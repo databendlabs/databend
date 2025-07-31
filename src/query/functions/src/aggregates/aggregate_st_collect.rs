@@ -72,9 +72,7 @@ impl<T: ValueType> Default for StCollectState<T> {
 }
 
 impl<T> ScalarStateFunc<T> for StCollectState<T>
-where
-    T: ArgType,
-    T::Scalar: Send + Sync,
+where T: ArgType
 {
     fn new() -> Self {
         Self::default()
@@ -189,9 +187,7 @@ where
 }
 
 impl<T> StateSerde for StCollectState<T>
-where
-    T: ArgType,
-    T::Scalar: Send + Sync,
+where T: ArgType
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(T::data_type())).into()]

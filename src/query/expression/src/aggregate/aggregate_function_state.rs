@@ -37,7 +37,8 @@ impl StateAddr {
     }
 
     #[inline]
-    pub fn get<'a, T>(&self) -> &'a mut T {
+    pub fn get<'a, T>(&self) -> &'a mut T
+    where T: Send + 'static {
         unsafe { &mut *(self.addr as *mut T) }
     }
 
@@ -71,7 +72,10 @@ impl StateAddr {
 
     #[inline]
     pub fn write<T, F>(&self, f: F)
-    where F: FnOnce() -> T {
+    where
+        F: FnOnce() -> T,
+        T: Send + 'static,
+    {
         unsafe {
             let ptr = self.addr as *mut T;
             std::ptr::write(ptr, f());
@@ -79,7 +83,8 @@ impl StateAddr {
     }
 
     #[inline]
-    pub fn write_state<T>(&self, state: T) {
+    pub fn write_state<T>(&self, state: T)
+    where T: Send + 'static {
         unsafe {
             let ptr = self.addr as *mut T;
             std::ptr::write(ptr, state);
@@ -274,7 +279,8 @@ impl<'a> AggrState<'a> {
         Self { addr, loc }
     }
 
-    pub fn get<'b, T>(&self) -> &'b mut T {
+    pub fn get<'b, T>(&self) -> &'b mut T
+    where T: Send + 'static {
         debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)
@@ -282,7 +288,10 @@ impl<'a> AggrState<'a> {
     }
 
     pub fn write<T, F>(&self, f: F)
-    where F: FnOnce() -> T {
+    where
+        F: FnOnce() -> T,
+        T: Send + 'static,
+    {
         debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)

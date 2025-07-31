@@ -81,8 +81,8 @@ where
 
 impl<T> UnaryState<T, StringType> for HistogramState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Sync + Send + Display,
+    T: ValueType,
+    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Display,
 {
     fn add(
         &mut self,
@@ -151,8 +151,8 @@ where
 
 impl<T> StateSerde for HistogramState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Clone + Ord + Display + Serialize,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord + Display + Serialize,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

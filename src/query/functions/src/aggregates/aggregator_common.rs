@@ -264,6 +264,7 @@ pub(super) fn batch_serialize1<A, S, F>(
 ) -> Result<()>
 where
     A: ValueType,
+    S: Send + 'static,
     for<'a> F: Fn(&S, &mut A::ColumnBuilderMut<'a>) -> Result<()>,
 {
     let [a] = builders else { unreachable!() };
@@ -285,6 +286,7 @@ pub(super) fn batch_serialize2<A, B, S, F>(
 where
     A: ValueType,
     B: ValueType,
+    S: Send + 'static,
     for<'a> F: Fn(&S, (&mut A::ColumnBuilderMut<'a>, &mut B::ColumnBuilderMut<'a>)) -> Result<()>,
 {
     let [a, b] = builders else { unreachable!() };
@@ -309,6 +311,7 @@ where
     A: ValueType,
     B: ValueType,
     C: ValueType,
+    S: Send + 'static,
     for<'a> F: Fn(
         &S,
         (
@@ -341,6 +344,7 @@ pub(super) fn batch_merge1<A, S, F>(
 ) -> Result<()>
 where
     A: AccessType,
+    S: Send + 'static,
     for<'a> F: Fn(&mut S, A::ScalarRef<'a>) -> Result<()>,
 {
     let view = state.downcast::<A>().unwrap();
@@ -369,6 +373,7 @@ pub(super) fn batch_merge2<A, B, S, F>(
 where
     A: AccessType,
     B: AccessType,
+    S: Send + 'static,
     for<'a> F: Fn(&mut S, (A::ScalarRef<'a>, B::ScalarRef<'a>)) -> Result<()>,
 {
     let view = state.downcast::<PairType<A, B>>().unwrap();
@@ -398,6 +403,7 @@ where
     A: AccessType,
     B: AccessType,
     C: AccessType,
+    S: Send + 'static,
     for<'a> F: Fn(&mut S, (A::ScalarRef<'a>, B::ScalarRef<'a>, C::ScalarRef<'a>)) -> Result<()>,
 {
     let view = state.downcast::<TernaryType<A, B, C>>().unwrap();

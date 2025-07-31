@@ -49,7 +49,7 @@ use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
 
-trait SumState: StateSerde + Send + Sync + Default + 'static {
+trait SumState: StateSerde + Send + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
 
     fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
@@ -500,7 +500,7 @@ struct AggregateArrayMovingAvgFunction<State> {
     window_size: Option<usize>,
     return_type: DataType,
     scale_add: u8,
-    _s: PhantomData<State>,
+    _s: PhantomData<fn(State)>,
 }
 
 impl<State> AggregateFunction for AggregateArrayMovingAvgFunction<State>
@@ -680,7 +680,7 @@ struct AggregateArrayMovingSumFunction<State> {
     display_name: String,
     window_size: Option<usize>,
     return_type: DataType,
-    _s: PhantomData<State>,
+    _s: PhantomData<fn(State)>,
 }
 
 impl<State> AggregateFunction for AggregateArrayMovingSumFunction<State>

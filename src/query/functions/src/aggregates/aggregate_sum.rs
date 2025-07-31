@@ -101,7 +101,7 @@ where
 
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
-    T: ArgType + Sync + Send,
+    T: ArgType,
     N: ArgType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,

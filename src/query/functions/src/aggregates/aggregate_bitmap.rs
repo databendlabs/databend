@@ -378,9 +378,7 @@ impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
 }
 
 struct AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     display_name: String,
     inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
@@ -391,7 +389,7 @@ where
 impl<T> AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType,
-    T::Scalar: Send + Sync,
+    T::Scalar: Sync,
 {
     fn try_create(
         display_name: &str,
@@ -458,7 +456,7 @@ where
 impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
 where
     T: ValueType,
-    T::Scalar: Send + Sync,
+    T::Scalar: Sync,
 {
     fn name(&self) -> &str {
         "AggregateBitmapIntersectCountFunction"
@@ -551,9 +549,7 @@ where
 }
 
 impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)

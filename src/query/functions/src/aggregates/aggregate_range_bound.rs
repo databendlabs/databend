@@ -88,8 +88,8 @@ where
 
 impl<T> UnaryState<T, ArrayType<T>> for RangeBoundState<T>
 where
-    T: ReturnType + Sync + Send,
-    T::Scalar: Ord + Sync + Send + BorshSerialize + BorshDeserialize,
+    T: ReturnType,
+    T::Scalar: Ord + BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
@@ -245,8 +245,8 @@ where
 
 impl<T> StateSerde for RangeBoundState<T>
 where
-    T: ReturnType + Send + Sync,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync + Ord,
+    T: ReturnType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

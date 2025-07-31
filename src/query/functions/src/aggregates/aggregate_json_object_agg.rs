@@ -52,13 +52,10 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 
-pub trait BinaryScalarStateFunc<V: ValueType>:
-    BorshSerialize + BorshDeserialize + Send + Sync + 'static
+pub(super) trait BinaryScalarStateFunc<V: ValueType>:
+    BorshSerialize + BorshDeserialize + Send + 'static
 {
     fn new() -> Self;
-    fn mem_size() -> Option<usize> {
-        None
-    }
     fn add(&mut self, other: Option<(&str, V::ScalarRef<'_>)>) -> Result<()>;
     fn add_batch(
         &mut self,
@@ -94,7 +91,7 @@ where
 impl<V> BinaryScalarStateFunc<V> for JsonObjectAggState<V>
 where
     V: ValueType,
-    V::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    V::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -202,7 +199,7 @@ where
 }
 
 #[derive(Clone)]
-pub struct AggregateJsonObjectAggFunction<V, State> {
+struct AggregateJsonObjectAggFunction<V, State> {
     display_name: String,
     return_type: DataType,
     _p: PhantomData<fn(V, State)>,

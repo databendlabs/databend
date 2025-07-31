@@ -66,14 +66,7 @@ struct AggregateWindowFunnelState<T> {
 }
 
 impl<T> AggregateWindowFunnelState<T>
-where T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Send
-        + Sync
+where T: Ord + Sub<Output = T> + AsPrimitive<u64> + BorshSerialize + BorshDeserialize + Clone + Send
 {
     pub fn new() -> Self {
         Self {

@@ -52,7 +52,7 @@ struct KurtosisState {
 
 impl<T> UnaryState<T, Float64Type> for KurtosisState
 where
-    T: AccessType + Sync + Send,
+    T: AccessType,
     T::Scalar: AsPrimitive<f64>,
 {
     fn add(

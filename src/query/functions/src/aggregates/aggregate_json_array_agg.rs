@@ -75,7 +75,7 @@ where
 impl<T> ScalarStateFunc<T> for JsonArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -139,7 +139,7 @@ where
 impl<T> StateSerde for JsonArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

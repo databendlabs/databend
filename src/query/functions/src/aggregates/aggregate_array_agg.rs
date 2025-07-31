@@ -81,9 +81,7 @@ where T: ValueType
 }
 
 impl<T> ScalarStateFunc<T> for ArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     fn new() -> Self {
         Self::default()
@@ -131,7 +129,6 @@ impl<T> StateSerde for ArrayAggStateAny<T>
 where
     Self: ScalarStateFunc<T>,
     T: ValueType,
-    T::Scalar: Send + Sync,
 {
     fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         let return_type = function_data
@@ -192,7 +189,7 @@ where
 impl<T> ScalarStateFunc<T> for NullableArrayAggStateAny<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -265,7 +262,7 @@ impl<T> StateSerde for NullableArrayAggStateAny<T>
 where
     Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
@@ -300,9 +297,7 @@ where
 
 #[derive(Debug)]
 struct ArrayAggStateSimple<T, const NULLABLE: bool>
-where
-    T: SimpleType,
-    T::Scalar: Send,
+where T: SimpleType
 {
     values: Vec<T::Scalar>,
     validity: MutableBitmap,
@@ -364,7 +359,7 @@ impl<T, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<T>>
     for ArrayAggStateSimple<T, NULLABLE>
 where
     T: SimpleType + Debug,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
     Self: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
@@ -446,7 +441,7 @@ where
 impl<T, const NULLABLE: bool> StateSerde for ArrayAggStateSimple<T, NULLABLE>
 where
     T: SimpleType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync + Debug,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
@@ -789,7 +784,7 @@ fn try_create_aggregate_array_agg_function(
     ) -> Result<Arc<dyn AggregateFunction>>
     where
         V: SimpleType,
-        V::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+        V::Scalar: BorshSerialize + BorshDeserialize,
     {
         if nullable {
             AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V, true>>::create(

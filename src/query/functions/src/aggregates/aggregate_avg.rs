@@ -47,12 +47,12 @@ where TSum: ValueType
 {
     pub value: TSum::Scalar,
     pub count: u64,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T, TSum> Default for NumberAvgState<T, TSum>
 where
-    T: ValueType + Sync + Send,
+    T: ValueType,
     TSum: ValueType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
@@ -68,7 +68,7 @@ where
 
 impl<T, TSum> UnaryState<T, Float64Type> for NumberAvgState<T, TSum>
 where
-    T: ValueType + Sync + Send,
+    T: ValueType,
     TSum: ArgType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
@@ -103,7 +103,7 @@ where
 
 impl<T, TSum> StateSerde for NumberAvgState<T, TSum>
 where
-    T: ValueType + Sync + Send,
+    T: ValueType,
     TSum: ArgType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,

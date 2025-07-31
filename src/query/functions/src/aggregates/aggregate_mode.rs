@@ -65,8 +65,8 @@ where
 
 impl<T> UnaryState<T, T> for ModeState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: Ord + Hash + Sync + Send + BorshSerialize + BorshDeserialize,
+    T: ValueType,
+    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
@@ -119,8 +119,8 @@ where
 
 impl<T> StateSerde for ModeState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize + Sync + Send,
+    T: ValueType,
+    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

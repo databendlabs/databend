@@ -54,10 +54,12 @@ pub struct AggregateDistinctCombinator<State> {
     nested_name: String,
     arguments: Vec<DataType>,
     nested: Arc<dyn AggregateFunction>,
-    _state: PhantomData<State>,
+    _s: PhantomData<fn(State)>,
 }
 
-impl<State> AggregateDistinctCombinator<State> {
+impl<State> AggregateDistinctCombinator<State>
+where State: Send + 'static
+{
     fn get_state(place: AggrState) -> &mut State {
         place
             .addr
@@ -240,7 +242,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         name,
-                        _state: PhantomData,
+                        _s: PhantomData,
                     }));
                 }
             }),
@@ -253,7 +255,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         nested_name: nested_name.to_owned(),
-                        _state: PhantomData,
+                        _s: PhantomData,
                     })),
                     _ => Ok(Arc::new(AggregateDistinctCombinator::<
                         AggregateDistinctStringState,
@@ -262,7 +264,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         name,
-                        _state: PhantomData,
+                        _s: PhantomData,
                     })),
                 };
             }
@@ -276,6 +278,6 @@ pub fn try_create(
         arguments,
         nested,
         name,
-        _state: PhantomData,
+        _s: PhantomData,
     }))
 }

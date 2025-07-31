@@ -16,7 +16,6 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::marker::Send;
-use std::marker::Sync;
 use std::sync::Arc;
 
 use borsh::BorshSerialize;
@@ -48,7 +47,7 @@ use super::FunctionData;
 use super::StateAddr;
 use super::StateSerde;
 
-pub(super) trait DistinctStateFunc: Sized + Send + Sync + StateSerde {
+pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;

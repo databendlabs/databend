@@ -481,7 +481,7 @@ pub fn convert_to_type_name(ty: &DataType) -> TypeName {
 
 /// [AccessType] defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
-    type Scalar: Debug + Clone + PartialEq;
+    type Scalar: Debug + Clone + PartialEq + Send + 'static;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;

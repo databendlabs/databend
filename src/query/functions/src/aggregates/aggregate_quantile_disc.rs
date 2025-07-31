@@ -60,10 +60,25 @@ where
     }
 }
 
+impl<T> QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
+{
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value.extend(
+            rhs.value
+                .iter()
+                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
+        );
+        Ok(())
+    }
+}
+
 impl<T> UnaryState<T, ArrayType<T>> for QuantileState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
     fn add(
         &mut self,
@@ -75,12 +90,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.value.extend(
-            rhs.value
-                .iter()
-                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
-        );
-        Ok(())
+        self.merge(rhs)
     }
 
     fn merge_result(
@@ -118,8 +128,8 @@ where
 
 impl<T> StateSerde for QuantileState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
@@ -147,15 +157,15 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, ArrayType<T>>>::merge(state, &rhs)
+            state.merge(&rhs)
         })
     }
 }
 
 impl<T> UnaryState<T, T> for QuantileState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
     fn add(
         &mut self,

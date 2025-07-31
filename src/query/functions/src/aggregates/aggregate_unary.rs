@@ -38,7 +38,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::StateSerde;
 
-pub(super) trait UnaryState<T, R>: StateSerde + Send + Sync + Default
+pub(super) trait UnaryState<T, R>: StateSerde + Default + Send + 'static
 where
     T: AccessType,
     R: ValueType,
@@ -153,7 +153,7 @@ where
 
 impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
 where
-    S: UnaryState<T, R> + 'static,
+    S: UnaryState<T, R>,
     T: AccessType,
     R: ValueType,
 {

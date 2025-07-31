@@ -52,7 +52,7 @@ pub struct SkewnessStateV2 {
 
 impl<T> UnaryState<T, Float64Type> for SkewnessStateV2
 where
-    T: AccessType + Sync + Send,
+    T: AccessType,
     T::Scalar: AsPrimitive<f64>,
 {
     fn add(

@@ -32,7 +32,6 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 
 use super::aggregate_min_max_any_decimal::MinMaxAnyDecimalState;
-use super::aggregate_scalar_state::need_manual_drop_state;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
@@ -207,7 +206,7 @@ where
 impl<T, C> Default for MinMaxAnyState<T, C>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
     fn default() -> Self {
@@ -221,7 +220,7 @@ where
 impl<T, C> UnaryState<T, T> for MinMaxAnyState<T, C>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
     fn add(
@@ -305,7 +304,7 @@ where
 impl<T, C> StateSerde for MinMaxAnyState<T, C>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
@@ -336,6 +335,15 @@ where
             let rhs = Self::deserialize_reader(&mut data)?;
             state.merge(&rhs)
         })
+    }
+}
+
+fn need_manual_drop_state(data_type: &DataType) -> bool {
+    match data_type {
+        DataType::String | DataType::Variant => true,
+        DataType::Nullable(t) | DataType::Array(t) | DataType::Map(t) => need_manual_drop_state(t),
+        DataType::Tuple(ts) => ts.iter().any(need_manual_drop_state),
+        _ => false,
     }
 }
 
