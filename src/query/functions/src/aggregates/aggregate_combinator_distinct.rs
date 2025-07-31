@@ -122,7 +122,7 @@ where State: DistinctStateFunc
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        State::batch_serialize(places, loc, builders)
+        State::batch_serialize(places, &loc[..1], builders)
     }
 
     fn batch_merge(
@@ -132,7 +132,7 @@ where State: DistinctStateFunc
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        State::batch_merge(places, loc, state, filter)
+        State::batch_merge(places, &loc[..1], state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

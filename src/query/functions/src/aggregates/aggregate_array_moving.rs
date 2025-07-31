@@ -77,7 +77,7 @@ trait SumState: StateSerde + Send + Default + 'static {
 }
 
 #[derive(Default, Debug)]
-pub struct NumberArrayMovingSumState<T, TSum> {
+struct NumberArrayMovingSumState<T, TSum> {
     values: Vec<T>,
     _t: PhantomData<TSum>,
 }
@@ -729,7 +729,7 @@ where State: SumState
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        State::serialize_type(None)
     }
 
     fn batch_serialize(

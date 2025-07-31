@@ -27,6 +27,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::PairType;
 use databend_common_expression::types::TernaryType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::AggrStateLoc;
@@ -347,7 +348,7 @@ where
     S: Send + 'static,
     for<'a> F: Fn(&mut S, A::ScalarRef<'a>) -> Result<()>,
 {
-    let view = state.downcast::<A>().unwrap();
+    let view = state.downcast::<UnaryType<A>>().unwrap();
     let iter = places.iter().zip(view.iter());
     if let Some(filter) = filter {
         for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
