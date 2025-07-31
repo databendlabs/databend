@@ -96,7 +96,7 @@ impl OrcTable {
             };
 
             let Some(first_file) = first_file else {
-                return Ok(ctx.get_zero_table().await?);
+                return ctx.get_zero_table().await;
             };
 
             let schema_from = first_file.path.clone();
