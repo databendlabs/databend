@@ -41,7 +41,7 @@ Limit
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.00
@@ -186,7 +186,7 @@ HashJoin
 query T
 explain select name from system.functions order by example
 ----
-Sort
+Sort(Single)
 ├── output columns: [functions.name (#0), functions.example (#4)]
 ├── sort keys: [example ASC NULLS LAST]
 ├── estimated rows: 0.00

@@ -3529,7 +3529,7 @@ pub struct SpillConfig {
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
 
-    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    // TODO: We need to fix StorageConfig so that it supports command line injections.
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 }
@@ -3839,5 +3839,20 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_env() {
+        unsafe {
+            std::env::set_var("LOG_TRACING_OTLP_ENDPOINT", "http://127.0.2.1:1111");
+            std::env::set_var("LOG_TRACING_CAPTURE_LOG_LEVEL", "DebuG");
+        }
+
+        let cfg = Config::load_with_config_file("").unwrap();
+        assert_eq!(
+            cfg.log.tracing.tracing_otlp.endpoint,
+            "http://127.0.2.1:1111"
+        );
+        assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
     }
 }

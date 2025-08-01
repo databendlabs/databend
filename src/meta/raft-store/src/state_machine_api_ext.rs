@@ -27,6 +27,7 @@ use display_more::DisplayUnixTimeStampExt;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
+use log::info;
 use log::warn;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
@@ -192,12 +193,36 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         &self,
         curr_time_ms: u64,
     ) -> Result<IOResultStream<(ExpireKey, String)>, io::Error> {
+        // Since the last saved cleanup timestamp
+        let start_ms = self.cleanup_start_timestamp().as_millis() as u64;
+        let start = ExpireKey::new(start_ms, 0);
+
         // curr_time > expire_at => expired
         let end = ExpireKey::new(curr_time_ms, 0);
 
-        let strm = self.expire_map().range(..end).await?;
+        let msg = {
+            let start = Duration::from_millis(start_ms);
+            let end = Duration::from_millis(curr_time_ms);
+            let msg = format!(
+                "list_expire_index: [{}, {}); interval: {:?}",
+                start.display_unix_timestamp_short(),
+                end.display_unix_timestamp_short(),
+                end.saturating_sub(start)
+            );
 
-        let strm = add_cooperative_yielding(strm, format!("list_expire_index up to {end}"))
+            info!("{}", msg);
+
+            msg
+        };
+
+        if start >= end {
+            // No expired entries
+            return Ok(futures_util::stream::empty().boxed());
+        }
+
+        let strm = self.expire_map().range(start..end).await?;
+
+        let strm = add_cooperative_yielding(strm, msg)
             // Return only non-deleted records
             .try_filter_map(|(k, seq_marked)| {
                 let expire_entry = seq_marked.into_data().map(|v| (k, v));

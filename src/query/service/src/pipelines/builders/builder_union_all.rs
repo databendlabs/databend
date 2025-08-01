@@ -42,7 +42,9 @@ impl PipelineBuilder {
         self.main_pipeline.extend_sinks(left_sinks);
         self.main_pipeline.extend_sinks(right_sinks);
 
-        match self.ctx.get_settings().get_enable_parallel_union_all()? {
+        let enable_parallel_union_all = self.ctx.get_settings().get_enable_parallel_union_all()?
+            || self.ctx.get_settings().get_grouping_sets_to_union()?;
+        match enable_parallel_union_all {
             true => self.main_pipeline.resize(outputs, false),
             false => self.main_pipeline.sequence_group(sequence_groups, outputs),
         }

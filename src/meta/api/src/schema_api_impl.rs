@@ -3703,31 +3703,40 @@ async fn get_history_tables_for_gc(
     }
 
     let mut filter_tb_infos = vec![];
+    const BATCH_SIZE: usize = 1000;
 
-    let limited_args = &args[..std::cmp::min(limit, args.len())];
-    let table_id_idents = limited_args.iter().map(|(table_id, _)| table_id.clone());
+    // Process in batches to avoid performance issues
+    for chunk in args.chunks(BATCH_SIZE) {
+        // Get table metadata for current batch
+        let table_id_idents = chunk.iter().map(|(table_id, _)| table_id.clone());
+        let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-    let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
+        // Filter by drop_time_range for current batch
+        for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
+            let Some(seq_meta) = seq_meta else {
+                error!(
+                    "batch_filter_table_info cannot find {:?} table_meta",
+                    table_id
+                );
+                continue;
+            };
 
-    for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(limited_args.iter()) {
-        let Some(seq_meta) = seq_meta else {
-            error!(
-                "batch_filter_table_info cannot find {:?} table_meta",
-                table_id
-            );
-            continue;
-        };
+            if !drop_time_range.contains(&seq_meta.data.drop_on) {
+                info!("table {:?} is not in drop_time_range", seq_meta.data);
+                continue;
+            }
 
-        if !drop_time_range.contains(&seq_meta.data.drop_on) {
-            info!("table {:?} is not in drop_time_range", seq_meta.data);
-            continue;
+            filter_tb_infos.push(TableNIV::new(
+                DBIdTableName::new(db_id, table_name.clone()),
+                table_id.clone(),
+                seq_meta,
+            ));
+
+            // Check if we have reached the limit
+            if filter_tb_infos.len() >= limit {
+                return Ok(filter_tb_infos);
+            }
         }
-
-        filter_tb_infos.push(TableNIV::new(
-            DBIdTableName::new(db_id, table_name.clone()),
-            table_id.clone(),
-            seq_meta,
-        ));
     }
 
     Ok(filter_tb_infos)

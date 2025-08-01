@@ -195,6 +195,7 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
             AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
+            AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
         }
     }
 
@@ -257,6 +258,7 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
             AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
+            AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
         }
     }
 
@@ -492,6 +494,9 @@ impl Binder {
             }
             GrantObjectName::Connection(name) => {
                 format!("SELECT * FROM show_grants('connection', '{}')", name)
+            }
+            GrantObjectName::Sequence(name) => {
+                format!("SELECT * FROM show_grants('sequence', '{}')", name)
             }
         };
 

@@ -60,6 +60,10 @@ pub enum OwnershipObject {
     Connection {
         name: String,
     },
+
+    Sequence {
+        name: String,
+    },
 }
 
 impl OwnershipObject {
@@ -90,6 +94,7 @@ impl fmt::Display for OwnershipObject {
             OwnershipObject::Stage { name } => write!(f, "STAGE {name}"),
             OwnershipObject::Warehouse { id } => write!(f, "WAREHOUSE {id}"),
             OwnershipObject::Connection { name } => write!(f, "CONNECTION {name}"),
+            OwnershipObject::Sequence { name } => write!(f, "SEQUENCE {name}"),
         }
     }
 }
@@ -131,6 +136,7 @@ impl KeyCodec for OwnershipObject {
             OwnershipObject::UDF { name } => b.push_raw("udf-by-name").push_str(name),
             OwnershipObject::Warehouse { id } => b.push_raw("warehouse-by-id").push_str(id),
             OwnershipObject::Connection { name } => b.push_raw("connection-by-name").push_str(name),
+            OwnershipObject::Sequence { name } => b.push_raw("sequence-by-name").push_str(name),
         }
     }
 
@@ -184,6 +190,10 @@ impl KeyCodec for OwnershipObject {
             "connection-by-name" => {
                 let name = p.next_str()?;
                 Ok(OwnershipObject::Connection { name })
+            }
+            "sequence-by-name" => {
+                let name = p.next_str()?;
+                Ok(OwnershipObject::Sequence { name })
             }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),

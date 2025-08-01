@@ -46,7 +46,7 @@ use crate::sessions::SessionManager;
 pub(crate) fn create_session() -> Result<Arc<Session>> {
     let config = GlobalConfig::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
-    match SessionManager::instance().create_with_settings(SessionType::FlightRPC, settings) {
+    match SessionManager::instance().create_with_settings(SessionType::FlightRPC, settings, None) {
         Err(cause) => Err(cause),
         Ok(session) => Ok(Arc::new(session)),
     }

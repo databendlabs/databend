@@ -1470,8 +1470,6 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
                 need_keep_alive: false,
-                last_server_info: None,
-                last_query_ids: vec![],
                 internal: None,
             }),
         ),
@@ -1495,8 +1493,6 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
                 need_keep_alive: false,
-                last_server_info: None,
-                last_query_ids: vec![],
                 internal: None,
             }),
         ),
@@ -1515,8 +1511,6 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
                 need_keep_alive: false,
-                last_server_info: None,
-                last_query_ids: vec![],
                 internal: None,
             }),
         ),
@@ -1537,8 +1531,6 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
                 need_keep_alive: false,
-                last_server_info: None,
-                last_query_ids: vec![],
                 internal: None,
             }),
         ),
@@ -1561,27 +1553,24 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 need_sticky: false,
                 need_keep_alive: false,
-                last_server_info: None,
-                last_query_ids: vec![],
                 internal: None,
             }),
         ),
     ];
 
     for (json, affect, session_conf) in sqls {
-        let result = TestHttpQueryRequest::new(json.clone())
+        let mut result = TestHttpQueryRequest::new(json.clone())
             .fetch_total()
             .await?
             .last();
+        if let Some(s) = result.1.session.as_mut() {
+            s.internal = None;
+        }
         assert_eq!(result.0, StatusCode::OK, "{} {:?}", json, result.1.error);
         assert!(result.1.error.is_none(), "{} {:?}", json, result.1.error);
         assert_eq!(result.1.state, ExecuteStateKind::Succeeded, "{}", json);
         assert_eq!(result.1.affect, affect, "{}", json);
-        let session = result.1.session.map(|s| HttpSessionConf {
-            last_server_info: None,
-            last_query_ids: vec![],
-            ..s
-        });
+        let session = result.1.session.map(|s| HttpSessionConf { ..s });
 
         assert_eq!(session, session_conf, "{}", json);
     }
@@ -1667,8 +1656,8 @@ async fn test_txn_error() -> Result<()> {
 
     {
         let mut session = session.clone();
-        if let Some(info) = &mut session.last_server_info {
-            info.id = "abc".to_string();
+        if let Some(info) = &mut session.internal.as_mut() {
+            info.last_node_id = Some("abc".to_string());
         }
         let json = serde_json::json!({
             "sql": "select 1",
@@ -1682,8 +1671,8 @@ async fn test_txn_error() -> Result<()> {
 
     {
         let mut session = session.clone();
-        if let Some(s) = &mut session.last_server_info {
-            s.id = "abc".to_string()
+        if let Some(s) = &mut session.internal.as_mut() {
+            s.last_node_id = Some("abc".to_string())
         }
         let json = serde_json::json!({
             "sql": "select 1",
@@ -1715,7 +1704,14 @@ async fn test_txn_timeout() -> Result<()> {
     sleep(Duration::from_secs(3)).await;
 
     let session = session.clone();
-    let last_query_id = session.last_query_ids.first().unwrap().to_string();
+    let last_query_id = session
+        .internal
+        .as_ref()
+        .unwrap()
+        .last_query_ids
+        .first()
+        .unwrap()
+        .to_string();
     let json = serde_json::json!({
         "sql": "select 1",
         "session": session,

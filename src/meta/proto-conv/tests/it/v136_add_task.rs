@@ -185,7 +185,7 @@ fn test_decode_v136_task_message() -> anyhow::Result<()> {
             vec![26, 6, 116, 97, 115, 107, 95, 99, 160, 6, 136, 1, 168, 6, 24];
         let want_delete = || {
             let task = want_task();
-            mt::TaskMessage::DeleteTask(task.task_name)
+            mt::TaskMessage::DeleteTask(task.task_name, None)
         };
 
         common::test_pb_from_to(func_name!(), want_delete())?;

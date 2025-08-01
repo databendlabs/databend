@@ -15,8 +15,9 @@
 #![allow(clippy::uninlined_format_args)]
 
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::{self};
 use std::sync::Arc;
-use std::time::Duration;
 
 use clap::CommandFactory;
 use clap::Parser;
@@ -32,6 +33,8 @@ use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
+use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
@@ -41,6 +44,7 @@ use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
+use databend_common_meta_control::lua_support;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::UpsertKV;
@@ -50,6 +54,7 @@ use databend_common_tracing::FileConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
+use mlua::Lua;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
@@ -226,19 +231,53 @@ impl App {
         Ok(())
     }
 
-    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        eprintln!(
-            "Using gRPC API address: {}",
-            serde_json::to_string(&addresses).unwrap()
+    async fn run_lua(&self, args: &LuaArgs) -> anyhow::Result<()> {
+        let lua = Lua::new();
+
+        // Setup Lua environment with gRPC client support
+        lua_support::setup_lua_environment(&lua)?;
+
+        let script = match &args.file {
+            Some(path) => std::fs::read_to_string(path)?,
+            None => {
+                let mut buffer = String::new();
+                io::stdin().read_to_string(&mut buffer)?;
+                buffer
+            }
+        };
+
+        #[allow(clippy::disallowed_types)]
+        let local = tokio::task::LocalSet::new();
+        let res = local.run_until(lua.load(&script).exec_async()).await;
+
+        if let Err(e) = res {
+            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        }
+        Ok(())
+    }
+
+    async fn get_metrics(&self, args: &MetricsArgs) -> anyhow::Result<()> {
+        let lua_script = format!(
+            r#"
+local admin_client = metactl.new_admin_client("{}")
+local metrics, err = admin_client:metrics()
+if err then
+    return nil, err
+end
+print(metrics)
+return metrics, nil
+"#,
+            args.admin_api_address
         );
-        MetaGrpcClient::try_create(
-            addresses,
-            "root",
-            "xxx",
-            Some(Duration::from_secs(2)),
-            Some(Duration::from_secs(1)),
-            None,
-        )
+
+        match lua_support::run_lua_script_with_result(&lua_script).await? {
+            Ok(_result) => Ok(()),
+            Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
+        }
+    }
+
+    fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
+        lua_support::new_grpc_client(addresses)
     }
 }
 
@@ -255,6 +294,8 @@ enum CtlCommand {
     Watch(WatchArgs),
     Upsert(UpsertArgs),
     Get(GetArgs),
+    Lua(LuaArgs),
+    Metrics(MetricsArgs),
 }
 
 /// Usage:
@@ -325,6 +366,12 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Get(args) => {
                 app.get(args).await?;
+            }
+            CtlCommand::Lua(args) => {
+                app.run_lua(args).await?;
+            }
+            CtlCommand::Metrics(args) => {
+                app.get_metrics(args).await?;
             }
         },
         // for backward compatibility

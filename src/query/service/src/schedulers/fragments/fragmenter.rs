@@ -105,23 +105,26 @@ impl Fragmenter {
         ctx: Arc<QueryContext>,
         plan: &PhysicalPlan,
     ) -> Result<Option<DataExchange>> {
-        match plan {
-            PhysicalPlan::ExchangeSink(plan) => match plan.kind {
-                FragmentKind::Normal => Ok(Some(ShuffleDataExchange::create(
-                    Self::get_executors(ctx),
-                    plan.keys.clone(),
-                ))),
-                FragmentKind::Merge => Ok(Some(MergeExchange::create(
-                    Self::get_local_executor(ctx),
-                    plan.ignore_exchange,
-                    plan.allow_adjust_parallelism,
-                ))),
-                FragmentKind::Expansive => {
-                    Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
-                }
-                _ => Ok(None),
-            },
-            _ => Ok(None),
+        let PhysicalPlan::ExchangeSink(exchange) = plan else {
+            return Ok(None);
+        };
+        match exchange.kind {
+            FragmentKind::Init => Ok(None),
+            FragmentKind::Normal => Ok(Some(DataExchange::ShuffleDataExchange(
+                ShuffleDataExchange {
+                    destination_ids: Self::get_executors(ctx),
+                    shuffle_keys: exchange.keys.clone(),
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                },
+            ))),
+            FragmentKind::Merge => Ok(Some(MergeExchange::create(
+                Self::get_local_executor(ctx),
+                exchange.ignore_exchange,
+                exchange.allow_adjust_parallelism,
+            ))),
+            FragmentKind::Expansive => {
+                Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
+            }
         }
     }
 

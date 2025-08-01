@@ -208,13 +208,27 @@ pub struct ServerInfo {
     pub start_time: String,
 }
 
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t == T::default()
+}
+
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     variables: Vec<(String, String)>,
     pub last_query_result_cache_key: String,
     #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     pub has_temp_table: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_node_id: Option<String>,
+    /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub last_query_ids: Vec<String>,
 }
 
 impl HttpSessionStateInternal {
@@ -222,6 +236,8 @@ impl HttpSessionStateInternal {
         variables: &HashMap<String, Scalar>,
         last_query_result_cache_key: String,
         has_temp_table: bool,
+        last_node_id: Option<String>,
+        last_query_ids: Vec<String>,
     ) -> Self {
         let variables = variables
             .iter()
@@ -236,6 +252,8 @@ impl HttpSessionStateInternal {
             variables,
             last_query_result_cache_key,
             has_temp_table,
+            last_node_id,
+            last_query_ids,
         }
     }
 
@@ -306,17 +324,6 @@ pub struct HttpSessionConf {
     pub need_sticky: bool,
     #[serde(default)]
     pub need_keep_alive: bool,
-
-    // TODO: move to internal later
-    // used to check if the session is still on the same server
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_server_info: Option<ServerInfo>,
-
-    // TODO: move to internal later
-    /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
-    #[serde(default)]
-    pub last_query_ids: Vec<String>,
-
     /// hide state not useful to clients
     /// so client only need to know there is a String field `internal`,
     /// which need to carry with session/conn
@@ -409,13 +416,14 @@ pub struct HttpQuery {
 fn try_set_txn(
     query_id: &str,
     session: &Arc<Session>,
-    session_conf: &HttpSessionConf,
+    txn_state: &Option<TxnState>,
+    internal_state: &HttpSessionStateInternal,
     http_query_manager: &Arc<HttpQueryManager>,
 ) -> Result<()> {
-    match &session_conf.txn_state {
+    match txn_state {
         Some(TxnState::Active) => {
-            http_query_manager.check_sticky_for_txn(&session_conf.last_server_info)?;
-            let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
+            http_query_manager.check_sticky_for_txn(&internal_state.last_node_id)?;
+            let last_query_id = internal_state.last_query_ids.first().ok_or_else(|| {
                 ErrorCode::InvalidSessionState(
                     "[HTTP-QUERY] Invalid transaction state: transaction is active but last_query_ids is empty".to_string(),
                 )
@@ -500,7 +508,7 @@ impl HttpQuery {
                 if !state.variables.is_empty() {
                     session.set_all_variables(state.get_variables()?)
                 }
-                if let Some(id) = session_conf.last_query_ids.first() {
+                if let Some(id) = state.last_query_ids.first() {
                     if let Some(last_query) = http_query_manager.queries.get(id) {
                         let state = *last_query.state.lock();
                         if !matches!(
@@ -521,7 +529,7 @@ impl HttpQuery {
                 }
                 let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
                 if state.has_temp_table {
-                    if let Some(ServerInfo { id, .. }) = &session_conf.last_server_info {
+                    if let Some(id) = &state.last_node_id {
                         if http_query_manager.server_info.id != *id {
                             if http_ctx.fixed_coordinator_node {
                                 return Err(ErrorCode::SessionLost(
@@ -563,11 +571,11 @@ impl HttpQuery {
                     warn!("[TEMP-TABLE] Found unexpected Temp table.");
                 }
             }
-
             try_set_txn(
                 &http_ctx.query_id,
                 &session,
-                session_conf,
+                &session_conf.txn_state,
+                &session_conf.internal.clone().unwrap_or_default(),
                 &http_query_manager,
             )?;
         };
@@ -731,12 +739,13 @@ impl HttpQuery {
             &session_state.variables,
             session_state.last_query_result_cache_key,
             has_temp_table,
+            Some(HttpQueryManager::instance().server_info.id.clone()),
+            if session_state.last_query_ids.is_empty() {
+                vec![self.id.clone()]
+            } else {
+                session_state.last_query_ids
+            },
         );
-        let internal = if internal == HttpSessionStateInternal::default() {
-            None
-        } else {
-            Some(internal)
-        };
 
         if is_stopped
             && txn_state != TxnState::AutoCommit
@@ -767,13 +776,8 @@ impl HttpQuery {
             txn_state: Some(txn_state),
             need_sticky,
             need_keep_alive,
-            last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
-            last_query_ids: if session_state.last_query_ids.is_empty() {
-                vec![self.id.clone()]
-            } else {
-                session_state.last_query_ids
-            },
-            internal,
+
+            internal: Some(internal),
         })
     }
 

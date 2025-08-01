@@ -401,7 +401,11 @@ impl Catalog for FakedCatalog {
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
 
@@ -412,6 +416,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

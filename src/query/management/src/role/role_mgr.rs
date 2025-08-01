@@ -567,6 +567,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
         OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
         OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
+        OwnershipObject::Sequence { name } => GrantObject::Sequence(name.to_string()),
     }
 }
 

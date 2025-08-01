@@ -158,10 +158,7 @@ NULL [1,2] 3
 5 [3,4,5] 3
 
 statement ok
-drop table t;
-
-statement ok
-create table t (a array(int));
+create or replace table t (a array(int));
 
 statement ok
 insert into t values ([1,2])
