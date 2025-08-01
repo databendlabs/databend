@@ -257,8 +257,8 @@ jobs:
         id: prepare
         run: |
           publish_name="databend-query-${{ matrix.category }}-${{ needs.create_release.outputs.version }}-${{ matrix.target }}.debug.gz"
-          gzip databend-query.debug
-          mv databend-query.debug.gz ${publish_name}
+          gzip target/${BUILD_PROFILE}/databend-query.debug
+          mv target/${BUILD_PROFILE}/databend-query.debug.gz ${publish_name}
           echo "publish_name=${publish_name}" >> $GITHUB_OUTPUT
       - name: Upload to Release
         env:
