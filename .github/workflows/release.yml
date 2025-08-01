@@ -253,12 +253,13 @@ jobs:
           target: ${{ matrix.target }}
           category: ${{ matrix.category }}
           artifacts: query.debug
+          path: distro/bin
       - name: Prepare artifact
         id: prepare
         run: |
           publish_name="databend-query-${{ matrix.category }}-${{ needs.create_release.outputs.version }}-${{ matrix.target }}.debug.gz"
-          gzip target/${BUILD_PROFILE}/databend-query.debug
-          mv target/${BUILD_PROFILE}/databend-query.debug.gz ${publish_name}
+          gzip distro/bin/databend-query.debug
+          mv distro/bin/databend-query.debug.gz ${publish_name}
           echo "publish_name=${publish_name}" >> $GITHUB_OUTPUT
       - name: Upload to Release
         env:
