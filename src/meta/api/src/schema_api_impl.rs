@@ -2105,6 +2105,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
+        self.update_multi_table_meta_with_retry(req, 1).await
+    }
+
+    /// `retry_times` is used to simulate the retry of the transaction.
+    /// It is only for test.
+    async fn update_multi_table_meta_with_retry(
+        &self,
+        req: UpdateMultiTableMetaReq,
+        retry_times: u32,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,
@@ -2294,7 +2304,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // Add get operation to check if transaction ID exists in else branch
         txn.else_then.push(TxnOp::get(txn_id_key));
 
+        for _ in 0..retry_times - 1 {
+            send_txn(self, txn.clone()).await?;
+        }
+
         let (succ, responses) = send_txn(self, txn).await?;
+
         if succ {
             return Ok(Ok(UpdateTableMetaReply {}));
         }
