@@ -92,6 +92,13 @@ echo "set data_retention_time_in_days=0; optimize table t20_0012 all" | $TEST_US
 ## verify
 echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 
+echo "=== NETWORK_POLICY SETTING ==="
+echo "drop network policy if exists test_user_without_account_admin"  | $TEST_USER_CONNECT
+echo "create network policy test_user_without_account_admin allowed_ip_list=('127.0.0.0/24')"  | $TEST_USER_CONNECT
+echo "set global network_policy='test_user_without_account_admin'"  | $TEST_USER_CONNECT
+echo "unset global network_policy"  | $TEST_USER_CONNECT
+echo "drop network policy if exists test_user_without_account_admin"  | $TEST_USER_CONNECT
+
 ## select data
 echo "select 'test -- select'" | $TEST_USER_CONNECT
 ## Init tables
