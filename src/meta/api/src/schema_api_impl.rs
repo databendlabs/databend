@@ -187,6 +187,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -2295,6 +2296,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Add transaction ID to the transaction with 5-minute expiration
         let txn_id_key = format!("_txn_id/{}", txn_id);
+
+        // Add condition to check that transaction ID does not exist (empty)
+        txn.condition
+            .push(TxnCondition::eq_seq(txn_id_key.clone(), 0));
+
         txn.if_then.push(TxnOp::put_with_ttl(
             txn_id_key.clone(),
             vec![],
@@ -2304,8 +2310,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // Add get operation to check if transaction ID exists in else branch
         txn.else_then.push(TxnOp::get(txn_id_key));
 
+        #[cfg(test)]
         for _ in 0..retry_times - 1 {
             send_txn(self, txn.clone()).await?;
+        }
+        #[cfg(not(test))]
+        {
+            assert_eq!(retry_times, 1);
         }
 
         let (succ, responses) = send_txn(self, txn).await?;
