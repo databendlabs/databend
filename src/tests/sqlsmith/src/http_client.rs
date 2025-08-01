@@ -91,37 +91,6 @@ pub(crate) struct HttpSessionConf {
     pub(crate) last_query_ids: Vec<String>,
 }
 
-fn serialize_as_json_string<S>(
-    value: &Option<HttpSessionStateInternal>,
-    serializer: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(complex_value) => {
-            let json_string =
-                serde_json::to_string(complex_value).map_err(serde::ser::Error::custom)?;
-            serializer.serialize_some(&json_string)
-        }
-        None => serializer.serialize_none(),
-    }
-}
-
-fn deserialize_from_json_string<'de, D>(
-    deserializer: D,
-) -> std::result::Result<Option<HttpSessionStateInternal>, D::Error>
-where D: Deserializer<'de> {
-    let json_string: Option<String> = Option::deserialize(deserializer)?;
-    match json_string {
-        Some(s) => {
-            let complex_value = serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
-            Ok(Some(complex_value))
-        }
-        None => Ok(None),
-    }
-}
-
 #[derive(serde::Deserialize, Debug)]
 pub(crate) struct QueryResponse {
     pub(crate) session: Option<HttpSessionConf>,
