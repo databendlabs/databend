@@ -141,7 +141,12 @@ where State: DistinctStateFunc
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = Self::get_state(place);
         let nested_place = place.remove_first_loc();
 
@@ -156,13 +161,13 @@ where State: DistinctStateFunc
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(nested_place, builder);
+                return self.nested.merge_result(nested_place, read_only, builder);
             }
             let entries = &state.build_entries(&self.arguments).unwrap();
             self.nested
                 .accumulate(nested_place, entries.into(), None, state.len())?;
             // merge_result
-            self.nested.merge_result(nested_place, builder)
+            self.nested.merge_result(nested_place, read_only, builder)
         }
     }
 

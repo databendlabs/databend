@@ -198,7 +198,12 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = Self::get_state(place);
 
         if state.columns.is_empty() || state.columns[0].len() == 0 {
@@ -206,14 +211,26 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         }
         let num_rows = state.columns[0].len();
 
-        let mut block = DataBlock::new(
-            state
-                .columns
-                .iter()
-                .map(|builder| builder.clone().build().into())
-                .collect(),
-            num_rows,
-        );
+        let mut block = if read_only {
+            DataBlock::new(
+                state
+                    .columns
+                    .iter()
+                    .map(|builder| builder.clone().build().into())
+                    .collect(),
+                num_rows,
+            )
+        } else {
+            DataBlock::new(
+                state
+                    .columns
+                    .drain(..)
+                    .map(|builder| builder.build().into())
+                    .collect(),
+                num_rows,
+            )
+        };
+
         let mut not_arg_indexes = HashSet::with_capacity(self.sort_descs.len());
         let mut sort_descs = Vec::with_capacity(self.sort_descs.len());
 
@@ -243,7 +260,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
             None,
             num_rows,
         )?;
-        self.inner.merge_result(inner_place, builder)
+        self.inner.merge_result(inner_place, false, builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {

@@ -196,7 +196,12 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let builder = builder.as_array_mut().unwrap();
         let inner = builder

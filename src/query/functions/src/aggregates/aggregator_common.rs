@@ -203,7 +203,7 @@ pub fn eval_aggr_for_test(
         func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(state, &mut builder)?;
+    func.merge_result(state, false, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

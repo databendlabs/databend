@@ -194,7 +194,12 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<StringAggState>();
         let mut builder = StringType::downcast_builder(builder);
         if !state.values.is_empty() {

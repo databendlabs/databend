@@ -135,7 +135,12 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
         self.nested
             .batch_serialize(&[place.addr], place.loc, builders)

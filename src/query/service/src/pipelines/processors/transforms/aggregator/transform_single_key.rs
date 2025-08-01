@@ -262,7 +262,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             for block in self.to_merge_data.iter() {
                 func.batch_merge(&[main_addr], loc, block.get_by_offset(idx), None)?;
             }
-            func.merge_result(AggrState::new(main_addr, loc), builder)?;
+            func.merge_result(AggrState::new(main_addr, loc), false, builder)?;
         }
 
         let columns = result_builders.into_iter().map(|b| b.build()).collect();

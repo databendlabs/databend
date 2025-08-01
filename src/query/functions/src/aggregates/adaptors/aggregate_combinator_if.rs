@@ -181,8 +181,13 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        self.nested.merge_result(place, builder)
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.nested.merge_result(place, read_only, builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {

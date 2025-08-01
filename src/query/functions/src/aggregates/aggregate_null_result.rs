@@ -117,7 +117,12 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn merge_result(&self, _place: AggrState, array: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        _place: AggrState,
+        _read_only: bool,
+        array: &mut ColumnBuilder,
+    ) -> Result<()> {
         AnyType::push_default(array);
         Ok(())
     }

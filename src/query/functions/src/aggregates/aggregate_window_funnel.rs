@@ -328,7 +328,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let mut builder = UInt8Type::downcast_builder(builder);
         let result = self.get_event_level(place);
         builder.push(result);
