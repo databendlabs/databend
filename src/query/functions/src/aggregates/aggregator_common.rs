@@ -47,7 +47,7 @@ use super::AggregateFunctionSortDesc;
 use super::StatesLayout;
 use crate::BUILTIN_FUNCTIONS;
 
-pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
+pub(super) fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "{} expect to have single parameters, but got {}",
@@ -57,7 +57,7 @@ pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     Ok(())
 }
 
-pub fn assert_params<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
+pub(super) fn assert_params<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
     if actual != expected {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "{} expect to have {} params, but got {}",
@@ -67,7 +67,7 @@ pub fn assert_params<D: Display>(name: D, actual: usize, expected: usize) -> Res
     Ok(())
 }
 
-pub fn assert_variadic_params<D: Display>(
+pub(super) fn assert_variadic_params<D: Display>(
     name: D,
     actual: usize,
     expected: (usize, usize),
@@ -81,7 +81,7 @@ pub fn assert_variadic_params<D: Display>(
     Ok(())
 }
 
-pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
+pub(super) fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "{} expect to have single arguments, but got {}",
@@ -91,7 +91,7 @@ pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> 
     Ok(())
 }
 
-pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
+pub(super) fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 2 {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "{} expect to have two arguments, but got {}",
@@ -101,7 +101,7 @@ pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()>
     Ok(())
 }
 
-pub fn assert_arguments<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
+pub(super) fn assert_arguments<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
     if actual != expected {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(
             "{} expect to have {} arguments, but got {}",
@@ -111,7 +111,7 @@ pub fn assert_arguments<D: Display>(name: D, actual: usize, expected: usize) -> 
     Ok(())
 }
 
-pub fn assert_variadic_arguments<D: Display>(
+pub(super) fn assert_variadic_arguments<D: Display>(
     name: D,
     actual: usize,
     expected: (usize, usize),
@@ -208,11 +208,11 @@ pub fn eval_aggr_for_test(
 }
 
 #[inline]
-pub fn borsh_partial_deserialize<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
+pub(super) fn borsh_partial_deserialize<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
     Ok(T::deserialize(slice)?)
 }
 
-pub fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
+pub(super) fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
     check_number::<T, usize>(
         None,
         &FunctionContext::default(),
@@ -226,7 +226,7 @@ pub fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
     )
 }
 
-pub(crate) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
+pub(super) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
     let levels = match params {
         [] => vec![0.5f64],
         [param] => {

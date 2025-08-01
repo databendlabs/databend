@@ -353,9 +353,7 @@ pub fn try_create_aggregate_range_bound_function(
 /// For a column with values `(0, 1, 3, 6, 8)` and `partition_num = 3`, the function calculates the
 /// partition boundaries based on the distribution of the data. The boundaries might be `[1, 6]`.
 pub fn aggregate_range_bound_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        super::try_create_aggregate_range_bound_function,
-    ))
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_range_bound_function))
 }
 
 fn get_partitions(

@@ -92,13 +92,14 @@ impl StateSerde for SortAggState {
 }
 
 pub struct AggregateFunctionSortAdaptor {
-    inner: AggregateFunctionRef,
+    name: String,
     sort_descs: Vec<AggregateFunctionSortDesc>,
+    inner: AggregateFunctionRef,
 }
 
 impl AggregateFunction for AggregateFunctionSortAdaptor {
     fn name(&self) -> &str {
-        self.inner.name()
+        &self.name
     }
 
     fn return_type(&self) -> Result<DataType> {
@@ -269,7 +270,11 @@ impl AggregateFunctionSortAdaptor {
         if sort_descs.is_empty() {
             return Ok(inner);
         }
-        Ok(Arc::new(AggregateFunctionSortAdaptor { inner, sort_descs }))
+        Ok(Arc::new(AggregateFunctionSortAdaptor {
+            name: format!("SortCombinator({})", inner.name()),
+            inner,
+            sort_descs,
+        }))
     }
 
     fn get_state(place: AggrState) -> &mut SortAggState {
@@ -311,6 +316,6 @@ impl AggregateFunctionSortAdaptor {
 
 impl Display for AggregateFunctionSortAdaptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        f.write_str(&self.name)
     }
 }

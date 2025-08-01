@@ -14,10 +14,16 @@
 
 use super::*;
 
+mod aggregate_combinator_distinct;
+mod aggregate_combinator_if;
+mod aggregate_combinator_state;
 mod aggregate_null_adaptor;
 mod aggregate_ornull_adaptor;
 mod aggregate_sort_adaptor;
 
+pub use aggregate_combinator_distinct::*;
+pub use aggregate_combinator_if::*;
+pub use aggregate_combinator_state::*;
 pub use aggregate_null_adaptor::*;
 pub use aggregate_ornull_adaptor::*;
 pub use aggregate_sort_adaptor::*;

@@ -51,7 +51,7 @@ impl AggregateStateCombinator {
     ) -> Result<AggregateFunctionRef> {
         let arg_name = arguments
             .iter()
-            .map(|x| x.to_string())
+            .map(DataType::to_string)
             .collect::<Vec<_>>()
             .join(", ");
 
