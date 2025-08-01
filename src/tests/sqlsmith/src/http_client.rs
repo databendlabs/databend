@@ -104,7 +104,7 @@ pub(crate) struct HttpSessionConf {
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
-    variables: Vec<(String, String)>,
+    variables: Option<Vec<(String, String)>>,
     pub last_query_result_cache_key: String,
 }
 
