@@ -42,6 +42,7 @@ use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
 use super::batch_merge1;
+use super::batch_serialize1;
 use super::AggregateFunctionSortDesc;
 use super::StateSerde;
 
@@ -60,18 +61,16 @@ impl StateSerde for SortAggState {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggregateFunctionSortAdaptor::get_state(AggrState::new(*place, loc));
+        batch_serialize1::<BinaryType, Self, _>(places, &loc[..1], builders, |state, builder| {
             let columns = state
                 .columns
                 .iter()
-                .map(|builder| builder.clone().build())
+                .map(|builder| builder.clone().build()) // todo: this clone needs to be eliminated
                 .collect::<Vec<_>>();
-            columns.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+            columns.serialize(&mut builder.data)?;
+            builder.commit_row();
+            Ok(())
+        })
     }
 
     fn batch_merge(
@@ -80,7 +79,7 @@ impl StateSerde for SortAggState {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+        batch_merge1::<BinaryType, Self, _>(places, &loc[..1], state, filter, |state, mut data| {
             let columns: Vec<Column> = BorshDeserialize::deserialize(&mut data)?;
             let rhs: Vec<_> = columns
                 .into_iter()
