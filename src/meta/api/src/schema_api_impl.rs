@@ -2113,6 +2113,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             update_temp_tables: _,
         } = req;
 
+        // Generate a random transaction ID for idempotency
+        let txn_id = Uuid::new_v4().to_string();
+
         let mut tbl_seqs = HashMap::new();
         let mut txn = TxnRequest::default();
         let mut mismatched_tbs = vec![];
@@ -2279,10 +2282,33 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
+
+        // Add transaction ID to the transaction with 5-minute expiration
+        let txn_id_key = format!("_txn_id/{}", txn_id);
+        txn.if_then.push(TxnOp::put_with_ttl(
+            txn_id_key.clone(),
+            vec![],
+            Some(Duration::from_secs(300)),
+        ));
+
+        // Add get operation to check if transaction ID exists in else branch
+        txn.else_then.push(TxnOp::get(txn_id_key));
+
         let (succ, responses) = send_txn(self, txn).await?;
         if succ {
             return Ok(Ok(UpdateTableMetaReply {}));
         }
+
+        // Check if transaction ID exists in else branch response (idempotency check)
+        if let Some(Response::Get(get_resp)) = responses.last().and_then(|r| r.response.as_ref()) {
+            if get_resp.value.is_some() {
+                info!(
+                    "Transaction ID exists, meaning transaction was already executed successfully"
+                );
+                return Ok(Ok(UpdateTableMetaReply {}));
+            }
+        }
+
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
             let Some(Response::Get(get_resp)) = &resp.response else {
