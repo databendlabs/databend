@@ -3932,6 +3932,8 @@ Functions overloads:
 23 to_int8(Float64 NULL) :: Int8 NULL
 24 to_int8(Boolean) :: Int8
 25 to_int8(Boolean NULL) :: Int8 NULL
+0 to_jsonb_binary(Variant) :: Binary
+1 to_jsonb_binary(Variant NULL) :: Binary NULL
 0 to_minute(Timestamp) :: UInt8
 1 to_minute(Timestamp NULL) :: UInt8 NULL
 0 to_monday(Date) :: Date

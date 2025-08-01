@@ -299,17 +299,15 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Geometry(bytes) => {
             let geom = Ewkb(bytes).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
-                .write_to_vec(buf);
+            jsonb::parse_owned_jsonb_with_buf(geom.as_bytes(), buf)
+                .expect("failed to parse geojson to json value");
             return;
         }
         ScalarRef::Geography(bytes) => {
             // todo: Implement direct conversion, omitting intermediate processes
             let geom = Ewkb(bytes.0).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
-                .write_to_vec(buf);
+            jsonb::parse_owned_jsonb_with_buf(geom.as_bytes(), buf)
+                .expect("failed to parse geojson to json value");
             return;
         }
     };
