@@ -8,11 +8,11 @@ RUN apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
-COPY ./distro/$TARGETPLATFORM/databend-meta /databend-meta
-COPY ./distro/$TARGETPLATFORM/databend-metactl /databend-metactl
+COPY ./distro/$TARGETPLATFORM/databend-meta /usr/bin/databend-meta
+COPY ./distro/$TARGETPLATFORM/databend-metactl /usr/bin/databend-metactl
 RUN useradd --uid 1000 --shell /sbin/nologin \
     --home-dir /var/lib/databend --user-group \
     --comment "Databend cloud data analytics" databend && \
     mkdir -p /var/lib/databend && \
     chown -R databend:databend /var/lib/databend
-ENTRYPOINT ["/databend-meta"]
+ENTRYPOINT ["/usr/bin/databend-meta"]
