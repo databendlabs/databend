@@ -27,9 +27,7 @@ use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
-use serde::Serializer;
 use url::Url;
 
 struct GlobalCookieStore {
