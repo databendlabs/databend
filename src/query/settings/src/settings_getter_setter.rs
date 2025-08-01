@@ -877,6 +877,16 @@ impl Settings {
         self.try_get_u64("max_spill_io_requests")
     }
 
+    // Get grouping_sets_channel_size.
+    pub fn get_grouping_sets_channel_size(&self) -> Result<u64> {
+        self.try_get_u64("grouping_sets_channel_size")
+    }
+
+    // Set grouping_sets_channel_size.
+    pub fn set_grouping_sets_channel_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("grouping_sets_channel_size", val)
+    }
+
     pub fn get_short_sql_max_length(&self) -> Result<u64> {
         self.try_get_u64("short_sql_max_length")
     }
