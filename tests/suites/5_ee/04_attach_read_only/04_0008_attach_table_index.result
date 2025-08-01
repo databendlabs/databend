@@ -2,9 +2,7 @@ init table
 4
 check index
 idx_text        NGRAM   default att_phrases
-idx_text        NGRAM   default phrases
 >>>> REFRESH NGRAM INDEX idx_text ON phrases;
 idx_text        NGRAM   default att_phrases
-idx_text        NGRAM   default phrases
 >>>> DROP NGRAM INDEX idx_text ON phrases;
 idx_text        NGRAM   default att_phrases

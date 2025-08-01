@@ -13,23 +13,23 @@ storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_options_in
 
 # attach table
 echo "drop table if exists att_phrases" | $BENDSQL_CLIENT_CONNECT
-echo "attach table att_phrases 's3://testbucket/admin/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "attach table att_phrases 's3://testbucket/admin/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
 
 # check index
 echo "check index"
-echo "select name, type, database, table from system.indexes;" | $BENDSQL_CLIENT_CONNECT
+echo "select name, type, database, table from system.indexes where table = 'att_phrases';" | $BENDSQL_CLIENT_CONNECT
 
 # refresh ngram index
 stmt "REFRESH NGRAM INDEX idx_text ON phrases;"
 echo "drop table if exists att_phrases" | $BENDSQL_CLIENT_CONNECT
 echo "attach table att_phrases 's3://testbucket/admin/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
-echo "select name, type, database, table from system.indexes;" | $BENDSQL_CLIENT_CONNECT
+echo "select name, type, database, table from system.indexes where table = 'att_phrases';" | $BENDSQL_CLIENT_CONNECT
 
 # drop ngram index
 stmt "DROP NGRAM INDEX idx_text ON phrases;"
 echo "drop table if exists att_phrases" | $BENDSQL_CLIENT_CONNECT
 echo "attach table att_phrases 's3://testbucket/admin/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
-echo "select name, type, database, table from system.indexes;" | $BENDSQL_CLIENT_CONNECT
+echo "select name, type, database, table from system.indexes where table = 'att_phrases';" | $BENDSQL_CLIENT_CONNECT
 
 echo "drop table if exists phrases" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists att_phrases" | $BENDSQL_CLIENT_CONNECT
