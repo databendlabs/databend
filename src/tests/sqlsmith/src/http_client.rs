@@ -89,25 +89,6 @@ pub(crate) struct HttpSessionConf {
     pub(crate) last_server_info: Option<ServerInfo>,
     #[serde(default)]
     pub(crate) last_query_ids: Vec<String>,
-    /// hide state not useful to clients
-    /// so client only need to know there is a String field `internal`,
-    /// which need to carry with session/conn
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(
-        serialize_with = "serialize_as_json_string",
-        deserialize_with = "deserialize_from_json_string"
-    )]
-    pub(crate) internal: Option<HttpSessionStateInternal>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
-pub struct HttpSessionStateInternal {
-    /// value is JSON of Scalar
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) variables: Option<Vec<(String, String)>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) last_query_result_cache_key: Option<String>,
 }
 
 fn serialize_as_json_string<S>(
