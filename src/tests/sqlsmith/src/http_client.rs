@@ -106,7 +106,8 @@ pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) variables: Option<Vec<(String, String)>>,
-    pub(crate) last_query_result_cache_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) last_query_result_cache_key: Option<String>,
 }
 
 fn serialize_as_json_string<S>(
