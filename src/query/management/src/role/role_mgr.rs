@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
@@ -35,6 +36,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -48,6 +50,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -296,6 +299,80 @@ impl RoleApi for RoleMgr {
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_udf_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::UDF {
+            name: "foo".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let udfs = values.try_collect().await?;
+        Ok(udfs)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_stage_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Stage {
+            name: "s1".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let stages = values.try_collect().await?;
+        Ok(stages)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_seq_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Sequence {
+            name: "seq1".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let seqs = values.try_collect().await?;
+        Ok(seqs)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_connection_ownerships(
+        &self,
+    ) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Connection {
+            name: "con".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let conns = values.try_collect().await?;
+        Ok(conns)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_warehouse_ownerships(
+        &self,
+    ) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Warehouse {
+            id: "w".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let ws = values.try_collect().await?;
+        Ok(ws)
     }
 
     /// General role update.
