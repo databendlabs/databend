@@ -120,33 +120,37 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
     fn accumulate(
         &self,
         place: AggrState,
-        entries: ProjectedBlock,
+        block: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = Self::get_state(place);
-        Self::init_columns(entries, state, Some(input_rows));
+        Self::init_columns(block, state, Some(input_rows));
 
         match validity {
             Some(validity) => {
-                for (i, entry) in entries.iter().enumerate() {
-                    entry
-                        .downcast::<AnyType>()
-                        .unwrap()
-                        .iter()
-                        .zip(validity.iter())
-                        .for_each(|(v, b)| {
-                            if b {
-                                state.columns[i].push(v);
-                            }
-                        });
+                for (view, builder) in block
+                    .iter()
+                    .map(|entry| entry.downcast::<AnyType>().unwrap())
+                    .zip(&mut state.columns)
+                {
+                    view.iter().zip(validity.iter()).for_each(|(v, b)| {
+                        if b {
+                            builder.push(v);
+                        }
+                    });
                 }
             }
             None => {
-                for (i, entry) in entries.iter().enumerate() {
-                    entry.downcast::<AnyType>().unwrap().iter().for_each(|v| {
-                        state.columns[i].push(v);
-                    });
+                for (entry, builder) in block.iter().zip(&mut state.columns) {
+                    match entry {
+                        BlockEntry::Const(scalar, _, n) => {
+                            builder.push_repeat(&scalar.as_ref(), *n);
+                        }
+                        BlockEntry::Column(column) => {
+                            builder.append_column(column);
+                        }
+                    }
                 }
             }
         }
@@ -154,14 +158,11 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, block: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
-        Self::init_columns(columns, state, None);
-
-        for (i, column) in columns.iter().enumerate() {
-            if let Some(v) = column.index(row) {
-                state.columns[i].push(v)
-            }
+        Self::init_columns(block, state, None);
+        for (entry, builder) in block.iter().zip(&mut state.columns) {
+            builder.push(entry.index(row).unwrap())
         }
         Ok(())
     }
@@ -199,7 +200,6 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = Self::get_state(place);
-        let inner_place = place.remove_first_loc();
 
         if state.columns.is_empty() || state.columns[0].len() == 0 {
             return Ok(());
@@ -209,8 +209,8 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         let mut block = DataBlock::new(
             state
                 .columns
-                .drain(..)
-                .map(|builder| builder.build().into())
+                .iter()
+                .map(|builder| builder.clone().build().into())
                 .collect(),
             num_rows,
         );
@@ -230,11 +230,13 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         }
         block = DataBlock::sort(&block, &sort_descs, None)?;
 
+        let inner_place = place.remove_first_loc();
+        self.inner.init_state(inner_place);
+
         let args = (0..block.num_columns())
             .filter(|i| !not_arg_indexes.contains(i))
             .collect_vec();
 
-        self.inner.init_state(inner_place);
         self.inner.accumulate(
             inner_place,
             ProjectedBlock::project(&args, &block),
@@ -291,11 +293,11 @@ impl AggregateFunctionSortAdaptor {
             .write_state(state);
     }
 
-    fn init_columns(entries: ProjectedBlock, state: &mut SortAggState, num_rows: Option<usize>) {
+    fn init_columns(block: ProjectedBlock, state: &mut SortAggState, num_rows: Option<usize>) {
         if !state.columns.is_empty() {
             return;
         }
-        state.columns = entries
+        state.columns = block
             .iter()
             .map(|entry| {
                 ColumnBuilder::with_capacity(&entry.data_type(), num_rows.unwrap_or_default())
