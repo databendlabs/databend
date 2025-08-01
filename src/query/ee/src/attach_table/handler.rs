@@ -105,6 +105,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             field_comments,
             drop_on: None,
             statistics: stat,
+            indexes: snapshot_hint.indexes,
             ..Default::default()
         };
         let req = CreateTableReq {

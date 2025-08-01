@@ -714,6 +714,7 @@ impl FuseTable {
                 table_info.meta.comment = comments.table_comment;
                 // TODO assert about field comments
                 table_info.meta.field_comments = comments.field_comments;
+                table_info.meta.indexes = hint.indexes;
             }
         }
 
