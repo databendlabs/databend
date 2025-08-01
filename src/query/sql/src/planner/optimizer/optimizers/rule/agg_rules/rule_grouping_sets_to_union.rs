@@ -115,12 +115,13 @@ impl Rule for RuleGroupingSetsToUnion {
                 let hash = hasher.finish();
                 let temp_cte_name = format!("cte_groupingsets_{hash}");
 
-                let channel_size = self.ctx
+                let channel_size = self
+                    .ctx
                     .get_table_ctx()
                     .get_settings()
                     .get_grouping_sets_channel_size()
                     .unwrap_or(2);
-                
+
                 let cte_materialized_sexpr = SExpr::create_unary(
                     MaterializedCTE::new(temp_cte_name.clone(), None, Some(channel_size as usize)),
                     agg_input.clone(),

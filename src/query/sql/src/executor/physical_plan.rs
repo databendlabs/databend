@@ -1020,7 +1020,7 @@ impl PhysicalPlan {
                 .join(", "),
             PhysicalPlan::MaterializedCTE(v) => format!("CTE({})", v.cte_name),
             PhysicalPlan::MaterializeCTERef(v) => format!("CTE_REF({})", v.cte_name),
-                
+
             _ => String::new(),
         })
     }
