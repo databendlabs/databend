@@ -104,8 +104,9 @@ pub(crate) struct HttpSessionConf {
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
-    variables: Option<Vec<(String, String)>>,
-    pub last_query_result_cache_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) variables: Option<Vec<(String, String)>>,
+    pub(crate) last_query_result_cache_key: String,
 }
 
 fn serialize_as_json_string<S>(
