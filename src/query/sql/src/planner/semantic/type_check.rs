@@ -117,6 +117,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_version::UDF_CLIENT_USER_AGENT;
 use derive_visitor::Drive;
@@ -5252,7 +5253,9 @@ impl<'a> TypeChecker<'a> {
             .get_enable_experimental_sequence_privilege_check()?
         {
             Some(databend_common_base::runtime::block_on(async move {
-                self.ctx.get_visibility_checker(false).await
+                self.ctx
+                    .get_visibility_checker(false, Object::Sequence)
+                    .await
             })?)
         } else {
             None

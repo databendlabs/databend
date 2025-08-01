@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -61,7 +62,7 @@ impl AsyncSystemTable for UserFunctionsTable {
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let user_functions = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false).await?;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
             let udfs = UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?;
             udfs.into_iter()
                 .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
