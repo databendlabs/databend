@@ -18,6 +18,7 @@ use chrono::Utc;
 use databend_common_ast::ast::TaskSql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::task_utils;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::task::TaskMgr;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
@@ -33,6 +34,7 @@ use databend_common_users::UserApiProvider;
 
 use crate::interpreters::task::TaskInterpreter;
 use crate::sessions::QueryContext;
+use crate::task::TaskService;
 
 pub(crate) struct PrivateTaskInterpreter;
 
@@ -87,6 +89,14 @@ impl TaskInterpreter for PrivateTaskInterpreter {
     }
 
     async fn alter_task(&self, _ctx: &Arc<QueryContext>, plan: &AlterTaskPlan) -> Result<()> {
+        if TaskService::instance()
+            .is_task_executing(&plan.task_name)
+            .await?
+        {
+            return Err(ErrorCode::TaskRunningWhenModifyingAfter(
+                "Task Running when modifying after",
+            ));
+        }
         UserApiProvider::instance()
             .task_api(&plan.tenant)
             .alter_task(&plan.task_name, &plan.alter_options)
@@ -108,6 +118,14 @@ impl TaskInterpreter for PrivateTaskInterpreter {
     }
 
     async fn drop_task(&self, _ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()> {
+        if TaskService::instance()
+            .is_task_executing(&plan.task_name)
+            .await?
+        {
+            return Err(ErrorCode::TaskRunningWhenModifyingAfter(
+                "Task Running when modifying after",
+            ));
+        }
         UserApiProvider::instance()
             .task_api(&plan.tenant)
             .drop_task(&plan.task_name)

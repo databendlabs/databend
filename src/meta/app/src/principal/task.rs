@@ -172,3 +172,63 @@ impl TaskMessage {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskState {
+    pub is_succeeded: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DependentType {
+    After = 0,
+    Before = 1,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskDependent {
+    pub ty: DependentType,
+    pub source: String,
+    pub target: String,
+}
+
+impl TaskDependent {
+    pub fn new(ty: DependentType, source: String, target: String) -> Self {
+        Self { ty, source, target }
+    }
+}
+
+mod kvapi_key_impl {
+    use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+
+    use crate::principal::DependentType;
+    use crate::principal::TaskDependent;
+
+    impl kvapi::KeyCodec for TaskDependent {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            match self.ty {
+                DependentType::After => b.push_str("After"),
+                DependentType::Before => b.push_str("Before"),
+            }
+            .push_str(self.source.as_str())
+            .push_str(self.target.as_str())
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let ty = match parser.next_str()?.as_str() {
+                "After" => DependentType::After,
+                "Before" => DependentType::Before,
+                str => {
+                    return Err(KeyError::InvalidId {
+                        s: str.to_string(),
+                        reason: "Invalid Dependent Type".to_string(),
+                    })
+                }
+            };
+            let source = parser.next_str()?;
+            let target = parser.next_str()?;
+
+            Ok(Self { ty, source, target })
+        }
+    }
+}

@@ -365,7 +365,7 @@ sleep 6
 response33=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
 
 actual=$(echo "$response33" | jq -c '.data')
-expected='[["1","0"],["1","0"],["1","0"],["1","1"],["2","0"],["2","0"],["2","2"],["3","0"],["3","0"],["3","0"]]'
+expected='[["1","0"],["1","0"],["1","0"],["1","1"],["2","0"],["2","0"],["2","2"],["3","0"],["3","0"]]'
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"

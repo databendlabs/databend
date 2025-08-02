@@ -405,6 +405,8 @@ build_exceptions! {
     TaskScheduleAndAfterConflict(2615),
     /// Task when condition not met
     TaskWhenConditionNotMet(2616),
+    /// Task Running when modifying after
+    TaskRunningWhenModifyingAfter(2617),
 }
 
 // Search and External Service Errors [1901-1903, 1910]
