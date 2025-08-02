@@ -3965,6 +3965,7 @@ dependencies = [
  "serde",
  "serde_json",
  "state-machine-api",
+ "tempfile",
  "thiserror 1.0.69",
  "tonic",
  "tonic-build",
