@@ -54,6 +54,7 @@ use concurrent_queue::ConcurrentQueue;
 use log::LevelFilter;
 use pin_project_lite::pin_project;
 
+use crate::runtime::datablock_limit::DataBlockLimit;
 use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
@@ -144,6 +145,7 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
+    pub datablock_limit: Option<Arc<DataBlockLimit>>,
 }
 
 impl Clone for TrackingPayload {
@@ -161,6 +163,7 @@ impl Clone for TrackingPayload {
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
+            datablock_limit: self.datablock_limit.clone(),
         }
     }
 }
@@ -243,6 +246,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
+                datablock_limit: None,
             }),
         }
     }
@@ -368,6 +372,20 @@ impl ThreadTracker {
                     .load(std::sync::atomic::Ordering::SeqCst)
             })
             .unwrap_or(0)
+    }
+
+    pub fn datablock_limit() -> Option<&'static Arc<DataBlockLimit>> {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .datablock_limit
+                    .as_ref()
+                    .map(|v| unsafe { std::mem::transmute(v) })
+            })
+            .ok()
+            .and_then(|x| x)
     }
 }
 

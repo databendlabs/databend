@@ -14,6 +14,7 @@
 
 mod backtrace;
 mod catch_unwind;
+mod datablock_limit;
 mod defer;
 pub mod error_info;
 mod executor_stats;
@@ -35,6 +36,7 @@ pub use backtrace::AsyncTaskItem;
 pub use catch_unwind::catch_unwind;
 pub use catch_unwind::drop_guard;
 pub use catch_unwind::CatchUnwindFuture;
+pub use datablock_limit::DataBlockLimit;
 pub use defer::defer;
 pub use executor_stats::ExecutorStats;
 pub use executor_stats::ExecutorStatsSlot;

@@ -1417,6 +1417,21 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_process_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Sets the maximum number of rows that can processed by processor. Setting it to 0 means no limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_process_bytes", DefaultSettingValue {
+                    // default: 10 MB
+                    value: UserSettingValue::UInt64(10000000),
+                    desc: "Sets the maximum number of bytes that can processed by processor. Setting it to 0 means no limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

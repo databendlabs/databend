@@ -129,7 +129,6 @@ impl Processor for ResizeProcessor {
             self.outputs[output_index]
                 .port
                 .push_data(self.inputs[input_index].port.pull_data().unwrap());
-            self.inputs[input_index].status = PortStatus::Idle;
             self.outputs[output_index].status = PortStatus::Idle;
 
             if self.inputs[input_index].port.is_finished() {
@@ -141,7 +140,12 @@ impl Processor for ResizeProcessor {
                 continue;
             }
 
-            self.inputs[input_index].port.set_need_data();
+            if !self.inputs[input_index].port.has_data() {
+                self.inputs[input_index].status = PortStatus::Idle;
+                self.inputs[input_index].port.set_need_data();
+            } else {
+                self.waiting_inputs.push_back(input_index);
+            }
         }
 
         if self.finished_outputs == self.outputs.len() {

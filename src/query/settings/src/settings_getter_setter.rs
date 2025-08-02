@@ -1051,4 +1051,12 @@ impl Settings {
     pub fn get_enforce_local(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_local")? == 1)
     }
+
+    pub fn get_max_process_rows(&self) -> Result<u64> {
+        self.try_get_u64("max_process_rows")
+    }
+
+    pub fn get_max_process_bytes(&self) -> Result<u64> {
+        self.try_get_u64("max_process_bytes")
+    }
 }

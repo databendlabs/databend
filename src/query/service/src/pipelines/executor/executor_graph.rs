@@ -29,6 +29,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::DataBlockLimit;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
@@ -183,6 +184,7 @@ struct ExecutingGraph {
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
     executor_stats: ExecutorStats,
+    datablock_limit: Option<Arc<DataBlockLimit>>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -190,9 +192,9 @@ type StateLockGuard = ExecutingGraph;
 impl ExecutingGraph {
     pub fn create(
         mut pipeline: Pipeline,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        datablock_limit: Option<DataBlockLimit>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
@@ -202,7 +204,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
-            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | 1u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
@@ -210,14 +212,15 @@ impl ExecutingGraph {
             finish_condvar_notify,
             finished_error: Mutex::new(None),
             executor_stats,
+            datablock_limit: datablock_limit.map(Arc::new),
         })
     }
 
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        datablock_limit: Option<DataBlockLimit>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
@@ -229,7 +232,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
-            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | 1u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
@@ -237,6 +240,7 @@ impl ExecutingGraph {
             finish_condvar_notify,
             finished_error: Mutex::new(None),
             executor_stats,
+            datablock_limit: datablock_limit.map(Arc::new),
         })
     }
 
@@ -394,6 +398,7 @@ impl ExecutingGraph {
                 let (event, process_rows) = {
                     let mut payload = node.tracking_payload.clone();
                     payload.process_rows = AtomicUsize::new(0);
+                    payload.datablock_limit = graph.datablock_limit();
                     let guard = ThreadTracker::tracking(payload);
 
                     if state_guard_cache.is_none() {
@@ -688,24 +693,28 @@ pub struct RunningGraph(ExecutingGraph);
 impl RunningGraph {
     pub fn create(
         pipeline: Pipeline,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        datablock_limit: Option<DataBlockLimit>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state =
-            ExecutingGraph::create(pipeline, init_epoch, query_id, finish_condvar_notify)?;
+            ExecutingGraph::create(pipeline, query_id, finish_condvar_notify, datablock_limit)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
     pub fn from_pipelines(
         pipelines: Vec<Pipeline>,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        datablock_limit: Option<DataBlockLimit>,
     ) -> Result<Arc<RunningGraph>> {
-        let graph_state =
-            ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, finish_condvar_notify)?;
+        let graph_state = ExecutingGraph::from_pipelines(
+            pipelines,
+            query_id,
+            finish_condvar_notify,
+            datablock_limit,
+        )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
@@ -983,6 +992,10 @@ impl RunningGraph {
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
         self.0.executor_stats.dump_snapshot()
+    }
+
+    pub fn datablock_limit(&self) -> Option<Arc<DataBlockLimit>> {
+        self.0.datablock_limit.clone()
     }
 }
 

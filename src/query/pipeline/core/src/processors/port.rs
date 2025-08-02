@@ -19,8 +19,9 @@ use std::sync::Arc;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::ExecutorStats;
+use databend_common_base::runtime::DataBlockLimit;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -186,17 +187,49 @@ impl InputPort {
 
     #[inline(always)]
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
+        let datablock_limit = ThreadTracker::datablock_limit();
+        if let Some(limit) = datablock_limit {
+            self.pull_partial_data(limit)
+        } else {
+            self.pull_all_data()
+        }
+    }
+
+    /// Pull entire available datablock without any limit.
+    ///
+    /// This method provides the original behavior with minimal overhead
+    /// when no datablock limit is configured.
+    #[inline(always)]
+    pub fn pull_all_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
-                address => {
-                    let block = (*Box::from_raw(address)).0;
-                    if let Ok(data_block) = block.as_ref() {
-                        ExecutorStats::record_thread_tracker(data_block.num_rows());
-                    }
-                    Some(block)
+                address => Some((*Box::from_raw(address)).0),
+            }
+        }
+    }
+
+    /// Pull datablock with a size limit, preserving excess rows for subsequent pulls.
+    pub fn pull_partial_data(&self, limit: &DataBlockLimit) -> Option<Result<DataBlock>> {
+        unsafe {
+            UpdateTrigger::update_input(&self.update_trigger);
+
+            // retrieve data without changing flags to prevent concurrent modifications
+            let address = self.shared.swap(std::ptr::null_mut(), 0, 0);
+            if address.is_null() {
+                self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                return None;
+            }
+
+            let shared_data = Box::from_raw(address);
+            match shared_data.0 {
+                Ok(data_block) => self.handle_data_block_with_limit(data_block, limit),
+                Err(e) => {
+                    // for error cases, unset flags and return the error
+                    self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                    Some(Err(e))
                 }
             }
         }
@@ -214,6 +247,40 @@ impl InputPort {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
+    }
+
+    /// Process datablock with size limit, potentially splitting it
+    fn handle_data_block_with_limit(
+        &self,
+        data_block: DataBlock,
+        limit: &DataBlockLimit,
+    ) -> Option<Result<DataBlock>> {
+        let total_rows = data_block.num_rows();
+
+        // empty datablock - consume entirely
+        if total_rows == 0 {
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+            return Some(Ok(data_block));
+        }
+
+        let total_bytes = data_block.memory_size();
+        let rows_to_take = limit.rows_to_take(total_rows, total_bytes);
+
+        // no splitting needed - consume entire datablock
+        if rows_to_take >= total_rows {
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+            return Some(Ok(data_block));
+        }
+
+        // split datablock and store remainder
+        let (taken, remainder) = data_block.split_at(rows_to_take);
+        let remainder_ptr = Box::into_raw(Box::new(SharedData(Ok(remainder))));
+
+        // put back the remainder without changing flags
+        // this keeps HAS_DATA set so we will have next pull to retrieve it
+        self.shared.swap(remainder_ptr, 0, 0);
+
+        Some(Ok(taken))
     }
 }
 
