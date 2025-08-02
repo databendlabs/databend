@@ -341,6 +341,7 @@ impl MutationExpression {
                     let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
                     let s_expr = rewriter.optimize_sync(&s_expr)?;
 
+                    // The delete operation only requires the row ID to locate the row to be deleted and does not need to extract any other columns.
                     if !is_lazy_table && mutation_type != MutationType::Delete {
                         for column_index in bind_context.column_set().iter() {
                             required_columns.insert(*column_index);
