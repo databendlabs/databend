@@ -46,6 +46,7 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_users::Object;
 use log::warn;
 
 use crate::generate_catalog_meta;
@@ -359,7 +360,7 @@ pub(crate) async fn dump_tables(
     let visibility_checker = if catalog.is_external() {
         None
     } else {
-        Some(ctx.get_visibility_checker(false).await?)
+        Some(ctx.get_visibility_checker(false, Object::All).await?)
     };
 
     let mut final_dbs: Vec<Arc<dyn Database>> = Vec::new();

@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -121,7 +122,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let visibility_checker = if ctl.is_external() {
             None
         } else {
-            Some(ctx.get_visibility_checker(false).await?)
+            Some(ctx.get_visibility_checker(false, Object::All).await?)
         };
         let catalog_dbs = visibility_checker
             .as_ref()

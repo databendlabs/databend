@@ -47,6 +47,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storages_fuse::table_functions::string_literal;
+use databend_common_users::Object;
 
 use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
@@ -210,7 +211,10 @@ impl AsyncSource for InspectParquetSource {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
-            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User

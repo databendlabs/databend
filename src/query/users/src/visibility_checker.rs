@@ -26,6 +26,15 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
 use itertools::Itertools;
 
+pub enum Object {
+    Stage,
+    UDF,
+    Warehouse,
+    Connection,
+    Sequence,
+    All,
+}
+
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
 /// database or table.
 /// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
