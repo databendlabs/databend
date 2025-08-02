@@ -574,6 +574,10 @@ impl Binder {
             return Ok(());
         }
 
+        if !metadata.table(0).table().supported_lazy_materialize() {
+            return Ok(());
+        }
+
         let cols = metadata.columns();
         let virtual_cols = cols
             .iter()

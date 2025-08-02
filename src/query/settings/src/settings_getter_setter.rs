@@ -188,6 +188,10 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    pub fn get_max_block_bytes(&self) -> Result<u64> {
+        self.try_get_u64("max_block_bytes")
+    }
+
     // Set max_block_size.
     pub fn set_max_block_size(&self, val: u64) -> Result<()> {
         self.try_set_u64("max_block_size", val)
