@@ -187,6 +187,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -2105,6 +2106,19 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
+        self.update_multi_table_meta_with_retry(req, 1).await
+    }
+
+    /// This function is ONLY for testing purposes.
+    /// In production environment, use `update_multi_table_meta` instead.
+    ///
+    /// `retry_times` is used to simulate the retry of the transaction.
+    /// It is only for test.
+    async fn update_multi_table_meta_with_retry(
+        &self,
+        req: UpdateMultiTableMetaReq,
+        retry_times: u32,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,
@@ -2112,6 +2126,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             deduplicated_labels,
             update_temp_tables: _,
         } = req;
+
+        // Generate a random transaction ID for idempotency
+        let txn_id = Uuid::new_v4().to_string();
 
         let mut tbl_seqs = HashMap::new();
         let mut txn = TxnRequest::default();
@@ -2279,10 +2296,44 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
+
+        // Add transaction ID to the transaction with 5-minute expiration
+        let txn_id_key = format!("_txn_id/{}", txn_id);
+
+        // Add condition to check that transaction ID does not exist (empty)
+        txn.condition
+            .push(TxnCondition::eq_seq(txn_id_key.clone(), 0));
+
+        txn.if_then.push(TxnOp::put_with_ttl(
+            txn_id_key.clone(),
+            vec![],
+            Some(Duration::from_secs(300)),
+        ));
+
+        // Add get operation to check if transaction ID exists in else branch
+        txn.else_then.push(TxnOp::get(txn_id_key));
+
+        // Simulate retry behavior for testing: send transaction multiple times
+        for _ in 0..retry_times - 1 {
+            send_txn(self, txn.clone()).await?;
+        }
+
         let (succ, responses) = send_txn(self, txn).await?;
+
         if succ {
             return Ok(Ok(UpdateTableMetaReply {}));
         }
+
+        // Check if transaction ID exists in else branch response (idempotency check)
+        if let Some(Response::Get(get_resp)) = responses.last().and_then(|r| r.response.as_ref()) {
+            if get_resp.value.is_some() {
+                info!(
+                    "Transaction ID exists, meaning transaction was already executed successfully"
+                );
+                return Ok(Ok(UpdateTableMetaReply {}));
+            }
+        }
+
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
             let Some(Response::Get(get_resp)) = &resp.response else {

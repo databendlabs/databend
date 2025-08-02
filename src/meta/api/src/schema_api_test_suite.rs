@@ -2605,10 +2605,15 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
-                    update_table_metas: vec![(req, table.as_ref().clone())],
-                    ..Default::default()
-                })
+
+                // test retry idempotency
+                mt.update_multi_table_meta_with_retry(
+                    UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    },
+                    2,
+                )
                 .await?
                 .unwrap();
 
@@ -2636,10 +2641,13 @@ impl SchemaApiTestSuite {
                     base_snapshot_location: None,
                 };
                 let res = mt
-                    .update_multi_table_meta(UpdateMultiTableMetaReq {
-                        update_table_metas: vec![(req, table.as_ref().clone())],
-                        ..Default::default()
-                    })
+                    .update_multi_table_meta_with_retry(
+                        UpdateMultiTableMetaReq {
+                            update_table_metas: vec![(req, table.as_ref().clone())],
+                            ..Default::default()
+                        },
+                        3,
+                    )
                     .await?;
 
                 let err = res.unwrap_err();
@@ -2683,11 +2691,14 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
-                    update_table_metas: vec![(req, table.as_ref().clone())],
-                    copied_files: vec![(table_id, upsert_source_table)],
-                    ..Default::default()
-                })
+                mt.update_multi_table_meta_with_retry(
+                    UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        copied_files: vec![(table_id, upsert_source_table)],
+                        ..Default::default()
+                    },
+                    4,
+                )
                 .await?
                 .unwrap();
 
@@ -2733,11 +2744,14 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                 };
-                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
-                    update_table_metas: vec![(req, table.as_ref().clone())],
-                    copied_files: vec![(table_id, upsert_source_table)],
-                    ..Default::default()
-                })
+                mt.update_multi_table_meta_with_retry(
+                    UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        copied_files: vec![(table_id, upsert_source_table)],
+                        ..Default::default()
+                    },
+                    5,
+                )
                 .await?
                 .unwrap();
 
