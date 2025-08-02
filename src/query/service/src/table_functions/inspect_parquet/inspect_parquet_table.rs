@@ -237,9 +237,12 @@ impl AsyncSource for InspectParquetSource {
         };
 
         let first_file = file_info.first_file(&operator).await?;
-
+        let Some(first_file) = first_file else {
+            return Ok(None);
+        };
         let parquet_schema =
             read_metadata_async(&first_file.path, &operator, Some(first_file.size)).await?;
+
         let created = match parquet_schema.file_metadata().created_by() {
             Some(user) => user.to_owned(),
             None => String::from("NULL"),

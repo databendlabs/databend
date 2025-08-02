@@ -67,6 +67,7 @@ mod user_functions_table;
 mod users_table;
 mod util;
 mod virtual_columns_table;
+mod zero_table;
 
 pub use backtrace_table::BacktraceTable;
 pub use build_options_table::BuildOptionsTable;
@@ -132,3 +133,4 @@ pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;
 pub use util::generate_catalog_meta;
 pub use virtual_columns_table::VirtualColumnsTable;
+pub use zero_table::ZeroTable;

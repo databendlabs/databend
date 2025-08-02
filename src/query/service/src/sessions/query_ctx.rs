@@ -1771,6 +1771,7 @@ impl TableContext for QueryContext {
                         read_options = read_options.with_do_prewhere(false);
                     }
                     ParquetTable::create(
+                        self,
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -1823,7 +1824,7 @@ impl TableContext for QueryContext {
                     stage_root,
                     is_variant,
                 };
-                OrcTable::try_create(info).await
+                OrcTable::try_create(self, info).await
             }
             FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(

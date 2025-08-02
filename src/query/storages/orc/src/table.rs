@@ -71,7 +71,10 @@ impl OrcTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(mut stage_table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
+    pub async fn try_create(
+        ctx: &dyn TableContext,
+        mut stage_table_info: StageTableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let stage_info = &stage_table_info.stage_info;
         if stage_table_info.is_variant {
             let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -88,18 +91,16 @@ impl OrcTable {
             let files_to_read = &stage_table_info.files_to_copy;
             let operator = init_stage_operator(stage_info)?;
             let first_file = match &files_to_read {
-                Some(files) => files[0].clone(),
-                None => stage_table_info
-                    .files_info
-                    .first_file(&operator)
-                    .await?
-                    .clone(),
+                Some(files) => Some(files[0].clone()),
+                None => stage_table_info.files_info.first_file(&operator).await?,
+            };
+
+            let Some(first_file) = first_file else {
+                return ctx.get_zero_table().await;
             };
 
             let schema_from = first_file.path.clone();
-
             let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
-
             let table_schema = Arc::new(
                 TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
             );

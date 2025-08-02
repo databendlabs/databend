@@ -108,6 +108,7 @@ impl ParquetTable {
 
     #[async_backtrace::framed]
     pub async fn create(
+        ctx: &dyn TableContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         read_options: ParquetReadOptions,
@@ -119,13 +120,18 @@ impl ParquetTable {
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
-            Some(files) => files[0].path.clone(),
-            None => files_info.first_file(&operator).await?.path.clone(),
+            Some(files) => Some(files[0].clone()),
+            None => files_info.first_file(&operator).await?,
         };
+
+        let Some(first_file) = first_file else {
+            return ctx.get_zero_table().await;
+        };
+
+        let first_file = first_file.path;
 
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
-
         let schema =
             arrow_to_table_schema(&arrow_schema, case_sensitive, fmt.use_logic_type)?.into();
         let table_info = create_parquet_table_info(schema, &stage_info)?;

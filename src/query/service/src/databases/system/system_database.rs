@@ -70,6 +70,7 @@ use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
+use databend_common_storages_system::ZeroTable;
 use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
 use databend_common_version::DATABEND_COMMIT_AUTHORS;
 use databend_common_version::DATABEND_CREDITS_LICENSES;
@@ -105,6 +106,7 @@ impl SystemDatabase {
     ) -> Self {
         let mut table_list = vec![
             OneTable::create(sys_db_meta.next_table_id()),
+            ZeroTable::create(sys_db_meta.next_table_id()),
             FunctionsTable::create(sys_db_meta.next_table_id()),
             ContributorsTable::create(sys_db_meta.next_table_id(), DATABEND_COMMIT_AUTHORS),
             CreditsTable::create(
