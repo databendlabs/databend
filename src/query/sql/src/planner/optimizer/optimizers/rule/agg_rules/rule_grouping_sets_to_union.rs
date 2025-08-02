@@ -27,6 +27,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::OptimizerContext;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
@@ -62,10 +63,11 @@ const ID: RuleID = RuleID::GroupingSetsToUnion;
 pub struct RuleGroupingSetsToUnion {
     id: RuleID,
     matchers: Vec<Matcher>,
+    ctx: Arc<OptimizerContext>,
 }
 
 impl RuleGroupingSetsToUnion {
-    pub fn new() -> Self {
+    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
         Self {
             id: ID,
             //  Aggregate
@@ -78,6 +80,7 @@ impl RuleGroupingSetsToUnion {
                     children: vec![Matcher::Leaf],
                 }],
             }],
+            ctx,
         }
     }
 }
@@ -112,8 +115,15 @@ impl Rule for RuleGroupingSetsToUnion {
                 let hash = hasher.finish();
                 let temp_cte_name = format!("cte_groupingsets_{hash}");
 
+                let channel_size = self
+                    .ctx
+                    .get_table_ctx()
+                    .get_settings()
+                    .get_grouping_sets_channel_size()
+                    .unwrap_or(2);
+
                 let cte_materialized_sexpr = SExpr::create_unary(
-                    MaterializedCTE::new(temp_cte_name.clone(), None, Some(1)),
+                    MaterializedCTE::new(temp_cte_name.clone(), None, Some(channel_size as usize)),
                     agg_input.clone(),
                 );
 
@@ -208,12 +218,6 @@ impl Rule for RuleGroupingSetsToUnion {
 
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
-    }
-}
-
-impl Default for RuleGroupingSetsToUnion {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

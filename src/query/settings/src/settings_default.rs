@@ -228,6 +228,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("grouping_sets_channel_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Sets the channel size for grouping sets to union transformation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent storage I/O requests.",
