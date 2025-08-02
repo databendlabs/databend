@@ -2109,6 +2109,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         self.update_multi_table_meta_with_retry(req, 1).await
     }
 
+    /// This function is ONLY for testing purposes.
+    /// In production environment, use `update_multi_table_meta` instead.
+    ///
     /// `retry_times` is used to simulate the retry of the transaction.
     /// It is only for test.
     async fn update_multi_table_meta_with_retry(
@@ -2310,13 +2313,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // Add get operation to check if transaction ID exists in else branch
         txn.else_then.push(TxnOp::get(txn_id_key));
 
-        #[cfg(test)]
+        // Simulate retry behavior for testing: send transaction multiple times
         for _ in 0..retry_times - 1 {
             send_txn(self, txn.clone()).await?;
-        }
-        #[cfg(not(test))]
-        {
-            assert_eq!(retry_times, 1);
         }
 
         let (succ, responses) = send_txn(self, txn).await?;
