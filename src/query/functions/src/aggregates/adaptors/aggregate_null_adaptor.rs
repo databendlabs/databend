@@ -208,8 +208,13 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        self.0.merge_result(place, builder)
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.0.merge_result(place, read_only, builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {
@@ -336,8 +341,13 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        self.0.merge_result(place, builder)
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.0.merge_result(place, read_only, builder)
     }
 
     fn need_manual_drop_state(&self) -> bool {
@@ -625,9 +635,14 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             .merge_states(place.remove_last_loc(), rhs.remove_last_loc())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         if !NULLABLE_RESULT {
-            return self.nested.merge_result(place, builder);
+            return self.nested.merge_result(place, read_only, builder);
         }
 
         let ColumnBuilder::Nullable(ref mut inner) = builder else {
@@ -637,7 +652,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         if get_flag(place) {
             inner.validity.push(true);
             self.nested
-                .merge_result(place.remove_last_loc(), &mut inner.builder)
+                .merge_result(place.remove_last_loc(), read_only, &mut inner.builder)
         } else {
             inner.push_null();
             Ok(())

@@ -42,22 +42,20 @@ use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_binary_arguments;
+use super::assert_params;
 use super::borsh_partial_deserialize;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::assert_binary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 
-pub trait BinaryScalarStateFunc<V: ValueType>:
-    BorshSerialize + BorshDeserialize + Send + Sync + 'static
+pub(super) trait BinaryScalarStateFunc<V: ValueType>:
+    BorshSerialize + BorshDeserialize + Send + 'static
 {
     fn new() -> Self;
-    fn mem_size() -> Option<usize> {
-        None
-    }
     fn add(&mut self, other: Option<(&str, V::ScalarRef<'_>)>) -> Result<()>;
     fn add_batch(
         &mut self,
@@ -93,7 +91,7 @@ where
 impl<V> BinaryScalarStateFunc<V> for JsonObjectAggState<V>
 where
     V: ValueType,
-    V::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    V::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -201,16 +199,15 @@ where
 }
 
 #[derive(Clone)]
-pub struct AggregateJsonObjectAggFunction<V, State> {
+struct AggregateJsonObjectAggFunction<V, State> {
     display_name: String,
     return_type: DataType,
-    _v: PhantomData<V>,
-    _state: PhantomData<State>,
+    _p: PhantomData<fn(V, State)>,
 }
 
 impl<V, State> AggregateFunction for AggregateJsonObjectAggFunction<V, State>
 where
-    V: ValueType + Send + Sync,
+    V: ValueType,
     State: BinaryScalarStateFunc<V>,
 {
     fn name(&self) -> &str {
@@ -346,7 +343,12 @@ where
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -369,15 +371,14 @@ impl<V, State> fmt::Display for AggregateJsonObjectAggFunction<V, State> {
 
 impl<V, State> AggregateJsonObjectAggFunction<V, State>
 where
-    V: ValueType + Send + Sync,
+    V: ValueType,
     State: BinaryScalarStateFunc<V>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateJsonObjectAggFunction::<V, State> {
             display_name: display_name.to_string(),
             return_type,
-            _v: PhantomData,
-            _state: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -422,10 +423,11 @@ where
 
 pub fn try_create_aggregate_json_object_agg_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, argument_types.len())?;
 
     let key_type = argument_types[0].remove_nullable();

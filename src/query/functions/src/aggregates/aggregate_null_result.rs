@@ -28,10 +28,10 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
 use super::StateAddr;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {
@@ -89,7 +89,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Null.into()]
     }
 
     fn batch_serialize(
@@ -98,10 +98,8 @@ impl AggregateFunction for AggregateNullResultFunction {
         _loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for _ in places {
-            binary_builder.commit_row();
-        }
+        let builder = builders[0].as_null_mut().unwrap();
+        *builder += places.len();
         Ok(())
     }
 
@@ -119,7 +117,12 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn merge_result(&self, _place: AggrState, array: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        _place: AggrState,
+        _read_only: bool,
+        array: &mut ColumnBuilder,
+    ) -> Result<()> {
         AnyType::push_default(array);
         Ok(())
     }

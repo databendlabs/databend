@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
@@ -152,6 +153,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             {
                 let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
                 func.batch_serialize(&[self.addr], loc, builders)?;
+                debug_assert!(builders.iter().map(ColumnBuilder::len).all_equal());
             }
 
             let columns = builders.into_iter().map(|b| b.build()).collect();
@@ -260,7 +262,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             for block in self.to_merge_data.iter() {
                 func.batch_merge(&[main_addr], loc, block.get_by_offset(idx), None)?;
             }
-            func.merge_result(AggrState::new(main_addr, loc), builder)?;
+            func.merge_result(AggrState::new(main_addr, loc), false, builder)?;
         }
 
         let columns = result_builders.into_iter().map(|b| b.build()).collect();

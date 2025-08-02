@@ -1,7 +1,7 @@
 query IT
-select length(max_state(number).1), typeof(max_state(number)) from numbers(100);
+select max_state(number).2, typeof(max_state(number)) from numbers(100);
 ----
-9 TUPLE(BINARY, BOOLEAN)
+99 TUPLE(BOOLEAN, UINT64, BOOLEAN)
 
 query IT
 select sum_state(number).1, typeof(sum_state(number)) from numbers(10000);

@@ -16,16 +16,15 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::UInt32Type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -34,19 +33,20 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function::AggregateFunctionRef;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_partial_deserialize;
+use super::assert_params;
+use super::assert_variadic_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregator_common::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateRetentionState {
-    pub events: u32,
+    events: u32,
 }
 
 impl AggregateRetentionState {
@@ -148,7 +148,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![UInt32Type::data_type().into()]
     }
 
     fn batch_serialize(
@@ -157,13 +157,15 @@ impl AggregateFunction for AggregateRetentionFunction {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<UInt32Type, AggregateRetentionState, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                builder.push_item(state.events);
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -173,23 +175,17 @@ impl AggregateFunction for AggregateRetentionFunction {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
-                let rhs: AggregateRetentionState = borsh_partial_deserialize(&mut data)?;
+        batch_merge1::<UInt32Type, AggregateRetentionState, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, events| {
+                let rhs = AggregateRetentionState { events };
                 state.merge(&rhs);
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
-                let rhs: AggregateRetentionState = borsh_partial_deserialize(&mut data)?;
-                state.merge(&rhs);
-            }
-        }
-        Ok(())
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -200,7 +196,12 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let builder = builder.as_array_mut().unwrap();
         let inner = builder
@@ -250,10 +251,11 @@ impl AggregateRetentionFunction {
 
 pub fn try_create_aggregate_retention_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for argument in arguments.iter() {

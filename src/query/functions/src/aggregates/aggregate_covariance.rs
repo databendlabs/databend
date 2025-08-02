@@ -40,15 +40,16 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::aggregator_common::assert_binary_arguments;
+use super::aggregator_common::assert_params;
 use super::borsh_partial_deserialize;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregator_common::assert_binary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct AggregateCovarianceState {
@@ -138,9 +139,7 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 #[derive(Clone)]
 pub struct AggregateCovarianceFunction<T0, T1, R> {
     display_name: String,
-    _t0: PhantomData<T0>,
-    _t1: PhantomData<T1>,
-    _r: PhantomData<R>,
+    _p: PhantomData<(T0, T1, R)>,
 }
 
 impl<T0, T1, R> AggregateFunction for AggregateCovarianceFunction<T0, T1, R>
@@ -236,6 +235,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        // If we had a fixed length array, which would be better, but for now, Borsh is already good enough
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -288,7 +288,12 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let mut builder = NumberType::<F64>::downcast_builder(builder);
         builder.push(R::apply(state).into());
@@ -314,19 +319,18 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            _t0: PhantomData,
-            _t1: PhantomData,
-            _r: PhantomData,
+            _p: PhantomData,
         }))
     }
 }
 
 pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, arguments.len())?;
 
     with_number_mapped_type!(|NUM_TYPE0| match &arguments[0] {

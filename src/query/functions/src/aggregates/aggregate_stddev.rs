@@ -16,12 +16,14 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::compute_view::NumberConvertView;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumnBuilderMut;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataKind;
 use databend_common_expression::types::DecimalF64View;
@@ -31,15 +33,24 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::F64;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 
+use super::aggregator_common::assert_params;
+use super::aggregator_common::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::aggregates::AggregateFunction;
 
 const STD_POP: u8 = 0;
 const STD_SAMP: u8 = 1;
@@ -141,12 +152,45 @@ where
     }
 }
 
+impl<const TYPE: u8> StateSerde for StddevState<TYPE> {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(Some(24))]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<Float64Type, NullableType<Float64Type>>>::merge(state, &rhs)
+        })
+    }
+}
+
 pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let return_type = DataType::Number(NumberDataType::Float64).wrap_nullable();
@@ -156,7 +200,8 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 StddevState<TYPE>,
                 NumberConvertView<NUM_TYPE, F64>,
                 NullableType<Float64Type>,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
+            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -165,9 +210,8 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                         StddevState<TYPE>,
                         DecimalF64View<DECIMAL>,
                         NullableType<Float64Type>,
-                    >::try_create_unary(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
+                    .finish()
                 }
             })
         }

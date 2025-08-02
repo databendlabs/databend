@@ -21,10 +21,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -33,15 +31,14 @@ use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::StateSerde;
 
-pub trait UnaryState<T, R>:
-    Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
+pub(super) trait UnaryState<T, R>: StateSerde + Default + Send + 'static
 where
     T: AccessType,
     R: ValueType,
@@ -82,67 +79,23 @@ where
         builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
-
-    fn serialize_type() -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
-    }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
-    }
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let rhs = Self::deserialize_reader(&mut data)?;
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let rhs = Self::deserialize_reader(&mut data)?;
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
-    }
 }
 
 pub trait FunctionData: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub struct AggregateUnaryFunction<S, T, R>
+pub(super) struct AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R>,
     T: AccessType,
     R: ValueType,
 {
     display_name: String,
-    _params: Vec<Scalar>,
-    _argument: DataType,
     return_type: DataType,
     function_data: Option<Box<dyn FunctionData>>,
     need_drop: bool,
-    _phantom: PhantomData<(S, T, R)>,
+    _p: PhantomData<fn(S, T, R)>,
 }
 
 impl<S, T, R> Display for AggregateUnaryFunction<S, T, R>
@@ -159,37 +112,19 @@ where
 impl<S, T, R> AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R> + 'static,
-    T: Send + Sync + AccessType,
-    R: Send + Sync + ValueType,
+    T: AccessType,
+    R: ValueType,
 {
-    pub(crate) fn try_create_unary(
+    pub(crate) fn create(
         display_name: &str,
         return_type: DataType,
-        _params: Vec<Scalar>,
-        _argument: DataType,
-    ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(Self::try_create(
-            display_name,
-            return_type,
-            _params,
-            _argument,
-        )))
-    }
-
-    pub(crate) fn try_create(
-        display_name: &str,
-        return_type: DataType,
-        _params: Vec<Scalar>,
-        _argument: DataType,
     ) -> AggregateUnaryFunction<S, T, R> {
         AggregateUnaryFunction {
             display_name: display_name.to_string(),
             return_type,
-            _params,
-            _argument,
             function_data: None,
             need_drop: false,
-            _phantom: Default::default(),
+            _p: PhantomData,
         }
     }
 
@@ -206,6 +141,10 @@ where
         self
     }
 
+    pub(crate) fn finish(self) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(self))
+    }
+
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = R::downcast_builder(builder);
         state.merge_result(builder, self.function_data.as_deref())
@@ -214,9 +153,9 @@ where
 
 impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
 where
-    S: UnaryState<T, R> + 'static,
-    T: Send + Sync + AccessType,
-    R: Send + Sync + ValueType,
+    S: UnaryState<T, R>,
+    T: AccessType,
+    R: ValueType,
 {
     fn name(&self) -> &str {
         &self.display_name
@@ -274,7 +213,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        S::serialize_type()
+        S::serialize_type(self.function_data.as_deref())
     }
 
     fn batch_serialize(
@@ -302,7 +241,12 @@ where
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state: &mut S = place.get::<S>();
         self.do_merge_result(state, builder)
     }
