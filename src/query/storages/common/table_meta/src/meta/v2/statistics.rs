@@ -28,6 +28,7 @@ use serde::de::Error;
 
 use crate::meta::supported_stat_type;
 use crate::meta::v0;
+use crate::meta::Location;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -69,6 +70,14 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AdditionalStatsMeta {
+    /// The size of the stats data in bytes.
+    pub size: u64,
+    /// The file location of the stats data.
+    pub location: Location,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
@@ -88,6 +97,8 @@ pub struct Statistics {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
+
+    pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
 
 // conversions from old meta data
@@ -253,6 +264,7 @@ impl Statistics {
             col_stats,
             cluster_stats: None,
             virtual_block_count: None,
+            additional_stats_meta: None,
         }
     }
 }

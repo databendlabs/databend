@@ -66,6 +66,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
+use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
@@ -470,7 +471,8 @@ impl CreateTableInterpreter {
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
-        is_valid_bloom_index_columns(&table_meta.options, schema)?;
+        is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
+        is_valid_approx_distinct_columns(&table_meta.options, schema)?;
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;

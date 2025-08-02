@@ -191,13 +191,13 @@ pub async fn do_refresh_virtual_column(
             vec![],
             vec![],
             Statistics::default(),
-            MutationKind::Update,
+            MutationKind::Refresh,
             table_meta_timestamps,
         )
     });
 
     let prev_snapshot_id = snapshot.snapshot_id;
-    let snapshot_gen = MutationGenerator::new(Some(snapshot), MutationKind::Update);
+    let snapshot_gen = MutationGenerator::new(Some(snapshot), MutationKind::Refresh);
     pipeline.add_sink(|input| {
         CommitSink::try_create(
             fuse_table,
@@ -344,6 +344,7 @@ impl AsyncTransform for VirtualColumnTransform {
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: block_meta.clone(),
             draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
+            column_hlls: None,
         };
 
         let entry = MutationLogEntry::ReplacedBlock {

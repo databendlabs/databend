@@ -18,6 +18,7 @@ mod column_statistic;
 pub mod reducers;
 mod traverse;
 
+pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
 pub use accumulator::VirtualColumnAccumulator;
 pub use cluster_statistics::sort_by_cluster_stats;

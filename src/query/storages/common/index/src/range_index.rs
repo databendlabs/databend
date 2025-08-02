@@ -42,6 +42,7 @@ use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -168,6 +169,11 @@ impl RangeIndex {
             default_stats: self.default_stats.clone(),
         }
         .apply(stats, |_| false)
+    }
+
+    pub fn supported_table_type(data_type: &TableDataType) -> bool {
+        let data_type = DataType::from(data_type);
+        Self::supported_type(&data_type)
     }
 }
 

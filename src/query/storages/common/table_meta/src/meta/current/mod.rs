@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub use v0::ColumnMeta as SingleColumnMeta;
+pub use v2::AdditionalStatsMeta;
 pub use v2::BlockMeta;
 pub use v2::ClusterStatistics;
 pub use v2::ColumnMeta;
@@ -20,7 +21,8 @@ pub use v2::ColumnStatistics;
 pub use v2::DraftVirtualBlockMeta;
 pub use v2::DraftVirtualColumnMeta;
 pub use v2::ExtendedBlockMeta;
-pub use v2::MetaHLL;
+pub use v2::MetaHLL12;
+pub use v2::SegmentStatistics;
 pub use v2::Statistics;
 pub use v2::VirtualBlockMeta;
 pub use v2::VirtualColumnMeta;

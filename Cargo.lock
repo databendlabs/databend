@@ -4232,9 +4232,11 @@ dependencies = [
 name = "databend-common-storage"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "anyhow",
  "arrow-schema",
  "async-backtrace",
+ "borsh",
  "chrono",
  "dashmap 6.1.0",
  "databend-common-ast",
@@ -4355,6 +4357,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "enum-as-inner",
+ "enum_dispatch",
  "fastrace",
  "futures",
  "futures-util",
@@ -4366,6 +4369,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.3",
  "parquet",
+ "paste",
  "rand 0.8.5",
  "serde",
  "serde_json",

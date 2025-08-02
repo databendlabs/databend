@@ -788,7 +788,7 @@ impl CompactSegmentTestFixture {
                     collected_blocks.push(block_meta.clone());
                     stats_acc.add_block(block_meta).unwrap();
                 }
-                let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
+                let segment_info = stats_acc.build(thresholds, cluster_key_id, None)?;
                 let path = location_gen
                     .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;

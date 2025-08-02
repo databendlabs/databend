@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +21,8 @@ use std::time::Instant;
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -43,14 +46,17 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::io::build_column_hlls;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::io::write::InvertedIndexBuilder;
@@ -129,6 +135,7 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct BlockSerialization {
     pub block_raw_data: Vec<u8>,
     pub block_meta: BlockMeta,
@@ -136,7 +143,13 @@ pub struct BlockSerialization {
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
+    pub column_hlls: Option<RawBlockHLL>,
 }
+
+local_block_meta_serde!(BlockSerialization);
+
+#[typetag::serde(name = "block_serialization_meta")]
+impl BlockMetaInfo for BlockSerialization {}
 
 #[derive(Clone)]
 pub struct BlockBuilder {
@@ -146,6 +159,7 @@ pub struct BlockBuilder {
     pub write_settings: WriteSettings,
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
@@ -170,9 +184,19 @@ impl BlockBuilder {
             self.bloom_columns_map.clone(),
             &self.ngram_args,
         )?;
-        let column_distinct_count = bloom_index_state
+        let mut column_distinct_count = bloom_index_state
             .as_ref()
-            .map(|i| i.column_distinct_count.clone());
+            .map(|i| i.column_distinct_count.clone())
+            .unwrap_or_default();
+
+        let column_hlls = build_column_hlls(&data_block, &self.ndv_columns_map)?;
+        if let Some(hlls) = &column_hlls {
+            for (key, val) in hlls {
+                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
+                    entry.insert(val.count());
+                }
+            }
+        }
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
         for inverted_index_builder in &self.inverted_index_builders {
@@ -206,8 +230,11 @@ impl BlockBuilder {
             };
 
         let row_count = data_block.num_rows() as u64;
-        let col_stats =
-            gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
+        let col_stats = gen_columns_statistics(
+            &data_block,
+            Some(column_distinct_count),
+            &self.source_schema,
+        )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_size = data_block.estimate_block_size() as u64;
@@ -256,6 +283,7 @@ impl BlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
+            column_hlls: column_hlls.map(|v| encode_column_hll(&v)).transpose()?,
         };
         Ok(serialized)
     }
@@ -269,23 +297,27 @@ impl BlockWriter {
         serialized: BlockSerialization,
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
+        let column_hlls = serialized.column_hlls;
+        let block_location = block_meta.location.0.clone();
 
         let extended_block_meta =
             if let Some(virtual_column_state) = &serialized.virtual_column_state {
                 ExtendedBlockMeta {
-                    block_meta: block_meta.clone(),
+                    block_meta,
                     draft_virtual_block_meta: Some(
                         virtual_column_state.draft_virtual_block_meta.clone(),
                     ),
+                    column_hlls,
                 }
             } else {
                 ExtendedBlockMeta {
-                    block_meta: block_meta.clone(),
+                    block_meta,
                     draft_virtual_block_meta: None,
+                    column_hlls,
                 }
             };
 
-        Self::write_down_data_block(dal, serialized.block_raw_data, &block_meta.location.0).await?;
+        Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;

@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bloom_index;
-mod hll_columns;
-#[allow(clippy::module_inception)]
-mod metadata;
+mod segment_stats;
 
-pub use bloom_index::BloomIndexColumns;
-pub use hll_columns::ApproxDistinctColumns;
-pub use metadata::*;
+pub use segment_stats::read_segment_stats;
+pub use segment_stats::read_segment_stats_in_parallel;

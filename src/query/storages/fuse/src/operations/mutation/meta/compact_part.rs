@@ -18,12 +18,13 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 
@@ -113,7 +114,7 @@ impl CompactBlockPartInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactExtraInfo {
     pub segment_index: SegmentIndex,
-    pub unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
+    pub unchanged_blocks: Vec<(BlockIndex, BlockMetaWithHLL)>,
     pub removed_segment_indexes: Vec<SegmentIndex>,
     pub removed_segment_summary: Statistics,
 }
@@ -121,7 +122,7 @@ pub struct CompactExtraInfo {
 impl CompactExtraInfo {
     pub fn create(
         segment_index: SegmentIndex,
-        unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
+        unchanged_blocks: Vec<(BlockIndex, BlockMetaWithHLL)>,
         removed_segment_indexes: Vec<SegmentIndex>,
         removed_segment_summary: Statistics,
     ) -> Self {

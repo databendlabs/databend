@@ -30,6 +30,8 @@ use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
+use databend_storages_common_table_meta::meta::SegmentStatisticsVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -53,6 +55,7 @@ pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type InvertedIndexMetaReader = InMemoryCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 pub type VectorIndexMetaReader = InMemoryCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
+pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -85,6 +88,13 @@ impl MetaReaders {
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
         TableSnapshotStatisticsReader::new(
             CacheManager::instance().get_table_snapshot_statistics_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn segment_stats_reader(dal: Operator) -> SegmentStatsReader {
+        SegmentStatsReader::new(
+            CacheManager::instance().get_segment_statistics_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -130,6 +140,16 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader.reader())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SegmentStatistics> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<SegmentStatistics> {
+        let version = SegmentStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         version.read(reader.reader())
     }

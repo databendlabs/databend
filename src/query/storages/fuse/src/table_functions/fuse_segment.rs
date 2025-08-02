@@ -82,6 +82,10 @@ impl TableMetaFunc for FuseSegment {
                 "virtual_block_count",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
+            TableField::new(
+                "segment_stats_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
         ])
     }
 
@@ -108,6 +112,7 @@ impl TableMetaFunc for FuseSegment {
         let mut virtual_column_size: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut virtual_block_count: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut file_location: Vec<String> = Vec::with_capacity(len);
+        let mut segment_stats_size: Vec<Option<u64>> = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -135,6 +140,13 @@ impl TableMetaFunc for FuseSegment {
                 virtual_column_size.push(segment.summary.virtual_column_size);
                 virtual_block_count.push(segment.summary.virtual_block_count);
                 file_location.push(segment_locations[idx].0.clone());
+                segment_stats_size.push(
+                    segment
+                        .summary
+                        .additional_stats_meta
+                        .as_ref()
+                        .map(|v| v.size),
+                );
 
                 row_num += 1;
                 if row_num >= limit {
@@ -162,6 +174,7 @@ impl TableMetaFunc for FuseSegment {
             UInt64Type::from_opt_data(vector_index_size),
             UInt64Type::from_opt_data(virtual_column_size),
             UInt64Type::from_opt_data(virtual_block_count),
+            UInt64Type::from_opt_data(segment_stats_size),
         ]))
     }
 }

@@ -62,7 +62,7 @@ pub enum MutationLogEntry {
     DoNothing,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct BlockMetaIndex {
     pub segment_idx: SegmentIndex,
     pub block_idx: BlockIndex,
