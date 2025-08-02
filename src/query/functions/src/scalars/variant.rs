@@ -65,6 +65,8 @@ use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::keypath::parse_key_paths;
+use jsonb::parse_owned_jsonb;
+use jsonb::parse_owned_jsonb_with_buf;
 use jsonb::parse_value;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
@@ -86,16 +88,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    if ctx.func_ctx.disable_variant_check {
-                        output.put_str("");
-                    } else {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
+            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data) {
+                if !ctx.func_ctx.disable_variant_check {
+                    ctx.set_error(output.len(), err.to_string());
                 }
             }
             output.commit_row();
@@ -112,16 +107,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    if ctx.func_ctx.disable_variant_check {
-                        output.put_str("");
-                    } else {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
+            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data) {
+                if !ctx.func_ctx.disable_variant_check {
+                    ctx.set_error(output.len(), err.to_string());
                 }
             }
             output.commit_row();
@@ -140,10 +128,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
                     output.builder.commit_row();
                 }
                 Err(_) => output.push_null(),
@@ -161,10 +148,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
                     output.builder.commit_row();
                 }
                 Err(_) => output.push_null(),
@@ -184,7 +170,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then check.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
+            match parse_owned_jsonb(val.as_bytes()) {
                 Ok(_) => output.push_null(),
                 Err(e) => output.push(&e.to_string()),
             }
@@ -201,7 +187,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
+            match parse_owned_jsonb(s.as_bytes()) {
                 Ok(_) => output.push_null(),
                 Err(e) => output.push(&e.to_string()),
             }
@@ -594,44 +580,41 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match parse_value(s.as_bytes()) {
-                    Ok(val) => {
-                        let mut buf = Vec::new();
-                        val.write_to_vec(&mut buf);
-                        match parse_json_path(path.as_bytes()) {
-                            Ok(json_path) => {
-                                match RawJsonb::new(&buf).select_value_by_path(&json_path) {
-                                    Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                        Some(v) => {
-                                            let raw_jsonb = v.as_raw();
-                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
-                                                output.push(&s);
-                                            } else if raw_jsonb.is_null().unwrap_or_default() {
-                                                output.push_null();
-                                            } else {
-                                                let json_str = raw_jsonb.to_string();
-                                                output.push(&json_str);
-                                            }
-                                        }
-                                        None => {
+                match parse_owned_jsonb(s.as_bytes()) {
+                    Ok(owned_jsonb) => match parse_json_path(path.as_bytes()) {
+                        Ok(json_path) => {
+                            let raw_jsonb = owned_jsonb.as_raw();
+                            match raw_jsonb.select_value_by_path(&json_path) {
+                                Ok(owned_jsonb_opt) => match owned_jsonb_opt {
+                                    Some(v) => {
+                                        let raw_jsonb = v.as_raw();
+                                        if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                            output.push(&s);
+                                        } else if raw_jsonb.is_null().unwrap_or_default() {
                                             output.push_null();
+                                        } else {
+                                            let json_str = raw_jsonb.to_string();
+                                            output.push(&json_str);
                                         }
-                                    },
-                                    Err(err) => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!("Select json path text failed err: {}", err),
-                                        );
+                                    }
+                                    None => {
                                         output.push_null();
                                     }
+                                },
+                                Err(err) => {
+                                    ctx.set_error(
+                                        output.len(),
+                                        format!("Select json path text failed err: {}", err),
+                                    );
+                                    output.push_null();
                                 }
                             }
-                            Err(_) => {
-                                ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
-                                output.push_null();
-                            }
                         }
-                    }
+                        Err(_) => {
+                            ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
+                            output.push_null();
+                        }
+                    },
                     Err(err) => {
                         ctx.set_error(output.len(), err.to_string());
                         output.push_null();

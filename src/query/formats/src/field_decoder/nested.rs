@@ -50,7 +50,7 @@ use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
-use jsonb::parse_value;
+use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 
 use crate::binary::decode_binary;
@@ -311,9 +311,8 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        match parse_value(&buf) {
-            Ok(value) => {
-                value.write_to_vec(&mut column.data);
+        match parse_owned_jsonb_with_buf(&buf, &mut column.data) {
+            Ok(_) => {
                 column.commit_row();
             }
             Err(e) => {
