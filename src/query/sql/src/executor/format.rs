@@ -580,6 +580,12 @@ fn to_format_tree(
                 "cte_schema: [{}]",
                 format_output_columns(plan.cte_schema.clone(), metadata, false)
             )));
+            
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            
             append_profile_info(&mut children, profs, plan.plan_id);
             Ok(FormatTreeNode::with_children(
                 "MaterializeCTERef".to_string(),
