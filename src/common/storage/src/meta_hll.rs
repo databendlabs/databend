@@ -115,7 +115,6 @@ impl MetaHLL {
 /// Helper function sigma as defined in
 /// "New cardinality estimation algorithms for MetaHLL sketches"
 /// Otmar Ertl, https://arxiv.org/abs/1702.01284
-#[allow(dead_code)]
 #[inline]
 fn hll_sigma(x: f64) -> f64 {
     if x == 1. {

@@ -16,7 +16,6 @@ pub mod accumulator;
 mod cluster_statistics;
 mod column_statistic;
 pub mod reducers;
-mod segment_statistics;
 mod traverse;
 
 pub use accumulator::ColumnHLLAccumulator;
