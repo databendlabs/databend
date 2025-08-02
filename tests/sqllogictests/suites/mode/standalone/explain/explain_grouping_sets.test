@@ -129,7 +129,8 @@ Sequence
     │   │   │   │   │   │               ├── estimated rows: 1.00
     │   │   │   │   │   │               └── MaterializeCTERef
     │   │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │   │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   │   │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   │   │                   └── estimated rows: 1.00
     │   │   │   │   │   └── EvalScalar
     │   │   │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
     │   │   │   │   │       ├── expressions: [NULL, TRY_CAST(group_item (#2) AS UInt8 NULL), NULL]
@@ -145,7 +146,8 @@ Sequence
     │   │   │   │   │               ├── estimated rows: 1.00
     │   │   │   │   │               └── MaterializeCTERef
     │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   │                   └── estimated rows: 1.00
     │   │   │   │   └── EvalScalar
     │   │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
     │   │   │   │       ├── expressions: [NULL, NULL, TRY_CAST(group_item (#3) AS UInt8 NULL)]
@@ -161,7 +163,8 @@ Sequence
     │   │   │   │               ├── estimated rows: 1.00
     │   │   │   │               └── MaterializeCTERef
     │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │                   └── estimated rows: 1.00
     │   │   │   └── EvalScalar
     │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
     │   │   │       ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), TRY_CAST(group_item (#2) AS UInt8 NULL), NULL]
@@ -177,7 +180,8 @@ Sequence
     │   │   │               ├── estimated rows: 1.00
     │   │   │               └── MaterializeCTERef
     │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │                   └── estimated rows: 1.00
     │   │   └── EvalScalar
     │   │       ├── output columns: [a (#8), b (#9), c (#10)]
     │   │       ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), NULL, TRY_CAST(group_item (#3) AS UInt8 NULL)]
@@ -193,7 +197,8 @@ Sequence
     │   │               ├── estimated rows: 1.00
     │   │               └── MaterializeCTERef
     │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │                   └── estimated rows: 1.00
     │   └── EvalScalar
     │       ├── output columns: [a (#8), b (#9), c (#10)]
     │       ├── expressions: [NULL, TRY_CAST(group_item (#2) AS UInt8 NULL), TRY_CAST(group_item (#3) AS UInt8 NULL)]
@@ -209,7 +214,8 @@ Sequence
     │               ├── estimated rows: 1.00
     │               └── MaterializeCTERef
     │                   ├── cte_name: cte_groupingsets_16366510952463710337
-    │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │                   ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │                   └── estimated rows: 1.00
     └── EvalScalar
         ├── output columns: [a (#8), b (#9), c (#10)]
         ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), TRY_CAST(group_item (#2) AS UInt8 NULL), TRY_CAST(group_item (#3) AS UInt8 NULL)]
@@ -225,4 +231,5 @@ Sequence
                 ├── estimated rows: 1.00
                 └── MaterializeCTERef
                     ├── cte_name: cte_groupingsets_16366510952463710337
-                    └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+                    ├── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+                    └── estimated rows: 1.00

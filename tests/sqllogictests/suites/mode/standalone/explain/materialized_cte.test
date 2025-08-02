@@ -20,14 +20,16 @@ Sequence
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
-    ├── estimated rows: 0.00
+    │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
+    ├── estimated rows: 100.00
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: t1
-    │   └── cte_schema: [number (#1)]
+    │   ├── cte_schema: [number (#1)]
+    │   └── estimated rows: 10.00
     └── MaterializeCTERef(Probe)
         ├── cte_name: t1
-        └── cte_schema: [number (#0)]
+        ├── cte_schema: [number (#0)]
+        └── estimated rows: 10.00
 
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
@@ -47,7 +49,8 @@ Sequence
     ├── MaterializedCTE: t2
     │   └── MaterializeCTERef
     │       ├── cte_name: t1
-    │       └── cte_schema: [number (#2)]
+    │       ├── cte_schema: [number (#2)]
+    │       └── estimated rows: 10.00
     └── HashJoin
         ├── output columns: [numbers.number (#0)]
         ├── join type: INNER
@@ -56,11 +59,13 @@ Sequence
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:
-        │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
-        ├── estimated rows: 0.00
+        │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
+        ├── estimated rows: 100.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: t2
-        │   └── cte_schema: [number (#1)]
+        │   ├── cte_schema: [number (#1)]
+        │   └── estimated rows: 10.00
         └── MaterializeCTERef(Probe)
             ├── cte_name: t1
-            └── cte_schema: [number (#0)]
+            ├── cte_schema: [number (#0)]
+            └── estimated rows: 10.00

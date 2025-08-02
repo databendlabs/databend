@@ -731,17 +731,17 @@ Sequence
 │   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
 └── HashJoin: INNER
     ├── Build
-    │   └── HashJoin: INNER
-    │       ├── Build
-    │       │   └── MaterializeCTERef
-    │       │       ├── cte_name: revenue
-    │       │       └── cte_schema: [l_suppkey (#9), total_revenue (#25)]
-    │       └── Probe
-    │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+    │   └── MaterializeCTERef
+    │       ├── cte_name: revenue
+    │       └── cte_schema: [l_suppkey (#28), total_revenue (#44)]
     └── Probe
-        └── MaterializeCTERef
-            ├── cte_name: revenue
-            └── cte_schema: [l_suppkey (#28), total_revenue (#44)]
+        └── HashJoin: INNER
+            ├── Build
+            │   └── MaterializeCTERef
+            │       ├── cte_name: revenue
+            │       └── cte_schema: [l_suppkey (#9), total_revenue (#25)]
+            └── Probe
+                └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
 
 
 # Q16
