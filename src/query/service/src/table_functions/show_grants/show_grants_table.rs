@@ -54,6 +54,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
+use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
@@ -764,7 +765,7 @@ async fn show_object_grant(
     let tenant = ctx.get_tenant();
     let user_api = UserApiProvider::instance();
     let roles = user_api.get_roles(&tenant).await?;
-    let visibility_checker = ctx.get_visibility_checker(false).await?;
+    let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
     let current_user = ctx.get_current_user()?.identity().username;
     let (object, owner_object, object_id, object_name) = match grant_type {
         "table" => {

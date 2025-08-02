@@ -42,7 +42,6 @@ use crate::plans::VisitorMut;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-// TODO
 const ID: RuleID = RuleID::GroupingSetsToUnion;
 // Split `Grouping Sets` into `Union All` of `Group by`
 // Eg:
@@ -52,11 +51,11 @@ const ID: RuleID = RuleID::GroupingSetsToUnion;
 
 // INTO:
 
-// select number % 10 AS a, number % 3 AS b, number % 4 AS c
+// select number % 10 AS a, number % 3 AS b, null AS c
 // from numbers(100000000)
 // group by a,b
 // union all
-// select number % 10 AS a, number % 3 AS b, number % 4 AS c
+// select number % 10 AS a, null AS b, number % 4 AS c
 // from numbers(100000000)
 // group by a,c
 //
