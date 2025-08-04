@@ -770,6 +770,10 @@ impl Table for FuseTable {
         column_id >= VECTOR_SCORE_COLUMN_ID
     }
 
+    fn supported_lazy_materialize(&self) -> bool {
+        !matches!(self.storage_format, FuseStorageFormat::Native)
+    }
+
     fn support_column_projection(&self) -> bool {
         true
     }

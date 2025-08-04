@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -24,24 +21,18 @@ use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_sql::executor::physical_plans::RowFetch;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_fuse::operations::row_fetch_processor;
-use databend_common_storages_fuse::TableContext;
-use tokio::sync::Semaphore;
 
 use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
         self.build_pipeline(&row_fetch.input)?;
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let row_fetch_runtime = GlobalIORuntime::instance();
-        let row_fetch_semaphore = Arc::new(Semaphore::new(max_io_requests));
+
         let processor = row_fetch_processor(
             self.ctx.clone(),
             row_fetch.row_id_col_offset,
             &row_fetch.source,
             row_fetch.cols_to_fetch.clone(),
             row_fetch.need_wrap_nullable,
-            row_fetch_semaphore,
-            row_fetch_runtime,
         )?;
         if !matches!(&*row_fetch.input, PhysicalPlan::MutationSplit(_)) {
             self.main_pipeline.add_transform(processor)?;

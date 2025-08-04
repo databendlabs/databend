@@ -34,6 +34,7 @@ use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
@@ -245,10 +246,34 @@ impl App {
             }
         };
 
-        if let Err(e) = lua.load(&script).exec_async().await {
+        #[allow(clippy::disallowed_types)]
+        let local = tokio::task::LocalSet::new();
+        let res = local.run_until(lua.load(&script).exec_async()).await;
+
+        if let Err(e) = res {
             return Err(anyhow::anyhow!("Lua execution error: {}", e));
         }
         Ok(())
+    }
+
+    async fn get_metrics(&self, args: &MetricsArgs) -> anyhow::Result<()> {
+        let lua_script = format!(
+            r#"
+local admin_client = metactl.new_admin_client("{}")
+local metrics, err = admin_client:metrics()
+if err then
+    return nil, err
+end
+print(metrics)
+return metrics, nil
+"#,
+            args.admin_api_address
+        );
+
+        match lua_support::run_lua_script_with_result(&lua_script).await? {
+            Ok(_result) => Ok(()),
+            Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
+        }
     }
 
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
@@ -270,6 +295,7 @@ enum CtlCommand {
     Upsert(UpsertArgs),
     Get(GetArgs),
     Lua(LuaArgs),
+    Metrics(MetricsArgs),
 }
 
 /// Usage:
@@ -343,6 +369,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Lua(args) => {
                 app.run_lua(args).await?;
+            }
+            CtlCommand::Metrics(args) => {
+                app.get_metrics(args).await?;
             }
         },
         // for backward compatibility

@@ -182,6 +182,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
             tables.len()
         );
 
+        let tables_count = tables.len();
+
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
         let (files_opt, failed_tables) = handler
@@ -230,7 +232,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         }
 
         match files_opt {
-            None => return Ok(PipelineBuildResult::create()),
+            None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(vec![tables_count as u64 - failed_tables.len() as u64]),
+                UInt64Type::from_data(vec![failed_tables.len() as u64]),
+            ])]),
             Some(purge_files) => {
                 let mut len = min(purge_files.len(), DRY_RUN_LIMIT);
                 if let Some(limit) = self.plan.option.limit {

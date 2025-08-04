@@ -14,21 +14,11 @@ Usage:
 import sys
 import time
 import argparse
+import os
+import importlib
+import glob
 from utils import print_title, kill_databend_meta
 import shutil
-
-# Direct imports of all test modules
-from subcommands import cmd_status
-from subcommands import cmd_upsert
-from subcommands import cmd_get
-from subcommands import cmd_watch
-from subcommands import cmd_trigger_snapshot
-from subcommands import cmd_export_from_grpc
-from subcommands import cmd_export_from_raft_dir
-from subcommands import cmd_import
-from subcommands import cmd_transfer_leader
-from subcommands import cmd_lua
-from subcommands import cmd_lua_grpc
 
 
 def cleanup_environment():
@@ -36,7 +26,27 @@ def cleanup_environment():
     print("🧹 Cleaning up test environment...")
     kill_databend_meta()
     shutil.rmtree(".databend", ignore_errors=True)
-    time.sleep(3)  # Allow complete cleanup
+    time.sleep(0.5)  # Allow complete cleanup
+
+
+def discover_test_modules():
+    """Dynamically discover all test modules in subcommands directory."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    subcommands_dir = os.path.join(script_dir, "subcommands")
+
+    # Find all cmd_*.py files
+    cmd_files = glob.glob(os.path.join(subcommands_dir, "cmd_*.py"))
+
+    test_modules = []
+    for cmd_file in sorted(cmd_files):
+        module_name = os.path.basename(cmd_file)[:-3]  # Remove .py extension
+        test_name = module_name[4:]  # Remove 'cmd_' prefix
+
+        # Import module dynamically
+        module = importlib.import_module(f"subcommands.{module_name}")
+        test_modules.append((test_name, module.main))
+
+    return test_modules
 
 
 def main():
@@ -50,20 +60,8 @@ def main():
     passed_tests = 0
     failed_tests = []
 
-    # All available test functions
-    all_test_functions = [
-        ("status", cmd_status.main),
-        ("upsert", cmd_upsert.main),
-        ("get", cmd_get.main),
-        ("watch", cmd_watch.main),
-        ("trigger_snapshot", cmd_trigger_snapshot.main),
-        ("export_from_grpc", cmd_export_from_grpc.main),
-        ("export_from_raft_dir", cmd_export_from_raft_dir.main),
-        ("import", cmd_import.main),
-        ("transfer_leader", cmd_transfer_leader.main),
-        ("lua", cmd_lua.main),
-        ("lua_grpc", cmd_lua_grpc.main),
-    ]
+    # Dynamically discover all test functions
+    all_test_functions = discover_test_modules()
 
     # Filter tests based on command line arguments
     if args.tests:
@@ -86,7 +84,6 @@ def main():
     print("=" * 60)
 
     for name, test_func in test_functions:
-        cleanup_environment()
 
         try:
             print(f"🔸 Running {name}")
@@ -98,9 +95,6 @@ def main():
             failed_tests.append(name)
 
         print("-" * 60)
-
-    # Final cleanup
-    cleanup_environment()
 
     # Print summary
     print_title("Test Suite Summary")
@@ -125,9 +119,7 @@ if __name__ == "__main__":
         sys.exit(exit_code)
     except KeyboardInterrupt:
         print(f"\n⏹️  Test execution interrupted by user")
-        cleanup_environment()
         sys.exit(130)
     except Exception as e:
         print(f"\n💥 Unexpected error: {str(e)}")
-        cleanup_environment()
         sys.exit(1)

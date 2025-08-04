@@ -25,15 +25,15 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionCreator;
 use super::AggregateFunctionFactory;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
+use super::CombinatorDescription;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_function_factory::CombinatorDescription;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Clone)]
 pub struct AggregateStateCombinator {
@@ -51,7 +51,7 @@ impl AggregateStateCombinator {
     ) -> Result<AggregateFunctionRef> {
         let arg_name = arguments
             .iter()
-            .map(|x| x.to_string())
+            .map(DataType::to_string)
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -135,7 +135,12 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
         self.nested
             .batch_serialize(&[place.addr], place.loc, builders)

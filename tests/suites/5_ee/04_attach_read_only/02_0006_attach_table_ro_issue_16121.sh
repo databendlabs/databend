@@ -13,7 +13,7 @@ echo "attach table issue_16121.attach_read_only 's3://testbucket/admin/$storage_
 echo "drop table issue_16121.base;" | $BENDSQL_CLIENT_CONNECT
 
 # purge base table data
-echo "set data_retention_time_in_days=0;vacuum drop table from issue_16121;" | $BENDSQL_CLIENT_CONNECT
+echo "set data_retention_time_in_days=0;vacuum drop table from issue_16121;" | $BENDSQL_CLIENT_CONNECT > /dev/null
 
 echo "expects no error(nothing outputs)"
 echo "drop table issue_16121.attach_read_only" | $BENDSQL_CLIENT_CONNECT

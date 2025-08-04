@@ -151,7 +151,14 @@ impl MutationExpression {
                 if *mutation_strategy == MutationStrategy::NotMatchedOnly {
                     update_stream_columns = false;
                 }
-                let is_lazy_table = *mutation_strategy != MutationStrategy::NotMatchedOnly;
+                let is_lazy_table = {
+                    let metadata = binder.metadata.read();
+                    *mutation_strategy != MutationStrategy::NotMatchedOnly
+                        && metadata
+                            .table(target_table_index)
+                            .table()
+                            .supported_lazy_materialize()
+                };
                 target_s_expr =
                     Self::update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
@@ -172,6 +179,12 @@ impl MutationExpression {
                         JoinCondition::On(Box::new(match_expr.clone())),
                     )
                     .await?;
+
+                if !is_lazy_table {
+                    for column_index in bind_context.column_set().iter() {
+                        required_columns.insert(*column_index);
+                    }
+                }
 
                 Ok(MutationExpressionBindResult {
                     input: join_s_expr,
@@ -276,7 +289,14 @@ impl MutationExpression {
                         target_table_row_id_index: DUMMY_COLUMN_INDEX,
                     })
                 } else {
-                    let is_lazy_table = mutation_type != MutationType::Delete;
+                    let is_lazy_table = {
+                        let metadata = binder.metadata.read();
+                        mutation_type != MutationType::Delete
+                            && metadata
+                                .table(target_table_index)
+                                .table()
+                                .supported_lazy_materialize()
+                    };
                     s_expr =
                         Self::update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
 
@@ -320,6 +340,13 @@ impl MutationExpression {
                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());
                     let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx, None);
                     let s_expr = rewriter.optimize_sync(&s_expr)?;
+
+                    // The delete operation only requires the row ID to locate the row to be deleted and does not need to extract any other columns.
+                    if !is_lazy_table && mutation_type != MutationType::Delete {
+                        for column_index in bind_context.column_set().iter() {
+                            required_columns.insert(*column_index);
+                        }
+                    }
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,

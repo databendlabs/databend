@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -64,7 +65,10 @@ impl Interpreter for ShowConnectionsInterpreter {
             .get_settings()
             .get_enable_experimental_connection_privilege_check()?
         {
-            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
             formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
         }
 
