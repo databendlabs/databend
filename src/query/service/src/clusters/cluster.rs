@@ -43,13 +43,17 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseMgr;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
+use databend_common_settings::Settings;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
@@ -614,6 +618,9 @@ impl ClusterDiscovery {
 
         self.drop_invalid_nodes(&node_info).await?;
 
+        let online_nodes = self.warehouse_manager.list_online_nodes().await?;
+        self.check_license_key(online_nodes.len()).await?;
+
         match self.warehouse_manager.start_node(node_info).await {
             Ok(seq_node) => self.start_heartbeat(seq_node).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
@@ -627,6 +634,20 @@ impl ClusterDiscovery {
         let node_info = seq_node.data;
         heartbeat.start(node_info, seq);
         Ok(())
+    }
+
+    async fn check_license_key(&self, nodes: usize) -> Result<()> {
+        let license_key = Self::get_license_key(&self.tenant_id).await?;
+
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(license_key, Feature::MaxNodeQuota(nodes))
+    }
+
+    async fn get_license_key(tenant: &str) -> Result<String> {
+        // We must get the license key from settings. It may be in the configuration file.
+        let settings = Settings::create(Tenant::new_literal(tenant));
+        settings.load_changes().await?;
+        Ok(settings.get_enterprise_license())
     }
 }
 

@@ -85,6 +85,8 @@ pub enum Feature {
     VectorIndex,
     #[serde(alias = "private_task", alias = "PRIVATE_TASK")]
     PrivateTask,
+    #[serde(alias = "max_node_quota", alias = "MAX_NODE_QUOTA")]
+    MaxNodeQuota(usize),
     #[serde(other)]
     Unknown,
 }
@@ -138,12 +140,17 @@ impl fmt::Display for Feature {
             Feature::VectorIndex => write!(f, "vector_index"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::Unknown => write!(f, "unknown"),
+            Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
         }
     }
 }
 
 impl Feature {
     pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
+        if let Feature::MaxNodeQuota(_) = self {
+            return Ok(());
+        }
+
         Err(ErrorCode::LicenseKeyInvalid(message.into()))
     }
 
@@ -173,6 +180,7 @@ impl Feature {
 
                 Ok(true)
             }
+            (Feature::MaxNodeQuota(c), Feature::MaxNodeQuota(v)) => Ok(c > v),
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
             | (Feature::ComputedColumn, Feature::ComputedColumn)
@@ -378,6 +386,11 @@ mod tests {
         assert_eq!(
             Feature::PrivateTask,
             serde_json::from_str::<Feature>("\"private_task\"").unwrap()
+        );
+
+        assert_eq!(
+            Feature::MaxNodeQuota(1),
+            serde_json::from_str::<Feature>("{\"MaxNodeQuota\": 1}").unwrap()
         );
 
         assert_eq!(
