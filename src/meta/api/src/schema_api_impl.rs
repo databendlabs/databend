@@ -2106,7 +2106,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
-        self.test_update_multi_table_meta_with_retry(req, 1).await
+        // Generate a random transaction ID for idempotency
+        let txn_id = Uuid::new_v4().to_string();
+        self.update_multi_table_meta_with_txn_id(req, txn_id).await
     }
 
     /// This function is ONLY for testing purposes.
@@ -2114,10 +2116,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ///
     /// `retry_times` is used to simulate the retry of the transaction.
     /// It is only for test.
-    async fn test_update_multi_table_meta_with_retry(
+    async fn update_multi_table_meta_with_txn_id(
         &self,
         req: UpdateMultiTableMetaReq,
-        retry_times: u32,
+        txn_id: String,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
@@ -2126,9 +2128,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             deduplicated_labels,
             update_temp_tables: _,
         } = req;
-
-        // Generate a random transaction ID for idempotency
-        let txn_id = Uuid::new_v4().to_string();
 
         let mut tbl_seqs = HashMap::new();
         let mut txn = TxnRequest::default();
@@ -2311,12 +2310,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         ));
 
         // Add get operation to check if transaction ID exists in else branch
-        txn.else_then.push(TxnOp::get(txn_id_key));
-
-        // Simulate retry behavior for testing: send transaction multiple times
-        for _ in 0..retry_times - 1 {
-            send_txn(self, txn.clone()).await?;
-        }
+        // NOTE: Orders of operations matter, please keep this as the last operation of else branch
+        txn.else_then.push(TxnOp::get(txn_id_key.clone()));
 
         let (succ, responses) = send_txn(self, txn).await?;
 
@@ -2325,10 +2320,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         // Check if transaction ID exists in else branch response (idempotency check)
+        //
+        // Please note that this is a best effort check: the "idempotency check" is only guaranteed
+        // roughly within 300 secs, please DO NOT use it for any safety properties.
         if let Some(Response::Get(get_resp)) = responses.last().and_then(|r| r.response.as_ref()) {
+            // Defensive check, make sure the get(tx_id_key) is the last operation
+            assert_eq!(get_resp.key, txn_id_key, "Transaction ID key mismatch");
             if get_resp.value.is_some() {
                 info!(
-                    "Transaction ID exists, meaning transaction was already executed successfully"
+                    "Transaction ID {} exists, the corresponding transaction has been executed successfully",
+                    txn_id_key
                 );
                 return Ok(Ok(UpdateTableMetaReply {}));
             }
