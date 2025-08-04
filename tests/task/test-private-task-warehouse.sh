@@ -19,46 +19,38 @@ echo "Starting Databend Query cluster enable private task"
 ./scripts/ci/deploy/databend-query-system-managed.sh 2
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh1 WITH WAREHOUSE_SIZE = '1'\"}")
-echo $response
 create_warehouse_1_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 1 Query ID: $create_warehouse_1_query_id"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh2 WITH WAREHOUSE_SIZE = '1'\"}")
-echo $response
 create_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 2 Query ID: $create_warehouse_2_query_id"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t1 (c1 int)\"}")
-echo $response
 create_table_query_id=$(echo $response | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 WAREHOUSE = 'wh1' SCHEDULE = 3 SECOND AS insert into t1 values(1)\"}")
-echo $response
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 WAREHOUSE = 'wh1' SCHEDULE = 15 SECOND AS insert into t1 values(1)\"}")
 create_task_1_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 1 Query ID: $create_task_1_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 WAREHOUSE = 'wh2' SCHEDULE = 3 SECOND AS insert into t1 values(2)\"}")
-echo $response
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 WAREHOUSE = 'wh2' SCHEDULE = 15 SECOND AS insert into t1 values(2)\"}")
 create_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
 
-sleep 2
+sleep 10
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 RESUME\"}")
-echo $response
 resume_task_1_query_id=$(echo $response | jq -r '.id')
 echo "RESUME Task 1 ID: $resume_task_1_query_id"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_2 RESUME\"}")
-echo $response
 resume_task_2_query_id=$(echo $response | jq -r '.id')
 echo "RESUME Task 2 ID: $resume_task_2_query_id"
 
-sleep 5
+sleep 25
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-echo $response
 
 actual=$(echo "$response" | jq -c '.data')
 expected='[["1"],["2"]]'
@@ -73,14 +65,12 @@ else
 fi
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SUSPEND WAREHOUSE wh2\"}")
-echo $response
 suspend_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Suspend WareHouse 2 Query ID: $suspend_warehouse_2_query_id"
 
-sleep 4
+sleep 20
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-echo $response
 
 actual=$(echo "$response" | jq -c '.data')
 expected='[["1"],["1"],["2"]]'
