@@ -22,8 +22,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ComputeQuota {
-    threads_num: Option<usize>,
-    memory_usage: Option<usize>,
+    pub threads_num: Option<usize>,
+    pub memory_usage: Option<usize>,
 }
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -87,6 +87,8 @@ pub enum Feature {
     PrivateTask,
     #[serde(alias = "max_node_quota", alias = "MAX_NODE_QUOTA")]
     MaxNodeQuota(usize),
+    #[serde(alias = "max_cpu_quota", alias = "MAX_CPU_QUOTA")]
+    MaxCpuQuota(usize),
     #[serde(other)]
     Unknown,
 }
@@ -140,6 +142,7 @@ impl fmt::Display for Feature {
             Feature::VectorIndex => write!(f, "vector_index"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::Unknown => write!(f, "unknown"),
+            Feature::MaxCpuQuota(v) => write!(f, "max_cpu_quota({})", v),
             Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
         }
     }
@@ -147,11 +150,10 @@ impl fmt::Display for Feature {
 
 impl Feature {
     pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
-        if let Feature::MaxNodeQuota(_) = self {
-            return Ok(());
+        match self {
+            Feature::MaxCpuQuota(_) | Feature::MaxNodeQuota(_) => Ok(()),
+            _ => Err(ErrorCode::LicenseKeyInvalid(message.into())),
         }
-
-        Err(ErrorCode::LicenseKeyInvalid(message.into()))
     }
 
     pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
@@ -180,6 +182,7 @@ impl Feature {
 
                 Ok(true)
             }
+            (Feature::MaxCpuQuota(c), Feature::MaxCpuQuota(v)) => Ok(c > v),
             (Feature::MaxNodeQuota(c), Feature::MaxNodeQuota(v)) => Ok(c > v),
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)

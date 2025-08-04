@@ -43,6 +43,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_license::license::ComputeQuota;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseApi;
@@ -326,7 +327,6 @@ impl ClusterDiscovery {
                     let mut node_info = NodeInfo::create(
                         config.query.node_id.clone(),
                         config.query.node_secret.clone(),
-                        config.query.num_cpus,
                         format!(
                             "{}:{}",
                             config.query.http_handler_host, config.query.http_handler_port
@@ -391,7 +391,6 @@ impl ClusterDiscovery {
                 let mut node_info = NodeInfo::create(
                     config.query.node_id.clone(),
                     config.query.node_secret.clone(),
-                    config.query.num_cpus,
                     format!(
                         "{}:{}",
                         config.query.http_handler_host, config.query.http_handler_port
@@ -539,7 +538,6 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
-        let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
         let mut http_address = format!(
             "{}:{}",
@@ -605,7 +603,6 @@ impl ClusterDiscovery {
         let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
-            cpus,
             http_address,
             address,
             discovery_address,
@@ -619,7 +616,7 @@ impl ClusterDiscovery {
         self.drop_invalid_nodes(&node_info).await?;
 
         let online_nodes = self.warehouse_manager.list_online_nodes().await?;
-        self.check_license_key(online_nodes.len()).await?;
+        self.check_license_key(online_nodes).await?;
 
         match self.warehouse_manager.start_node(node_info).await {
             Ok(seq_node) => self.start_heartbeat(seq_node).await,
@@ -636,11 +633,15 @@ impl ClusterDiscovery {
         Ok(())
     }
 
-    async fn check_license_key(&self, nodes: usize) -> Result<()> {
+    async fn check_license_key(&self, nodes: Vec<NodeInfo>) -> Result<()> {
         let license_key = Self::get_license_key(&self.tenant_id).await?;
 
+        let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
         LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(license_key, Feature::MaxNodeQuota(nodes))
+            .check_enterprise_enabled(license_key.clone(), Feature::MaxNodeQuota(nodes.len()))?;
+
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(license_key, Feature::MaxCpuQuota(total_cpu_nums as usize))
     }
 
     async fn get_license_key(tenant: &str) -> Result<String> {

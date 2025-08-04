@@ -79,7 +79,6 @@ fn create_node(cache_id: String) -> Arc<NodeInfo> {
     Arc::new(NodeInfo::create(
         GlobalUniqName::unique(),
         String::new(),
-        0,
         String::new(),
         String::new(),
         String::new(),

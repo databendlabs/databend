@@ -3958,6 +3958,7 @@ dependencies = [
  "map-api",
  "num-derive",
  "num-traits",
+ "num_cpus",
  "openraft",
  "pretty_assertions",
  "prost",

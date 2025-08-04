@@ -28,6 +28,7 @@ serde_json = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+num_cpus = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }
