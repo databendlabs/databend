@@ -168,7 +168,16 @@ impl VacuumDropTablePlan {
                 ]))
             }
         } else {
-            Arc::new(DataSchema::empty())
+            Arc::new(DataSchema::new(vec![
+                DataField::new(
+                    "success_tables_count",
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                DataField::new(
+                    "failed_tables_count",
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ]))
         }
     }
 }

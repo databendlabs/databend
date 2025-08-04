@@ -102,7 +102,7 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
-            RuleID::GroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new())),
+            RuleID::GroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new(ctx))),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

@@ -41,24 +41,24 @@ use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_arguments;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateAddrs;
-use crate::aggregates::assert_arguments;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::assert_variadic_params;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
     display_name: String,
-    _op: PhantomData<OP>,
-    _agg: PhantomData<AGG>,
+    _p: PhantomData<(OP, AGG)>,
 }
 
 impl<OP, AGG> AggregateBitmapFunction<OP, AGG>
@@ -69,8 +69,7 @@ where
     fn try_create(display_name: &str) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateBitmapFunction::<OP, AGG> {
             display_name: display_name.to_string(),
-            _op: PhantomData,
-            _agg: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -358,7 +357,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         AGG::merge_result(place, builder)
     }
 
@@ -379,20 +383,18 @@ impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
 }
 
 struct AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     display_name: String,
     inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
     filter_values: Vec<T::Scalar>,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+    T: ValueType,
+    T::Scalar: Sync,
 {
     fn try_create(
         display_name: &str,
@@ -402,8 +404,7 @@ where
             display_name: display_name.to_string(),
             inner: AggregateBitmapFunction {
                 display_name: "".to_string(),
-                _op: PhantomData,
-                _agg: PhantomData,
+                _p: PhantomData,
             },
             filter_values,
             _t: PhantomData,
@@ -459,8 +460,8 @@ where
 
 impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+    T: ValueType,
+    T::Scalar: Sync,
 {
     fn name(&self) -> &str {
         "AggregateBitmapIntersectCountFunction"
@@ -547,15 +548,18 @@ where
         self.inner.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        self.inner.merge_result(place, builder)
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.inner.merge_result(place, read_only, builder)
     }
 }
 
 impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
@@ -564,10 +568,11 @@ where
 
 pub fn try_create_aggregate_bitmap_function<const OP_TYPE: u8, const AGG_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
     with_bitmap_op_mapped_type!(|OP| match OP_TYPE {
@@ -694,7 +699,7 @@ fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
 }
 
 pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -705,7 +710,7 @@ pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -716,7 +721,7 @@ pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -727,7 +732,7 @@ pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription
 }
 
 pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -738,7 +743,7 @@ pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -749,7 +754,7 @@ pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
 }
 
 pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -760,7 +765,7 @@ pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

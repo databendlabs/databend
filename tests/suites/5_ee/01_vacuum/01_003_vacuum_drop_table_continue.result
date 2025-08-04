@@ -12,7 +12,6 @@
 >>>> insert into test_vacuum_drop_table_continue.d values (1)
 1
 >>>> drop database test_vacuum_drop_table_continue
->>>> set data_retention_time_in_days=0; vacuum drop table
 >>>> undrop database test_vacuum_drop_table_continue
 >>>> use test_vacuum_drop_table_continue;show tables
 a

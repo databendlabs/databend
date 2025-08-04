@@ -2,12 +2,19 @@
 
 # Configuration
 DEFAULT_OUTPUT_DIR="."
+DEFAULT_HOURS=24
 VERBOSITY=0 # 0=normal, 1=verbose, 2=debug
 
 # Initialize variables
 DSN=""
-DATE=""
 OUTPUT_DIR=""
+HOURS=""
+DATE=""
+ARCHIVE_DATE=""
+ARCHIVE_NAME=""
+START_TIME=""
+SERVER_START_TIME=""
+SERVER_END_TIME=""
 FORMATTED_DATE=""
 
 # Logging functions
@@ -31,36 +38,53 @@ log() {
 # Show help information
 show_help() {
 	cat <<EOF
-Usage: $0 [OPTIONS] YYYYMMDD
+Usage: $0 [OPTIONS] [YYYYMMDD]
 
-Download Databend system data for the specified date.
+Download Databend system data for the specified time range.
 
 OPTIONS:
     --dsn DSN              Database connection string (overrides BENDSQL_DSN env var)
     --output_dir PATH      Output directory (default: current directory)
+    --date YYYYMMDD        Specific date to fetch (server date, e.g., 20250109)
+    --hours HOURS          Number of hours to look back (default: 24, ignored if --date specified)
     -v                     Verbose output
     -vv                    Debug output (very verbose)
     -h, --help             Show this help message
 
 ARGUMENTS:
-    YYYYMMDD              Date in YYYYMMDD format (e.g., 20250701)
+    YYYYMMDD              Date in YYYYMMDD format (alternative to --date option)
 
 ENVIRONMENT VARIABLES:
     BENDSQL_DSN           Default database connection string
 
 EXAMPLES:
-    # Use environment variable for DSN
+    # Fetch past 24 hours (default) - uses current date for filename
     export BENDSQL_DSN="http://username:password@localhost:8000/database?sslmode=enable"
-    $0 20250701
+    $0
+    # Output: data_2025-01-09.tar.gz
 
-    # Override DSN with command line
-    $0 --dsn "http://username:password@localhost:8000/database?sslmode=enable" 20250701
+    # Fetch past 12 hours - uses current date for filename
+    $0 --hours 12
+    # Output: data_2025-01-09.tar.gz
 
-    # Specify custom output directory
-    $0 --output_dir /tmp/databend_export 20250701
+    # Fetch specific date (server date)
+    $0 --date 20250109
+    # Output: data_2025-01-09.tar.gz
+    # or
+    $0 20250109
+
+    # Fetch specific date with custom output directory
+    $0 --date 20250108 --output_dir /tmp/databend_export
+    # Output: data_2025-01-08.tar.gz
 
     # Enable verbose logging
-    $0 -v 20250701
+    $0 -v --date 20250109
+
+NOTE:
+    - When --date is specified, --hours is ignored
+    - All dates are interpreted as server dates (database server timezone)
+    - Date format must be YYYYMMDD (e.g., 20250109 for January 9, 2025)
+    - Output filename format: data_YYYY-MM-DD.tar.gz (compatible with restore_log.sh)
 EOF
 }
 
@@ -69,6 +93,19 @@ format_date() {
 	local input_date="$1"
 	FORMATTED_DATE="${input_date:0:4}-${input_date:4:2}-${input_date:6:2}"
 	log DEBUG "Formatted date: $FORMATTED_DATE"
+}
+
+calculate_archive_info() {
+	if [[ -n "$DATE" ]]; then
+		ARCHIVE_DATE="$FORMATTED_DATE"
+	else
+		# For hours mode, use current date
+		ARCHIVE_DATE=$(date '+%Y-%m-%d')
+	fi
+	# Unified filename format for compatibility with restore_log.sh
+	ARCHIVE_NAME="data_${ARCHIVE_DATE}.tar.gz"
+	log DEBUG "Archive date: $ARCHIVE_DATE"
+	log DEBUG "Archive name: $ARCHIVE_NAME"
 }
 
 parse_arguments() {
@@ -86,6 +123,14 @@ parse_arguments() {
 			OUTPUT_DIR="$2"
 			shift 2
 			;;
+		--date)
+			DATE="$2"
+			shift 2
+			;;
+		--hours)
+			HOURS="$2"
+			shift 2
+			;;
 		-v)
 			VERBOSITY=1
 			shift
@@ -95,7 +140,7 @@ parse_arguments() {
 			shift
 			;;
 		*)
-			if [[ -z "$DATE" ]]; then
+			if [[ -z "$DATE" && "$1" =~ ^[0-9]{8}$ ]]; then
 				DATE="$1"
 				shift
 			else
@@ -114,27 +159,34 @@ parse_arguments() {
 	fi
 
 	OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
-
+	HOURS="${HOURS:-$DEFAULT_HOURS}"
+	
 	if [[ -n "$DATE" ]]; then
 		format_date "$DATE"
 	fi
+	
+	calculate_archive_info
 }
 
 validate_arguments() {
-	if [[ -z "$DATE" ]]; then
-		log ERROR "Missing required date parameter"
-		echo "Use -h or --help for usage information." >&2
-		exit 1
-	fi
-
-	if [[ ! "$DATE" =~ ^[0-9]{8}$ ]]; then
-		log ERROR "Invalid date format: $DATE (expected YYYYMMDD)"
-		echo "Use -h or --help for usage information." >&2
-		exit 1
-	fi
-
 	if [[ -z "$DSN" ]]; then
 		log ERROR "No DSN provided. Set BENDSQL_DSN environment variable or use --dsn option."
+		echo "Use -h or --help for usage information." >&2
+		exit 1
+	fi
+
+	# Validate date parameter if provided
+	if [[ -n "$DATE" ]]; then
+		if [[ ! "$DATE" =~ ^[0-9]{8}$ ]]; then
+			log ERROR "Invalid date format: $DATE (expected YYYYMMDD)"
+			echo "Use -h or --help for usage information." >&2
+			exit 1
+		fi
+	fi
+	
+	# Validate hours parameter
+	if [[ ! "$HOURS" =~ ^[0-9]+$ ]] || [[ $HOURS -le 0 ]]; then
+		log ERROR "Invalid hours value: $HOURS (must be a positive integer)"
 		echo "Use -h or --help for usage information." >&2
 		exit 1
 	fi
@@ -142,224 +194,328 @@ validate_arguments() {
 
 build_base_command() {
 	BASE_CMD="bendsql"
-	[[ -n "$DSN" ]] && BASE_CMD+=" --dsn \"$DSN\""
+	if [[ -n "$DSN" ]]; then
+		BASE_CMD+=" --dsn \"$DSN\""
+	fi
 	log INFO "Using command: $BASE_CMD"
 }
 
 execute_query() {
 	local sql="$1"
-	log DEBUG "Executing: ${sql:0:60}..."
+	log DEBUG "Executing: ${sql:0:80}..."
 
 	eval "$BASE_CMD --quote-style never --query=\"$sql\""
 	local retval=$?
 
-	[[ $retval -ne 0 ]] && {
+	if [[ $retval -ne 0 ]]; then
 		log ERROR "Query failed"
 		exit $retval
-	}
+	fi
+}
+
+# Get server time range
+get_server_time_range() {
+	echo "Querying server time range..."
+	
+	local time_query
+	if [[ -n "$DATE" ]]; then
+		time_query="SELECT DATE('$FORMATTED_DATE') AS start_time, DATE('$FORMATTED_DATE') + INTERVAL 1 DAY AS end_time"
+	else
+		time_query="SELECT NOW() - INTERVAL $HOURS HOUR AS start_time, NOW() AS end_time"
+	fi
+	
+	local time_result
+	time_result=$(execute_query "$time_query")
+	
+	if [[ -z "$time_result" ]]; then
+		log ERROR "Failed to get server time range"
+		exit 1
+	fi
+	
+	# Parse the result - assuming tab-separated format
+	SERVER_START_TIME=$(echo "$time_result" | tail -n 1 | awk '{print $1" "$2}')
+	SERVER_END_TIME=$(echo "$time_result" | tail -n 1 | awk '{print $3" "$4}')
+	
+	if [[ -n "$DATE" ]]; then
+		echo "Server time range: $FORMATTED_DATE (full day, server timezone)"
+	else
+		echo "Server time range: $SERVER_START_TIME ~ $SERVER_END_TIME ($HOURS hours)"
+	fi
+	
+	log DEBUG "Server start time: $SERVER_START_TIME"
+	log DEBUG "Server end time: $SERVER_END_TIME"
 }
 
 download_file() {
 	local filename="$1"
 	local download_dir="$2"
+	local current="$3"
+	local total="$4"
 
+	echo "  [$current/$total] Downloading: $filename"
 	log INFO "Processing file: $filename"
 
+	local presign_result
 	presign_result=$(execute_query "PRESIGN DOWNLOAD @a5c7667401c0c728c2ef9703bdaea66d9ae2d906/$filename")
+	local presign_url
 	presign_url=$(echo "$presign_result" | awk '{print $3}')
 
-	[[ -z "$presign_url" ]] && {
-		log ERROR "Empty presigned URL"
+	if [[ -z "$presign_url" ]]; then
+		log ERROR "Empty presigned URL for $filename"
 		return 1
-	}
-	[[ "$presign_url" =~ ^https?:// ]] || {
-		log ERROR "Invalid URL format"
+	fi
+	
+	if [[ ! "$presign_url" =~ ^https?:// ]]; then
+		log ERROR "Invalid URL format for $filename"
 		return 1
-	}
+	fi
 
 	log DEBUG "Downloading from: $presign_url"
 	if curl -k -L -s -S -f -o "$download_dir/$filename" "$presign_url"; then
-		log INFO "Downloaded: $filename ($(du -h "$download_dir/$filename" | cut -f1))"
+		local file_size
+		file_size=$(du -h "$download_dir/$filename" | cut -f1)
+		echo "    ✓ Success ($file_size)"
+		log INFO "Downloaded: $filename ($file_size)"
 		return 0
 	else
-		log ERROR "Download failed"
+		echo "    ✗ Failed"
+		log ERROR "Download failed: $filename"
 		rm -f "$download_dir/$filename" 2>/dev/null
 		return 1
 	fi
 }
 
 create_archive() {
-	local date_str="$1"
-	shift
 	local dirs=("$@")
 	local deleted_files=0
-	local temp_log=$(mktemp)
+	local temp_log
+	temp_log=$(mktemp)
 
-	local archive_name="data_${date_str}.tar.gz"
-
+	echo "Creating archive..."
 	local missing_dirs=()
 	for dir in "${dirs[@]}"; do
 		if [[ ! -d "$dir" ]]; then
 			missing_dirs+=("$dir")
-		elif [[ ! -r "$dir" ]]; then
-			log WARN "[WARN] Directory exists but not readable: $dir"
 		fi
 	done
 
 	if [[ ${#missing_dirs[@]} -gt 0 ]]; then
-		log ERROR "[ERROR] Missing directories: ${missing_dirs[*]}"
+		log ERROR "Missing directories: ${missing_dirs[*]}"
+		rm -f "$temp_log"
 		return 1
 	fi
 
 	local file_list
 	file_list=$(mktemp)
 	find "${dirs[@]}" -type f -print >"$file_list" 2>/dev/null
+	local total_files
+	total_files=$(wc -l < "$file_list")
 
-	log INFO "[INFO] Creating archive $archive_name from ${#dirs[@]} directories..."
-	if ! tar -czf "$archive_name" --files-from="$file_list" 2>>"$temp_log"; then
-		log ERROR "[ERROR] Create archive failure, for details:"
+	echo "  Archiving $total_files files..."
+	if ! tar -czf "$ARCHIVE_NAME" --files-from="$file_list" 2>>"$temp_log"; then
+		log ERROR "Archive creation failed:"
 		cat "$temp_log" >&2
-		rm -f "$file_list" "$temp_log" "$archive_name"
+		rm -f "$file_list" "$temp_log" "$ARCHIVE_NAME"
 		return 1
 	fi
 
-	if ! tar -tzf "$archive_name" &>/dev/null; then
-		log ERROR "[ERROR] Create archive failure"
-		rm -f "$archive_name"
+	if ! tar -tzf "$ARCHIVE_NAME" &>/dev/null; then
+		log ERROR "Archive validation failed"
+		rm -f "$ARCHIVE_NAME" "$file_list" "$temp_log"
 		return 1
 	fi
 
-	log INFO "[INFO] Clean temp files..."
+	local archive_size
+	archive_size=$(du -h "$ARCHIVE_NAME" | cut -f1)
+	echo "  ✓ Archive created: $ARCHIVE_NAME ($archive_size)"
+
+	echo "  Cleaning up temporary files..."
 	while IFS= read -r file; do
 		if rm -f "$file" 2>>"$temp_log"; then
 			((deleted_files++))
-		else
-			log WARN "[WARN] remove file failure: $file"
 		fi
 	done <"$file_list"
 
+	echo "  ✓ Cleaned up $deleted_files files"
 	rm -f "$file_list" "$temp_log"
 	return 0
 }
 
-extract_first_column() {
-	sed 's/[[:space:]]\{1,\}/\t/g' |
-		sed -e 's/^[[:space:]]*//' \
-			-e 's/[[:space:]]*$//' \
-			-e 's/"//g' |
-		awk -F '\t' 'NF>0 {print $1}'
+get_time_condition() {
+	if [[ -n "$DATE" ]]; then
+		echo "DATE(timestamp) = '$FORMATTED_DATE'"
+	else
+		echo "timestamp >= NOW() - INTERVAL $HOURS HOUR"
+	fi
+}
+
+get_event_time_condition() {
+	if [[ -n "$DATE" ]]; then
+		echo "DATE(event_time) = '$FORMATTED_DATE'"
+	else
+		echo "event_time >= NOW() - INTERVAL $HOURS HOUR"
+	fi
+}
+
+process_stage() {
+	local stage_name="$1"
+	local query="$2"
+	local output_subdir="$3"
+	local stage_num="$4"
+	local total_stages="$5"
+
+	echo ""
+	echo "[$stage_num/$total_stages] $stage_name"
+
+	echo "  Preparing data..."
+	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
+	execute_query "$query"
+
+	echo "  Listing files..."
+	local file_list
+	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
+	if [[ -z "$file_list" ]]; then
+		echo "  ⚠ No files found"
+		stage_total=0
+		stage_success=0
+		return 0
+	fi
+
+	# Count files
+	local file_count
+	file_count=$(echo "$file_list" | wc -l)
+	echo "  Found $file_count files"
+
+	mkdir -p "$OUTPUT_DIR/$output_subdir"
+	
+	local current=0
+	local success=0
+	while IFS= read -r filename; do
+		((current++))
+		if download_file "$filename" "$OUTPUT_DIR/$output_subdir" "$current" "$file_count"; then
+			((success++))
+		fi
+	done <<<"$file_list"
+
+	echo "  Stage completed: $success/$current files downloaded"
+	
+	# Return counts via global variables for main function
+	stage_total=$current
+	stage_success=$success
+	
+	return 0
 }
 
 main() {
+	START_TIME=$(date +%s)
+	
 	parse_arguments "$@"
 	validate_arguments
+	
+	echo "================================================================"
+	echo "Databend Log Fetcher - Started at $(date '+%Y-%m-%d %H:%M:%S')"
+	echo "================================================================"
+	echo "Output archive: $ARCHIVE_NAME"
+	if [[ -n "$DATE" ]]; then
+		echo "Mode: Specific date ($FORMATTED_DATE)"
+	else
+		echo "Mode: Past $HOURS hours (filename uses current date)"
+	fi
+	echo "================================================================"
+	
 	build_base_command
 
-	mkdir -p "$OUTPUT_DIR"
-	log INFO "Output directory: $OUTPUT_DIR"
+	# Get and display server time range
+	get_server_time_range
 
+	mkdir -p "$OUTPUT_DIR"
+	echo "Output directory: $OUTPUT_DIR"
+
+	# Initialize workspace
+	echo ""
+	echo "[0/6] Initializing workspace..."
 	execute_query "DROP STAGE IF EXISTS a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 	execute_query "CREATE STAGE a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
+	echo "  ✓ Workspace initialized"
 
-	log INFO "Fetch columns info..."
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.columns;"
+	local total=0
+	local success=0
+	
+	# Stage 1: Columns
+	process_stage "Fetch System Columns" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.columns;" \
+		"columns" "1" "6"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
 
-	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
-	[[ -z "$file_list" ]] && {
-		log ERROR "No files found"
-		exit 1
-	}
+	# Stage 2: User Functions
+	process_stage "Fetch User Functions" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions);" \
+		"user_functions" "2" "6"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
 
-	total=0
-	success=0
+	# Stage 3: Query History - uses query_logs directory to match restore script expectations
+	local event_condition
+	event_condition=$(get_event_time_condition)
+	process_stage "Fetch Query History" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE $event_condition);" \
+		"query_logs" "3" "6"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
 
-	mkdir -p "$OUTPUT_DIR/columns"
-	while IFS= read -r filename; do
-		((total++))
-		download_file "$filename" "$OUTPUT_DIR/columns" && ((success++))
-	done <<<"$file_list"
+	# Stage 4: Raw Logs - uses query_raw_logs directory to match restore script expectations
+	local time_condition
+	time_condition=$(get_time_condition)
+	process_stage "Fetch Raw Logs" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history WHERE $time_condition);" \
+		"query_raw_logs" "4" "6"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
 
-	log INFO "Fetch Databend user functions..."
-	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
+	# Stage 5: Profile Logs - uses query_profile_logs directory to match restore script expectations
+	process_stage "Fetch Profile Logs" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history WHERE $time_condition);" \
+		"query_profile_logs" "5" "6"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
 
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions);"
+	# Stage 6: Create Archive
+	echo ""
+	echo "[6/6] Creating archive and cleanup"
 
-	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
-	[[ -z "$file_list" ]] && {
-		log ERROR "No files found"
-		exit 1
-	}
-
-	mkdir -p "$OUTPUT_DIR/user_functions"
-	while IFS= read -r filename; do
-		((total++))
-		download_file "$filename" "$OUTPUT_DIR/user_functions" && ((success++))
-	done <<<"$file_list"
-
-	log INFO "Fetch Databend query logs..."
-	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
-
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE to_date(event_time) = '$FORMATTED_DATE');"
-
-	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
-	[[ -z "$file_list" ]] && {
-		log ERROR "No files found"
-		exit 1
-	}
-
-	mkdir -p "$OUTPUT_DIR/query_logs"
-	while IFS= read -r filename; do
-		((total++))
-		download_file "$filename" "$OUTPUT_DIR/query_logs" && ((success++))
-	done <<<"$file_list"
-
-	log INFO "Fetch Databend query raw logs..."
-	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
-
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
-
-	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
-	[[ -z "$file_list" ]] && {
-		log ERROR "No files found"
-		exit 1
-	}
-
-	mkdir -p "$OUTPUT_DIR/query_raw_logs"
-	while IFS= read -r filename; do
-		((total++))
-		download_file "$filename" "$OUTPUT_DIR/query_raw_logs" && ((success++))
-	done <<<"$file_list"
-
-	log INFO "Fetch Databend query profile logs..."
-	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
-
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
-
-	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
-	[[ -z "$file_list" ]] && {
-		log ERROR "No files found"
-		exit 1
-	}
-
-	mkdir -p "$OUTPUT_DIR/query_profile_logs"
-	while IFS= read -r filename; do
-		((total++))
-		download_file "$filename" "$OUTPUT_DIR/query_profile_logs" && ((success++))
-	done <<<"$file_list"
-
+	echo ""
 	echo "Summary:"
-	echo "Files processed: $total"
-	echo "Successfully downloaded: $success"
-	echo "Failed: $((total - success))"
+	if [[ -n "$DATE" ]]; then
+		echo "  Date: $FORMATTED_DATE (server timezone)"
+	else
+		echo "  Time range: $SERVER_START_TIME ~ $SERVER_END_TIME"
+	fi
+	echo "  Files processed: $total"
+	echo "  Successfully downloaded: $success"
+	echo "  Failed: $((total - success))"
+	if [[ $total -gt 0 ]]; then
+		echo "  Success rate: $(( success * 100 / total ))%"
+	fi
 
 	if [[ $success -gt 0 ]]; then
-		if create_archive "$FORMATTED_DATE" "$OUTPUT_DIR/columns" "$OUTPUT_DIR/user_functions" "$OUTPUT_DIR/query_logs" "$OUTPUT_DIR/query_raw_logs" "$OUTPUT_DIR/query_profile_logs"; then
-			echo "Operation completed successfully"
+		if create_archive "$OUTPUT_DIR/columns" "$OUTPUT_DIR/user_functions" "$OUTPUT_DIR/query_logs" "$OUTPUT_DIR/query_raw_logs" "$OUTPUT_DIR/query_profile_logs"; then
+			local end_time
+			end_time=$(date +%s)
+			local total_time
+			total_time=$((end_time - START_TIME))
+			echo ""
+			echo "================================================================"
+			echo "✓ Operation completed successfully in ${total_time}s"
+			echo "Archive: $(pwd)/$ARCHIVE_NAME"
+			echo "================================================================"
 			exit 0
 		else
+			log ERROR "Archive creation failed"
 			exit 1
 		fi
 	else
+		log ERROR "No files were successfully downloaded"
 		exit 1
 	fi
 }

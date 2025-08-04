@@ -225,8 +225,8 @@ pub fn simulate_two_groups_group_by(
     func.accumulate_keys(&places, &loc, (&block_entries).into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(state1, &mut builder)?;
-    func.merge_result(state2, &mut builder)?;
+    func.merge_result(state1, false, &mut builder)?;
+    func.merge_result(state2, false, &mut builder)?;
 
     Ok((builder.build(), data_type))
 }

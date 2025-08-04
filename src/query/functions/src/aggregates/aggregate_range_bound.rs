@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -26,8 +25,12 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 use rand::prelude::SliceRandom;
 use rand::rngs::SmallRng;
 use rand::thread_rng;
@@ -35,11 +38,15 @@ use rand::Rng;
 use rand::SeedableRng;
 
 use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::with_simple_no_number_mapped_type;
 
 struct RangeBoundData {
@@ -81,8 +88,8 @@ where
 
 impl<T> UnaryState<T, ArrayType<T>> for RangeBoundState<T>
 where
-    T: ReturnType + Sync + Send,
-    T::Scalar: Ord + Sync + Send + BorshSerialize + BorshDeserialize,
+    T: ReturnType,
+    T::Scalar: Ord + BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
@@ -236,6 +243,42 @@ where
     }
 }
 
+impl<T> StateSerde for RangeBoundState<T>
+where
+    T: ReturnType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 pub fn try_create_aggregate_range_bound_function(
     display_name: &str,
     params: Vec<Scalar>,
@@ -249,63 +292,54 @@ pub fn try_create_aggregate_range_bound_function(
 
     with_simple_no_number_mapped_type!(|T| match data_type {
         DataType::T => {
-            let func = AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::try_create(
+            AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         RangeBoundState<NumberType<NUM>>,
                         NumberType<NUM>,
                         ArrayType<NumberType<NUM>>,
-                    >::try_create(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
                     .with_function_data(Box::new(function_data))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         RangeBoundState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         ArrayType<DecimalType<DECIMAL>>,
-                    >::try_create(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
                     .with_function_data(Box::new(function_data))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::Binary => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 RangeBoundState<BinaryType>,
                 BinaryType,
                 ArrayType<BinaryType>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
+            >::create(display_name, return_type)
             .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, data_type
+            "{display_name} does not support type '{data_type:?}'",
         ))),
     })
 }
@@ -319,9 +353,7 @@ pub fn try_create_aggregate_range_bound_function(
 /// For a column with values `(0, 1, 3, 6, 8)` and `partition_num = 3`, the function calculates the
 /// partition boundaries based on the distribution of the data. The boundaries might be `[1, 6]`.
 pub fn aggregate_range_bound_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(
-        crate::aggregates::try_create_aggregate_range_bound_function,
-    ))
+    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_range_bound_function))
 }
 
 fn get_partitions(

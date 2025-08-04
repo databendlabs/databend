@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::TableContext;
+use databend_common_users::Object;
 use futures::future::try_join_all;
 use log::warn;
 
@@ -202,7 +203,7 @@ impl IndexesTable {
         table_names: Option<&[String]>,
     ) -> Result<Vec<TableInfo>> {
         let tenant = ctx.get_tenant();
-        let visibility_checker = ctx.get_visibility_checker(false).await?;
+        let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
 
         let ctl_name = catalog.name();
