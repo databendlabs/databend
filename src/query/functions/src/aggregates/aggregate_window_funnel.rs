@@ -46,18 +46,18 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::assert_unary_params;
+use super::assert_variadic_arguments;
 use super::borsh_partial_deserialize;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_params;
-use crate::aggregates::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -66,14 +66,7 @@ struct AggregateWindowFunnelState<T> {
 }
 
 impl<T> AggregateWindowFunnelState<T>
-where T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Send
-        + Sync
+where T: Ord + Sub<Output = T> + AsPrimitive<u64> + BorshSerialize + BorshDeserialize + Clone + Send
 {
     pub fn new() -> Self {
         Self {
@@ -159,12 +152,12 @@ pub struct AggregateWindowFunnelFunction<T> {
     _arguments: Vec<DataType>,
     event_size: usize,
     window: u64,
-    t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -335,7 +328,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let mut builder = UInt8Type::downcast_builder(builder);
         let result = self.get_event_level(place);
         builder.push(result);
@@ -371,7 +369,7 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -393,7 +391,7 @@ where
             _arguments: arguments,
             event_size,
             window,
-            t: PhantomData,
+            _t: PhantomData,
         }))
     }
 

@@ -19,7 +19,7 @@ use std::slice::SliceIndex;
 use crate::BlockEntry;
 use crate::DataBlock;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ProjectedBlock<'a> {
     map: Option<&'a [usize]>,
     entries: &'a [BlockEntry],
