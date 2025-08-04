@@ -156,6 +156,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'dropped_on'                      | 'system'             | 'views'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | NULL     | NULL      | NULL      |
 | 'dropped_on'                      | 'system'             | 'views_with_history'     | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | NULL     | NULL      | NULL      |
 | 'dummy'                           | 'system'             | 'one'                    | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
+| 'dummy'                           | 'system'             | 'zero'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'enabled'                         | 'system'             | 'notifications'          | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'end_time'                        | 'system'             | 'clustering_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'engine'                          | 'information_schema' | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
@@ -253,7 +254,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                            | 'system'             | 'dictionaries'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'name'                            | 'system'             | 'functions'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'name'                            | 'system'             | 'indexes'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
-| 'name'                            | 'system'             | 'malloc_stats_totals'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'name'                            | 'system'             | 'notifications'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'name'                            | 'system'             | 'password_policies'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'name'                            | 'system'             | 'procedures'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
@@ -280,7 +280,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'node'                            | 'system'             | 'backtrace'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'node'                            | 'system'             | 'caches'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'node'                            | 'system'             | 'locks'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
-| 'node'                            | 'system'             | 'malloc_stats_totals'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'node'                            | 'system'             | 'metrics'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'node'                            | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'node'                            | 'system'             | 'query_execution'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
@@ -369,7 +368,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'start_time'                      | 'system'             | 'clustering_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'state'                           | 'system'             | 'task_history'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'state'                           | 'system'             | 'tasks'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
-| 'statistics'                      | 'system'             | 'malloc_stats'           | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'status'                          | 'system'             | 'backtrace'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'status'                          | 'system'             | 'locks'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'status'                          | 'system'             | 'notification_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
@@ -444,7 +442,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'user'                            | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'user'                            | 'system'             | 'temporary_tables'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'value'                           | 'system'             | 'configs'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
-| 'value'                           | 'system'             | 'malloc_stats_totals'    | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'value'                           | 'system'             | 'metrics'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'value'                           | 'system'             | 'settings'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'vector_index_size'               | 'system'             | 'tables'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | NULL     | NULL      | NULL      |
