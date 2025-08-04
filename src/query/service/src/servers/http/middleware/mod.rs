@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod client_capabilities;
 mod metrics;
 mod panic_handler;
 mod session;
 pub mod session_header;
 
+pub(crate) use client_capabilities::ClientCapabilities;
 pub(crate) use metrics::MetricsMiddleware;
 pub(crate) use panic_handler::PanicHandler;
 pub(crate) use session::forward_request_with_body;

@@ -30,6 +30,7 @@ def do_query(session_client, query, session_state=None):
         query_payload["session"] = session_state
     headers = {
         "Content-Type": "application/json",
+        "X-DATABEND-CLIENT-CAPS": "session_cookie"
     }
 
     response = session_client.post(url, headers=headers, json=query_payload, auth=auth)
@@ -39,7 +40,7 @@ def do_query(session_client, query, session_state=None):
 def test_simple():
     client = requests.session()
     client.cookies = GlobalCookieJar()
-    client.cookies.set("cookie_enabled", "true")
+    # client.cookies.set("cookie_enabled", "true")
 
     resp = do_query(client, "select 1")
     assert resp.status_code == 200, resp.text
