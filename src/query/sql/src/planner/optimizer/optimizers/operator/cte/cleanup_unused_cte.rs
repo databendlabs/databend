@@ -56,6 +56,7 @@ impl CleanupUnusedCTEOptimizer {
     }
 
     /// Remove unused CTEs from the expression tree and update ref_count
+    #[recursive::recursive]
     fn remove_unused_ctes(
         s_expr: &SExpr,
         referenced_ctes: &HashMap<String, usize>,
