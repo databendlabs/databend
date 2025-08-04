@@ -34,6 +34,12 @@ pub trait RoleApi: Sync + Send {
 
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>>;
 
+    async fn list_udf_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+    async fn list_stage_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+    async fn list_seq_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+    async fn list_connection_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+    async fn list_warehouse_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+
     /// General role update.
     ///
     /// It fetches the role that matches the specified seq number, update it in place, then write it back with the seq it sees.

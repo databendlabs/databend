@@ -11,7 +11,7 @@ def test_lua_sleep():
 
     lua_script = '''
 print("Before sleep")
-sleep(0.5)
+metactl.sleep(0.5)
 print("After sleep")
 '''
 

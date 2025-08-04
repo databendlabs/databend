@@ -16,7 +16,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::AddAssign;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -24,15 +23,24 @@ use databend_common_exception::Result;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggregateUnaryFunction;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct ModeState<T>
@@ -57,8 +65,8 @@ where
 
 impl<T> UnaryState<T, T> for ModeState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: Ord + Hash + Sync + Send + BorshSerialize + BorshDeserialize,
+    T: ValueType,
+    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
@@ -109,51 +117,84 @@ where
     }
 }
 
+impl<T> StateSerde for ModeState<T>
+where
+    T: ValueType,
+    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 pub fn try_create_aggregate_mode_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].clone();
     with_number_mapped_type!(|NUM| match &data_type {
         DataType::Number(NumberDataType::NUM) => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 ModeState<NumberType<NUM>>,
                 NumberType<NUM>,
                 NumberType<NUM>,
-            >::try_create(
-                display_name, data_type.clone(), params, data_type.clone()
+            >::create(
+                display_name, data_type.clone()
             )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         ModeState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         DecimalType<DECIMAL>,
-                    >::try_create(
-                        display_name, data_type.clone(), params, data_type.clone()
-                    )
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    >::create(display_name, data_type.clone())
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         _ => {
-            let func = AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::try_create(
+            AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::create(
                 display_name,
                 data_type.clone(),
-                params,
-                data_type.clone(),
             )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
     })
 }

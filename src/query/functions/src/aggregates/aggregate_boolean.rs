@@ -13,25 +13,31 @@
 // limitations under the License.
 
 use boolean::TrueIdxIter;
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::*;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 
+use super::assert_params;
 use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_unary::UnaryState;
-use crate::aggregates::AggregateUnaryFunction;
+use super::StateSerde;
+use super::UnaryState;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 pub struct BooleanState<const IS_AND: bool> {
     pub value: bool,
 }
@@ -121,12 +127,43 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
     }
 }
 
+impl<const IS_AND: bool> StateSerde for BooleanState<IS_AND> {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Boolean.into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let builder = builders[0].as_boolean_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            builder.push(state.value);
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BooleanType, Self, _>(places, loc, state, filter, |state, value| {
+            state.merge(&Self { value })
+        })
+    }
+}
+
 pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let mut data_type = arguments[0].clone();
@@ -138,12 +175,11 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
     match &data_type {
         DataType::Boolean => {
             let return_type = DataType::Boolean;
-            AggregateUnaryFunction::<BooleanState<IS_AND>, BooleanType, BooleanType>::try_create_unary(
+            AggregateUnaryFunction::<BooleanState<IS_AND>, BooleanType, BooleanType>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
+            .finish()
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(
@@ -154,7 +190,7 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
 }
 
 pub fn aggregate_boolean_function_desc<const IS_AND: bool>() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

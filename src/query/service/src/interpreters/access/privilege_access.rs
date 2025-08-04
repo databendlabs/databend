@@ -1359,6 +1359,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Set(plan) => {
                 use databend_common_ast::ast::SetType;
                 if let SetType::SettingsGlobal = plan.set_type {
+                    plan.idents.iter()
+                        .try_for_each(|setting| {
+                            if setting.eq_ignore_ascii_case("network_policy") && !self.ctx.get_current_user()?.is_account_admin() {
+                                return Err(ErrorCode::PermissionDenied("Permission Denied: Setting of network_policy is restricted to account_admin role".to_string()));
+                            }
+                            Ok(())
+                        })?;
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                         .await?;
                 }
@@ -1366,6 +1373,14 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Unset(plan) => {
                 use databend_common_ast::ast::SetType;
                 if let SetType::SettingsGlobal = plan.unset_type {
+                    plan.vars.iter()
+                        .try_for_each(|setting| {
+                            if setting.eq_ignore_ascii_case("network_policy") && !self.ctx.get_current_user()?.is_account_admin() {
+                                    return Err(ErrorCode::PermissionDenied("Permission Denied: Setting of network_policy is restricted to account_admin role".to_string()));
+                            }
+                            Ok(())
+                            }
+                        )?;
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                         .await?;
                 }
