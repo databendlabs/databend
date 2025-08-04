@@ -38,6 +38,7 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
@@ -371,9 +372,10 @@ impl Session {
     pub async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         self.privilege_mgr()
-            .get_visibility_checker(ignore_ownership)
+            .get_visibility_checker(ignore_ownership, object)
             .await
     }
 

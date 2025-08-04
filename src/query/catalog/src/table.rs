@@ -76,6 +76,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn supported_lazy_materialize(&self) -> bool {
+        false
+    }
+
     fn schema(&self) -> Arc<TableSchema> {
         self.get_table_info().schema()
     }

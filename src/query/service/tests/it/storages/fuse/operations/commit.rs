@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -137,6 +138,7 @@ use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
@@ -595,6 +597,7 @@ impl TableContext for CtxDelegation {
     async fn get_visibility_checker(
         &self,
         _ignore_ownership: bool,
+        _object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }

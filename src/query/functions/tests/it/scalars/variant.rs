@@ -98,6 +98,7 @@ fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json('1234')", &[]);
     run_ast(file, "parse_json('[1,2,3,4]')", &[]);
     run_ast(file, "parse_json('{\"a\":\"b\",\"c\":\"d\"}')", &[]);
+    run_ast(file, "parse_json('{\"k\":\"v\",\"k\":\"v2\"}')", &[]);
 
     run_ast(file, "parse_json(s)", &[(
         "s",
@@ -145,6 +146,7 @@ fn test_try_parse_json(file: &mut impl Write) {
     run_ast(file, "try_parse_json('1234')", &[]);
     run_ast(file, "try_parse_json('[1,2,3,4]')", &[]);
     run_ast(file, "try_parse_json('{\"a\":\"b\",\"c\":\"d\"}')", &[]);
+    run_ast(file, "try_parse_json('{\"k\":\"v\",\"k\":\"v2\"}')", &[]);
 
     run_ast(file, "try_parse_json(s)", &[(
         "s",

@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_users::Object;
 
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
@@ -72,7 +73,7 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
             {
                 let ctx = self.ctx.clone();
                 Some(databend_common_base::runtime::block_on(async move {
-                    ctx.get_visibility_checker(false).await
+                    ctx.get_visibility_checker(false, Object::Sequence).await
                 })?)
             } else {
                 None

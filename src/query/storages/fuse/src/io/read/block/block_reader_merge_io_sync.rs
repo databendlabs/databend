@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_catalog::plan::PartInfoPtr;
@@ -22,6 +23,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -35,6 +37,24 @@ impl BlockReader {
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<BlockReadResult> {
         let part = FuseBlockPartInfo::from_part(part)?;
+        let location = &part.location;
+        let columns_meta = &part.columns_meta;
+
+        self.sync_read_columns_data_by_merge_io_2(
+            settings,
+            location,
+            columns_meta,
+            ignore_column_ids,
+        )
+    }
+
+    pub fn sync_read_columns_data_by_merge_io_2(
+        &self,
+        settings: &ReadSettings,
+        location: &str,
+        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
         let mut ranges = vec![];
@@ -45,9 +65,10 @@ impl BlockReader {
                     continue;
                 }
             }
-            let block_path = &part.location;
 
-            if let Some(column_meta) = part.columns_meta.get(column_id) {
+            let block_path = location;
+
+            if let Some(column_meta) = columns_meta.get(column_id) {
                 // first, check column array object cache
                 let (offset, len) = column_meta.offset_length();
                 let column_cache_key = TableDataCacheKey::new(block_path, *column_id, offset, len);
@@ -59,12 +80,8 @@ impl BlockReader {
             }
         }
 
-        let merge_io_result = MergeIOReader::sync_merge_io_read(
-            settings,
-            self.operator.clone(),
-            &part.location,
-            &ranges,
-        )?;
+        let merge_io_result =
+            MergeIOReader::sync_merge_io_read(settings, self.operator.clone(), location, &ranges)?;
 
         // for sync read, we disable table data cache
         let cached_column_data = vec![];
