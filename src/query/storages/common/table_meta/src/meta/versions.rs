@@ -128,6 +128,24 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
+impl Versioned<0> for v2::SegmentStatistics {}
+
+pub enum SegmentStatisticsVersion {
+    V0(PhantomData<v2::SegmentStatistics>),
+}
+
+impl SegmentStatisticsVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            SegmentStatisticsVersion::V0(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
+}
+
 /// Statically check that if T implements Versioned<U> where U equals V
 #[inline]
 pub fn testify_version<T, const V: u64>(t: PhantomData<T>) -> PhantomData<T>
@@ -189,7 +207,21 @@ mod converters {
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown table snapshot statistics version {value}, versions supported: 0"
+                    "unknown table snapshot statistics version {value}, versions supported: 0, 2, 3"
+                ))),
+            }
+        }
+    }
+
+    impl TryFrom<u64> for SegmentStatisticsVersion {
+        type Error = ErrorCode;
+        fn try_from(value: u64) -> Result<Self, Self::Error> {
+            match value {
+                0 => Ok(SegmentStatisticsVersion::V0(testify_version::<_, 0>(
+                    PhantomData,
+                ))),
+                _ => Err(ErrorCode::Internal(format!(
+                    "unknown segment statistics version {value}, versions supported: 0"
                 ))),
             }
         }

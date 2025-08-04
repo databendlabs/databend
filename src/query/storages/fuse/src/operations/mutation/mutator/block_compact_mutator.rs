@@ -21,6 +21,7 @@ use std::vec;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -32,10 +33,12 @@ use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use opendal::Operator;
 
+use crate::io::read::read_segment_stats;
 use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
@@ -211,6 +214,7 @@ impl BlockCompactMutator {
                 PartitionsShuffleKind::Mod,
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
+                    self.operator.clone(),
                     column_ids,
                     self.cluster_key_id,
                     self.thresholds,
@@ -227,6 +231,7 @@ impl BlockCompactMutator {
     #[async_backtrace::framed]
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
+        dal: Operator,
         column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
@@ -248,13 +253,18 @@ impl BlockCompactMutator {
 
             let column_ids = column_ids.clone();
             let semaphore = semaphore.clone();
+            let dal = dal.clone();
 
             let batch = lazy_parts.drain(0..batch_size).collect::<Vec<_>>();
             works.push(async move {
                 let mut res = vec![];
                 for lazy_part in batch {
-                    let mut builder =
-                        CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
+                    let mut builder = CompactTaskBuilder::new(
+                        dal.clone(),
+                        column_ids.clone(),
+                        cluster_key_id,
+                        thresholds,
+                    );
                     let parts = builder
                         .build_tasks(
                             lazy_part.segment_indices,
@@ -418,11 +428,12 @@ impl SegmentCompactChecker {
 }
 
 struct CompactTaskBuilder {
+    dal: Operator,
     column_ids: HashSet<ColumnId>,
     cluster_key_id: Option<u32>,
     thresholds: BlockThresholds,
 
-    blocks: Vec<Arc<BlockMeta>>,
+    blocks: Vec<BlockMetaWithHLL>,
     total_rows: usize,
     total_size: usize,
     total_compressed: usize,
@@ -430,11 +441,13 @@ struct CompactTaskBuilder {
 
 impl CompactTaskBuilder {
     fn new(
+        dal: Operator,
         column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
     ) -> Self {
         Self {
+            dal,
             column_ids,
             cluster_key_id,
             thresholds,
@@ -449,27 +462,27 @@ impl CompactTaskBuilder {
         self.blocks.is_empty()
     }
 
-    fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
+    fn take_blocks(&mut self) -> Vec<BlockMetaWithHLL> {
         self.total_rows = 0;
         self.total_size = 0;
         self.total_compressed = 0;
         std::mem::take(&mut self.blocks)
     }
 
-    fn add(&mut self, block: &Arc<BlockMeta>) -> (bool, bool) {
-        let total_rows = self.total_rows + block.row_count as usize;
-        let total_size = self.total_size + block.block_size as usize;
-        let total_compressed = self.total_compressed + block.file_size as usize;
+    fn add(&mut self, block_meta: &Arc<BlockMeta>, hlls: &Option<RawBlockHLL>) -> (bool, bool) {
+        let total_rows = self.total_rows + block_meta.row_count as usize;
+        let total_size = self.total_size + block_meta.block_size as usize;
+        let total_compressed = self.total_compressed + block_meta.file_size as usize;
         if !self.check_large_enough(total_rows, total_size, total_compressed) {
             // blocks < N
-            self.blocks.push(block.clone());
+            self.blocks.push((block_meta.clone(), hlls.clone()));
             self.total_rows = total_rows;
             self.total_size = total_size;
             self.total_compressed = total_compressed;
             (false, false)
         } else if self.check_for_compact(total_rows, total_size, total_compressed) {
             // N <= blocks < 2N
-            self.blocks.push(block.clone());
+            self.blocks.push((block_meta.clone(), hlls.clone()));
             (false, true)
         } else {
             // blocks >= 2N
@@ -500,20 +513,21 @@ impl CompactTaskBuilder {
     fn build_task(
         &self,
         tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
-        unchanged_blocks: &mut Vec<(BlockIndex, Arc<BlockMeta>)>,
+        unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
         block_idx: BlockIndex,
-        blocks: Vec<Arc<BlockMeta>>,
+        blocks: Vec<BlockMetaWithHLL>,
     ) -> bool {
-        if blocks.len() == 1 && !self.check_compact(&blocks[0]) {
+        if blocks.len() == 1 && !self.check_compact(&blocks[0].0) {
             unchanged_blocks.push((block_idx, blocks[0].clone()));
             true
         } else {
+            let blocks = blocks.into_iter().map(|v| v.0).collect();
             tasks.push_back((block_idx, blocks));
             false
         }
     }
 
-    fn check_compact(&self, block: &Arc<BlockMeta>) -> bool {
+    fn check_compact(&self, block: &BlockMeta) -> bool {
         // The snapshot schema does not contain stream columns,
         // so the stream columns need to be filtered out.
         let column_ids = block
@@ -554,10 +568,17 @@ impl CompactTaskBuilder {
         let mut handlers = Vec::with_capacity(compact_segments.len());
         for segment in compact_segments.into_iter().rev() {
             let permit = acquire_task_permit(semaphore.clone()).await?;
+            let op = self.dal.clone();
             let handler = runtime.spawn(async move {
+                let stats = if let Some(meta) = &segment.summary.additional_stats_meta {
+                    let stats = read_segment_stats(op.clone(), meta.location.clone()).await?;
+                    Some(stats)
+                } else {
+                    None
+                };
                 let blocks = segment.block_metas()?;
                 drop(permit);
-                Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
+                Ok::<_, ErrorCode>((blocks, segment.summary.clone(), stats))
             });
             handlers.push(handler);
         }
@@ -573,29 +594,33 @@ impl CompactTaskBuilder {
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
-            .flat_map(|(blocks, summary)| {
+            .flat_map(|(blocks, summary, hlls)| {
                 merge_statistics_mut(&mut removed_segment_summary, &summary, self.cluster_key_id);
-                blocks
+
+                blocks.into_iter().enumerate().map(move |(idx, v)| {
+                    let column_hlls = hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned();
+                    (v, column_hlls)
+                })
             })
             .collect::<Vec<_>>();
 
         if let Some(default_cluster_key) = self.cluster_key_id {
             // sort ascending.
             blocks.sort_by(|a, b| {
-                sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, default_cluster_key)
+                sort_by_cluster_stats(&a.0.cluster_stats, &b.0.cluster_stats, default_cluster_key)
             });
         }
 
         let mut tasks = VecDeque::new();
-        for block in blocks.iter() {
-            let (unchanged, need_take) = self.add(block);
+        for (block_meta, hlls) in blocks.iter() {
+            let (unchanged, need_take) = self.add(block_meta, hlls);
             if need_take {
                 let blocks = self.take_blocks();
                 latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                 block_idx += 1;
             }
             if unchanged {
-                let blocks = vec![block.clone()];
+                let blocks = vec![(block_meta.clone(), hlls.clone())];
                 latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                 block_idx += 1;
             }
@@ -610,16 +635,18 @@ impl CompactTaskBuilder {
                 let mut blocks = if latest_flag {
                     unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
                 } else {
-                    tasks.pop_back().map_or(vec![], |(_, v)| v)
+                    tasks
+                        .pop_back()
+                        .map_or(vec![], |(_, v)| v.into_iter().map(|v| (v, None)).collect())
                 };
 
                 let (total_rows, total_size, total_compressed) = blocks
                     .iter()
                     .chain(tail.iter())
                     .fold((0, 0, 0), |mut acc, x| {
-                        acc.0 += x.row_count as usize;
-                        acc.1 += x.block_size as usize;
-                        acc.2 += x.file_size as usize;
+                        acc.0 += x.0.row_count as usize;
+                        acc.1 += x.0.block_size as usize;
+                        acc.2 += x.0.file_size as usize;
                         acc
                     });
                 if self.check_for_compact(total_rows, total_size, total_compressed) {

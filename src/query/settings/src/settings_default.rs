@@ -1376,7 +1376,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("enable_block_stream_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables block stream write",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

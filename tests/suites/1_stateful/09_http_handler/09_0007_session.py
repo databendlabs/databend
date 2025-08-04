@@ -16,21 +16,31 @@ login_url = "http://localhost:8000/v1/session/login"
 logout_url = "http://localhost:8000/v1/session/logout"
 auth = ("root", "")
 
+
 def check(func):
     def wrapper(self, *args, **kwargs):
         print(f"---- {func.__name__}{args[:1]}")
-        resp : Response = func(self, *args, **kwargs)
+        resp: Response = func(self, *args, **kwargs)
         self.session_header = resp.headers.get(HEADER_SESSION)
         last = self.session_header_json
-        self.session_header_json = json.loads(base64.urlsafe_b64decode(self.session_header))
+        self.session_header_json = json.loads(
+            base64.urlsafe_b64decode(self.session_header)
+        )
         if last:
             if last["id"] != self.session_header_json["id"]:
-                print("error: session id should not change", last, self.session_header_json)
+                print(
+                    "error: session id should not change",
+                    last,
+                    self.session_header_json,
+                )
             if last["last_refresh_time"] < time.time() - 100:
                 if last["last_refresh_time"] > time.time() - 2:
                     print("error: last_refresh_time should not change")
             else:
-                if last["last_refresh_time"] != self.session_header_json["last_refresh_time"]:
+                if (
+                    last["last_refresh_time"]
+                    != self.session_header_json["last_refresh_time"]
+                ):
                     print("error: last_refresh_time should not change")
 
         # print("get header: ", self.session_header_json)
@@ -44,11 +54,11 @@ def check(func):
         if err:
             pprint(err)
         return resp
+
     return wrapper
 
 
 class Client(object):
-
     def __init__(self):
         self.client = requests.session()
         self.session_header = ""
@@ -82,7 +92,7 @@ class Client(object):
             auth=auth,
             headers={
                 "Content-Type": "application/json",
-                HEADER_SESSION: self.session_header
+                HEADER_SESSION: self.session_header,
             },
             json=query_payload,
         )
@@ -91,7 +101,9 @@ class Client(object):
     def set_fake_last_refresh_time(self):
         j = self.session_header_json
         j["last_refresh_time"] = int(time.time()) - 10 * 60
-        self.session_header = base64.urlsafe_b64encode(json.dumps(j).encode('utf-8')).decode('ascii')
+        self.session_header = base64.urlsafe_b64encode(
+            json.dumps(j).encode("utf-8")
+        ).decode("ascii")
 
 
 def main():

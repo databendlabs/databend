@@ -455,6 +455,14 @@ impl FuseTable {
                 blooms_to_be_purged.insert(loc.to_string());
             }
 
+            let mut stats_to_be_purged = HashSet::new();
+            for loc in &locations.hll_location {
+                if locations_referenced_by_root.hll_location.contains(loc) {
+                    continue;
+                }
+                stats_to_be_purged.insert(loc.to_string());
+            }
+
             let segment_locations_to_be_purged = HashSet::from_iter(
                 chunk
                     .iter()
@@ -481,6 +489,7 @@ impl FuseTable {
                 agg_indexes_to_be_purged,
                 inverted_indexes_to_be_purged,
                 blooms_to_be_purged,
+                stats_to_be_purged,
                 segment_locations_to_be_purged,
             )
             .await?;
@@ -541,6 +550,7 @@ impl FuseTable {
             agg_indexes_to_be_purged,
             inverted_indexes_to_be_purged,
             root_location_tuple.bloom_location,
+            root_location_tuple.hll_location,
             segment_locations_to_be_purged,
         )
         .await?;
@@ -566,6 +576,7 @@ impl FuseTable {
         agg_indexes_to_be_purged: HashSet<String>,
         inverted_indexes_to_be_purged: HashSet<String>,
         blooms_to_be_purged: HashSet<String>,
+        stats_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
         // 1. Try to purge block file chunks.
@@ -616,7 +627,15 @@ impl FuseTable {
             .await?;
         }
 
-        // 3. Try to purge segment file chunks.
+        // 3. Try to purge segment statistic file chunks.
+        let stats_count = stats_to_be_purged.len();
+        if stats_count > 0 {
+            counter.hlls += stats_count;
+            self.try_purge_location_files(ctx.clone(), stats_to_be_purged)
+                .await?;
+        }
+
+        // 4. Try to purge segment file chunks.
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
@@ -661,9 +680,10 @@ impl FuseTable {
         // 5. Refresh status.
         {
             let status = format!(
-                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
+                "gc: block files purged:{}, bloom files purged:{}, segment stats files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
                 counter.blocks,
                 counter.blooms,
+                counter.hlls,
                 counter.segments,
                 counter.table_statistics,
                 counter.snapshots,
@@ -714,6 +734,7 @@ impl FuseTable {
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
+        let mut hlls = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
@@ -779,12 +800,14 @@ impl FuseTable {
                 };
                 blocks.extend(location_tuple.block_location.into_iter());
                 blooms.extend(location_tuple.bloom_location.into_iter());
+                hlls.extend(location_tuple.hll_location.into_iter());
             }
         }
 
         Ok(LocationTuple {
             block_location: blocks,
             bloom_location: blooms,
+            hll_location: hlls,
         })
     }
 
@@ -808,6 +831,7 @@ struct RootSnapshotInfo {
 pub struct LocationTuple {
     pub block_location: HashSet<String>,
     pub bloom_location: HashSet<String>,
+    pub hll_location: HashSet<String>,
 }
 
 impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
@@ -815,6 +839,7 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
     fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut hll_location = HashSet::new();
         let block_metas = value.block_metas()?;
         for block_meta in block_metas.into_iter() {
             block_location.insert(block_meta.location.0.clone());
@@ -822,9 +847,13 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
                 bloom_location.insert(bloom_loc.0.clone());
             }
         }
+        if let Some(meta) = &value.as_ref().summary.additional_stats_meta {
+            hll_location.insert(meta.location.0.clone());
+        }
         Ok(Self {
             block_location,
             bloom_location,
+            hll_location,
         })
     }
 }
@@ -834,6 +863,7 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
     fn try_from(value: Arc<ColumnOrientedSegment>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut hll_location = HashSet::new();
 
         let location_path = value.location_path_col();
         for path in location_path.iter() {
@@ -846,19 +876,19 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
             .unwrap();
         let column = value.block_metas.get_by_offset(index).to_column();
         for value in column.iter() {
-            match value {
-                ScalarRef::Null => {}
-                ScalarRef::Tuple(values) => {
-                    let path = values[0].as_string().unwrap();
-                    bloom_location.insert(path.to_string());
-                }
-                _ => unreachable!(),
+            if let ScalarRef::Tuple(values) = value {
+                let path = values[0].as_string().unwrap();
+                bloom_location.insert(path.to_string());
             }
         }
 
+        if let Some(meta) = &value.as_ref().summary.additional_stats_meta {
+            hll_location.insert(meta.location.0.clone());
+        }
         Ok(Self {
             block_location,
             bloom_location,
+            hll_location,
         })
     }
 }
@@ -870,6 +900,7 @@ struct PurgeCounter {
     agg_indexes: usize,
     inverted_indexes: usize,
     blooms: usize,
+    hlls: usize,
     segments: usize,
     table_statistics: usize,
     snapshots: usize,
@@ -883,6 +914,7 @@ impl PurgeCounter {
             agg_indexes: 0,
             inverted_indexes: 0,
             blooms: 0,
+            hlls: 0,
             segments: 0,
             table_statistics: 0,
             snapshots: 0,

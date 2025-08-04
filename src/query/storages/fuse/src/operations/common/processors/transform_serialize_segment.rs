@@ -29,8 +29,10 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
@@ -40,6 +42,7 @@ use opendal::Operator;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+use crate::statistics::ColumnHLLAccumulator;
 use crate::statistics::RowOrientedSegmentBuilder;
 use crate::statistics::VirtualColumnAccumulator;
 use crate::FuseSegmentFormat;
@@ -52,6 +55,8 @@ enum State<B: SegmentBuilder> {
         data: Vec<u8>,
         location: String,
         segment: B::Segment,
+
+        stats: Option<(String, Vec<u8>)>,
     },
     PreCommitSegment {
         location: String,
@@ -65,6 +70,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     meta_locations: TableMetaLocationGenerator,
     segment_builder: B,
     virtual_column_accumulator: Option<VirtualColumnAccumulator>,
+    hll_accumulator: ColumnHLLAccumulator,
     state: State<B>,
 
     input: Arc<InputPort>,
@@ -105,6 +111,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             state: State::None,
             segment_builder,
             virtual_column_accumulator,
+            hll_accumulator: ColumnHLLAccumulator::default(),
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
@@ -244,6 +251,9 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     .add_block(extended_block_meta.block_meta)?;
             }
 
+            if let Some(hll) = extended_block_meta.column_hlls {
+                self.hll_accumulator.add_hll(hll);
+            }
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
@@ -257,17 +267,33 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegment => {
-                let segment_info = self
-                    .segment_builder
-                    .build(self.thresholds, self.default_cluster_key_id)?;
+                let location = self
+                    .meta_locations
+                    .gen_segment_info_location(self.table_meta_timestamps, self.is_column_oriented);
+
+                let mut additional_stats_meta = None;
+                let mut stats = None;
+                if !self.hll_accumulator.is_empty() {
+                    let segment_stats_location = TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(location.as_str());
+                    let stats_data = self.hll_accumulator.build().to_bytes()?;
+                    additional_stats_meta = Some(AdditionalStatsMeta {
+                        size: stats_data.len() as u64,
+                        location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                    });
+                    stats = Some((segment_stats_location, stats_data));
+                }
+
+                let segment_info = self.segment_builder.build(
+                    self.thresholds,
+                    self.default_cluster_key_id,
+                    additional_stats_meta,
+                )?;
 
                 self.state = State::SerializedSegment {
                     data: segment_info.serialize()?,
-                    location: self.meta_locations.gen_segment_info_location(
-                        self.table_meta_timestamps,
-                        self.is_column_oriented,
-                    ),
+                    location,
                     segment: segment_info,
+                    stats,
                 }
             }
             State::PreCommitSegment { location, segment } => {
@@ -300,8 +326,12 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 data,
                 location,
                 segment,
+                stats,
             } => {
                 self.data_accessor.write(&location, data).await?;
+                if let Some((location, stats)) = stats {
+                    self.data_accessor.write(&location, stats).await?;
+                }
                 info!("fuse append wrote down segment {} ", location);
 
                 self.state = State::PreCommitSegment { location, segment };

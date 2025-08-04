@@ -40,7 +40,7 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
-use databend_storages_common_table_meta::meta::MetaHLL;
+use databend_storages_common_table_meta::meta::MetaHLL12;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -99,7 +99,7 @@ struct SinkAnalyzeState {
     histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
     committed: bool,
-    ndv_states: HashMap<ColumnId, MetaHLL>,
+    ndv_states: HashMap<ColumnId, MetaHLL12>,
     histograms: HashMap<ColumnId, Histogram>,
     step: AnalyzeStep,
 }
@@ -187,7 +187,7 @@ impl SinkAnalyzeState {
 
             let col = col.index(0).unwrap();
             let data = col.as_tuple().unwrap()[0].as_binary().unwrap();
-            let hll: MetaHLL = borsh_deserialize_from_slice(data)?;
+            let hll: MetaHLL12 = borsh_deserialize_from_slice(data)?;
 
             if !is_full {
                 ndv_states

@@ -270,7 +270,7 @@ actual=$(echo "$response19" | jq -c '.data')
 echo "\n\nSELECT * FROM system.tasks: $actual"
 
 # Test Task When on After & Schedule & Execute
-response20=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t3 (c1 int, c2 int)\"}")
+response20=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE OR REPLACE TABLE t3 (c1 int, c2 int)\"}")
 create_table_query_id_2=$(echo $response20 | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_2"
 

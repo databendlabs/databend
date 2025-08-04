@@ -23,7 +23,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::Value;
-use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 
@@ -107,9 +106,7 @@ fn traverse_column_recursive(
             _ => unreachable!(),
         },
         _ => {
-            if RangeIndex::supported_type(data_type)
-                && *next_column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
-            {
+            if RangeIndex::supported_type(data_type) {
                 leaves.push((
                     *next_column_id,
                     Value::Column(column.clone()),
@@ -169,9 +166,7 @@ fn traverse_scalar_recursive(
         },
         _ => {
             // Ignore the range index does not supported type.
-            if RangeIndex::supported_type(data_type)
-                && *next_column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
-            {
+            if RangeIndex::supported_type(data_type) {
                 leaves.push((
                     *next_column_id,
                     Value::Scalar(scalar.clone()),

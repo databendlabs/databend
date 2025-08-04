@@ -3219,6 +3219,14 @@ pub struct CacheConfig {
     )]
     pub table_meta_statistic_count: u64,
 
+    /// Max number of cached segment statistic meta
+    #[clap(
+        long = "cache-segment-statistic-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_statistics_count: u64,
+
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     #[clap(
         long = "cache-enable-table-bloom-index-cache",
@@ -3635,6 +3643,7 @@ mod cache_config_converters {
                 block_meta_count: value.block_meta_count,
                 segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
@@ -3671,6 +3680,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,

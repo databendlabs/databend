@@ -95,7 +95,7 @@ async fn generate_column_oriented_segment(
             TestFixture::default_table_meta_timestamps(),
             true,
         );
-        let (block_meta, _index_meta) = block_writer
+        let (block_meta, _index_meta, _) = block_writer
             .write(
                 FuseStorageFormat::Parquet,
                 &table_schema,
@@ -112,7 +112,9 @@ async fn generate_column_oriented_segment(
         for block_meta in block_metas.iter() {
             segment_builder.add_block(block_meta.clone()).unwrap();
         }
-        segment_builder.build(Default::default(), Some(0)).unwrap()
+        segment_builder
+            .build(Default::default(), Some(0), None)
+            .unwrap()
     };
 
     assert_eq!(

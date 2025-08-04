@@ -15,9 +15,6 @@ CREATE OR REPLACE TABLE product_test (
 );
 
 statement ok
-set enable_block_stream_write = 1;
-
-statement ok
 INSERT INTO product_test (id, name, category, price, stock)
    VALUES(6, 'Keyboard', 'Electronics', 79.99, 25),
          (7, 'Table', 'Furniture', 399.99, 3);

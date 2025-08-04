@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -92,6 +93,13 @@ impl Marshal for TableSnapshotStatistics {
         assert_eq!(self.format_version, TableSnapshotStatistics::VERSION);
         let bytes = serde_json::to_vec(self)?;
         Ok(bytes)
+    }
+}
+
+impl Marshal for SegmentStatistics {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        assert_eq!(self.format_version, SegmentStatistics::VERSION);
+        self.to_bytes()
     }
 }
 

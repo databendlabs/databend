@@ -40,6 +40,7 @@ use opendal::Operator;
 use crate::io::BlockReader;
 use crate::FuseStorageFormat;
 
+#[derive(Debug)]
 pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,

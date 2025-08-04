@@ -57,6 +57,7 @@ impl PipelineBuilder {
 
         if is_lazy {
             let query_ctx = self.ctx.clone();
+            let dal = table.get_operator();
 
             let lazy_parts = compact_block
                 .parts
@@ -78,6 +79,7 @@ impl PipelineBuilder {
                         .block_on(async move {
                             let partitions = BlockCompactMutator::build_compact_tasks(
                                 ctx.clone(),
+                                dal.clone(),
                                 column_ids.clone(),
                                 cluster_key_id,
                                 thresholds,

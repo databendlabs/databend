@@ -43,6 +43,8 @@ pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
+/// In memory object cache of SegmentStatistics
+pub type SegmentStatisticsCache = InMemoryLruCache<SegmentStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
@@ -109,6 +111,13 @@ impl CachedObject<TableSnapshotStatistics> for TableSnapshotStatistics {
     type Cache = TableSnapshotStatisticCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_snapshot_statistics_cache()
+    }
+}
+
+impl CachedObject<SegmentStatistics> for SegmentStatistics {
+    type Cache = SegmentStatisticsCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_segment_statistics_cache()
     }
 }
 
@@ -245,6 +254,15 @@ impl From<TableSnapshot> for CacheValue<TableSnapshot> {
 
 impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
     fn from(value: TableSnapshotStatistics) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<SegmentStatistics> for CacheValue<SegmentStatistics> {
+    fn from(value: SegmentStatistics) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
