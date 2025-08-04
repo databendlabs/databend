@@ -86,6 +86,106 @@ evaluation (internal):
 +--------+---------------------------------------------------+
 
 
+ast            : cosine_distance([a, b], [c, d])
+raw expr       : cosine_distance(array(a::Float32, b::Float32), array(c::Float32, d::Float32))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(array<T0=Float32><T0, T0>(a, b), array<T0=Float32><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+--------------+
+|        | a         | b          | c          | d          | Output       |
++--------+-----------+------------+------------+------------+--------------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32      |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown      |
+| Row 0  | 1         | 2          | 3          | 4          | 0.01613009   |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 0.0003668666 |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 0.0000377297 |
++--------+-----------+------------+------------+------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------+
+| Column | Data                                              |
++--------+---------------------------------------------------+
+| a      | Float32([1, 5.1, 9.4])                            |
+| b      | Float32([2, 6.2, 10.6])                           |
+| c      | Float32([3, 7.3, 11.1])                           |
+| d      | Float32([4, 8.4, 12.3])                           |
+| Output | Float32([0.01613009, 0.0003668666, 0.0000377297]) |
++--------+---------------------------------------------------+
+
+
+ast            : cosine_distance([a, b], [c, d])
+raw expr       : cosine_distance(array(a::Float32 NULL, b::Float32 NULL), array(c::Float32 NULL, d::Float32 NULL))
+checked expr   : cosine_distance<Array(Float32 NULL), Array(Float32 NULL)>(array<T0=Float32 NULL><T0, T0>(a, b), array<T0=Float32 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+--------------+
+|        | a            | b            | c            | d            | Output       |
++--------+--------------+--------------+--------------+--------------+--------------+
+| Type   | Float32 NULL | Float32 NULL | Float32 NULL | Float32 NULL | Float32      |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown      |
+| Row 0  | 1            | 2            | 3            | 4            | 0.01613009   |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 0.0003668666 |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 0.0000377297 |
++--------+--------------+--------------+--------------+--------------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float32([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float32([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float32([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float32([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float32([0.01613009, 0.0003668666, 0.0000377297])                          |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : cosine_distance([a, b], [c, d])
+raw expr       : cosine_distance(array(a::Float64, b::Float64), array(c::Float64, d::Float64))
+checked expr   : cosine_distance<Array(Float64), Array(Float64)>(array<T0=Float64><T0, T0>(a, b), array<T0=Float64><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+--------------+
+|        | a         | b          | c          | d          | Output       |
++--------+-----------+------------+------------+------------+--------------+
+| Type   | Float64   | Float64    | Float64    | Float64    | Float64      |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown      |
+| Row 0  | 1         | 2          | 3          | 4          | 0.0161300899 |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 0.0003669116 |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 0.0000377663 |
++--------+-----------+------------+------------+------------+--------------+
+evaluation (internal):
++--------+-----------------------------------------------------+
+| Column | Data                                                |
++--------+-----------------------------------------------------+
+| a      | Float64([1, 5.1, 9.4])                              |
+| b      | Float64([2, 6.2, 10.6])                             |
+| c      | Float64([3, 7.3, 11.1])                             |
+| d      | Float64([4, 8.4, 12.3])                             |
+| Output | Float64([0.0161300899, 0.0003669116, 0.0000377663]) |
++--------+-----------------------------------------------------+
+
+
+ast            : cosine_distance([a, b], [c, d])
+raw expr       : cosine_distance(array(a::Float64 NULL, b::Float64 NULL), array(c::Float64 NULL, d::Float64 NULL))
+checked expr   : cosine_distance<Array(Float64 NULL), Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0>(a, b), array<T0=Float64 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+--------------+
+|        | a            | b            | c            | d            | Output       |
++--------+--------------+--------------+--------------+--------------+--------------+
+| Type   | Float64 NULL | Float64 NULL | Float64 NULL | Float64 NULL | Float64      |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown      |
+| Row 0  | 1            | 2            | 3            | 4            | 0.0161300899 |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 0.0003669116 |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 0.0000377663 |
++--------+--------------+--------------+--------------+--------------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float64([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float64([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float64([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float64([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float64([0.0161300899, 0.0003669116, 0.0000377663])                        |
++--------+----------------------------------------------------------------------------+
+
+
 ast            : l1_distance([1,2,3], [1,2,3])
 raw expr       : l1_distance(array(1, 2, 3), array(1, 2, 3))
 checked expr   : l1_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
@@ -165,6 +265,106 @@ evaluation (internal):
 +--------+-----------------------------+
 
 
+ast            : l1_distance([a, b], [c, d])
+raw expr       : l1_distance(array(a::Float32, b::Float32), array(c::Float32, d::Float32))
+checked expr   : l1_distance<Array(Float32), Array(Float32)>(array<T0=Float32><T0, T0>(a, b), array<T0=Float32><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+----------+
+|        | a         | b          | c          | d          | Output   |
++--------+-----------+------------+------------+------------+----------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32  |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown  |
+| Row 0  | 1         | 2          | 3          | 4          | 4        |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 4.4      |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 3.400001 |
++--------+-----------+------------+------------+------------+----------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Float32([1, 5.1, 9.4])      |
+| b      | Float32([2, 6.2, 10.6])     |
+| c      | Float32([3, 7.3, 11.1])     |
+| d      | Float32([4, 8.4, 12.3])     |
+| Output | Float32([4, 4.4, 3.400001]) |
++--------+-----------------------------+
+
+
+ast            : l1_distance([a, b], [c, d])
+raw expr       : l1_distance(array(a::Float32 NULL, b::Float32 NULL), array(c::Float32 NULL, d::Float32 NULL))
+checked expr   : l1_distance<Array(Float32 NULL), Array(Float32 NULL)>(array<T0=Float32 NULL><T0, T0>(a, b), array<T0=Float32 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+----------+
+|        | a            | b            | c            | d            | Output   |
++--------+--------------+--------------+--------------+--------------+----------+
+| Type   | Float32 NULL | Float32 NULL | Float32 NULL | Float32 NULL | Float32  |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown  |
+| Row 0  | 1            | 2            | 3            | 4            | 4        |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 4.4      |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 3.400001 |
++--------+--------------+--------------+--------------+--------------+----------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float32([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float32([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float32([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float32([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float32([4, 4.4, 3.400001])                                                |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : l1_distance([a, b], [c, d])
+raw expr       : l1_distance(array(a::Float64, b::Float64), array(c::Float64, d::Float64))
+checked expr   : l1_distance<Array(Float64), Array(Float64)>(array<T0=Float64><T0, T0>(a, b), array<T0=Float64><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+---------+
+|        | a         | b          | c          | d          | Output  |
++--------+-----------+------------+------------+------------+---------+
+| Type   | Float64   | Float64    | Float64    | Float64    | Float64 |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown |
+| Row 0  | 1         | 2          | 3          | 4          | 4       |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 4.4     |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 3.4     |
++--------+-----------+------------+------------+------------+---------+
+evaluation (internal):
++--------+-------------------------+
+| Column | Data                    |
++--------+-------------------------+
+| a      | Float64([1, 5.1, 9.4])  |
+| b      | Float64([2, 6.2, 10.6]) |
+| c      | Float64([3, 7.3, 11.1]) |
+| d      | Float64([4, 8.4, 12.3]) |
+| Output | Float64([4, 4.4, 3.4])  |
++--------+-------------------------+
+
+
+ast            : l1_distance([a, b], [c, d])
+raw expr       : l1_distance(array(a::Float64 NULL, b::Float64 NULL), array(c::Float64 NULL, d::Float64 NULL))
+checked expr   : l1_distance<Array(Float64 NULL), Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0>(a, b), array<T0=Float64 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+---------+
+|        | a            | b            | c            | d            | Output  |
++--------+--------------+--------------+--------------+--------------+---------+
+| Type   | Float64 NULL | Float64 NULL | Float64 NULL | Float64 NULL | Float64 |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown |
+| Row 0  | 1            | 2            | 3            | 4            | 4       |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 4.4     |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 3.4     |
++--------+--------------+--------------+--------------+--------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float64([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float64([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float64([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float64([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float64([4, 4.4, 3.4])                                                     |
++--------+----------------------------------------------------------------------------+
+
+
 ast            : l2_distance([1,2,3], [1,2,3])
 raw expr       : l2_distance(array(1, 2, 3), array(1, 2, 3))
 checked expr   : l2_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
@@ -242,6 +442,106 @@ evaluation (internal):
 | d      | Float32([4, 8.4, 12.3])                |
 | Output | Float32([2.828427, 3.11127, 2.404163]) |
 +--------+----------------------------------------+
+
+
+ast            : l2_distance([a, b], [c, d])
+raw expr       : l2_distance(array(a::Float32, b::Float32), array(c::Float32, d::Float32))
+checked expr   : l2_distance<Array(Float32), Array(Float32)>(array<T0=Float32><T0, T0>(a, b), array<T0=Float32><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+----------+
+|        | a         | b          | c          | d          | Output   |
++--------+-----------+------------+------------+------------+----------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32  |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown  |
+| Row 0  | 1         | 2          | 3          | 4          | 2.828427 |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 3.11127  |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 2.404163 |
++--------+-----------+------------+------------+------------+----------+
+evaluation (internal):
++--------+----------------------------------------+
+| Column | Data                                   |
++--------+----------------------------------------+
+| a      | Float32([1, 5.1, 9.4])                 |
+| b      | Float32([2, 6.2, 10.6])                |
+| c      | Float32([3, 7.3, 11.1])                |
+| d      | Float32([4, 8.4, 12.3])                |
+| Output | Float32([2.828427, 3.11127, 2.404163]) |
++--------+----------------------------------------+
+
+
+ast            : l2_distance([a, b], [c, d])
+raw expr       : l2_distance(array(a::Float32 NULL, b::Float32 NULL), array(c::Float32 NULL, d::Float32 NULL))
+checked expr   : l2_distance<Array(Float32 NULL), Array(Float32 NULL)>(array<T0=Float32 NULL><T0, T0>(a, b), array<T0=Float32 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+----------+
+|        | a            | b            | c            | d            | Output   |
++--------+--------------+--------------+--------------+--------------+----------+
+| Type   | Float32 NULL | Float32 NULL | Float32 NULL | Float32 NULL | Float32  |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown  |
+| Row 0  | 1            | 2            | 3            | 4            | 2.828427 |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 3.11127  |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 2.404163 |
++--------+--------------+--------------+--------------+--------------+----------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float32([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float32([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float32([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float32([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float32([2.828427, 3.11127, 2.404163])                                     |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : l2_distance([a, b], [c, d])
+raw expr       : l2_distance(array(a::Float64, b::Float64), array(c::Float64, d::Float64))
+checked expr   : l2_distance<Array(Float64), Array(Float64)>(array<T0=Float64><T0, T0>(a, b), array<T0=Float64><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+--------------+
+|        | a         | b          | c          | d          | Output       |
++--------+-----------+------------+------------+------------+--------------+
+| Type   | Float64   | Float64    | Float64    | Float64    | Float64      |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown      |
+| Row 0  | 1         | 2          | 3          | 4          | 2.8284271247 |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 3.1112698372 |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 2.404163056  |
++--------+-----------+------------+------------+------------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------+
+| Column | Data                                               |
++--------+----------------------------------------------------+
+| a      | Float64([1, 5.1, 9.4])                             |
+| b      | Float64([2, 6.2, 10.6])                            |
+| c      | Float64([3, 7.3, 11.1])                            |
+| d      | Float64([4, 8.4, 12.3])                            |
+| Output | Float64([2.8284271247, 3.1112698372, 2.404163056]) |
++--------+----------------------------------------------------+
+
+
+ast            : l2_distance([a, b], [c, d])
+raw expr       : l2_distance(array(a::Float64 NULL, b::Float64 NULL), array(c::Float64 NULL, d::Float64 NULL))
+checked expr   : l2_distance<Array(Float64 NULL), Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0>(a, b), array<T0=Float64 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+--------------+
+|        | a            | b            | c            | d            | Output       |
++--------+--------------+--------------+--------------+--------------+--------------+
+| Type   | Float64 NULL | Float64 NULL | Float64 NULL | Float64 NULL | Float64      |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown      |
+| Row 0  | 1            | 2            | 3            | 4            | 2.8284271247 |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 3.1112698372 |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 2.404163056  |
++--------+--------------+--------------+--------------+--------------+--------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float64([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float64([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float64([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float64([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float64([2.8284271247, 3.1112698372, 2.404163056])                         |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : inner_product([1,0,0], [1,0,0])
@@ -330,6 +630,106 @@ evaluation (internal):
 | d      | Float32([4, 8.4, 12.3])      |
 | Output | Float32([11, 89.31, 234.72]) |
 +--------+------------------------------+
+
+
+ast            : inner_product([a, b], [c, d])
+raw expr       : inner_product(array(a::Float32, b::Float32), array(c::Float32, d::Float32))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(array<T0=Float32><T0, T0>(a, b), array<T0=Float32><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+---------+
+|        | a         | b          | c          | d          | Output  |
++--------+-----------+------------+------------+------------+---------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32 |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown |
+| Row 0  | 1         | 2          | 3          | 4          | 11      |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 89.31   |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 234.72  |
++--------+-----------+------------+------------+------------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | Float32([1, 5.1, 9.4])       |
+| b      | Float32([2, 6.2, 10.6])      |
+| c      | Float32([3, 7.3, 11.1])      |
+| d      | Float32([4, 8.4, 12.3])      |
+| Output | Float32([11, 89.31, 234.72]) |
++--------+------------------------------+
+
+
+ast            : inner_product([a, b], [c, d])
+raw expr       : inner_product(array(a::Float32 NULL, b::Float32 NULL), array(c::Float32 NULL, d::Float32 NULL))
+checked expr   : inner_product<Array(Float32 NULL), Array(Float32 NULL)>(array<T0=Float32 NULL><T0, T0>(a, b), array<T0=Float32 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+---------+
+|        | a            | b            | c            | d            | Output  |
++--------+--------------+--------------+--------------+--------------+---------+
+| Type   | Float32 NULL | Float32 NULL | Float32 NULL | Float32 NULL | Float32 |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown |
+| Row 0  | 1            | 2            | 3            | 4            | 11      |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 89.31   |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 234.72  |
++--------+--------------+--------------+--------------+--------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float32([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float32([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float32([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float32([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float32([11, 89.31, 234.72])                                               |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : inner_product([a, b], [c, d])
+raw expr       : inner_product(array(a::Float64, b::Float64), array(c::Float64, d::Float64))
+checked expr   : inner_product<Array(Float64), Array(Float64)>(array<T0=Float64><T0, T0>(a, b), array<T0=Float64><T0, T0>(c, d))
+evaluation:
++--------+-----------+------------+------------+------------+---------+
+|        | a         | b          | c          | d          | Output  |
++--------+-----------+------------+------------+------------+---------+
+| Type   | Float64   | Float64    | Float64    | Float64    | Float64 |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown |
+| Row 0  | 1         | 2          | 3          | 4          | 11      |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 89.31   |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 234.72  |
++--------+-----------+------------+------------+------------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | Float64([1, 5.1, 9.4])       |
+| b      | Float64([2, 6.2, 10.6])      |
+| c      | Float64([3, 7.3, 11.1])      |
+| d      | Float64([4, 8.4, 12.3])      |
+| Output | Float64([11, 89.31, 234.72]) |
++--------+------------------------------+
+
+
+ast            : inner_product([a, b], [c, d])
+raw expr       : inner_product(array(a::Float64 NULL, b::Float64 NULL), array(c::Float64 NULL, d::Float64 NULL))
+checked expr   : inner_product<Array(Float64 NULL), Array(Float64 NULL)>(array<T0=Float64 NULL><T0, T0>(a, b), array<T0=Float64 NULL><T0, T0>(c, d))
+evaluation:
++--------+--------------+--------------+--------------+--------------+---------+
+|        | a            | b            | c            | d            | Output  |
++--------+--------------+--------------+--------------+--------------+---------+
+| Type   | Float64 NULL | Float64 NULL | Float64 NULL | Float64 NULL | Float64 |
+| Domain | {1..=9.4}    | {2..=10.6}   | {3..=11.1}   | {4..=12.3}   | Unknown |
+| Row 0  | 1            | 2            | 3            | 4            | 11      |
+| Row 1  | 5.1          | 6.2          | 7.3          | 8.4          | 89.31   |
+| Row 2  | 9.4          | 10.6         | 11.1         | 12.3         | 234.72  |
++--------+--------------+--------------+--------------+--------------+---------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | NullableColumn { column: Float64([1, 5.1, 9.4]), validity: [0b_____111] }  |
+| b      | NullableColumn { column: Float64([2, 6.2, 10.6]), validity: [0b_____111] } |
+| c      | NullableColumn { column: Float64([3, 7.3, 11.1]), validity: [0b_____111] } |
+| d      | NullableColumn { column: Float64([4, 8.4, 12.3]), validity: [0b_____111] } |
+| Output | Float64([11, 89.31, 234.72])                                               |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : vector_dims([1,-2]::vector(2))
