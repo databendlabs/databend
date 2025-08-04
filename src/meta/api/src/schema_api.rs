@@ -273,6 +273,12 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
+    async fn update_multi_table_meta_with_txn_id(
+        &self,
+        req: UpdateMultiTableMetaReq,
+        txn_id: String,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
