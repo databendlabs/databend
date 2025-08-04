@@ -449,7 +449,9 @@ impl TaskService {
                         token.cancel();
                     }
                     if task_mgr.accept(&task_key).await? {
-                        task_mgr.clean_task_state_and_dependents(&task_name).await??;
+                        task_mgr
+                            .clean_task_state_and_dependents(&task_name)
+                            .await??;
                     }
                     task_mgr
                         .accept(&TaskMessageIdent::new(

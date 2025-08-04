@@ -373,7 +373,9 @@ impl TaskMgr {
                 TaskDependentIdent::new_generic(&self.tenant, task_after_dependent);
             update_ops.push(TxnOp::delete(task_after_ident.to_string_key()));
         }
-        update_ops.push(TxnOp::delete(TaskStateIdent::new(&self.tenant, task_name).to_string_key()));
+        update_ops.push(TxnOp::delete(
+            TaskStateIdent::new(&self.tenant, task_name).to_string_key(),
+        ));
 
         let request = TxnRequest::new(vec![], update_ops);
         let _ = self.kv_api.transaction(request).await?;
