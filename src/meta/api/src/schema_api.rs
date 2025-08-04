@@ -273,7 +273,7 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
-    async fn update_multi_table_meta_with_retry(
+    async fn test_update_multi_table_meta_with_retry(
         &self,
         req: UpdateMultiTableMetaReq,
         retry_times: u32,

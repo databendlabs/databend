@@ -2106,7 +2106,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
-        self.update_multi_table_meta_with_retry(req, 1).await
+        self.test_update_multi_table_meta_with_retry(req, 1).await
     }
 
     /// This function is ONLY for testing purposes.
@@ -2114,7 +2114,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ///
     /// `retry_times` is used to simulate the retry of the transaction.
     /// It is only for test.
-    async fn update_multi_table_meta_with_retry(
+    async fn test_update_multi_table_meta_with_retry(
         &self,
         req: UpdateMultiTableMetaReq,
         retry_times: u32,
