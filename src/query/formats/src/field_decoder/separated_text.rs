@@ -50,7 +50,7 @@ use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
-use jsonb::parse_value;
+use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
@@ -301,9 +301,8 @@ impl SeparatedTextDecoder {
     }
 
     fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
-        match parse_value(data) {
-            Ok(value) => {
-                value.write_to_vec(&mut column.data);
+        match parse_owned_jsonb_with_buf(data, &mut column.data) {
+            Ok(_) => {
                 column.commit_row();
             }
             Err(e) => {

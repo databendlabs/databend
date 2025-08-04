@@ -29,6 +29,7 @@ fn test_binary() {
     test_length(file);
     test_to_base64(file);
     test_to_hex(file);
+    test_to_jsonb_binary(file);
 
     for is_try in [false, true] {
         test_from_base64(file, is_try);
@@ -90,4 +91,16 @@ fn test_from_base64(file: &mut impl Write, is_try: bool) {
         StringType::from_data(vec!["QWJj", "MTIz"]),
     )]);
     run_ast(file, format!("{prefix}from_base64('!@#')"), &[]);
+}
+
+fn test_to_jsonb_binary(file: &mut impl Write) {
+    run_ast(
+        file,
+        format!("to_jsonb_binary(parse_json('{{\"k1\":\"val\",\"k2\":100}}'))"),
+        &[],
+    );
+    run_ast(file, format!("to_jsonb_binary(parse_json('10'))"), &[]);
+    run_ast(file, format!("to_jsonb_binary(parse_json('123456'))"), &[]);
+    run_ast(file, format!("to_jsonb_binary(parse_json('\"abcd\"'))"), &[
+    ]);
 }
