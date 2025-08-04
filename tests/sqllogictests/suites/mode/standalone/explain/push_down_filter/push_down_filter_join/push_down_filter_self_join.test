@@ -40,7 +40,8 @@ Sequence
     ├── MaterializedCTE: b
     │   └── MaterializeCTERef
     │       ├── cte_name: a
-    │       └── cte_schema: [a (#16), b (#17)]
+    │       ├── cte_schema: [a (#16), b (#17)]
+    │       └── estimated rows: 20.00
     └── HashJoin
         ├── output columns: [a (#4), b (#5), b (#11), a (#10)]
         ├── join type: INNER
@@ -48,10 +49,12 @@ Sequence
         ├── probe keys: [b1.a (#4)]
         ├── keys is null equal: [false]
         ├── filters: [d.b (#5) < d.b (#11)]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 400.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: b
-        │   └── cte_schema: [a (#10), b (#11)]
+        │   ├── cte_schema: [a (#10), b (#11)]
+        │   └── estimated rows: 20.00
         └── MaterializeCTERef(Probe)
             ├── cte_name: b
-            └── cte_schema: [a (#4), b (#5)]
+            ├── cte_schema: [a (#4), b (#5)]
+            └── estimated rows: 20.00

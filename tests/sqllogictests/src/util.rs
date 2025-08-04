@@ -25,9 +25,7 @@ use bollard::Docker;
 use clap::Parser;
 use redis::Commands;
 use serde::Deserialize;
-use serde::Deserializer;
 use serde::Serialize;
-use serde::Serializer;
 use serde_json::Value;
 use testcontainers::core::client::docker_client_instance;
 use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
@@ -51,7 +49,7 @@ const CONTAINER_RETRY_TIMES: usize = 3;
 const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ServerInfo {
     pub id: String,
     pub start_time: String,
@@ -59,64 +57,13 @@ pub struct ServerInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
+    pub catalog: Option<String>,
     pub database: Option<String>,
     pub role: Option<String>,
-    pub catalog: Option<String>,
-
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
     pub txn_state: Option<String>,
-    pub last_server_info: Option<ServerInfo>,
-    #[serde(default)]
-    pub last_query_ids: Vec<String>,
-    /// hide state not useful to clients
-    /// so client only need to know there is a String field `internal`,
-    /// which need to carry with session/conn
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(
-        serialize_with = "serialize_as_json_string",
-        deserialize_with = "deserialize_from_json_string"
-    )]
-    pub internal: Option<HttpSessionStateInternal>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
-pub struct HttpSessionStateInternal {
-    /// value is JSON of Scalar
-    variables: Vec<(String, String)>,
-    pub last_query_result_cache_key: String,
-}
-
-fn serialize_as_json_string<S>(
-    value: &Option<HttpSessionStateInternal>,
-    serializer: S,
-) -> std::result::Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match value {
-        Some(complex_value) => {
-            let json_string =
-                serde_json::to_string(complex_value).map_err(serde::ser::Error::custom)?;
-            serializer.serialize_some(&json_string)
-        }
-        None => serializer.serialize_none(),
-    }
-}
-
-fn deserialize_from_json_string<'de, D>(
-    deserializer: D,
-) -> std::result::Result<Option<HttpSessionStateInternal>, D::Error>
-where D: Deserializer<'de> {
-    let json_string: Option<String> = Option::deserialize(deserializer)?;
-    match json_string {
-        Some(s) => {
-            let complex_value = serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
-            Ok(Some(complex_value))
-        }
-        None => Ok(None),
-    }
+    pub internal: String,
 }
 
 pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {

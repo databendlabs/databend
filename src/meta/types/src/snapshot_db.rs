@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::BufReader;
@@ -28,13 +29,24 @@ use crate::raft_types::SnapshotMeta;
 use crate::sys_data::SysData;
 
 /// A readonly leveled map that owns the data.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DB {
     pub storage_path: String,
     pub rel_path: String,
     pub meta: SnapshotMeta,
     pub sys_data: SysData,
     pub rotbl: Arc<Rotbl>,
+}
+
+impl fmt::Debug for DB {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DB")
+            .field("storage_path", &self.storage_path)
+            .field("rel_path", &self.rel_path)
+            .field("meta", &self.meta)
+            .field("sys_data", &self.sys_data)
+            .finish()
+    }
 }
 
 impl AsRef<SysData> for DB {
@@ -162,4 +174,38 @@ pub struct DBStat {
 
     /// Total number of read block from disk.
     pub read_block_from_disk: u64,
+}
+
+#[cfg(test)]
+mod tests {
+
+    use rotbl::storage::impls::fs::FsStorage;
+    use rotbl::v001::Config;
+    use rotbl::v001::RotblMeta;
+
+    use super::*;
+
+    /// Debug should not output db cache data.
+    #[test]
+    fn test_db_debug() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let storage = FsStorage::new(tmp_dir.path().to_path_buf());
+        let config = Config::default();
+        let path = "test_rotbl";
+        let rotbl =
+            Rotbl::create_table(storage, config, path, RotblMeta::new(1, "foo"), []).unwrap();
+
+        let db = DB {
+            storage_path: "a".to_string(),
+            rel_path: "b".to_string(),
+            meta: Default::default(),
+            sys_data: Default::default(),
+            rotbl: Arc::new(rotbl),
+        };
+
+        assert_eq!(
+            format!("{:?}", db),
+            r#"DB { storage_path: "a", rel_path: "b", meta: SnapshotMeta { last_log_id: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, snapshot_id: "" }, sys_data: SysData { last_applied: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, nodes: {}, sequence: 0, key_counts: {}, sm_features: {} } }"#
+        );
+    }
 }

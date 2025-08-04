@@ -221,8 +221,8 @@ impl HttpQueryManager {
         }
     }
 
-    pub(crate) fn check_sticky_for_txn(&self, last_server_info: &Option<ServerInfo>) -> Result<()> {
-        if let Some(ServerInfo { id, .. }) = last_server_info {
+    pub(crate) fn check_sticky_for_txn(&self, last_node_id: &Option<String>) -> Result<()> {
+        if let Some(id) = last_node_id {
             if self.server_info.id != *id {
                 return Err(ErrorCode::SessionLost(format!(
                     "[HTTP-QUERY] Transaction aborted because server restart or route error: expecting server {}, current one is {} started at {} ",

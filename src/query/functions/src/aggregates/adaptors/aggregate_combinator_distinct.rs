@@ -19,11 +19,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -38,16 +36,16 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function_factory::AggregateFunctionCreator;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::aggregate_function_factory::CombinatorDescription;
-use super::aggregator_common::assert_variadic_arguments;
+use super::assert_variadic_arguments;
+use super::AggrState;
+use super::AggrStateLoc;
 use super::AggregateCountFunction;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::StateAddr;
+use super::AggregateFunction;
+use super::AggregateFunctionCreator;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::CombinatorDescription;
+use super::StateAddr;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
@@ -56,10 +54,12 @@ pub struct AggregateDistinctCombinator<State> {
     nested_name: String,
     arguments: Vec<DataType>,
     nested: Arc<dyn AggregateFunction>,
-    _state: PhantomData<State>,
+    _s: PhantomData<fn(State)>,
 }
 
-impl<State> AggregateDistinctCombinator<State> {
+impl<State> AggregateDistinctCombinator<State>
+where State: Send + 'static
+{
     fn get_state(place: AggrState) -> &mut State {
         place
             .addr
@@ -113,7 +113,7 @@ where State: DistinctStateFunc
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        State::serialize_type(None)
     }
 
     fn batch_serialize(
@@ -122,13 +122,7 @@ where State: DistinctStateFunc
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = Self::get_state(AggrState::new(*place, loc));
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        State::batch_serialize(places, &loc[..1], builders)
     }
 
     fn batch_merge(
@@ -138,23 +132,7 @@ where State: DistinctStateFunc
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = Self::get_state(AggrState::new(*place, loc));
-                let rhs = State::deserialize(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = Self::get_state(AggrState::new(*place, loc));
-                let rhs = State::deserialize(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
+        State::batch_merge(places, &loc[..1], state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -163,7 +141,12 @@ where State: DistinctStateFunc
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = Self::get_state(place);
         let nested_place = place.remove_first_loc();
 
@@ -178,13 +161,13 @@ where State: DistinctStateFunc
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(nested_place, builder);
+                return self.nested.merge_result(nested_place, read_only, builder);
             }
             let entries = &state.build_entries(&self.arguments).unwrap();
             self.nested
                 .accumulate(nested_place, entries.into(), None, state.len())?;
             // merge_result
-            self.nested.merge_result(nested_place, builder)
+            self.nested.merge_result(nested_place, read_only, builder)
         }
     }
 
@@ -220,7 +203,7 @@ pub fn aggregate_combinator_distinct_desc() -> CombinatorDescription {
 }
 
 pub fn aggregate_combinator_uniq_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         returns_default_when_only_null: true,
         ..Default::default()
     };
@@ -264,7 +247,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         name,
-                        _state: PhantomData,
+                        _s: PhantomData,
                     }));
                 }
             }),
@@ -277,7 +260,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         nested_name: nested_name.to_owned(),
-                        _state: PhantomData,
+                        _s: PhantomData,
                     })),
                     _ => Ok(Arc::new(AggregateDistinctCombinator::<
                         AggregateDistinctStringState,
@@ -286,7 +269,7 @@ pub fn try_create(
                         arguments,
                         nested,
                         name,
-                        _state: PhantomData,
+                        _s: PhantomData,
                     })),
                 };
             }
@@ -300,6 +283,6 @@ pub fn try_create(
         arguments,
         nested,
         name,
-        _state: PhantomData,
+        _s: PhantomData,
     }))
 }

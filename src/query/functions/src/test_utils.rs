@@ -38,6 +38,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use log as _;
 
 use crate::BUILTIN_FUNCTIONS;
 

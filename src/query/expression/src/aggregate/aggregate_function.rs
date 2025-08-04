@@ -113,12 +113,17 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(AggrState::new(*place, &loc), builder)?;
+            self.merge_result(AggrState::new(*place, &loc), false, builder)?;
         }
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()>;
 
     // std::mem::needs_drop::<State>
     // if true will call drop_state

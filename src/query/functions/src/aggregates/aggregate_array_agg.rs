@@ -51,28 +51,29 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
+use super::FunctionData;
 use super::StateAddr;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
+use super::StateSerde;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug)]
 struct ArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
+where T: ValueType
 {
     values: Vec<T::Scalar>,
 }
 
 impl<T> Default for ArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
+where T: ValueType
 {
     fn default() -> Self {
         Self { values: Vec::new() }
@@ -80,9 +81,7 @@ where
 }
 
 impl<T> ScalarStateFunc<T> for ArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send,
+where T: ValueType
 {
     fn new() -> Self {
         Self::default()
@@ -126,6 +125,48 @@ where
     }
 }
 
+impl<T> StateSerde for ArrayAggStateAny<T>
+where
+    Self: ScalarStateFunc<T>,
+    T: ValueType,
+{
+    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        let return_type = function_data
+            .and_then(|data| data.as_any().downcast_ref::<DataType>())
+            .cloned()
+            .unwrap();
+        vec![return_type.into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<ArrayType<T>, Self, _>(places, loc, builders, |state, builder| {
+            for v in &state.values {
+                builder.put_item(T::to_scalar_ref(v));
+            }
+            builder.commit_row();
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<ArrayType<T>, Self, _>(places, loc, state, filter, |state, values| {
+            for val in T::iter_column(&values) {
+                state.values.push(T::to_owned_scalar(val));
+            }
+            Ok(())
+        })
+    }
+}
+
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 struct NullableArrayAggStateAny<T>
 where
@@ -148,7 +189,7 @@ where
 impl<T> ScalarStateFunc<T> for NullableArrayAggStateAny<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -217,54 +258,52 @@ where
     }
 }
 
+impl<T> StateSerde for NullableArrayAggStateAny<T>
+where
+    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<Self>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 #[derive(Debug)]
 struct ArrayAggStateSimple<T, const NULLABLE: bool>
-where T: Debug
+where T: SimpleType
 {
-    values: Vec<T>,
+    values: Vec<T::Scalar>,
     validity: MutableBitmap,
 }
 
-impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
-where T: Debug + BorshSerialize
-{
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        if NULLABLE {
-            (
-                &self.values,
-                Column::Boolean(self.validity.clone().freeze()),
-            )
-                .serialize(writer)
-        } else {
-            self.values.serialize(writer)
-        }
-    }
-}
-
-impl<T, const NULLABLE: bool> BorshDeserialize for ArrayAggStateSimple<T, NULLABLE>
-where T: Debug + BorshDeserialize
-{
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        if NULLABLE {
-            let (values, Column::Boolean(validity)) = BorshDeserialize::deserialize_reader(reader)?
-            else {
-                unreachable!()
-            };
-            Ok(Self {
-                values,
-                validity: validity.make_mut(),
-            })
-        } else {
-            let values = BorshDeserialize::deserialize_reader(reader)?;
-            Ok(Self {
-                values,
-                ..Default::default()
-            })
-        }
-    }
-}
-
-impl<T: Debug, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE> {
+impl<T: Debug + SimpleType, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE> {
     fn default() -> Self {
         Self {
             values: Vec::new(),
@@ -273,17 +312,15 @@ impl<T: Debug, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE
     }
 }
 
-impl<V, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<V>>
-    for ArrayAggStateSimple<V::Scalar, NULLABLE>
-where
-    V: SimpleType,
-    Self: BorshSerialize + BorshDeserialize,
+impl<T, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<T>>
+    for ArrayAggStateSimple<T, NULLABLE>
+where T: SimpleType + Debug
 {
     fn new() -> Self {
         Self::default()
     }
 
-    fn add(&mut self, other: Option<V::Scalar>) {
+    fn add(&mut self, other: Option<T::Scalar>) {
         match other {
             Some(scalar) => {
                 self.values.push(scalar);
@@ -292,14 +329,14 @@ where
                 }
             }
             None if NULLABLE => {
-                self.values.push(V::Scalar::default());
+                self.values.push(T::Scalar::default());
                 self.validity.push(false);
             }
             _ => unreachable!(),
         }
     }
 
-    fn add_batch(&mut self, column: &Buffer<V::Scalar>, validity: Option<&Bitmap>) -> Result<()> {
+    fn add_batch(&mut self, column: &Buffer<T::Scalar>, validity: Option<&Bitmap>) -> Result<()> {
         let length = column.len();
         if length == 0 {
             return Ok(());
@@ -311,7 +348,7 @@ where
                     self.values.push(*value);
                     self.validity.push(true);
                 } else {
-                    self.values.push(V::Scalar::default());
+                    self.values.push(T::Scalar::default());
                     self.validity.push(false);
                 }
             }
@@ -338,9 +375,9 @@ where
 
         let column = mem::take(&mut self.values).into();
         let item = if !NULLABLE {
-            SimpleValueType::<V>::upcast_column_with_type(column, inner_type)
+            SimpleValueType::<T>::upcast_column_with_type(column, inner_type)
         } else {
-            let column = SimpleValueType::<V>::upcast_column_with_type(
+            let column = SimpleValueType::<T>::upcast_column_with_type(
                 column,
                 &inner_type.remove_nullable(),
             );
@@ -355,32 +392,113 @@ where
     }
 }
 
+impl<T, const NULLABLE: bool> StateSerde for ArrayAggStateSimple<T, NULLABLE>
+where T: SimpleType
+{
+    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        let data_type = function_data
+            .and_then(|data| data.as_any().downcast_ref::<DataType>())
+            .and_then(|ty| ty.as_array())
+            .unwrap()
+            .remove_nullable();
+
+        if NULLABLE {
+            vec![DataType::Array(Box::new(DataType::Tuple(vec![
+                DataType::Boolean,
+                data_type,
+            ])))
+            .into()]
+        } else {
+            vec![DataType::Array(Box::new(data_type)).into()]
+        }
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        if NULLABLE {
+            // ArrayType<PairType<BooleanType, SimpleValueType<T>>>
+            let [builder] = builders else { unreachable!() };
+            let array_builder = builder.as_array_mut().unwrap();
+            let [bool_builder, value_builder] =
+                array_builder.builder.as_tuple_mut().unwrap().as_mut_slice()
+            else {
+                unreachable!()
+            };
+
+            let bool_builder = bool_builder.as_boolean_mut().unwrap();
+            let mut value_builder = SimpleValueType::<T>::downcast_builder(value_builder);
+
+            for place in places {
+                let state = AggrState::new(*place, loc).get::<Self>();
+                bool_builder.extend_from_slice(state.validity.as_slice(), 0, state.validity.len());
+                value_builder.extend_from_slice(&state.values);
+                array_builder.offsets.push(value_builder.len() as u64);
+            }
+            Ok(())
+        } else {
+            batch_serialize1::<ArrayType<SimpleValueType<T>>, Self, _>(
+                places,
+                loc,
+                builders,
+                |state, builder| {
+                    for value in &state.values {
+                        builder.put_item(*value)
+                    }
+                    builder.commit_row();
+                    Ok(())
+                },
+            )
+        }
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        if NULLABLE {
+            batch_merge1::<ArrayType<PairType<BooleanType, SimpleValueType<T>>>, Self, _>(
+                places,
+                loc,
+                state,
+                filter,
+                |state, (validity, values)| {
+                    let rhs = Self {
+                        values: SimpleValueType::<T>::column_to_builder(values),
+                        validity: validity.make_mut(),
+                    };
+                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
+                },
+            )
+        } else {
+            batch_merge1::<ArrayType<SimpleValueType<T>>, Self, _>(
+                places,
+                loc,
+                state,
+                filter,
+                |state, data| {
+                    let rhs = Self {
+                        values: SimpleValueType::<T>::column_to_builder(data),
+                        validity: MutableBitmap::new(),
+                    };
+                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
+                },
+            )
+        }
+    }
+}
+
 #[derive(Debug)]
 struct ArrayAggStateZST<const NULLABLE: bool> {
     validity: MutableBitmap,
 }
 
-impl<const NULLABLE: bool> BorshSerialize for ArrayAggStateZST<NULLABLE> {
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        Column::Boolean(self.validity.clone().freeze()).serialize(writer)
-    }
-}
-
-impl<const NULLABLE: bool> BorshDeserialize for ArrayAggStateZST<NULLABLE> {
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let Column::Boolean(validity) = BorshDeserialize::deserialize_reader(reader)? else {
-            unreachable!()
-        };
-        Ok(Self {
-            validity: validity.make_mut(),
-        })
-    }
-}
-
 impl<V, const NULLABLE: bool> ScalarStateFunc<ZeroSizeValueType<V>> for ArrayAggStateZST<NULLABLE>
-where
-    V: ZeroSizeType,
-    Self: BorshSerialize + BorshDeserialize,
+where V: ZeroSizeType
 {
     fn new() -> Self {
         Self {
@@ -441,16 +559,52 @@ where
     }
 }
 
-#[derive(Clone)]
-pub struct AggregateArrayAggFunction<T, State> {
-    display_name: String,
-    return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![ArrayType::<BooleanType>::data_type().into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<ArrayType<BooleanType>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                builder.push_item(state.validity.clone().freeze());
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<ArrayType<BooleanType>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, data| {
+                state.validity.extend_from_bitmap(&data);
+                Ok(())
+            },
+        )
+    }
 }
 
-unsafe impl<T, State> Send for AggregateArrayAggFunction<T, State> {}
-unsafe impl<T, State> Sync for AggregateArrayAggFunction<T, State> {}
+#[derive(Clone)]
+struct AggregateArrayAggFunction<T, State> {
+    display_name: String,
+    return_type: DataType,
+    _p: PhantomData<fn(T, State)>,
+}
 
 impl<T, State> AggregateFunction for AggregateArrayAggFunction<T, State>
 where
@@ -551,7 +705,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        State::serialize_type(Some(&self.return_type))
     }
 
     fn batch_serialize(
@@ -560,13 +714,7 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<State>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        State::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -576,24 +724,7 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, data) in iter {
-                let mut binary = data;
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut binary)?;
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
+        State::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -602,7 +733,12 @@ where
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -625,15 +761,14 @@ impl<T, State> fmt::Display for AggregateArrayAggFunction<T, State> {
 
 impl<T, State> AggregateArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -641,10 +776,11 @@ where
 
 fn try_create_aggregate_array_agg_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
     let is_nullable = data_type.is_nullable_or_null();
@@ -657,19 +793,19 @@ fn try_create_aggregate_array_agg_function(
         nullable: bool,
     ) -> Result<Arc<dyn AggregateFunction>>
     where
-        V: SimpleType + Send + Sync,
+        V: SimpleType,
         V::Scalar: BorshSerialize + BorshDeserialize,
     {
         if nullable {
-            AggregateArrayAggFunction::<
-                SimpleValueType<V>,
-                ArrayAggStateSimple<V::Scalar, true>,
-            >::create(display_name, return_type)
+            AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V, true>>::create(
+                display_name,
+                return_type,
+            )
         } else {
-            AggregateArrayAggFunction::<
-                SimpleValueType<V>,
-                ArrayAggStateSimple<V::Scalar, false>,
-            >::create(display_name, return_type)
+            AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V, false>>::create(
+                display_name,
+                return_type,
+            )
         }
     }
 

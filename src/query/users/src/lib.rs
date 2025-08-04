@@ -42,3 +42,4 @@ pub use role_mgr::BUILTIN_ROLE_PUBLIC;
 pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
 pub use visibility_checker::GrantObjectVisibilityChecker;
+pub use visibility_checker::Object;
