@@ -20,7 +20,7 @@ class GlobalCookieJar(RequestsCookieJar):
         super().set_cookie(cookie, *args, **kwargs)
 
 
-def do_query(session_client, query, session_state=None):
+def do_query(session_client, query, session_state=None, enable_cookie=True):
     url = f"http://127.0.0.1:8000/v1/query"
     query_payload = {
         "sql": query,
@@ -30,8 +30,10 @@ def do_query(session_client, query, session_state=None):
         query_payload["session"] = session_state
     headers = {
         "Content-Type": "application/json",
-        "X-DATABEND-CLIENT-CAPS": "session_cookie"
     }
+    if enable_cookie:
+        headers["X-DATABEND-CLIENT-CAPS"] = "session_cookie"
+
 
     response = session_client.post(url, headers=headers, json=query_payload, auth=auth)
     return response
@@ -97,7 +99,7 @@ def test_temp_table():
 
 def test_no_cookie_if_not_enabled():
     client = requests.session()
-    resp = do_query(client, "select 1")
+    resp = do_query(client, "select 1", enable_cookie=False)
     assert resp.status_code == 200, resp.text
     assert len(client.cookies.items()) == 0
 
