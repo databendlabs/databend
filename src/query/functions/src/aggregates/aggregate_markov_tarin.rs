@@ -44,13 +44,13 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::assert_unary_arguments;
 use super::borsh_partial_deserialize;
 use super::extract_number_param;
+use super::AggrStateLoc;
 use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::StateAddr;
-use crate::aggregates::AggrStateLoc;
 
 pub struct MarkovTarin {
     display_name: String,
@@ -171,7 +171,12 @@ impl AggregateFunction for MarkovTarin {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let model = place.get::<MarkovModel>();
         model.finalize(&self.params);
 

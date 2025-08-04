@@ -270,16 +270,25 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         match builder {
             ColumnBuilder::Nullable(inner_mut) => {
                 if !get_flag(place) {
                     inner_mut.push_null();
                 } else if self.inner_nullable {
-                    self.nested.merge_result(place.remove_last_loc(), builder)?;
-                } else {
                     self.nested
-                        .merge_result(place.remove_last_loc(), &mut inner_mut.builder)?;
+                        .merge_result(place.remove_last_loc(), read_only, builder)?;
+                } else {
+                    self.nested.merge_result(
+                        place.remove_last_loc(),
+                        read_only,
+                        &mut inner_mut.builder,
+                    )?;
                     inner_mut.validity.push(true);
                 }
             }
