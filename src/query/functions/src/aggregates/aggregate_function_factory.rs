@@ -28,9 +28,10 @@ use super::AggregateFunctionSortAdaptor;
 use super::Aggregators;
 
 // The NULL value in the those function needs to be handled separately.
-const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 7] = [
+const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 8] = [
     "array_agg",
     "list",
+    "json_agg",
     "json_array_agg",
     "json_object_agg",
     "group_array_moving_avg",

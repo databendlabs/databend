@@ -513,6 +513,11 @@ select stddev_samp(a) from d where b = 'abc';
 NULL
 
 query TTTTT
+select json_agg(a), json_agg(b), json_agg(c), json_agg(d), json_agg(e), json_agg('a') from d
+----
+[20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+
+query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
 [20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]

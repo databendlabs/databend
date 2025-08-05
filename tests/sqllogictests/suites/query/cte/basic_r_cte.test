@@ -284,6 +284,43 @@ from
 236700 473200 210000
 
 statement ok
+CREATE OR REPLACE table t_tree (id int, parent int, name string);
+
+statement ok
+INSERT INTO t_tree VALUES(1, null, 'root'),(2, 1, 'a'),(3, 2, 'b'),(4, 1, 'c'),(5, 4, 'd');
+
+query T
+WITH RECURSIVE tree AS (
+    SELECT
+        id,
+        parent,
+        name,
+        CAST(name AS TEXT) AS path,
+        1 AS level
+    FROM
+        t_tree
+    WHERE
+        parent IS NULL
+    UNION ALL
+    SELECT
+        t.id,
+        t.parent,
+        t.name,
+        tree.path || '->' || t.name,
+        tree.level + 1
+    FROM
+        t_tree t
+        INNER JOIN tree ON t.parent = tree.id
+)
+SELECT json_object_agg(name, (
+    SELECT json_object_agg(name, (
+        SELECT json_agg(name) FROM tree WHERE parent = t2.id and level = 3
+    )) FROM tree t2 WHERE parent = t1.id and level=2
+)) FROM tree t1 WHERE level = 1;
+----
+{"root":{"a":["b"],"c":["d"]}}
+
+statement ok
 use default;
 
 statement ok

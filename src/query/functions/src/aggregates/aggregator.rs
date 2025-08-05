@@ -127,6 +127,7 @@ impl Aggregators {
             "group_array_moving_sum",
             aggregate_array_moving_sum_function_desc(),
         );
+        factory.register("json_agg", aggregate_json_array_agg_function_desc());
         factory.register("json_array_agg", aggregate_json_array_agg_function_desc());
         factory.register("json_object_agg", aggregate_json_object_agg_function_desc());
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
