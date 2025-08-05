@@ -25,6 +25,7 @@ use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::processors::BlockLimit;
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
 
@@ -40,6 +41,7 @@ pub struct SharedData(pub Result<DataBlock>);
 
 pub struct SharedStatus {
     data: AtomicPtr<SharedData>,
+    block_limit: Arc<BlockLimit>,
 }
 
 unsafe impl Send for SharedStatus {}
@@ -57,9 +59,10 @@ impl Drop for SharedStatus {
 }
 
 impl SharedStatus {
-    pub fn create() -> Arc<SharedStatus> {
+    pub fn create(block_limit: Arc<BlockLimit>) -> Arc<SharedStatus> {
         Arc::new(SharedStatus {
             data: AtomicPtr::new(std::ptr::null_mut()),
+            block_limit,
         })
     }
 
@@ -134,7 +137,7 @@ pub struct InputPort {
 impl InputPort {
     pub fn create() -> Arc<InputPort> {
         Arc::new(InputPort {
-            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            shared: UnSafeCellWrap::create(SharedStatus::create(Arc::new(Default::default()))),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
     }
@@ -227,7 +230,7 @@ impl OutputPort {
     pub fn create() -> Arc<OutputPort> {
         Arc::new(OutputPort {
             record_profile: UnSafeCellWrap::create(false),
-            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            shared: UnSafeCellWrap::create(SharedStatus::create(Arc::new(Default::default()))),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
     }
@@ -318,8 +321,8 @@ impl OutputPort {
 /// Connect input and output ports.
 ///
 /// # Safety
-pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
-    let shared_status = SharedStatus::create();
+pub unsafe fn connect(input: &InputPort, output: &OutputPort, block_limit: Arc<BlockLimit>) {
+    let shared_status = SharedStatus::create(block_limit);
 
     input.set_shared(shared_status.clone());
     output.set_shared(shared_status);

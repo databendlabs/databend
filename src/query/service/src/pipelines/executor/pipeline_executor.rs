@@ -75,9 +75,9 @@ impl PipelineExecutor {
 
             let graph = RunningGraph::create(
                 pipeline,
-                1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
+                settings.block_limit.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {
@@ -130,9 +130,9 @@ impl PipelineExecutor {
 
             let graph = RunningGraph::from_pipelines(
                 pipelines,
-                1,
                 settings.query_id.clone(),
                 Some(finish_condvar.clone()),
+                settings.block_limit.clone(),
             )?;
 
             Ok(PipelineExecutor::QueriesPipelineExecutor(QueryWrapper {

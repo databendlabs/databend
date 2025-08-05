@@ -45,6 +45,7 @@
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::task::Context;
@@ -144,6 +145,8 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
+    // Indicate whether datablock is sliced and has remaining data in port
+    pub has_remaining_data: AtomicBool,
 }
 
 impl Clone for TrackingPayload {
@@ -160,6 +163,10 @@ impl Clone for TrackingPayload {
             perf_enabled: self.perf_enabled,
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
+            ),
+            has_remaining_data: AtomicBool::new(
+                self.has_remaining_data
+                    .load(std::sync::atomic::Ordering::SeqCst),
             ),
         }
     }
@@ -243,6 +250,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
+                has_remaining_data: AtomicBool::new(false),
             }),
         }
     }
@@ -368,6 +376,18 @@ impl ThreadTracker {
                     .load(std::sync::atomic::Ordering::SeqCst)
             })
             .unwrap_or(0)
+    }
+
+    pub fn has_remaining_data() -> bool {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .has_remaining_data
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            })
+            .unwrap_or(false)
     }
 }
 

@@ -22,6 +22,7 @@ use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::BlockLimit;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 
@@ -60,7 +61,7 @@ async fn test_port_drop() -> Result<()> {
         let input = InputPort::create();
         let output = OutputPort::create();
 
-        connect(&input, &output);
+        connect(&input, &output, Arc::new(BlockLimit::default()));
         output.push_data(Ok(DataBlock::empty_with_meta(meta.clone_self())));
         assert_eq!(meta.ref_count(), 2);
     }
@@ -98,7 +99,7 @@ async fn test_input_and_output_port() -> Result<()> {
         let output = OutputPort::create();
         let barrier = Arc::new(Barrier::new(2));
 
-        connect(&input, &output);
+        connect(&input, &output, Arc::new(BlockLimit::default()));
         let thread_1 = Thread::spawn(input_port(input, barrier.clone()));
         let thread_2 = Thread::spawn(output_port(output, barrier));
 
@@ -114,7 +115,7 @@ async fn test_input_and_output_flags() -> Result<()> {
         let input = InputPort::create();
         let output = OutputPort::create();
 
-        connect(&input, &output);
+        connect(&input, &output, Arc::new(BlockLimit::default()));
 
         output.finish();
         assert!(input.is_finished());
