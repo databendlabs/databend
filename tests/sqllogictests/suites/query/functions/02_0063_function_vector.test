@@ -59,6 +59,14 @@ select inner_product([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), inner_product(
 ----
 6.3 41.2
 
+query FFFF
+SELECT COSINE_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
+       L1_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
+       L2_DISTANCE(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL))),
+       INNER_PRODUCT(parse_json('[0.1,0.2,0.3]')::ARRAY(FLOAT NULL), CAST([0.4,0.5,0.6], ARRAY(FLOAT NULL)));
+----
+0.025368273 0.90000004 0.51961523 0.32
+
 statement ok
 CREATE OR REPLACE TABLE vectors (a VECTOR(3), b VECTOR(3));
 
@@ -83,3 +91,4 @@ NULL NULL
 
 statement ok
 DROP TABLE vectors;
+

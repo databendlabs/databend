@@ -23,6 +23,7 @@ use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -34,6 +35,7 @@ use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
+use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
@@ -62,20 +64,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+                calculate_array_distance(lhs, rhs, output, ctx, cosine_distance);
+            }
+        ),
+    );
 
-                match cosine_distance(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F32::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F32::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type, _, _>(
+        "cosine_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F32::from(0.0));
+                    return;
                 }
+                calculate_array_distance(lhs.column, rhs.column, output, ctx, cosine_distance);
             }
         ),
     );
@@ -85,20 +89,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+                calculate_array_distance(lhs, rhs, output, ctx, l1_distance);
+            }
+        ),
+    );
 
-                match l1_distance(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F32::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F32::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type, _, _>(
+        "l1_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F32::from(0.0));
+                    return;
                 }
+                calculate_array_distance(lhs.column, rhs.column, output, ctx, l1_distance);
             }
         ),
     );
@@ -110,20 +116,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+                calculate_array_distance(lhs, rhs, output, ctx, l2_distance);
+            }
+        ),
+    );
 
-                match l2_distance(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F32::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F32::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type, _, _>(
+        "l2_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F32::from(0.0));
+                    return;
                 }
+                calculate_array_distance(lhs.column, rhs.column, output, ctx, l2_distance);
             }
         ),
     );
@@ -133,20 +141,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+                calculate_array_distance(lhs, rhs, output, ctx, inner_product);
+            }
+        ),
+    );
 
-                match inner_product(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F32::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F32::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type, _, _>(
+        "inner_product",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F32::from(0.0));
+                    return;
                 }
+                calculate_array_distance(lhs.column, rhs.column, output, ctx, inner_product);
             }
         ),
     );
@@ -156,20 +166,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+                calculate_array_distance_64(lhs, rhs, output, ctx, cosine_distance_64);
+            }
+        ),
+    );
 
-                match cosine_distance_64(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F64::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F64::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type, _, _>(
+        "cosine_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F64::from(0.0));
+                    return;
                 }
+                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, cosine_distance_64);
             }
         ),
     );
@@ -179,20 +191,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+                calculate_array_distance_64(lhs, rhs, output, ctx, l1_distance_64);
+            }
+        ),
+    );
 
-                match l1_distance_64(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F64::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F64::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type, _, _>(
+        "l1_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F64::from(0.0));
+                    return;
                 }
+                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, l1_distance_64);
             }
         ),
     );
@@ -202,20 +216,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+                calculate_array_distance_64(lhs, rhs, output, ctx, l2_distance_64);
+            }
+        ),
+    );
 
-                match l2_distance_64(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F64::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F64::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type, _, _>(
+        "l2_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F64::from(0.0));
+                    return;
                 }
+                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, l2_distance_64);
             }
         ),
     );
@@ -225,20 +241,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float64Type>, ArrayType<Float64Type>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                let l =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
-                let r =
-                    unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+                calculate_array_distance_64(lhs, rhs, output, ctx, inner_product_64);
+            }
+        ),
+    );
 
-                match inner_product_64(l.as_slice(), r.as_slice()) {
-                    Ok(dist) => {
-                        output.push(F64::from(dist));
-                    }
-                    Err(err) => {
-                        ctx.set_error(output.len(), err.to_string());
-                        output.push(F64::from(0.0));
-                    }
+    registry.register_passthrough_nullable_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type, _, _>(
+        "inner_product",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
+            |lhs, rhs, output, ctx| {
+                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                    ctx.set_error(output.len(), "Vector contain null values");
+                    output.push(F64::from(0.0));
+                    return;
                 }
+                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, inner_product_64);
             }
         ),
     );
@@ -642,6 +660,52 @@ fn calculate_norm(value: &VectorScalarRef) -> f32 {
         VectorScalarRef::Float32(vals) => {
             let v = unsafe { std::mem::transmute::<&[F32], &[f32]>(vals) };
             vector_norm(v)
+        }
+    }
+}
+
+fn calculate_array_distance<F>(
+    lhs: Buffer<F32>,
+    rhs: Buffer<F32>,
+    output: &mut Vec<F32>,
+    ctx: &mut EvalContext,
+    distance_fn: F,
+) where
+    F: Fn(&[f32], &[f32]) -> Result<f32>,
+{
+    let l = unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(lhs) };
+    let r = unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(rhs) };
+
+    match distance_fn(l.as_slice(), r.as_slice()) {
+        Ok(dist) => {
+            output.push(F32::from(dist));
+        }
+        Err(err) => {
+            ctx.set_error(output.len(), err.to_string());
+            output.push(F32::from(0.0));
+        }
+    }
+}
+
+fn calculate_array_distance_64<F>(
+    lhs: Buffer<F64>,
+    rhs: Buffer<F64>,
+    output: &mut Vec<F64>,
+    ctx: &mut EvalContext,
+    distance_fn: F,
+) where
+    F: Fn(&[f64], &[f64]) -> Result<f64>,
+{
+    let l = unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(lhs) };
+    let r = unsafe { std::mem::transmute::<Buffer<F64>, Buffer<f64>>(rhs) };
+
+    match distance_fn(l.as_slice(), r.as_slice()) {
+        Ok(dist) => {
+            output.push(F64::from(dist));
+        }
+        Err(err) => {
+            ctx.set_error(output.len(), err.to_string());
+            output.push(F64::from(0.0));
         }
     }
 }

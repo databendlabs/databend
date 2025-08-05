@@ -63,6 +63,54 @@ fn test_vector_cosine_distance(file: &mut impl Write) {
             ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
         ],
     );
+    run_ast(file, "cosine_distance([a, b], [c, d])", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+        ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+        ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+        ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+    ]);
+    run_ast(file, "cosine_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float32Type::from_data_with_validity(vec![1.0f32, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float32Type::from_data_with_validity(vec![2.0f32, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float32Type::from_data_with_validity(vec![3.0f32, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float32Type::from_data_with_validity(vec![4.0f32, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
+    run_ast(file, "cosine_distance([a, b], [c, d])", &[
+        ("a", Float64Type::from_data(vec![1.0f64, 5.1, 9.4])),
+        ("b", Float64Type::from_data(vec![2.0f64, 6.2, 10.6])),
+        ("c", Float64Type::from_data(vec![3.0f64, 7.3, 11.1])),
+        ("d", Float64Type::from_data(vec![4.0f64, 8.4, 12.3])),
+    ]);
+    run_ast(file, "cosine_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float64Type::from_data_with_validity(vec![1.0f64, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float64Type::from_data_with_validity(vec![2.0f64, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float64Type::from_data_with_validity(vec![3.0f64, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float64Type::from_data_with_validity(vec![4.0f64, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
 }
 
 fn test_vector_l1_distance(file: &mut impl Write) {
@@ -90,6 +138,54 @@ fn test_vector_l1_distance(file: &mut impl Write) {
             ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
         ],
     );
+    run_ast(file, "l1_distance([a, b], [c, d])", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+        ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+        ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+        ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+    ]);
+    run_ast(file, "l1_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float32Type::from_data_with_validity(vec![1.0f32, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float32Type::from_data_with_validity(vec![2.0f32, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float32Type::from_data_with_validity(vec![3.0f32, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float32Type::from_data_with_validity(vec![4.0f32, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
+    run_ast(file, "l1_distance([a, b], [c, d])", &[
+        ("a", Float64Type::from_data(vec![1.0f64, 5.1, 9.4])),
+        ("b", Float64Type::from_data(vec![2.0f64, 6.2, 10.6])),
+        ("c", Float64Type::from_data(vec![3.0f64, 7.3, 11.1])),
+        ("d", Float64Type::from_data(vec![4.0f64, 8.4, 12.3])),
+    ]);
+    run_ast(file, "l1_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float64Type::from_data_with_validity(vec![1.0f64, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float64Type::from_data_with_validity(vec![2.0f64, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float64Type::from_data_with_validity(vec![3.0f64, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float64Type::from_data_with_validity(vec![4.0f64, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
 }
 
 fn test_vector_l2_distance(file: &mut impl Write) {
@@ -117,6 +213,54 @@ fn test_vector_l2_distance(file: &mut impl Write) {
             ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
         ],
     );
+    run_ast(file, "l2_distance([a, b], [c, d])", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+        ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+        ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+        ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+    ]);
+    run_ast(file, "l2_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float32Type::from_data_with_validity(vec![1.0f32, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float32Type::from_data_with_validity(vec![2.0f32, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float32Type::from_data_with_validity(vec![3.0f32, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float32Type::from_data_with_validity(vec![4.0f32, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
+    run_ast(file, "l2_distance([a, b], [c, d])", &[
+        ("a", Float64Type::from_data(vec![1.0f64, 5.1, 9.4])),
+        ("b", Float64Type::from_data(vec![2.0f64, 6.2, 10.6])),
+        ("c", Float64Type::from_data(vec![3.0f64, 7.3, 11.1])),
+        ("d", Float64Type::from_data(vec![4.0f64, 8.4, 12.3])),
+    ]);
+    run_ast(file, "l2_distance([a, b], [c, d])", &[
+        (
+            "a",
+            Float64Type::from_data_with_validity(vec![1.0f64, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float64Type::from_data_with_validity(vec![2.0f64, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float64Type::from_data_with_validity(vec![3.0f64, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float64Type::from_data_with_validity(vec![4.0f64, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
 }
 
 fn test_vector_inner_product(file: &mut impl Write) {
@@ -149,6 +293,54 @@ fn test_vector_inner_product(file: &mut impl Write) {
             ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
         ],
     );
+    run_ast(file, "inner_product([a, b], [c, d])", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+        ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+        ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+        ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+    ]);
+    run_ast(file, "inner_product([a, b], [c, d])", &[
+        (
+            "a",
+            Float32Type::from_data_with_validity(vec![1.0f32, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float32Type::from_data_with_validity(vec![2.0f32, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float32Type::from_data_with_validity(vec![3.0f32, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float32Type::from_data_with_validity(vec![4.0f32, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
+    run_ast(file, "inner_product([a, b], [c, d])", &[
+        ("a", Float64Type::from_data(vec![1.0f64, 5.1, 9.4])),
+        ("b", Float64Type::from_data(vec![2.0f64, 6.2, 10.6])),
+        ("c", Float64Type::from_data(vec![3.0f64, 7.3, 11.1])),
+        ("d", Float64Type::from_data(vec![4.0f64, 8.4, 12.3])),
+    ]);
+    run_ast(file, "inner_product([a, b], [c, d])", &[
+        (
+            "a",
+            Float64Type::from_data_with_validity(vec![1.0f64, 5.1, 9.4], vec![true, true, true]),
+        ),
+        (
+            "b",
+            Float64Type::from_data_with_validity(vec![2.0f64, 6.2, 10.6], vec![true, true, true]),
+        ),
+        (
+            "c",
+            Float64Type::from_data_with_validity(vec![3.0f64, 7.3, 11.1], vec![true, true, true]),
+        ),
+        (
+            "d",
+            Float64Type::from_data_with_validity(vec![4.0f64, 8.4, 12.3], vec![true, true, true]),
+        ),
+    ]);
 }
 
 fn test_vector_vector_dims(file: &mut impl Write) {
