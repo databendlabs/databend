@@ -562,7 +562,7 @@ impl HttpQuery {
                             Some(s) => {
                                 return    Err(ErrorCode::SessionTimeout(format!(
                                     "temporary tables in session {} expired after idle for more than {} seconds, when starting query {}",
-                                  s.header.id, s.header.last_refresh_time.elapsed().unwrap_or_default().as_secs(), query_id,
+                                  s.header.id, ClientSessionManager::instance().max_idle_time.as_secs(), query_id,
                                 )));
                             }
                         }

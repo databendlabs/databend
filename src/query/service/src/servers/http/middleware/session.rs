@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
@@ -68,6 +69,7 @@ use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::session_header::ClientSession;
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
@@ -364,6 +366,13 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
 
+        let mut client_caps = req
+            .headers()
+            .get(HEADER_CLIENT_CAPABILITIES)
+            .map(|caps| caps.to_str().unwrap().to_string())
+            .map(|caps| ClientCapabilities::parse(&caps))
+            .unwrap_or_default();
+
         let is_worksheet = user_agent
             .as_ref()
             .map(|ua_str| {
@@ -406,7 +415,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .await?;
         login_history.user_name = user_name.clone();
 
-        let mut client_session = ClientSession::try_decode(req)?;
+        let mut client_session = ClientSession::try_decode(req, &mut client_caps)?;
         if client_session.is_none() && !matches!(self.endpoint_kind, EndpointKind::PollQuery) {
             info!(
                 "[HTTP-SESSION] got request without session, url={}, headers={:?}",
@@ -480,6 +489,7 @@ impl<E> HTTPSessionEndpoint<E> {
             is_sticky_node,
             client_session,
             fixed_coordinator_node: is_worksheet,
+            client_caps,
         })
     }
 }

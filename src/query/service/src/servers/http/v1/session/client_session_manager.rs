@@ -58,7 +58,7 @@ fn hash_token(token: &[u8]) -> String {
 }
 
 struct SessionState {
-    pub last_access: Instant,
+    pub last_refresh_time: Instant,
     pub temp_tbl_mgr: TempTblMgrRef,
 }
 
@@ -134,7 +134,7 @@ impl ClientSessionManager {
             {
                 let guard = self.session_state.lock();
                 for (key, session_state) in &*guard {
-                    if (now - session_state.last_access)
+                    if (now - session_state.last_refresh_time)
                         > self.max_idle_time + self.min_refresh_interval
                     {
                         expired.push((key.clone(), session_state.temp_tbl_mgr.clone()));
@@ -375,13 +375,16 @@ impl ClientSessionManager {
     pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        match guard.entry(key) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().last_access = Instant::now();
-                true
+        if let Entry::Occupied(mut entry) = guard.entry(key) {
+            let now = Instant::now();
+            if now.duration_since(entry.get().last_refresh_time)
+                > ClientSessionManager::instance().min_refresh_interval
+            {
+                entry.get_mut().last_refresh_time = Instant::now();
+                return true;
             }
-            Entry::Vacant(_) => false,
         }
+        false
     }
 
     pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
@@ -400,7 +403,7 @@ impl ClientSessionManager {
     pub fn add_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
         let mut guard = self.session_state.lock();
         let state = SessionState {
-            last_access: Instant::now(),
+            last_refresh_time: Instant::now(),
             temp_tbl_mgr,
         };
         if guard.insert(prefix.clone(), state).is_none() {
