@@ -14,16 +14,16 @@
 
 use crate::tenant_key::ident::TIdent;
 
-pub type TaskDependentIdent = TIdent<TaskDependentResource, TaskDependent>;
+pub type TaskDependentIdent = TIdent<TaskDependentResource, TaskDependentKey>;
 
 pub use kvapi_impl::TaskDependentResource;
 
-use crate::principal::TaskDependent;
+use crate::principal::TaskDependentKey;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::task::TaskDependent;
+    use crate::principal::task::TaskDependentValue;
     use crate::principal::task_dependent_ident::TaskDependentIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -32,10 +32,10 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_task_dependents";
         const TYPE: &'static str = "TaskDependentIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = TaskDependent;
+        type ValueType = TaskDependentValue;
     }
 
-    impl kvapi::Value for TaskDependent {
+    impl kvapi::Value for TaskDependentValue {
         type KeyType = TaskDependentIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {

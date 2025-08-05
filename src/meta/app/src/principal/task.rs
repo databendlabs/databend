@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -185,33 +186,34 @@ pub enum DependentType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskDependent {
+pub struct TaskDependentKey {
     pub ty: DependentType,
     pub source: String,
-    pub target: String,
 }
 
-impl TaskDependent {
-    pub fn new(ty: DependentType, source: String, target: String) -> Self {
-        Self { ty, source, target }
+impl TaskDependentKey {
+    pub fn new(ty: DependentType, source: String) -> Self {
+        Self { ty, source }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskDependentValue(pub HashSet<String>);
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
     use crate::principal::DependentType;
-    use crate::principal::TaskDependent;
+    use crate::principal::TaskDependentKey;
 
-    impl kvapi::KeyCodec for TaskDependent {
+    impl kvapi::KeyCodec for TaskDependentKey {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             match self.ty {
                 DependentType::After => b.push_str("After"),
                 DependentType::Before => b.push_str("Before"),
             }
             .push_str(self.source.as_str())
-            .push_str(self.target.as_str())
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
@@ -226,9 +228,8 @@ mod kvapi_key_impl {
                 }
             };
             let source = parser.next_str()?;
-            let target = parser.next_str()?;
 
-            Ok(Self { ty, source, target })
+            Ok(Self { ty, source })
         }
     }
 }

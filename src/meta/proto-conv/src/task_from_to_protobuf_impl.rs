@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal as mt;
@@ -197,8 +199,8 @@ impl FromToProto for mt::TaskMessage {
     }
 }
 
-impl FromToProto for mt::TaskDependent {
-    type PB = pb::TaskDependent;
+impl FromToProto for mt::TaskDependentKey {
+    type PB = pb::TaskDependentKey;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -213,18 +215,37 @@ impl FromToProto for mt::TaskDependent {
                 _ => return Err(Incompatible::new(format!("invalid task type {}", p.ty))),
             },
             source: p.source,
-            target: p.target,
         })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::TaskDependent {
+        Ok(pb::TaskDependentKey {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
 
             source: self.source.clone(),
-            target: self.target.clone(),
             ty: self.ty as i32,
+        })
+    }
+}
+
+impl FromToProto for mt::TaskDependentValue {
+    type PB = pb::TaskDependentValue;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self(HashSet::from_iter(p.names)))
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::TaskDependentValue {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            names: Vec::from_iter(self.0.iter().cloned()),
         })
     }
 }

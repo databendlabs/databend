@@ -86,7 +86,7 @@ message TaskState {
   bool is_succeeded = 1;
 }
 
-message TaskDependent {
+message TaskDependentKey {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
@@ -95,6 +95,12 @@ message TaskDependent {
     Before = 1;
   }
   string source = 1;
-  string target = 2;
   DependentType ty = 3;
+}
+
+message TaskDependentValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated string names = 1;
 }
