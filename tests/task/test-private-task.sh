@@ -14,13 +14,13 @@ rm -rf .databend
 
 echo "Starting Databend Query cluster with 2 nodes enable private task"
 
-#for node in 1 2; do
-#    CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
-#
-#    echo "Appending history table config to node-${node}"
-#    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
-#    sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
-#done
+for node in 1 2; do
+    CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+
+    echo "Appending history table config to node-${node}"
+    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
+done
 
 # Start meta cluster (3 nodes - needed for HA)
 echo 'Start Meta service HA cluster(3 nodes)...'
