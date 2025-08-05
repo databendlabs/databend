@@ -536,8 +536,8 @@ impl TaskMgr {
     async fn clean_related_dependent(
         &self,
         task_name: &&str,
-        mut check_ops: &mut Vec<TxnCondition>,
-        mut update_ops: &mut Vec<TxnOp>,
+        check_ops: &mut Vec<TxnCondition>,
+        update_ops: &mut Vec<TxnOp>,
         is_after: bool,
     ) -> Result<(), TaskApiError> {
         let (self_dependent, other_dependent) = if is_after {
