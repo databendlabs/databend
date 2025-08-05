@@ -52,7 +52,9 @@ def discover_test_modules():
 def main():
     """Main test execution function."""
     parser = argparse.ArgumentParser(description="Run metactl subcommand tests")
-    parser.add_argument("tests", nargs="*", help="Specific test names to run (default: all)")
+    parser.add_argument(
+        "tests", nargs="*", help="Specific test names to run (default: all)"
+    )
     args = parser.parse_args()
 
     print_title("Metactl Subcommand Test Suite")
@@ -74,17 +76,20 @@ def main():
                 test_functions.append((test_name, test_map[test_name]))
             else:
                 available_tests = ", ".join(test_map.keys())
-                print(f"❌ Unknown test '{test_name}'. Available tests: {available_tests}")
+                print(
+                    f"❌ Unknown test '{test_name}'. Available tests: {available_tests}"
+                )
                 return 1
     else:
         test_functions = all_test_functions
 
     total_tests = len(test_functions)
-    print(f"📋 Executing {total_tests} test suite{'s' if total_tests != 1 else ''} sequentially...")
+    print(
+        f"📋 Executing {total_tests} test suite{'s' if total_tests != 1 else ''} sequentially..."
+    )
     print("=" * 60)
 
     for name, test_func in test_functions:
-
         try:
             print(f"🔸 Running {name}")
             test_func()
@@ -101,7 +106,7 @@ def main():
     print(f"📊 Total test suites: {total_tests}")
     print(f"✅ Passed: {passed_tests}")
     print(f"❌ Failed: {len(failed_tests)}")
-    print(f"📈 Success rate: {(passed_tests/total_tests*100):.1f}%")
+    print(f"📈 Success rate: {(passed_tests / total_tests * 100):.1f}%")
 
     if failed_tests:
         print(f"\n🚨 Failed test suites:")

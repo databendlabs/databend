@@ -123,6 +123,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
                     .await?;
             }
             ast::TableIndexType::Ngram => {
+                assert!(segment_locs.is_none());
                 let handler = get_table_index_handler();
                 let _ = handler
                     .do_refresh_table_index(
@@ -131,7 +132,6 @@ impl Interpreter for RefreshTableIndexInterpreter {
                         self.ctx.clone(),
                         index_name,
                         index_schema,
-                        segment_locs,
                         &mut build_res.main_pipeline,
                     )
                     .await?;

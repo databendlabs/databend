@@ -59,12 +59,17 @@ futures-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
+serde = { workspace = true }
 tempfile = { workspace = true }
+typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }
 tantivy = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["serde"]
 
 [lints]
 workspace = true

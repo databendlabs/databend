@@ -24,7 +24,6 @@ use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait TableIndexHandler: Sync + Send {
@@ -47,7 +46,6 @@ pub trait TableIndexHandler: Sync + Send {
         ctx: Arc<dyn TableContext>,
         index_name: String,
         index_schema: TableSchemaRef,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
 }
@@ -87,19 +85,10 @@ impl TableIndexHandlerWrapper {
         ctx: Arc<dyn TableContext>,
         index_name: String,
         index_schema: TableSchemaRef,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.handler
-            .do_refresh_table_index(
-                index_ty,
-                table,
-                ctx,
-                index_name,
-                index_schema,
-                segment_locs,
-                pipeline,
-            )
+            .do_refresh_table_index(index_ty, table, ctx, index_name, index_schema, pipeline)
             .await
     }
 }
