@@ -41,6 +41,7 @@ buf-list = { workspace = true }
 bumpalo = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }

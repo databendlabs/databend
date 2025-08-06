@@ -275,7 +275,7 @@ byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
-bytesize = "1.1.0"
+bytesize = "2"
 cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.40", features = ["serde"] }

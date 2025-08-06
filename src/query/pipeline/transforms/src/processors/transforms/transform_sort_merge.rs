@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use bytesize::ByteSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::row::RowConverter as CommonConverter;
@@ -50,7 +51,7 @@ pub struct TransformSortMerge<R: Rows> {
     aborting: Arc<AtomicBool>,
 
     /// Record current memory usage.
-    num_bytes: usize,
+    num_bytes: ByteSize,
     num_rows: usize,
 
     _r: PhantomData<R>,
@@ -70,7 +71,7 @@ impl<R: Rows> TransformSortMerge<R> {
             block_size,
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
-            num_bytes: 0,
+            num_bytes: ByteSize(0),
             num_rows: 0,
             _r: PhantomData,
         }
@@ -91,7 +92,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
             return Ok(());
         }
 
-        self.num_bytes += block.memory_size();
+        self.num_bytes += block.memory_size() as u64;
         self.num_rows += block.num_rows();
         self.buffer.push(Some((block, init_rows.to_column())));
 
@@ -111,7 +112,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     }
 
     #[inline(always)]
-    fn num_bytes(&self) -> usize {
+    fn num_bytes(&self) -> ByteSize {
         self.num_bytes
     }
 
@@ -124,7 +125,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
         let blocks = self.merge_sort(spill_batch_size)?;
 
         self.num_rows = 0;
-        self.num_bytes = 0;
+        self.num_bytes = ByteSize(0);
 
         debug_assert!(self.buffer.is_empty());
 

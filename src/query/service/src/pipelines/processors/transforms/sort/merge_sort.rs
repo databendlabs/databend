@@ -19,6 +19,7 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -164,8 +165,8 @@ where
     fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
         let (num_rows, num_bytes) = input_data
             .iter()
-            .map(|block| (block.num_rows(), block.memory_size()))
-            .fold((0, 0), |(acc_rows, acc_bytes), (rows, bytes)| {
+            .map(|block| (block.num_rows(), ByteSize(block.memory_size() as _)))
+            .fold((0, ByteSize(0)), |(acc_rows, acc_bytes), (rows, bytes)| {
                 (acc_rows + rows, acc_bytes + bytes)
             });
         let params = self.determine_params(num_bytes, num_rows);
@@ -186,16 +187,16 @@ where
         }
     }
 
-    fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
+    fn determine_params(&self, bytes: ByteSize, rows: usize) -> SortSpillParams {
         // We use the first memory calculation to estimate the batch size and the number of merge.
-        let unit_size = self.memory_settings.spill_unit_size;
-        let num_merge = bytes.div_ceil(unit_size).max(2);
-        let batch_rows = rows.div_ceil(num_merge);
+        let spill_unit_size = self.memory_settings.spill_unit_size;
+        let num_merge = (bytes.0 as usize).div_ceil(spill_unit_size).max(2);
+        let batch_rows = rows.div_ceil(num_merge as _);
 
         /// The memory will be doubled during merging.
         const MERGE_RATIO: usize = 2;
         let num_merge = num_merge.div_ceil(MERGE_RATIO).max(2);
-        log::info!("determine sort spill params, buffer_bytes: {bytes}, buffer_rows: {rows}, spill_unit_size: {unit_size}, batch_rows: {batch_rows}, batch_num_merge {num_merge}");
+        log::info!(buffer_bytes:? = bytes, buffer_rows = rows, spill_unit_size, batch_rows, batch_num_merge = num_merge; "determine sort spill params");
         SortSpillParams {
             batch_rows,
             num_merge,
@@ -283,13 +284,13 @@ where
     }
 
     fn check_spill(&self) -> bool {
-        if !self.memory_settings.check_spill() {
+        if !self.memory_settings.check_spill(0) {
             return false;
         }
 
         match &self.inner {
             Inner::Limit(limit_sort) => {
-                limit_sort.num_bytes() > self.memory_settings.spill_unit_size * 2
+                limit_sort.num_bytes() > ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
             }
             Inner::Collect(input_data) => {
                 input_data.iter().map(|b| b.memory_size()).sum::<usize>()
@@ -422,20 +423,22 @@ where
                 let finished = self.input.is_finished();
                 self.trans_to_spill()?;
 
-                let input = self.input_rows();
+                let incoming = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
                 };
                 let memory_rows = spill_sort.collect_memory_rows();
                 let max = spill_sort.max_rows();
 
-                if memory_rows > 0 && memory_rows + input > max {
+                if memory_rows > 0 && memory_rows + incoming > max {
+                    log::debug!(incoming_rows = incoming, memory_rows, max_rows = max; "collect_spill_last");
                     spill_sort
-                        .collect_spill_last(memory_rows + input - max)
+                        .collect_spill_last(memory_rows + incoming - max)
                         .await?;
                 }
-                let need_spill = input > max;
-                if need_spill || finished && input > 0 {
+                let need_spill = incoming > max;
+                if need_spill || finished && incoming > 0 {
+                    log::debug!(incoming_rows = incoming, memory_rows, max_rows = max, finished; "sort_input_data");
                     spill_sort
                         .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
                         .await?;

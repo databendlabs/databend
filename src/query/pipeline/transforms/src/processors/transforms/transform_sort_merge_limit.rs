@@ -17,6 +17,7 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::intrinsics::unlikely;
 
+use bytesize::ByteSize;
 use databend_common_base::containers::FixedHeap;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -32,7 +33,7 @@ pub struct TransformSortMergeLimit<R: Rows> {
     buffer: HashMap<usize, DataBlock>,
 
     /// Record current memory usage.
-    num_bytes: usize,
+    num_bytes: ByteSize,
     num_rows: usize,
 
     /// The index for the next input block.
@@ -54,7 +55,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
         self.next_index += 1;
 
         let mut cursor = Cursor::new(input_index, init_rows);
-        self.num_bytes += block.memory_size();
+        self.num_bytes += block.memory_size() as u64;
         self.num_rows += block.num_rows();
         let cur_index = input_index;
         self.buffer.insert(cur_index, block);
@@ -65,7 +66,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
                     // Evict the first row of the block,
                     // which means the block must not appear in the Top-N result.
                     if let Some(block) = self.buffer.remove(&evict.input_index) {
-                        self.num_bytes -= block.memory_size();
+                        self.num_bytes -= block.memory_size() as u64;
                         self.num_rows -= block.num_rows();
                     }
                 }
@@ -90,7 +91,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     }
 
     #[inline(always)]
-    fn num_bytes(&self) -> usize {
+    fn num_bytes(&self) -> ByteSize {
         self.num_bytes
     }
 
@@ -138,7 +139,7 @@ impl<R: Rows> TransformSortMergeLimit<R> {
             buffer: HashMap::with_capacity(limit),
             block_size,
             next_index: 0,
-            num_bytes: 0,
+            num_bytes: ByteSize(0),
             num_rows: 0,
         }
     }
@@ -184,7 +185,7 @@ impl<R: Rows> TransformSortMergeLimit<R> {
         }
 
         self.buffer.clear();
-        self.num_bytes = 0;
+        self.num_bytes = ByteSize(0);
         self.num_rows = 0;
 
         output_blocks

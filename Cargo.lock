@@ -1818,6 +1818,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e93abca9e28e0a1b9877922aacb20576e05d4679ffa78c3d6dc22a26a216659"
 
 [[package]]
+name = "bytesize"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3c8f83209414aacf0eeae3cf730b18d6981697fba62f200fcfb92b9f082acba"
+
+[[package]]
 name = "bzip2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3089,7 +3095,7 @@ dependencies = [
  "borsh",
  "bytemuck",
  "bytes",
- "bytesize",
+ "bytesize 2.0.1",
  "chrono",
  "concurrent-queue",
  "crc32fast",
@@ -4071,6 +4077,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
+ "bytesize 2.0.1",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -5252,6 +5259,7 @@ dependencies = [
  "bumpalo",
  "byteorder",
  "bytes",
+ "bytesize 2.0.1",
  "chrono",
  "chrono-tz 0.8.6",
  "concurrent-queue",
@@ -7497,7 +7505,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac7045ac9fe5f9c727f38799d002a7ed3583cd777e3322a7c4b43e3cf437dc69"
 dependencies = [
  "bytes",
- "bytesize",
+ "bytesize 1.3.3",
  "crc32fast",
  "crossbeam-channel",
  "flate2",
@@ -12008,7 +12016,7 @@ version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "744a264d26b88a6a7e37cbad97953fa233b94d585236310bcbc88474b4092d79"
 dependencies = [
- "bytesize",
+ "bytesize 1.3.3",
  "human_format",
 ]
 

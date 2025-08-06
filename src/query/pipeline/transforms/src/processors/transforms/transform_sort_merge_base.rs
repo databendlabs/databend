@@ -15,6 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -40,7 +41,7 @@ pub trait MergeSort<R: Rows> {
     fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()>;
 
     /// Return buffered data size.
-    fn num_bytes(&self) -> usize;
+    fn num_bytes(&self) -> ByteSize;
 
     /// Return buffered rows.
     fn num_rows(&self) -> usize;
