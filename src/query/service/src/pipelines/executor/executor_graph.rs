@@ -414,7 +414,23 @@ impl ExecutingGraph {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
 
-                    let event = node.processor.event(event_cause)?;
+                    let mut event = node.processor.event(event_cause.clone())?;
+                    let mut count = 0;
+                    while (!matches!(event, Event::Sync) || !matches!(event, Event::Async))
+                        && ThreadTracker::has_remaining_data()
+                    {
+                        count += 1;
+                        if count > 100000 {
+                            warn!(
+                                "Node {:?} has been processing for too long, event: {:?}, cause: {:?}",
+                                node.processor.id(),
+                                event,
+                                event_cause
+                            );
+                            break;
+                        }
+                        event = node.processor.event(event_cause.clone())?;
+                    }
                     let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
                         Ok(_) => Ok((event, process_rows)),

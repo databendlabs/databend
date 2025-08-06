@@ -49,7 +49,10 @@ impl ExecutorSettings {
 
         let max_block_rows = settings.get_max_block_size()?;
         let max_block_bytes = settings.get_max_block_bytes()?;
-        let block_limit = Arc::new(BlockLimit::new(max_block_rows, max_block_bytes));
+        let block_limit = Arc::new(BlockLimit::new(
+            max_block_rows as usize,
+            max_block_bytes as usize,
+        ));
 
         Ok(ExecutorSettings {
             enable_queries_executor,

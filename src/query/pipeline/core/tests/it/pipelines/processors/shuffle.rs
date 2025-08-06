@@ -48,8 +48,16 @@ async fn test_shuffle_output_finish() -> Result<()> {
     unsafe {
         connect(&input1, &upstream_output1, Arc::new(BlockLimit::default()));
         connect(&input2, &upstream_output2, Arc::new(BlockLimit::default()));
-        connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-        connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
+        connect(
+            &downstream_input1,
+            &output1,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input2,
+            &output2,
+            Arc::new(BlockLimit::default()),
+        );
     }
 
     downstream_input1.finish();
@@ -113,10 +121,26 @@ async fn test_shuffle_processor() -> Result<()> {
         connect(&input2, &upstream_output2, Arc::new(BlockLimit::default()));
         connect(&input3, &upstream_output3, Arc::new(BlockLimit::default()));
         connect(&input4, &upstream_output4, Arc::new(BlockLimit::default()));
-        connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-        connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
-        connect(&downstream_input3, &output3, Arc::new(BlockLimit::default()));
-        connect(&downstream_input4, &output4, Arc::new(BlockLimit::default()));
+        connect(
+            &downstream_input1,
+            &output1,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input2,
+            &output2,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input3,
+            &output3,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input4,
+            &output4,
+            Arc::new(BlockLimit::default()),
+        );
     }
 
     let col1 = Int32Type::from_data(vec![1]);

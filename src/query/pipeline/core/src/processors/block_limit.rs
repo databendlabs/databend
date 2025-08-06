@@ -12,28 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+// this is used to avoid after limiting by bytes, the rows limit is too small
+// TODO: this magic 10 may need to be look backed in the future
+const MIN_ROWS_BY_BYTES: usize = 10;
 
 /// DataBlock limit in rows and bytes
 pub struct BlockLimit {
-    rows: AtomicU64,
-    bytes: AtomicU64,
+    rows: AtomicUsize,
+    bytes: AtomicUsize,
 }
 
 impl BlockLimit {
-    pub fn new(rows: u64, bytes: u64) -> Self {
+    pub fn new(rows: usize, bytes: usize) -> Self {
         BlockLimit {
-            rows: AtomicU64::new(rows),
-            bytes: AtomicU64::new(bytes),
+            rows: AtomicUsize::new(rows),
+            bytes: AtomicUsize::new(bytes),
         }
+    }
+
+    /// Calculate the number of rows to take based on both row and byte limits
+    pub fn calculate_limit_rows(&self, total_rows: usize, total_bytes: usize) -> usize {
+        if total_rows == 0 {
+            return 0;
+        }
+        // max with 1 used to avoid division by zero
+        let average_bytes_per_row = (total_bytes / total_rows).max(1);
+        let rows_by_bytes =
+            (self.bytes.load(Ordering::Relaxed) / average_bytes_per_row).max(MIN_ROWS_BY_BYTES);
+        let rows_limit = self.rows.load(Ordering::Relaxed);
+        rows_limit.min(rows_by_bytes)
     }
 }
 
 impl Default for BlockLimit {
     fn default() -> Self {
         BlockLimit {
-            rows: AtomicU64::new(u64::MAX),
-            bytes: AtomicU64::new(u64::MAX),
+            rows: AtomicUsize::new(usize::MAX),
+            bytes: AtomicUsize::new(usize::MAX),
         }
     }
 }

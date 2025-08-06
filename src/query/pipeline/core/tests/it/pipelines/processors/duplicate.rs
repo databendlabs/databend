@@ -44,8 +44,16 @@ async fn test_duplicate_output_finish() -> Result<()> {
 
         unsafe {
             connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
-            connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-            connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
+            connect(
+                &downstream_input1,
+                &output1,
+                Arc::new(BlockLimit::default()),
+            );
+            connect(
+                &downstream_input2,
+                &output2,
+                Arc::new(BlockLimit::default()),
+            );
         }
 
         downstream_input1.set_need_data();
@@ -72,8 +80,16 @@ async fn test_duplicate_output_finish() -> Result<()> {
 
         unsafe {
             connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
-            connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-            connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
+            connect(
+                &downstream_input1,
+                &output1,
+                Arc::new(BlockLimit::default()),
+            );
+            connect(
+                &downstream_input2,
+                &output2,
+                Arc::new(BlockLimit::default()),
+            );
         }
 
         downstream_input1.finish();
@@ -98,8 +114,16 @@ async fn test_duplicate_output_finish() -> Result<()> {
 
         unsafe {
             connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
-            connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-            connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
+            connect(
+                &downstream_input1,
+                &output1,
+                Arc::new(BlockLimit::default()),
+            );
+            connect(
+                &downstream_input2,
+                &output2,
+                Arc::new(BlockLimit::default()),
+            );
         }
 
         downstream_input1.finish();
@@ -124,8 +148,16 @@ async fn test_duplicate_processor() -> Result<()> {
 
     unsafe {
         connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
-        connect(&downstream_input1, &output1, Arc::new(BlockLimit::default()));
-        connect(&downstream_input2, &output2, Arc::new(BlockLimit::default()));
+        connect(
+            &downstream_input1,
+            &output1,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input2,
+            &output2,
+            Arc::new(BlockLimit::default()),
+        );
     }
 
     downstream_input1.set_need_data();

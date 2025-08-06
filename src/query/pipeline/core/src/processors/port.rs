@@ -127,6 +127,11 @@ impl SharedStatus {
     pub fn get_flags(&self) -> usize {
         self.data.load(Ordering::SeqCst) as usize & FLAGS_MASK
     }
+
+    #[inline(always)]
+    pub fn get_block_limit(&self) -> &Arc<BlockLimit> {
+        &self.block_limit
+    }
 }
 
 pub struct InputPort {
@@ -187,21 +192,53 @@ impl InputPort {
         (self.shared.get_flags() & HAS_DATA) != 0
     }
 
-    #[inline(always)]
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
-            let unset_flags = HAS_DATA | NEED_DATA;
-            match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
-                address if address.is_null() => None,
-                address => {
-                    let block = (*Box::from_raw(address)).0;
-                    if let Ok(data_block) = block.as_ref() {
-                        ExecutorStats::record_thread_tracker(data_block.num_rows());
-                    }
-                    Some(block)
+
+            // First, swap out the data without unsetting flags to prevent race conditions
+            let address = self.shared.swap(std::ptr::null_mut(), 0, 0);
+
+            if address.is_null() {
+                // No data available, now safe to unset flags
+                self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                return None;
+            }
+
+            let shared_data = Box::from_raw(address);
+            match shared_data.0 {
+                Ok(data_block) => self.process_data_block(data_block),
+                Err(e) => {
+                    // Error case, unset both flags
+                    self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                    Some(Err(e))
                 }
             }
+        }
+    }
+
+    fn process_data_block(&self, data_block: DataBlock) -> Option<Result<DataBlock>> {
+        let block_limit = self.shared.get_block_limit();
+        let limit_rows =
+            block_limit.calculate_limit_rows(data_block.num_rows(), data_block.memory_size());
+
+        if data_block.num_rows() > limit_rows && limit_rows > 0 {
+            // Need to split the block
+            let taken_block = data_block.slice(0..limit_rows);
+            let remaining_block = data_block.slice(limit_rows..data_block.num_rows());
+
+            let remaining_data = Box::new(SharedData(Ok(remaining_block)));
+            self.shared.swap(Box::into_raw(remaining_data), 0, 0);
+
+            ExecutorStats::record_thread_tracker(taken_block.num_rows());
+            Some(Ok(taken_block))
+        } else {
+            // No need to split, take the whole block
+            // Unset both HAS_DATA and NEED_DATA flags
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+
+            ExecutorStats::record_thread_tracker(data_block.num_rows());
+            Some(Ok(data_block))
         }
     }
 

@@ -124,6 +124,7 @@ async fn apply_snapshot_pruning(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        block_limit: Arc::new(Default::default()),
     };
     let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
 
