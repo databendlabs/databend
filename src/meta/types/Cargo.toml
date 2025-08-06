@@ -19,6 +19,7 @@ log = { workspace = true }
 map-api = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
+num_cpus = { workspace = true }
 openraft = { workspace = true }
 pretty_assertions = { workspace = true }
 prost = { workspace = true }
@@ -28,7 +29,6 @@ serde_json = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-num_cpus = { workspace = true }
 
 [build-dependencies]
 prost-build = { workspace = true }
