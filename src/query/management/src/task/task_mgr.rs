@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -28,7 +28,6 @@ use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::TaskState;
 use databend_common_meta_app::principal::task_dependent_ident::TaskDependentIdent;
-use databend_common_meta_app::principal::task_dependent_ident::TaskDependentResource;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::principal::task_state_ident::TaskStateIdent;
 use databend_common_meta_app::principal::DependentType;
@@ -40,7 +39,6 @@ use databend_common_meta_app::principal::TaskDependentValue;
 use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -278,12 +276,11 @@ impl TaskMgr {
         let after_dependent_ident =
             TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
 
-        self.check_and_set(
+        self.check_and_add(
             &mut check_ops,
             &mut update_ops,
             new_afters,
             &after_dependent_ident,
-            true,
         )
         .await?;
 
@@ -292,12 +289,11 @@ impl TaskMgr {
             let before_dependent_ident =
                 TaskDependentIdent::new_generic(&self.tenant, before_dependent);
 
-            self.check_and_set(
+            self.check_and_add(
                 &mut check_ops,
                 &mut update_ops,
                 &[task_name.to_string()],
                 &before_dependent_ident,
-                true,
             )
             .await?;
         }
@@ -328,12 +324,11 @@ impl TaskMgr {
         let after_dependent_ident =
             TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
 
-        self.check_and_set(
+        self.check_and_remove(
             &mut check_ops,
             &mut update_ops,
             remove_afters,
             &after_dependent_ident,
-            false,
         )
         .await?;
 
@@ -342,12 +337,11 @@ impl TaskMgr {
             let before_dependent_ident =
                 TaskDependentIdent::new_generic(&self.tenant, before_dependent.clone());
 
-            self.check_and_set(
+            self.check_and_remove(
                 &mut check_ops,
                 &mut update_ops,
                 &[task_name.to_string()],
                 &before_dependent_ident,
-                false,
             )
             .await?;
         }
@@ -556,12 +550,11 @@ impl TaskMgr {
                 let target_ident =
                     TaskDependentIdent::new_generic(&self.tenant, target_key.clone());
 
-                self.check_and_set(
+                self.check_and_remove(
                     check_ops,
                     update_ops,
                     &[task_name.to_string()],
                     &target_ident,
-                    false,
                 )
                 .await?;
             }
@@ -569,15 +562,14 @@ impl TaskMgr {
         Ok(())
     }
 
-    async fn check_and_set(
+    async fn check_and_add(
         &self,
         check_ops: &mut Vec<TxnCondition>,
         update_ops: &mut Vec<TxnOp>,
         task_names: &[String],
-        dependent_ident: &TIdent<TaskDependentResource, TaskDependentKey>,
-        is_add: bool,
+        dependent_ident: &TaskDependentIdent,
     ) -> Result<(), TaskApiError> {
-        match self.kv_api.get(dependent_ident).await? {
+        match self.kv_api.get_pb(dependent_ident).await? {
             None => {
                 check_ops.push(TxnCondition {
                     key: dependent_ident.to_string_key(),
@@ -585,26 +577,52 @@ impl TaskMgr {
                     target: Some(Target::Seq(0)),
                 });
 
-                if is_add {
-                    update_ops.push(TxnOp::put(
-                        dependent_ident.to_string_key(),
-                        TaskDependentValue(HashSet::from_iter(task_names.iter().cloned()))
-                            .to_pb()?
-                            .encode_to_vec(),
-                    ));
-                }
+                update_ops.push(TxnOp::put(
+                    dependent_ident.to_string_key(),
+                    TaskDependentValue(BTreeSet::from_iter(task_names.iter().cloned()))
+                        .to_pb()?
+                        .encode_to_vec(),
+                ));
             }
             Some(mut old_dependent) => {
-                check_ops.push(TxnCondition::eq_value(
+                check_ops.push(TxnCondition::eq_seq(
+                    dependent_ident.to_string_key(),
+                    old_dependent.seq,
+                ));
+
+                old_dependent.0.extend(task_names.iter().cloned());
+
+                update_ops.push(TxnOp::put(
                     dependent_ident.to_string_key(),
                     old_dependent.to_pb()?.encode_to_vec(),
                 ));
+            }
+        }
+        Ok(())
+    }
 
-                if is_add {
-                    old_dependent.0.extend(task_names.iter().cloned());
-                } else {
-                    old_dependent.0.retain(|name| !task_names.contains(name));
-                }
+    async fn check_and_remove(
+        &self,
+        check_ops: &mut Vec<TxnCondition>,
+        update_ops: &mut Vec<TxnOp>,
+        task_names: &[String],
+        dependent_ident: &TaskDependentIdent,
+    ) -> Result<(), TaskApiError> {
+        match self.kv_api.get_pb(dependent_ident).await? {
+            None => {
+                check_ops.push(TxnCondition {
+                    key: dependent_ident.to_string_key(),
+                    expected: ConditionResult::Eq as i32,
+                    target: Some(Target::Seq(0)),
+                });
+            }
+            Some(mut old_dependent) => {
+                check_ops.push(TxnCondition::eq_seq(
+                    dependent_ident.to_string_key(),
+                    old_dependent.seq,
+                ));
+
+                old_dependent.0.retain(|name| !task_names.contains(name));
 
                 update_ops.push(TxnOp::put(
                     dependent_ident.to_string_key(),

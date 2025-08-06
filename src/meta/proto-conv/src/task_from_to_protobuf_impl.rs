@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal as mt;
 use databend_common_meta_app::principal::task::Status;
-use databend_common_meta_app::principal::DependentType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::task_message::DeleteTask;
 use databend_common_protos::pb::task_message::Message;
@@ -199,36 +198,6 @@ impl FromToProto for mt::TaskMessage {
     }
 }
 
-impl FromToProto for mt::TaskDependentKey {
-    type PB = pb::TaskDependentKey;
-
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        Ok(Self {
-            ty: match p.ty {
-                0 => DependentType::After,
-                1 => DependentType::Before,
-                _ => return Err(Incompatible::new(format!("invalid task type {}", p.ty))),
-            },
-            source: p.source,
-        })
-    }
-
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::TaskDependentKey {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-
-            source: self.source.clone(),
-            ty: self.ty as i32,
-        })
-    }
-}
-
 impl FromToProto for mt::TaskDependentValue {
     type PB = pb::TaskDependentValue;
 
@@ -238,7 +207,7 @@ impl FromToProto for mt::TaskDependentValue {
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        Ok(Self(HashSet::from_iter(p.names)))
+        Ok(Self(BTreeSet::from_iter(p.names)))
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {

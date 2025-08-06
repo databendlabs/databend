@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -198,7 +198,7 @@ impl TaskDependentKey {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskDependentValue(pub HashSet<String>);
+pub struct TaskDependentValue(pub BTreeSet<String>);
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;

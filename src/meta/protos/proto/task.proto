@@ -94,8 +94,8 @@ message TaskDependentKey {
     After = 0;
     Before = 1;
   }
-  string source = 1;
-  DependentType ty = 3;
+  DependentType ty = 1;
+  string source = 2;
 }
 
 message TaskDependentValue {
