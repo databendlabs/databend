@@ -38,7 +38,6 @@ impl ClusterDescriptor {
         new_nodes.push(Arc::new(NodeInfo::create(
             id.clone(),
             "".to_string(),
-            0,
             "".to_string(),
             addr.into(),
             "".to_string(),
