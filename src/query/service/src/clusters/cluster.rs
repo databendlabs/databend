@@ -636,6 +636,13 @@ impl ClusterDiscovery {
         let license_key = Self::get_license_key(&self.tenant_id).await?;
 
         let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
+
+        info!("[Cluster] current resource status - online nodes: [{}], available CPU cores: [{}] for tenant [{}].",
+            nodes.len(),
+            total_cpu_nums,
+            self.tenant_id
+        );
+
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(license_key.clone(), Feature::MaxNodeQuota(nodes.len()))?;
 
