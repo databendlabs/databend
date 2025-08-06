@@ -20,6 +20,7 @@ use databend_common_meta_types::MatchSeq;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
 use crate::principal::ProcedureIdentity;
+use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
@@ -416,6 +417,22 @@ pub struct UnknownDatamask {
 }
 
 impl UnknownDatamask {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownRowAccessPolicy: `{name}` while `{context}`")]
+pub struct UnknownRowAccessPolicy {
+    name: String,
+    context: String,
+}
+
+impl UnknownRowAccessPolicy {
     pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -1086,7 +1103,13 @@ pub enum AppError {
     DatamaskAlreadyExists(#[from] ExistError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
+    RowAccessPolicyAlreadyExists(#[from] ExistError<row_access_policy_name_ident::Resource>),
+
+    #[error(transparent)]
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
+
+    #[error(transparent)]
+    UnknownRowAccessPolicy(#[from] UnknownError<row_access_policy_name_ident::Resource>),
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
@@ -1473,6 +1496,12 @@ impl AppErrorMessage for UnknownDatamask {
     }
 }
 
+impl AppErrorMessage for UnknownRowAccessPolicy {
+    fn message(&self) -> String {
+        format!("RowAccessPolicy '{}' does not exists", self.name)
+    }
+}
+
 impl AppErrorMessage for UnmatchColumnDataType {
     fn message(&self) -> String {
         format!(
@@ -1627,6 +1656,12 @@ impl From<AppError> for ErrorCode {
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::RowAccessPolicyAlreadyExists(err) => {
+                ErrorCode::RowAccessPolicyAlreadyExists(err.message())
+            }
+            AppError::UnknownRowAccessPolicy(err) => {
+                ErrorCode::UnknownRowAccessPolicy(err.message())
+            }
 
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::UnmatchMaskPolicyReturnType(err) => {

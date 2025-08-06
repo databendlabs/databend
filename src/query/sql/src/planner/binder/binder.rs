@@ -611,6 +611,10 @@ impl Binder {
                     .await?
             }
 
+            // RowAccessPolicy
+            Statement::CreateRowAccessPolicy(stmt) => self.bind_create_row_access(stmt).await?,
+            Statement::DropRowAccessPolicy(stmt) => self.bind_drop_row_access(stmt).await?,
+            Statement::DescRowAccessPolicy(stmt) => self.bind_desc_row_access(stmt).await?,
             Statement::SetRole {
                 is_default,
                 role_name,

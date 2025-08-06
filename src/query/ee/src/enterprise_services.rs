@@ -23,6 +23,7 @@ use crate::fail_safe::RealFailSafeHandler;
 use crate::hilbert_clustering::RealHilbertClusteringHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::resource_management::init_resources_management;
+use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
@@ -39,6 +40,7 @@ impl EnterpriseServices {
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
+        RealRowAccessPolicyHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
