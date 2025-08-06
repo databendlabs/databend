@@ -9,7 +9,6 @@ from metactl_utils import metactl_bin
 from utils import print_title, kill_databend_meta, start_meta_node
 
 
-
 def setup_test_environment():
     """Setup meta service for testing."""
     kill_databend_meta()
@@ -55,20 +54,26 @@ end
 '''
 
     # Run metactl lua with gRPC client script
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     print("output:", output)
 
-    expected_output = '''Upsert result:\t{"result"={"data"="test_value","seq"=1}}
+    expected_output = """Upsert result:\t{"result"={"data"="test_value","seq"=1}}
 Get result:\t{"data"="test_value","seq"=1}
-Get null result:\tNULL'''
+Get null result:\tNULL"""
     print("expect:", expected_output)
 
     # Check if entire output matches expected value
-    assert output == expected_output, f"Expected:\n{expected_output}\n\nActual:\n{output}"
+    assert output == expected_output, (
+        f"Expected:\n{expected_output}\n\nActual:\n{output}"
+    )
 
     print("✓ Lua gRPC client test passed")
 

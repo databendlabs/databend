@@ -12,24 +12,25 @@ def test_lua_file():
     print_title("Test lua subcommand with file")
 
     # Create a temporary Lua script
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.lua', delete=False) as f:
-        f.write('print(2 + 3)\n')
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".lua", delete=False) as f:
+        f.write("print(2 + 3)\n")
         lua_file = f.name
 
     print("file name:", lua_file)
-    with open(lua_file, 'r') as ff:
+    with open(lua_file, "r") as ff:
         print("file content:", ff.read())
 
     # Run metactl lua with file
-    result = subprocess.run([
-        metactl_bin, "lua",
-        "--file", lua_file
-    ], capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua", "--file", lua_file],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     assert "5" == output
     print("✓ Lua file execution test passed")
-
 
 
 def test_lua_stdin():
@@ -39,9 +40,13 @@ def test_lua_stdin():
     lua_script = 'print("Hello from stdin!")\nprint(5 * 6)\n'
 
     # Run metactl lua with stdin
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     assert "Hello from stdin!" in output

@@ -4,9 +4,7 @@ import re
 import shutil
 import time
 from metactl_utils import metactl_bin
-from utils import (
-    run_command, kill_databend_meta, start_meta_node, print_title
-)
+from utils import run_command, kill_databend_meta, start_meta_node, print_title
 
 
 def get_cluster_leader():
@@ -16,14 +14,14 @@ def get_cluster_leader():
 
     for port in grpc_ports:
         try:
-            result = run_command([
-                metactl_bin, "status",
-                "--grpc-api-address", f"127.0.0.1:{port}"
-            ], check=False)
+            result = run_command(
+                [metactl_bin, "status", "--grpc-api-address", f"127.0.0.1:{port}"],
+                check=False,
+            )
 
             if result and "State: Leader" in result:
                 # Parse leader node ID from status output
-                node_match = re.search(r'Node: id=(\d+)', result)
+                node_match = re.search(r"Node: id=(\d+)", result)
                 if node_match:
                     return int(node_match.group(1))
         except:
@@ -71,10 +69,9 @@ def test_transfer_leader_subcommand():
 
     # Use admin API address of node 1 for transfer command
     admin_addr = "127.0.0.1:28101"
-    result = run_command([
-        metactl_bin, "transfer-leader",
-        "--admin-api-address", admin_addr
-    ])
+    result = run_command(
+        [metactl_bin, "transfer-leader", "--admin-api-address", admin_addr]
+    )
 
     print("✓ Transfer command executed")
 
@@ -83,8 +80,12 @@ def test_transfer_leader_subcommand():
     new_leader = wait_for_leader_change(initial_leader, timeout=30)
 
     if new_leader:
-        print(f"✓ Leadership transferred from node {initial_leader} to node {new_leader}")
-        assert new_leader != initial_leader, f"Leader should change from {initial_leader}"
+        print(
+            f"✓ Leadership transferred from node {initial_leader} to node {new_leader}"
+        )
+        assert new_leader != initial_leader, (
+            f"Leader should change from {initial_leader}"
+        )
     else:
         print("✓ No leader change detected (acceptable if cluster is stable)")
 
@@ -126,11 +127,16 @@ def test_transfer_leader_with_target():
 
     # Transfer to specific target
     admin_addr = "127.0.0.1:28101"
-    result = run_command([
-        metactl_bin, "transfer-leader",
-        "--admin-api-address", admin_addr,
-        "--to", str(target_node)
-    ])
+    result = run_command(
+        [
+            metactl_bin,
+            "transfer-leader",
+            "--admin-api-address",
+            admin_addr,
+            "--to",
+            str(target_node),
+        ]
+    )
 
     print("✓ Transfer command with target executed")
 
@@ -139,9 +145,13 @@ def test_transfer_leader_with_target():
     new_leader = wait_for_leader_change(initial_leader, timeout=30)
 
     if new_leader:
-        print(f"✓ Leadership transferred from node {initial_leader} to node {new_leader}")
+        print(
+            f"✓ Leadership transferred from node {initial_leader} to node {new_leader}"
+        )
         # Note: The actual new leader might not be exactly the target due to cluster dynamics
-        assert new_leader != initial_leader, f"Leader should change from {initial_leader}"
+        assert new_leader != initial_leader, (
+            f"Leader should change from {initial_leader}"
+        )
     else:
         print("✓ No leader change detected (acceptable if transfer was to same node)")
 

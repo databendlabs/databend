@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -22,6 +23,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
@@ -36,6 +39,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::io::read::read_segment_stats;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -53,7 +57,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 
@@ -121,33 +125,42 @@ pub async fn do_refresh_virtual_column(
     let operator = fuse_table.get_operator_ref();
 
     // Iterates through all segments and collect blocks don't have virtual block meta.
-    let segment_locs = snapshot.segments.clone();
-    let mut block_metas = VecDeque::new();
-    let mut block_meta_index_map = HashMap::new();
-    for (segment_idx, (location, ver)) in segment_locs.into_iter().enumerate() {
+    let mut virtual_column_metas = VecDeque::new();
+    for (segment_idx, (location, ver)) in snapshot.segments.iter().enumerate() {
         let segment_info = segment_reader
             .read(&LoadParams {
                 location: location.to_string(),
                 len_hint: None,
-                ver,
+                ver: *ver,
                 put_cache: false,
             })
             .await?;
+        let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
+            let stats = read_segment_stats(operator.clone(), meta.location.clone()).await?;
+            Some(stats)
+        } else {
+            None
+        };
 
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
             if block_meta.virtual_block_meta.is_some() {
                 continue;
             }
-            let index = BlockMetaIndex {
-                segment_idx,
-                block_idx,
-            };
-            block_meta_index_map.insert(block_meta.location.clone(), index);
-            block_metas.push_back(block_meta);
+            virtual_column_metas.push_back(VirtualColumnMeta {
+                index: BlockMetaIndex {
+                    segment_idx,
+                    block_idx,
+                },
+                block_meta,
+                column_hlls: stats
+                    .as_ref()
+                    .and_then(|v| v.block_hlls.get(block_idx))
+                    .cloned(),
+            });
         }
     }
 
-    if block_metas.is_empty() {
+    if virtual_column_metas.is_empty() {
         return Ok(());
     }
 
@@ -159,7 +172,7 @@ pub async fn do_refresh_virtual_column(
                 settings,
                 storage_format,
                 block_reader.clone(),
-                block_metas.clone(),
+                virtual_column_metas.clone(),
             );
             AsyncSourcer::create(ctx.clone(), output, inner)
         },
@@ -167,7 +180,7 @@ pub async fn do_refresh_virtual_column(
     )?;
 
     // Extract inner fields as virtual columns and write virtual block data.
-    let block_nums = block_metas.len();
+    let block_nums = virtual_column_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_threads = std::cmp::min(block_nums, max_threads);
     pipeline.try_resize(max_threads)?;
@@ -175,7 +188,6 @@ pub async fn do_refresh_virtual_column(
         VirtualColumnTransform::new(
             operator.clone(),
             write_settings.clone(),
-            block_meta_index_map.clone(),
             virtual_column_builder.clone(),
         )
     });
@@ -187,7 +199,7 @@ pub async fn do_refresh_virtual_column(
         TableMutationAggregator::create(
             fuse_table,
             ctx.clone(),
-            vec![],
+            snapshot.segments.clone(),
             vec![],
             vec![],
             Statistics::default(),
@@ -221,7 +233,7 @@ pub struct VirtualColumnSource {
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
     block_reader: Arc<BlockReader>,
-    block_metas: VecDeque<Arc<BlockMeta>>,
+    virtual_column_metas: VecDeque<VirtualColumnMeta>,
     is_finished: bool,
 }
 
@@ -230,13 +242,13 @@ impl VirtualColumnSource {
         settings: ReadSettings,
         storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
-        block_metas: VecDeque<Arc<BlockMeta>>,
+        virtual_column_metas: VecDeque<VirtualColumnMeta>,
     ) -> Self {
         Self {
             settings,
             storage_format,
             block_reader,
-            block_metas,
+            virtual_column_metas,
             is_finished: false,
         }
     }
@@ -252,14 +264,13 @@ impl AsyncSource for VirtualColumnSource {
             return Ok(None);
         }
 
-        match self.block_metas.pop_front() {
-            Some(block_meta) => {
+        match self.virtual_column_metas.pop_front() {
+            Some(meta) => {
                 let block = self
                     .block_reader
-                    .read_by_meta(&self.settings, &block_meta, &self.storage_format)
+                    .read_by_meta(&self.settings, &meta.block_meta, &self.storage_format)
                     .await?;
-                let block =
-                    block.add_meta(Some(<BlockMeta as Clone>::clone(&block_meta).boxed()))?;
+                let block = block.add_meta(Some(Box::new(meta)))?;
                 Ok(Some(block))
             }
             None => {
@@ -274,7 +285,6 @@ impl AsyncSource for VirtualColumnSource {
 pub struct VirtualColumnTransform {
     operator: Operator,
     write_settings: WriteSettings,
-    block_meta_index_map: HashMap<Location, BlockMetaIndex>,
     virtual_column_builder: VirtualColumnBuilder,
 }
 
@@ -282,13 +292,11 @@ impl VirtualColumnTransform {
     pub fn new(
         operator: Operator,
         write_settings: WriteSettings,
-        block_meta_index_map: HashMap<Location, BlockMetaIndex>,
         virtual_column_builder: VirtualColumnBuilder,
     ) -> Self {
         Self {
             operator,
             write_settings,
-            block_meta_index_map,
             virtual_column_builder,
         }
     }
@@ -300,9 +308,13 @@ impl AsyncTransform for VirtualColumnTransform {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let block_meta = data_block
+        let VirtualColumnMeta {
+            index,
+            block_meta,
+            column_hlls,
+        } = data_block
             .get_meta()
-            .and_then(BlockMeta::downcast_ref_from)
+            .and_then(VirtualColumnMeta::downcast_ref_from)
             .unwrap();
 
         self.virtual_column_builder.add_block(&data_block)?;
@@ -337,18 +349,14 @@ impl AsyncTransform for VirtualColumnTransform {
             }
         }
 
-        let block_meta_index = self
-            .block_meta_index_map
-            .remove(&block_meta.location)
-            .unwrap();
         let extended_block_meta = ExtendedBlockMeta {
-            block_meta: block_meta.clone(),
+            block_meta: Arc::unwrap_or_clone(block_meta.clone()),
             draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
-            column_hlls: None,
+            column_hlls: column_hlls.clone(),
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
-            index: block_meta_index,
+            index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
         };
         let meta = MutationLogs {
@@ -358,3 +366,21 @@ impl AsyncTransform for VirtualColumnTransform {
         Ok(new_block)
     }
 }
+
+#[derive(Clone)]
+pub struct VirtualColumnMeta {
+    index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    column_hlls: Option<RawBlockHLL>,
+}
+
+impl Debug for VirtualColumnMeta {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.debug_struct("VirtualColumnMeta").finish()
+    }
+}
+
+local_block_meta_serde!(VirtualColumnMeta);
+
+#[typetag::serde(name = "virtual_column")]
+impl BlockMetaInfo for VirtualColumnMeta {}

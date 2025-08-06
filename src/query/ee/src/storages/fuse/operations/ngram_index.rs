@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::slice;
 use std::sync::Arc;
 
@@ -23,6 +24,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
+use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -42,6 +45,7 @@ use databend_common_storages_fuse::index::BloomIndexBuilder;
 use databend_common_storages_fuse::index::BloomIndexMeta;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_index_meta;
+use databend_common_storages_fuse::io::read::read_segment_stats;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::BloomIndexState;
@@ -64,7 +68,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
@@ -74,7 +78,6 @@ pub async fn do_refresh_ngram_index(
     ctx: Arc<dyn TableContext>,
     index_name: String,
     _index_schema: TableSchemaRef,
-    segment_locs: Option<Vec<Location>>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
     let index = fuse_table
@@ -109,33 +112,28 @@ pub async fn do_refresh_ngram_index(
     let segment_reader =
         MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
 
-    // If no segment locations are specified, iterates through all segments
-    let segment_locs = if let Some(segment_locs) = segment_locs {
-        segment_locs
-            .into_iter()
-            .filter(|s| snapshot.segments.contains(s))
-            .collect()
-    } else {
-        snapshot.segments.clone()
-    };
-
-    if segment_locs.is_empty() {
+    if snapshot.segments.is_empty() {
         return Ok(());
     }
     let operator = fuse_table.get_operator_ref();
 
     // Read the segment infos and collect the block metas that need to generate the index.
-    let mut block_metas = VecDeque::new();
-    let mut block_meta_index_map = HashMap::new();
-    for (segment_idx, (segment_loc, ver)) in segment_locs.into_iter().enumerate() {
+    let mut index_metas = VecDeque::new();
+    for (segment_idx, (segment_loc, ver)) in snapshot.segments.iter().enumerate() {
         let segment_info = segment_reader
             .read(&LoadParams {
                 location: segment_loc.to_string(),
                 len_hint: None,
-                ver,
+                ver: *ver,
                 put_cache: false,
             })
             .await?;
+        let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
+            let stats = read_segment_stats(operator.clone(), meta.location.clone()).await?;
+            Some(stats)
+        } else {
+            None
+        };
 
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
             let index_location =
@@ -167,20 +165,21 @@ pub async fn do_refresh_ngram_index(
             } else {
                 None
             };
-            block_meta_index_map.insert(
-                block_meta.location.clone(),
-                (
-                    BlockMetaIndex {
-                        segment_idx,
-                        block_idx,
-                    },
-                    bloom_meta,
-                ),
-            );
-            block_metas.push_back(block_meta);
+            index_metas.push_back(NgramIndexMeta {
+                index: BlockMetaIndex {
+                    segment_idx,
+                    block_idx,
+                },
+                block_meta,
+                column_hlls: stats
+                    .as_ref()
+                    .and_then(|v| v.block_hlls.get(block_idx))
+                    .cloned(),
+                bloom_meta,
+            });
         }
     }
-    if block_metas.is_empty() {
+    if index_metas.is_empty() {
         return Ok(());
     }
 
@@ -194,14 +193,14 @@ pub async fn do_refresh_ngram_index(
                 settings,
                 storage_format,
                 block_reader.clone(),
-                block_metas.clone(),
+                index_metas.clone(),
             );
             AsyncSourcer::create(ctx.clone(), output, inner)
         },
         1,
     )?;
 
-    let block_nums = block_metas.len();
+    let block_nums = index_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_threads = std::cmp::min(block_nums, max_threads);
     pipeline.try_resize(max_threads)?;
@@ -210,7 +209,6 @@ pub async fn do_refresh_ngram_index(
             ctx.clone(),
             operator.clone(),
             index_ngram_args.clone(),
-            block_meta_index_map.clone(),
             index_column_id,
         )
     });
@@ -222,7 +220,7 @@ pub async fn do_refresh_ngram_index(
         TableMutationAggregator::create(
             fuse_table,
             ctx.clone(),
-            vec![],
+            snapshot.segments.clone(),
             vec![],
             vec![],
             Statistics::default(),
@@ -255,7 +253,7 @@ pub struct NgramIndexSource {
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
     block_reader: Arc<BlockReader>,
-    block_metas: VecDeque<Arc<BlockMeta>>,
+    index_metas: VecDeque<NgramIndexMeta>,
     is_finished: bool,
 }
 
@@ -264,13 +262,13 @@ impl NgramIndexSource {
         settings: ReadSettings,
         storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
-        block_metas: VecDeque<Arc<BlockMeta>>,
+        index_metas: VecDeque<NgramIndexMeta>,
     ) -> Self {
         Self {
             settings,
             storage_format,
             block_reader,
-            block_metas,
+            index_metas,
             is_finished: false,
         }
     }
@@ -286,13 +284,13 @@ impl AsyncSource for NgramIndexSource {
             return Ok(None);
         }
 
-        match self.block_metas.pop_front() {
-            Some(block_meta) => {
+        match self.index_metas.pop_front() {
+            Some(index_meta) => {
                 let block = self
                     .block_reader
-                    .read_by_meta(&self.settings, &block_meta, &self.storage_format)
+                    .read_by_meta(&self.settings, &index_meta.block_meta, &self.storage_format)
                     .await?;
-                let block = block.add_meta(Some(Box::new(Arc::unwrap_or_clone(block_meta))))?;
+                let block = block.add_meta(Some(Box::new(index_meta)))?;
                 Ok(Some(block))
             }
             None => {
@@ -307,7 +305,6 @@ pub struct NgramIndexTransform {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     index_ngram_args: NgramArgs,
-    block_meta_index_map: HashMap<Location, (BlockMetaIndex, Option<Arc<BloomIndexMeta>>)>,
     ngram_column_id: ColumnId,
 }
 
@@ -316,14 +313,12 @@ impl NgramIndexTransform {
         ctx: Arc<dyn TableContext>,
         operator: Operator,
         index_ngram_args: NgramArgs,
-        block_meta_index_map: HashMap<Location, (BlockMetaIndex, Option<Arc<BloomIndexMeta>>)>,
         ngram_column_id: ColumnId,
     ) -> Self {
         Self {
             ctx,
             operator,
             index_ngram_args,
-            block_meta_index_map,
             ngram_column_id,
         }
     }
@@ -335,22 +330,22 @@ impl AsyncTransform for NgramIndexTransform {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let block_meta = data_block
+        let NgramIndexMeta {
+            index,
+            block_meta,
+            column_hlls,
+            bloom_meta,
+        } = data_block
             .get_meta()
-            .and_then(BlockMeta::downcast_ref_from)
+            .and_then(NgramIndexMeta::downcast_ref_from)
             .unwrap();
 
         let index_path = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
             &block_meta.location.0,
         );
 
-        let mut new_block_meta = block_meta.clone();
+        let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
         let index_location = (index_path.clone(), BlockFilter::VERSION);
-
-        let (block_meta_index, bloom_index_meta) = self
-            .block_meta_index_map
-            .remove(&block_meta.location)
-            .unwrap();
 
         let mut builder = BloomIndexBuilder::create(
             self.ctx.get_function_context()?,
@@ -360,7 +355,7 @@ impl AsyncTransform for NgramIndexTransform {
         builder.add_block(&data_block)?;
 
         if let Some(new_ngram_index) = builder.finalize()? {
-            let (index, old_ngram_name) = if let Some(bloom_index_meta) = bloom_index_meta {
+            let (index, old_ngram_name) = if let Some(bloom_index_meta) = bloom_meta {
                 let mut old_ngram_name = None;
 
                 let mut index_columns = bloom_index_meta
@@ -435,11 +430,11 @@ impl AsyncTransform for NgramIndexTransform {
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
-            column_hlls: None,
+            column_hlls: column_hlls.clone(),
         };
 
         let entry = MutationLogEntry::ReplacedBlock {
-            index: block_meta_index,
+            index: index.clone(),
             block_meta: Arc::new(extended_block_meta),
         };
         let meta = MutationLogs {
@@ -449,3 +444,22 @@ impl AsyncTransform for NgramIndexTransform {
         Ok(new_block)
     }
 }
+
+#[derive(Clone)]
+pub struct NgramIndexMeta {
+    index: BlockMetaIndex,
+    block_meta: Arc<BlockMeta>,
+    column_hlls: Option<RawBlockHLL>,
+    bloom_meta: Option<Arc<BloomIndexMeta>>,
+}
+
+impl Debug for NgramIndexMeta {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.debug_struct("NgramIndexMeta").finish()
+    }
+}
+
+local_block_meta_serde!(NgramIndexMeta);
+
+#[typetag::serde(name = "ngram_index")]
+impl BlockMetaInfo for NgramIndexMeta {}
