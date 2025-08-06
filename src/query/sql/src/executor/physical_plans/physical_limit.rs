@@ -55,17 +55,19 @@ impl PhysicalPlanBuilder {
         // 1. Prune unused Columns.
         // Apply lazy.
         let metadata = self.metadata.read().clone();
-        let lazy_columns = metadata.lazy_columns();
+
         required = required
-            .difference(lazy_columns)
+            .difference(&limit.lazy_columns)
             .cloned()
             .collect::<ColumnSet>();
-        required.extend(metadata.row_id_indexes());
+
+        if !limit.lazy_columns.is_empty() {
+            required.extend(metadata.row_id_indexes());
+        }
 
         // 2. Build physical plan.
         let input_plan = self.build(s_expr.child(0)?, required).await?;
-        let metadata = self.metadata.read().clone();
-        if limit.before_exchange || metadata.lazy_columns().is_empty() {
+        if limit.before_exchange || limit.lazy_columns.is_empty() {
             return Ok(PhysicalPlan::Limit(Limit {
                 plan_id: 0,
                 input: Box::new(input_plan),
@@ -79,6 +81,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input_plan.output_schema()?;
 
         // Lazy materialization is enabled.
+        let metadata = self.metadata.read();
         let row_id_col_index = metadata
             .columns()
             .iter()
@@ -100,8 +103,8 @@ impl PhysicalPlanBuilder {
         // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
         // See the case in tests/sqllogictests/suites/crdb/limit:
         // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
-        let lazy_columns = metadata
-            .lazy_columns()
+        let lazy_columns = limit
+            .lazy_columns
             .iter()
             .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
             .cloned()
@@ -143,10 +146,9 @@ impl PhysicalPlanBuilder {
             has_inner_column,
             true,
             true,
-            false,
         );
 
-        Ok(PhysicalPlan::RowFetch(RowFetch {
+        let fetch = PhysicalPlan::RowFetch(RowFetch {
             plan_id: 0,
             input: Box::new(PhysicalPlan::Limit(Limit {
                 plan_id: 0,
@@ -161,6 +163,8 @@ impl PhysicalPlanBuilder {
             fetched_fields,
             need_wrap_nullable: false,
             stat_info: Some(stat_info),
-        }))
+        });
+
+        Ok(fetch)
     }
 }
