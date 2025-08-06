@@ -43,8 +43,8 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
-use crate::plans::MaterializeCTERef;
 use crate::plans::MaterializedCTE;
+use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
@@ -167,7 +167,7 @@ pub enum RelOperator {
     CompactBlock(CompactBlock),
     MutationSource(MutationSource),
     MaterializedCTE(MaterializedCTE),
-    MaterializeCTERef(MaterializeCTERef),
+    MaterializedCTERef(MaterializedCTERef),
     Sequence(Sequence),
 }
 
@@ -260,6 +260,6 @@ impl_try_from_rel_operator! {
     CompactBlock,
     MutationSource,
     MaterializedCTE,
-    MaterializeCTERef,
+    MaterializedCTERef,
     Sequence
 }

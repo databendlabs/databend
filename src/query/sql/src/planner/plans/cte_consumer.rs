@@ -31,19 +31,19 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaterializeCTERef {
+pub struct MaterializedCTERef {
     pub cte_name: String,
     pub output_columns: Vec<usize>,
     pub def: SExpr,
 }
 
-impl Hash for MaterializeCTERef {
+impl Hash for MaterializedCTERef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.cte_name.hash(state);
     }
 }
 
-impl Operator for MaterializeCTERef {
+impl Operator for MaterializedCTERef {
     fn rel_op(&self) -> RelOp {
         RelOp::MaterializeCTERef
     }
