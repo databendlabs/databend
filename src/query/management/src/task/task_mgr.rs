@@ -376,8 +376,9 @@ impl TaskMgr {
             Some(mut old_dependent) => {
                 check_ops.push(TxnCondition::eq_seq(after_key.clone(), old_dependent.seq));
 
-                old_dependent.0.retain(|name| !remove_afters.contains(name));
-
+                for remove_after in remove_afters {
+                    old_dependent.0.remove(remove_after);
+                }
                 update_ops.push(TxnOp::put(
                     after_key,
                     old_dependent.to_pb()?.encode_to_vec(),
