@@ -197,7 +197,7 @@ impl TaskDependentKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct TaskDependentValue(pub BTreeSet<String>);
 
 mod kvapi_key_impl {
