@@ -283,6 +283,8 @@ build_exceptions! {
     UnmatchMaskPolicyReturnType(1121),
     /// Empty share endpoint config
     EmptyShareEndpointConfig(1130),
+    /// Unknown row policy
+    UnknownRowAccessPolicy(1131),
 }
 
 // Sequence Errors [1124-1126, 3101]
@@ -519,6 +521,8 @@ build_exceptions! {
     CommitTableMetaError(2322),
     /// Create as drop table without drop time
     CreateAsDropTableWithoutDropTime(2323),
+    /// Row Policy already exists
+    RowAccessPolicyAlreadyExists(2324),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]
