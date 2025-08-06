@@ -73,6 +73,9 @@ use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseCl
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_report_issue::ReportIssueInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
+use crate::interpreters::interpreter_row_access_policy_create::CreateRowAccessPolicyInterpreter;
+use crate::interpreters::interpreter_row_access_policy_desc::DescRowAccessPolicyInterpreter;
+use crate::interpreters::interpreter_row_access_policy_drop::DropRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_sequence_desc::DescSequenceInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
@@ -565,6 +568,16 @@ impl InterpreterFactory {
                 ctx,
                 *drop_udf.clone(),
             )?)),
+
+            Plan::CreateRowAccessPolicy(create_row_access) => Ok(Arc::new(
+                CreateRowAccessPolicyInterpreter::try_create(ctx, *create_row_access.clone())?,
+            )),
+            Plan::DropRowAccessPolicy(drop_row_access) => Ok(Arc::new(
+                DropRowAccessPolicyInterpreter::try_create(ctx, *drop_row_access.clone())?,
+            )),
+            Plan::DescRowAccessPolicy(desc_row_access) => Ok(Arc::new(
+                DescRowAccessPolicyInterpreter::try_create(ctx, *desc_row_access.clone())?,
+            )),
 
             Plan::Presign(presign) => Ok(Arc::new(PresignInterpreter::try_create(
                 ctx,

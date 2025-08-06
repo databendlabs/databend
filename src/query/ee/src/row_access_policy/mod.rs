@@ -12,19 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod attach_table;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod fail_safe;
-pub mod hilbert_clustering;
-pub mod license;
-pub mod resource_management;
-pub mod row_access_policy;
-pub mod storage_encryption;
-pub mod storage_quota;
-pub mod storages;
-pub mod stream;
-pub mod table_index;
-pub mod test_kits;
-pub mod virtual_column;
+pub(crate) mod row_access_policy_handler;

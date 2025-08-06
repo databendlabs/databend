@@ -14,7 +14,7 @@ select $1, metadata$filename, metadata$file_row_number from @data/orc/all  (file
 {"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null} orc/alltypes.zstd.orc 10
 
 statement ok
-create or replace table t1(a variant, filename string, row int);
+create or replace table t1(a variant, filename string, `row` int);
 
 query ??
 copy into t1 from (select $1, metadata$filename, metadata$file_row_number from @data/orc/all)  file_format=(type=orc);
@@ -52,7 +52,7 @@ NULL orc/alltypes.zstd.orc 0
 NULL orc/alltypes.zstd.orc 10
 
 statement ok
-create or replace table t1(a int64,  filename string, row int);
+create or replace table t1(a int64,  filename string, `row` int);
 
 query ??
 copy into t1 from (select int64, metadata$filename, metadata$file_row_number from @data/orc/all)  file_format=(type=orc);

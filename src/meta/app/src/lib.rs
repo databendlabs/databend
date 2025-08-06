@@ -35,4 +35,6 @@ pub mod tenant_key;
 pub mod id_generator;
 
 mod key_with_tenant;
+pub mod row_access_policy;
+
 pub use key_with_tenant::KeyWithTenant;

@@ -12,26 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod dictionary;
-mod dynamic_table;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod row_access_policy;
-mod sequence;
-mod stage;
-mod stream;
-mod table;
-mod task;
-mod view;
-mod warehouse;
-mod workload;
+pub mod row_access_policy_handler;
+
+pub use row_access_policy_handler::get_row_access_policy_handler;
+pub use row_access_policy_handler::RowAccessPolicyHandler;
+pub use row_access_policy_handler::RowAccessPolicyHandlerWrapper;
