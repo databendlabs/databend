@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use databend_common_meta_app::principal as mt;
 use fastrace::func_name;
@@ -32,31 +32,15 @@ fn test_decode_v141_task_state() -> anyhow::Result<()> {
 
 #[test]
 fn test_decode_v141_task_dependent() -> anyhow::Result<()> {
-    {
-        let task_dependent_key_v141 = vec![10, 1, 97, 160, 6, 141, 1, 168, 6, 24];
-        let want = || mt::TaskDependentKey {
-            ty: mt::DependentType::After,
-            source: s("a"),
-        };
-        common::test_pb_from_to(func_name!(), want())?;
-        common::test_load_old(
-            func_name!(),
-            task_dependent_key_v141.as_slice(),
-            141,
-            want(),
-        )?;
-    }
-    {
-        let task_dependent_value_v141 = vec![10, 1, 97, 10, 1, 98, 160, 6, 141, 1, 168, 6, 24];
-        let want = || mt::TaskDependentValue(HashSet::from([s("a"), s("b")]));
-        common::test_pb_from_to(func_name!(), want())?;
-        common::test_load_old(
-            func_name!(),
-            task_dependent_value_v141.as_slice(),
-            141,
-            want(),
-        )?;
-    }
+    let task_dependent_value_v141 = vec![10, 1, 97, 10, 1, 98, 160, 6, 141, 1, 168, 6, 24];
+    let want = || mt::TaskDependentValue(BTreeSet::from([s("a"), s("b")]));
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(
+        func_name!(),
+        task_dependent_value_v141.as_slice(),
+        141,
+        want(),
+    )?;
 
     Ok(())
 }
