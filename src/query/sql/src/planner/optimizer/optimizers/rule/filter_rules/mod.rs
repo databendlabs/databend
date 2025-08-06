@@ -26,6 +26,7 @@ mod rule_push_down_filter_window;
 mod rule_push_down_filter_window_top_n;
 mod rule_push_down_prewhere;
 mod rule_push_down_sort_expression;
+mod rule_push_down_sort_filter_scan;
 mod rule_push_down_sort_scan;
 
 pub use rule_eliminate_filter::RuleEliminateFilter;
@@ -42,4 +43,5 @@ pub use rule_push_down_filter_window::RulePushDownFilterWindow;
 pub use rule_push_down_filter_window_top_n::RulePushDownFilterWindowTopN;
 pub use rule_push_down_prewhere::RulePushDownPrewhere;
 pub use rule_push_down_sort_expression::RulePushDownSortEvalScalar;
+pub use rule_push_down_sort_filter_scan::RulePushDownSortFilterScan;
 pub use rule_push_down_sort_scan::RulePushDownSortScan;

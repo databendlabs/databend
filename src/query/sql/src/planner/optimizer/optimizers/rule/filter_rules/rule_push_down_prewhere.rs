@@ -38,6 +38,14 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
+/// Input:  Filter
+///           \
+///          Scan
+///
+/// Output:
+///         Filter
+///           \
+///           Scan(padding prewhere)
 pub struct RulePushDownPrewhere {
     id: RuleID,
     matchers: Vec<Matcher>,

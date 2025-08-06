@@ -25,10 +25,19 @@ use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::F32;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_pruning_milliseconds;
 use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_after;
 use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_before;
@@ -36,6 +45,7 @@ use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruni
 use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruning_before;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::FixedLengthPriorityQueue;
+use databend_storages_common_index::ScoredPointOffset;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -49,15 +59,23 @@ type VectorPruningFutureReturn = Pin<Box<dyn Future<Output = Result<VectorPruneR
 type VectorPruningFuture =
     Box<dyn FnOnce(OwnedSemaphorePermit) -> VectorPruningFutureReturn + Send + 'static>;
 
+#[derive(Clone)]
+struct VectorTopNParam {
+    has_filter: bool,
+    filter_expr: Option<Expr>,
+    asc: bool,
+    limit: usize,
+}
+
 /// Vector index pruner.
 #[derive(Clone)]
 pub struct VectorIndexPruner {
+    func_ctx: FunctionContext,
     pruning_ctx: Arc<PruningContext>,
     _schema: TableSchemaRef,
     vector_index: VectorIndexInfo,
-    filters: Option<Filters>,
-    sort: Vec<(RemoteExpr<String>, bool, bool)>,
-    limit: Option<usize>,
+    vector_reader: VectorIndexReader,
+    vector_topn_param: Option<VectorTopNParam>,
 }
 
 impl VectorIndexPruner {
@@ -69,13 +87,75 @@ impl VectorIndexPruner {
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
         limit: Option<usize>,
     ) -> Result<Self> {
+        let func_ctx = pruning_ctx.ctx.get_function_context()?;
+
+        let settings = ReadSettings::from_ctx(&pruning_ctx.ctx)?;
+        let distance_type = match vector_index.func_name.as_str() {
+            "cosine_distance" => DistanceType::Dot,
+            "l1_distance" => DistanceType::L1,
+            "l2_distance" => DistanceType::L2,
+            _ => unreachable!(),
+        };
+        let columns = vec![
+            format!("{}-{}_graph_links", vector_index.column_id, distance_type),
+            format!("{}-{}_graph_data", vector_index.column_id, distance_type),
+            format!(
+                "{}-{}_encoded_u8_meta",
+                vector_index.column_id, distance_type
+            ),
+            format!(
+                "{}-{}_encoded_u8_data",
+                vector_index.column_id, distance_type
+            ),
+        ];
+
+        let query_values =
+            unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
+
+        let vector_reader = VectorIndexReader::create(
+            pruning_ctx.dal.clone(),
+            settings,
+            distance_type,
+            columns,
+            query_values,
+        );
+
+        let filter_expr = if let Some(filters) = &filters {
+            let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+            let column_refs = filter.column_refs();
+            if column_refs.len() == 1 && column_refs.contains_key(VECTOR_SCORE_COL_NAME) {
+                let filter_expr = filter.project_column_ref(|_| 0);
+                Some(filter_expr)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut vector_topn_param = None;
+        if !sort.is_empty() && limit.is_some() {
+            let (sort_expr, asc, _nulls_first) = &sort[0];
+            if let RemoteExpr::ColumnRef { id, .. } = sort_expr {
+                if id == VECTOR_SCORE_COL_NAME {
+                    let limit = limit.unwrap();
+                    vector_topn_param = Some(VectorTopNParam {
+                        has_filter: filters.is_some(),
+                        filter_expr,
+                        asc: *asc,
+                        limit,
+                    });
+                }
+            }
+        }
+
         Ok(Self {
+            func_ctx,
             pruning_ctx,
             _schema: schema,
             vector_index,
-            filters,
-            sort,
-            limit,
+            vector_reader,
+            vector_topn_param,
         })
     }
 }
@@ -85,138 +165,68 @@ impl VectorIndexPruner {
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let settings = ReadSettings::from_ctx(&self.pruning_ctx.ctx)?;
-        let distance_type = match self.vector_index.func_name.as_str() {
-            "cosine_distance" => DistanceType::Dot,
-            "l1_distance" => DistanceType::L1,
-            "l2_distance" => DistanceType::L2,
-            _ => unreachable!(),
-        };
-        let columns = vec![
-            format!(
-                "{}-{}_graph_links",
-                self.vector_index.column_id, distance_type
-            ),
-            format!(
-                "{}-{}_graph_data",
-                self.vector_index.column_id, distance_type
-            ),
-            format!(
-                "{}-{}_encoded_u8_meta",
-                self.vector_index.column_id, distance_type
-            ),
-            format!(
-                "{}-{}_encoded_u8_data",
-                self.vector_index.column_id, distance_type
-            ),
-        ];
-
-        let query_values = unsafe {
-            std::mem::transmute::<Vec<F32>, Vec<f32>>(self.vector_index.query_values.clone())
-        };
-
-        let vector_reader = VectorIndexReader::create(
-            self.pruning_ctx.dal.clone(),
-            settings,
-            distance_type,
-            columns,
-            query_values,
-        );
-
-        // @TODO support filters
-        if self.filters.is_none() && !self.sort.is_empty() && self.limit.is_some() {
-            let (sort, asc, _nulls_first) = &self.sort[0];
-            if let RemoteExpr::ColumnRef { id, .. } = sort {
-                if id == VECTOR_SCORE_COL_NAME && *asc {
-                    let limit = self.limit.unwrap();
-                    return self
-                        .vector_index_topn_prune(vector_reader, limit, metas)
-                        .await;
-                }
+        if let Some(param) = &self.vector_topn_param {
+            let start = Instant::now();
+            // Perf.
+            {
+                let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_vector_index_pruning_before(metas.len() as u64);
+                metrics_inc_bytes_block_vector_index_pruning_before(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_vector_index_pruning_before(metas.len() as u64);
             }
+            let pruned_metas = if param.has_filter && param.asc {
+                self.vector_index_topn_prune(param.limit, metas).await?
+            } else {
+                self.vector_index_filter_topn_prune(
+                    &param.filter_expr,
+                    param.asc,
+                    param.limit,
+                    metas,
+                )
+                .await?
+            };
+
+            let elapsed = start.elapsed().as_millis() as u64;
+            // Perf.
+            {
+                let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
+                metrics_inc_bytes_block_vector_index_pruning_after(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
+                metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
+            }
+            info!("[FUSE-PRUNER] Vector index topn prune elapsed: {elapsed}");
+
+            return Ok(pruned_metas);
         }
 
-        self.vector_index_prune(vector_reader, metas).await
+        // fallback
+        self.vector_index_prune(metas).await
     }
 
     async fn vector_index_topn_prune(
         &self,
-        vector_reader: VectorIndexReader,
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
-        let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
-
-        let start = Instant::now();
-        // Perf.
-        {
-            let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
-            metrics_inc_blocks_vector_index_pruning_before(metas.len() as u64);
-            metrics_inc_bytes_block_vector_index_pruning_before(block_size);
-            self.pruning_ctx
-                .pruning_stats
-                .set_blocks_vector_index_pruning_before(metas.len() as u64);
-        }
-
-        let mut block_meta_indexes = metas.into_iter().enumerate();
-        let pruning_tasks = std::iter::from_fn(move || {
-            block_meta_indexes
-                .next()
-                .map(|(index, (block_meta_index, block_meta))| {
-                    let vector_reader = vector_reader.clone();
-                    let index_name = self.vector_index.index_name.clone();
-
-                    let v: VectorPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
-                        Box::pin(async move {
-                            let _permit = permit;
-
-                            let Some(location) = &block_meta.vector_index_location else {
-                                return Err(ErrorCode::StorageUnavailable(format!(
-                                    "vector index {} file don't exist, need refresh",
-                                    index_name
-                                )));
-                            };
-
-                            let row_count = block_meta.row_count as usize;
-                            let score_offsets =
-                                vector_reader.prune(limit, row_count, &location.0).await?;
-
-                            let mut vector_scores = Vec::with_capacity(score_offsets.len());
-                            for score_offset in score_offsets {
-                                let vector_score = VectorScore {
-                                    index,
-                                    row_idx: score_offset.idx,
-                                    score: F32::from(score_offset.score),
-                                };
-                                vector_scores.push(vector_score);
-                            }
-
-                            Ok(VectorPruneResult {
-                                block_idx: index,
-                                scores: vector_scores,
-                                block_meta_index,
-                                block_meta,
-                            })
-                        })
-                    });
-                    v
-                })
-        });
-
-        let join_handlers = pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
+        let results = self
+            .process_vector_pruning_tasks(
+                metas,
+                "vector topn pruning failure",
+                move |vector_reader, row_count, location| {
+                    let limit = limit;
+                    async move { vector_reader.prune(limit, row_count, &location).await }
+                },
+            )
             .await?;
 
-        let joint = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("vector topn pruning failure, {}", e)))?;
-
         let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        let mut vector_prune_result_map = HashMap::with_capacity(joint.len());
-        for vector_prune_result in joint {
-            let vector_prune_result = vector_prune_result?;
-
+        let mut vector_prune_result_map = HashMap::with_capacity(results.len());
+        for vector_prune_result in results {
             for vector_score in &vector_prune_result.scores {
                 top_queue.push(vector_score.clone());
             }
@@ -246,39 +256,168 @@ impl VectorIndexPruner {
             pruned_metas.push((block_meta_index, vector_prune_result.block_meta));
         }
 
-        let elapsed = start.elapsed().as_millis() as u64;
-        // Perf.
-        {
-            let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
-            metrics_inc_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
-            metrics_inc_bytes_block_vector_index_pruning_after(block_size);
-            self.pruning_ctx
-                .pruning_stats
-                .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
-            metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
+        Ok(pruned_metas)
+    }
+
+    async fn vector_index_filter_topn_prune(
+        &self,
+        filter_expr: &Option<Expr>,
+        asc: bool,
+        limit: usize,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let results = self
+            .process_vector_pruning_tasks(
+                metas,
+                "vector topn pruning failure",
+                move |vector_reader, row_count, location| async move {
+                    vector_reader.generate_scores(row_count, &location).await
+                },
+            )
+            .await?;
+
+        let mut top_queue = FixedLengthPriorityQueue::new(limit);
+        let mut vector_prune_result_map = HashMap::with_capacity(results.len());
+        for vector_prune_result in results {
+            if let Some(filter_expr) = filter_expr {
+                let num_rows = vector_prune_result.block_meta.row_count as usize;
+                let mut builder = Vec::with_capacity(num_rows);
+                for score in &vector_prune_result.scores {
+                    builder.push(F32::from(score.score));
+                }
+                let column = Column::Number(NumberColumn::Float32(Buffer::from(builder)));
+                let block = DataBlock::new(vec![BlockEntry::from(column)], num_rows);
+                let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let res = evaluator.run(&filter_expr)?;
+                let res_column = res.into_full_column(filter_expr.data_type(), num_rows);
+                let res_column = res_column.remove_nullable();
+                let bitmap = res_column.as_boolean().unwrap();
+                if bitmap.null_count() == num_rows {
+                    continue;
+                }
+
+                // If asc is false, we want to keep the largest scores
+                // We need to modify the score to reverse the ordering
+                if !asc {
+                    for (i, vector_score) in vector_prune_result.scores.iter().enumerate() {
+                        if bitmap.get_bit(i) {
+                            let modified_score = vector_score.negative_score();
+                            top_queue.push(modified_score);
+                        }
+                    }
+                } else {
+                    for (i, vector_score) in vector_prune_result.scores.iter().enumerate() {
+                        if bitmap.get_bit(i) {
+                            top_queue.push(vector_score.clone());
+                        }
+                    }
+                }
+            } else if !asc {
+                for vector_score in vector_prune_result.scores.iter() {
+                    let modified_score = vector_score.negative_score();
+                    top_queue.push(modified_score);
+                }
+            } else {
+                for vector_score in vector_prune_result.scores.iter() {
+                    top_queue.push(vector_score.clone());
+                }
+            }
+
+            vector_prune_result_map.insert(vector_prune_result.block_idx, vector_prune_result);
         }
-        info!("[FUSE-PRUNER] Vector index topn prune elapsed: {elapsed}");
+
+        let top_scores = top_queue.into_sorted_vec();
+        let top_indexes: HashSet<usize> = top_scores.iter().map(|s| s.index).collect();
+
+        let mut pruned_metas = Vec::with_capacity(top_indexes.len());
+        let len = vector_prune_result_map.len();
+        for index in 0..len {
+            if !top_indexes.contains(&index) {
+                continue;
+            }
+            let vector_prune_result = vector_prune_result_map.remove(&index).unwrap();
+
+            let mut vector_scores = Vec::with_capacity(vector_prune_result.scores.len());
+            for vector_score in &vector_prune_result.scores {
+                vector_scores.push((vector_score.row_idx as usize, vector_score.score));
+            }
+            let mut block_meta_index = vector_prune_result.block_meta_index;
+            block_meta_index.vector_scores = Some(vector_scores);
+
+            pruned_metas.push((block_meta_index, vector_prune_result.block_meta));
+        }
 
         Ok(pruned_metas)
     }
 
     async fn vector_index_prune(
         &self,
-        vector_reader: VectorIndexReader,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        // can't use vector index topn to prune, only generate vector scores.
+        let start = Instant::now();
+
+        let results = self
+            .process_vector_pruning_tasks(
+                metas,
+                "vector pruning failure",
+                |vector_reader, row_count, location| async move {
+                    vector_reader.generate_scores(row_count, &location).await
+                },
+            )
+            .await?;
+
+        let mut vector_prune_result_map = HashMap::with_capacity(results.len());
+        for vector_prune_result in results {
+            vector_prune_result_map.insert(vector_prune_result.block_idx, vector_prune_result);
+        }
+
+        let len = vector_prune_result_map.len();
+        let mut new_metas = Vec::with_capacity(len);
+        for index in 0..len {
+            let vector_prune_result = vector_prune_result_map.remove(&index).unwrap();
+
+            let mut vector_scores = Vec::with_capacity(vector_prune_result.scores.len());
+            for vector_score in &vector_prune_result.scores {
+                vector_scores.push((vector_score.row_idx as usize, vector_score.score));
+            }
+            let mut block_meta_index = vector_prune_result.block_meta_index;
+            block_meta_index.vector_scores = Some(vector_scores);
+
+            new_metas.push((block_meta_index, vector_prune_result.block_meta));
+        }
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        // Perf.
+        {
+            metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
+        }
+        info!("[FUSE-PRUNER] Vector index prune elapsed: {elapsed}");
+
+        Ok(new_metas)
+    }
+
+    // Helper function to process vector pruning tasks with different vector reader operations
+    async fn process_vector_pruning_tasks<F, Fut>(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        error_message: &str,
+        vector_reader_op: F,
+    ) -> Result<Vec<VectorPruneResult>>
+    where
+        F: Fn(VectorIndexReader, usize, String) -> Fut + Clone + Send + 'static,
+        Fut: Future<Output = Result<Vec<ScoredPointOffset>>> + Send,
+    {
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
 
-        let start = Instant::now();
         let mut block_meta_indexes = metas.into_iter().enumerate();
         let pruning_tasks = std::iter::from_fn(move || {
             block_meta_indexes
                 .next()
                 .map(|(index, (block_meta_index, block_meta))| {
-                    let vector_reader = vector_reader.clone();
+                    let vector_reader = self.vector_reader.clone();
                     let index_name = self.vector_index.index_name.clone();
+                    let vector_reader_op = vector_reader_op.clone();
 
                     let v: VectorPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
@@ -290,10 +429,11 @@ impl VectorIndexPruner {
                                     index_name
                                 )));
                             };
+
                             let row_count = block_meta.row_count as usize;
-                            let score_offsets = vector_reader
-                                .generate_scores(row_count, &location.0)
-                                .await?;
+                            let score_offsets =
+                                vector_reader_op(vector_reader, row_count, location.0.clone())
+                                    .await?;
 
                             let mut vector_scores = Vec::with_capacity(score_offsets.len());
                             for score_offset in score_offsets {
@@ -323,37 +463,14 @@ impl VectorIndexPruner {
 
         let joint = future::try_join_all(join_handlers)
             .await
-            .map_err(|e| ErrorCode::StorageOther(format!("vector pruning failure, {}", e)))?;
+            .map_err(|e| ErrorCode::StorageOther(format!("{}, {}", error_message, e)))?;
 
-        let mut vector_prune_result_map = HashMap::with_capacity(joint.len());
-        for vector_prune_result in joint {
-            let vector_prune_result = vector_prune_result?;
-            vector_prune_result_map.insert(vector_prune_result.block_idx, vector_prune_result);
+        let mut results = Vec::with_capacity(joint.len());
+        for result in joint {
+            results.push(result?);
         }
 
-        let len = vector_prune_result_map.len();
-        let mut new_metas = Vec::with_capacity(len);
-        for index in 0..len {
-            let vector_prune_result = vector_prune_result_map.remove(&index).unwrap();
-            let mut vector_scores =
-                Vec::with_capacity(vector_prune_result.block_meta.row_count as usize);
-            for score in &vector_prune_result.scores {
-                vector_scores.push((score.row_idx as usize, score.score));
-            }
-            let mut block_meta_index = vector_prune_result.block_meta_index;
-            block_meta_index.vector_scores = Some(vector_scores);
-
-            new_metas.push((block_meta_index, vector_prune_result.block_meta));
-        }
-
-        let elapsed = start.elapsed().as_millis() as u64;
-        // Perf.
-        {
-            metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
-        }
-        info!("[FUSE-PRUNER] Vector index prune elapsed: {elapsed}");
-
-        Ok(new_metas)
+        Ok(results)
     }
 }
 
@@ -383,5 +500,16 @@ impl Ord for VectorScore {
 impl PartialOrd for VectorScore {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl VectorScore {
+    // Create a modified vector score with negated score to reverse ordering
+    fn negative_score(&self) -> Self {
+        Self {
+            index: self.index,
+            row_idx: self.row_idx,
+            score: -self.score,
+        }
     }
 }
