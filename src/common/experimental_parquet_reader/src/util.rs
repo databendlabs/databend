@@ -45,8 +45,8 @@ pub fn from_table_field_type(field_name: String, field_type: &TableDataType) -> 
         t => unimplemented!("Unsupported type: {:?} ", t),
     };
 
-    if is_nullable {
-        parquet_primitive_type.field_info.repetition = Repetition::Optional;
+    if !is_nullable {
+        parquet_primitive_type.field_info.repetition = Repetition::Required;
     }
 
     parquet_primitive_type
