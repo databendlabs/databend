@@ -248,6 +248,7 @@ fn convert_endianness_and_copy<T: Copy>(src_bytes: &[u8], dst_slice: &mut [T]) {
 }
 
 /// Perform defensive checks for nullable vs non-nullable columns
+#[cfg(debug_assertions)]
 pub fn validate_column_nullability(def_levels: &[u8], is_nullable: bool) -> Result<()> {
     if is_nullable {
         // Nullable columns must have definition levels
@@ -279,6 +280,7 @@ pub fn validate_physical_type(actual: PhysicalType, expected: PhysicalType) -> R
 }
 
 /// Validate values buffer alignment
+#[cfg(debug_assertions)]
 pub fn validate_buffer_alignment<T>(values_buffer: &[u8]) -> Result<()> {
     let type_size = std::mem::size_of::<T>();
     if values_buffer.len() % type_size != 0 {
