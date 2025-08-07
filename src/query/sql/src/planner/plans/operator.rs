@@ -177,6 +177,18 @@ impl RelOperator {
         iter.any(|expr| expr.has_subquery())
     }
 
+    pub fn support_lazy_materialize(&self) -> bool {
+        matches!(
+            self,
+            RelOperator::Join(_)
+                | RelOperator::CacheScan(_)
+                | RelOperator::UnionAll(_)
+                | RelOperator::DummyTableScan(_)
+                | RelOperator::ExpressionScan(_)
+                | RelOperator::ConstantTableScan(_)
+        )
+    }
+
     pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
         let mut subqueries = Vec::new();
         for scalar in self.scalar_expr_iter() {

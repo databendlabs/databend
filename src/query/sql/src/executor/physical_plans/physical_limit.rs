@@ -56,18 +56,19 @@ impl PhysicalPlanBuilder {
         // Apply lazy.
         let metadata = self.metadata.read().clone();
 
-        required = required
-            .difference(&limit.lazy_columns)
-            .cloned()
-            .collect::<ColumnSet>();
+        let support_lazy_materialize = s_expr.child(0)?.support_lazy_materialize();
+        if !limit.lazy_columns.is_empty() && support_lazy_materialize {
+            required = required
+                .difference(&limit.lazy_columns)
+                .cloned()
+                .collect::<ColumnSet>();
 
-        if !limit.lazy_columns.is_empty() {
             required.extend(metadata.row_id_indexes());
         }
 
         // 2. Build physical plan.
         let input_plan = self.build(s_expr.child(0)?, required).await?;
-        if limit.before_exchange || limit.lazy_columns.is_empty() {
+        if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {
             return Ok(PhysicalPlan::Limit(Limit {
                 plan_id: 0,
                 input: Box::new(input_plan),

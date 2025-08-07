@@ -216,7 +216,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        {
+        if !name_mapping.contains_key(ROW_ID_COL_NAME) {
             let metadata = self.metadata.read();
             if let Some(index) = metadata.row_id_index_by_table_index(scan.table_index) {
                 let internal_column = INTERNAL_COLUMN_FACTORY

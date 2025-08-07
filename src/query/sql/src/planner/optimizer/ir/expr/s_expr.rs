@@ -211,6 +211,14 @@ impl SExpr {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
+    pub(crate) fn support_lazy_materialize(&self) -> bool {
+        self.plan.support_lazy_materialize()
+            && self
+                .children
+                .iter()
+                .all(|child| child.support_lazy_materialize())
+    }
+
     #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
