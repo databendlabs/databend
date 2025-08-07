@@ -421,13 +421,7 @@ p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "56", features = ["async"] }
 parquet-format-safe = "0.2.0"
-parquet2 = { version = "0.17.0", default-features = false, features = [
-    "serde_types",
-    "async",
-    "zstd",
-    "snappy",
-    "lz4",
-] }
+parquet2 = { version = "0.17.0", default-features = false, features = ["serde_types", "async", "zstd", "snappy", "lz4"] }
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
