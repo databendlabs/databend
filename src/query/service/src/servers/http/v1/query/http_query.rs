@@ -748,7 +748,7 @@ impl HttpQuery {
         );
 
         if is_stopped
-            && txn_state != TxnState::AutoCommit
+            && txn_state == TxnState::Active
             && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && self
                 .is_txn_mgr_saved
@@ -764,7 +764,7 @@ impl HttpQuery {
                 .await;
         }
 
-        let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
+        let need_sticky = txn_state == TxnState::Active || has_temp_table;
         let need_keep_alive = need_sticky;
 
         Ok(HttpSessionConf {
