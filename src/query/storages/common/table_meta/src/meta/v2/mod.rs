@@ -32,5 +32,4 @@ pub use statistics::AdditionalStatsMeta;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;
-pub use table_snapshot_statistics::MetaHLL12;
 pub use table_snapshot_statistics::TableSnapshotStatistics;

@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod segment;
-mod snapshot;
-mod table_snapshot_statistics;
+use std::collections::HashMap;
 
-pub use segment::CompactSegmentInfo;
-pub use segment::RawBlockMeta;
-pub use segment::SegmentInfo;
-pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;
+use databend_common_expression::ColumnId;
+use databend_common_storage::Histogram;
+use databend_common_storage::MetaHLL;
+
+use crate::meta::FormatVersion;
+use crate::meta::SnapshotId;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct TableSnapshotStatistics {
+    /// format version of snapshot
+    pub format_version: FormatVersion,
+
+    pub snapshot_id: SnapshotId,
+    pub row_count: usize,
+    pub hll: HashMap<ColumnId, MetaHLL>,
+    pub histograms: HashMap<ColumnId, Histogram>,
+}

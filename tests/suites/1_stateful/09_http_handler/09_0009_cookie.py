@@ -34,7 +34,6 @@ def do_query(session_client, query, session_state=None, enable_cookie=True):
     if enable_cookie:
         headers["X-DATABEND-CLIENT-CAPS"] = "session_cookie"
 
-
     response = session_client.post(url, headers=headers, json=query_payload, auth=auth)
     return response
 

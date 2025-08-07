@@ -70,7 +70,10 @@ class Client(object):
         response = self.client.post(
             login_url,
             auth=auth,
-            headers={"Content-Type": "application/json", "X-DATABEND-CLIENT-CAPS": "session_header"},
+            headers={
+                "Content-Type": "application/json",
+                "X-DATABEND-CLIENT-CAPS": "session_header",
+            },
             json=payload,
         )
         return response

@@ -21,7 +21,6 @@ pub use v2::ColumnStatistics;
 pub use v2::DraftVirtualBlockMeta;
 pub use v2::DraftVirtualColumnMeta;
 pub use v2::ExtendedBlockMeta;
-pub use v2::MetaHLL12;
 pub use v2::SegmentStatistics;
 pub use v2::Statistics;
 pub use v2::VirtualBlockMeta;

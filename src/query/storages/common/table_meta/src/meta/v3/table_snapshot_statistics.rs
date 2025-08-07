@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
 use databend_common_storage::Histogram;
+use databend_common_storage::MetaHLL12;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -24,8 +25,6 @@ use crate::meta::v2;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
-
-pub type MetaHLL12 = simple_hll::HyperLogLog<12>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
