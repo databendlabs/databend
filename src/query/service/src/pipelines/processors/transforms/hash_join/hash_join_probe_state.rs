@@ -454,9 +454,7 @@ impl HashJoinProbeState {
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         // Probe states.

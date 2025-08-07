@@ -57,9 +57,13 @@ task2:join()
 print("Done")
 '''
 
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
 
@@ -68,11 +72,13 @@ print("Done")
         "Task 2: Upserted k2",
         'Task 1: Got k2:\t{"data"="v2","seq"=2}',
         'Task 2: Got k1:\t{"data"="v1","seq"=1}',
-        "Done"
+        "Done",
     ]
 
     for phrase in expected_phrases:
-        assert phrase in output, f"Expected phrase '{phrase}' not found in output:\n{output}"
+        assert phrase in output, (
+            f"Expected phrase '{phrase}' not found in output:\n{output}"
+        )
 
     print("✓ Cross-task access test passed")
     kill_databend_meta()

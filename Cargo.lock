@@ -3958,6 +3958,7 @@ dependencies = [
  "map-api",
  "num-derive",
  "num-traits",
+ "num_cpus",
  "openraft",
  "pretty_assertions",
  "prost",
@@ -4955,8 +4956,10 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "serde",
  "tantivy",
  "tempfile",
+ "typetag",
  "uuid",
 ]
 
@@ -5017,7 +5020,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]

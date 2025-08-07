@@ -11,16 +11,20 @@ def test_lua_admin_client_creation():
     """Test creating admin client in Lua."""
     print_title("Test lua admin client creation")
 
-    lua_script = '''
+    lua_script = """
 -- Test that we can create an admin client
 local admin_client = metactl.new_admin_client("127.0.0.1:28002")
 print("Admin client created successfully")
-'''
+"""
 
     # Run metactl lua with stdin
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     assert "Admin client created successfully" in output
@@ -31,7 +35,7 @@ def test_lua_admin_client_metrics_error_handling():
     """Test admin client metrics method error handling."""
     print_title("Test lua admin client metrics error handling")
 
-    lua_script = '''
+    lua_script = """
 -- Test admin client metrics method with invalid address
 local admin_client = metactl.new_admin_client("127.0.0.1:99999")
 local metrics, err = admin_client:metrics()
@@ -42,12 +46,16 @@ if err then
 else
     error("Should have gotten an error for invalid address")
 end
-'''
+"""
 
     # Run metactl lua with stdin
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     assert "Expected error:" in output
@@ -59,7 +67,7 @@ def test_lua_admin_client_all_methods():
     """Test that all admin client methods exist and handle errors properly."""
     print_title("Test lua admin client all methods")
 
-    lua_script = '''
+    lua_script = """
 -- Test all admin client methods exist
 local admin_client = metactl.new_admin_client("127.0.0.1:99999")
 
@@ -88,12 +96,16 @@ for _, method_name in ipairs(methods_to_test) do
 end
 
 print("All admin client methods test completed successfully")
-'''
+"""
 
     # Run metactl lua with stdin
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     output = result.stdout.strip()
     assert "All admin client methods test completed successfully" in output
@@ -102,7 +114,10 @@ print("All admin client methods test completed successfully")
     expected_methods = ["metrics", "status", "list_features", "trigger_snapshot"]
     for method in expected_methods:
         assert f"✓ Method {method} exists" in output
-        assert f"✓ Method {method} properly handles connection errors" in output or f"⚠ Method {method} succeeded unexpectedly" in output
+        assert (
+            f"✓ Method {method} properly handles connection errors" in output
+            or f"⚠ Method {method} succeeded unexpectedly" in output
+        )
 
     print("✓ Lua admin client all methods test passed")
 
@@ -112,8 +127,8 @@ def test_lua_admin_client_file():
     print_title("Test lua admin client with file")
 
     # Create a temporary Lua script
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.lua', delete=False) as f:
-        f.write('''
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".lua", delete=False) as f:
+        f.write("""
 -- Test admin client from file
 local admin_client = metactl.new_admin_client("127.0.0.1:99999")
 local metrics, err = admin_client:metrics()
@@ -123,15 +138,17 @@ else
     print("File test: Unexpected success")
 end
 print("File test completed")
-''')
+""")
         lua_file = f.name
 
     try:
         # Run metactl lua with file
-        result = subprocess.run([
-            metactl_bin, "lua",
-            "--file", lua_file
-        ], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            [metactl_bin, "lua", "--file", lua_file],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
         output = result.stdout.strip()
         assert "File test: Got expected error" in output

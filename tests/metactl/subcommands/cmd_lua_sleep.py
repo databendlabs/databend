@@ -5,21 +5,26 @@ import time
 from metactl_utils import metactl_bin
 from utils import print_title
 
+
 def test_lua_sleep():
     """Test sleep functionality."""
     print_title("Test sleep functionality")
 
-    lua_script = '''
+    lua_script = """
 print("Before sleep")
 metactl.sleep(0.5)
 print("After sleep")
-'''
+"""
 
     start_time = time.time()
 
-    result = subprocess.run([
-        metactl_bin, "lua"
-    ], input=lua_script, capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        [metactl_bin, "lua"],
+        input=lua_script,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
     execution_time = time.time() - start_time
 

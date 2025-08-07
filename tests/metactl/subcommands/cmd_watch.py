@@ -4,10 +4,7 @@ import shutil
 import time
 import subprocess
 from metactl_utils import metactl_bin, metactl_upsert
-from utils import (
-    run_command, kill_databend_meta, start_meta_node,
-    print_title
-)
+from utils import run_command, kill_databend_meta, start_meta_node, print_title
 
 
 def test_watch_subcommand():
@@ -24,7 +21,7 @@ def test_watch_subcommand():
         initial_keys = [
             ("app/config/db_host", "localhost"),
             ("app/config/db_port", "5432"),
-            ("app/settings/timeout", "30")
+            ("app/settings/timeout", "30"),
         ]
 
         for key, value in initial_keys:
@@ -33,11 +30,12 @@ def test_watch_subcommand():
         print("✓ Initial keys inserted")
 
         # Test 2: Start watch and check for immediate initial values
-        process = subprocess.Popen([
-            metactl_bin, "watch",
-            "--grpc-api-address", grpc_addr,
-            "--prefix", "app/"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen(
+            [metactl_bin, "watch", "--grpc-api-address", grpc_addr, "--prefix", "app/"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
         # Give watch time to initialize and send initial events
         time.sleep(3)
@@ -52,10 +50,7 @@ def test_watch_subcommand():
         print("✓ Watch process started, should have received initial keys")
 
         # Test 3: Insert new keys while watch is running
-        new_keys = [
-            ("app/config/db_user", "admin"),
-            ("app/settings/max_conn", "100")
-        ]
+        new_keys = [("app/config/db_user", "admin"), ("app/settings/max_conn", "100")]
 
         for key, value in new_keys:
             metactl_upsert(grpc_addr, key, value)
@@ -84,50 +79,66 @@ def test_watch_subcommand():
         assert len(stdout) > 0, "Watch should produce output"
 
         # Split output into lines to check sequence
-        lines = stdout.strip().split('\n')
+        lines = stdout.strip().split("\n")
 
         # First, check that INIT events come before CHANGE events
         init_lines = [line for line in lines if "INIT:" in line]
-        change_lines = [line for line in lines if "CHANGE:" in line and "CHANGE:None" not in line]
+        change_lines = [
+            line for line in lines if "CHANGE:" in line and "CHANGE:None" not in line
+        ]
 
-        print(f"Found {len(init_lines)} INIT events and {len(change_lines)} CHANGE events")
+        print(
+            f"Found {len(init_lines)} INIT events and {len(change_lines)} CHANGE events"
+        )
 
         # Verify all initial keys appear in INIT events (order doesn't matter for INIT)
         for key, value in initial_keys:
             init_found = any(key in line and value in line for line in init_lines)
-            assert init_found, f"Initial key {key} with value {value} should appear in INIT events"
+            assert init_found, (
+                f"Initial key {key} with value {value} should appear in INIT events"
+            )
 
         # Verify CHANGE events appear in exact order with correct keys
         # Expected sequence: new_keys[0], new_keys[1], then update to db_port
         expected_changes = [
-            ("app/config/db_user", "admin"),      # First new key
-            ("app/settings/max_conn", "100"),     # Second new key
-            ("app/config/db_port", "5433")        # Update existing key
+            ("app/config/db_user", "admin"),  # First new key
+            ("app/settings/max_conn", "100"),  # Second new key
+            ("app/config/db_port", "5433"),  # Update existing key
         ]
 
         print(f"CHANGE lines: {change_lines}")
 
-        assert len(change_lines) == len(expected_changes), \
+        assert len(change_lines) == len(expected_changes), (
             f"Expected {len(expected_changes)} CHANGE events, got {len(change_lines)}"
+        )
 
         # Verify each CHANGE event matches the expected sequence
         for i, (expected_key, expected_value) in enumerate(expected_changes):
             change_line = change_lines[i]
-            assert expected_key in change_line, \
+            assert expected_key in change_line, (
                 f"CHANGE event {i}: expected key '{expected_key}' not found in line: {change_line}"
-            assert expected_value in change_line, \
+            )
+            assert expected_value in change_line, (
                 f"CHANGE event {i}: expected value '{expected_value}' not found in line: {change_line}"
+            )
             print(f"✓ CHANGE event {i}: {expected_key} -> {expected_value} verified")
 
-        print("✓ Watch correctly separated initial INIT events from subsequent CHANGE events")
-
+        print(
+            "✓ Watch correctly separated initial INIT events from subsequent CHANGE events"
+        )
 
         # Test 6: Watch with invalid address should fail
-        result = run_command([
-            metactl_bin, "watch",
-            "--grpc-api-address", "127.0.0.1:99999",
-            "--prefix", ""
-        ], check=False)
+        result = run_command(
+            [
+                metactl_bin,
+                "watch",
+                "--grpc-api-address",
+                "127.0.0.1:99999",
+                "--prefix",
+                "",
+            ],
+            check=False,
+        )
 
         # Should fail with connection error (run_command shows error in output)
         print(f"✓ Invalid address correctly failed")

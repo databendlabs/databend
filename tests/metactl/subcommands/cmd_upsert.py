@@ -4,8 +4,11 @@ import shutil
 import json
 from metactl_utils import metactl_bin, verify_kv
 from utils import (
-    run_command, kill_databend_meta, start_meta_node,
-    print_title, BUILD_PROFILE
+    run_command,
+    kill_databend_meta,
+    start_meta_node,
+    print_title,
+    BUILD_PROFILE,
 )
 
 
@@ -28,30 +31,51 @@ def test_upsert_and_verify():
     ]
 
     for key, value in test_cases:
-        run_command([
-            metactl_bin, "upsert",
-            "--grpc-api-address", grpc_addr,
-            "--key", key,
-            "--value", value
-        ], check=False)
+        run_command(
+            [
+                metactl_bin,
+                "upsert",
+                "--grpc-api-address",
+                grpc_addr,
+                "--key",
+                key,
+                "--value",
+                value,
+            ],
+            check=False,
+        )
         verify_kv(grpc_addr, key, value)
 
     # Overwrite a key and verify the new value
-    run_command([
-        metactl_bin, "upsert",
-        "--grpc-api-address", grpc_addr,
-        "--key", "overwrite_key",
-        "--value", "new_value"
-    ], check=False)
+    run_command(
+        [
+            metactl_bin,
+            "upsert",
+            "--grpc-api-address",
+            grpc_addr,
+            "--key",
+            "overwrite_key",
+            "--value",
+            "new_value",
+        ],
+        check=False,
+    )
     verify_kv(grpc_addr, "overwrite_key", "new_value")
 
     # Test empty value
-    run_command([
-        metactl_bin, "upsert",
-        "--grpc-api-address", grpc_addr,
-        "--key", "empty_key",
-        "--value", ""
-    ], check=False)
+    run_command(
+        [
+            metactl_bin,
+            "upsert",
+            "--grpc-api-address",
+            grpc_addr,
+            "--key",
+            "empty_key",
+            "--value",
+            "",
+        ],
+        check=False,
+    )
     verify_kv(grpc_addr, "empty_key", "")
 
     print("✓ All upsert and verify tests passed")
@@ -60,7 +84,6 @@ def test_upsert_and_verify():
     # Otherwise, leave the state for checking
     kill_databend_meta()
     shutil.rmtree(".databend", ignore_errors=True)
-
 
 
 def main():

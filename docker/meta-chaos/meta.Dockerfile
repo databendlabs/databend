@@ -10,5 +10,5 @@ RUN apt-get update -y && \
     rm -rf /var/cache/apt/*
 COPY ./distro/$TARGETPLATFORM/databend-meta /usr/bin/databend-meta
 COPY ./distro/$TARGETPLATFORM/databend-metactl /usr/bin/databend-metactl
-COPY ./distro/$TARGETPLATFORM/cat-logs.sh /usr/bin/cat-logs
+COPY ./distro/$TARGETPLATFORM/cat-logs.sh /cat-logs.sh
 ENTRYPOINT ["databend-meta"]

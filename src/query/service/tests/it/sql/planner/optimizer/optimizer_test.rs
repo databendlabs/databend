@@ -507,7 +507,6 @@ fn create_node(local_id: &str) -> Arc<NodeInfo> {
     let mut node_info = NodeInfo::create(
         local_id.to_string(),
         String::new(),
-        0,
         String::new(),
         String::new(),
         String::new(),

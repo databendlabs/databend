@@ -12,12 +12,8 @@ from utils import print_step, BUILD_PROFILE, run_command
 metactl_bin = f"./target/{BUILD_PROFILE}/databend-metactl"
 
 
-
-
 def metactl_run_lua(lua_script=None, lua_filename=None):
-    cmds = [
-        metactl_bin, "lua"
-    ]
+    cmds = [metactl_bin, "lua"]
 
     if lua_filename:
         cmds += [lua_filename]
@@ -38,21 +34,26 @@ def metactl_run_lua(lua_script=None, lua_filename=None):
 
 def metactl_upsert(grpc_addr, key, value):
     """Upsert a key-value pair using the upsert subcommand."""
-    result = run_command([
-        metactl_bin, "upsert",
-        "--grpc-api-address", grpc_addr,
-        "--key", key,
-        "--value", value
-    ])
+    result = run_command(
+        [
+            metactl_bin,
+            "upsert",
+            "--grpc-api-address",
+            grpc_addr,
+            "--key",
+            key,
+            "--value",
+            value,
+        ]
+    )
     return result
 
 
 def metactl_trigger_snapshot(admin_addr):
     """Trigger snapshot creation using the trigger-snapshot subcommand."""
-    result = run_command([
-        metactl_bin, "trigger-snapshot",
-        "--admin-api-address", admin_addr
-    ])
+    result = run_command(
+        [metactl_bin, "trigger-snapshot", "--admin-api-address", admin_addr]
+    )
     return result
 
 
@@ -60,11 +61,9 @@ def verify_kv(grpc_addr, key, expected_value=None):
     """Verify a key-value pair using the get subcommand."""
     time.sleep(0.5)  # Brief sleep to ensure data is persisted
 
-    result = run_command([
-        metactl_bin, "get",
-        "--grpc-api-address", grpc_addr,
-        "--key", key
-    ], check=False)
+    result = run_command(
+        [metactl_bin, "get", "--grpc-api-address", grpc_addr, "--key", key], check=False
+    )
 
     print(f"Get result for key '{key}': {result}")
 
@@ -82,11 +81,13 @@ def verify_kv(grpc_addr, key, expected_value=None):
         assert expected_value is None, f"Expected None but got {expected_value}"
     else:
         # Extract the actual value from the stored data
-        actual_value = bytes(data["data"]).decode('utf-8')
+        actual_value = bytes(data["data"]).decode("utf-8")
         print(f"Actual value: '{actual_value}', Expected: '{expected_value}'")
 
         if expected_value is not None:
-            assert actual_value == expected_value, f"Expected '{expected_value}', got '{actual_value}'"
+            assert actual_value == expected_value, (
+                f"Expected '{expected_value}', got '{actual_value}'"
+            )
 
 
 def metactl_export_from_grpc(addr: str) -> str:
@@ -99,6 +100,7 @@ def metactl_export_from_grpc(addr: str) -> str:
 
     print_step(f"Done: Exported meta data to stdout")
     return result
+
 
 def metactl_export(meta_dir: str, output_path: str) -> str:
     """Export meta data from raft directory to database file or stdout"""
