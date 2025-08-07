@@ -43,7 +43,7 @@ static PUSHDOWN_FILTER_RULES: &[RuleID] = &[
 
 #[derive(Clone)]
 pub struct CTEFilterPushdownOptimizer {
-    cte_filters: HashMap<String, Vec<ScalarExpr>>,
+    cte_filters: HashMap<String, Option<Vec<ScalarExpr>>>,
     inner_optimizer: RecursiveRuleOptimizer,
 }
 
@@ -77,8 +77,24 @@ impl CTEFilterPushdownOptimizer {
                     )
                 };
 
-                let predicates = self.cte_filters.entry(cte.cte_name.clone()).or_default();
-                predicates.push(and_predicate);
+                match self.cte_filters.get_mut(&cte.cte_name) {
+                    Some(Some(predicates)) => {
+                        predicates.push(and_predicate);
+                    }
+                    Some(None) => {
+                        // Already marked as None, do nothing
+                    }
+                    None => {
+                        self.cte_filters
+                            .insert(cte.cte_name.clone(), Some(vec![and_predicate]));
+                    }
+                }
+            }
+        } else {
+            for child in s_expr.children() {
+                if let RelOperator::MaterializedCTERef(cte) = child.plan() {
+                    self.cte_filters.insert(cte.cte_name.clone(), None);
+                }
             }
         }
 
@@ -107,7 +123,7 @@ impl CTEFilterPushdownOptimizer {
         };
 
         if let RelOperator::MaterializedCTE(cte) = s_expr.plan() {
-            if let Some(predicates) = self.cte_filters.get(&cte.cte_name) {
+            if let Some(Some(predicates)) = self.cte_filters.get(&cte.cte_name) {
                 if !predicates.is_empty() {
                     let or_predicate = if predicates.len() == 1 {
                         predicates[0].clone()
