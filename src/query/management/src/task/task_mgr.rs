@@ -22,6 +22,7 @@ use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::util::txn_put_pb;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::principal::task;
@@ -273,23 +274,29 @@ impl TaskMgr {
         let after_dependent = TaskDependentKey::new(DependentType::After, task_name.to_string());
         let after_dependent_ident =
             TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
-        let after_key = after_dependent_ident.to_string_key();
 
         let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
-        check_ops.push(TxnCondition::eq_seq(after_key, after_seq_deps.seq()));
+        check_ops.push(txn_cond_eq_seq(
+            &after_dependent_ident,
+            after_seq_deps.seq(),
+        ));
 
         let mut after_deps = after_seq_deps.unwrap_or_default();
         after_deps.0.extend(new_afters.iter().cloned());
         update_ops.push(txn_put_pb(&after_dependent_ident, &after_deps)?);
 
-        for after in new_afters {
-            let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
-            let before_dependent_ident =
-                TaskDependentIdent::new_generic(&self.tenant, before_dependent);
-            let before_key = before_dependent_ident.to_string_key();
-
-            let before_seq_deps = self.kv_api.get_pb(&before_dependent_ident).await?;
-            check_ops.push(TxnCondition::eq_seq(before_key, before_seq_deps.seq()));
+        for (before_dependent_ident, before_seq_deps) in self
+            .kv_api
+            .get_pb_vec(new_afters.iter().map(|after| {
+                let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
+                TaskDependentIdent::new_generic(&self.tenant, before_dependent)
+            }))
+            .await?
+        {
+            check_ops.push(txn_cond_eq_seq(
+                &before_dependent_ident,
+                before_seq_deps.seq(),
+            ));
 
             let mut deps = before_seq_deps.unwrap_or_default();
             deps.0.insert(task_name.to_string());
@@ -321,10 +328,12 @@ impl TaskMgr {
         let after_dependent = TaskDependentKey::new(DependentType::After, task_name.to_string());
         let after_dependent_ident =
             TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
-        let after_key = after_dependent_ident.to_string_key();
 
         let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
-        check_ops.push(TxnCondition::eq_seq(after_key, after_seq_deps.seq()));
+        check_ops.push(txn_cond_eq_seq(
+            &after_dependent_ident,
+            after_seq_deps.seq(),
+        ));
 
         if let Some(mut deps) = after_seq_deps {
             for remove_after in remove_afters {
@@ -333,14 +342,18 @@ impl TaskMgr {
             update_ops.push(txn_put_pb(&after_dependent_ident, &deps)?);
         }
 
-        for after in remove_afters {
-            let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
-            let before_dependent_ident =
-                TaskDependentIdent::new_generic(&self.tenant, before_dependent);
-            let before_key = before_dependent_ident.to_string_key();
-
-            let before_seq_deps = self.kv_api.get_pb(&before_dependent_ident).await?;
-            check_ops.push(TxnCondition::eq_seq(before_key, before_seq_deps.seq()));
+        for (before_dependent_ident, before_seq_deps) in self
+            .kv_api
+            .get_pb_vec(remove_afters.iter().map(|after| {
+                let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
+                TaskDependentIdent::new_generic(&self.tenant, before_dependent)
+            }))
+            .await?
+        {
+            check_ops.push(txn_cond_eq_seq(
+                &before_dependent_ident,
+                before_seq_deps.seq(),
+            ));
 
             if let Some(mut deps) = before_seq_deps {
                 deps.0.remove(task_name);
@@ -420,12 +433,15 @@ impl TaskMgr {
         };
         let mut ready_tasks = Vec::new();
 
-        for task_before_target in task_before_dependent.0.iter() {
-            let target_after_ident = TaskDependentIdent::new_generic(
-                &self.tenant,
-                TaskDependentKey::new(DependentType::After, task_before_target.to_string()),
-            );
-            let Some(target_after_dependent) = self.kv_api.get(&target_after_ident).await? else {
+        for (target_after_ident, target_after_dependent) in self
+            .kv_api
+            .get_pb_vec(task_before_dependent.0.iter().map(|before| {
+                let after_dependent = TaskDependentKey::new(DependentType::After, before.clone());
+                TaskDependentIdent::new_generic(&self.tenant, after_dependent)
+            }))
+            .await?
+        {
+            let Some(target_after_dependent) = target_after_dependent else {
                 continue;
             };
 
@@ -448,7 +464,7 @@ impl TaskMgr {
             let reply = self.kv_api.transaction(request).await?;
 
             if reply.success {
-                ready_tasks.push(task_before_target.clone())
+                ready_tasks.push(target_after_ident.name().source.clone());
             }
         }
         Ok(Ok(ready_tasks))
@@ -544,10 +560,9 @@ impl TaskMgr {
                 let target_key = TaskDependentKey::new(other_dependent, dependent_target.clone());
                 let target_ident =
                     TaskDependentIdent::new_generic(&self.tenant, target_key.clone());
-                let target_key = target_ident.to_string_key();
 
                 let seq_dep = self.kv_api.get_pb(&target_ident).await?;
-                check_ops.push(TxnCondition::eq_seq(target_key, seq_dep.seq()));
+                check_ops.push(txn_cond_eq_seq(&target_ident, seq_dep.seq()));
 
                 if let Some(mut deps) = seq_dep {
                     deps.0.remove(task_name);
