@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Query;
@@ -37,6 +38,7 @@ impl Binder {
         let Some(with) = with else {
             return Ok(());
         };
+
         for cte in with.ctes.iter() {
             let cte_name = self.normalize_identifier(&cte.alias.name).name;
             if bind_context.cte_context.cte_map.contains_key(&cte_name) {
@@ -44,6 +46,9 @@ impl Binder {
                     "Duplicate common table expression: {cte_name}"
                 )));
             }
+
+            let (s_expr, cte_bind_context) =
+                self.bind_cte_definition(&cte_name, &bind_context.cte_context.cte_map, &cte.query)?;
 
             let column_name = cte
                 .alias
@@ -58,6 +63,8 @@ impl Binder {
                 recursive: with.recursive,
                 materialized: cte.materialized,
                 columns: vec![],
+                bound_s_expr: s_expr,
+                bound_context: cte_bind_context,
             };
             bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
@@ -117,8 +124,16 @@ impl Binder {
         let output_columns = cte_output_columns.iter().map(|c| c.index).collect();
 
         let mut new_bind_context = bind_context.clone();
-        for column in cte_output_columns {
-            new_bind_context.add_column_binding(column);
+        for column in cte_output_columns.iter() {
+            new_bind_context.add_column_binding(column.clone());
+        }
+
+        let mut column_mapping = HashMap::new();
+        for (index_in_ref, index_in_def) in cte_output_columns
+            .iter()
+            .zip(cte_info.bound_context.columns.iter())
+        {
+            column_mapping.insert(index_in_ref.index, index_in_def.index);
         }
 
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::MaterializedCTERef(
@@ -126,6 +141,7 @@ impl Binder {
                 cte_name: table_name.to_string(),
                 output_columns,
                 def: s_expr,
+                column_mapping,
             },
         )));
         Ok((s_expr, new_bind_context))
@@ -166,11 +182,17 @@ impl Binder {
         for cte in with.ctes.iter().rev() {
             if cte.materialized {
                 let cte_name = self.normalize_identifier(&cte.alias.name).name;
-                let (s_expr, bind_context) =
-                    self.bind_cte_definition(&cte_name, &cte_context.cte_map, &cte.query)?;
+
+                let cte_info = cte_context.cte_map.get(&cte_name).ok_or_else(|| {
+                    ErrorCode::Internal(format!("CTE '{}' not found in context", cte_name))
+                })?;
+
+                let s_expr = cte_info.bound_s_expr.clone();
+
+                let bind_context = cte_info.bound_context.clone();
 
                 let materialized_cte =
-                    MaterializedCTE::new(cte_name, Some(bind_context.columns), None);
+                    MaterializedCTE::new(cte_name, Some(bind_context.columns.clone()), None);
                 let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
                 current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);

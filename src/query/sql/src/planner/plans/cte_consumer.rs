@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -35,6 +36,7 @@ pub struct MaterializedCTERef {
     pub cte_name: String,
     pub output_columns: Vec<usize>,
     pub def: SExpr,
+    pub column_mapping: HashMap<usize, usize>,
 }
 
 impl Hash for MaterializedCTERef {

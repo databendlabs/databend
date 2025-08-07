@@ -106,6 +106,11 @@ impl Rule for RuleGroupingSetsToUnion {
             .cloned()
             .collect();
 
+        let column_mapping = agg_input_columns
+            .iter()
+            .map(|index| (*index, *index))
+            .collect();
+
         if let Some(grouping_sets) = &agg.grouping_sets {
             if !grouping_sets.sets.is_empty() {
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
@@ -131,6 +136,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     cte_name: temp_cte_name,
                     output_columns: agg_input_columns.clone(),
                     def: agg_input.clone(),
+                    column_mapping,
                 });
 
                 let mask = (1 << grouping_sets.dup_group_items.len()) - 1;

@@ -24,10 +24,12 @@ use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut;
 
 static PUSHDOWN_FILTER_RULES: &[RuleID] = &[
     RuleID::PushDownFilterUnion,
@@ -47,6 +49,19 @@ pub struct CTEFilterPushdownOptimizer {
     inner_optimizer: RecursiveRuleOptimizer,
 }
 
+struct ColumnMappingRewriter {
+    mapping: HashMap<usize, usize>,
+}
+
+impl VisitorMut<'_> for ColumnMappingRewriter {
+    fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+        if let Some(&new_index) = self.mapping.get(&col.column.index) {
+            col.column.index = new_index;
+        }
+        Ok(())
+    }
+}
+
 impl CTEFilterPushdownOptimizer {
     pub fn new(ctx: Arc<OptimizerContext>) -> Self {
         let inner_optimizer = RecursiveRuleOptimizer::new(ctx.clone(), PUSHDOWN_FILTER_RULES);
@@ -61,7 +76,7 @@ impl CTEFilterPushdownOptimizer {
         if let RelOperator::Filter(filter) = s_expr.plan() {
             let child = s_expr.child(0)?;
             if let RelOperator::MaterializedCTERef(cte) = child.plan() {
-                let and_predicate = if filter.predicates.len() == 1 {
+                let mut and_predicate = if filter.predicates.len() == 1 {
                     filter.predicates[0].clone()
                 } else {
                     filter.predicates.iter().skip(1).fold(
@@ -76,6 +91,11 @@ impl CTEFilterPushdownOptimizer {
                         },
                     )
                 };
+
+                let mut rewriter = ColumnMappingRewriter {
+                    mapping: cte.column_mapping.clone(),
+                };
+                rewriter.visit(&mut and_predicate)?;
 
                 match self.cte_filters.get_mut(&cte.cte_name) {
                     Some(Some(predicates)) => {
