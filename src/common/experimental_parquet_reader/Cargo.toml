@@ -15,11 +15,11 @@ databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 bytes = { workspace = true }
-lz4_flex = { version = "^0.9" }
-parquet2 = { version = "0.17.0", default-features = false, features = ["serde_types", "async", "zstd", "snappy", "lz4"] }
-parquet-format-safe = "0.2.0"
+lz4_flex = { workspace = true }
 parquet = { workspace = true, features = ["experimental"] }
-streaming-decompression = "0.1.2"
+parquet-format-safe = { workspace = true }
+parquet2 = { workspace = true }
+streaming-decompression = { workspace = true }
 zstd = { workspace = true }
 
 [dev-dependencies]
