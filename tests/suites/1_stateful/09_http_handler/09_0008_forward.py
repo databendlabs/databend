@@ -28,7 +28,12 @@ def do_query(query, port=8000, session=None, node_id=None, wait=100):
     return response
 
 
-def test_txn():
+def get_txn_state(resp):
+    return (resp.get("state") == "Succeeded",
+    resp.get("session").get("need_sticky"),
+    resp.get("session").get("txn_state"))
+
+def test_txn_success():
     resp = do_query("create or replace table t1(a int)").json()
     assert not (resp.get("session").get("need_sticky")), resp
 
@@ -37,20 +42,53 @@ def test_txn():
     node_id = resp.get("node_id")
     session = resp.get("session")
 
-    # can not find txn state in node 2
-    resp = do_query("insert into t1 values (1)", port=8002, session=session).json()
-    assert resp.get("state") == "Failed", resp.text
-
     # forward to node 1
     resp = do_query(
         "insert into t1 values (2)", port=8002, session=session, node_id=node_id
     ).json()
-    assert resp.get("state") == "Succeeded", resp
-    assert resp.get("session").get("need_sticky"), resp
+    assert get_txn_state(resp) == (True, True, "Active"), resp
 
     # return need_sticky = false after commit
     resp = do_query("commit").json()
+    assert get_txn_state(resp) == (True, False, "AutoCommit"), resp
+
+
+def test_txn_fail():
+    resp = do_query("create or replace table t1(a int)").json()
     assert not (resp.get("session").get("need_sticky")), resp
+
+    resp = do_query("begin").json()
+    assert resp.get("session").get("need_sticky"), resp
+    node_id = resp.get("node_id")
+    session = resp.get("session")
+
+    # fail
+    resp = do_query(
+        "select 1/0",  session=session
+    ).json()
+    assert get_txn_state(resp) == (False, False, "Fail"), resp
+
+    # fail because wrong node
+    resp = do_query(
+        "select 1", port=8002, session=session
+    ).json()
+    session = resp.get("session")
+    assert get_txn_state(resp) == (False, False, "Fail"), resp
+
+    # keep fail state until commit/abort
+    resp = do_query(
+        "select 1", session=session, node_id=node_id
+    ).json()
+    assert get_txn_state(resp) == (False, False, "Fail"), resp
+    session = resp.get("session")
+
+    # return need_sticky = false after commit
+    resp = do_query("commit", session=session).json()
+    assert get_txn_state(resp) == (True, False, "AutoCommit"), resp
+
+    # return need_sticky = false after abort
+    resp = do_query("abort", session=session).json()
+    assert get_txn_state(resp) == (True, False, "AutoCommit"), resp
 
 
 def test_query():
@@ -104,7 +142,8 @@ def main():
         return
 
     test_query()
-    test_txn()
+    test_txn_success()
+    test_txn_fail()
 
 
 if __name__ == "__main__":

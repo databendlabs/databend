@@ -101,8 +101,14 @@ impl HttpQueryRequest {
             } else {
                 s.txn_state.clone()
             };
+            let need_sticky = match &s.internal {
+                Some(internal) => internal.has_temp_table,
+                None => false,
+            };
             HttpSessionConf {
                 txn_state,
+                need_sticky,
+                need_keep_alive: need_sticky,
                 ..s.clone()
             }
         });
