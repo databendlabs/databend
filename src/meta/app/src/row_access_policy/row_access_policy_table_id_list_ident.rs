@@ -15,6 +15,8 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
+/// RowAccess Policy can be applied to tables, If drop a row access policy
+/// should list the table that apply the policy and remove it.
 pub type RowAccessPolicyTableIdListIdent = TIdent<Resource>;
 pub type RowAccessPolicyTableIdListIdentRaw = TIdentRaw<Resource>;
 

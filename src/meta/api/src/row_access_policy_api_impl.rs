@@ -53,6 +53,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
         let name_ident = &req.name;
 
+        let id = fetch_id(self, IdGenerator::row_access_id()).await?;
         let mut trials = txn_backoff(None, func_name!());
         let id = loop {
             trials.next().unwrap()?.await;
@@ -91,8 +92,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             // name -> id
             // id -> policy
             // row policy name -> row policy table id list
-
-            let id = fetch_id(self, IdGenerator::row_access_id()).await?;
 
             let id = RowAccessPolicyId::new(id);
             let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), id);
