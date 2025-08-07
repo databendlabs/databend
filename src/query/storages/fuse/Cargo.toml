@@ -73,7 +73,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 siphasher = { workspace = true }
-streaming-decompression = "0.1.2"
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
