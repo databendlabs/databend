@@ -31,11 +31,9 @@ use databend_common_meta_app::principal::task::TaskState;
 use databend_common_meta_app::principal::task_dependent_ident::TaskDependentIdent;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::principal::task_state_ident::TaskStateIdent;
-use databend_common_meta_app::principal::DependentType;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
-use databend_common_meta_app::principal::TaskDependentKey;
 use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -271,9 +269,7 @@ impl TaskMgr {
         let mut update_ops = Vec::new();
         let mut check_ops = Vec::with_capacity(new_afters.len());
 
-        let after_dependent = TaskDependentKey::new(DependentType::After, task_name.to_string());
-        let after_dependent_ident =
-            TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
+        let after_dependent_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
 
         let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
         check_ops.push(txn_cond_eq_seq(
@@ -285,10 +281,9 @@ impl TaskMgr {
         after_deps.0.extend(new_afters.iter().cloned());
         update_ops.push(txn_put_pb(&after_dependent_ident, &after_deps)?);
 
-        let before_dependent_idents = new_afters.iter().map(|after| {
-            let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
-            TaskDependentIdent::new_generic(&self.tenant, before_dependent)
-        });
+        let before_dependent_idents = new_afters
+            .iter()
+            .map(|after| TaskDependentIdent::new_before(&self.tenant, after));
         for (before_dependent_ident, before_seq_deps) in
             self.kv_api.get_pb_vec(before_dependent_idents).await?
         {
@@ -324,10 +319,7 @@ impl TaskMgr {
         let mut update_ops = Vec::new();
         let mut check_ops = Vec::with_capacity(remove_afters.len());
 
-        let after_dependent = TaskDependentKey::new(DependentType::After, task_name.to_string());
-        let after_dependent_ident =
-            TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
-
+        let after_dependent_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
         let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
         check_ops.push(txn_cond_eq_seq(
             &after_dependent_ident,
@@ -341,10 +333,9 @@ impl TaskMgr {
             update_ops.push(txn_put_pb(&after_dependent_ident, &deps)?);
         }
 
-        let before_dependent_idents = remove_afters.iter().map(|after| {
-            let before_dependent = TaskDependentKey::new(DependentType::Before, after.clone());
-            TaskDependentIdent::new_generic(&self.tenant, before_dependent)
-        });
+        let before_dependent_idents = remove_afters
+            .iter()
+            .map(|after| TaskDependentIdent::new_before(&self.tenant, after));
         for (before_dependent_ident, before_seq_deps) in
             self.kv_api.get_pb_vec(before_dependent_idents).await?
         {
@@ -381,57 +372,33 @@ impl TaskMgr {
         let mut check_ops = Vec::new();
         let mut update_ops = Vec::new();
 
-        let task_after_ident = TaskDependentIdent::new_generic(
-            &self.tenant,
-            TaskDependentKey::new(DependentType::After, task_name.to_string()),
-        );
+        let task_after_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
+        let task_before_ident = TaskDependentIdent::new_before(&self.tenant, task_name);
+
+        let mut target_idents = Vec::new();
         if let Some(task_after_dependent) = self.kv_api.get(&task_after_ident).await? {
-            let target_idents = task_after_dependent.0.into_iter().map(|dependent_target| {
-                let target_key =
-                    TaskDependentKey::new(DependentType::Before, dependent_target.clone());
-                TaskDependentIdent::new_generic(&self.tenant, target_key.clone())
-            });
-            for (target_ident, seq_dep) in self.kv_api.get_pb_vec(target_idents).await? {
-                check_ops.push(txn_cond_eq_seq(&target_ident, seq_dep.seq()));
-
-                if let Some(mut deps) = seq_dep {
-                    deps.0.remove(task_name);
-                    update_ops.push(txn_put_pb(&target_ident, &deps)?);
-                }
-            }
+            target_idents.extend(task_after_dependent.0.into_iter().map(|dependent_target| {
+                TaskDependentIdent::new_before(&self.tenant, dependent_target)
+            }));
         }
-        let task_before_ident = TaskDependentIdent::new_generic(
-            &self.tenant,
-            TaskDependentKey::new(DependentType::Before, task_name.to_string()),
-        );
         if let Some(task_before_dependent) = self.kv_api.get(&task_before_ident).await? {
-            let target_idents = task_before_dependent.0.into_iter().map(|dependent_target| {
-                let target_key =
-                    TaskDependentKey::new(DependentType::After, dependent_target.clone());
-                TaskDependentIdent::new_generic(&self.tenant, target_key.clone())
-            });
-            for (target_ident, seq_dep) in self.kv_api.get_pb_vec(target_idents).await? {
-                check_ops.push(txn_cond_eq_seq(&target_ident, seq_dep.seq()));
+            target_idents.extend(task_before_dependent.0.into_iter().map(|dependent_target| {
+                TaskDependentIdent::new_after(&self.tenant, dependent_target)
+            }));
+        }
+        for (target_ident, seq_dep) in self.kv_api.get_pb_vec(target_idents).await? {
+            check_ops.push(txn_cond_eq_seq(&target_ident, seq_dep.seq()));
 
-                if let Some(mut deps) = seq_dep {
-                    deps.0.remove(task_name);
-                    update_ops.push(txn_put_pb(&target_ident, &deps)?);
-                }
+            if let Some(mut deps) = seq_dep {
+                deps.0.remove(task_name);
+                update_ops.push(txn_put_pb(&target_ident, &deps)?);
             }
         }
         update_ops.push(TxnOp::delete(
-            TaskDependentIdent::new_generic(
-                &self.tenant,
-                TaskDependentKey::new(DependentType::Before, task_name.to_string()),
-            )
-            .to_string_key(),
+            TaskDependentIdent::new_before(&self.tenant, task_name).to_string_key(),
         ));
         update_ops.push(TxnOp::delete(
-            TaskDependentIdent::new_generic(
-                &self.tenant,
-                TaskDependentKey::new(DependentType::After, task_name.to_string()),
-            )
-            .to_string_key(),
+            TaskDependentIdent::new_after(&self.tenant, task_name).to_string_key(),
         ));
         update_ops.push(TxnOp::delete(
             TaskStateIdent::new(&self.tenant, task_name).to_string_key(),
@@ -443,16 +410,36 @@ impl TaskMgr {
         Ok(Ok(()))
     }
 
+    /// Marks the given task as succeeded, and checks all tasks that depend on it.
+    ///
+    /// For each task that depends on the completed task (`task_name`), we check if all its
+    /// predecessor tasks are also succeeded. If so, we mark the dependent task as *not succeeded*
+    /// to prevent premature execution. Otherwise, we record the dependent task as *ready*
+    /// for further processing.
+    ///
+    /// # Arguments
+    /// - `task_name`: The name of the task that has just completed successfully.
+    ///
+    /// # Returns
+    /// - `Vec<String>`: A list of dependent task names that are ready to proceed.
+    ///
+    /// # Behavior
+    /// 1. Retrieves all tasks that must be executed *before* the given `task_name`.
+    /// 2. For each such task, find the tasks that depend on it (`after` tasks).
+    /// 3. For each `after` task:
+    ///     - If all its dependencies (excluding the current task) are succeeded:
+    ///         - Mark that task as **not succeeded**.
+    ///         - Also mark the current task as succeeded.
+    ///         - Record it as ready for further processing.
+    ///     - Otherwise:
+    ///         - Still mark the current task as succeeded.
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn task_succeeded(
+    pub async fn get_next_ready_tasks(
         &self,
         task_name: &str,
     ) -> Result<Result<Vec<String>, TaskError>, TaskApiError> {
-        let task_before_ident = TaskDependentIdent::new_generic(
-            &self.tenant,
-            TaskDependentKey::new(DependentType::Before, task_name.to_string()),
-        );
+        let task_before_ident = TaskDependentIdent::new_before(&self.tenant, task_name);
         let task_state_key = TaskStateIdent::new(&self.tenant, task_name);
         let succeeded_value = TaskState { is_succeeded: true };
         let not_succeeded_value = TaskState {
@@ -464,17 +451,16 @@ impl TaskMgr {
         };
         let mut ready_tasks = Vec::new();
 
-        let target_after_idents = task_before_dependent.0.iter().map(|before| {
-            let after_dependent = TaskDependentKey::new(DependentType::After, before.clone());
-            TaskDependentIdent::new_generic(&self.tenant, after_dependent)
-        });
+        let target_after_idents = task_before_dependent
+            .0
+            .iter()
+            .map(|before| TaskDependentIdent::new_after(&self.tenant, before));
         for (target_after_ident, target_after_dependent) in
             self.kv_api.get_pb_vec(target_after_idents).await?
         {
             let Some(target_after_dependent) = target_after_dependent else {
                 continue;
             };
-
             let mut request = TxnRequest::new(vec![], vec![])
                 .with_else(vec![txn_put_pb(&task_state_key, &succeeded_value)?]);
 
@@ -482,17 +468,14 @@ impl TaskMgr {
                 let task_ident = TaskStateIdent::new(&self.tenant, target_after_task);
                 // Only care about the predecessors of this task's successor tasks, excluding this task itself.
                 if target_after_task != task_name {
-                    request =
-                        request.push_if_then([], [txn_put_pb(&task_ident, &not_succeeded_value)?]);
-                    continue;
-                }
-                request = request.push_if_then(
-                    [TxnCondition::eq_value(
+                    request.condition.push(TxnCondition::eq_value(
                         task_ident.to_string_key(),
                         succeeded_value.to_pb()?.encode_to_vec(),
-                    )],
-                    [txn_put_pb(&task_ident, &not_succeeded_value)?],
-                );
+                    ));
+                }
+                request
+                    .if_then
+                    .push(txn_put_pb(&task_ident, &not_succeeded_value)?);
             }
             let reply = self.kv_api.transaction(request).await?;
 

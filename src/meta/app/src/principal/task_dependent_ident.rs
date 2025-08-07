@@ -16,9 +16,27 @@ use crate::tenant_key::ident::TIdent;
 
 pub type TaskDependentIdent = TIdent<TaskDependentResource, TaskDependentKey>;
 
+impl TaskDependentIdent {
+    pub fn new_before(tenant: impl ToTenant, task_name: impl ToString) -> Self {
+        TaskDependentIdent::new_generic(
+            tenant,
+            TaskDependentKey::new(DependentType::Before, task_name.to_string()),
+        )
+    }
+
+    pub fn new_after(tenant: impl ToTenant, task_name: impl ToString) -> Self {
+        TaskDependentIdent::new_generic(
+            tenant,
+            TaskDependentKey::new(DependentType::After, task_name.to_string()),
+        )
+    }
+}
+
 pub use kvapi_impl::TaskDependentResource;
 
+use crate::principal::DependentType;
 use crate::principal::TaskDependentKey;
+use crate::tenant::ToTenant;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;

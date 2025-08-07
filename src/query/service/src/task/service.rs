@@ -393,7 +393,7 @@ impl TaskService {
                                                 .await?;
 
                                             for next_task in
-                                                task_mgr.task_succeeded(&task_name).await??
+                                                task_mgr.get_next_ready_tasks(&task_name).await??
                                             {
                                                 let next_task = task_mgr
                                                     .describe_task(&next_task)
