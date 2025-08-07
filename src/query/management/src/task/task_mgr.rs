@@ -424,15 +424,15 @@ impl TaskMgr {
     /// - `Vec<String>`: A list of dependent task names that are ready to proceed.
     ///
     /// # Behavior
-    /// 1. Retrieves all tasks that must be executed *before* the given `task_name`.
-    /// 2. For each such task, find the tasks that depend on it (`after` tasks).
-    /// 3. For each `after` task:
-    ///     - If all its dependencies (excluding the current task) are succeeded:
-    ///         - Mark that task as **not succeeded**.
-    ///         - Also mark the current task as succeeded.
-    ///         - Record it as ready for further processing.
+    /// 1. Retrieves all tasks that the given `task_name` is a dependency of (i.e., tasks that depend on `task_name`).
+    /// 2. For each such dependent task:
+    ///     - Check whether all its dependencies (excluding `task_name`) have succeeded.
+    ///     - If so:
+    ///         - Mark that task as **not succeeded** to trigger reevaluation or blocking.
+    ///         - Mark `task_name` as succeeded.
+    ///         - Add the task to the ready list for further processing.
     ///     - Otherwise:
-    ///         - Still mark the current task as succeeded.
+    ///         - Still mark `task_name` as succeeded.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn get_next_ready_tasks(
