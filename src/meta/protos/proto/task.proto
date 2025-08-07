@@ -79,23 +79,11 @@ message Task {
   string owner_user = 21;
 }
 
-message TaskState {
+message TaskStateValue {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
   bool is_succeeded = 1;
-}
-
-message TaskDependentKey {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  enum DependentType {
-    After = 0;
-    Before = 1;
-  }
-  DependentType ty = 1;
-  string source = 2;
 }
 
 message TaskDependentValue {

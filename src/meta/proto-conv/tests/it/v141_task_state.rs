@@ -23,7 +23,7 @@ use crate::common;
 fn test_decode_v141_task_state() -> anyhow::Result<()> {
     let task_state_v141 = vec![8, 1, 160, 6, 141, 1, 168, 6, 24];
 
-    let want = || mt::TaskState { is_succeeded: true };
+    let want = || mt::TaskStateValue { is_succeeded: true };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), task_state_v141.as_slice(), 141, want())?;
 

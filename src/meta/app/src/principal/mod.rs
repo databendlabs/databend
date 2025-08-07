@@ -101,7 +101,7 @@ pub use task::TaskDependentKey;
 pub use task::TaskDependentValue;
 pub use task::TaskMessage;
 pub use task::TaskRun;
-pub use task::TaskState;
+pub use task::TaskStateValue;
 pub use task::WarehouseOptions;
 pub use task_ident::TaskIdent;
 pub use task_ident::TaskIdentRaw;

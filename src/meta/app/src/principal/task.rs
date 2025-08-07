@@ -175,7 +175,19 @@ impl TaskMessage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskState {
+pub struct TaskStateKey {
+    pub current: String,
+    pub next: String,
+}
+
+impl TaskStateKey {
+    pub fn new(current: String, next: String) -> Self {
+        Self { current, next }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskStateValue {
     pub is_succeeded: bool,
 }
 
@@ -202,10 +214,28 @@ pub struct TaskDependentValue(pub BTreeSet<String>);
 
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
 
+    use crate::principal::task::TaskStateKey;
     use crate::principal::DependentType;
     use crate::principal::TaskDependentKey;
+
+    impl kvapi::KeyCodec for TaskStateKey {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_str(self.current.as_str())
+                .push_str(self.next.as_str())
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            let current = parser.next_str()?;
+            let next = parser.next_str()?;
+
+            Ok(Self { current, next })
+        }
+    }
 
     impl kvapi::KeyCodec for TaskDependentKey {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {

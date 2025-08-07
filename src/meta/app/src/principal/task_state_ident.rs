@@ -14,16 +14,26 @@
 
 use crate::tenant_key::ident::TIdent;
 
-pub type TaskStateIdent = TIdent<Resource>;
+pub type TaskStateIdent = TIdent<Resource, TaskStateKey>;
 
-pub type TaskStateIdentRaw = TIdent<Resource>;
+impl TaskStateIdent {
+    pub fn new(tenant: impl ToTenant, current: impl ToString, next: impl ToString) -> Self {
+        TaskStateIdent::new_generic(
+            tenant,
+            TaskStateKey::new(current.to_string(), next.to_string()),
+        )
+    }
+}
 
 pub use kvapi_impl::Resource;
+
+use crate::principal::task::TaskStateKey;
+use crate::tenant::ToTenant;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::task::TaskState;
+    use crate::principal::task::TaskStateValue;
     use crate::principal::task_state_ident::TaskStateIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -32,10 +42,10 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_task_states";
         const TYPE: &'static str = "TaskStateIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = TaskState;
+        type ValueType = TaskStateValue;
     }
 
-    impl kvapi::Value for TaskState {
+    impl kvapi::Value for TaskStateValue {
         type KeyType = TaskStateIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
