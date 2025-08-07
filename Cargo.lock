@@ -11461,6 +11461,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "579fe5745f02cef3d5f236bfed216fd4693e49e4e920a13475c6132233283bce"
 dependencies = [
  "async-stream",
+ "brotli 3.5.0",
+ "flate2",
  "futures",
  "lz4",
  "parquet-format-safe",
@@ -11468,6 +11470,7 @@ dependencies = [
  "serde",
  "snap",
  "streaming-decompression",
+ "xxhash-rust",
  "zstd 0.12.4",
 ]
 
@@ -17616,6 +17619,12 @@ source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#
 dependencies = [
  "cbordata",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "xz2"
