@@ -13,6 +13,9 @@
 ## limitations under the License.
 
 statement ok
+set global enable_experimental_row_access_policy = 1;
+
+statement ok
 drop row access policy if exists rap1;
 
 statement ok
@@ -51,3 +54,6 @@ drop row access policy if exists rap1;
 
 statement ok
 drop row access policy if exists rap3;
+
+statement ok
+unset global enable_experimental_row_access_policy;
