@@ -64,14 +64,7 @@ opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 
-# TODO move this out
-parquet2 = { version = "0.17.0", default-features = false, features = [
-    "serde_types",
-    "async",
-    "zstd",
-    "snappy",
-    "lz4",
-] }
+parquet2 = { workspace = true }
 paste = { workspace = true }
 rand = { workspace = true }
 roaring = { workspace = true }
