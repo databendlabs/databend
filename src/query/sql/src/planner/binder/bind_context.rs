@@ -198,9 +198,13 @@ impl CteContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
-    pub materialized: bool,
     pub recursive: bool,
     pub columns: Vec<ColumnBinding>,
+    pub materialized_cte_info: Option<MaterializedCTEInfo>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MaterializedCTEInfo {
     pub bound_s_expr: SExpr,
     pub bound_context: BindContext,
 }

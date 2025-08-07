@@ -26,12 +26,14 @@ use crate::binder::BindContext;
 use crate::binder::Binder;
 use crate::binder::CteContext;
 use crate::binder::CteInfo;
+use crate::binder::MaterializedCTEInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOperator;
 use crate::plans::Sequence;
+use crate::ColumnBinding;
 
 impl Binder {
     pub fn init_cte(&mut self, bind_context: &mut BindContext, with: &Option<With>) -> Result<()> {
@@ -47,8 +49,20 @@ impl Binder {
                 )));
             }
 
-            let (s_expr, cte_bind_context) =
-                self.bind_cte_definition(&cte_name, &bind_context.cte_context.cte_map, &cte.query)?;
+            let materialized_cte_info = if cte.materialized {
+                let (s_expr, cte_bind_context) = self.bind_cte_definition(
+                    &cte_name,
+                    &bind_context.cte_context.cte_map,
+                    &cte.query,
+                )?;
+                let materialized_cte_info = MaterializedCTEInfo {
+                    bound_s_expr: s_expr,
+                    bound_context: cte_bind_context,
+                };
+                Some(materialized_cte_info)
+            } else {
+                None
+            };
 
             let column_name = cte
                 .alias
@@ -61,10 +75,8 @@ impl Binder {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
-                materialized: cte.materialized,
                 columns: vec![],
-                bound_s_expr: s_expr,
-                bound_context: cte_bind_context,
+                materialized_cte_info,
             };
             bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
@@ -77,6 +89,7 @@ impl Binder {
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
+        producer_column_bindings: &[ColumnBinding],
     ) -> Result<(SExpr, BindContext)> {
         let (s_expr, cte_bind_context) = self.bind_cte_definition(
             table_name,
@@ -129,11 +142,11 @@ impl Binder {
         }
 
         let mut column_mapping = HashMap::new();
-        for (index_in_ref, index_in_def) in cte_output_columns
+        for (index_in_ref, index_in_producer) in cte_output_columns
             .iter()
-            .zip(cte_info.bound_context.columns.iter())
+            .zip(producer_column_bindings.iter())
         {
-            column_mapping.insert(index_in_ref.index, index_in_def.index);
+            column_mapping.insert(index_in_ref.index, index_in_producer.index);
         }
 
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::MaterializedCTERef(
@@ -180,16 +193,13 @@ impl Binder {
         let mut current_expr = main_query_expr;
 
         for cte in with.ctes.iter().rev() {
-            if cte.materialized {
-                let cte_name = self.normalize_identifier(&cte.alias.name).name;
-
-                let cte_info = cte_context.cte_map.get(&cte_name).ok_or_else(|| {
-                    ErrorCode::Internal(format!("CTE '{}' not found in context", cte_name))
-                })?;
-
-                let s_expr = cte_info.bound_s_expr.clone();
-
-                let bind_context = cte_info.bound_context.clone();
+            let cte_name = self.normalize_identifier(&cte.alias.name).name;
+            let cte_info = cte_context.cte_map.get(&cte_name).ok_or_else(|| {
+                ErrorCode::Internal(format!("CTE '{}' not found in context", cte_name))
+            })?;
+            if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
+                let s_expr = materialized_cte_info.bound_s_expr.clone();
+                let bind_context = materialized_cte_info.bound_context.clone();
 
                 let materialized_cte =
                     MaterializedCTE::new(cte_name, Some(bind_context.columns.clone()), None);
