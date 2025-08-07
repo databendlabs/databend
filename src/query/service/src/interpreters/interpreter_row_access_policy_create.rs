@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateRowAccessPolicyPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
@@ -53,9 +55,18 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
-        handler
+        if let Err(e) = handler
             .create_row_access(meta_api, self.plan.clone().into())
-            .await?;
+            .await
+        {
+            if e.code() == ErrorCode::ROW_ACCESS_POLICY_ALREADY_EXISTS {
+                if let CreateOption::CreateIfNotExists = self.plan.create_option {
+                    return Ok(PipelineBuildResult::create());
+                }
+            } else {
+                return Err(e);
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

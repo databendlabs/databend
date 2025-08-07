@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -53,9 +54,16 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
-        handler
+        if let Err(e) = handler
             .drop_row_access(meta_api, self.plan.clone().into())
-            .await?;
+            .await
+        {
+            if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists {
+                return Ok(PipelineBuildResult::create());
+            } else {
+                return Err(e);
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

@@ -48,11 +48,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
     ) -> Result<()> {
         let dropped = meta_api.drop_row_access(&req.name).await?;
         if dropped.is_none() {
-            if req.if_exists {
-                // Ok
-            } else {
-                return Err(AppError::from(req.name.unknown_error("drop row policy")).into());
-            }
+            return Err(AppError::from(req.name.unknown_error("drop row policy")).into());
         }
 
         Ok(())

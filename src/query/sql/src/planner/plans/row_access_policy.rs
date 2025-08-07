@@ -45,7 +45,11 @@ impl CreateRowAccessPolicyPlan {
 impl From<CreateRowAccessPolicyPlan> for CreateRowAccessPolicyReq {
     fn from(p: CreateRowAccessPolicyPlan) -> Self {
         CreateRowAccessPolicyReq {
-            create_option: p.create_option,
+            can_replace: match p.create_option {
+                CreateOption::Create => false,
+                CreateOption::CreateIfNotExists => false,
+                CreateOption::CreateOrReplace => true,
+            },
             name: RowAccessPolicyNameIdent::new(p.tenant.clone(), &p.name),
             row_access_policy_meta: RowAccessPolicyMeta {
                 args: p
@@ -79,7 +83,6 @@ impl DropRowAccessPolicyPlan {
 impl From<DropRowAccessPolicyPlan> for DropRowAccessPolicyReq {
     fn from(p: DropRowAccessPolicyPlan) -> Self {
         DropRowAccessPolicyReq {
-            if_exists: p.if_exists,
             name: RowAccessPolicyNameIdent::new(&p.tenant, &p.name),
         }
     }

@@ -22,7 +22,6 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdList;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdListIdent;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
@@ -53,6 +52,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
         let name_ident = &req.name;
 
+        let id = fetch_id(self, IdGenerator::row_access_id()).await?;
         let mut trials = txn_backoff(None, func_name!());
         let id = loop {
             trials.next().unwrap()?.await;
@@ -65,34 +65,26 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             let mut curr_seq = 0;
 
             if let Some((seq_id, seq_meta)) = res {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(AppError::RowAccessPolicyAlreadyExists(
-                            name_ident.exist_error(func_name!()),
-                        )
-                        .into());
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateRowAccessPolicyReply { id: *seq_id.data });
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+                if req.can_replace {
+                    let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
 
-                        txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-                        // TODO(eason): need to remove row policy from table meta
+                    // TODO(eason): need to remove row policy from table meta
 
-                        curr_seq = seq_id.seq;
-                    }
-                };
+                    curr_seq = seq_id.seq;
+                } else {
+                    return Err(AppError::RowAccessPolicyAlreadyExists(
+                        name_ident.exist_error(func_name!()),
+                    )
+                    .into());
+                }
             }
 
             // Create row policy by inserting these record:
             // name -> id
             // id -> policy
             // row policy name -> row policy table id list
-
-            let id = fetch_id(self, IdGenerator::row_access_id()).await?;
 
             let id = RowAccessPolicyId::new(id);
             let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), id);

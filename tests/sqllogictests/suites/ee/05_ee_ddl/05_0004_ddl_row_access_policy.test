@@ -22,6 +22,20 @@ create or replace row access policy rap_it as (empl_id varchar) returns boolean 
       else false
   end;
 
+statement ok
+create row access policy IF NOT EXISTS rap_it as (empl_id varchar) returns boolean ->
+  case
+      when 'it_admin' = current_role() then true
+      else false
+  end;
+
+statement ok
+create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+  case
+      when 'it_admin' = current_role() then false
+      else true
+  end;
+
 statement error 1005
 CREATE OR REPLACE row access policy IF NOT EXISTS rap2 AS (val STRING) RETURNS STRING ->
   case

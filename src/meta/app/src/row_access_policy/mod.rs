@@ -25,9 +25,7 @@ pub use row_access_policy_id_ident::RowAccessPolicyIdIdent;
 pub use row_access_policy_name_ident::RowAccessPolicyNameIdent;
 pub use row_access_policy_table_id_list_ident::RowAccessPolicyTableIdListIdent;
 
-use crate::schema::CreateOption;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowAccessPolicyMeta {
     // Vec<(arg_name, arg_type)>
     pub args: Vec<(String, String)>,
@@ -39,19 +37,18 @@ pub struct RowAccessPolicyMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRowAccessPolicyReq {
-    pub create_option: CreateOption,
+    pub can_replace: bool,
     pub name: RowAccessPolicyNameIdent,
     pub row_access_policy_meta: RowAccessPolicyMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRowAccessPolicyReply {
     pub id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropRowAccessPolicyReq {
-    pub if_exists: bool,
     pub name: RowAccessPolicyNameIdent,
 }
 
@@ -61,7 +58,7 @@ pub struct GetRowAccessPolicyReq {
 }
 
 /// A list of table ids
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
+#[derive(Clone, Debug, Eq, Default, PartialEq)]
 pub struct RowAccessPolicyTableIdList {
     pub id_list: BTreeSet<u64>,
 }

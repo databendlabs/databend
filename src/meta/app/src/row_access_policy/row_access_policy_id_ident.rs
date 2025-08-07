@@ -53,7 +53,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_row_access_policy_by_id";
         const TYPE: &'static str = "RowAccessPolicyIdIdent";
-        const HAS_TENANT: bool = false;
+        const HAS_TENANT: bool = true;
         type ValueType = RowAccessPolicyMeta;
     }
 
@@ -83,7 +83,7 @@ mod tests {
         let ident = RowAccessPolicyIdIdent::new_generic(tenant, RowAccessPolicyId::new(3));
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_row_access_policy_by_id/3");
+        assert_eq!(key, "__fd_row_access_policy_by_id/dummy/3");
 
         assert_eq!(ident, RowAccessPolicyIdIdent::from_str_key(&key).unwrap());
     }
