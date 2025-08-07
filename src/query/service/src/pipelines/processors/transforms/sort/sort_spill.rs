@@ -36,12 +36,13 @@ use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
+use databend_common_pipeline_transforms::MemorySettings;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::bounds::Bounds;
 use super::Base;
-use super::MemoryRows;
+use super::RowsStat;
 use super::SortCollectedMeta;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
@@ -153,7 +154,14 @@ where A: SortAlgorithm
         }
     }
 
-    pub async fn on_restore(&mut self) -> Result<OutputData> {
+    pub fn collect_total_rows(&self) -> usize {
+        match &self.step {
+            Step::Collect(step_collect) => step_collect.streams.total_rows(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub async fn on_restore(&mut self, _memory_settings: &MemorySettings) -> Result<OutputData> {
         match &mut self.step {
             Step::Collect(collect) => self.step = Step::Sort(collect.next_step(&self.base)?),
             Step::Sort(_) => (),
@@ -615,7 +623,11 @@ impl Base {
     }
 }
 
-impl<R: Rows, S> MemoryRows for Vec<BoundBlockStream<R, S>> {
+impl<R: Rows, S> RowsStat for Vec<BoundBlockStream<R, S>> {
+    fn total_rows(&self) -> usize {
+        self.iter().map(|s| s.total_rows()).sum::<usize>()
+    }
+
     fn in_memory_rows(&self) -> usize {
         self.iter().map(|s| s.in_memory_rows()).sum::<usize>()
     }
@@ -804,6 +816,10 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
 
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    fn total_rows(&self) -> usize {
+        self.blocks.iter().map(|b| b.rows).sum()
     }
 
     fn in_memory_rows(&self) -> usize {

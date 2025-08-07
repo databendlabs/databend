@@ -66,13 +66,19 @@ local_block_meta_serde!(SortCollectedMeta);
 #[typetag::serde(name = "sort_collected")]
 impl BlockMetaInfo for SortCollectedMeta {}
 
-trait MemoryRows {
+trait RowsStat {
+    fn total_rows(&self) -> usize;
+
     fn in_memory_rows(&self) -> usize;
 }
 
-impl MemoryRows for Vec<DataBlock> {
-    fn in_memory_rows(&self) -> usize {
+impl RowsStat for Vec<DataBlock> {
+    fn total_rows(&self) -> usize {
         self.iter().map(|s| s.num_rows()).sum::<usize>()
+    }
+
+    fn in_memory_rows(&self) -> usize {
+        self.total_rows()
     }
 }
 

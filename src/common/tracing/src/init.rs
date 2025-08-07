@@ -195,11 +195,12 @@ pub fn init_logging(
         .join()
         .unwrap();
 
+        let trace_config = fastrace::collector::Config::default();
         if cfg.structlog.on {
             let reporter = StructLogReporter::wrap(otlp_reporter);
-            fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+            fastrace::set_reporter(reporter, trace_config);
         } else {
-            fastrace::set_reporter(otlp_reporter, fastrace::collector::Config::default());
+            fastrace::set_reporter(otlp_reporter, trace_config);
         }
 
         _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
