@@ -402,11 +402,13 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     );
 
     println!(
-        "    usage: {}",
-        format!(
-            "bendsql -u ${{USER}} -p ${{PASSWORD}} -h {} -P {}",
-            conf.query.http_handler_host, conf.query.http_handler_port
-        )
+        "    usage with args: bendsql -u ${{USER}} -p ${{PASSWORD}} -h {} -P {}",
+        conf.query.http_handler_host, conf.query.http_handler_port
+    );
+
+    println!(
+        "    usage with dsn: bendsql --dsn \"databend://${{USER}}:${{PASSWORD}}@{}:{}?sslmode=disable\"",
+        conf.query.http_handler_host, conf.query.http_handler_port
     );
 
     println!(
