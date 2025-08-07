@@ -178,7 +178,7 @@ impl RelOperator {
     }
 
     pub fn support_lazy_materialize(&self) -> bool {
-        matches!(
+        !matches!(
             self,
             RelOperator::Join(_)
                 | RelOperator::CacheScan(_)
