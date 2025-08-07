@@ -4618,7 +4618,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "siphasher 0.3.11",
- "streaming-decompression",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
