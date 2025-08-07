@@ -395,29 +395,22 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         "    connect via: mysql -u${{USER}} -p${{PASSWORD}} -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
-    println!("Clickhouse(http)");
-    println!(
-        "    listened at {}:{}",
-        conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
-    );
-    println!(
-        "    usage: {}",
-        HttpHandlerKind::Clickhouse.usage(
-            format!(
-                "{}:{}",
-                conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
-            )
-            .parse()
-            .with_context(make_error)?
-        )
-    );
-    println!("Databend HTTP");
+    println!("Databend");
     println!(
         "    listened at {}:{}",
         conf.query.http_handler_host, conf.query.http_handler_port
     );
+
     println!(
         "    usage: {}",
+        format!(
+            "bendsql -u ${{USER}} -p ${{PASSWORD}} -h {} -P {}",
+            conf.query.http_handler_host, conf.query.http_handler_port
+        )
+    );
+
+    println!(
+        "    http: {}",
         HttpHandlerKind::Query.usage(
             format!(
                 "{}:{}",
@@ -427,6 +420,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .with_context(make_error)?
         )
     );
+
     for (idx, (k, v)) in env::vars()
         .filter(|(k, _)| k.starts_with("_DATABEND"))
         .enumerate()

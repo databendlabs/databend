@@ -294,9 +294,7 @@ impl HashJoinProbeState {
         mark_scan_map: &mut [Vec<u8>],
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         for probed_row in build_indexes.iter() {
@@ -324,9 +322,7 @@ impl HashJoinProbeState {
         mark_scan_map: &mut [Vec<u8>],
     ) -> Result<()> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         let probe_block = if probe_state.is_probe_projected {
