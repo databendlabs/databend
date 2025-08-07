@@ -211,6 +211,7 @@ impl SExpr {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
+    #[recursive::recursive]
     pub(crate) fn support_lazy_materialize(&self) -> bool {
         self.plan.support_lazy_materialize()
             && self
