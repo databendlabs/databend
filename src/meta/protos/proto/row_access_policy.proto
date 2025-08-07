@@ -27,9 +27,8 @@ message RowAccessPolicyMeta {
   optional string update_on = 5;
 }
 
-message RowAccessPolicyTableIdList {
+message RowAccessPolicyTableId {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  repeated uint64 ids = 1;
 }
