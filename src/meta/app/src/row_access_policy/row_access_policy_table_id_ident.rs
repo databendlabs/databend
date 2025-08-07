@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::row_access_policy::RowAccessPolicyId;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
 /// RowAccess Policy can be applied to tables, If drop a row access policy
-/// should list the table that apply the policy and remove it.
-pub type RowAccessPolicyTableIdListIdent = TIdent<Resource>;
-pub type RowAccessPolicyTableIdListIdentRaw = TIdentRaw<Resource>;
+/// should get all __fd_row_access_policy_apply_table_id/tenant/<policy_id> key
+/// and remove table's bind.
+pub type RowAccessPolicyTableIdIdent = TIdent<Resource, RowAccessPolicyId>;
+pub type RowAccessPolicyTableIdIdentRaw = TIdentRaw<Resource, RowAccessPolicyId>;
 
 pub use kvapi_impl::Resource;
 
@@ -26,20 +28,20 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::row_access_policy::RowAccessPolicyTableIdList;
-    use crate::row_access_policy::RowAccessPolicyTableIdListIdent;
+    use crate::row_access_policy::RowAccessPolicyTableId;
+    use crate::row_access_policy::RowAccessPolicyTableIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_row_access_policy_id_list";
+        const PREFIX: &'static str = "__fd_row_access_policy_apply_table_id";
         const TYPE: &'static str = "RowAccessPolicyTableIdListIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = RowAccessPolicyTableIdList;
+        type ValueType = RowAccessPolicyTableId;
     }
 
-    impl kvapi::Value for RowAccessPolicyTableIdList {
-        type KeyType = RowAccessPolicyTableIdListIdent;
+    impl kvapi::Value for RowAccessPolicyTableId {
+        type KeyType = RowAccessPolicyTableIdIdent;
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
@@ -50,19 +52,23 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::row_access_policy::RowAccessPolicyTableIdListIdent;
+    use crate::row_access_policy::RowAccessPolicyId;
+    use crate::row_access_policy::RowAccessPolicyIdIdent;
+    use crate::row_access_policy::RowAccessPolicyTableIdIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("tenant1");
-        let ident = RowAccessPolicyTableIdListIdent::new(tenant.clone(), "test");
+        let id = RowAccessPolicyId::new(20);
+        let id_ident = RowAccessPolicyIdIdent::new_generic(tenant, id);
+        let ident = RowAccessPolicyTableIdIdent::new_from(id_ident);
         assert_eq!(
-            "__fd_row_access_policy_id_list/tenant1/test",
+            "__fd_row_access_policy_apply_table_id/tenant1/20",
             ident.to_string_key()
         );
 
-        let got = RowAccessPolicyTableIdListIdent::from_str_key(&ident.to_string_key()).unwrap();
+        let got = RowAccessPolicyTableIdIdent::from_str_key(&ident.to_string_key()).unwrap();
         assert_eq!(ident, got);
     }
 }

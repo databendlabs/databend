@@ -14,16 +14,14 @@
 
 mod row_access_policy_id_ident;
 pub mod row_access_policy_name_ident;
-pub mod row_access_policy_table_id_list_ident;
-
-use std::collections::BTreeSet;
+pub mod row_access_policy_table_id_ident;
 
 use chrono::DateTime;
 use chrono::Utc;
 pub use row_access_policy_id_ident::RowAccessPolicyId;
 pub use row_access_policy_id_ident::RowAccessPolicyIdIdent;
 pub use row_access_policy_name_ident::RowAccessPolicyNameIdent;
-pub use row_access_policy_table_id_list_ident::RowAccessPolicyTableIdListIdent;
+pub use row_access_policy_table_id_ident::RowAccessPolicyTableIdIdent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowAccessPolicyMeta {
@@ -57,8 +55,8 @@ pub struct GetRowAccessPolicyReq {
     pub name: RowAccessPolicyNameIdent,
 }
 
-/// A list of table ids
+/// Recoder table id
 #[derive(Clone, Debug, Eq, Default, PartialEq)]
-pub struct RowAccessPolicyTableIdList {
-    pub id_list: BTreeSet<u64>,
+pub struct RowAccessPolicyTableId {
+    pub table_id: Option<u64>,
 }

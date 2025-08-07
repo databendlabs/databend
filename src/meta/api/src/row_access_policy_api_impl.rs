@@ -14,14 +14,14 @@
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
-use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdList;
-use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdListIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
@@ -84,11 +84,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             // Create row policy by inserting these record:
             // name -> id
             // id -> policy
-            // row policy name -> row policy table id list
+            // row policy id -> row policy table id
 
             let id = RowAccessPolicyId::new(id);
             let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), id);
-            let id_list_key = RowAccessPolicyTableIdListIdent::new_from(name_ident.clone());
+            let policy_apply_table_id = RowAccessPolicyTableIdIdent::new_from(id_ident.clone());
 
             debug!(
                 id :? =(&id_ident),
@@ -98,12 +98,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
             {
                 let meta: RowAccessPolicyMeta = req.row_access_policy_meta.clone();
-                let id_list = RowAccessPolicyTableIdList::default();
+                let table_id = RowAccessPolicyTableId::default();
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
                 txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id, None)?,        // name -> db_id
+                    txn_op_put_pb(name_ident, &id, None)?,        // name -> policy_id
                     txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
-                    txn_op_put_pb(&id_list_key, &id_list, None)?, // row policy name -> id_list
+                    txn_op_put_pb(&policy_apply_table_id, &table_id, None)?, // row policy id -> id
                 ]);
 
                 let (succ, _responses) = send_txn(self, txn).await?;

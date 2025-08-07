@@ -74,25 +74,25 @@ impl FromToProto for mt::RowAccessPolicyMeta {
     }
 }
 
-impl FromToProto for mt::RowAccessPolicyTableIdList {
-    type PB = pb::DbIdList;
+impl FromToProto for mt::RowAccessPolicyTableId {
+    type PB = pb::ShareReferenceDbId;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::DbIdList) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::ShareReferenceDbId) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
-            id_list: p.ids.iter().copied().collect(),
+            table_id: if p.id == 0 { None } else { Some(p.id) },
         };
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DbIdList, Incompatible> {
-        let p = pb::DbIdList {
+    fn to_pb(&self) -> Result<pb::ShareReferenceDbId, Incompatible> {
+        let p = pb::ShareReferenceDbId {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            ids: self.id_list.iter().copied().collect(),
+            id: self.table_id.unwrap_or_default(),
         };
         Ok(p)
     }
