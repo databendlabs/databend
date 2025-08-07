@@ -33,6 +33,7 @@ unsafe impl Send for UpdateList {}
 
 unsafe impl Sync for UpdateList {}
 
+#[derive(Debug, Clone)]
 pub enum DirectedEdge {
     Source(EdgeIndex),
     Target(EdgeIndex),

@@ -47,6 +47,7 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
+use log::error;
 use log::trace;
 use log::warn;
 use parking_lot::Condvar;
@@ -404,36 +405,43 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
+                let mut final_event;
                 let (event, process_rows) = {
+                    let mut inner_event_cause = event_cause.clone();
+
+                    let has_remaining_data = Arc::new(AtomicBool::new(false));
+
                     let mut payload = node.tracking_payload.clone();
                     payload.process_rows = AtomicUsize::new(0);
-                    payload.has_remaining_data = AtomicBool::new(false);
+                    payload.has_remaining_data = has_remaining_data.clone();
                     let guard = ThreadTracker::tracking(payload);
 
                     if state_guard_cache.is_none() {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
+                    let mut cnt = 0;
 
-                    let mut event = node.processor.event(event_cause.clone())?;
-                    let mut count = 0;
-                    while (!matches!(event, Event::Sync) || !matches!(event, Event::Async))
-                        && ThreadTracker::has_remaining_data()
-                    {
-                        count += 1;
-                        if count > 100000 {
-                            warn!(
-                                "Node {:?} has been processing for too long, event: {:?}, cause: {:?}",
-                                node.processor.id(),
-                                event,
-                                event_cause
-                            );
+                    loop {
+                        let event = node.processor.event(inner_event_cause.clone())?;
+                        final_event = event;
+                        // If the processor is finished or needs different handling, stop retrigger processor's event
+                        if matches!(final_event, Event::Finished | Event::Async | Event::Sync) {
                             break;
                         }
-                        event = node.processor.event(event_cause.clone())?;
+                        // If no remaining data, we're done
+                        if !has_remaining_data.swap(false, Ordering::SeqCst) {
+                            break;
+                        }
+                        inner_event_cause = EventCause::Input(0);
+                        cnt += 1;
+                        if cnt > 10 {
+                            error!("Infinite loop detected in processor event handling for node: {:?}, event: {:?}, cause: {:?}",
+                                   node.processor.id(), final_event, inner_event_cause);
+                        }
                     }
                     let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
-                        Ok(_) => Ok((event, process_rows)),
+                        Ok(_) => Ok((final_event, process_rows)),
                         Err(out_of_limit) => {
                             Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
                         }

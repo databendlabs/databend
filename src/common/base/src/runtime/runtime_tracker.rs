@@ -146,7 +146,7 @@ pub struct TrackingPayload {
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
     // Indicate whether datablock is sliced and has remaining data in port
-    pub has_remaining_data: AtomicBool,
+    pub has_remaining_data: Arc<AtomicBool>,
 }
 
 impl Clone for TrackingPayload {
@@ -164,10 +164,7 @@ impl Clone for TrackingPayload {
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
-            has_remaining_data: AtomicBool::new(
-                self.has_remaining_data
-                    .load(std::sync::atomic::Ordering::SeqCst),
-            ),
+            has_remaining_data: self.has_remaining_data.clone(),
         }
     }
 }
@@ -250,7 +247,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
-                has_remaining_data: AtomicBool::new(false),
+                has_remaining_data: Arc::new(AtomicBool::new(false)),
             }),
         }
     }
@@ -378,16 +375,10 @@ impl ThreadTracker {
             .unwrap_or(0)
     }
 
-    pub fn has_remaining_data() -> bool {
+    pub fn has_remaining_data() -> Arc<AtomicBool> {
         TRACKER
-            .try_with(|tracker| {
-                tracker
-                    .borrow()
-                    .payload
-                    .has_remaining_data
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            })
-            .unwrap_or(false)
+            .try_with(|tracker| tracker.borrow().payload.has_remaining_data.clone())
+            .unwrap_or(Arc::new(AtomicBool::new(false)))
     }
 }
 

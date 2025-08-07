@@ -21,6 +21,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -230,6 +231,7 @@ impl InputPort {
             let remaining_data = Box::new(SharedData(Ok(remaining_block)));
             self.shared.swap(Box::into_raw(remaining_data), 0, 0);
 
+            ThreadTracker::has_remaining_data().store(true, Ordering::SeqCst);
             ExecutorStats::record_thread_tracker(taken_block.num_rows());
             Some(Ok(taken_block))
         } else {
