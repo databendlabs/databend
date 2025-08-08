@@ -442,7 +442,7 @@ impl Join {
         }
 
         let mut selectivity = MAX_SELECTIVITY;
-        let mut sb = SelectivityEstimator::new(&mut statistics, cardinality, HashSet::new());
+        let mut sb = SelectivityEstimator::new(statistics, cardinality, HashSet::new());
 
         for expr in &self.non_equi_conditions {
             selectivity = selectivity.min(sb.compute_selectivity(expr, true)?);
