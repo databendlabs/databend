@@ -175,21 +175,22 @@ impl TaskMessage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskStateKey {
-    pub current: String,
-    pub next: String,
+pub struct TaskSucceededStateKey {
+    pub before_task: String,
+    pub after_task: String,
 }
 
-impl TaskStateKey {
-    pub fn new(current: String, next: String) -> Self {
-        Self { current, next }
+impl TaskSucceededStateKey {
+    pub fn new(before_task: String, after_task: String) -> Self {
+        Self {
+            before_task,
+            after_task,
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskStateValue {
-    pub is_succeeded: bool,
-}
+pub struct TaskSucceededStateValue;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DependentType {
@@ -218,22 +219,25 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyError;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::principal::task::TaskStateKey;
+    use crate::principal::task::TaskSucceededStateKey;
     use crate::principal::DependentType;
     use crate::principal::TaskDependentKey;
 
-    impl kvapi::KeyCodec for TaskStateKey {
+    impl kvapi::KeyCodec for TaskSucceededStateKey {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_str(self.current.as_str())
-                .push_str(self.next.as_str())
+            b.push_str(self.before_task.as_str())
+                .push_str(self.after_task.as_str())
         }
 
         fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
         where Self: Sized {
-            let current = parser.next_str()?;
-            let next = parser.next_str()?;
+            let before_task = parser.next_str()?;
+            let after_task = parser.next_str()?;
 
-            Ok(Self { current, next })
+            Ok(Self {
+                before_task,
+                after_task,
+            })
         }
     }
 

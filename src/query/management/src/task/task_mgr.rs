@@ -23,14 +23,15 @@ use databend_common_ast::ast::ScheduleOptions;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::txn_cond_eq_seq;
+use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::util::txn_put_pb;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::TaskMessage;
-use databend_common_meta_app::principal::task::TaskStateValue;
+use databend_common_meta_app::principal::task::TaskSucceededStateValue;
 use databend_common_meta_app::principal::task_dependent_ident::TaskDependentIdent;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
-use databend_common_meta_app::principal::task_state_ident::TaskStateIdent;
+use databend_common_meta_app::principal::task_state_ident::TaskSucceededStateIdent;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
@@ -40,16 +41,16 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_condition::Target;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
-use databend_common_proto_conv::FromToProto;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use prost::Message;
 use seq_marked::SeqValue;
 
 use crate::task::errors::TaskApiError;
@@ -407,7 +408,7 @@ impl TaskMgr {
         ));
         let mut stream = self
             .kv_api
-            .list_pb_keys(&DirName::new(TaskStateIdent::new(
+            .list_pb_keys(&DirName::new(TaskSucceededStateIdent::new(
                 &self.tenant,
                 task_name,
                 "",
@@ -456,10 +457,6 @@ impl TaskMgr {
         task_name: &str,
     ) -> Result<Result<Vec<String>, TaskError>, TaskApiError> {
         let task_before_ident = TaskDependentIdent::new_before(&self.tenant, task_name);
-        let succeeded_value = TaskStateValue { is_succeeded: true };
-        let not_succeeded_value = TaskStateValue {
-            is_succeeded: false,
-        };
 
         let Some(task_before_dependent) = self.kv_api.get_pb(&task_before_ident).await? else {
             return Ok(Ok(Vec::new()));
@@ -478,25 +475,24 @@ impl TaskMgr {
             };
             let target_after = &target_after_ident.name().source;
             let this_task_to_target_state =
-                TaskStateIdent::new(&self.tenant, task_name, target_after);
+                TaskSucceededStateIdent::new(&self.tenant, task_name, target_after);
             let mut request = TxnRequest::new(vec![], vec![]).with_else(vec![txn_put_pb(
                 &this_task_to_target_state,
-                &succeeded_value,
+                &TaskSucceededStateValue,
             )?]);
 
             for before_target_after in target_after_dependent.0.iter() {
                 let task_ident =
-                    TaskStateIdent::new(&self.tenant, before_target_after, target_after);
+                    TaskSucceededStateIdent::new(&self.tenant, before_target_after, target_after);
                 // Only care about the predecessors of this task's successor tasks, excluding this task itself.
                 if before_target_after != task_name {
-                    request.condition.push(TxnCondition::eq_value(
-                        task_ident.to_string_key(),
-                        succeeded_value.to_pb()?.encode_to_vec(),
-                    ));
+                    request.condition.push(TxnCondition {
+                        key: task_ident.to_string_key(),
+                        expected: ConditionResult::Gt as i32,
+                        target: Some(Target::Seq(0)),
+                    });
                 }
-                request
-                    .if_then
-                    .push(txn_put_pb(&task_ident, &not_succeeded_value)?);
+                request.if_then.push(txn_op_del(&task_ident));
             }
             let reply = self.kv_api.transaction(request).await?;
 

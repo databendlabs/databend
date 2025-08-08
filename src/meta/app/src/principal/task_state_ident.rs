@@ -14,39 +14,43 @@
 
 use crate::tenant_key::ident::TIdent;
 
-pub type TaskStateIdent = TIdent<Resource, TaskStateKey>;
+pub type TaskSucceededStateIdent = TIdent<Resource, TaskSucceededStateKey>;
 
-impl TaskStateIdent {
-    pub fn new(tenant: impl ToTenant, current: impl ToString, next: impl ToString) -> Self {
-        TaskStateIdent::new_generic(
+impl TaskSucceededStateIdent {
+    pub fn new(
+        tenant: impl ToTenant,
+        before_task: impl ToString,
+        after_task: impl ToString,
+    ) -> Self {
+        TaskSucceededStateIdent::new_generic(
             tenant,
-            TaskStateKey::new(current.to_string(), next.to_string()),
+            TaskSucceededStateKey::new(before_task.to_string(), after_task.to_string()),
         )
     }
 }
 
 pub use kvapi_impl::Resource;
 
-use crate::principal::task::TaskStateKey;
+use crate::principal::task::TaskSucceededStateKey;
 use crate::tenant::ToTenant;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::task::TaskStateValue;
-    use crate::principal::task_state_ident::TaskStateIdent;
+    use crate::principal::task_state_ident::TaskSucceededStateIdent;
+    use crate::principal::TaskSucceededStateValue;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_task_states";
-        const TYPE: &'static str = "TaskStateIdent";
+        const TYPE: &'static str = "TaskSucceededStateIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = TaskStateValue;
+        type ValueType = TaskSucceededStateValue;
     }
 
-    impl kvapi::Value for TaskStateValue {
-        type KeyType = TaskStateIdent;
+    impl kvapi::Value for TaskSucceededStateValue {
+        type KeyType = TaskSucceededStateIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []

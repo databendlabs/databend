@@ -219,25 +219,22 @@ impl FromToProto for mt::TaskDependentValue {
     }
 }
 
-impl FromToProto for mt::TaskStateValue {
+impl FromToProto for mt::TaskSucceededStateValue {
     type PB = pb::TaskStateValue;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
 
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    fn from_pb(_p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        Ok(Self {
-            is_succeeded: p.is_succeeded,
-        })
+        Ok(Self)
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(pb::TaskStateValue {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            is_succeeded: self.is_succeeded,
         })
     }
 }
