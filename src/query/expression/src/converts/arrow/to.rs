@@ -114,7 +114,6 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            // TODO Map DecimalDataType::Decimal64 to ArrowDataType::Decimal64?
             TableDataType::Decimal(
                 DecimalDataType::Decimal64(size) | DecimalDataType::Decimal128(size),
             ) => ArrowDataType::Decimal128(size.precision(), size.scale() as i8),
