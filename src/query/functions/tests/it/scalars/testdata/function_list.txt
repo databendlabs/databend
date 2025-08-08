@@ -1998,6 +1998,7 @@ Functions overloads:
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 grouping FACTORY
+1 grouping FACTORY
 0 gt(Variant, Variant) :: Boolean
 1 gt(Variant NULL, Variant NULL) :: Boolean NULL
 2 gt(String, String) :: Boolean
