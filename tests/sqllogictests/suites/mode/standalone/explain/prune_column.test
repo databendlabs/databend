@@ -79,7 +79,7 @@ HashJoin
 ├── probe keys: [t2.b (#7)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 ├── EvalScalar(Build)
 │   ├── output columns: [a (#1), b (#2)]
 │   ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1]
@@ -121,7 +121,7 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 2.00
+├── estimated rows: 0.01
 ├── AggregateFinal(Build)
 │   ├── output columns: [COUNT(*) (#12)]
 │   ├── group by: []
@@ -138,7 +138,7 @@ HashJoin
 │           ├── probe keys: [t3.b (#10)]
 │           ├── keys is null equal: [false]
 │           ├── filters: []
-│           ├── estimated rows: 0.20
+│           ├── estimated rows: 0.00
 │           ├── EvalScalar(Build)
 │           │   ├── output columns: [b (#5)]
 │           │   ├── expressions: [numbers.number (#3) + 1]

@@ -166,7 +166,7 @@ HashJoin
 ├── probe keys: [CAST(t1.a (#2) AS UInt64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 450.00
+├── estimated rows: 2.25
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#3)]
