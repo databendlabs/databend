@@ -73,25 +73,3 @@ impl FromToProto for mt::RowAccessPolicyMeta {
         Ok(p)
     }
 }
-
-impl FromToProto for mt::RowAccessPolicyTableId {
-    type PB = pb::RowAccessPolicyTableId;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let v = Self {};
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::RowAccessPolicyTableId {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-        };
-        Ok(p)
-    }
-}

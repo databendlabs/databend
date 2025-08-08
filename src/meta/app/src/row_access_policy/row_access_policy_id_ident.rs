@@ -30,13 +30,13 @@ impl RowAccessPolicyIdIdent {
         Self::new_generic(tenant, RowAccessPolicyId::new(row_access_id))
     }
 
-    pub fn row_access_id(&self) -> RowAccessPolicyId {
+    pub fn row_access_policy_id(&self) -> RowAccessPolicyId {
         *self.name()
     }
 }
 
 impl RowAccessPolicyIdIdentRaw {
-    pub fn row_access_id(&self) -> RowAccessPolicyId {
+    pub fn row_access_policy_id(&self) -> RowAccessPolicyId {
         *self.name()
     }
 }

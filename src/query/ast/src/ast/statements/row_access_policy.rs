@@ -45,7 +45,7 @@ pub struct RowAccessPolicyDefinition {
 impl Display for RowAccessPolicyDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "(")?;
-        write_comma_separated_list(f, self.parameters.clone())?;
+        write_comma_separated_list(f, &self.parameters)?;
         write!(f, ")")?;
         write!(f, " RETURNS BOOLEAN ->")?;
         write!(f, " {}", self.definition)
