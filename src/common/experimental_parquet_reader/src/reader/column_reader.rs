@@ -103,6 +103,17 @@ fn pages_to_column_iter<'a>(
                 chunk_size,
             )))
         }
+        // TODO: arrow  55.1.0 does not support Decimal64 yet, so we use Decimal128, but the storage format is Int64
+        (PhysicalType::Int64, TableDataType::Decimal(DecimalDataType::Decimal128(decimal_size))) => {
+            Ok(Box::new(new_decimal64_iter(
+                pages,
+                num_rows,
+                decimal_size.precision(),
+                decimal_size.scale(),
+                is_nullable,
+                chunk_size,
+            )))
+        }
         (PhysicalType::FixedLenByteArray(_), TableDataType::Decimal(DecimalDataType::Decimal128(decimal_size))) => {
             Ok(Box::new(new_decimal128_iter(
                 pages,
