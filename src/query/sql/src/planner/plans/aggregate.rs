@@ -89,6 +89,14 @@ impl Aggregate {
             self.group_items
                 .iter()
                 .enumerate()
+                .filter(|(_, item)| {
+                    // skip _grouping_id column cause this column is generated in expansion
+                    if let ScalarExpr::BoundColumnRef(c) = &item.scalar {
+                        c.column.column_name != "_grouping_id"
+                    } else {
+                        true
+                    }
+                })
                 .map(|(index, item)| item.bound_column_expr(format!("_group_item_{}", index)))
                 .collect()
         } else {
