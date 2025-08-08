@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -31,9 +32,11 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::ir::UniformSampleSet;
+use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -258,7 +261,7 @@ impl Join {
         Ok(used_columns)
     }
 
-    fn inner_join_cardinality(
+    fn inner_join_eq_conditions_cardinality(
         &self,
         left_cardinality: f64,
         right_cardinality: f64,
@@ -373,7 +376,6 @@ impl Join {
             }
         }
 
-        eprintln!("join_selectivity {}", join_selectivity);
         let mut join_cardinality = left_cardinality * right_cardinality * join_selectivity;
         join_cardinality = join_cardinality.min(left_cardinality * right_cardinality);
 
@@ -430,6 +432,26 @@ impl Join {
         Ok(join_cardinality)
     }
 
+    fn inner_join_non_eq_conditions_cardinality(
+        &self,
+        cardinality: f64,
+        statistics: &mut Statistics,
+    ) -> Result<f64> {
+        if self.non_equi_conditions.is_empty() || cardinality == 0.0 {
+            return Ok(cardinality);
+        }
+
+        let mut selectivity = MAX_SELECTIVITY;
+        let mut sb = SelectivityEstimator::new(&mut statistics, cardinality, HashSet::new());
+
+        for expr in &self.non_equi_conditions {
+            selectivity = selectivity.min(sb.compute_selectivity(expr, true)?);
+        }
+
+        sb.update_other_statistic_by_selectivity(selectivity);
+        Ok(cardinality * selectivity)
+    }
+
     pub fn has_null_equi_condition(&self) -> bool {
         self.equi_conditions
             .iter()
@@ -451,12 +473,29 @@ impl Join {
         );
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
-        let inner_join_cardinality = self.inner_join_cardinality(
+        let inner_join_cardinality = self.inner_join_eq_conditions_cardinality(
             left_cardinality,
             right_cardinality,
             &mut left_statistics,
             &mut right_statistics,
         )?;
+
+        let mut join_statistics = {
+            let mut column_stats = HashMap::new();
+            column_stats.extend(left_statistics.column_stats);
+            column_stats.extend(right_statistics.column_stats);
+
+            Statistics {
+                precise_cardinality: None,
+                column_stats,
+            }
+        };
+
+        let inner_join_cardinality = self.inner_join_non_eq_conditions_cardinality(
+            inner_join_cardinality,
+            &mut join_statistics,
+        )?;
+
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Asof | JoinType::Cross => inner_join_cardinality,
             JoinType::Left | JoinType::LeftAsof => {
@@ -475,21 +514,15 @@ impl Join {
             JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
             JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
         };
+
         // Derive column statistics
-        let column_stats = if cardinality == 0.0 {
-            HashMap::new()
-        } else {
-            let mut column_stats = HashMap::new();
-            column_stats.extend(left_statistics.column_stats);
-            column_stats.extend(right_statistics.column_stats);
-            column_stats
-        };
+        if cardinality == 0.0 {
+            join_statistics.column_stats = HashMap::new();
+        }
+
         Ok(Arc::new(StatInfo {
             cardinality,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats,
-            },
+            statistics: join_statistics,
         }))
     }
 
@@ -1039,7 +1072,7 @@ mod tests {
             )]),
         };
 
-        let result = join.inner_join_cardinality(
+        let result = join.inner_join_eq_conditions_cardinality(
             1000.0, // left_cardinality
             2000.0, // right_cardinality
             &mut left_stats,
@@ -1072,10 +1105,13 @@ mod tests {
             )]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
-        let expected = 1000.0 * 2000.0 * DEFAULT_EQ_SELECTIVITY;
         assert_eq!(result, 2000000.0);
         Ok(())
     }
@@ -1100,8 +1136,12 @@ mod tests {
             )]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         assert_eq!(result, 0.0);
         Ok(())
@@ -1127,8 +1167,12 @@ mod tests {
             )]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         assert!(result > 0.0);
         assert!(result < 1000.0 * 2000.0);
@@ -1166,8 +1210,12 @@ mod tests {
             ]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         let expected = 1000.0 * 2000.0 * (1.0 / 100.0) * DEFAULT_EQ_SELECTIVITY;
         assert_eq!(result, expected);
@@ -1194,7 +1242,8 @@ mod tests {
             )]),
         };
 
-        let result = join.inner_join_cardinality(0.0, 0.0, &mut left_stats, &mut right_stats)?;
+        let result =
+            join.inner_join_eq_conditions_cardinality(0.0, 0.0, &mut left_stats, &mut right_stats)?;
 
         assert_eq!(result, 0.0);
         Ok(())
@@ -1225,8 +1274,12 @@ mod tests {
             )]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         assert!((result - (1000.0 * 2000.0)).abs() < f64::EPSILON);
         Ok(())
@@ -1264,8 +1317,12 @@ mod tests {
             ]),
         };
 
-        let result =
-            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let result = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         let expected = 1000.0 * 2000.0 * (1.0 / 100.0) * (1.0 / 50.0);
         assert!((result - expected).abs() < f64::EPSILON);
@@ -1292,7 +1349,12 @@ mod tests {
             )]),
         };
 
-        let _ = join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+        let _ = join.inner_join_eq_conditions_cardinality(
+            1000.0,
+            2000.0,
+            &mut left_stats,
+            &mut right_stats,
+        )?;
 
         assert_eq!(left_stats.column_stats[&1].min, Datum::Int(50));
         assert_eq!(left_stats.column_stats[&1].max, Datum::Int(100));
