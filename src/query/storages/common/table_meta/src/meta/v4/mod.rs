@@ -21,3 +21,4 @@ pub use segment::RawBlockMeta;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
 pub use snapshot::TableSnapshotLite;
+pub use table_snapshot_statistics::TableSnapshotStatistics;

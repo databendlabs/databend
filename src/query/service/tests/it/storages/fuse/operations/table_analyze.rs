@@ -219,7 +219,7 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let hll: HashMap<ColumnId, MetaHLL12> =
         HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
     let table_statistics =
-        TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id);
+        TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id, 14);
     let table_statistics_location = location_gen.snapshot_statistics_location_from_uuid(
         &table_statistics.snapshot_id,
         table_statistics.format_version(),

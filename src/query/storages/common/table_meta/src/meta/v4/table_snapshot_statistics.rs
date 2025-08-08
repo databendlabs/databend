@@ -18,8 +18,12 @@ use databend_common_expression::ColumnId;
 use databend_common_storage::Histogram;
 use databend_common_storage::MetaHLL;
 
+use crate::meta::v1;
+use crate::meta::v2;
+use crate::meta::v3;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
+use crate::meta::Versioned;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
@@ -30,4 +34,70 @@ pub struct TableSnapshotStatistics {
     pub row_count: usize,
     pub hll: HashMap<ColumnId, MetaHLL>,
     pub histograms: HashMap<ColumnId, Histogram>,
+}
+
+impl TableSnapshotStatistics {
+    pub fn new(
+        hll: HashMap<ColumnId, MetaHLL>,
+        histograms: HashMap<ColumnId, Histogram>,
+        snapshot_id: SnapshotId,
+        row_count: usize,
+    ) -> Self {
+        Self {
+            format_version: TableSnapshotStatistics::VERSION,
+            snapshot_id,
+            hll,
+            histograms,
+            row_count,
+        }
+    }
+
+    pub fn format_version(&self) -> u64 {
+        self.format_version
+    }
+
+    pub fn column_distinct_values(&self) -> HashMap<ColumnId, u64> {
+        self.hll
+            .iter()
+            .map(|hll| (*hll.0, hll.1.count() as u64))
+            .collect()
+    }
+}
+
+impl From<v1::TableSnapshotStatistics> for TableSnapshotStatistics {
+    fn from(value: v1::TableSnapshotStatistics) -> Self {
+        Self {
+            format_version: TableSnapshotStatistics::VERSION,
+            snapshot_id: value.snapshot_id,
+            row_count: 0,
+            hll: HashMap::new(),
+            histograms: HashMap::new(),
+        }
+    }
+}
+
+impl From<v2::TableSnapshotStatistics> for TableSnapshotStatistics {
+    fn from(value: v2::TableSnapshotStatistics) -> Self {
+        let hll = value.hll.into_iter().map(|(k, v)| (k, v.into())).collect();
+        Self {
+            format_version: TableSnapshotStatistics::VERSION,
+            snapshot_id: value.snapshot_id,
+            row_count: 0,
+            hll,
+            histograms: HashMap::new(),
+        }
+    }
+}
+
+impl From<v3::TableSnapshotStatistics> for TableSnapshotStatistics {
+    fn from(value: v3::TableSnapshotStatistics) -> Self {
+        let hll = value.hll.into_iter().map(|(k, v)| (k, v.into())).collect();
+        Self {
+            format_version: TableSnapshotStatistics::VERSION,
+            snapshot_id: value.snapshot_id,
+            row_count: 0,
+            hll,
+            histograms: value.histograms,
+        }
+    }
 }

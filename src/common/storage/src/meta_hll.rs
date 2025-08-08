@@ -117,18 +117,6 @@ impl MetaHLL {
     pub fn num_empty_registers(&self) -> usize {
         self.registers.iter().filter(|x| **x == 0).count()
     }
-
-    pub fn from_hll(hll: MetaHLL12) -> Self {
-        let registers = hll.get_registers();
-        let mut new_registers = vec![0; M];
-        let group_size = registers.len() / M;
-        for i in 0..M {
-            for j in 0..group_size {
-                new_registers[i] = new_registers[i].max(registers[i * group_size + j]);
-            }
-        }
-        Self::with_registers(new_registers)
-    }
 }
 
 /// Helper function sigma as defined in
@@ -177,6 +165,20 @@ fn hll_tau(x: f64) -> f64 {
             }
         }
         z / 3.0
+    }
+}
+
+impl From<MetaHLL12> for MetaHLL {
+    fn from(value: MetaHLL12) -> Self {
+        let registers = value.get_registers();
+        let mut new_registers = vec![0; M];
+        let group_size = registers.len() / M;
+        for i in 0..M {
+            for j in 0..group_size {
+                new_registers[i] = new_registers[i].max(registers[i * group_size + j]);
+            }
+        }
+        Self::with_registers(new_registers)
     }
 }
 
@@ -393,7 +395,7 @@ mod tests {
             hll.add_object(&i);
         }
 
-        let hll = MetaHLL::from_hll(hll);
+        let hll = MetaHLL::from(hll);
         let count = hll.count();
         let error_rate = 1.04 / ((M as f64).sqrt());
         let diff = count as f64 / 100_000f64;

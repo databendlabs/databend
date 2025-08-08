@@ -136,6 +136,11 @@ impl Interpreter for AnalyzeTableInterpreter {
         let table_statistics = table
             .read_table_snapshot_statistics(Some(&snapshot))
             .await?;
+        if let Some(table_statistics) = &table_statistics {
+            if table_statistics.snapshot_id == snapshot.snapshot_id {
+                return Ok(PipelineBuildResult::create());
+            }
+        }
 
         // plan sql
         let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {

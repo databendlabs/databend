@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -20,7 +21,11 @@ use std::time::Instant;
 use async_channel::Receiver;
 use async_channel::Sender;
 use async_trait::async_trait;
+use databend_common_base::base::tokio::sync::Semaphore;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -28,9 +33,12 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
@@ -39,17 +47,41 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
+use databend_common_storage::MetaHLL;
 use databend_common_storage::MetaHLL12;
+use databend_storages_common_cache::BlockMeta;
+use databend_storages_common_cache::CompactSegmentInfo;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::Versioned;
+use opendal::Operator;
 
+use crate::io::build_column_hlls;
+use crate::io::read::meta::SegmentStatsReader;
+use crate::io::BlockReader;
+use crate::io::CachedMetaWriter;
+use crate::io::CompactSegmentInfoReader;
 use crate::io::SegmentsIO;
+use crate::io::TableMetaLocationGenerator;
+use crate::operations::acquire_task_permit;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
+use crate::FuseLazyPartInfo;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -255,6 +287,7 @@ impl SinkAnalyzeState {
             self.ndv_states.clone(),
             self.histograms.clone(),
             self.snapshot_id,
+            snapshot.summary.row_count,
         );
         let table_statistics_location = table
             .meta_location_generator
@@ -459,5 +492,236 @@ impl AsyncSink for HistogramInfoSink {
             };
         }
         Ok(false)
+    }
+}
+
+struct SegmentWithHLL {
+    location: Location,
+    blocks: Vec<Arc<BlockMeta>>,
+    summary: Statistics,
+    origin_hlls: Vec<RawBlockHLL>,
+    indexes: Vec<usize>,
+    new_hlls: Vec<Option<BlockHLL>>,
+}
+
+enum State {
+    ReadData(Option<PartInfoPtr>),
+    CollectNDV {
+        location: Location,
+        info: CompactSegmentInfo,
+        hlls: Vec<RawBlockHLL>,
+    },
+    GenerateHLL,
+    SyncGen,
+    Write,
+    Finish,
+}
+
+pub struct AnalyzeCollectNDVSource {
+    state: State,
+    output: Arc<OutputPort>,
+    column_hlls: HashMap<ColumnId, MetaHLL>,
+    row_count: u64,
+
+    segment_with_hll: Option<SegmentWithHLL>,
+
+    ctx: Arc<dyn TableContext>,
+    block_reader: Arc<BlockReader>,
+    dal: Operator,
+    settings: ReadSettings,
+    storage_format: FuseStorageFormat,
+    segment_reader: CompactSegmentInfoReader,
+    stats_reader: SegmentStatsReader,
+    ndv_columns_map: BTreeMap<FieldIndex, TableField>,
+}
+
+#[async_trait::async_trait]
+impl Processor for AnalyzeCollectNDVSource {
+    fn name(&self) -> String {
+        "AnalyzeCollectNDVSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if matches!(self.state, State::ReadData(None)) {
+            self.state = self
+                .ctx
+                .get_partition()
+                .map_or(State::Finish, |part| State::ReadData(Some(part)));
+        }
+
+        if matches!(self.state, State::Finish) {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if self.output.is_finished() {
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            return Ok(Event::NeedConsume);
+        }
+        todo!()
+    }
+
+    fn process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::CollectNDV {
+                location,
+                info,
+                hlls,
+            } => {
+                let mut indexes = vec![];
+                for (idx, data) in hlls.iter().enumerate() {
+                    let block_hll = decode_column_hll(&data)?;
+                    if let Some(column_hlls) = &block_hll {
+                        for (column_id, column_hll) in self.column_hlls.iter_mut() {
+                            if let Some(hll) = column_hlls.get(column_id) {
+                                column_hll.merge(hll);
+                            }
+                        }
+                    } else {
+                        indexes.push(idx);
+                    }
+                }
+
+                if !indexes.is_empty() {
+                    assert!(self.segment_with_hll.is_none());
+                    let new_hlls = Vec::with_capacity(indexes.len());
+                    self.segment_with_hll = Some(SegmentWithHLL {
+                        location,
+                        blocks: info.block_metas()?,
+                        summary: info.summary.clone(),
+                        origin_hlls: hlls,
+                        indexes,
+                        new_hlls,
+                    });
+                    self.state = State::GenerateHLL;
+                }
+            }
+            State::SyncGen => {
+                let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
+                let new_hlls = std::mem::take(&mut segment_with_hll.new_hlls);
+                for (idx, new) in new_hlls.into_iter().enumerate() {
+                    if let Some(column_hlls) = new {
+                        for (column_id, column_hll) in self.column_hlls.iter_mut() {
+                            if let Some(hll) = column_hlls.get(column_id) {
+                                column_hll.merge(hll);
+                            }
+                        }
+                        segment_with_hll.origin_hlls[idx] = encode_column_hll(&column_hlls)?;
+                    }
+                }
+            }
+            _ => return Err(ErrorCode::Internal("It's a bug.")),
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(Some(part)) => {
+                let part = FuseLazyPartInfo::from_part(&part)?;
+                let (path, ver) = &part.segment_location;
+                if *ver < 2 {
+                    return Ok(());
+                }
+                let load_param = LoadParams {
+                    location: path.clone(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: true,
+                };
+                let compact_segment_info = self.segment_reader.read(&load_param).await?;
+
+                let block_count = compact_segment_info.summary.block_count as usize;
+                let block_hlls =
+                    if let Some(meta) = &compact_segment_info.summary.additional_stats_meta {
+                        let (path, ver) = &meta.location;
+                        let load_param = LoadParams {
+                            location: path.clone(),
+                            len_hint: None,
+                            ver: *ver,
+                            put_cache: true,
+                        };
+                        let stats = self.stats_reader.read(&load_param).await?;
+                        stats.block_hlls.clone()
+                    } else {
+                        vec![vec![]; block_count]
+                    };
+            }
+            State::GenerateHLL => {
+                let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
+                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+                let max_concurrency = std::cmp::max(max_threads * 2, 10);
+                let semaphore = Arc::new(Semaphore::new(max_concurrency));
+                let runtime = GlobalIORuntime::instance();
+                let mut handlers = Vec::with_capacity(segment_with_hll.indexes.len());
+                for &idx in &segment_with_hll.indexes {
+                    let permit = acquire_task_permit(semaphore.clone()).await?;
+                    let block_reader = self.block_reader.clone();
+                    let settings = self.settings.clone();
+                    let storage_format = self.storage_format.clone();
+                    let block_meta = segment_with_hll.blocks[idx].clone();
+                    let ndv_columns_map = self.ndv_columns_map.clone();
+                    let handler: databend_common_base::JoinHandle<
+                        std::result::Result<Option<HashMap<u32, MetaHLL>>, ErrorCode>,
+                    > = runtime.spawn(async move {
+                        let block = block_reader
+                            .read_by_meta(&settings, &block_meta, &storage_format)
+                            .await?;
+                        let column_hlls = build_column_hlls(&block, &ndv_columns_map)?;
+                        drop(permit);
+                        Ok::<_, ErrorCode>(column_hlls)
+                    });
+                    handlers.push(handler);
+                }
+
+                let joint = futures::future::try_join_all(handlers).await.map_err(|e| {
+                    ErrorCode::StorageOther(format!(
+                        "[BLOCK-COMPACT] Failed to deserialize segment blocks: {}",
+                        e
+                    ))
+                })?;
+                let new_hlls = joint.into_iter().collect::<Result<Vec<_>>>()?;
+                if new_hlls.iter().all(|v| v.is_none()) {
+                } else {
+                    segment_with_hll.new_hlls = new_hlls;
+                }
+            }
+            State::Write => {
+                let SegmentWithHLL {
+                    location,
+                    blocks,
+                    mut summary,
+                    origin_hlls,
+                    ..
+                } = std::mem::take(&mut self.segment_with_hll).unwrap();
+
+                let segment_loc = location.0.as_str();
+                let data = SegmentStatistics::new(origin_hlls).to_bytes()?;
+                let segment_stats_location =
+                    TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+                        segment_loc,
+                    );
+                let additional_stats_meta = AdditionalStatsMeta {
+                    size: data.len() as u64,
+                    location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                };
+                self.dal.write(&segment_stats_location, data).await?;
+                summary.additional_stats_meta = Some(additional_stats_meta);
+                let new_segment = SegmentInfo::new(blocks, summary);
+                new_segment
+                    .write_meta_through_cache(&self.dal, segment_loc)
+                    .await?;
+            }
+            _ => return Err(ErrorCode::Internal("It's a bug.")),
+        }
+        Ok(())
     }
 }

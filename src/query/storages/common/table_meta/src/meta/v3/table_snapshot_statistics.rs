@@ -68,7 +68,7 @@ impl From<v2::TableSnapshotStatistics> for TableSnapshotStatistics {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id: value.snapshot_id,
-            hll: HashMap::new(),
+            hll: value.hll,
             histograms: HashMap::new(),
         }
     }
