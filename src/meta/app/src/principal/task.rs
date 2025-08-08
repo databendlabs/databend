@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -169,6 +170,100 @@ impl TaskMessage {
             | TaskMessage::ScheduleTask(task)
             | TaskMessage::AfterTask(task) => task.warehouse_options.as_ref(),
             TaskMessage::DeleteTask(_, warehouse_options) => warehouse_options.as_ref(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskSucceededStateKey {
+    pub before_task: String,
+    pub after_task: String,
+}
+
+impl TaskSucceededStateKey {
+    pub fn new(before_task: String, after_task: String) -> Self {
+        Self {
+            before_task,
+            after_task,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskSucceededStateValue;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DependentType {
+    After = 0,
+    Before = 1,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskDependentKey {
+    pub ty: DependentType,
+    pub source: String,
+}
+
+impl TaskDependentKey {
+    pub fn new(ty: DependentType, source: String) -> Self {
+        Self { ty, source }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct TaskDependentValue(pub BTreeSet<String>);
+
+mod kvapi_key_impl {
+    use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyError;
+    use databend_common_meta_kvapi::kvapi::KeyParser;
+
+    use crate::principal::task::TaskSucceededStateKey;
+    use crate::principal::DependentType;
+    use crate::principal::TaskDependentKey;
+
+    impl kvapi::KeyCodec for TaskSucceededStateKey {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_str(self.before_task.as_str())
+                .push_str(self.after_task.as_str())
+        }
+
+        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
+        where Self: Sized {
+            let before_task = parser.next_str()?;
+            let after_task = parser.next_str()?;
+
+            Ok(Self {
+                before_task,
+                after_task,
+            })
+        }
+    }
+
+    impl kvapi::KeyCodec for TaskDependentKey {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            match self.ty {
+                DependentType::After => b.push_str("After"),
+                DependentType::Before => b.push_str("Before"),
+            }
+            .push_str(self.source.as_str())
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
+            let ty = match parser.next_str()?.as_str() {
+                "After" => DependentType::After,
+                "Before" => DependentType::Before,
+                str => {
+                    return Err(KeyError::InvalidId {
+                        s: str.to_string(),
+                        reason: "Invalid Dependent Type".to_string(),
+                    })
+                }
+            };
+            let source = parser.next_str()?;
+
+            Ok(Self { ty, source })
         }
     }
 }

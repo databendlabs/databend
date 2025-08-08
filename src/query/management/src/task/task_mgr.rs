@@ -22,9 +22,16 @@ use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::txn_cond_eq_seq;
+use databend_common_meta_api::txn_op_del;
+use databend_common_meta_api::util::txn_put_pb;
+use databend_common_meta_api::SchemaApi;
 use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskSucceededStateValue;
+use databend_common_meta_app::principal::task_dependent_ident::TaskDependentIdent;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
+use databend_common_meta_app::principal::task_state_ident::TaskSucceededStateIdent;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
@@ -33,10 +40,18 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_condition::Target;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
+use futures::StreamExt;
 use futures::TryStreamExt;
+use seq_marked::SeqValue;
 
 use crate::task::errors::TaskApiError;
 use crate::task::errors::TaskError;
@@ -153,12 +168,7 @@ impl TaskMgr {
                         name: task_name.to_string(),
                     }));
                 }
-                for after in afters {
-                    if task.after.contains(after) {
-                        continue;
-                    }
-                    task.after.push(after.clone());
-                }
+                return self.add_after(&task.task_name, afters).await;
             }
             AlterTaskOptions::RemoveAfter(afters) => {
                 if task.schedule_options.is_some() {
@@ -167,7 +177,7 @@ impl TaskMgr {
                         name: task_name.to_string(),
                     }));
                 }
-                task.after.retain(|task| !afters.contains(task));
+                return self.remove_after(&task.task_name, afters).await;
             }
         }
         if let Err(e) = self
@@ -251,6 +261,248 @@ impl TaskMgr {
         Ok(change.is_changed())
     }
 
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn add_after(
+        &self,
+        task_name: &str,
+        new_afters: &[String],
+    ) -> Result<Result<(), TaskError>, TaskApiError> {
+        let mut request = TxnRequest::new(vec![], vec![]);
+        let after_dependent_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
+
+        let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
+        request.condition.push(txn_cond_eq_seq(
+            &after_dependent_ident,
+            after_seq_deps.seq(),
+        ));
+
+        let mut after_deps = after_seq_deps.unwrap_or_default();
+        after_deps.0.extend(new_afters.iter().cloned());
+        request
+            .if_then
+            .push(txn_put_pb(&after_dependent_ident, &after_deps)?);
+
+        let before_dependent_idents = new_afters
+            .iter()
+            .map(|after| TaskDependentIdent::new_before(&self.tenant, after));
+        for (before_dependent_ident, before_seq_deps) in
+            self.kv_api.get_pb_vec(before_dependent_idents).await?
+        {
+            request.condition.push(txn_cond_eq_seq(
+                &before_dependent_ident,
+                before_seq_deps.seq(),
+            ));
+
+            let mut deps = before_seq_deps.unwrap_or_default();
+            deps.0.insert(task_name.to_string());
+            request
+                .if_then
+                .push(txn_put_pb(&before_dependent_ident, &deps)?);
+        }
+        let reply = self.kv_api.transaction(request).await?;
+
+        if !reply.success {
+            return Err(TaskApiError::SimultaneousUpdateTaskAfter {
+                task_name: task_name.to_string(),
+                after: new_afters.join(","),
+            });
+        }
+
+        Ok(Ok(()))
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn remove_after(
+        &self,
+        task_name: &str,
+        remove_afters: &[String],
+    ) -> Result<Result<(), TaskError>, TaskApiError> {
+        let mut request = TxnRequest::new(vec![], vec![]);
+
+        let after_dependent_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
+        let after_seq_deps = self.kv_api.get_pb(&after_dependent_ident).await?;
+        request.condition.push(txn_cond_eq_seq(
+            &after_dependent_ident,
+            after_seq_deps.seq(),
+        ));
+
+        if let Some(mut deps) = after_seq_deps {
+            for remove_after in remove_afters {
+                deps.0.remove(remove_after);
+            }
+            request
+                .if_then
+                .push(txn_put_pb(&after_dependent_ident, &deps)?);
+        }
+
+        let before_dependent_idents = remove_afters
+            .iter()
+            .map(|after| TaskDependentIdent::new_before(&self.tenant, after));
+        for (before_dependent_ident, before_seq_deps) in
+            self.kv_api.get_pb_vec(before_dependent_idents).await?
+        {
+            request.condition.push(txn_cond_eq_seq(
+                &before_dependent_ident,
+                before_seq_deps.seq(),
+            ));
+
+            if let Some(mut deps) = before_seq_deps {
+                deps.0.remove(task_name);
+                request
+                    .if_then
+                    .push(txn_put_pb(&before_dependent_ident, &deps)?);
+            }
+        }
+        let reply = self.kv_api.transaction(request).await?;
+
+        if !reply.success {
+            return Err(TaskApiError::SimultaneousUpdateTaskAfter {
+                task_name: task_name.to_string(),
+                after: remove_afters.join(","),
+            });
+        }
+
+        Ok(Ok(()))
+    }
+
+    // Tips: Task Before only cleans up when dropping a task
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn clean_task_state_and_dependents(
+        &self,
+        task_name: &str,
+    ) -> Result<Result<(), TaskError>, TaskApiError> {
+        let mut request = TxnRequest::new(vec![], vec![]);
+
+        let task_after_ident = TaskDependentIdent::new_after(&self.tenant, task_name);
+        let task_before_ident = TaskDependentIdent::new_before(&self.tenant, task_name);
+
+        let mut target_idents = Vec::new();
+        if let Some(task_after_dependent) = self.kv_api.get(&task_after_ident).await? {
+            target_idents.extend(task_after_dependent.0.into_iter().map(|dependent_target| {
+                TaskDependentIdent::new_before(&self.tenant, dependent_target)
+            }));
+        }
+        if let Some(task_before_dependent) = self.kv_api.get(&task_before_ident).await? {
+            target_idents.extend(task_before_dependent.0.into_iter().map(|dependent_target| {
+                TaskDependentIdent::new_after(&self.tenant, dependent_target)
+            }));
+        }
+        for (target_ident, seq_dep) in self.kv_api.get_pb_vec(target_idents).await? {
+            request
+                .condition
+                .push(txn_cond_eq_seq(&target_ident, seq_dep.seq()));
+
+            if let Some(mut deps) = seq_dep {
+                deps.0.remove(task_name);
+                request.if_then.push(txn_put_pb(&target_ident, &deps)?);
+            }
+        }
+        request.if_then.push(TxnOp::delete(
+            TaskDependentIdent::new_before(&self.tenant, task_name).to_string_key(),
+        ));
+        request.if_then.push(TxnOp::delete(
+            TaskDependentIdent::new_after(&self.tenant, task_name).to_string_key(),
+        ));
+        let mut stream = self
+            .kv_api
+            .list_pb_keys(&DirName::new(TaskSucceededStateIdent::new(
+                &self.tenant,
+                task_name,
+                "",
+            )))
+            .await?;
+
+        while let Some(result) = stream.next().await {
+            request.if_then.push(TxnOp::delete(result?.to_string_key()))
+        }
+        let _ = self.kv_api.transaction(request).await?;
+
+        Ok(Ok(()))
+    }
+
+    /// Marks the given task as succeeded, and checks all tasks that depend on it.
+    ///
+    /// For each task that depends on the completed task (`task_name`), we check if all its
+    /// predecessor tasks are also succeeded. If so, we mark the dependent task as *not succeeded*
+    /// to prevent premature execution. Otherwise, we record the dependent task as *ready*
+    /// for further processing.
+    ///
+    /// # Arguments
+    /// - `task_name`: The name of the task that has just completed successfully.
+    ///
+    /// # Returns
+    /// - `Vec<String>`: A list of dependent task names that are ready to proceed.
+    ///
+    /// # Behavior
+    /// Assume:
+    /// - `a` = given `task_name` (the completed task)
+    /// - `b` = a task that has `a` in its `AFTER` list (i.e., depends on `a`)
+    /// - `c` = other tasks in `b`'s `AFTER` list (other dependencies of `b`)
+    ///
+    /// 1. Retrieves all tasks (`b`) that have `a` in their `AFTER` list.
+    /// 2. For each `b`:
+    ///     - Check whether all its dependencies (`a/b` + `c/b`) have succeeded.
+    ///     - If all dependencies are complete:
+    ///         - Add `b` to the ready list.
+    ///         - Set the status of its dependencies (`a/b` + `c/b`) to `not succeeded`.
+    ///     - If not all dependencies of `b` are complete:
+    ///         - Only mark `a/b` as succeeded.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn get_next_ready_tasks(
+        &self,
+        task_name: &str,
+    ) -> Result<Result<Vec<String>, TaskError>, TaskApiError> {
+        let task_before_ident = TaskDependentIdent::new_before(&self.tenant, task_name);
+
+        let Some(task_before_dependent) = self.kv_api.get_pb(&task_before_ident).await? else {
+            return Ok(Ok(Vec::new()));
+        };
+        let mut ready_tasks = Vec::new();
+
+        let target_after_idents = task_before_dependent
+            .0
+            .iter()
+            .map(|before| TaskDependentIdent::new_after(&self.tenant, before));
+        for (target_after_ident, target_after_dependent) in
+            self.kv_api.get_pb_vec(target_after_idents).await?
+        {
+            let Some(target_after_dependent) = target_after_dependent else {
+                continue;
+            };
+            let target_after = &target_after_ident.name().source;
+            let this_task_to_target_state =
+                TaskSucceededStateIdent::new(&self.tenant, task_name, target_after);
+            let mut request = TxnRequest::new(vec![], vec![]).with_else(vec![txn_put_pb(
+                &this_task_to_target_state,
+                &TaskSucceededStateValue,
+            )?]);
+
+            for before_target_after in target_after_dependent.0.iter() {
+                let task_ident =
+                    TaskSucceededStateIdent::new(&self.tenant, before_target_after, target_after);
+                // Only care about the predecessors of this task's successor tasks, excluding this task itself.
+                if before_target_after != task_name {
+                    request.condition.push(TxnCondition {
+                        key: task_ident.to_string_key(),
+                        expected: ConditionResult::Gt as i32,
+                        target: Some(Target::Seq(0)),
+                    });
+                }
+                request.if_then.push(txn_op_del(&task_ident));
+            }
+            let reply = self.kv_api.transaction(request).await?;
+
+            if reply.success {
+                ready_tasks.push(target_after_ident.name().source.clone());
+            }
+        }
+        Ok(Ok(ready_tasks))
+    }
+
     async fn create_task_inner(
         &self,
         task: Task,
@@ -300,7 +552,9 @@ impl TaskMgr {
             }
         }
         if !task.after.is_empty() {
-            self.send(TaskMessage::AfterTask(task)).await?;
+            if let Err(err) = self.add_after(&task.task_name, &task.after).await? {
+                return Ok(Err(err));
+            }
         } else if task.schedule_options.is_some() && !without_schedule {
             self.send(TaskMessage::ScheduleTask(task)).await?;
         }

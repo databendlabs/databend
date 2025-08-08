@@ -78,3 +78,15 @@ message Task {
   optional string error_integration = 20;
   string owner_user = 21;
 }
+
+message TaskStateValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+}
+
+message TaskDependentValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated string names = 1;
+}

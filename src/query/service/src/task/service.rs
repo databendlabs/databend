@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_stream::stream;
 use chrono::DateTime;
 use chrono::Utc;
 use chrono_tz::Tz;
@@ -59,10 +58,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_sql::Planner;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use futures::Stream;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
-use itertools::Itertools;
 use log::error;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
@@ -135,12 +132,6 @@ impl TaskService {
         suspend_task_after_num_failures INTEGER\
         );";
         self.execute_sql(None, create_task_run_table).await?;
-
-        let create_task_after_table = "CREATE TABLE IF NOT EXISTS system_task.task_after(\
-        task_name STRING NOT NULL,\
-        next_task STRING NOT NULL\
-        );";
-        self.execute_sql(None, create_task_after_table).await?;
 
         Ok(())
     }
@@ -401,11 +392,9 @@ impl TaskService {
                                                 .update_or_create_task_run(&task_run)
                                                 .await?;
 
-                                            let mut stream =
-                                                Box::pin(task_service.check_next_tasks(&task_name));
-
-                                            while let Some(next_task) = stream.next().await {
-                                                let next_task = next_task?;
+                                            for next_task in
+                                                task_mgr.get_next_ready_tasks(&task_name).await??
+                                            {
                                                 let next_task = task_mgr
                                                     .describe_task(&next_task)
                                                     .await??
@@ -460,7 +449,9 @@ impl TaskService {
                         token.cancel();
                     }
                     if task_mgr.accept(&task_key).await? {
-                        self.clean_task_afters(&task_name).await?;
+                        task_mgr
+                            .clean_task_state_and_dependents(&task_name)
+                            .await??;
                     }
                     task_mgr
                         .accept(&TaskMessageIdent::new(
@@ -469,16 +460,8 @@ impl TaskService {
                         ))
                         .await?;
                 }
-                TaskMessage::AfterTask(task) => {
-                    if !task_mgr.accept(&task_key).await? {
-                        continue;
-                    }
-                    match task.status {
-                        Status::Suspended => continue,
-                        Status::Started => (),
-                    }
-                    self.update_task_afters(&task).await?;
-                }
+                // deprecated
+                TaskMessage::AfterTask(_) => (),
             }
         }
         Ok(())
@@ -503,6 +486,18 @@ impl TaskService {
                 .flatten()
                 .transpose()
         })))
+    }
+
+    pub async fn is_task_executing(&self, task_name: &str) -> Result<bool> {
+        let blocks = self.execute_sql(None, &format!("SELECT state = 'EXECUTING' from system_task.task_run WHERE task_name = '{task_name}' ORDER BY run_id DESC LIMIT 1")).await?;
+        Ok(blocks
+            .first()
+            .and_then(|block| {
+                block.columns()[0]
+                    .index(0)
+                    .and_then(|scalar| scalar.as_boolean().cloned())
+            })
+            .unwrap_or(false))
     }
 
     fn decode(resp: WatchResponse) -> Result<Option<(String, TaskMessage)>> {
@@ -670,89 +665,6 @@ impl TaskService {
             self.execute_sql(None, &Self::task_run2insert(task_run)?)
                 .await?;
         }
-        Ok(())
-    }
-
-    pub fn check_next_tasks<'a>(
-        &'a self,
-        task_name: &'a str,
-    ) -> impl Stream<Item = Result<String>> + '_ {
-        stream! {
-            let check = format!("
-            WITH latest_task_run AS (
-    SELECT
-        task_name,
-        state,
-        completed_at
-    FROM (
-        SELECT
-            task_name,
-            state,
-            completed_at,
-            ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn
-        FROM system_task.task_run
-    ) ranked
-    WHERE rn = 1
-),
-next_task_time AS (
-    SELECT
-        task_name AS next_task,
-        completed_at
-    FROM latest_task_run
-)
-SELECT DISTINCT ta.next_task
-FROM system_task.task_after ta
-WHERE ta.task_name = '{task_name}'
-  AND NOT EXISTS (
-    SELECT 1
-    FROM system_task.task_after ta_dep
-    LEFT JOIN latest_task_run tr
-      ON ta_dep.task_name = tr.task_name
-    LEFT JOIN next_task_time nt
-      ON ta_dep.next_task = nt.next_task
-    WHERE ta_dep.next_task = ta.next_task
-      AND (
-        tr.task_name IS NULL
-        OR tr.state != 'SUCCEEDED'
-        OR tr.completed_at IS NULL
-        OR (nt.completed_at IS NOT NULL AND tr.completed_at <= nt.completed_at)
-      )
-  );");
-            if let Some(next_task) = self.execute_sql(None, &check).await?.first().and_then(|block| block.columns()[0].index(0).and_then(|scalar| { scalar.as_string().map(|s| s.to_string()) })) {
-                yield Result::Ok(next_task);
-            }
-        }
-    }
-
-    pub async fn clean_task_afters(&self, task_name: &str) -> Result<()> {
-        self.execute_sql(
-            None,
-            &format!(
-                "DELETE FROM system_task.task_after WHERE next_task = '{}'",
-                task_name
-            ),
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn update_task_afters(&self, task: &Task) -> Result<()> {
-        self.clean_task_afters(&task.task_name).await?;
-        let values = task
-            .after
-            .iter()
-            .map(|after| format!("('{}', '{}')", after, task.task_name))
-            .join(", ");
-        self.execute_sql(
-            None,
-            &format!(
-                "INSERT INTO system_task.task_after (task_name, next_task) VALUES {}",
-                values
-            ),
-        )
-        .await?;
-
         Ok(())
     }
 

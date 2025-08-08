@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal as mt;
@@ -192,6 +194,47 @@ impl FromToProto for mt::TaskMessage {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             message: Some(message),
+        })
+    }
+}
+
+impl FromToProto for mt::TaskDependentValue {
+    type PB = pb::TaskDependentValue;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self(BTreeSet::from_iter(p.names)))
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::TaskDependentValue {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            names: Vec::from_iter(self.0.iter().cloned()),
+        })
+    }
+}
+
+impl FromToProto for mt::TaskSucceededStateValue {
+    type PB = pb::TaskStateValue;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(_p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self)
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::TaskStateValue {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
         })
     }
 }

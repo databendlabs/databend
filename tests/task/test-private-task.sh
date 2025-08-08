@@ -149,6 +149,48 @@ else
     exit 1
 fi
 
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_3 REMOVE AFTER 'my_task_2'\"}")
+alter_task_query_id=$(echo $response | jq -r '.id')
+echo "ALTER Task 3 ID: $alter_task_query_id"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_1\"}")
+execute_task_1_query_id=$(echo $response | jq -r '.id')
+echo "Execute Task 1 ID: $execute_task_1_query_id"
+
+sleep 15
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["0"],["0"],["0"],["1"],["1"],["1"],["2"],["2"],["2"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+sleep 30
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["0"],["0"],["0"],["1"],["1"],["1"],["1"],["2"],["2"],["2"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 # Test whether the schedule can be restored after restart
 
 killall -9 databend-query || true
@@ -172,7 +214,7 @@ sleep 45
 response9=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 
 actual=$(echo "$response9" | jq -c '.data')
-expected='[["0"],["0"],["1"],["1"],["1"],["2"],["2"]]'
+expected='[["0"],["0"],["0"],["1"],["1"],["1"],["1"],["1"],["2"],["2"],["2"]]'
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"

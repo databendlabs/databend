@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use databend_common_exception::ErrorCode;
+use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaError;
+use databend_common_proto_conv::Incompatible;
 
 use crate::errors::TenantError;
 
@@ -84,6 +84,15 @@ pub enum TaskApiError {
         meta_err: MetaError,
         context: String,
     },
+
+    #[error("Incompatible error: {inner}")]
+    Incompatible { inner: Incompatible },
+
+    #[error("There are simultaneous update to task: {task_name} afters: {after}")]
+    SimultaneousUpdateTaskAfter { task_name: String, after: String },
+
+    #[error("InvalidArgument error: {inner}")]
+    InvalidArgument { inner: InvalidArgument },
 }
 
 impl From<MetaError> for TaskApiError {
@@ -95,6 +104,18 @@ impl From<MetaError> for TaskApiError {
     }
 }
 
+impl From<InvalidArgument> for TaskApiError {
+    fn from(err: InvalidArgument) -> Self {
+        TaskApiError::InvalidArgument { inner: err }
+    }
+}
+
+impl From<Incompatible> for TaskApiError {
+    fn from(value: Incompatible) -> Self {
+        TaskApiError::Incompatible { inner: value }
+    }
+}
+
 impl From<TaskApiError> for ErrorCode {
     fn from(value: TaskApiError) -> Self {
         match value {
@@ -102,21 +123,11 @@ impl From<TaskApiError> for ErrorCode {
             TaskApiError::MetaError { meta_err, context } => {
                 ErrorCode::from(meta_err).add_message_back(context)
             }
-        }
-    }
-}
-
-impl TaskApiError {
-    pub fn append_context(self, context: impl Display) -> Self {
-        match self {
-            TaskApiError::TenantError(e) => TaskApiError::TenantError(e.append_context(context)),
-            TaskApiError::MetaError {
-                meta_err,
-                context: old,
-            } => TaskApiError::MetaError {
-                meta_err,
-                context: format!("{}; {}", old, context),
-            },
+            TaskApiError::Incompatible { inner } => ErrorCode::from_std_error(inner),
+            TaskApiError::SimultaneousUpdateTaskAfter { .. } => {
+                ErrorCode::from_string(value.to_string())
+            }
+            TaskApiError::InvalidArgument { inner } => ErrorCode::from_std_error(inner),
         }
     }
 }
