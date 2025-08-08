@@ -48,7 +48,7 @@ use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
 use log::error;
-use log::trace;
+use log::info;
 use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -369,6 +369,9 @@ impl ExecutingGraph {
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
+        info!("------------new--------------");
+        let node = &locker.graph[index];
+        info!("Node {:?} trigger schedule", node);
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
@@ -381,6 +384,7 @@ impl ExecutingGraph {
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
+                info!("Schedule edge: {:?}", edge);
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 event_cause = match edge {
@@ -396,6 +400,7 @@ impl ExecutingGraph {
                 let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
 
                 if matches!(*node_state, State::Idle) {
+                    info!("add new Node: {:?}", target_index);
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
                 } else {
@@ -438,6 +443,12 @@ impl ExecutingGraph {
                             error!("Infinite loop detected in processor event handling for node: {:?}, event: {:?}, cause: {:?}",
                                    node.processor.id(), final_event, inner_event_cause);
                         }
+                        info!(
+                            "!!Reschedule node: {:?} {:?} event_cause: {:?}",
+                            node.processor.id(),
+                            node.processor.name(),
+                            inner_event_cause
+                        );
                     }
                     let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
@@ -448,7 +459,7 @@ impl ExecutingGraph {
                     }
                 }?;
 
-                trace!(
+                info!(
                     "node id: {:?}, name: {:?}, event: {:?}",
                     node.processor.id(),
                     node.processor.name(),
