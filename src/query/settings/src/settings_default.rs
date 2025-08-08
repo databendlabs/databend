@@ -676,7 +676,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_batch_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(8 * 1024 * 1024),
+                    value: UserSettingValue::UInt64(20 * 1024 * 1024),
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

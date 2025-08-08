@@ -32,6 +32,12 @@ pub struct SortSpillParams {
     pub num_merge: usize,
 }
 
+impl SortSpillParams {
+    pub fn max_rows(&self) -> usize {
+        self.batch_rows * self.num_merge
+    }
+}
+
 pub trait MergeSort<R: Rows> {
     const NAME: &'static str;
 

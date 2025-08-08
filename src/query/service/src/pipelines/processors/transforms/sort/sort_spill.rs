@@ -172,27 +172,33 @@ where A: SortAlgorithm
         };
 
         if sort.output_merger.is_some() {
-            return sort.restore_and_output(&self.base).await;
+            return sort
+                .restore_and_output(&self.base, sort.params.num_merge)
+                .await;
         }
 
         while sort.current.is_empty() {
             sort.choice_streams_by_bound();
         }
 
+        let num_merge = sort.recalculate_num_merge();
+        assert!(num_merge >= 2);
         log::debug!(
             current_len = sort.current.len(),
             subsequent_len = sort.subsequent.len(),
-            params:? = sort.params; "restore status");
-        if sort.current.len() <= sort.params.num_merge {
-            return sort.restore_and_output(&self.base).await;
+            num_merge,
+            batch_rows = sort.params.batch_rows;
+        "restore params");
+        if sort.current.len() <= num_merge {
+            sort.restore_and_output(&self.base, num_merge).await
+        } else {
+            sort.merge_current(&self.base, num_merge).await?;
+            Ok(OutputData {
+                block: None,
+                bound: (u32::MAX, None),
+                finish: false,
+            })
         }
-
-        sort.merge_current(&self.base).await?;
-        Ok(OutputData {
-            block: None,
-            bound: (u32::MAX, None),
-            finish: false,
-        })
     }
 
     pub fn max_rows(&self) -> usize {
@@ -200,7 +206,7 @@ where A: SortAlgorithm
             Step::Collect(collect) => collect.params,
             Step::Sort(sort) => sort.params,
         };
-        params.num_merge * params.batch_rows
+        params.max_rows()
     }
 
     #[expect(unused)]
@@ -346,14 +352,11 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::merge_current")]
-    async fn merge_current(&mut self, base: &Base) -> Result<()> {
+    async fn merge_current(&mut self, base: &Base, num_merge: usize) -> Result<()> {
         for s in &mut self.subsequent {
             s.spill(0).await?;
         }
-        let SortSpillParams {
-            batch_rows,
-            num_merge,
-        } = self.params;
+        let batch_rows = self.params.batch_rows;
         for (i, s) in self.current.iter_mut().rev().enumerate() {
             if i < num_merge {
                 s.spill(1).await?;
@@ -385,7 +388,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::restore_and_output")]
-    async fn restore_and_output(&mut self, base: &Base) -> Result<OutputData> {
+    async fn restore_and_output(&mut self, base: &Base, num_merge: usize) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -416,7 +419,8 @@ impl<A: SortAlgorithm> StepSort<A> {
                     });
                 }
 
-                self.sort_spill(base, self.params).await?;
+                self.sort_spill(base, self.params.batch_rows, num_merge)
+                    .await?;
 
                 let streams = mem::take(&mut self.current);
                 let merger = Merger::<A, _>::create(
@@ -481,14 +485,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::sort_spill")]
-    async fn sort_spill(
-        &mut self,
-        base: &Base,
-        SortSpillParams {
-            batch_rows,
-            num_merge,
-        }: SortSpillParams,
-    ) -> Result<()> {
+    async fn sort_spill(&mut self, base: &Base, batch_rows: usize, num_merge: usize) -> Result<()> {
         let need = self
             .current
             .iter()
@@ -556,6 +553,23 @@ impl<A: SortAlgorithm> StepSort<A> {
             .partition(|s| s.should_include_first());
 
         self.current.sort_by_key(|s| s.blocks[0].data.is_some());
+    }
+
+    fn recalculate_num_merge(&self) -> usize {
+        let mut max_rows = self.params.max_rows();
+        let batch_rows = self.params.batch_rows;
+        let mut num_merge = 0;
+        for s in self.current.iter().rev() {
+            // Edge case: rows may not always equal batch_rows, recalculate num_merge to mitigate risk
+            let rows = s.blocks[0].rows.max(batch_rows);
+            if max_rows >= rows || num_merge < 2 {
+                max_rows -= rows;
+                num_merge += 1;
+            } else {
+                max_rows = 0;
+            }
+        }
+        num_merge
     }
 }
 

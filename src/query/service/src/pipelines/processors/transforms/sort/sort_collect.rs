@@ -35,7 +35,7 @@ use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
 use super::sort_spill::SortSpill;
 use super::Base;
-use super::MemoryRows;
+use super::RowsStat;
 
 enum Inner<A: SortAlgorithm> {
     Collect(Vec<DataBlock>),
@@ -176,7 +176,7 @@ where
         // We use the first memory calculation to estimate the batch size and the number of merge.
         let spill_unit_size = self.memory_settings.spill_unit_size;
         let num_merge = (bytes.0 as usize).div_ceil(spill_unit_size).max(2);
-        let batch_rows = rows.div_ceil(num_merge as _);
+        let batch_rows = rows.div_ceil(num_merge as _).min(self.max_block_size);
 
         /// The memory will be doubled during merging.
         const MERGE_RATIO: usize = 2;
