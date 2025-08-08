@@ -82,6 +82,30 @@ impl HistoryMetaHandle {
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
         let _guard = ThreadTracker::tracking(tracking_payload);
+
+        // Short-circuit: check timestamp first to avoid unnecessary lock contention
+        if interval != 0 {
+            let should_acquire = match ThreadTracker::tracking_future(
+                self.meta_client
+                    .get_kv(&format!("{}/last_timestamp", meta_key)),
+            )
+            .await?
+            {
+                Some(v) => {
+                    let last: u64 = serde_json::from_slice(&v.data)?;
+                    chrono::Utc::now().timestamp_millis() as u64
+                        - Duration::from_secs(interval).as_millis() as u64
+                        > last
+                }
+                None => true,
+            };
+
+            if !should_acquire {
+                return Ok(None);
+            }
+        }
+
+        // Acquire lock only if needed
         let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
             self.meta_client.clone(),
             meta_key,
@@ -90,29 +114,9 @@ impl HistoryMetaHandle {
             Duration::from_secs(3),
         ))
         .await
-        .map_err(|_e| "acquire semaphore failed from GlobalHistoryLog")?;
-        if interval == 0 {
-            return Ok(Some(acquired_guard));
-        }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await?
-        {
-            Some(v) => {
-                let last: u64 = serde_json::from_slice(&v.data)?;
-                chrono::Utc::now().timestamp_millis() as u64
-                    - Duration::from_secs(interval).as_millis() as u64
-                    > last
-            }
-            None => true,
-        } {
-            Ok(Some(acquired_guard))
-        } else {
-            drop(acquired_guard);
-            Ok(None)
-        }
+        .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog ({})", e))?;
+
+        Ok(Some(acquired_guard))
     }
 
     /// Acquires a permit with automatic timestamp update on drop using RAII pattern.
