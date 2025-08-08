@@ -382,7 +382,7 @@ logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "glob
     'fastrace',
 ] }
 lz4 = "1.24.0"
-lz4_flex = { version = "^0.9" }
+lz4_flex = { version = "^0.11" }
 map-api = { version = "0.2.5" }
 maplit = "1.0.2"
 match-template = "0.0.1"
