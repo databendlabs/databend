@@ -28,7 +28,7 @@ HashJoin
 ├── filters: []
 ├── cache index: 0
 ├── cache columns: [1]
-├── estimated rows: 3.00
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── output columns: [a (#0), b (#1)]

@@ -208,7 +208,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 1.00
+├── estimated rows: 0.01
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]

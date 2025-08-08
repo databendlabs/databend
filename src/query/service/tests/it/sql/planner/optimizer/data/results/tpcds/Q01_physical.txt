@@ -127,14 +127,14 @@ Limit
                 │           ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
                 │           ├── group by: [sr_customer_sk, sr_store_sk]
                 │           ├── aggregate functions: [sum(sr_return_amt)]
-                │           ├── estimated rows: 841298963.13
+                │           ├── estimated rows: 4206494.82
                 │           └── Exchange
                 │               ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
                 │               ├── exchange type: Hash(0, 1)
                 │               └── AggregatePartial
                 │                   ├── group by: [sr_customer_sk, sr_store_sk]
                 │                   ├── aggregate functions: [sum(sr_return_amt)]
-                │                   ├── estimated rows: 841298963.13
+                │                   ├── estimated rows: 4206494.82
                 │                   └── HashJoin
                 │                       ├── output columns: [store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7), store_returns.sr_return_amt (#11)]
                 │                       ├── join type: INNER
@@ -144,7 +144,7 @@ Limit
                 │                       ├── filters: []
                 │                       ├── build join filters:
                 │                       │   └── filter id:0, build key:date_dim.d_date_sk (#20), probe key:store_returns.sr_returned_date_sk (#0), filter type:inlist,min_max
-                │                       ├── estimated rows: 841298963.13
+                │                       ├── estimated rows: 4206494.82
                 │                       ├── Exchange(Build)
                 │                       │   ├── output columns: [date_dim.d_date_sk (#20)]
                 │                       │   ├── exchange type: Broadcast
