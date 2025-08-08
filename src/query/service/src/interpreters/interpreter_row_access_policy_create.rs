@@ -55,17 +55,18 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
-        if let Err(e) = handler
+        if let Err(_e) = handler
             .create_row_access(meta_api, self.plan.clone().into())
-            .await
+            .await?
         {
-            if e.code() == ErrorCode::ROW_ACCESS_POLICY_ALREADY_EXISTS {
-                if let CreateOption::CreateIfNotExists = self.plan.create_option {
-                    return Ok(PipelineBuildResult::create());
-                }
+            return if let CreateOption::CreateIfNotExists = self.plan.create_option {
+                Ok(PipelineBuildResult::create())
             } else {
-                return Err(e);
-            }
+                Err(ErrorCode::RowAccessPolicyAlreadyExists(format!(
+                    "Row Access Policy '{}' already exists",
+                    self.plan.name
+                )))
+            };
         }
 
         Ok(PipelineBuildResult::create())

@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
@@ -29,8 +30,8 @@ use fastrace::func_name;
 use log::debug;
 
 use crate::fetch_id;
-use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::meta_txn_error::MetaTxnError;
 use crate::row_access_policy_api::RowAccessPolicyApi;
 use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
@@ -45,7 +46,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
     async fn create_row_access(
         &self,
         req: CreateRowAccessPolicyReq,
-    ) -> Result<CreateRowAccessPolicyReply, KVAppError> {
+    ) -> Result<
+        Result<CreateRowAccessPolicyReply, ExistError<row_access_policy_name_ident::Resource>>,
+        MetaTxnError,
+    > {
         debug!(req :? =(&req); "RowAccessPolicyApi: {}", func_name!());
 
         let name_ident = &req.name;
@@ -72,10 +76,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
                     curr_seq = seq_id.seq;
                 } else {
-                    return Err(AppError::RowAccessPolicyAlreadyExists(
-                        name_ident.exist_error(func_name!()),
-                    )
-                    .into());
+                    return Ok(Err(name_ident.exist_error(func_name!())));
                 }
             }
 
@@ -115,13 +116,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             }
         };
 
-        Ok(CreateRowAccessPolicyReply { id: *id })
+        Ok(Ok(CreateRowAccessPolicyReply { id: *id }))
     }
 
     async fn drop_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, KVAppError> {
+    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaTxnError> {
         debug!(name_ident :? =(name_ident); "RowAccessPolicyApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
