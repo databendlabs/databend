@@ -470,6 +470,7 @@ impl<'a, T: ParquetColumnType> Iterator for ParquetColumnIterator<'a, T> {
 
             match page {
                 parquet2::page::Page::Data(data_page) => {
+                    let data_len_before = column_data.len();
                     match process_data_page(
                         data_page,
                         &mut column_data,
@@ -481,7 +482,6 @@ impl<'a, T: ParquetColumnType> Iterator for ParquetColumnIterator<'a, T> {
                             if self.is_nullable {
                                 // For nullable columns, we must have a validity bitmap for each page
                                 if let Some(bitmap) = validity_bitmap {
-                                    let data_len_before = column_data.len();
                                     let data_added = column_data.len() - data_len_before;
 
                                     // Verify bitmap length matches data added
