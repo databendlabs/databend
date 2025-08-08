@@ -560,6 +560,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
+    pub fn get_enable_experimental_row_access_policy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
+    }
+
     pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_connection_privilege_check")? != 0)
     }

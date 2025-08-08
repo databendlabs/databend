@@ -20,6 +20,7 @@ use databend_common_meta_types::MatchSeq;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
 use crate::principal::ProcedureIdentity;
+use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
@@ -1089,6 +1090,9 @@ pub enum AppError {
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
+    UnknownRowAccessPolicy(#[from] UnknownError<row_access_policy_name_ident::Resource>),
+
+    #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
@@ -1467,12 +1471,6 @@ impl AppErrorMessage for IndexColumnIdNotFound {
     }
 }
 
-impl AppErrorMessage for UnknownDatamask {
-    fn message(&self) -> String {
-        format!("Datamask '{}' does not exists", self.name)
-    }
-}
-
 impl AppErrorMessage for UnmatchColumnDataType {
     fn message(&self) -> String {
         format!(
@@ -1627,6 +1625,9 @@ impl From<AppError> for ErrorCode {
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::UnknownRowAccessPolicy(err) => {
+                ErrorCode::UnknownRowAccessPolicy(err.message())
+            }
 
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::UnmatchMaskPolicyReturnType(err) => {

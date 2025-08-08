@@ -268,6 +268,11 @@ pub enum Statement {
     },
     AlterUDF(AlterUDFStmt),
 
+    // RowAccessPolicy
+    CreateRowAccessPolicy(CreateRowAccessPolicyStmt),
+    DropRowAccessPolicy(DropRowAccessPolicyStmt),
+    DescRowAccessPolicy(DescRowAccessPolicyStmt),
+
     // Stages
     CreateStage(CreateStageStmt),
     ShowStages {
@@ -498,6 +503,7 @@ impl Statement {
             | Statement::ShowFileFormats
             | Statement::Presign(..)
             | Statement::DescDatamaskPolicy(..)
+            | Statement::DescRowAccessPolicy(..)
             | Statement::DescNetworkPolicy(..)
             | Statement::ShowNetworkPolicies
             | Statement::DescPasswordPolicy(..)
@@ -560,6 +566,8 @@ impl Statement {
             | Statement::CreateUDF(..)
             | Statement::DropUDF { .. }
             | Statement::AlterUDF(..)
+            | Statement::CreateRowAccessPolicy(..)
+            | Statement::DropRowAccessPolicy(..)
             | Statement::DropStage { .. }
             | Statement::DropConnection(..)
             | Statement::CreateFileFormat { .. }
@@ -915,6 +923,9 @@ impl Display for Statement {
                 write!(f, " {udf_name}")?;
             }
             Statement::AlterUDF(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {

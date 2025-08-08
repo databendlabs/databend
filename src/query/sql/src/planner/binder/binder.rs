@@ -611,6 +611,40 @@ impl Binder {
                     .await?
             }
 
+            // RowAccessPolicy
+            Statement::CreateRowAccessPolicy(stmt) => {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    self.bind_create_row_access(stmt).await?
+                } else {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+            }
+            Statement::DropRowAccessPolicy(stmt) => {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    self.bind_drop_row_access(stmt).await?
+                } else {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+            }
+            Statement::DescRowAccessPolicy(stmt) => {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    self.bind_desc_row_access(stmt).await?
+                } else {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+            }
             Statement::SetRole {
                 is_default,
                 role_name,

@@ -4938,6 +4938,7 @@ dependencies = [
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
+ "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
@@ -4973,6 +4974,18 @@ dependencies = [
  "databend-common-exception",
  "databend-common-management",
  "databend-common-meta-types",
+]
+
+[[package]]
+name = "databend-enterprise-row-access-policy-feature"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-meta-api",
+ "databend-common-meta-app",
+ "databend-common-meta-store",
 ]
 
 [[package]]
@@ -5319,6 +5332,7 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
+ "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",

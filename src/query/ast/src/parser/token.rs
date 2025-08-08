@@ -1844,6 +1844,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
+            | TokenKind::ROW
             | TokenKind::POLICY
             | TokenKind::TASK
             | TokenKind::PIPE
