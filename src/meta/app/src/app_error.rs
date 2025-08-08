@@ -426,22 +426,6 @@ impl UnknownDatamask {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("UnknownRowAccessPolicy: `{name}` while `{context}`")]
-pub struct UnknownRowAccessPolicy {
-    name: String,
-    context: String,
-}
-
-impl UnknownRowAccessPolicy {
-    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            context: context.into(),
-        }
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabaseId: `{db_id}` while `{context}`")]
 pub struct UnknownDatabaseId {
     db_id: u64,
@@ -1103,9 +1087,6 @@ pub enum AppError {
     DatamaskAlreadyExists(#[from] ExistError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
-    RowAccessPolicyAlreadyExists(#[from] ExistError<row_access_policy_name_ident::Resource>),
-
-    #[error(transparent)]
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
@@ -1490,18 +1471,6 @@ impl AppErrorMessage for IndexColumnIdNotFound {
     }
 }
 
-impl AppErrorMessage for UnknownDatamask {
-    fn message(&self) -> String {
-        format!("Datamask '{}' does not exists", self.name)
-    }
-}
-
-impl AppErrorMessage for UnknownRowAccessPolicy {
-    fn message(&self) -> String {
-        format!("RowAccessPolicy '{}' does not exists", self.name)
-    }
-}
-
 impl AppErrorMessage for UnmatchColumnDataType {
     fn message(&self) -> String {
         format!(
@@ -1656,9 +1625,6 @@ impl From<AppError> for ErrorCode {
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
-            AppError::RowAccessPolicyAlreadyExists(err) => {
-                ErrorCode::RowAccessPolicyAlreadyExists(err.message())
-            }
             AppError::UnknownRowAccessPolicy(err) => {
                 ErrorCode::UnknownRowAccessPolicy(err.message())
             }
