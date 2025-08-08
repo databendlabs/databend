@@ -76,24 +76,24 @@ query T
 explain select * from t, t2, t1 where t.a = t2.a and t1.a = t2.a
 ----
 HashJoin
-├── output columns: [t2.a (#1), t1.a (#2), t.a (#0)]
+├── output columns: [t1.a (#2), t2.a (#1), t.a (#0)]
 ├── join type: INNER
 ├── build keys: [t.a (#0)]
-├── probe keys: [t2.a (#1)]
+├── probe keys: [t1.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
+│   └── filter id:1, build key:t.a (#0), probe key:t1.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
-│   ├── output columns: [t1.a (#2), t.a (#0)]
+│   ├── output columns: [t2.a (#1), t.a (#0)]
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
-│   ├── probe keys: [t1.a (#2)]
+│   ├── probe keys: [t2.a (#1)]
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#0), probe key:t1.a (#2), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
@@ -106,27 +106,27 @@ HashJoin
 │   │   ├── push downs: [filters: [], limit: NONE]
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
-│       ├── table: default.join_reorder.t1
-│       ├── output columns: [a (#2)]
-│       ├── read rows: 10
+│       ├── table: default.join_reorder.t2
+│       ├── output columns: [a (#1)]
+│       ├── read rows: 100
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │       ├── push downs: [filters: [], limit: NONE]
 │       ├── apply join filters: [#0]
-│       └── estimated rows: 10.00
+│       └── estimated rows: 100.00
 └── TableScan(Probe)
-    ├── table: default.join_reorder.t2
-    ├── output columns: [a (#1)]
-    ├── read rows: 100
+    ├── table: default.join_reorder.t1
+    ├── output columns: [a (#2)]
+    ├── read rows: 10
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#1]
-    └── estimated rows: 100.00
+    └── estimated rows: 10.00
 
 query T
 explain select * from t1, t, t2 where t.a = t2.a and t1.a = t2.a

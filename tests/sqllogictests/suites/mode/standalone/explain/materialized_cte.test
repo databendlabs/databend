@@ -21,7 +21,7 @@ Sequence
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
-    ├── estimated rows: 0.50
+    ├── estimated rows: 100.00
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: t1
     │   ├── cte_schema: [number (#1)]

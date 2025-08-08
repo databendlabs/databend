@@ -49,7 +49,7 @@ Sequence
         ├── probe keys: [b1.a (#4)]
         ├── keys is null equal: [false]
         ├── filters: [d.b (#5) < d.b (#11)]
-        ├── estimated rows: 0.40
+        ├── estimated rows: 400.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: b
         │   ├── cte_schema: [a (#10), b (#11)]

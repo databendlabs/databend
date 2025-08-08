@@ -407,7 +407,7 @@ AggregateFinal
         ├── join type: INNER
         ├── range join conditions: [t1.a (#0) "gt" t2.a (#1)]
         ├── other conditions: []
-        ├── estimated rows: 200.00
+        ├── estimated rows: 1000.00
         ├── TableScan(Left)
         │   ├── table: default.default.t1
         │   ├── output columns: [a (#0)]
