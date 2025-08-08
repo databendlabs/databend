@@ -59,7 +59,7 @@ impl<'a> Decompressor<'a> {
         } else {
             // Decompress directly into the buffer
             match compressed_page.compression() {
-                Compression::Lz4 => {
+                Compression::Lz4Raw => {
                     let _decompressed_len =
                         lz4_flex::decompress_into(compressed_page.data(), uncompressed_buffer)
                             .map_err(|e| {
