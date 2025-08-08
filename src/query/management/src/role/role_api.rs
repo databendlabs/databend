@@ -22,7 +22,7 @@ use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {
-    async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
+    async fn add_role(&self, role_info: RoleInfo, can_replace: bool) -> Result<()>;
 
     #[allow(clippy::ptr_arg)]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
@@ -48,6 +49,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
 use futures::TryStreamExt;
@@ -175,23 +177,29 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
-        let match_seq = MatchSeq::Exact(0);
-        let key = self.role_ident(role_info.identity()).to_string_key();
-        let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+    async fn add_role(
+        &self,
+        info: RoleInfo,
+        can_replace: bool,
+    ) -> databend_common_exception::Result<()> {
+        let seq = if can_replace {
+            MatchSeq::GE(0)
+        } else {
+            MatchSeq::Exact(0)
+        };
 
-        let upsert_kv = self.kv_api.upsert_kv(UpsertKV::new(
-            &key,
-            match_seq,
-            Operation::Update(value),
-            None,
-        ));
+        let key = RoleIdent::new(&self.tenant, &info.name);
+        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
-        })?;
+        if !can_replace && res.prev.is_some() {
+            return Err(ErrorCode::RoleAlreadyExists(format!(
+                "Role '{}' already exists.",
+                info.name
+            )));
+        }
 
-        Ok(res_seq)
+        Ok(())
     }
 
     #[async_backtrace::framed]
