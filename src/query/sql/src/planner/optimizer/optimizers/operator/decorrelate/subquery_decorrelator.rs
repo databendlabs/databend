@@ -586,6 +586,7 @@ impl SubqueryDecorrelatorOptimizer {
                     limit: Some(1),
                     offset: 0,
                     before_exchange: false,
+                    lazy_columns: Default::default(),
                 };
                 subquery_expr =
                     SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr));

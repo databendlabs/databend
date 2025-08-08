@@ -212,6 +212,15 @@ impl SExpr {
     }
 
     #[recursive::recursive]
+    pub(crate) fn support_lazy_materialize(&self) -> bool {
+        self.plan.support_lazy_materialize()
+            && self
+                .children
+                .iter()
+                .all(|child| child.support_lazy_materialize())
+    }
+
+    #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
         let iter = self.plan.scalar_expr_iter();

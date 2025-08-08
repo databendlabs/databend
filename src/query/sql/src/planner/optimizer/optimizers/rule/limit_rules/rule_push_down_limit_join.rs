@@ -77,7 +77,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                 JoinType::Left => {
                     let child = child.replace_children(vec![
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
+                            Arc::new(RelOperator::Limit(limit.without_lazy_columns())),
                             Arc::new(child.child(0)?.clone()),
                         )),
                         Arc::new(child.child(1)?.clone()),
@@ -87,6 +87,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                             before_exchange: limit.before_exchange,
                             limit: limit.limit,
                             offset: 0,
+                            lazy_columns: limit.lazy_columns.clone(),
                         })),
                         Arc::new(child),
                     );
@@ -97,7 +98,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                     let child = Arc::new(child.replace_children(vec![
                         Arc::new(child.child(0)?.clone()),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
+                            Arc::new(RelOperator::Limit(limit.without_lazy_columns())),
                             Arc::new(child.child(1)?.clone()),
                         )),
                     ]));
@@ -106,6 +107,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                             before_exchange: limit.before_exchange,
                             limit: limit.limit,
                             offset: 0,
+                            lazy_columns: limit.lazy_columns.clone(),
                         })),
                         child,
                     );
