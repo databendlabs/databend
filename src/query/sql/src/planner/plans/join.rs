@@ -313,74 +313,67 @@ impl Join {
                 continue;
             }
 
-            if left_columns_stat.len() == 1 && left_columns_stat.len() == right_columns_stat.len() {
-                let (left_idx, left_column_stat) = left_columns_stat.pop().unwrap();
-                let (right_idx, right_column_stat) = right_columns_stat.pop().unwrap();
+            let (left_idx, left_column_stat) = left_columns_stat.pop().unwrap();
+            let (right_idx, right_column_stat) = right_columns_stat.pop().unwrap();
 
-                if !left_column_stat.min.type_comparable(&right_column_stat.min) {
-                    continue;
-                }
-
-                let left_interval = UniformSampleSet::new(
-                    left_column_stat.min.clone(),
-                    left_column_stat.max.clone(),
-                );
-
-                let right_interval = UniformSampleSet::new(
-                    right_column_stat.min.clone(),
-                    right_column_stat.max.clone(),
-                );
-
-                if !left_interval.has_intersection(&right_interval)? {
-                    join_selectivity = 0.0;
-                    break;
-                }
-
-                let (min, max) = left_interval.intersection(&right_interval)?;
-
-                let has_histogram =
-                    left_column_stat.histogram.is_some() && right_column_stat.histogram.is_some();
-
-                match left_column_stat.min {
-                    Datum::Int(_) | Datum::UInt(_) | Datum::Float(_) if has_histogram => {
-                        // Calculate join selectivity from histogram
-                        let left_histogram = left_column_stat.histogram.as_ref().unwrap();
-                        let right_histogram = right_column_stat.histogram.as_ref().unwrap();
-                        let (cardinality, ndv) =
-                            evaluate_by_histogram(left_histogram, right_histogram)?;
-                        join_selectivity *= cardinality / (left_cardinality * right_cardinality);
-
-                        let new_statistic = NewStatistic {
-                            min,
-                            max,
-                            ndv: Some(ndv),
-                        };
-
-                        left_need_update_columns_stat.push((left_idx, new_statistic.clone()));
-                        right_need_update_columns_stat.push((right_idx, new_statistic));
-                    }
-                    _calculate_join_selectivity_from_ndv => {
-                        let min_ndv = left_column_stat.ndv.min(right_column_stat.ndv);
-                        let max_ndv = left_column_stat.ndv.max(right_column_stat.ndv);
-
-                        if max_ndv != 0.0 {
-                            join_selectivity *= 1_f64 / max_ndv;
-                        }
-
-                        let new_statistic = NewStatistic {
-                            min,
-                            max,
-                            ndv: Some(min_ndv),
-                        };
-                        left_need_update_columns_stat.push((left_idx, new_statistic.clone()));
-                        right_need_update_columns_stat.push((right_idx, new_statistic));
-                    }
-                }
-
+            if !left_column_stat.min.type_comparable(&right_column_stat.min) {
                 continue;
+            }
+
+            let left_interval =
+                UniformSampleSet::new(left_column_stat.min.clone(), left_column_stat.max.clone());
+
+            let right_interval =
+                UniformSampleSet::new(right_column_stat.min.clone(), right_column_stat.max.clone());
+
+            if !left_interval.has_intersection(&right_interval)? {
+                join_selectivity = 0.0;
+                break;
+            }
+
+            let (min, max) = left_interval.intersection(&right_interval)?;
+
+            let has_histogram =
+                left_column_stat.histogram.is_some() && right_column_stat.histogram.is_some();
+
+            match left_column_stat.min {
+                Datum::Int(_) | Datum::UInt(_) | Datum::Float(_) if has_histogram => {
+                    // Calculate join selectivity from histogram
+                    let left_histogram = left_column_stat.histogram.as_ref().unwrap();
+                    let right_histogram = right_column_stat.histogram.as_ref().unwrap();
+                    let (cardinality, ndv) =
+                        evaluate_by_histogram(left_histogram, right_histogram)?;
+                    join_selectivity *= cardinality / (left_cardinality * right_cardinality);
+
+                    let new_statistic = NewStatistic {
+                        min,
+                        max,
+                        ndv: Some(ndv),
+                    };
+
+                    left_need_update_columns_stat.push((left_idx, new_statistic.clone()));
+                    right_need_update_columns_stat.push((right_idx, new_statistic));
+                }
+                _calculate_join_selectivity_from_ndv => {
+                    let min_ndv = left_column_stat.ndv.min(right_column_stat.ndv);
+                    let max_ndv = left_column_stat.ndv.max(right_column_stat.ndv);
+
+                    if max_ndv != 0.0 {
+                        join_selectivity *= 1_f64 / max_ndv;
+                    }
+
+                    let new_statistic = NewStatistic {
+                        min,
+                        max,
+                        ndv: Some(min_ndv),
+                    };
+                    left_need_update_columns_stat.push((left_idx, new_statistic.clone()));
+                    right_need_update_columns_stat.push((right_idx, new_statistic));
+                }
             }
         }
 
+        eprintln!("join_selectivity {}", join_selectivity);
         let mut join_cardinality = left_cardinality * right_cardinality * join_selectivity;
         join_cardinality = join_cardinality.min(left_cardinality * right_cardinality);
 
@@ -928,4 +921,383 @@ fn evaluate_by_histogram(left_hist: &Histogram, right_hist: &Histogram) -> Resul
     }
 
     Ok((card, all_ndv.ceil()))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_storage::Datum;
+    use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+
+    use crate::optimizer::ir::ColumnStat;
+    use crate::optimizer::ir::HistogramBuilder;
+    use crate::optimizer::ir::Statistics;
+    use crate::plans::join::DEFAULT_EQ_SELECTIVITY;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::Join;
+    use crate::plans::JoinEquiCondition;
+    use crate::plans::JoinType;
+    use crate::ColumnBindingBuilder;
+    use crate::IndexType;
+    use crate::ScalarExpr;
+    use crate::Visibility;
+
+    fn create_column_stat(min: Datum, max: Datum, ndv: f64, has_histogram: bool) -> ColumnStat {
+        let histogram = if has_histogram {
+            Some(
+                HistogramBuilder::from_ndv(
+                    ndv as u64,
+                    ndv as u64 * 2,
+                    Some((min.clone(), max.clone())),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        };
+
+        ColumnStat {
+            min,
+            max,
+            ndv,
+            histogram,
+            null_count: 0,
+        }
+    }
+
+    fn create_equi_condition(left_col: IndexType, right_col: IndexType) -> JoinEquiCondition {
+        let left_column = ColumnBindingBuilder::new(
+            String::from("column_name"),
+            left_col,
+            Box::new(DataType::Number(NumberDataType::Float32)),
+            Visibility::Visible,
+        );
+
+        let left_bound_column_ref = BoundColumnRef {
+            span: None,
+            column: left_column.build(),
+        };
+
+        let right_column = ColumnBindingBuilder::new(
+            String::from("column_name"),
+            right_col,
+            Box::new(DataType::Number(NumberDataType::Float32)),
+            Visibility::Visible,
+        );
+
+        let right_bound_column_ref = BoundColumnRef {
+            span: None,
+            column: right_column.build(),
+        };
+
+        JoinEquiCondition::new(
+            ScalarExpr::BoundColumnRef(left_bound_column_ref),
+            ScalarExpr::BoundColumnRef(right_bound_column_ref),
+            false,
+        )
+    }
+
+    fn create_join_with_equi_conditions(conditions: Vec<(IndexType, IndexType)>) -> Join {
+        Join {
+            equi_conditions: conditions
+                .into_iter()
+                .map(|(l, r)| create_equi_condition(l, r))
+                .collect(),
+            non_equi_conditions: vec![],
+            join_type: JoinType::Cross,
+            marker_index: None,
+            from_correlated_subquery: false,
+            need_hold_hash_table: false,
+            is_lateral: false,
+            single_to_inner: None,
+            build_side_cache_info: None,
+        }
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_basic() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let result = join.inner_join_cardinality(
+            1000.0, // left_cardinality
+            2000.0, // right_cardinality
+            &mut left_stats,
+            &mut right_stats,
+        )?;
+
+        assert_eq!((result - 200.0).abs(), 20000.0 - 200.0); // 1000 * 2000 * (1/100) = 20000
+        assert_eq!(left_stats.column_stats[&1].ndv, 100.0);
+        assert_eq!(right_stats.column_stats[&2].ndv, 100.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_zero_ndv() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 0.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 0.0, false),
+            )]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        let expected = 1000.0 * 2000.0 * DEFAULT_EQ_SELECTIVITY;
+        assert_eq!(result, 2000000.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_no_overlap() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(200), Datum::Int(300), 100.0, false),
+            )]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        assert_eq!(result, 0.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_with_histogram() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, true),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(50), Datum::Int(150), 100.0, true),
+            )]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        assert!(result > 0.0);
+        assert!(result < 1000.0 * 2000.0);
+
+        assert_eq!(left_stats.column_stats[&1].min, Datum::Int(50));
+        assert_eq!(left_stats.column_stats[&1].max, Datum::Int(100));
+        assert_eq!(right_stats.column_stats[&2].min, Datum::Int(50));
+        assert_eq!(right_stats.column_stats[&2].max, Datum::Int(100));
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_missing_stats() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2), (3, 4)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([
+                (
+                    2,
+                    create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+                ),
+                (
+                    4,
+                    create_column_stat(Datum::Int(1), Datum::Int(50), 50.0, false),
+                ),
+            ]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        let expected = 1000.0 * 2000.0 * (1.0 / 100.0) * DEFAULT_EQ_SELECTIVITY;
+        assert_eq!(result, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_zero_cardinality() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let result = join.inner_join_cardinality(0.0, 0.0, &mut left_stats, &mut right_stats)?;
+
+        assert_eq!(result, 0.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_type_incompatible() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(
+                    Datum::Bytes("a".as_bytes().to_vec()),
+                    Datum::Bytes("z".as_bytes().to_vec()),
+                    26.0,
+                    false,
+                ),
+            )]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        assert!((result - (1000.0 * 2000.0)).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_multiple_conditions() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2), (3, 4)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([
+                (
+                    1,
+                    create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+                ),
+                (
+                    3,
+                    create_column_stat(Datum::Int(1), Datum::Int(50), 50.0, false),
+                ),
+            ]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([
+                (
+                    2,
+                    create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, false),
+                ),
+                (
+                    4,
+                    create_column_stat(Datum::Int(1), Datum::Int(50), 50.0, false),
+                ),
+            ]),
+        };
+
+        let result =
+            join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        let expected = 1000.0 * 2000.0 * (1.0 / 100.0) * (1.0 / 50.0);
+        assert!((result - expected).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn test_inner_join_cardinality_stats_update() -> Result<()> {
+        let join = create_join_with_equi_conditions(vec![(1, 2)]);
+
+        let mut left_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                1,
+                create_column_stat(Datum::Int(1), Datum::Int(100), 100.0, true),
+            )]),
+        };
+
+        let mut right_stats = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([(
+                2,
+                create_column_stat(Datum::Int(50), Datum::Int(150), 100.0, true),
+            )]),
+        };
+
+        let _ = join.inner_join_cardinality(1000.0, 2000.0, &mut left_stats, &mut right_stats)?;
+
+        assert_eq!(left_stats.column_stats[&1].min, Datum::Int(50));
+        assert_eq!(left_stats.column_stats[&1].max, Datum::Int(100));
+        assert_eq!(right_stats.column_stats[&2].min, Datum::Int(50));
+        assert_eq!(right_stats.column_stats[&2].max, Datum::Int(100));
+        Ok(())
+    }
 }
