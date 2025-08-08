@@ -1643,13 +1643,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowRoles { show_options },
     );
-    let create_role = map(
+    let create_role = map_res(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
         },
-        |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
-            if_not_exists: opt_if_not_exists.is_some(),
-            role_name,
+        |(_, opt_or_replace, _, opt_if_not_exists, role_name)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRole {
+                create_option,
+                role_name,
+            })
         },
     );
     let drop_role = map(
