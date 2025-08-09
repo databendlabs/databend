@@ -339,7 +339,14 @@ impl Operator for Aggregate {
                     let settings = ctx.get_settings();
 
                     // Group aggregation, enforce `Hash` distribution
-                    match settings.get_group_by_shuffle_mode()?.as_str() {
+                    let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
+                    // Grouping set must be merged before_merge
+                    if self.grouping_sets.is_some() {
+                        group_by_shuffle_mode = "before_merge".to_string();
+                    }
+
+                    match group_by_shuffle_mode.as_str() {
                         "before_partial" => {
                             children_required.push(vec![RequiredProperty {
                                 distribution: Distribution::Hash(self.get_distribution_keys(true)?),
