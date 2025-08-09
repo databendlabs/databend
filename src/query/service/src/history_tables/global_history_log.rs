@@ -167,6 +167,11 @@ impl GlobalHistoryLog {
                         Ok(acquired_lock) => {
                             if acquired_lock {
                                 consecutive_error = 0;
+                            } else {
+                                // If the lock is acquired by another node, this node will wait for
+                                // a relative longer time (15s to 20s) before retrying.
+                                // This is to avoid frequent acquire attempts
+                                sleep(Duration::from_secs(15 + random::<u64>() % 5)).await;
                             }
                         }
                         Err(e) => {
