@@ -25,6 +25,7 @@ use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -33,6 +34,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_client::ClientHandle;
@@ -181,7 +183,7 @@ impl RoleApi for RoleMgr {
         &self,
         info: RoleInfo,
         can_replace: bool,
-    ) -> databend_common_exception::Result<()> {
+    ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError> {
         let seq = if can_replace {
             MatchSeq::GE(0)
         } else {
@@ -193,13 +195,12 @@ impl RoleApi for RoleMgr {
         let res = self.kv_api.upsert_pb(&req).await?;
 
         if !can_replace && res.prev.is_some() {
-            return Err(ErrorCode::RoleAlreadyExists(format!(
-                "Role '{}' already exists.",
-                info.name
-            )));
+            return Ok(Err(
+                RoleIdent::new(&self.tenant, &info.name).exist_error(func_name!())
+            ));
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     #[async_backtrace::framed]

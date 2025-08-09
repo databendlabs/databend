@@ -124,19 +124,14 @@ impl UserApiProvider {
         role_info: RoleInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
-        if let CreateOption::CreateIfNotExists = create_option {
-            if self.exists_role(tenant, role_info.name.clone()).await? {
+        let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
+        let client = self.role_api(tenant);
+        if let Err(_e) = client.add_role(role_info, can_replace).await? {
+            if matches!(create_option, CreateOption::CreateIfNotExists) {
                 return Ok(());
             }
         }
-
-        let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
-
-        let client = self.role_api(tenant);
-        client
-            .add_role(role_info, can_replace)
-            .await
-            .map_err(|e| e.add_message_back("(while add role)"))
+        return Ok(());
     }
 
     #[async_backtrace::framed]
