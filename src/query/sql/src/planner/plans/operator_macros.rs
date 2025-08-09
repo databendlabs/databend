@@ -111,7 +111,7 @@ macro_rules! impl_match_rel_op {
             RelOperator::CompactBlock($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::MaterializedCTE($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::MaterializeCTERef($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::MaterializedCTERef($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Sequence($rel_op) => $rel_op.$method($($arg),*),
         }
     }

@@ -142,12 +142,12 @@ impl CollectStatisticsOptimizer {
                 }
                 Ok(s_expr)
             }
-            RelOperator::MaterializeCTERef(cte_ref) => {
+            RelOperator::MaterializedCTERef(cte_ref) => {
                 let def_with_stats = self.collect(&cte_ref.def).await?;
                 let mut new_cte_ref = cte_ref.clone();
                 new_cte_ref.def = def_with_stats;
 
-                Ok(s_expr.replace_plan(Arc::new(RelOperator::MaterializeCTERef(new_cte_ref))))
+                Ok(s_expr.replace_plan(Arc::new(RelOperator::MaterializedCTERef(new_cte_ref))))
             }
             _ => {
                 let mut children = Vec::with_capacity(s_expr.arity());

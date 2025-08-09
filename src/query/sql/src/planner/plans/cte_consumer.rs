@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -31,19 +32,20 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaterializeCTERef {
+pub struct MaterializedCTERef {
     pub cte_name: String,
     pub output_columns: Vec<usize>,
     pub def: SExpr,
+    pub column_mapping: HashMap<usize, usize>,
 }
 
-impl Hash for MaterializeCTERef {
+impl Hash for MaterializedCTERef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.cte_name.hash(state);
     }
 }
 
-impl Operator for MaterializeCTERef {
+impl Operator for MaterializedCTERef {
     fn rel_op(&self) -> RelOp {
         RelOp::MaterializeCTERef
     }

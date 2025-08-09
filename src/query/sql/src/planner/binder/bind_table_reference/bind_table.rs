@@ -79,8 +79,14 @@ impl Binder {
 
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
-            if cte_info.materialized {
-                return self.bind_cte_consumer(bind_context, &table_name, alias, cte_info);
+            if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
+                return self.bind_cte_consumer(
+                    bind_context,
+                    &table_name,
+                    alias,
+                    cte_info,
+                    &materialized_cte_info.bound_context.columns,
+                );
             } else {
                 if self
                     .metadata
