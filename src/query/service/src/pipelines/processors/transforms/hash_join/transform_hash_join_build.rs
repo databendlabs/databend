@@ -449,6 +449,6 @@ impl TransformHashJoinBuild {
     }
 
     fn need_spill(&mut self) -> bool {
-        self.memory_settings.check_spill(0)
+        self.memory_settings.check_spill()
     }
 }

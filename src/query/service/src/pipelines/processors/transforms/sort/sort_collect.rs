@@ -215,7 +215,7 @@ where
     }
 
     fn check_spill(&self) -> bool {
-        if !self.memory_settings.check_spill(0) {
+        if !self.memory_settings.check_spill() {
             return false;
         }
 

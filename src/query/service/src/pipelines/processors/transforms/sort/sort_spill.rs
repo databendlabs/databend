@@ -202,11 +202,14 @@ where A: SortAlgorithm
     }
 
     pub fn max_rows(&self) -> usize {
-        let params = match &self.step {
+        self.params().max_rows()
+    }
+
+    pub fn params(&self) -> SortSpillParams {
+        match &self.step {
             Step::Collect(collect) => collect.params,
             Step::Sort(sort) => sort.params,
-        };
-        params.max_rows()
+        }
     }
 
     #[expect(unused)]

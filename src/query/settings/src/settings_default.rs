@@ -680,7 +680,7 @@ impl DefaultSettings {
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
                 ("enable_shuffle_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

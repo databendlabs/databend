@@ -192,7 +192,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
 
-        if self.settings.check_spill(0) {
+        if self.settings.check_spill() {
             if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                 let group_types = v.payload.group_types.clone();
                 let aggrs = v.payload.aggrs.clone();

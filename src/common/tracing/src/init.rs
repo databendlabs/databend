@@ -28,6 +28,7 @@ use logforth::filter::EnvFilter;
 use logforth::Dispatch;
 use logforth::Logger;
 use opendal::Operator;
+use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
@@ -163,6 +164,7 @@ pub fn init_logging(
                 .with_timeout(Duration::from_secs(
                     opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
                 ))
+                .with_compression(Compression::Gzip)
                 .build_span_exporter()
                 .expect("initialize oltp grpc exporter"),
             OTLPProtocol::Http => opentelemetry_otlp::new_exporter()

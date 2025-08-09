@@ -96,9 +96,9 @@ impl MemorySettings {
         }
     }
 
-    pub fn check_spill(&self, reserve: usize) -> bool {
+    pub fn check_spill(&self) -> bool {
         if self.enable_global_level_spill
-            && self.global_memory_tracking.get_memory_usage() + reserve >= self.max_memory_usage
+            && self.global_memory_tracking.get_memory_usage() >= self.max_memory_usage
         {
             return true;
         }
@@ -107,7 +107,7 @@ impl MemorySettings {
             let workload_group_memory_usage = workload_group.mem_stat.get_memory_usage();
             let max_memory_usage = workload_group.max_memory_usage.load(Ordering::Relaxed);
 
-            if max_memory_usage != 0 && workload_group_memory_usage + reserve >= max_memory_usage {
+            if max_memory_usage != 0 && workload_group_memory_usage >= max_memory_usage {
                 return true;
             }
         }
@@ -117,7 +117,61 @@ impl MemorySettings {
         };
 
         self.enable_query_level_spill
-            && query_memory_tracking.get_memory_usage() + reserve >= self.max_query_memory_usage
+            && query_memory_tracking.get_memory_usage() >= self.max_query_memory_usage
+    }
+
+    fn check_global(&self) -> Option<isize> {
+        self.enable_global_level_spill.then(|| {
+            let usage = self.global_memory_tracking.get_memory_usage();
+            if usage >= self.max_memory_usage {
+                -((usage - self.max_memory_usage) as isize)
+            } else {
+                (self.max_memory_usage - usage) as isize
+            }
+        })
+    }
+
+    fn check_workload_group(&self) -> Option<isize> {
+        let workload_group = ThreadTracker::workload_group()?;
+        let usage = workload_group.mem_stat.get_memory_usage();
+        let max_memory_usage = workload_group.max_memory_usage.load(Ordering::Relaxed);
+
+        if max_memory_usage == 0 {
+            return None;
+        }
+
+        Some(if usage >= max_memory_usage {
+            -((usage - max_memory_usage) as isize)
+        } else {
+            (max_memory_usage - usage) as isize
+        })
+    }
+
+    fn check_query(&self) -> Option<isize> {
+        if !self.enable_query_level_spill {
+            return None;
+        }
+
+        let query_memory_tracking = self.query_memory_tracking.as_ref()?;
+        let usage = query_memory_tracking.get_memory_usage();
+
+        Some(if usage >= self.max_query_memory_usage {
+            -((usage - self.max_query_memory_usage) as isize)
+        } else {
+            (self.max_query_memory_usage - usage) as isize
+        })
+    }
+
+    pub fn check_spill_remain(&self) -> isize {
+        [
+            self.check_global(),
+            self.check_workload_group(),
+            self.check_query(),
+        ]
+        .into_iter()
+        .flatten()
+        .reduce(|a, b| a.min(b))
+        .unwrap_or(1)
     }
 }
 
@@ -164,7 +218,7 @@ mod tests {
             max_memory_usage: 100,
             ..Default::default()
         };
-        assert!(settings.check_spill(0));
+        assert!(settings.check_spill());
     }
 
     #[test]
@@ -181,7 +235,7 @@ mod tests {
             max_memory_usage: 100,
             ..Default::default()
         };
-        assert!(settings.check_spill(0));
+        assert!(settings.check_spill());
     }
 
     #[test]
@@ -194,7 +248,7 @@ mod tests {
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
         };
-        assert!(settings.check_spill(0));
+        assert!(settings.check_spill());
     }
 
     #[test]
@@ -211,7 +265,7 @@ mod tests {
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
         };
-        assert!(!settings.check_spill(0));
+        assert!(!settings.check_spill());
     }
 
     #[test]
@@ -227,7 +281,7 @@ mod tests {
             query_memory_tracking: None,
             ..Default::default()
         };
-        assert!(!settings.check_spill(0));
+        assert!(!settings.check_spill());
     }
 
     #[test]
@@ -240,7 +294,7 @@ mod tests {
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
         };
-        assert!(settings.check_spill(0));
+        assert!(settings.check_spill());
     }
 
     #[test]
@@ -257,7 +311,7 @@ mod tests {
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
         };
-        assert!(settings.check_spill(0));
+        assert!(settings.check_spill());
     }
 
     #[test]
@@ -267,6 +321,6 @@ mod tests {
             enable_query_level_spill: false,
             ..Default::default()
         };
-        assert!(!settings.check_spill(0));
+        assert!(!settings.check_spill());
     }
 }

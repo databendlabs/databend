@@ -286,20 +286,21 @@ where
     }
 
     fn check_spill(&self) -> bool {
-        if !self.memory_settings.check_spill(0) {
-            return false;
-        }
-
         match &self.inner {
             Inner::Limit(limit_sort) => {
-                limit_sort.num_bytes() > ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
+                self.memory_settings.check_spill()
+                    && limit_sort.num_bytes()
+                        >= ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
             }
             Inner::Collect(input_data) => {
-                input_data.iter().map(|b| b.memory_size()).sum::<usize>()
-                    > self.memory_settings.spill_unit_size * 2
+                self.memory_settings.check_spill()
+                    && input_data.iter().map(|b| b.memory_size()).sum::<usize>()
+                        >= self.memory_settings.spill_unit_size * 2
             }
             Inner::Spill(input_data, sort_spill) => {
-                input_data.in_memory_rows() > sort_spill.max_rows()
+                let rows = input_data.in_memory_rows();
+                self.memory_settings.check_spill() && rows >= sort_spill.params().batch_rows * 2
+                    || input_data.in_memory_rows() >= sort_spill.max_rows()
             }
             _ => unreachable!(),
         }
@@ -430,23 +431,11 @@ where
                     unreachable!()
                 };
 
-                let memory_rows = spill_sort.collect_memory_rows();
-                let max = spill_sort.max_rows();
-                let memory_rows = if memory_rows > 0 && memory_rows + incoming > max {
-                    log::debug!(incoming_rows = incoming, memory_rows, max_rows = max; "collect_spill_last");
-                    spill_sort
-                        .collect_spill_last(memory_rows + incoming - max)
-                        .await?;
-                    spill_sort.collect_memory_rows()
-                } else {
-                    memory_rows
-                };
-                let need_spill = incoming > max;
-                if need_spill || finished && incoming > 0 {
+                if incoming > 0 {
                     let total_rows = spill_sort.collect_total_rows();
-                    log::debug!(incoming_block, incoming_rows = incoming, memory_rows, total_rows, max_rows = max, finished; "sort_input_data");
+                    log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
                     spill_sort
-                        .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
+                        .sort_input_data(std::mem::take(input_data), !finished, &self.aborting)
                         .await?;
                 }
                 if finished {

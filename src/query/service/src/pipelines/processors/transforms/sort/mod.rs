@@ -76,7 +76,7 @@ trait RowsStat {
 
 impl RowsStat for Vec<DataBlock> {
     fn total_rows(&self) -> usize {
-        self.iter().map(|s| s.num_rows()).sum::<usize>()
+        self.iter().map(|b| b.num_rows()).sum::<usize>()
     }
 
     fn in_memory_rows(&self) -> usize {
