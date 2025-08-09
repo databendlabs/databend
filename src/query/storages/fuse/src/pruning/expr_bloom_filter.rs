@@ -27,13 +27,13 @@ use xorf::BinaryFuse16;
 use xorf::Filter;
 
 /// Bloom filter for runtime filtering of data rows.
-pub struct ExprBloomFilter {
-    filter: BinaryFuse16,
+pub struct ExprBloomFilter<'a> {
+    filter: &'a BinaryFuse16,
 }
 
-impl ExprBloomFilter {
+impl<'a> ExprBloomFilter<'a> {
     /// Create a new bloom filter.
-    pub fn new(filter: BinaryFuse16) -> Self {
+    pub fn new(filter: &'a BinaryFuse16) -> ExprBloomFilter<'a> {
         Self { filter }
     }
 
