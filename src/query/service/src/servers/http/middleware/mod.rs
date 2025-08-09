@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod client_capabilities;
+pub mod json_header;
 mod metrics;
 mod panic_handler;
 mod session;
