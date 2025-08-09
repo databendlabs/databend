@@ -14,6 +14,7 @@
 
 use std::io;
 use std::sync::mpsc::SyncSender;
+use std::time::Duration;
 
 use databend_common_meta_types::raft_types;
 use log::info;
@@ -21,41 +22,56 @@ use log::warn;
 use tokio::sync::oneshot;
 
 use crate::raft_log_v004::callback_data::CallbackData;
+use crate::raft_log_v004::IODesc;
 
 /// The callback to be called when the IO is completed.
 ///
 /// This is used as a wrapper of Openraft callback or used directly internally in RaftLog.
 pub struct Callback {
-    context: String,
+    io_desc: IODesc,
     data: CallbackData,
 }
 
 impl Callback {
-    pub fn new_io_flushed(io_flushed: raft_types::IOFlushed, context: impl ToString) -> Self {
+    pub fn new_io_flushed(io_flushed: raft_types::IOFlushed, mut io_desc: IODesc) -> Self {
+        io_desc.set_flush_time();
+
         Callback {
-            context: context.to_string(),
+            io_desc,
             data: CallbackData::IOFlushed(io_flushed),
         }
     }
 
-    pub fn new_oneshot(tx: oneshot::Sender<Result<(), io::Error>>, context: impl ToString) -> Self {
+    pub fn new_oneshot(tx: oneshot::Sender<Result<(), io::Error>>, mut io_desc: IODesc) -> Self {
+        io_desc.set_flush_time();
+
         Callback {
-            context: context.to_string(),
+            io_desc,
             data: CallbackData::Oneshot(tx),
         }
     }
 
-    pub fn new_sync_oneshot(tx: SyncSender<Result<(), io::Error>>, context: impl ToString) -> Self {
+    pub fn new_sync_oneshot(tx: SyncSender<Result<(), io::Error>>, mut io_desc: IODesc) -> Self {
+        io_desc.set_flush_time();
+
         Callback {
-            context: context.to_string(),
+            io_desc,
             data: CallbackData::SyncOneshot(tx),
         }
     }
 }
 
 impl raft_log::Callback for Callback {
-    fn send(self, res: Result<(), io::Error>) {
-        info!("{}: Callback is called with: {:?}", self.context, res);
+    fn send(mut self, res: Result<(), io::Error>) {
+        self.io_desc.set_flush_done_time();
+
+        info!("{}: Callback is called with: {:?}", self.io_desc, res);
+
+        if let Some(duration) = self.io_desc.total_duration() {
+            if duration > Duration::from_millis(50) {
+                warn!("{}: Slow IO operation: {:?}", self.io_desc, res);
+            }
+        }
 
         match self.data {
             CallbackData::Oneshot(tx) => {
@@ -63,7 +79,7 @@ impl raft_log::Callback for Callback {
                 if send_res.is_err() {
                     warn!(
                         "{}: Callback failed to send Oneshot result back to caller",
-                        self.context
+                        self.io_desc
                     );
                 }
             }
