@@ -223,7 +223,9 @@ pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    variables: Vec<(String, String)>,
+    pub variables: Vec<(String, String)>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     pub last_query_result_cache_key: String,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
