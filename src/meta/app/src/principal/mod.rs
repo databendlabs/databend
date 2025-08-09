@@ -83,6 +83,7 @@ pub use procedure_id_ident::ProcedureId;
 pub use procedure_id_to_name::ProcedureIdToNameIdent;
 pub use procedure_identity::ProcedureIdentity;
 pub use procedure_name_ident::ProcedureNameIdent;
+pub use role_ident::Resource;
 pub use role_ident::RoleIdent;
 pub use role_ident::RoleIdentRaw;
 pub use role_info::RoleInfo;

@@ -23,10 +23,7 @@ statement ok
 CREATE ROLE IF NOT EXISTS `test-a`
 
 statement ok
-DROP ROLE `test-a`
-
-statement ok
-CREATE ROLE IF NOT EXISTS `test-a`
+CREATE or replace ROLE `test-a`
 
 statement ok
 DROP ROLE `test-a`
@@ -49,3 +46,28 @@ create role 'a"a'
 
 statement error 1005
 create role "a'a"
+
+statement ok
+drop role if exists r1;
+
+statement ok
+create role r1;
+
+statement ok
+grant select on *.* to role r1;
+
+query T
+show grants for role r1;
+----
+SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
+
+statement ok
+create or replace role r1;
+
+query T
+SELECT count() FROM show_grants('role', 'r1')
+----
+0
+
+statement ok
+drop role r1;

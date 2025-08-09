@@ -388,7 +388,7 @@ impl Binder {
                 self.bind_show_roles(bind_context, show_options).await?
             }
             Statement::CreateRole {
-                if_not_exists,
+                create_option,
                 role_name,
             } => {
                 if illegal_ident_name(role_name) {
@@ -397,7 +397,7 @@ impl Binder {
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
-                    if_not_exists: *if_not_exists,
+                    create_option: create_option.clone().into(),
                     role_name: role_name.to_string(),
                 }))
             }

@@ -23,6 +23,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::RoleCacheManager;
@@ -51,7 +52,9 @@ async fn test_role_cache_mgr() -> Result<()> {
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(false),
     );
-    user_manager.add_role(&tenant, role1, false).await?;
+    user_manager
+        .add_role(&tenant, role1, &CreateOption::CreateOrReplace)
+        .await?;
 
     let mut roles = role_cache_manager
         .find_related_roles(&tenant, &["role1".to_string()])

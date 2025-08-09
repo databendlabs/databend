@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
@@ -24,6 +25,7 @@ use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -32,6 +34,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_client::ClientHandle;
@@ -48,6 +51,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
 use futures::TryStreamExt;
@@ -175,23 +179,28 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
-        let match_seq = MatchSeq::Exact(0);
-        let key = self.role_ident(role_info.identity()).to_string_key();
-        let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+    async fn add_role(
+        &self,
+        info: RoleInfo,
+        can_replace: bool,
+    ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError> {
+        let seq = if can_replace {
+            MatchSeq::GE(0)
+        } else {
+            MatchSeq::Exact(0)
+        };
 
-        let upsert_kv = self.kv_api.upsert_kv(UpsertKV::new(
-            &key,
-            match_seq,
-            Operation::Update(value),
-            None,
-        ));
+        let key = RoleIdent::new(&self.tenant, &info.name);
+        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
-        })?;
+        if !can_replace && res.prev.is_some() {
+            return Ok(Err(
+                RoleIdent::new(&self.tenant, &info.name).exist_error(func_name!())
+            ));
+        }
 
-        Ok(res_seq)
+        Ok(Ok(()))
     }
 
     #[async_backtrace::framed]
