@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::BlockLimit;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -61,7 +62,7 @@ fn connect_inputs(inputs: Vec<Arc<InputPort>>) -> Vec<Arc<OutputPort>> {
     unsafe {
         for input in inputs {
             let output = OutputPort::create();
-            connect(&input, &output);
+            connect(&input, &output, Arc::new(BlockLimit::default()));
             outputs.push(output);
         }
     }
@@ -75,7 +76,7 @@ fn connect_outputs(outputs: Vec<Arc<OutputPort>>) -> Vec<Arc<InputPort>> {
     unsafe {
         for output in outputs {
             let input = InputPort::create();
-            connect(&input, &output);
+            connect(&input, &output, Arc::new(BlockLimit::default()));
             inputs.push(input);
         }
     }

@@ -21,10 +21,12 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::processors::BlockLimit;
 use crate::processors::UpdateTrigger;
 use crate::unsafe_cell_wrap::UnSafeCellWrap;
 
@@ -40,6 +42,7 @@ pub struct SharedData(pub Result<DataBlock>);
 
 pub struct SharedStatus {
     data: AtomicPtr<SharedData>,
+    block_limit: Arc<BlockLimit>,
 }
 
 unsafe impl Send for SharedStatus {}
@@ -57,9 +60,10 @@ impl Drop for SharedStatus {
 }
 
 impl SharedStatus {
-    pub fn create() -> Arc<SharedStatus> {
+    pub fn create(block_limit: Arc<BlockLimit>) -> Arc<SharedStatus> {
         Arc::new(SharedStatus {
             data: AtomicPtr::new(std::ptr::null_mut()),
+            block_limit,
         })
     }
 
@@ -124,6 +128,11 @@ impl SharedStatus {
     pub fn get_flags(&self) -> usize {
         self.data.load(Ordering::SeqCst) as usize & FLAGS_MASK
     }
+
+    #[inline(always)]
+    pub fn get_block_limit(&self) -> &Arc<BlockLimit> {
+        &self.block_limit
+    }
 }
 
 pub struct InputPort {
@@ -134,7 +143,7 @@ pub struct InputPort {
 impl InputPort {
     pub fn create() -> Arc<InputPort> {
         Arc::new(InputPort {
-            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            shared: UnSafeCellWrap::create(SharedStatus::create(Arc::new(Default::default()))),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
     }
@@ -184,21 +193,54 @@ impl InputPort {
         (self.shared.get_flags() & HAS_DATA) != 0
     }
 
-    #[inline(always)]
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
-            let unset_flags = HAS_DATA | NEED_DATA;
-            match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
-                address if address.is_null() => None,
-                address => {
-                    let block = (*Box::from_raw(address)).0;
-                    if let Ok(data_block) = block.as_ref() {
-                        ExecutorStats::record_thread_tracker(data_block.num_rows());
-                    }
-                    Some(block)
+
+            // First, swap out the data without unsetting flags to prevent race conditions
+            let address = self.shared.swap(std::ptr::null_mut(), 0, 0);
+
+            if address.is_null() {
+                // No data available, now safe to unset flags
+                self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                return None;
+            }
+
+            let shared_data = Box::from_raw(address);
+            match shared_data.0 {
+                Ok(data_block) => self.process_data_block(data_block),
+                Err(e) => {
+                    // Error case, unset both flags
+                    self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                    Some(Err(e))
                 }
             }
+        }
+    }
+
+    fn process_data_block(&self, data_block: DataBlock) -> Option<Result<DataBlock>> {
+        let block_limit = self.shared.get_block_limit();
+        let limit_rows =
+            block_limit.calculate_limit_rows(data_block.num_rows(), data_block.memory_size());
+
+        if data_block.num_rows() > limit_rows && limit_rows > 0 {
+            // Need to split the block
+            let taken_block = data_block.slice(0..limit_rows);
+            let remaining_block = data_block.slice(limit_rows..data_block.num_rows());
+
+            let remaining_data = Box::new(SharedData(Ok(remaining_block)));
+            self.shared.swap(Box::into_raw(remaining_data), 0, 0);
+
+            ThreadTracker::has_remaining_data().store(true, Ordering::SeqCst);
+            ExecutorStats::record_thread_tracker(taken_block.num_rows());
+            Some(Ok(taken_block))
+        } else {
+            // No need to split, take the whole block
+            // Unset both HAS_DATA and NEED_DATA flags
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+
+            ExecutorStats::record_thread_tracker(data_block.num_rows());
+            Some(Ok(data_block))
         }
     }
 
@@ -227,7 +269,7 @@ impl OutputPort {
     pub fn create() -> Arc<OutputPort> {
         Arc::new(OutputPort {
             record_profile: UnSafeCellWrap::create(false),
-            shared: UnSafeCellWrap::create(SharedStatus::create()),
+            shared: UnSafeCellWrap::create(SharedStatus::create(Arc::new(Default::default()))),
             update_trigger: UnSafeCellWrap::create(std::ptr::null_mut()),
         })
     }
@@ -318,8 +360,8 @@ impl OutputPort {
 /// Connect input and output ports.
 ///
 /// # Safety
-pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
-    let shared_status = SharedStatus::create();
+pub unsafe fn connect(input: &InputPort, output: &OutputPort, block_limit: Arc<BlockLimit>) {
+    let shared_status = SharedStatus::create(block_limit);
 
     input.set_shared(shared_status.clone());
     output.set_shared(shared_status);
