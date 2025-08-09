@@ -16,7 +16,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:t.number (#0), probe key:t1.number (#1), filter type:inlist,min_max
-    ├── estimated rows: 2.00
+    ├── estimated rows: 0.01
     ├── Exchange(Build)
     │   ├── output columns: [t.number (#0)]
     │   ├── exchange type: Broadcast
@@ -55,7 +55,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:1, build key:t.number (#0), probe key:t2.number (#2), filter type:inlist,min_max
-    ├── estimated rows: 6.00
+    ├── estimated rows: 0.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#1), t.number (#0)]
     │   ├── exchange type: Broadcast
@@ -68,7 +68,7 @@ Exchange
     │       ├── filters: []
     │       ├── build join filters:
     │       │   └── filter id:0, build key:t.number (#0), probe key:t1.number (#1), filter type:inlist,min_max
-    │       ├── estimated rows: 2.00
+    │       ├── estimated rows: 0.01
     │       ├── Exchange(Build)
     │       │   ├── output columns: [t.number (#0)]
     │       │   ├── exchange type: Broadcast
@@ -117,7 +117,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:1, build key:t.b (#1), probe key:t2.number (#3), filter type:inlist,min_max
-    ├── estimated rows: 6.00
+    ├── estimated rows: 0.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#2), b (#1), numbers.number (#0)]
     │   ├── exchange type: Broadcast
@@ -130,7 +130,7 @@ Exchange
     │       ├── filters: []
     │       ├── build join filters:
     │       │   └── filter id:0, build key:t.a (#0), probe key:t1.number (#2), filter type:inlist,min_max
-    │       ├── estimated rows: 2.00
+    │       ├── estimated rows: 0.01
     │       ├── Exchange(Build)
     │       │   ├── output columns: [numbers.number (#0), b (#1)]
     │       │   ├── exchange type: Broadcast
@@ -181,7 +181,7 @@ Exchange
     ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── estimated rows: 2.00
+    ├── estimated rows: 0.01
     ├── Exchange(Build)
     │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
     │   ├── exchange type: Broadcast
@@ -266,7 +266,7 @@ Fragment 2:
         ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── estimated rows: 2.00
+        ├── estimated rows: 0.01
         ├── ExchangeSource(Build)
         │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
         │   └── source fragment: [1]
@@ -313,7 +313,7 @@ AggregateFinal
         ├── estimated rows: 1.00
         └── UnionAll
             ├── output columns: [a (#4)]
-            ├── estimated rows: 10100.00
+            ├── estimated rows: 50.50
             ├── HashJoin
             │   ├── output columns: [numbers.number (#0)]
             │   ├── join type: INNER
@@ -323,7 +323,7 @@ AggregateFinal
             │   ├── filters: []
             │   ├── build join filters:
             │   │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
-            │   ├── estimated rows: 10000.00
+            │   ├── estimated rows: 50.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
             │   │   ├── exchange type: Broadcast
@@ -355,7 +355,7 @@ AggregateFinal
                 ├── filters: []
                 ├── build join filters:
                 │   └── filter id:1, build key:t3.a (#3), probe key:t1.a (#2), filter type:inlist,min_max
-                ├── estimated rows: 100.00
+                ├── estimated rows: 0.50
                 ├── Exchange(Build)
                 │   ├── output columns: [numbers.number (#3)]
                 │   ├── exchange type: Broadcast
@@ -403,7 +403,7 @@ AggregateFinal
     ├── estimated rows: 1.00
     └── UnionAll
         ├── output columns: [a (#5)]
-        ├── estimated rows: 10001.00
+        ├── estimated rows: 51.00
         ├── Exchange
         │   ├── output columns: [numbers.number (#0)]
         │   ├── exchange type: Merge
@@ -416,7 +416,7 @@ AggregateFinal
         │       ├── filters: []
         │       ├── build join filters:
         │       │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
-        │       ├── estimated rows: 10000.00
+        │       ├── estimated rows: 50.00
         │       ├── Exchange(Build)
         │       │   ├── output columns: [numbers.number (#0)]
         │       │   ├── exchange type: Broadcast
@@ -460,7 +460,7 @@ AggregateFinal
                         ├── filters: []
                         ├── build join filters:
                         │   └── filter id:1, build key:t3.a (#3), probe key:t1.a (#2), filter type:inlist,min_max
-                        ├── estimated rows: 100.00
+                        ├── estimated rows: 0.50
                         ├── Exchange(Build)
                         │   ├── output columns: [numbers.number (#3)]
                         │   ├── exchange type: Broadcast
@@ -510,7 +510,7 @@ AggregateFinal
         ├── estimated rows: 1.00
         └── UnionAll
             ├── output columns: [a (#3)]
-            ├── estimated rows: 10010.00
+            ├── estimated rows: 60.00
             ├── HashJoin
             │   ├── output columns: [numbers.number (#0)]
             │   ├── join type: INNER
@@ -520,7 +520,7 @@ AggregateFinal
             │   ├── filters: []
             │   ├── build join filters:
             │   │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
-            │   ├── estimated rows: 10000.00
+            │   ├── estimated rows: 50.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
             │   │   ├── exchange type: Broadcast
@@ -632,7 +632,7 @@ Exchange
     ├── filters: []
     ├── build join filters(distributed):
     │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
-    ├── estimated rows: 200.00
+    ├── estimated rows: 1.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.number (#1)]
     │   ├── exchange type: Hash(t2.number (#1))

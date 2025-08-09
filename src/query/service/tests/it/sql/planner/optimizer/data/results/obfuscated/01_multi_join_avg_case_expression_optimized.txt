@@ -18,13 +18,13 @@ Exchange(Merge)
                             ├── probe keys: [a.a0m (#9)]
                             ├── other filters: []
                             ├── Join(Inner)
-                            │   ├── build keys: [b.a0k (#48), b.a0n (#50)]
-                            │   ├── probe keys: [a.a0k (#7), a.a0n (#10)]
-                            │   ├── other filters: [lte(b.a2c (#52), a.a0d (#0)), gt(b.a2k (#61), a.a0d (#0))]
+                            │   ├── build keys: [d.a5t (#151)]
+                            │   ├── probe keys: [a.a0l (#8)]
+                            │   ├── other filters: []
                             │   ├── Join(Inner)
-                            │   │   ├── build keys: [d.a5t (#151)]
-                            │   │   ├── probe keys: [a.a0l (#8)]
-                            │   │   ├── other filters: []
+                            │   │   ├── build keys: [b.a0k (#48), b.a0n (#50)]
+                            │   │   ├── probe keys: [a.a0k (#7), a.a0n (#10)]
+                            │   │   ├── other filters: [lte(b.a2c (#52), a.a0d (#0)), gt(b.a2k (#61), a.a0d (#0))]
                             │   │   ├── Scan
                             │   │   │   ├── table: default.a0c (#0)
                             │   │   │   ├── filters: [gte(a0c.a0d (#0), '20240526'), lte(a0c.a0d (#0), '20250525')]
@@ -32,14 +32,14 @@ Exchange(Merge)
                             │   │   │   └── limit: NONE
                             │   │   └── Exchange(Broadcast)
                             │   │       └── Scan
-                            │   │           ├── table: default.a5r (#3)
-                            │   │           ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
+                            │   │           ├── table: default.a1z (#1)
+                            │   │           ├── filters: [eq(a1z.a2t (#70), '624100')]
                             │   │           ├── order by: []
                             │   │           └── limit: NONE
                             │   └── Exchange(Broadcast)
                             │       └── Scan
-                            │           ├── table: default.a1z (#1)
-                            │           ├── filters: [eq(a1z.a2t (#70), '624100')]
+                            │           ├── table: default.a5r (#3)
+                            │           ├── filters: [eq(substring(a5r.a5w (#156), 1, 1), '1')]
                             │           ├── order by: []
                             │           └── limit: NONE
                             └── Exchange(Broadcast)

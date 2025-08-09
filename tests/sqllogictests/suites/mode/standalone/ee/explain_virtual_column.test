@@ -377,11 +377,11 @@ AggregateFinal
 ├── output columns: [sum(t1.a) (#9), t2.v['b']['c'] (#5)]
 ├── group by: [v['b']['c']]
 ├── aggregate functions: [sum(a)]
-├── estimated rows: 1.00
+├── estimated rows: 0.01
 └── AggregatePartial
     ├── group by: [v['b']['c']]
     ├── aggregate functions: [sum(a)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.01
     └── HashJoin
         ├── output columns: [t2.v['b']['c'] (#5), t1.a (#7)]
         ├── join type: INNER
@@ -389,7 +389,7 @@ AggregateFinal
         ├── probe keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── estimated rows: 1.00
+        ├── estimated rows: 0.01
         ├── TableScan(Build)
         │   ├── table: default.test_virtual_db.t1
         │   ├── output columns: [a (#7)]
