@@ -503,12 +503,11 @@ struct SegmentWithHLL {
     indexes: Vec<usize>,
     new_hlls: Vec<Option<BlockHLL>>,
 }
-
 enum State {
     ReadData(Option<PartInfoPtr>),
     CollectNDV {
         location: Location,
-        info: CompactSegmentInfo,
+        info: Arc<CompactSegmentInfo>,
         hlls: Vec<RawBlockHLL>,
     },
     GenerateHLL,
@@ -601,6 +600,8 @@ impl Processor for AnalyzeCollectNDVSource {
                         new_hlls,
                     });
                     self.state = State::GenerateHLL;
+                } else {
+                    self.state = State::ReadData(None);
                 }
             }
             State::SyncGen => {
@@ -629,6 +630,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let part = FuseLazyPartInfo::from_part(&part)?;
                 let (path, ver) = &part.segment_location;
                 if *ver < 2 {
+                    self.state = State::ReadData(None);
                     return Ok(());
                 }
                 let load_param = LoadParams {
@@ -654,6 +656,11 @@ impl Processor for AnalyzeCollectNDVSource {
                     } else {
                         vec![vec![]; block_count]
                     };
+                self.state = State::CollectNDV {
+                    location: part.segment_location.clone(),
+                    info: compact_segment_info,
+                    hlls: block_hlls,
+                };
             }
             State::GenerateHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
@@ -669,9 +676,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     let storage_format = self.storage_format.clone();
                     let block_meta = segment_with_hll.blocks[idx].clone();
                     let ndv_columns_map = self.ndv_columns_map.clone();
-                    let handler: databend_common_base::JoinHandle<
-                        std::result::Result<Option<HashMap<u32, MetaHLL>>, ErrorCode>,
-                    > = runtime.spawn(async move {
+                    let handler = runtime.spawn(async move {
                         let block = block_reader
                             .read_by_meta(&settings, &block_meta, &storage_format)
                             .await?;
@@ -690,8 +695,11 @@ impl Processor for AnalyzeCollectNDVSource {
                 })?;
                 let new_hlls = joint.into_iter().collect::<Result<Vec<_>>>()?;
                 if new_hlls.iter().all(|v| v.is_none()) {
+                    self.segment_with_hll = None;
+                    self.state = State::ReadData(None);
                 } else {
                     segment_with_hll.new_hlls = new_hlls;
+                    self.state = State::Write;
                 }
             }
             State::Write => {
@@ -719,6 +727,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 new_segment
                     .write_meta_through_cache(&self.dal, segment_loc)
                     .await?;
+                self.state = State::ReadData(None);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
