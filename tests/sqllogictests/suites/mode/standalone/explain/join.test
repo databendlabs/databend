@@ -1036,7 +1036,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_2 (#2)]
-├── estimated rows: 4.00
+├── estimated rows: 0.80
 ├── EvalScalar(Build)
 │   ├── output columns: [MAX(a) (#2)]
 │   ├── expressions: [1]
@@ -1063,7 +1063,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
-├── estimated rows: 4.00
+├── estimated rows: 0.80
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#1)]
 │   ├── filters: [is_true(t2.a (#1) > 0)]

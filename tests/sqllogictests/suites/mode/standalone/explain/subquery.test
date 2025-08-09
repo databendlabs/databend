@@ -361,7 +361,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t.number (#0) < numbers.number (#1)]
-├── estimated rows: 0.01
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
@@ -482,47 +482,47 @@ explain select t.number from numbers(1) as t where exists(select * from numbers(
 ----
 HashJoin
 ├── output columns: [t.number (#0)]
-├── join type: LEFT ANTI
+├── join type: RIGHT ANTI
 ├── build keys: []
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t.number (#0) < t1.number (#2)]
-├── estimated rows: 1.00
-├── TableScan(Build)
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#2)]
-│   ├── read rows: 1
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 1.00
-└── HashJoin(Probe)
-    ├── output columns: [t.number (#0)]
-    ├── join type: LEFT SEMI
-    ├── build keys: []
-    ├── probe keys: []
-    ├── keys is null equal: []
-    ├── filters: [t.number (#0) > t1.number (#1)]
-    ├── estimated rows: 1.00
-    ├── TableScan(Build)
-    │   ├── table: default.system.numbers
-    │   ├── output columns: [number (#1)]
-    │   ├── read rows: 1
-    │   ├── read size: < 1 KiB
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 1.00
-    └── TableScan(Probe)
-        ├── table: default.system.numbers
-        ├── output columns: [number (#0)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 1.00
+├── estimated rows: 0.20
+├── HashJoin(Build)
+│   ├── output columns: [t.number (#0)]
+│   ├── join type: LEFT SEMI
+│   ├── build keys: []
+│   ├── probe keys: []
+│   ├── keys is null equal: []
+│   ├── filters: [t.number (#0) > t1.number (#1)]
+│   ├── estimated rows: 0.20
+│   ├── TableScan(Build)
+│   │   ├── table: default.system.numbers
+│   │   ├── output columns: [number (#1)]
+│   │   ├── read rows: 1
+│   │   ├── read size: < 1 KiB
+│   │   ├── partitions total: 1
+│   │   ├── partitions scanned: 1
+│   │   ├── push downs: [filters: [], limit: NONE]
+│   │   └── estimated rows: 1.00
+│   └── TableScan(Probe)
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#0)]
+│       ├── read rows: 1
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.system.numbers
+    ├── output columns: [number (#2)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 1.00
 
 query T
 explain select * from (select number as a from numbers(10)) as t(b) where t.b > 5
@@ -781,7 +781,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL))]
-├── estimated rows: 3.00
+├── estimated rows: 0.60
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
 │   └── column 0: ['data%']
@@ -834,7 +834,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL), '$')]
-├── estimated rows: 3.00
+├── estimated rows: 0.60
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
 │   └── column 0: ['data$%%']
