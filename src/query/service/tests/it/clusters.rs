@@ -86,6 +86,38 @@ async fn test_remove_invalid_nodes() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lost_local_cluster_discovery() -> Result<()> {
+    let _guard = TestFixture::setup().await?;
+
+    let mut config_1 = ConfigBuilder::create()
+        .query_flight_address("10.0.0.1")
+        .build();
+    let mut config_2 = ConfigBuilder::create()
+        .query_flight_address("10.0.0.2")
+        .build();
+
+    config_1.query.check_connection_before_schedule = false;
+    config_2.query.check_connection_before_schedule = false;
+
+    let metastore = ClusterDiscovery::create_meta_client(&config_1).await?;
+    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, metastore.clone()).await?;
+    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, metastore.clone()).await?;
+
+    cluster_discovery_2.register_to_metastore(&config_2).await?;
+
+    let cluster_1 = cluster_discovery_1.discover(&config_1).await?;
+    assert_eq!(cluster_1.get_nodes().len(), 2);
+    assert_eq!(cluster_1.is_local(&cluster_1.nodes[0]), false);
+    assert_eq!(cluster_1.is_local(&cluster_1.nodes[1]), true);
+
+    let cluster_2 = cluster_discovery_2.discover(&config_2).await?;
+    assert_eq!(cluster_2.get_nodes().len(), 1);
+    assert_eq!(cluster_2.is_local(&cluster_2.nodes[0]), true);
+
+    Ok(())
+}
+
 // TODO:(Winter) need kvapi::KVApi for cluster multiple nodes test
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 // async fn test_multiple_cluster_discovery() -> Result<()> {

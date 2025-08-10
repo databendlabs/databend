@@ -294,9 +294,14 @@ impl ClusterDiscovery {
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
             Ok(cluster_nodes) => {
+                let mut has_local_node = false;
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
-                    if node.id != self.local_id {
+                    if node.id == self.local_id {
+                        has_local_node = true;
+                    }
+
+                    if config.query.check_connection_before_schedule && node.id != self.local_id {
                         let start_at = Instant::now();
                         if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
@@ -311,6 +316,26 @@ impl ClusterDiscovery {
                     }
 
                     res.push(Arc::new(node.clone()));
+                }
+
+                // When this node loses heartbeat with the meta node but receives an SQL request from the client, we should attempt to use this node.
+                if !has_local_node && !res.is_empty() {
+                    let mut local_node_info = NodeInfo::create(
+                        config.query.node_id.clone(),
+                        config.query.node_secret.clone(),
+                        format!(
+                            "{}:{}",
+                            config.query.http_handler_host, config.query.http_handler_port
+                        ),
+                        config.query.flight_api_address.clone(),
+                        config.query.discovery_address.clone(),
+                        String::new(),
+                        String::new(),
+                    );
+
+                    local_node_info.cluster_id = res[0].cluster_id.clone();
+                    local_node_info.warehouse_id = res[0].warehouse_id.clone();
+                    res.push(Arc::new(local_node_info));
                 }
 
                 metrics_gauge_discovered_nodes(
