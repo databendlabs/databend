@@ -2031,6 +2031,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .collect(),
             resources_management: self.resources_management,
             enable_queries_executor: self.enable_queries_executor,
+            check_connection_before_schedule: true,
         })
     }
 }
