@@ -57,6 +57,8 @@ use super::HttpSessionConf;
 use super::HttpSessionStateInternal;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::http::error::HttpErrorCode;
+use crate::servers::http::error::JsonErrorOnly;
+use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::json_header::encode_json_header;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueriesQueueManager;
@@ -138,9 +140,20 @@ pub async fn streaming_load_handler(
     )
     .await;
     let is_failed = res.is_err();
+
     let mut resp = match res {
         Ok(r) => r.into_response(),
-        Err(e) => e.into_response(),
+        Err(err) => (
+            err.status(),
+            Json(JsonErrorOnly {
+                error: QueryError {
+                    code: err.status().as_u16(),
+                    message: err.to_string(),
+                    detail: None,
+                },
+            }),
+        )
+            .into_response(),
     };
     if let Some(s) = &mut session_conf {
         if let Some(internal) = &mut s.internal {

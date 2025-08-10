@@ -15,7 +15,7 @@ curl -i -sS \
  	-H "X-Databend-Query-Context:{}" \
  	-H "X-Databend-SQL:insert into streaming_load_08 from @_databend_load file_format = (type=csv)" \
  	-F "upload=@$DATA/data.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" \
- 	| grep "x-databend-query-context" | cut -d ':' -f 2- | base64 -d
+ 	| grep "x-databend-query-context"  | cut -d ':' -f 2- |  sed 's/-/+/g; s/_/\//g; s/^[[:space:]]*//g; s/[[:space:]]*$//g' | base64 -d
 
 echo
 
@@ -31,7 +31,7 @@ curl -i -sS \
  	-H "x-databend-query-id:load-csv" \
  	-H "X-Databend-SQL:insert into streaming_load_08 from @_databend_load file_format = (type=csv)" \
  	-F "upload=@$DATA/data.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" \
- 	| grep "x-databend-query-context" | cut -d ':' -f 2- | base64 -d
+ 	| grep "x-databend-query-context"
 
 echo
 
