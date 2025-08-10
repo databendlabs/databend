@@ -47,7 +47,6 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
-use log::error;
 use log::info;
 use log::warn;
 use parking_lot::Condvar;
@@ -297,7 +296,6 @@ impl ExecutingGraph {
                 mut_node.tracking_payload.time_series_profile = Some(query_time_series.clone());
             }
         }
-
         for edge in pipeline.graph.edge_indices() {
             let index = EdgeIndex::new(edge.index());
             if let Some((source, target)) = pipeline.graph.edge_endpoints(index) {
@@ -369,9 +367,9 @@ impl ExecutingGraph {
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
-        info!("------------new--------------");
+        // info!("[schedule] ------------new--------------");
         let node = &locker.graph[index];
-        info!("Node {:?} trigger schedule", node);
+        // info!("[schedule] Node {:?} trigger schedule", node);
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
@@ -384,7 +382,7 @@ impl ExecutingGraph {
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
-                info!("Schedule edge: {:?}", edge);
+                // info!("Schedule edge: {:?}", edge);
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 event_cause = match edge {
@@ -400,7 +398,7 @@ impl ExecutingGraph {
                 let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
 
                 if matches!(*node_state, State::Idle) {
-                    info!("add new Node: {:?}", target_index);
+                    // info!("[schedule] add new Node: {:?}", node);
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
                 } else {
@@ -410,49 +408,20 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
-                let mut final_event;
+                // info!("[schedule] Schedule node: {:?}", node);
                 let (event, process_rows) = {
-                    let mut inner_event_cause = event_cause.clone();
-
-                    let has_remaining_data = Arc::new(AtomicBool::new(false));
-
                     let mut payload = node.tracking_payload.clone();
                     payload.process_rows = AtomicUsize::new(0);
-                    payload.has_remaining_data = has_remaining_data.clone();
                     let guard = ThreadTracker::tracking(payload);
 
                     if state_guard_cache.is_none() {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
-                    let mut cnt = 0;
 
-                    loop {
-                        let event = node.processor.event(inner_event_cause.clone())?;
-                        final_event = event;
-                        // If the processor is finished or needs different handling, stop retrigger processor's event
-                        if matches!(final_event, Event::Finished | Event::Async | Event::Sync) {
-                            break;
-                        }
-                        // If no remaining data, we're done
-                        if !has_remaining_data.swap(false, Ordering::SeqCst) {
-                            break;
-                        }
-                        inner_event_cause = EventCause::Input(0);
-                        cnt += 1;
-                        if cnt > 10 {
-                            error!("Infinite loop detected in processor event handling for node: {:?}, event: {:?}, cause: {:?}",
-                                   node.processor.id(), final_event, inner_event_cause);
-                        }
-                        info!(
-                            "!!Reschedule node: {:?} {:?} event_cause: {:?}",
-                            node.processor.id(),
-                            node.processor.name(),
-                            inner_event_cause
-                        );
-                    }
+                    let event = node.processor.event(event_cause)?;
                     let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
-                        Ok(_) => Ok((final_event, process_rows)),
+                        Ok(_) => Ok((event, process_rows)),
                         Err(out_of_limit) => {
                             Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
                         }
@@ -492,8 +461,31 @@ impl ExecutingGraph {
                     }
                 };
 
-                node.trigger(&mut need_schedule_edges);
+                let mut new_need_schedule_edges = VecDeque::new();
+                node.trigger(&mut new_need_schedule_edges);
+                while let Some(edge) = new_need_schedule_edges.pop_back() {
+                    if let DirectedEdge::Target(index) = edge {
+                        let port_index = locker.graph.edge_weight(index).unwrap().input_index;
+                        let port = node.inputs_port[port_index].as_ref();
+                        if port.slice_occurred() {
+                            port.reset_slice_occurred();
+                            // info!(
+                            //     "[schedule!!] detect slice occurred on edge: {:?}",
+                            //     DirectedEdge::Source(index)
+                            // );
+                            need_schedule_edges.push_front(DirectedEdge::Source(index));
+                        }
+                    }
+                    need_schedule_edges.push_front(edge);
+                }
+
                 *state_guard_cache.unwrap() = processor_state;
+
+                // info!(
+                //     "[schedule] node {} trigger edge: {:?}",
+                //     node.processor.name(),
+                //     need_schedule_edges
+                // );
             }
         }
 

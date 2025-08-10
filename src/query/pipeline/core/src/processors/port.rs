@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -21,11 +22,9 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use log::info;
 
 use crate::processors::BlockLimit;
 use crate::processors::UpdateTrigger;
@@ -44,7 +43,9 @@ pub struct SharedData(pub Result<DataBlock>);
 pub struct SharedStatus {
     data: AtomicPtr<SharedData>,
     block_limit: Arc<BlockLimit>,
-    // TODO: add new status if slice
+    // This flag is used to indicate if a slice operation
+    // has occurred on the data block
+    slice_occurred: AtomicBool,
 }
 
 unsafe impl Send for SharedStatus {}
@@ -66,6 +67,7 @@ impl SharedStatus {
         Arc::new(SharedStatus {
             data: AtomicPtr::new(std::ptr::null_mut()),
             block_limit,
+            slice_occurred: AtomicBool::new(false),
         })
     }
 
@@ -156,7 +158,6 @@ impl InputPort {
             let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
 
             if flags & IS_FINISHED == 0 {
-                info!("[input_port] trigger input port finish");
                 UpdateTrigger::update_input(&self.update_trigger);
             }
         }
@@ -181,7 +182,7 @@ impl InputPort {
         unsafe {
             let flags = self.shared.set_flags(NEED_DATA, NEED_DATA);
             if flags & NEED_DATA == 0 {
-                info!("[input_port] trigger input port set need data");
+                // info!("[input_port] trigger input port set need data");
                 UpdateTrigger::update_input(&self.update_trigger);
             }
         }
@@ -199,7 +200,7 @@ impl InputPort {
 
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
         unsafe {
-            info!("[input_port] trigger input port pull data");
+            // info!("[input_port] trigger input port pull data");
             UpdateTrigger::update_input(&self.update_trigger);
 
             // First, swap out the data without unsetting flags to prevent race conditions
@@ -229,23 +230,22 @@ impl InputPort {
             block_limit.calculate_limit_rows(data_block.num_rows(), data_block.memory_size());
 
         if data_block.num_rows() > limit_rows && limit_rows > 0 {
-            info!(
-                "[input_port] pull data with slice, limit/all: {}/{}",
-                limit_rows,
-                data_block.num_rows()
-            );
+            // info!(
+            //     "[input_port] pull data with slice, limit/all: {}/{}",
+            //     limit_rows,
+            //     data_block.num_rows()
+            // );
             // Need to split the block
             let taken_block = data_block.slice(0..limit_rows);
             let remaining_block = data_block.slice(limit_rows..data_block.num_rows());
 
             let remaining_data = Box::new(SharedData(Ok(remaining_block)));
             self.shared.swap(Box::into_raw(remaining_data), 0, 0);
-
-            ThreadTracker::has_remaining_data().store(true, Ordering::SeqCst);
+            self.shared.slice_occurred.store(true, Ordering::Relaxed);
             ExecutorStats::record_thread_tracker(taken_block.num_rows());
             Some(Ok(taken_block))
         } else {
-            info!("[input_port] pull data all: {}", data_block.num_rows());
+            // info!("[input_port] pull data all: {}", data_block.num_rows());
             // No need to split, take the whole block
             // Unset both HAS_DATA and NEED_DATA flags
             self.shared.set_flags(0, HAS_DATA | NEED_DATA);
@@ -268,6 +268,14 @@ impl InputPort {
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
     }
+
+    pub fn slice_occurred(&self) -> bool {
+        self.shared.slice_occurred.load(Ordering::Relaxed)
+    }
+
+    pub fn reset_slice_occurred(&self) {
+        self.shared.slice_occurred.store(false, Ordering::Relaxed);
+    }
 }
 
 pub struct OutputPort {
@@ -288,7 +296,7 @@ impl OutputPort {
     #[inline(always)]
     pub fn push_data(&self, data: Result<DataBlock>) {
         unsafe {
-            info!("[output_port] trigger output port push_data");
+            // info!("[output_port] trigger output port push_data");
             UpdateTrigger::update_output(&self.update_trigger);
 
             if let Ok(data_block) = &data {
@@ -323,7 +331,6 @@ impl OutputPort {
             let flags = self.shared.set_flags(IS_FINISHED, IS_FINISHED);
 
             if flags & IS_FINISHED == 0 {
-                info!("[output_port] trigger output port finish");
                 UpdateTrigger::update_output(&self.update_trigger);
             }
         }
