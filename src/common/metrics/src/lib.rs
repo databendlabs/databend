@@ -30,7 +30,6 @@ pub use crate::metrics::http;
 pub use crate::metrics::interpreter;
 pub use crate::metrics::lock;
 pub use crate::metrics::mysql;
-pub use crate::metrics::openai;
 pub use crate::metrics::session;
 pub use crate::metrics::storage;
 pub use crate::metrics::system;

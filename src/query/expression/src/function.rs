@@ -163,13 +163,6 @@ pub struct FunctionContext {
     pub disable_variant_check: bool,
     pub enable_selector_executor: bool,
 
-    pub openai_api_chat_base_url: String,
-    pub openai_api_embedding_base_url: String,
-    pub openai_api_key: String,
-    pub openai_api_version: String,
-    pub openai_api_embedding_model: String,
-    pub openai_api_completion_model: String,
-
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_strict_datetime_parser: bool,
@@ -186,12 +179,6 @@ impl Default for FunctionContext {
             rounding_mode: false,
             disable_variant_check: false,
             enable_selector_executor: true,
-            openai_api_chat_base_url: "".to_string(),
-            openai_api_embedding_base_url: "".to_string(),
-            openai_api_key: "".to_string(),
-            openai_api_version: "".to_string(),
-            openai_api_embedding_model: "".to_string(),
-            openai_api_completion_model: "".to_string(),
 
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
