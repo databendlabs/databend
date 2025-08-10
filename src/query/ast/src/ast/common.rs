@@ -25,7 +25,7 @@ use crate::ast::WithOptions;
 use crate::Span;
 
 // Identifier of table name or column name.
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Drive, DriveMut)]
 pub struct Identifier {
     pub span: Span,
     pub name: String,
@@ -34,7 +34,7 @@ pub struct Identifier {
     pub ident_type: IdentifierType,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Default)]
 pub enum IdentifierType {
     #[default]
     None,
