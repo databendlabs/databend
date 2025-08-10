@@ -48,7 +48,11 @@ impl ExchangeTransform {
 
                 // exchange writer sink and resize and exchange reader
                 let len = params.destination_ids.len();
-                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                let local_pipe = if params.allow_adjust_parallelism {
+                    ctx.get_settings().get_max_threads()? as usize
+                } else {
+                    1
+                };
 
                 let mut items = Vec::with_capacity(len);
                 let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
@@ -58,8 +62,13 @@ impl ExchangeTransform {
                 let senders = flight_senders.into_iter();
                 for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(match destination_id == &params.executor_id {
-                        true if max_threads == 1 => create_dummy_item(),
-                        true => create_resize_item(1, max_threads),
+                        true => {
+                            if local_pipe == 1 {
+                                create_dummy_item()
+                            } else {
+                                create_resize_item(1, local_pipe)
+                            }
+                        }
                         false => create_writer_item(
                             sender,
                             false,
@@ -84,11 +93,13 @@ impl ExchangeTransform {
                     }
                 }
 
-                let new_outputs = max_threads + nodes_source;
+                let new_outputs = local_pipe + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
-                if params.exchange_injector.exchange_sorting().is_none() {
-                    pipeline.try_resize(max_threads)?;
+                if params.exchange_injector.exchange_sorting().is_none()
+                    && params.allow_adjust_parallelism
+                {
+                    pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
                 }
 
                 injector.apply_shuffle_deserializer(params, pipeline)

@@ -86,6 +86,14 @@ output domain  : Undefined
 output         : '{"a":"b","c":"d"}'
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | parse_json('{"k":"v","k":"v2"}')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ duplicate object attribute "k", pos 12 while evaluating function `parse_json('{"k":"v","k":"v2"}')` in expr `CAST('{"k":"v","k":"v2"}' AS Variant)`
+
+
+
 ast            : parse_json(s)
 raw expr       : parse_json(s::String)
 checked expr   : CAST<String>(s AS Variant)
@@ -271,6 +279,15 @@ optimized expr : 0x400000021000000110000001100000011000000161636264
 output type    : Variant NULL
 output domain  : Undefined
 output         : '{"a":"b","c":"d"}'
+
+
+ast            : try_parse_json('{"k":"v","k":"v2"}')
+raw expr       : try_parse_json('{"k":"v","k":"v2"}')
+checked expr   : try_parse_json<String>("{\"k\":\"v\",\"k\":\"v2\"}")
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : try_parse_json(s)

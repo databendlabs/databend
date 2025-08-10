@@ -15,6 +15,7 @@
 use databend_meta::api::http::v1::features::FeatureResponse;
 use reqwest::Client;
 use serde::Deserialize;
+use serde::Serialize;
 
 pub struct MetaAdminClient {
     client: Client,
@@ -79,6 +80,22 @@ impl MetaAdminClient {
         }
     }
 
+    pub async fn trigger_snapshot(&self) -> anyhow::Result<()> {
+        let resp = self
+            .client
+            .get(format!("{}/v1/ctrl/trigger_snapshot", self.endpoint))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            let data = resp.bytes().await?;
+            let msg = String::from_utf8_lossy(&data);
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        }
+    }
+
     pub async fn set_feature(
         &self,
         feature: &str,
@@ -119,14 +136,31 @@ impl MetaAdminClient {
             Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
         }
     }
+
+    pub async fn get_metrics(&self) -> anyhow::Result<String> {
+        let resp = self
+            .client
+            .get(format!("{}/v1/metrics", self.endpoint))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            let result = resp.text().await?;
+            Ok(result)
+        } else {
+            let data = resp.bytes().await?;
+            let msg = String::from_utf8_lossy(&data);
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        }
+    }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AdminStatusResponse {
     pub name: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AdminTransferLeaderResponse {
     pub from: u64,
     pub to: u64,

@@ -34,6 +34,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::physical_sort::SortStep;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
@@ -48,7 +49,7 @@ pub struct WindowPartition {
     pub input: PhysicalPlan,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
-    pub after_exchange: Option<bool>,
+    pub sort_step: SortStep,
     pub top_n: Option<WindowPartitionTopN>,
 
     pub stat_info: Option<PlanStatsInfo>,
@@ -164,12 +165,12 @@ impl IPhysicalPlan for WindowPartition {
                     top_n.func,
                     num_partitions as u64,
                 ),
-            )
+            )?;
         } else {
             builder.main_pipeline.exchange(
                 num_processors,
                 WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-            );
+            )?;
         }
 
         let temp_dir_manager = TempDirManager::instance();
@@ -180,7 +181,11 @@ impl IPhysicalPlan for WindowPartition {
             .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
             .transpose()?;
 
-        let have_order_col = self.after_exchange.unwrap_or(false);
+        let have_order_col = match self.sort_step {
+            SortStep::Single | SortStep::Partial => false,
+            SortStep::Final => true,
+            _ => unimplemented!(),
+        };
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
 
         let processor_id = AtomicUsize::new(0);

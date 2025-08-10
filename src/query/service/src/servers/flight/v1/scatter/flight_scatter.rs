@@ -16,5 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 pub trait FlightScatter: Sync + Send {
+    fn name(&self) -> &'static str;
+
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
 }

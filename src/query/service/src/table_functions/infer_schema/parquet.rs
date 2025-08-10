@@ -36,6 +36,7 @@ use databend_common_sql::binder::resolve_file_location;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFilesInfo;
+use databend_common_users::Object;
 use opendal::Scheme;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
@@ -99,7 +100,10 @@ impl AsyncSource for ParquetInferSchemaSource {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
-            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User
@@ -123,8 +127,9 @@ impl AsyncSource for ParquetInferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        let schema = match file_format_params.get_type() {
-            StageFileFormatType::Parquet => {
+        let schema = match (first_file.as_ref(), file_format_params.get_type()) {
+            (None, _) => return Ok(None),
+            (Some(first_file), StageFileFormatType::Parquet) => {
                 let arrow_schema = read_parquet_schema_async_rs(
                     &operator,
                     &first_file.path,

@@ -803,7 +803,9 @@ pub enum TokenKind {
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
-    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    /// L1DISTANCE and L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<+>")]
+    L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
@@ -1537,6 +1539,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L1DISTANCE
                 | L2DISTANCE
                 | Placeholder
                 | QuestionOr
@@ -1841,6 +1844,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
+            | TokenKind::ROW
             | TokenKind::POLICY
             | TokenKind::TASK
             | TokenKind::PIPE

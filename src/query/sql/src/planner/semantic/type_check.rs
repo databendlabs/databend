@@ -117,6 +117,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_version::UDF_CLIENT_USER_AGENT;
 use derive_visitor::Drive;
@@ -2905,30 +2906,6 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
 
-        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
-        if (func_name == "substr" || func_name == "substring")
-            && self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()
-                .unwrap()
-                .substr_index_zero_literal_as_one()
-        {
-            Self::rewrite_substring(&mut args);
-        }
-
-        if func_name == "grouping" {
-            // `grouping` will be rewritten again after resolving grouping sets.
-            return Ok(Box::new((
-                ScalarExpr::FunctionCall(FunctionCall {
-                    span,
-                    params: vec![],
-                    arguments: args,
-                    func_name: "grouping".to_string(),
-                }),
-                DataType::Number(NumberDataType::UInt32),
-            )));
-        }
         if let Some(rewritten_variant_expr) =
             self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
@@ -2948,11 +2925,22 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         mut params: Vec<Scalar>,
-        args: Vec<ScalarExpr>,
+        mut args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
+        if (func_name == "substr" || func_name == "substring")
+            && self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .substr_index_zero_literal_as_one()
+        {
+            Self::rewrite_substring(&mut args);
+        }
+
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
-
         // inject the params
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()
@@ -5246,7 +5234,20 @@ impl<'a> TypeChecker<'a> {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
         };
 
-        databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
+        let visibility_checker = if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            Some(databend_common_base::runtime::block_on(async move {
+                self.ctx
+                    .get_visibility_checker(false, Object::Sequence)
+                    .await
+            })?)
+        } else {
+            None
+        };
+        databend_common_base::runtime::block_on(catalog.get_sequence(req, visibility_checker))?;
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);

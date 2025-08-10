@@ -8,6 +8,9 @@ statement ok
 set auto_compaction_imperfect_blocks_threshold = 3;
 
 statement ok
+set enable_shuffle_sort = 0;
+
+statement ok
 set enable_parallel_multi_merge_sort = 0;
 
 # ISSUE 15760

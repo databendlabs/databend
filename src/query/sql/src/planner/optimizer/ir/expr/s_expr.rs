@@ -137,6 +137,11 @@ impl SExpr {
         &self.children[0]
     }
 
+    pub fn unary_child_arc(&self) -> Arc<SExpr> {
+        assert_eq!(self.children.len(), 1);
+        self.children[0].clone()
+    }
+
     pub fn left_child(&self) -> &SExpr {
         debug_assert_eq!(self.children.len(), 2);
         &self.children[0]
@@ -204,6 +209,15 @@ impl SExpr {
     #[recursive::recursive]
     pub(crate) fn has_subquery(&self) -> bool {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
+    }
+
+    #[recursive::recursive]
+    pub fn support_lazy_materialize(&self) -> bool {
+        self.plan.support_lazy_materialize()
+            && self
+                .children
+                .iter()
+                .all(|child| child.support_lazy_materialize())
     }
 
     #[recursive::recursive]

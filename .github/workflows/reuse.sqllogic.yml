@@ -219,8 +219,8 @@ jobs:
         tests:
           - { dirs: "query", runner: "4c16g" }
           - { dirs: "duckdb", runner: "4c16g" }
-          - { dirs: "crdb", runner: "2c8g" }
-          - { dirs: "base", runner: "2c8g" }
+          - { dirs: "crdb", runner: "2c8g", parallel: "2" }
+          - { dirs: "base", runner: "2c8g", parallel: "2" }
           - { dirs: "ydb", runner: "2c8g" }
           - { dirs: "tpcds", runner: "2c8g" }
           - { dirs: "tpch", runner: "2c8g" }

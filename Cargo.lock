@@ -1447,7 +1447,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.101",
- "which",
+ "which 4.4.2",
 ]
 
 [[package]]
@@ -3037,7 +3037,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "databend_educe",
  "derive-visitor",
@@ -3463,6 +3463,7 @@ dependencies = [
  "jsonb",
  "lexical-core",
  "libm",
+ "log",
  "match-template",
  "md-5",
  "naive-cityhash",
@@ -3755,12 +3756,14 @@ dependencies = [
  "clap",
  "databend-common-building",
  "databend-common-meta-client",
+ "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
  "databend-common-meta-sled-store",
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
  "futures",
+ "mlua",
  "raft-log",
  "reqwest",
  "serde",
@@ -3955,6 +3958,7 @@ dependencies = [
  "map-api",
  "num-derive",
  "num-traits",
+ "num_cpus",
  "openraft",
  "pretty_assertions",
  "prost",
@@ -3963,6 +3967,7 @@ dependencies = [
  "serde",
  "serde_json",
  "state-machine-api",
+ "tempfile",
  "thiserror 1.0.69",
  "tonic",
  "tonic-build",
@@ -4228,9 +4233,11 @@ dependencies = [
 name = "databend-common-storage"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "anyhow",
  "arrow-schema",
  "async-backtrace",
+ "borsh",
  "chrono",
  "dashmap 6.1.0",
  "databend-common-ast",
@@ -4351,6 +4358,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "enum-as-inner",
+ "enum_dispatch",
  "fastrace",
  "futures",
  "futures-util",
@@ -4362,6 +4370,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.3",
  "parquet",
+ "paste",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -4398,6 +4407,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-common-storages-parquet",
+ "databend-common-users",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace",
@@ -4434,6 +4444,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-common-users",
  "databend-storages-common-cache",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
@@ -4524,6 +4535,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
+ "jiff 0.2.13",
  "log",
  "opendal",
  "orc-rust",
@@ -4925,6 +4937,7 @@ dependencies = [
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
+ "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
@@ -4943,8 +4956,10 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "serde",
  "tantivy",
  "tempfile",
+ "typetag",
  "uuid",
 ]
 
@@ -4958,6 +4973,18 @@ dependencies = [
  "databend-common-exception",
  "databend-common-management",
  "databend-common-meta-types",
+]
+
+[[package]]
+name = "databend-enterprise-row-access-policy-feature"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-meta-api",
+ "databend-common-meta-app",
+ "databend-common-meta-store",
 ]
 
 [[package]]
@@ -5005,7 +5032,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -5207,6 +5233,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
+ "mlua",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -5304,6 +5331,7 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
+ "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
@@ -5316,6 +5344,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "derive-visitor",
+ "enum-as-inner",
  "ethnum",
  "fastrace",
  "flatbuffers",
@@ -5582,12 +5611,14 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
+ "jiff 0.2.13",
  "serde",
  "typetag",
 ]
@@ -6301,6 +6332,12 @@ dependencies = [
  "log",
  "regex",
 ]
+
+[[package]]
+name = "env_home"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f84e12ccf0a7ddc17a6c41c93326024c42920d7ee630d04950e6926645c0fe"
 
 [[package]]
 name = "env_logger"
@@ -9425,9 +9462,9 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "153dfebb6ad4484c84a5ae765a18976bf476b8a3f5165ce987aedd59d1f1e6c8"
+checksum = "96cbb4fba292867a2d86ed83dbe5f9d036f423bf6a491b7d884058b2fde42fcd"
 dependencies = [
  "byteorder",
  "ethnum",
@@ -9971,6 +10008,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
+name = "lua-src"
+version = "548.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00bc4bd1f1d5c65b30717333cbec4fa7aa378978940a1bca62f404498d423233"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "luajit-src"
+version = "210.6.1+f9140a6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "813bd31f2759443affa687c0d9c5eb5cf6cb0e898810ab197408431d746054bf"
+dependencies = [
+ "cc",
+ "which 7.0.3",
+]
+
+[[package]]
 name = "lz4"
 version = "1.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10244,6 +10300,38 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mlua"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de25fc513588ac1273aa8c6dc0fffee6d32c12f38dc75f5cdc74547121a107ef"
+dependencies = [
+ "bstr",
+ "either",
+ "erased-serde",
+ "futures-util",
+ "mlua-sys",
+ "num-traits",
+ "parking_lot 0.12.3",
+ "rustc-hash 2.1.1",
+ "rustversion",
+ "serde",
+ "serde-value",
+]
+
+[[package]]
+name = "mlua-sys"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcdf7c9e260ca82aaa32ac11148941952b856bb8c69aa5a9e65962f21fcb8637"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "lua-src",
+ "luajit-src",
+ "pkg-config",
 ]
 
 [[package]]
@@ -12109,7 +12197,7 @@ dependencies = [
  "protobuf-support",
  "tempfile",
  "thiserror 1.0.69",
- "which",
+ "which 4.4.2",
 ]
 
 [[package]]
@@ -13084,9 +13172,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f6e7717a92f1a74cd17a166a7e3972016b306dfea7d43186728d982838c5f32"
+checksum = "068a45a83c2ce7d6bdad6ba83719ff08ba9818d210b613af13647ea33ab7d23c"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -13637,23 +13725,29 @@ dependencies = [
 
 [[package]]
 name = "serde-bridge"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f68e451f87e0f0a51c565c907017f033ecce23a1aef9eb3faee0dfd6e578d84"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/serde-bridge?rev=4f0e99a#4f0e99abc82de8a82046415c90f01f9739bad630"
 dependencies = [
  "anyhow",
- "indexmap 1.9.3",
+ "indexmap 2.9.0",
  "serde",
 ]
 
 [[package]]
 name = "serde-env"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c68119a0846249fd6f4b38561b4b4727dbc4fd9fea074f1253bca7d50440ce58"
+version = "0.2.0"
+source = "git+https://github.com/datafuse-extras/serde-env?rev=085d4b1#085d4b1846ad16e3b7062bf11bf40a1c38d746e1"
 dependencies = [
- "anyhow",
- "log",
+ "serde",
+]
+
+[[package]]
+name = "serde-value"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
+dependencies = [
+ "ordered-float 2.10.1",
  "serde",
 ]
 
@@ -13805,11 +13899,10 @@ dependencies = [
 [[package]]
 name = "serfig"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40f8bc5badc980cedcab554e3a630a5657ee53a94b274e4c937394e19186af8"
+source = "git+https://github.com/datafuse-extras/serfig?rev=610ac6d#610ac6dfa251206d3667d169b772de7b0f05d151"
 dependencies = [
  "anyhow",
- "indexmap 1.9.3",
+ "indexmap 2.9.0",
  "log",
  "serde",
  "serde-bridge",
@@ -14464,8 +14557,8 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.1.0"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.0#3c4eb15cb42620f7cdaf331b0fd0a75c6a31f498"
+version = "0.1.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.1#637437b7a78b07bf39adff8bebef270f17c678dc"
 dependencies = [
  "display-more",
  "map-api",
@@ -16722,6 +16815,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "7.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d643ce3fd3e5b54854602a080f34fb10ab75e0b813ee32d00ca2b44fa74762"
+dependencies = [
+ "either",
+ "env_home",
+ "rustix 1.0.7",
+ "winsafe",
+]
+
+[[package]]
 name = "whoami"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17321,6 +17426,12 @@ dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "winsafe"
+version = "0.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "winx"

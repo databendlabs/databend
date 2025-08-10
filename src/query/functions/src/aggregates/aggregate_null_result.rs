@@ -23,13 +23,15 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
 use super::StateAddr;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {
@@ -86,11 +88,28 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn serialize(&self, _place: AggrState, _writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![DataType::Null.into()]
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        _loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let builder = builders[0].as_null_mut().unwrap();
+        *builder += places.len();
         Ok(())
     }
 
-    fn merge(&self, _place: AggrState, _reader: &mut &[u8]) -> Result<()> {
+    fn batch_merge(
+        &self,
+        _: &[StateAddr],
+        _: &[AggrStateLoc],
+        _: &BlockEntry,
+        _: Option<&Bitmap>,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -98,7 +117,12 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn merge_result(&self, _place: AggrState, array: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        _place: AggrState,
+        _read_only: bool,
+        array: &mut ColumnBuilder,
+    ) -> Result<()> {
         AnyType::push_default(array);
         Ok(())
     }

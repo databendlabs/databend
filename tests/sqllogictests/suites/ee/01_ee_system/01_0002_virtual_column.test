@@ -624,9 +624,6 @@ S002 ST002 B Good Y
 S003 ST003 C Average N
 
 statement ok
-set enable_block_stream_write = 1
-
-statement ok
 CREATE OR REPLACE TABLE test_stream (
     id INT,
     data1 VARIANT,
@@ -679,9 +676,6 @@ FROM test_stream;
 8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
 9 "Richard" 33 "Austin" "hiking" "cycling"
 10 "Lisa" 26 "Chicago" "gaming" "reading"
-
-statement ok
-set enable_block_stream_write = 0
 
 statement ok
 set enable_experimental_virtual_column = 0;

@@ -119,7 +119,7 @@ impl ReportIssueInterpreter {
             ));
         };
 
-        let Ok(plan) = planner.plan_stmt(&extras.statement).await else {
+        let Ok(plan) = planner.plan_stmt(&extras.statement, false).await else {
             // TODO: Generate a bug report for the planner stage.
             return Err(ErrorCode::Unimplemented(
                 "Bug Report: Plan statement Export Not Supported",

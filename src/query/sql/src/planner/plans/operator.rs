@@ -31,6 +31,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::r_cte_scan::RecursiveCteScan;
+use crate::plans::sequence::Sequence;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
@@ -42,6 +43,8 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::MaterializeCTERef;
+use crate::plans::MaterializedCTE;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
@@ -127,6 +130,9 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
+    MaterializedCTE,
+    MaterializeCTERef,
+    Sequence,
 }
 
 /// Relational operators
@@ -160,12 +166,27 @@ pub enum RelOperator {
     Mutation(Mutation),
     CompactBlock(CompactBlock),
     MutationSource(MutationSource),
+    MaterializedCTE(MaterializedCTE),
+    MaterializeCTERef(MaterializeCTERef),
+    Sequence(Sequence),
 }
 
 impl RelOperator {
     pub fn has_subquery(&self) -> bool {
         let mut iter = self.scalar_expr_iter();
         iter.any(|expr| expr.has_subquery())
+    }
+
+    pub fn support_lazy_materialize(&self) -> bool {
+        !matches!(
+            self,
+            RelOperator::Join(_)
+                | RelOperator::CacheScan(_)
+                | RelOperator::UnionAll(_)
+                | RelOperator::DummyTableScan(_)
+                | RelOperator::ExpressionScan(_)
+                | RelOperator::ConstantTableScan(_)
+        )
     }
 
     pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
@@ -249,5 +270,8 @@ impl_try_from_rel_operator! {
     AsyncFunction,
     Mutation,
     CompactBlock,
-    MutationSource
+    MutationSource,
+    MaterializedCTE,
+    MaterializeCTERef,
+    Sequence
 }

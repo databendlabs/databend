@@ -43,6 +43,7 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StorageError;
+use databend_common_meta_types::snapshot_db::DBStat;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaNetworkError;
@@ -308,6 +309,15 @@ impl RaftStoreInner {
             return Default::default();
         };
         db.sys_data().key_counts().clone()
+    }
+
+    /// Get the statistics of the snapshot database.
+    pub(crate) async fn get_snapshot_db_stat(&self) -> DBStat {
+        let sm = self.state_machine.read().await;
+        let Some(db) = sm.levels().persisted() else {
+            return Default::default();
+        };
+        db.db_stat()
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.

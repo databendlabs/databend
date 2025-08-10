@@ -145,10 +145,17 @@ impl DefaultSettings {
                 }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
-                    desc: "Sets the maximum byte size of a single data block that can be read.",
+                    desc: "Sets the maximum rows size of a single data block that can be read.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("max_block_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50 * 1024 * 1024),
+                    desc: "Sets the maximum byte size of a single data block that can be read.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
                 ("sequence_step_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
@@ -224,6 +231,13 @@ impl DefaultSettings {
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
+                }),
+                ("grouping_sets_channel_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Sets the channel size for grouping sets to union transformation.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
@@ -513,6 +527,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("grouping_sets_to_union", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables grouping sets to union.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -660,6 +681,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                }),
+                ("enable_shuffle_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable shuffle sort.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -962,14 +990,28 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
+                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_experimental_row_access_policy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting enable row access policy(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_connection_privilege_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting disables connection object privilege check(disable by default).",
+                    desc: "experiment setting enable connection object privilege check(disable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1171,6 +1213,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_selector_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables selector executor for filter expression",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("dynamic_sample_time_budget_ms", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Time budget for dynamic sample in milliseconds",
@@ -1334,7 +1383,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("enable_block_stream_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables block stream write",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

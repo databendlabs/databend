@@ -115,7 +115,7 @@ impl Display for InsertSource {
                 location,
             } => {
                 if let Some(value) = value {
-                    write!(f, "(")?;
+                    write!(f, "VALUES (")?;
                     write_comma_separated_list(f, value)?;
                     write!(f, ")")?;
                 }

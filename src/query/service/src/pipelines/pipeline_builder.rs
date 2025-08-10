@@ -150,7 +150,6 @@ impl PipelineBuilder {
         let _guard = self.add_plan_scope(plan)?;
         self.is_exchange_stack
             .push(plan.downcast_ref::<ExchangeSink>().is_some());
-
         plan.build_pipeline(self)?;
         self.is_exchange_stack.pop();
 

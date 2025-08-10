@@ -16,8 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -25,14 +23,15 @@ use databend_common_expression::Scalar;
 
 use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionOrNullAdaptor;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortAdaptor;
-use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::Aggregators;
+use super::Aggregators;
 
 // The NULL value in the those function needs to be handled separately.
-const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 7] = [
+const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 8] = [
     "array_agg",
     "list",
+    "json_agg",
     "json_array_agg",
     "json_object_agg",
     "group_array_moving_avg",
@@ -129,17 +128,7 @@ impl AggregateFunctionDescription {
     }
 }
 
-#[derive(
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Debug,
-    BorshSerialize,
-    BorshDeserialize,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSortDesc {
     pub index: usize,
     pub is_reuse_index: bool,
@@ -166,7 +155,7 @@ pub struct AggregateFunctionFactory {
 }
 
 impl AggregateFunctionFactory {
-    pub(in crate::aggregates::aggregate_function_factory) fn create() -> AggregateFunctionFactory {
+    pub(in super::aggregate_function_factory) fn create() -> AggregateFunctionFactory {
         AggregateFunctionFactory {
             case_insensitive_desc: Default::default(),
             case_insensitive_combinator_desc: Default::default(),

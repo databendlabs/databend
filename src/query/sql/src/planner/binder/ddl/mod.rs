@@ -26,6 +26,7 @@ mod notification;
 mod password_policy;
 mod procedure;
 mod role;
+mod row_access_policy;
 mod sequence;
 mod stage;
 mod stream;

@@ -148,7 +148,8 @@ impl IPhysicalPlan for ColumnMutation {
             }
 
             // Keep the original order of the columns.
-            let num_output_columns = self.input_num_columns - self.has_filter_column as usize - self.udf_col_num;
+            let num_output_columns =
+                self.input_num_columns - self.has_filter_column as usize - self.udf_col_num;
             let mut projection = Vec::with_capacity(num_output_columns);
             for idx in 0..num_output_columns {
                 if let Some(index) = schema_offset_to_new_offset.get(&idx) {

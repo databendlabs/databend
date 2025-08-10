@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::io::Write;
 use std::time::Instant;
@@ -19,6 +20,7 @@ use std::time::Instant;
 use bytes::Buf;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableMeta;
 use log::info;
 use log::warn;
@@ -46,6 +48,8 @@ impl<'a> SnapshotHintWriter<'a> {
 pub struct SnapshotHint {
     pub snapshot_full_path: String,
     pub entity_comments: EntityComments,
+    #[serde(default)]
+    pub indexes: BTreeMap<String, TableIndex>,
 }
 
 impl SnapshotHint {
@@ -122,6 +126,7 @@ async fn try_read_legacy_hint(
                     table_comment: "".to_string(),
                     field_comments: vec![],
                 },
+                indexes: Default::default(),
             }))
         }
         Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(None),
@@ -167,6 +172,7 @@ impl SnapshotHintWriter<'_> {
         let hint = SnapshotHint {
             snapshot_full_path: last_snapshot_path,
             entity_comments: EntityComments::from(table_meta),
+            indexes: table_meta.indexes.clone(),
         };
 
         let mut bytes = vec![];

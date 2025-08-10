@@ -338,6 +338,10 @@ SELECT * from s;"#,
         r#"GRANT access connection on connection c1  TO 'test-grant';"#,
         r#"GRANT all on connection c1  TO 'test-grant';"#,
         r#"GRANT OWNERSHIP on connection c1  TO role r1;"#,
+        r#"GRANT access sequence, create sequence ON *.*  TO 'test-grant';"#,
+        r#"GRANT access sequence on sequence s1  TO 'test-grant';"#,
+        r#"GRANT all on sequence s1  TO 'test-grant';"#,
+        r#"GRANT OWNERSHIP on sequence s1  TO role r1;"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant';"#,
@@ -944,6 +948,21 @@ SELECT * from s;"#,
         r#"SHOW SEQUENCES LIKE '%seq%'"#,
         r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
         r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
+        // row policy
+        r#"create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+          case
+              when 'it_admin' = current_role() then true
+              else false
+          end"#,
+        r#"create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+            'sales_executive_role' = current_role()
+              or exists (
+                    select 1 from salesmanagerregions
+                      where sales_manager = current_role()
+                        and region = sales_region
+        )"#,
+        r#"DROP row access policy IF EXISTS r1"#,
+        r#"desc row access policy r1"#,
     ];
 
     for case in cases {

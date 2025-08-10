@@ -2031,6 +2031,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .collect(),
             resources_management: self.resources_management,
             enable_queries_executor: self.enable_queries_executor,
+            check_connection_before_schedule: true,
         })
     }
 }
@@ -3219,6 +3220,14 @@ pub struct CacheConfig {
     )]
     pub table_meta_statistic_count: u64,
 
+    /// Max number of cached segment statistic meta
+    #[clap(
+        long = "cache-segment-statistic-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_statistics_count: u64,
+
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     #[clap(
         long = "cache-enable-table-bloom-index-cache",
@@ -3304,7 +3313,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-meta-count",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "30000"
     )]
     pub vector_index_meta_count: u64,
 
@@ -3312,7 +3321,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "64424509440"
     )]
     pub vector_index_filter_size: u64,
 
@@ -3529,7 +3538,7 @@ pub struct SpillConfig {
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
 
-    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    // TODO: We need to fix StorageConfig so that it supports command line injections.
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 }
@@ -3635,6 +3644,7 @@ mod cache_config_converters {
                 block_meta_count: value.block_meta_count,
                 segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
@@ -3671,6 +3681,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3839,5 +3850,20 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_env() {
+        unsafe {
+            std::env::set_var("LOG_TRACING_OTLP_ENDPOINT", "http://127.0.2.1:1111");
+            std::env::set_var("LOG_TRACING_CAPTURE_LOG_LEVEL", "DebuG");
+        }
+
+        let cfg = Config::load_with_config_file("").unwrap();
+        assert_eq!(
+            cfg.log.tracing.tracing_otlp.endpoint,
+            "http://127.0.2.1:1111"
+        );
+        assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
     }
 }

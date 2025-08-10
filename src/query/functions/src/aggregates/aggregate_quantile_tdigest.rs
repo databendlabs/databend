@@ -31,23 +31,25 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
+use super::assert_params;
+use super::assert_unary_arguments;
 use super::borsh_partial_deserialize;
 use super::get_levels;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_params;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::StateAddr;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
+use super::StateAddr;
 
 pub(crate) const MEDIAN: u8 = 0;
 pub(crate) const QUANTILE: u8 = 1;
@@ -284,11 +286,11 @@ pub struct AggregateQuantileTDigestFunction<T> {
     return_type: DataType,
     levels: Vec<f64>,
     _arguments: Vec<DataType>,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> Display for AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
@@ -296,7 +298,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
 }
 
 impl<T> AggregateFunction for AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn name(&self) -> &str {
         "AggregateQuantileDiscFunction"
@@ -362,15 +364,50 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
         });
         Ok(())
     }
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<QuantileTDigestState>();
-        Ok(state.serialize(writer)?)
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = borsh_partial_deserialize(reader)?;
-        state.merge(&mut rhs)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+                let mut rhs: QuantileTDigestState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs)?;
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+                let mut rhs: QuantileTDigestState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs)?;
+            }
+        }
+        Ok(())
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -379,7 +416,12 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
     }
@@ -395,7 +437,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
 }
 
 impl<T> AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn try_create(
         display_name: &str,

@@ -286,8 +286,8 @@ pub async fn verify_compact_tasks(
                 compact_segment_indices.insert(extra.segment_index);
                 compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                 actual_blocks_number += extra.unchanged_blocks.len();
-                for b in &extra.unchanged_blocks {
-                    actual_block_ids.insert(b.1.location.clone());
+                for (_, b) in &extra.unchanged_blocks {
+                    actual_block_ids.insert(b.0.location.clone());
                 }
             }
             CompactBlockPartInfo::CompactTaskInfo(task) => {

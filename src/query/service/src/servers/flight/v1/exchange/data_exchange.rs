@@ -35,15 +35,7 @@ impl DataExchange {
 pub struct ShuffleDataExchange {
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<RemoteExpr>,
-}
-
-impl ShuffleDataExchange {
-    pub fn create(destination_ids: Vec<String>, shuffle_keys: Vec<RemoteExpr>) -> DataExchange {
-        DataExchange::ShuffleDataExchange(ShuffleDataExchange {
-            destination_ids,
-            shuffle_keys,
-        })
-    }
+    pub allow_adjust_parallelism: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

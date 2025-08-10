@@ -144,16 +144,18 @@ impl Pipeline {
             return self;
         }
 
+        let root_scope = root_scope.unwrap();
+
         for node in self.graph.node_weights_mut() {
             let Some(scope) = node.scope.as_mut() else {
-                node.scope = root_scope.clone();
+                node.scope = Some(root_scope.clone());
                 continue;
             };
 
-            if scope.parent_id.is_none() {
+            if scope.parent_id.is_none() && scope.id != root_scope.id {
                 unsafe {
                     let scope = Arc::get_mut_unchecked(scope);
-                    scope.parent_id = root_scope.as_ref().map(|x| x.id);
+                    scope.parent_id = Some(root_scope.id);
                 }
             }
         }
@@ -458,15 +460,29 @@ impl Pipeline {
         self.sinks = new_sinks;
     }
 
-    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
+    pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) -> Result<()> {
+        self.exchange_with_merge(n, exchange.clone(), |inputs, output| {
+            Ok(MergePartitionProcessor::create(
+                inputs,
+                output,
+                exchange.clone(),
+            ))
+        })
+    }
+
+    pub fn exchange_with_merge<T, F>(&mut self, n: usize, exchange: Arc<T>, f: F) -> Result<()>
+    where
+        T: Exchange,
+        F: Fn(Vec<Arc<InputPort>>, Arc<OutputPort>) -> Result<ProcessorPtr>,
+    {
         if self.sinks.is_empty() {
-            return;
+            return Ok(());
         }
 
         let input_len = self.sinks.len();
         let mut items = Vec::with_capacity(input_len);
 
-        for _index in 0..input_len {
+        for _ in 0..input_len {
             let input = InputPort::create();
             let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
             items.push(PipeItem::create(
@@ -491,14 +507,15 @@ impl Pipeline {
             let output = OutputPort::create();
             let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
             items.push(PipeItem::create(
-                MergePartitionProcessor::create(inputs.clone(), output.clone(), exchange.clone()),
+                f(inputs.clone(), output.clone())?,
                 inputs,
                 vec![output],
             ));
         }
 
         // merge partition
-        self.add_pipe(Pipe::create(input_len * n, n, items))
+        self.add_pipe(Pipe::create(input_len * n, n, items));
+        Ok(())
     }
 
     #[track_caller]

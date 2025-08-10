@@ -49,6 +49,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
+use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
@@ -163,6 +164,7 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
+        is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
 
         if let Some(new_snapshot_location) =
             set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
@@ -241,10 +243,12 @@ async fn set_segment_format(
                     for block in segment.blocks {
                         segment_builder.add_block(block.as_ref().clone())?;
                     }
+                    let additional_stats_meta = segment.summary.additional_stats_meta;
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
                             fuse_table.cluster_key_id(),
+                            additional_stats_meta,
                         )?
                         .serialize()?;
                     let location_gen = fuse_table.meta_location_generator();

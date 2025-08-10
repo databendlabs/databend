@@ -94,6 +94,7 @@ impl IPhysicalPlan for CompactSource {
 
         if is_lazy {
             let query_ctx = builder.ctx.clone();
+            let dal = table.get_operator();
 
             let lazy_parts = self
                 .parts
@@ -115,6 +116,7 @@ impl IPhysicalPlan for CompactSource {
                         .block_on(async move {
                             let partitions = BlockCompactMutator::build_compact_tasks(
                                 ctx.clone(),
+                                dal.clone(),
                                 column_ids.clone(),
                                 cluster_key_id,
                                 thresholds,

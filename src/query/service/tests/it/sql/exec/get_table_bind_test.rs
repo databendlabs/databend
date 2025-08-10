@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -137,6 +138,7 @@ use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
@@ -401,7 +403,11 @@ impl Catalog for FakedCatalog {
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
 
@@ -412,6 +418,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }
@@ -683,6 +690,7 @@ impl TableContext for CtxDelegation {
     async fn get_visibility_checker(
         &self,
         _ignore_ownership: bool,
+        _object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
@@ -992,14 +1000,6 @@ impl TableContext for CtxDelegation {
 
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
-    }
-
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
     }
 
     fn set_cluster(&self, _: Arc<Cluster>) {

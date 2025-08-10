@@ -78,7 +78,7 @@ impl WindowFuncAggImpl {
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
         self.agg
-            .merge_result(AggrState::new(self.addr, &self.loc), builder)
+            .merge_result(AggrState::new(self.addr, &self.loc), true, builder)
     }
 }
 

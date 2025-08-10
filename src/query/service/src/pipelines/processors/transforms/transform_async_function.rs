@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
+use databend_common_users::Object;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
@@ -167,7 +168,18 @@ impl TransformAsyncFunction {
                             count: batch_size,
                         };
 
-                        let resp = catalog.get_sequence_next_value(req).await?;
+                        let visibility_checker = if ctx
+                            .get_settings()
+                            .get_enable_experimental_sequence_privilege_check()?
+                        {
+                            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
+                        } else {
+                            None
+                        };
+
+                        let resp = catalog
+                            .get_sequence_next_value(req, visibility_checker)
+                            .await?;
                         let start = resp.start;
 
                         // If we have remaining numbers, use them first

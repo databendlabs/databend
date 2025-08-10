@@ -69,6 +69,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -90,7 +91,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -120,16 +120,15 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_COMMIT_VERSION;
-use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
 use log::debug;
@@ -144,7 +143,6 @@ use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::ProcessInfo;
@@ -170,9 +168,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
-    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
-    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -198,7 +193,6 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
-            m_cte_temp_table: Default::default(),
         })
     }
 
@@ -593,6 +587,36 @@ impl QueryContext {
     pub fn clear_table_meta_timestamps_cache(&self) {
         self.shared.table_meta_timestamps.lock().clear();
     }
+
+    pub fn get_materialized_cte_senders(
+        &self,
+        cte_name: &str,
+        cte_ref_count: usize,
+        channel_size: Option<usize>,
+    ) -> Vec<Sender<DataBlock>> {
+        let mut senders = vec![];
+        let mut receivers = vec![];
+        for _ in 0..cte_ref_count {
+            let (sender, receiver) = if let Some(channel_size) = channel_size {
+                async_channel::bounded(channel_size)
+            } else {
+                async_channel::unbounded()
+            };
+            senders.push(sender);
+            receivers.push(receiver);
+        }
+        self.shared
+            .materialized_cte_receivers
+            .lock()
+            .insert(cte_name.to_string(), receivers);
+        senders
+    }
+
+    pub fn get_materialized_cte_receiver(&self, cte_name: &str) -> Receiver<DataBlock> {
+        let mut receivers = self.shared.materialized_cte_receivers.lock();
+        let receivers = receivers.get_mut(cte_name).unwrap();
+        receivers.pop().unwrap()
+    }
 }
 
 #[async_trait::async_trait]
@@ -918,10 +942,11 @@ impl TableContext for QueryContext {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         self.shared
             .session
-            .get_visibility_checker(ignore_ownership)
+            .get_visibility_checker(ignore_ownership, object)
             .await
     }
 
@@ -991,6 +1016,7 @@ impl TableContext for QueryContext {
             tz,
             rounding_mode,
             disable_variant_check,
+            enable_selector_executor: settings.get_enable_selector_executor()?,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),
@@ -1176,7 +1202,9 @@ impl TableContext for QueryContext {
             .get_settings()
             .get_enable_experimental_connection_privilege_check()?
         {
-            let visibility_checker = self.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
             if !visibility_checker.check_connection_visibility(name) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
@@ -1743,6 +1771,7 @@ impl TableContext for QueryContext {
                         read_options = read_options.with_do_prewhere(false);
                     }
                     ParquetTable::create(
+                        self,
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -1774,6 +1803,14 @@ impl TableContext for QueryContext {
                 }
             }
             FileFormatParams::Orc(..) => {
+                let is_variant =
+                    match max_column_position {
+                        0 => false,
+                        1 => true,
+                        _ => return Err(ErrorCode::SemanticError(
+                            "[QUERY-CTX] Query from ORC file only support $1 as column position",
+                        )),
+                    };
                 let schema = Arc::new(TableSchema::empty());
                 let info = StageTableInfo {
                     schema,
@@ -1785,9 +1822,9 @@ impl TableContext for QueryContext {
                     default_exprs: None,
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    is_variant: false,
+                    is_variant,
                 };
-                OrcTable::try_create(info).await
+                OrcTable::try_create(self, info).await
             }
             FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -1900,50 +1937,6 @@ impl TableContext for QueryContext {
                 .temp_tbl_mgr()
                 .lock()
                 .is_temp_table(database_name, table_name)
-    }
-
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
-        self.m_cte_temp_table
-            .write()
-            .push((database_name.to_string(), table_name.to_string()));
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
-        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
-        let tenant = self.get_tenant();
-        for (db_name, table_name) in m_cte_temp_table.iter() {
-            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
-            let db = self
-                .get_catalog(CATALOG_DEFAULT)
-                .await?
-                .get_database(&tenant, db_name)
-                .await?;
-            let temp_prefix = table
-                .options()
-                .get(OPT_KEY_TEMP_PREFIX)
-                .cloned()
-                .unwrap_or_default();
-            let drop_table_req = DropTableByIdReq {
-                if_exists: true,
-                tenant: tenant.clone(),
-                tb_id: table.get_table_info().ident.table_id,
-                table_name: table_name.to_string(),
-                db_id: db.get_db_info().database_id.db_id,
-                db_name: db.name().to_string(),
-                engine: table.engine().to_string(),
-                temp_prefix: temp_prefix.clone(),
-            };
-            if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
-                .await?
-                .is_some()
-            {
-                ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
-            }
-        }
-        let mut m_cte_temp_table = self.m_cte_temp_table.write();
-        m_cte_temp_table.clear();
-        Ok(())
     }
 
     fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {

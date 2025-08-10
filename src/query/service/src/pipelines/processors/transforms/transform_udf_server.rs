@@ -25,6 +25,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::udf_client::error_kind;
 use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_retry_external;
@@ -168,6 +170,14 @@ impl AsyncTransform for TransformUdfServer {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            for func in self.funcs.iter() {
+                let builder = ColumnBuilder::repeat_default(&func.data_type, 0);
+                let entry = BlockEntry::Column(builder.build());
+                data_block.add_entry(entry);
+            }
+            return Ok(data_block);
+        }
         let rows = data_block.num_rows();
         let batch_rows = self.request_batch_rows;
         let mut batch_blocks: Vec<DataBlock> = (0..rows)

@@ -15,8 +15,8 @@
 use std::any::Any;
 use std::collections::btree_map::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::fmt::Display;
 use std::ops::AddAssign;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -27,17 +27,25 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::assert_variadic_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_unary::UnaryState;
-use crate::aggregates::assert_variadic_arguments;
-use crate::aggregates::AggregateUnaryFunction;
+use super::StateSerde;
+use super::StateSerdeItem;
+use super::UnaryState;
 
 struct HistogramData {
     pub max_num_buckets: u64,
@@ -73,8 +81,8 @@ where
 
 impl<T> UnaryState<T, StringType> for HistogramState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Sync + Send,
+    T: ValueType,
+    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Display,
 {
     fn add(
         &mut self,
@@ -141,6 +149,42 @@ where
     }
 }
 
+impl<T> StateSerde for HistogramState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord + Display + Serialize,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<T, StringType>>::merge(state, &rhs)
+        })
+    }
+}
+
 pub fn try_create_aggregate_histogram_function(
     display_name: &str,
     params: Vec<Scalar>,
@@ -154,75 +198,73 @@ pub fn try_create_aggregate_histogram_function(
 
     with_number_mapped_type!(|NUM| match &data_type {
         DataType::Number(NumberDataType::NUM) => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 HistogramState<NumberType<NUM>>,
                 NumberType<NUM>,
                 StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
-            )
+            >::create(display_name, DataType::String)
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
                 data_type,
             }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         HistogramState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         StringType,
-                    >::try_create(
-                        display_name, DataType::String, params, data_type.clone()
-                    )
+                    >::create(display_name, DataType::String)
                     .with_function_data(Box::new(HistogramData {
                         max_num_buckets,
                         data_type,
                     }))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::String => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<StringType>,
-                StringType,
-                StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
-            )
-            .with_function_data(Box::new(HistogramData { max_num_buckets, data_type }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Timestamp => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<TimestampType>,
-                TimestampType,
-                StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
+            AggregateUnaryFunction::<HistogramState<StringType>, StringType, StringType>::create(
+                display_name,
+                DataType::String,
             )
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
                 data_type,
             }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
+        }
+        DataType::Timestamp => {
+            AggregateUnaryFunction::<
+                HistogramState<TimestampType>,
+                TimestampType,
+                StringType,
+            >::create(
+                display_name, DataType::String
+            )
+            .with_function_data(Box::new(HistogramData {
+                max_num_buckets,
+                data_type,
+            }))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Date => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<DateType>,
-                DateType,
-                StringType,
-            >::try_create(display_name, DataType::String, params, data_type.clone())
-            .with_function_data(Box::new(HistogramData { max_num_buckets, data_type }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            AggregateUnaryFunction::<HistogramState<DateType>, DateType, StringType>::create(
+                display_name,
+                DataType::String,
+            )
+            .with_function_data(Box::new(HistogramData {
+                max_num_buckets,
+                data_type,
+            }))
+            .with_need_drop(true)
+            .finish()
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
@@ -232,7 +274,7 @@ pub fn try_create_aggregate_histogram_function(
 }
 
 pub fn aggregate_histogram_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: false,
         ..Default::default()
     };

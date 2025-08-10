@@ -42,9 +42,11 @@ use super::segment::ColumnOrientedSegment;
 use super::AbstractSegment;
 use crate::meta::format::encode;
 use crate::meta::supported_stat_type;
+use crate::meta::AdditionalStatsMeta;
 use crate::meta::BlockMeta;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
+use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
@@ -57,6 +59,7 @@ pub trait SegmentBuilder: Send + Sync + 'static {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment>;
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self;
 }
@@ -67,7 +70,7 @@ pub struct ColumnOrientedSegmentBuilder {
     file_size: Vec<u64>,
     cluster_stats: Vec<Option<ClusterStatistics>>,
     location: (Vec<String>, Vec<u64>),
-    bloom_filter_index_location: (Vec<String>, Vec<u64>, MutableBitmap),
+    bloom_filter_index_location: LocationsWithOption,
     bloom_filter_index_size: Vec<u64>,
     inverted_index_size: Vec<Option<u64>>,
     virtual_block_meta: Vec<Option<VirtualBlockMeta>>,
@@ -127,23 +130,8 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.cluster_stats.push(block_meta.cluster_stats);
         self.location.0.push(block_meta.location.0);
         self.location.1.push(block_meta.location.1);
-        self.bloom_filter_index_location.0.push(
-            block_meta
-                .bloom_filter_index_location
-                .as_ref()
-                .map(|l| l.0.clone())
-                .unwrap_or_default(),
-        );
-        self.bloom_filter_index_location.1.push(
-            block_meta
-                .bloom_filter_index_location
-                .as_ref()
-                .map(|l| l.1)
-                .unwrap_or_default(),
-        );
         self.bloom_filter_index_location
-            .2
-            .push(block_meta.bloom_filter_index_location.is_some());
+            .add_location(block_meta.bloom_filter_index_location.as_ref());
         self.bloom_filter_index_size
             .push(block_meta.bloom_filter_index_size);
         self.inverted_index_size
@@ -173,12 +161,14 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
         let mut this = std::mem::replace(
             self,
             ColumnOrientedSegmentBuilder::new(self.table_schema.clone(), self.block_per_segment),
         );
-        let summary = this.build_summary(thresholds, default_cluster_key_id)?;
+        let summary =
+            this.build_summary(thresholds, default_cluster_key_id, additional_stats_meta)?;
         let cluster_stats = this.cluster_stats;
         let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
         for stats in cluster_stats {
@@ -199,10 +189,10 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             ]),
             Column::Nullable(Box::new(NullableColumn::new(
                 Column::Tuple(vec![
-                    StringType::from_data(this.bloom_filter_index_location.0),
-                    UInt64Type::from_data(this.bloom_filter_index_location.1),
+                    StringType::from_data(this.bloom_filter_index_location.locations),
+                    UInt64Type::from_data(this.bloom_filter_index_location.versions),
                 ]),
-                this.bloom_filter_index_location.2.into(),
+                this.bloom_filter_index_location.validity.into(),
             ))),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
@@ -264,11 +254,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 Vec::with_capacity(block_per_segment),
                 Vec::with_capacity(block_per_segment),
             ),
-            bloom_filter_index_location: (
-                Vec::with_capacity(block_per_segment),
-                Vec::with_capacity(block_per_segment),
-                MutableBitmap::with_capacity(block_per_segment),
-            ),
+            bloom_filter_index_location: LocationsWithOption::new_with_capacity(block_per_segment),
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
             virtual_block_meta: Vec::with_capacity(block_per_segment),
@@ -288,6 +274,7 @@ impl ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Statistics> {
         let row_count = self.row_count.iter().sum();
         let block_count = self.row_count.len() as u64;
@@ -380,6 +367,7 @@ impl ColumnOrientedSegmentBuilder {
             col_stats,
             cluster_stats,
             virtual_block_count: Some(virtual_block_count),
+            additional_stats_meta,
         })
     }
 }
@@ -437,5 +425,33 @@ fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
         (true, false) => Ordering::Greater,
         (false, true) => Ordering::Less,
         (false, false) => v1.cmp(v2),
+    }
+}
+
+struct LocationsWithOption {
+    locations: Vec<String>,
+    versions: Vec<u64>,
+    validity: MutableBitmap,
+}
+
+impl LocationsWithOption {
+    fn new_with_capacity(capacity: usize) -> Self {
+        Self {
+            locations: Vec::with_capacity(capacity),
+            versions: Vec::with_capacity(capacity),
+            validity: MutableBitmap::with_capacity(capacity),
+        }
+    }
+
+    fn add_location(&mut self, location: Option<&Location>) {
+        if let Some(location) = location {
+            self.locations.push(location.0.clone());
+            self.versions.push(location.1);
+            self.validity.push(true);
+        } else {
+            self.locations.push(String::new());
+            self.versions.push(0);
+            self.validity.push(false);
+        }
     }
 }

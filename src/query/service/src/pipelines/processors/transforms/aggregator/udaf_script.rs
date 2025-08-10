@@ -28,18 +28,24 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::StateSerdeItem;
+use databend_common_functions::aggregates::AggrStateLoc;
 use databend_common_functions::aggregates::AggregateFunction;
+use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
@@ -98,23 +104,62 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<UdfAggState>();
-        state
-            .serialize(writer)
-            .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<UdfAggState>();
-        let rhs =
-            UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
-        let state = self
-            .runtime
-            .merge(&states)
-            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
-        place.write(|| state);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<UdfAggState>();
+            state
+                .serialize(&mut binary_builder.data)
+                .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<UdfAggState>();
+                let rhs = UdfAggState::deserialize(&mut data)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+                let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
+                let merged_state = self
+                    .runtime
+                    .merge(&states)
+                    .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
+                AggrState::new(*place, loc).write(|| merged_state);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<UdfAggState>();
+                let rhs = UdfAggState::deserialize(&mut data)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+                let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
+                let merged_state = self
+                    .runtime
+                    .merge(&states)
+                    .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
+                AggrState::new(*place, loc).write(|| merged_state);
+            }
+        }
         Ok(())
     }
 
@@ -131,7 +176,12 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let array = self
             .runtime

@@ -17,8 +17,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::*;
@@ -27,13 +25,13 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
@@ -41,57 +39,37 @@ use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
-use super::borsh_partial_deserialize;
+use super::assert_binary_arguments;
+use super::assert_params;
+use super::batch_merge3;
+use super::batch_serialize3;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::assert_binary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;
 
 // State for arg_min(arg, val) and arg_max(arg, val)
 // A: ValueType for arg.
 // V: ValueType for val.
-pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
-    BorshSerialize + BorshDeserialize + Send + Sync + 'static
-{
-    fn new() -> Self;
-    fn change(&self, other: &V::ScalarRef<'_>) -> bool;
-    fn update(&mut self, other: V::ScalarRef<'_>, arg: A::ScalarRef<'_>);
-    fn add_batch(
-        &mut self,
-        data_column: &ColumnView<A>,
-        column: &ColumnView<V>,
-        validity: Option<&Bitmap>,
-    ) -> Result<()>;
-
-    fn merge_from(&mut self, rhs: Self) -> Result<()>;
-    fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn merge_result(&self, column: &mut ColumnBuilder) -> Result<()>;
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
 struct ArgMinMaxState<A, V, C>
 where
     V: ValueType,
-    V::Scalar: BorshSerialize + BorshDeserialize,
     A: ValueType,
-    A::Scalar: BorshSerialize + BorshDeserialize,
 {
     pub data: Option<(V::Scalar, A::Scalar)>,
-    #[borsh(skip)]
     _c: PhantomData<C>,
 }
 
-impl<A, V, C> AggregateArgMinMaxState<A, V> for ArgMinMaxState<A, V, C>
+impl<A, V, C> ArgMinMaxState<A, V, C>
 where
     A: ValueType,
-    A::Scalar: Send + Sync + BorshSerialize + BorshDeserialize,
     V: ValueType,
-    V::Scalar: Send + Sync + BorshSerialize + BorshDeserialize,
-    C: ChangeIf<V> + Default,
+    C: ChangeIf<V>,
 {
     fn new() -> Self {
         Self {
@@ -190,36 +168,35 @@ where
 }
 
 #[derive(Clone)]
-pub struct AggregateArgMinMaxFunction<A, V, C, State> {
+pub struct AggregateArgMinMaxFunction<A, V, C> {
     display_name: String,
-    return_data_type: DataType,
-    _a: PhantomData<A>,
-    _v: PhantomData<V>,
-    _c: PhantomData<C>,
-    _state: PhantomData<State>,
+    arg: DataType,
+    value: DataType,
+    _p: PhantomData<fn(A, V, C)>,
 }
 
-impl<A, V, C, State> AggregateFunction for AggregateArgMinMaxFunction<A, V, C, State>
+impl<A, V, C> AggregateFunction for AggregateArgMinMaxFunction<A, V, C>
 where
-    A: ValueType + Send + Sync,
-    V: ValueType + Send + Sync,
-    C: ChangeIf<V> + Default,
-    State: AggregateArgMinMaxState<A, V>,
+    A: ValueType,
+    V: ValueType,
+    C: ChangeIf<V>,
 {
     fn name(&self) -> &str {
         "AggregateArgMinMaxFunction"
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.return_data_type.clone())
+        Ok(self.arg.clone())
     }
 
     fn init_state(&self, place: AggrState) {
-        place.write(State::new);
+        place.write(ArgMinMaxState::<A, V, C>::new);
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
-        registry.register(AggrStateType::Custom(Layout::new::<State>()));
+        registry.register(AggrStateType::Custom(
+            Layout::new::<ArgMinMaxState<A, V, C>>(),
+        ));
     }
 
     fn accumulate(
@@ -229,7 +206,7 @@ where
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state: &mut State = place.get();
+        let state: &mut ArgMinMaxState<A, V, C> = place.get();
         let arg_col = columns[0].downcast::<A>().unwrap();
         let val_col = columns[1].downcast::<V>().unwrap();
         state.add_batch(&arg_col, &val_col, validity)
@@ -250,7 +227,7 @@ where
             .enumerate()
             .zip(places.iter().cloned())
             .for_each(|((row, val), addr)| {
-                let state = AggrState::new(addr, loc).get::<State>();
+                let state = AggrState::new(addr, loc).get::<ArgMinMaxState<A, V, C>>();
                 if state.change(&val) {
                     state.update(val, arg_col.index(row).unwrap())
                 }
@@ -261,7 +238,7 @@ where
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let arg_col = columns[0].downcast::<A>().unwrap();
         let val_col = &columns[1].downcast::<V>().unwrap();
-        let state = place.get::<State>();
+        let state = place.get::<ArgMinMaxState<A, V, C>>();
 
         let val = unsafe { val_col.index_unchecked(row) };
         if state.change(&val) {
@@ -270,25 +247,76 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<State>();
-        Ok(state.serialize(writer)?)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![
+            DataType::Boolean.into(),
+            self.value.clone().into(),
+            self.arg.clone().into(),
+        ]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<State>();
-        let rhs: State = borsh_partial_deserialize(reader)?;
-        state.merge_from(rhs)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize3::<BooleanType, V, A, ArgMinMaxState<A, V, C>, _>(
+            places,
+            loc,
+            builders,
+            |state, (flag_builder, value_builder, arg_builder)| {
+                match &state.data {
+                    Some((value, arg)) => {
+                        flag_builder.push_item(true);
+                        value_builder.push_item(V::to_scalar_ref(value));
+                        arg_builder.push_item(A::to_scalar_ref(arg));
+                    }
+                    None => {
+                        flag_builder.push_item(false);
+                        value_builder.push_default();
+                        arg_builder.push_default();
+                    }
+                }
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge3::<BooleanType, V, A, ArgMinMaxState<A, V, C>, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, (flag, value, arg)| {
+                state.merge_from(ArgMinMaxState::<A, V, C> {
+                    data: flag.then_some((V::to_owned_scalar(value), A::to_owned_scalar(arg))),
+                    _c: PhantomData,
+                })
+            },
+        )
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-        let state = place.get::<State>();
-        let other = rhs.get::<State>();
+        let state = place.get::<ArgMinMaxState<A, V, C>>();
+        let other = rhs.get::<ArgMinMaxState<A, V, C>>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<State>();
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        let state = place.get::<ArgMinMaxState<A, V, C>>();
         state.merge_result(builder)
     }
 
@@ -297,45 +325,44 @@ where
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<State>();
+        let state = place.get::<ArgMinMaxState<A, V, C>>();
         std::ptr::drop_in_place(state);
     }
 }
 
-impl<A, V, C, State> fmt::Display for AggregateArgMinMaxFunction<A, V, C, State> {
+impl<A, V, C> fmt::Display for AggregateArgMinMaxFunction<A, V, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<A, V, C, State> AggregateArgMinMaxFunction<A, V, C, State>
+impl<A, V, C> AggregateArgMinMaxFunction<A, V, C>
 where
-    A: ValueType + Send + Sync,
-    V: ValueType + Send + Sync,
-    C: ChangeIf<V> + Default,
-    State: AggregateArgMinMaxState<A, V>,
+    A: ValueType,
+    V: ValueType,
+    C: ChangeIf<V>,
 {
     pub fn try_create(
         display_name: &str,
-        return_data_type: DataType,
+        arg: DataType,
+        value: DataType,
     ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(AggregateArgMinMaxFunction::<A, V, C, State> {
+        Ok(Arc::new(AggregateArgMinMaxFunction::<A, V, C> {
             display_name: display_name.to_owned(),
-            return_data_type,
-            _a: PhantomData,
-            _v: PhantomData,
-            _c: PhantomData,
-            _state: PhantomData,
+            arg,
+            value,
+            _p: PhantomData,
         }))
     }
 }
 
 pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, arguments.len())?;
     let arg_type = arguments[0].clone();
     let val_type = arguments[1].clone();
@@ -346,32 +373,32 @@ pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
                 DataType::ARG_TYPE => {
                     with_simple_no_number_mapped_type!(|VAL_TYPE| match val_type {
                         DataType::VAL_TYPE => {
-                            type State = ArgMinMaxState<ARG_TYPE, VAL_TYPE, CMP>;
-                            AggregateArgMinMaxFunction::<ARG_TYPE, VAL_TYPE, CMP, State>::try_create(
+                            AggregateArgMinMaxFunction::<ARG_TYPE, VAL_TYPE, CMP>::try_create(
                                 display_name,
                                 arg_type,
+                                val_type,
                             )
                         }
                         DataType::Number(num_type) => {
                             with_number_mapped_type!(|NUM| match num_type {
                                 NumberDataType::NUM => {
-                                    type State = ArgMinMaxState<ARG_TYPE, NumberType<NUM>, CMP>;
                                     AggregateArgMinMaxFunction::<
                                         ARG_TYPE,
                                         NumberType<NUM>,
                                         CMP,
-                                        State,
                                     >::try_create(
-                                        display_name, arg_type
+                                        display_name,
+                                        arg_type,
+                                        val_type,
                                     )
                                 }
                             })
                         }
                         _ => {
-                            type State = ArgMinMaxState<ARG_TYPE, AnyType, CMP>;
-                            AggregateArgMinMaxFunction::<ARG_TYPE, AnyType, CMP, State>::try_create(
+                            AggregateArgMinMaxFunction::<ARG_TYPE, AnyType, CMP>::try_create(
                                 display_name,
                                 arg_type,
+                                val_type,
                             )
                         }
                     })
@@ -381,44 +408,38 @@ pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
                         NumberDataType::ARG_NUM => {
                             with_simple_no_number_mapped_type!(|VAL_TYPE| match val_type {
                                 DataType::VAL_TYPE => {
-                                    type State = ArgMinMaxState<NumberType<ARG_NUM>, VAL_TYPE, CMP>;
                                     AggregateArgMinMaxFunction::<
                                         NumberType<ARG_NUM>,
                                         VAL_TYPE,
                                         CMP,
-                                        State,
                                     >::try_create(
-                                        display_name, arg_type
+                                        display_name,
+                                        arg_type,
+                                        val_type,
                                     )
                                 }
                                 DataType::Number(val_num) => {
                                     with_number_mapped_type!(|VAL_NUM| match val_num {
                                         NumberDataType::VAL_NUM => {
-                                            type State = ArgMinMaxState<
-                                                NumberType<ARG_NUM>,
-                                                NumberType<VAL_NUM>,
-                                                CMP,
-                                            >;
                                             AggregateArgMinMaxFunction::<
                                                 NumberType<ARG_NUM>,
                                                 NumberType<VAL_NUM>,
                                                 CMP,
-                                                State,
                                             >::try_create(
-                                                display_name, arg_type
+                                                display_name, arg_type, val_type
                                             )
                                         }
                                     })
                                 }
                                 _ => {
-                                    type State = ArgMinMaxState<NumberType<ARG_NUM>, AnyType, CMP>;
                                     AggregateArgMinMaxFunction::<
                                         NumberType<ARG_NUM>,
                                         AnyType,
                                         CMP,
-                                        State,
                                     >::try_create(
-                                        display_name, arg_type
+                                        display_name, arg_type,
+                                val_type
+
                                     )
                                 }
                             })
@@ -428,32 +449,32 @@ pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
                 _ => {
                     with_simple_no_number_mapped_type!(|VAL_TYPE| match val_type {
                         DataType::VAL_TYPE => {
-                            type State = ArgMinMaxState<AnyType, VAL_TYPE, CMP>;
-                            AggregateArgMinMaxFunction::<AnyType, VAL_TYPE, CMP, State>::try_create(
+                            AggregateArgMinMaxFunction::<AnyType, VAL_TYPE, CMP>::try_create(
                                 display_name,
                                 arg_type,
+                                val_type,
                             )
                         }
                         DataType::Number(num_type) => {
                             with_number_mapped_type!(|NUM| match num_type {
                                 NumberDataType::NUM => {
-                                    type State = ArgMinMaxState<AnyType, NumberType<NUM>, CMP>;
                                     AggregateArgMinMaxFunction::<
                                         AnyType,
                                         NumberType<NUM>,
                                         CMP,
-                                        State,
                                     >::try_create(
-                                        display_name, arg_type
+                                        display_name,
+                                        arg_type,
+                                        val_type,
                                     )
                                 }
                             })
                         }
                         _ => {
-                            type State = ArgMinMaxState<AnyType, AnyType, CMP>;
-                            AggregateArgMinMaxFunction::<AnyType, AnyType, CMP, State>::try_create(
+                            AggregateArgMinMaxFunction::<AnyType, AnyType, CMP>::try_create(
                                 display_name,
                                 arg_type,
+                                val_type,
                             )
                         }
                     })
@@ -461,8 +482,8 @@ pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
             })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported compare type for aggregate function {} (type number: {})",
-            display_name, CMP_TYPE
+            "Unsupported compare type for aggregate function {display_name} (type number: {})",
+            CMP_TYPE
         ))),
     })
 }

@@ -190,9 +190,11 @@ def json_access(data: Any, key: str) -> Any:
 def url_len(key: str) -> int:
     return len(key)
 
+
 @udf(input_types=["VARCHAR"], result_type="BIGINT")
 def url_len_mul_100(key: str) -> int:
     return len(key) * 100
+
 
 @udf(input_types=["ARRAY(VARIANT)"], result_type="VARIANT")
 def json_concat(list: List[Any]) -> Any:
@@ -417,12 +419,11 @@ def ping(s: str) -> str:
 def check_headers() -> str:
     return "success"
 
-@udf(
-    input_types=["VARCHAR"],
-    result_type="ARRAY(FLOAT32 NULL)"
-)
+
+@udf(input_types=["VARCHAR"], result_type="ARRAY(FLOAT32 NULL)")
 def embedding_4(s: str):
     return [1.1, 1.2, 1.3, 1.4]
+
 
 if __name__ == "__main__":
     udf_server = CheckHeadersServer(
@@ -459,4 +460,3 @@ if __name__ == "__main__":
     # Built-in function
     udf_server.add_function(ping)
     udf_server.serve()
-

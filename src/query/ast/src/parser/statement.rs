@@ -1765,6 +1765,52 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    // row policy
+    // CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+    // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
+    // [ COMMENT = '<string_literal>' ]
+    let create_row_access = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ #row_access_definition
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, opt_or_replace, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRowAccessPolicy(
+                CreateRowAccessPolicyStmt {
+                    create_option,
+                    name,
+                    description: opt_comment.map(|(_, _, description)| description),
+                    definition,
+                },
+            ))
+        },
+    );
+    let drop_row_access = map(
+        rule! {
+            DROP ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, _, _, opt_if_exists, name)| {
+            let stmt = DropRowAccessPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropRowAccessPolicy(stmt)
+        },
+    );
+    let describe_row_access = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ ROW ~ ACCESS ~ POLICY ~ ^#ident
+        },
+        |(_, _, _, _, name)| {
+            Statement::DescRowAccessPolicy(DescRowAccessPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+
     // stages
     let create_stage = map_res(
         rule! {
@@ -2477,7 +2523,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let describe_procedure = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            ( DESC | DESCRIBE ) ~ ^PROCEDURE ~ #ident ~ #procedure_type_name
         },
         |(_, _, name, args)| {
             Statement::DescProcedure(DescProcedureStmt {
@@ -2730,6 +2776,9 @@ AS
             | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
+            | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+            | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
+            | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
             | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
             | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
@@ -3418,13 +3467,35 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let seq_privs = map(
+        rule! {
+            ACCESS ~ SEQUENCE ~ ON ~ SEQUENCE ~ #ident
+        },
+        |(_, _, _, _, c)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessSequence],
+            level: AccountMgrLevel::Sequence(c.to_string()),
+        },
+    );
+
+    let seq_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ SEQUENCE ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessSequence],
+            level: AccountMgrLevel::Sequence(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
-        | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <warehouse_name>"
+        | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
+        | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
-        | #connection_privs: "USAGE ON CONNECTION <warehouse_name>"
+        | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"
+        | #seq_privs: "ACCESS SEQUENCE ON CONNECTION <seq_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3453,9 +3524,17 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         UserPrivilegeType::CreateConnection,
         rule! { CREATE ~ CONNECTION },
     );
-    let access_connection = value(
+    let access_sequence = value(
         UserPrivilegeType::AccessConnection,
         rule! { ACCESS ~ CONNECTION },
+    );
+    let create_sequence = value(
+        UserPrivilegeType::CreateSequence,
+        rule! { CREATE ~ SEQUENCE },
+    );
+    let access_connection = value(
+        UserPrivilegeType::AccessSequence,
+        rule! { ACCESS ~ SEQUENCE },
     );
     let drop_user = value(UserPrivilegeType::DropUser, rule! { DROP ~ USER });
     let create_role = value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE });
@@ -3482,6 +3561,8 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         rule!(
             #create_connection
             | #access_connection
+            | #access_sequence
+            | #create_sequence
             | #drop_user
             | #create_role
             | #drop_role
@@ -3550,6 +3631,10 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::Connection(w.to_string())
     });
 
+    let seq = map(rule! { SEQUENCE ~ #ident}, |(_, w)| {
+        GrantObjectName::Sequence(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
@@ -3557,6 +3642,7 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         | #udf : "UDF <udf_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
         | #connection : "CONNECTION <connection_name>"
+        | #seq : "SEQUENCE <seq_name>"
     )(i)
 }
 
@@ -3653,12 +3739,14 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Udf,
         Warehouse,
         Connection,
+        Sequence,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
         value(Object::Warehouse, rule! { WAREHOUSE }),
         value(Object::Connection, rule! { CONNECTION }),
+        value(Object::Sequence, rule! { SEQUENCE }),
     ));
 
     // Object object_name
@@ -3669,13 +3757,14 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
             Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
             Object::Connection => AccountMgrLevel::Connection(object_name.to_string()),
+            Object::Sequence => AccountMgrLevel::Sequence(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
     )(i)
 }
 
@@ -3703,7 +3792,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> }"
         | #role_granted: "OF ROLE <role_name>"
     )(i)
 }
@@ -5002,6 +5091,32 @@ fn udf_immutable(i: Input) -> IResult<bool> {
         value(false, rule! { VOLATILE }),
         value(true, rule! { IMMUTABLE }),
     ))(i)
+}
+
+pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
+    pub fn row_access_type(i: Input) -> IResult<RowAccessPolicyType> {
+        map(rule! { #ident ~ #type_name }, |(name, data_type)| {
+            RowAccessPolicyType {
+                name: name.to_string(),
+                data_type,
+            }
+        })(i)
+    }
+
+    let row_access_def = map(
+        rule! {
+            AS ~ "(" ~ #comma_separated_list1(row_access_type) ~ ")" ~ RETURNS ~ BOOLEAN
+            ~ "->" ~ #expr
+        },
+        |(_, _, parameters, _, _, _, _, definition)| RowAccessPolicyDefinition {
+            parameters,
+            definition: Box::new(definition),
+        },
+    );
+
+    rule!(
+        #row_access_def: "AS (<arg_name> <arg_type> [ , ... ]) RETURNS BOOLEAN -> <definition expr>"
+    )(i)
 }
 
 pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {

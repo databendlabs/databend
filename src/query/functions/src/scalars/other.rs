@@ -391,7 +391,29 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             },
         }))
     }));
-    registry.register_function_factory("grouping", grouping)
+    registry.register_function_factory("grouping", grouping);
+
+    // dummy grouping
+    // used in type_check before AggregateRewriter
+    let dummy_grouping = FunctionFactory::Closure(Box::new(|_, arg_type: &[DataType]| {
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "grouping".to_string(),
+                args_type: vec![DataType::Generic(0); arg_type.len()],
+                return_type: DataType::Number(NumberDataType::UInt32),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(move |args, _| {
+                    unreachable!(
+                        "grouping function must be rewritten in type_checker, but got: {:?}",
+                        args
+                    )
+                }),
+            },
+        }))
+    }));
+    registry.register_function_factory("grouping", dummy_grouping);
 }
 
 fn register_num_to_char(registry: &mut FunctionRegistry) {

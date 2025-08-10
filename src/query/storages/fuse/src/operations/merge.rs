@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -93,6 +94,9 @@ impl FuseTable {
         let bloom_columns_map = self
             .bloom_index_cols()
             .bloom_index_fields(new_schema.clone(), BloomIndex::supported_type)?;
+        let ndv_columns_map = self
+            .approx_distinct_cols()
+            .distinct_column_fields(new_schema.clone(), RangeIndex::supported_table_type)?;
         let ngram_args = FuseTable::create_ngram_index_args(
             &self.table_info.meta,
             &self.table_info.meta.schema,
@@ -111,6 +115,7 @@ impl FuseTable {
             write_settings: self.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            ndv_columns_map,
             ngram_args,
             inverted_index_builders,
             vector_index_builder,

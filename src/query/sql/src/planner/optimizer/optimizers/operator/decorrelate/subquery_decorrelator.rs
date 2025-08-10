@@ -312,18 +312,19 @@ impl SubqueryDecorrelatorOptimizer {
                 ));
             }
 
-            RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
+            RelOperator::UnionAll(_) | RelOperator::Sequence(_) => Ok(SExpr::create_binary(
                 s_expr.plan.clone(),
                 Arc::new(self.optimize_sync(s_expr.left_child())?),
                 Arc::new(self.optimize_sync(s_expr.right_child())?),
             )),
 
-            RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) => {
-                Ok(SExpr::create_unary(
-                    s_expr.plan.clone(),
-                    Arc::new(self.optimize_sync(s_expr.unary_child())?),
-                ))
-            }
+            RelOperator::Limit(_)
+            | RelOperator::Udf(_)
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::MaterializedCTE(_) => Ok(SExpr::create_unary(
+                s_expr.plan.clone(),
+                Arc::new(self.optimize_sync(s_expr.unary_child())?),
+            )),
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
@@ -334,6 +335,7 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
+            | RelOperator::MaterializeCTERef(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
@@ -584,6 +586,7 @@ impl SubqueryDecorrelatorOptimizer {
                     limit: Some(1),
                     offset: 0,
                     before_exchange: false,
+                    lazy_columns: Default::default(),
                 };
                 subquery_expr =
                     SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr));

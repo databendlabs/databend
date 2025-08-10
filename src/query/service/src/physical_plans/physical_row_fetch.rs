@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
@@ -30,7 +28,6 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_storages_fuse::operations::row_fetch_processor;
 use itertools::Itertools;
-use tokio::sync::Semaphore;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
@@ -139,17 +136,12 @@ impl IPhysicalPlan for RowFetch {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let max_io_requests = builder.settings.get_max_storage_io_requests()? as usize;
-        let row_fetch_runtime = GlobalIORuntime::instance();
-        let row_fetch_semaphore = Arc::new(Semaphore::new(max_io_requests));
         let processor = row_fetch_processor(
             builder.ctx.clone(),
             self.row_id_col_offset,
             &self.source,
             self.cols_to_fetch.clone(),
             self.need_wrap_nullable,
-            row_fetch_semaphore,
-            row_fetch_runtime,
         )?;
 
         if self.input.downcast_ref::<MutationSplit>().is_none() {

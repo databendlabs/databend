@@ -16,10 +16,10 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::compute_view::StringConvertView;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
@@ -34,18 +34,19 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::borsh_partial_deserialize;
+use super::assert_variadic_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug)]
 pub struct StringAggState {
     values: String,
 }
@@ -129,12 +130,13 @@ impl AggregateFunction for AggregateStringAggFunction {
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let view = columns[0].downcast::<StringType>().unwrap();
-        view.iter().zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::new(*place, loc).get::<StringAggState>();
-            state.values.push_str(v);
-            state.values.push_str(&self.delimiter);
-        });
+        StringConvertView::iter_column(&columns[0].to_column())
+            .zip(places.iter())
+            .for_each(|(v, place)| {
+                let state = AggrState::new(*place, loc).get::<StringAggState>();
+                state.values.push_str(v.as_str());
+                state.values.push_str(&self.delimiter);
+            });
         Ok(())
     }
 
@@ -147,16 +149,42 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<StringAggState>();
-        Ok(state.serialize(writer)?)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![DataType::String.into()]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<StringAggState>();
-        let rhs: StringAggState = borsh_partial_deserialize(reader)?;
-        state.values.push_str(&rhs.values);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let builder = builders[0].as_string_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<StringAggState>();
+            builder.put_str(&state.values);
+            builder.commit_row();
+        }
         Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<StringType, StringAggState, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.values.push_str(values);
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -166,7 +194,12 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<StringAggState>();
         let mut builder = StringType::downcast_builder(builder);
         if !state.values.is_empty() {

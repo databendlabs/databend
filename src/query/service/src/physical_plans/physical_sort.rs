@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::assert_matches::debug_assert_matches;
+use std::fmt::Display;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -27,6 +29,7 @@ use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncType;
@@ -41,11 +44,14 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -55,13 +61,40 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     /// limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
-    /// If the sort plan is after the exchange plan.
-    /// It's [None] if the sorting plan is in single node mode.
-    pub after_exchange: Option<bool>,
+    pub step: SortStep,
     pub pre_projection: Option<Vec<IndexType>>,
+    pub broadcast_id: Option<u32>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+#[derive(Debug, Hash, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum SortStep {
+    // single node mode
+    Single,
+
+    // cluster mode
+    Partial, // before the exchange plan
+    Final,   // after the exchange plan
+
+    // range shuffle mode
+    Sample,
+    Shuffled,
+    Route,
+}
+
+impl Display for SortStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortStep::Single => write!(f, "Single"),
+            SortStep::Partial => write!(f, "Partial"),
+            SortStep::Final => write!(f, "Final"),
+            SortStep::Sample => write!(f, "Sample"),
+            SortStep::Shuffled => write!(f, "Shuffled"),
+            SortStep::Route => write!(f, "Route"),
+        }
+    }
 }
 
 #[typetag::serde]
@@ -79,40 +112,54 @@ impl IPhysicalPlan for Sort {
 
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
-        if matches!(self.after_exchange, Some(true)) {
-            // If the plan is after exchange plan in cluster mode,
-            // the order column is at the last of the input schema.
-            debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
-            debug_assert_eq!(
-                fields.last().unwrap().data_type(),
-                &self.order_col_type(&input_schema)?
-            );
-            fields.pop();
-        } else {
-            if let Some(proj) = &self.pre_projection {
-                let fileted_fields = proj
-                    .iter()
-                    .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if fileted_fields.len() < fields.len() {
-                    // Only if the projection is not a full projection, we need to add a projection transform.
-                    fields = fileted_fields
+        match self.step {
+            SortStep::Final | SortStep::Shuffled => {
+                let mut fields = input_schema.fields().clone();
+                // If the plan is after exchange plan in cluster mode,
+                // the order column is at the last of the input schema.
+                debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
+                debug_assert_eq!(
+                    fields.last().unwrap().data_type(),
+                    &self.order_col_type(&input_schema)?
+                );
+                fields.pop();
+                Ok(DataSchemaRefExt::create(fields))
+            }
+            SortStep::Single | SortStep::Partial | SortStep::Sample => {
+                let mut fields = self
+                    .pre_projection
+                    .as_ref()
+                    .and_then(|proj| {
+                        let fileted_fields = proj
+                            .iter()
+                            .map(|index| {
+                                input_schema
+                                    .field_with_name(&index.to_string())
+                                    .unwrap()
+                                    .clone()
+                            })
+                            .collect::<Vec<_>>();
+
+                        if fileted_fields.len() < input_schema.fields().len() {
+                            // Only if the projection is not a full projection, we need to add a projection transform.
+                            Some(fileted_fields)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| input_schema.fields().clone());
+                if self.step != SortStep::Single {
+                    // If the plan is before exchange plan in cluster mode,
+                    // the order column should be added to the output schema.
+                    fields.push(DataField::new(
+                        ORDER_COL_NAME,
+                        self.order_col_type(&input_schema)?,
+                    ));
                 }
+                Ok(DataSchemaRefExt::create(fields))
             }
-
-            if matches!(self.after_exchange, Some(false)) {
-                // If the plan is before exchange plan in cluster mode,
-                // the order column should be added to the output schema.
-                fields.push(DataField::new(
-                    ORDER_COL_NAME,
-                    self.order_col_type(&input_schema)?,
-                ));
-            }
+            SortStep::Route => Ok(input_schema),
         }
-
-        Ok(DataSchemaRefExt::create(fields))
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
@@ -193,42 +240,12 @@ impl IPhysicalPlan for Sort {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        self.input.build_pipeline(builder)?;
-
-        let input_schema = self.input.output_schema()?;
-
-        if !matches!(self.after_exchange, Some(true)) {
-            // If the Sort plan is after exchange, we don't need to do a projection,
-            // because the data is already projected in each cluster node.
-            if let Some(proj) = &self.pre_projection {
-                // Do projection to reduce useless data copying during sorting.
-                let projection = proj
-                    .iter()
-                    .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
-                    .collect::<Vec<_>>();
-
-                if projection.len() < input_schema.fields().len() {
-                    // Only if the projection is not a full projection, we need to add a projection transform.
-                    builder.main_pipeline.add_transformer(|| {
-                        CompoundBlockOperator::new(
-                            vec![BlockOperator::Project {
-                                projection: projection.clone(),
-                            }],
-                            builder.func_ctx.clone(),
-                            input_schema.num_fields(),
-                        )
-                    });
-                }
-            }
-        }
-
-        let plan_schema = self.output_schema()?;
-
+        let output_schema = self.output_schema()?;
         let sort_desc = self
             .order_by
             .iter()
             .map(|desc| {
-                let offset = plan_schema.index_of(&desc.order_by.to_string())?;
+                let offset = output_schema.index_of(&desc.order_by.to_string())?;
                 Ok(SortColumnDescription {
                     offset,
                     asc: desc.asc,
@@ -236,47 +253,123 @@ impl IPhysicalPlan for Sort {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-
-        let max_threads = builder.settings.get_max_threads()? as usize;
         let sort_desc = sort_desc.into();
 
-        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
-            builder.main_pipeline.try_resize(max_threads)?;
+        if self.step != SortStep::Shuffled {
+            self.input.build_pipeline(builder)?;
         }
 
-        let sort_builder =
-            SortPipelineBuilder::create(builder.ctx.clone(), plan_schema, sort_desc)?
-                .with_limit(self.limit);
+        if let Some(proj) = &self.pre_projection {
+            debug_assert_matches!(
+                self.step,
+                SortStep::Single | SortStep::Partial | SortStep::Sample
+            );
 
-        match self.after_exchange {
-            Some(true) => {
+            let input_schema = self.input.output_schema()?;
+            // Do projection to reduce useless data copying during sorting.
+            let projection = proj
+                .iter()
+                .map(|i| input_schema.index_of(&i.to_string()).unwrap())
+                .collect::<Vec<_>>();
+
+            builder.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projection.clone(),
+                    }],
+                    builder.func_ctx.clone(),
+                    input_schema.num_fields(),
+                )
+            });
+        }
+
+        let sort_builder = SortPipelineBuilder::create(
+            builder.ctx.clone(),
+            output_schema,
+            sort_desc,
+            self.broadcast_id,
+        )?
+        .with_limit(self.limit);
+
+        let max_threads = builder.settings.get_max_threads()? as usize;
+        match self.step {
+            SortStep::Single => {
+                // Build for single node mode.
+                // We build the full sort pipeline for it.
+                if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    builder.main_pipeline.try_resize(max_threads)?;
+                }
+                sort_builder
+                    .remove_order_col_at_last()
+                    .build_full_sort_pipeline(&mut builder.main_pipeline)
+            }
+
+            SortStep::Partial => {
+                // Build for each cluster node.
+                // We build the full sort pipeline for it.
+                // Don't remove the order column at last.
+                if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    builder.main_pipeline.try_resize(max_threads)?;
+                }
+                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline)
+            }
+            SortStep::Final => {
+                // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+                if max_threads == 1 && builder.main_pipeline.output_len() > 1 {
+                    builder.main_pipeline.try_resize(1)?;
+                    return sort_builder
+                        .remove_order_col_at_last()
+                        .build_merge_sort_pipeline(&mut builder.main_pipeline, true);
+                }
+
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
-                if builder.main_pipeline.output_len() > 1 {
-                    sort_builder
-                        .remove_order_col_at_last()
-                        .build_multi_merge(&mut builder.main_pipeline)
-                } else {
-                    sort_builder
-                        .remove_order_col_at_last()
-                        .build_merge_sort_pipeline(&mut builder.main_pipeline, true)
-                }
-            }
-            Some(false) => {
-                // Build for each cluster node.
-                // We build the full sort pipeline for it.
-                // Don't remove the order column at last.
-                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline)
-            }
-            None => {
-                // Build for single node mode.
-                // We build the full sort pipeline for it.
                 sort_builder
                     .remove_order_col_at_last()
-                    .build_full_sort_pipeline(&mut builder.main_pipeline)
+                    .build_multi_merge(&mut builder.main_pipeline)
+            }
+
+            SortStep::Sample => {
+                if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    builder.main_pipeline.try_resize(max_threads)?;
+                }
+                sort_builder.build_sample(&mut builder.main_pipeline)?;
+                builder.exchange_injector = TransformSortBuilder::exchange_injector();
+                Ok(())
+            }
+            SortStep::Shuffled => {
+                if self.input.downcast_ref::<Exchange>().is_some() {
+                    let exchange = TransformSortBuilder::exchange_injector();
+                    let old_inject = std::mem::replace(&mut builder.exchange_injector, exchange);
+                    self.input.build_pipeline(builder)?;
+                    builder.exchange_injector = old_inject;
+                } else {
+                    self.input.build_pipeline(builder)?;
+                }
+
+                if builder.main_pipeline.output_len() == 1 {
+                    return Ok(());
+                }
+
+                if max_threads == 1 {
+                    // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+                    unimplemented!();
+                }
+                sort_builder
+                    .remove_order_col_at_last()
+                    .build_bounded_merge_sort(&mut builder.main_pipeline)
+            }
+            SortStep::Route => {
+                if builder.main_pipeline.output_len() == 1 {
+                    builder
+                        .main_pipeline
+                        .add_transformer(TransformSortBuilder::build_dummy_route);
+                    Ok(())
+                } else {
+                    TransformSortBuilder::add_route(&mut builder.main_pipeline)
+                }
             }
         }
     }
@@ -316,7 +409,6 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        let input_plan = self.build(s_expr.child(0)?, required).await?;
 
         let order_by = sort
             .items
@@ -337,12 +429,20 @@ impl PhysicalPlanBuilder {
                 .map(|v| v.index)
                 .collect::<Vec<_>>();
 
+            let sort_step = match sort.after_exchange {
+                Some(false) => SortStep::Partial,
+                Some(true) => SortStep::Final,
+                None => SortStep::Single,
+            };
+
+            let input_plan = self.build(s_expr.unary_child(), required).await?;
+
             return Ok(Box::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
-                input: input_plan.clone(),
+                input: input_plan,
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
-                after_exchange: sort.after_exchange,
+                sort_step,
                 top_n: window.top.map(|top| WindowPartitionTopN {
                     func: match window.func {
                         WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,
@@ -357,12 +457,89 @@ impl PhysicalPlanBuilder {
         };
 
         // 2. Build physical plan.
-        Ok(Box::new(Sort {
-            order_by,
-            pre_projection,
+        let Some(after_exchange) = sort.after_exchange else {
+            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            return Ok(Box::new(Sort {
+                input: input_plan,
+                order_by,
+                limit: sort.limit,
+                step: SortStep::Single,
+                pre_projection,
+                broadcast_id: None,
+                stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Sort"),
+            }));
+        };
+
+        let settings = self.ctx.get_settings();
+        if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
+            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            return if !after_exchange {
+                Ok(Box::new(Sort {
+                    input: input_plan,
+                    order_by,
+                    limit: sort.limit,
+                    step: SortStep::Partial,
+                    pre_projection,
+                    broadcast_id: None,
+                    stat_info: Some(stat_info),
+                    meta: PhysicalPlanMeta::new("Sort"),
+                }))
+            } else {
+                Ok(Box::new(Sort {
+                    input: input_plan,
+                    order_by,
+                    limit: sort.limit,
+                    step: SortStep::Final,
+                    pre_projection: None,
+                    broadcast_id: None,
+                    stat_info: Some(stat_info),
+                    meta: PhysicalPlanMeta::new("Sort"),
+                }))
+            };
+        }
+
+        if after_exchange {
+            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            return Ok(Box::new(Sort {
+                input: input_plan,
+                order_by,
+                limit: sort.limit,
+                step: SortStep::Route,
+                pre_projection: None,
+                broadcast_id: None,
+                stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Sort"),
+            }));
+        }
+
+        let input_plan = self.build(s_expr.unary_child(), required).await?;
+        let sample = Box::new(Sort {
             input: input_plan,
+            order_by: order_by.clone(),
             limit: sort.limit,
-            after_exchange: sort.after_exchange,
+            step: SortStep::Sample,
+            pre_projection,
+            broadcast_id: Some(self.ctx.get_next_broadcast_id()),
+            stat_info: Some(stat_info.clone()),
+            meta: PhysicalPlanMeta::new("Sort"),
+        });
+        let exchange = Box::new(Exchange {
+            input: sample,
+            kind: FragmentKind::Normal,
+            keys: vec![],
+            ignore_exchange: false,
+            allow_adjust_parallelism: false,
+            meta: PhysicalPlanMeta::new("Exchange"),
+        });
+
+        Ok(Box::new(Sort {
+            input: exchange,
+            order_by,
+            limit: sort.limit,
+            step: SortStep::Shuffled,
+            pre_projection: None,
+            broadcast_id: None,
             stat_info: Some(stat_info),
             meta: PhysicalPlanMeta::new("Sort"),
         }))

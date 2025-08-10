@@ -22,8 +22,8 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ComputeQuota {
-    threads_num: Option<usize>,
-    memory_usage: Option<usize>,
+    pub threads_num: Option<usize>,
+    pub memory_usage: Option<usize>,
 }
 
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -85,6 +85,12 @@ pub enum Feature {
     VectorIndex,
     #[serde(alias = "private_task", alias = "PRIVATE_TASK")]
     PrivateTask,
+    #[serde(alias = "max_node_quota", alias = "MAX_NODE_QUOTA")]
+    MaxNodeQuota(usize),
+    #[serde(alias = "max_cpu_quota", alias = "MAX_CPU_QUOTA")]
+    MaxCpuQuota(usize),
+    #[serde(alias = "row_access_policy", alias = "ROW_ACCESS_POLICY")]
+    RowAccessPolicy,
     #[serde(other)]
     Unknown,
 }
@@ -137,14 +143,20 @@ impl fmt::Display for Feature {
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::VectorIndex => write!(f, "vector_index"),
             Feature::PrivateTask => write!(f, "private_task"),
+            Feature::RowAccessPolicy => write!(f, "row_access_policy"),
             Feature::Unknown => write!(f, "unknown"),
+            Feature::MaxCpuQuota(v) => write!(f, "max_cpu_quota({})", v),
+            Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
         }
     }
 }
 
 impl Feature {
     pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
-        Err(ErrorCode::LicenseKeyInvalid(message.into()))
+        match self {
+            Feature::MaxCpuQuota(_) | Feature::MaxNodeQuota(_) => Ok(()),
+            _ => Err(ErrorCode::LicenseKeyInvalid(message.into())),
+        }
     }
 
     pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
@@ -173,6 +185,8 @@ impl Feature {
 
                 Ok(true)
             }
+            (Feature::MaxCpuQuota(c), Feature::MaxCpuQuota(v)) => Ok(c > v),
+            (Feature::MaxNodeQuota(c), Feature::MaxNodeQuota(v)) => Ok(c > v),
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
             | (Feature::ComputedColumn, Feature::ComputedColumn)
@@ -180,6 +194,7 @@ impl Feature {
             | (Feature::LicenseInfo, Feature::LicenseInfo)
             | (Feature::Stream, Feature::Stream)
             | (Feature::DataMask, Feature::DataMask)
+            | (Feature::RowAccessPolicy, Feature::RowAccessPolicy)
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
@@ -381,6 +396,16 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::MaxNodeQuota(1),
+            serde_json::from_str::<Feature>("{\"MaxNodeQuota\": 1}").unwrap()
+        );
+
+        assert_eq!(
+            Feature::RowAccessPolicy,
+            serde_json::from_str::<Feature>("\"RowAccessPolicy\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -417,11 +442,12 @@ mod tests {
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
                 Feature::PrivateTask,
+                Feature::RowAccessPolicy,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }

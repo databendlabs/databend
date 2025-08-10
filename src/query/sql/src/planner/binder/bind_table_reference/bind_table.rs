@@ -34,7 +34,6 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 use crate::BindContext;
-
 impl Binder {
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
@@ -59,6 +58,15 @@ impl Binder {
             table_identifier.table_name_alias(),
         );
 
+        if let Some(cte_name) = &bind_context.cte_context.cte_name {
+            if cte_name == &table_name {
+                return Err(ErrorCode::SemanticError(format!(
+                    "The cte {table_name} is not recursive, but it references itself.",
+                ))
+                .set_span(*span));
+            }
+        }
+
         let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
             check_with_opt_valid(with_options)?;
             let consume = get_with_opt_consume(with_options)?;
@@ -69,12 +77,10 @@ impl Binder {
             (false, None, String::new())
         };
 
-        // Check and bind common table expression
-        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
+                return self.bind_cte_consumer(bind_context, &table_name, alias, cte_info);
             } else {
                 if self
                     .metadata
@@ -104,11 +110,6 @@ impl Binder {
 
         // Resolve table with catalog
         let table_meta = {
-            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}${}", &table_name, cte_suffix_name)
-            } else {
-                table_name.clone()
-            };
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
@@ -161,7 +162,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    None,
                     false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -247,7 +247,6 @@ impl Binder {
                         false,
                         false,
                         false,
-                        None,
                         bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -280,7 +279,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                     bind_context.allow_virtual_column,
                 );
 

@@ -28,6 +28,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::TransformSortPartial;
@@ -82,11 +83,30 @@ impl IPhysicalPlan for AggregatePartial {
         let input_schema = self.input.output_schema()?;
 
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        let factory = AggregateFunctionFactory::instance();
 
-        fields.extend(self.agg_funcs.iter().map(|func| {
-            let name = func.output_column.to_string();
-            DataField::new(&name, DataType::Binary)
-        }));
+        for desc in &self.agg_funcs {
+            let name = desc.output_column.to_string();
+
+            if desc.sig.udaf.is_some() {
+                fields.push(DataField::new(
+                    &name,
+                    DataType::Tuple(vec![DataType::Binary]),
+                ));
+                continue;
+            }
+
+            let func = factory
+                .get(
+                    &desc.sig.name,
+                    desc.sig.params.clone(),
+                    desc.sig.args.clone(),
+                    desc.sig.sort_descs.clone(),
+                )
+                .unwrap();
+
+            fields.push(DataField::new(&name, func.serialize_data_type()))
+        }
 
         for (idx, field) in self.group_by.iter().zip(
             self.group_by

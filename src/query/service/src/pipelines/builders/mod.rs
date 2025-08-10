@@ -14,9 +14,11 @@
 
 mod builder_aggregate;
 mod builder_append_table;
-mod builder_copy_into_table;
+
 mod builder_fill_missing_columns;
 mod builder_join;
+
+mod builder_copy_into_table;
 mod builder_mutation;
 mod builder_on_finished;
 mod builder_project;

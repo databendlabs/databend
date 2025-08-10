@@ -535,7 +535,7 @@ Limit
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 3.85
@@ -868,7 +868,7 @@ from numbers(10) where number > 5
 ) a join ( select number , to_yyyymmdd(to_timestamp(number)) as  register_at from numbers(10) where number > 5
 ) b on  a.number=b.number order by a.number) where pt = register_at;
 ----
-Sort
+Sort(Single)
 ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -1079,7 +1079,7 @@ INSERT INTO t2 VALUES (1, 10), (2, 20);
 query T
 EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
 ├── sort keys: [i ASC NULLS LAST, j ASC NULLS LAST]
 ├── estimated rows: 3.00
@@ -1362,7 +1362,7 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Sort(Build)
+├── Sort(Single)(Build)
 │   ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
 │   ├── sort keys: [count(a) ASC NULLS LAST]
 │   ├── estimated rows: 0.00
@@ -1412,7 +1412,7 @@ HashJoin
 ├── build join filters:
 │   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Sort(Build)
+├── Sort(Single)(Build)
 │   ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
 │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
 │   ├── estimated rows: 0.00
@@ -1705,4 +1705,3 @@ HashJoin
         ├── push downs: [filters: [NOT CAST(numbers.number (#0) AS Boolean)], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 10.00
-

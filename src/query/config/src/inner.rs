@@ -254,6 +254,7 @@ pub struct QueryConfig {
     pub resources_management: Option<ResourcesManagementConfig>,
 
     pub enable_queries_executor: bool,
+    pub check_connection_before_schedule: bool,
 }
 
 impl Default for QueryConfig {
@@ -343,6 +344,7 @@ impl Default for QueryConfig {
             settings: HashMap::new(),
             resources_management: None,
             enable_queries_executor: false,
+            check_connection_before_schedule: true,
         }
     }
 }
@@ -583,6 +585,9 @@ pub struct CacheConfig {
     /// Max number of cached table segment
     pub table_meta_statistic_count: u64,
 
+    /// Max number of cached segment statistics
+    pub segment_statistics_count: u64,
+
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     pub enable_table_index_bloom: bool,
 
@@ -751,6 +756,7 @@ impl Default for CacheConfig {
             block_meta_count: 0,
             segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
+            segment_statistics_count: 0,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
@@ -760,8 +766,8 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
-            vector_index_meta_count: 3000,
-            vector_index_filter_size: 2147483648,
+            vector_index_meta_count: 30000,
+            vector_index_filter_size: 64424509440,
             vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),

@@ -36,6 +36,7 @@ pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;
 pub use snapshots::SnapshotsIO;
+pub use write::build_column_hlls;
 pub(crate) use write::create_index_schema;
 pub(crate) use write::create_inverted_index_builders;
 pub(crate) use write::create_tokenizer_manager;

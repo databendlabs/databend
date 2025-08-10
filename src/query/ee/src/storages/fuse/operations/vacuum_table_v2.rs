@@ -248,11 +248,16 @@ pub async fn do_vacuum2(
         .into_iter()
         .filter(|s| !gc_root_segments.contains(s))
         .collect();
+    let stats_to_gc = segments_to_gc
+        .iter()
+        .map(|v| TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(v))
+        .collect::<Vec<_>>();
     ctx.set_status_info(&format!(
-        "[FUSE-VACUUM2] Filtered segments_to_gc for table {}, elapsed: {:?}, segments_to_gc: {:?}",
+        "[FUSE-VACUUM2] Filtered segments_to_gc for table {}, elapsed: {:?}, segments_to_gc: {:?}, stats_to_gc: {:?}",
         fuse_table.get_table_info().desc,
         start.elapsed(),
-        slice_summary(&segments_to_gc)
+        slice_summary(&segments_to_gc),
+        slice_summary(&stats_to_gc)
     ));
 
     let start = std::time::Instant::now();
@@ -349,6 +354,7 @@ pub async fn do_vacuum2(
     let subject_files_to_gc: Vec<_> = segments_to_gc
         .into_iter()
         .chain(blocks_to_gc.into_iter())
+        .chain(stats_to_gc.into_iter())
         .collect();
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
 

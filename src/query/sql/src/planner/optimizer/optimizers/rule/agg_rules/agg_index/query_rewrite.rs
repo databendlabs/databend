@@ -25,6 +25,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
 use itertools::Itertools;
 use log::info;
 
@@ -306,6 +307,12 @@ impl QueryInfo {
                 }
                 return Ok(None);
             }
+            ScalarExpr::UDAFCall(udaf) => {
+                for arg in &udaf.arguments {
+                    self.check_output_cols(arg, index_output_cols, new_selection_set)?;
+                }
+                return Ok(None);
+            }
             ScalarExpr::UDFCall(udf) => {
                 let mut valid = true;
                 let mut new_args = Vec::with_capacity(udf.arguments.len());
@@ -361,23 +368,38 @@ impl ViewInfo {
         // query can use those columns to compute expressions.
         let mut index_fields = Vec::with_capacity(query_info.output_cols.len());
         let mut index_output_cols = HashMap::with_capacity(query_info.output_cols.len());
+        let factory = AggregateFunctionFactory::instance();
         for (index, item) in query_info.output_cols.iter().enumerate() {
             let display_name = format_scalar(&item.scalar, &query_info.column_map);
 
-            let mut is_agg = false;
-            if let Some(ref aggregate) = query_info.aggregate {
-                for agg_func in &aggregate.aggregate_functions {
-                    if item.index == agg_func.index {
-                        is_agg = true;
-                        break;
-                    }
+            let aggr_scalar_item = query_info.aggregate.as_ref().and_then(|aggregate| {
+                aggregate
+                    .aggregate_functions
+                    .iter()
+                    .find(|agg_func| agg_func.index == item.index)
+            });
+
+            let (data_type, is_agg) = match aggr_scalar_item {
+                Some(item) => {
+                    let func = match &item.scalar {
+                        ScalarExpr::AggregateFunction(func) => func,
+                        _ => unreachable!(),
+                    };
+                    let func = factory.get(
+                        &func.func_name,
+                        func.params.clone(),
+                        func.args
+                            .iter()
+                            .map(|arg| arg.data_type())
+                            .collect::<Result<_>>()?,
+                        func.sort_descs
+                            .iter()
+                            .map(|desc| desc.try_into())
+                            .collect::<Result<_>>()?,
+                    )?;
+                    (func.serialize_data_type(), true)
                 }
-            }
-            // we store the value of aggregate function as binary data.
-            let data_type = if is_agg {
-                DataType::Binary
-            } else {
-                item.scalar.data_type().unwrap()
+                None => (item.scalar.data_type().unwrap(), false),
             };
 
             let name = format!("{index}");
@@ -1298,6 +1320,15 @@ fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr
                 scalar = format!("{} within group (order by {})", scalar, sort_descs);
             }
             scalar
+        }
+        ScalarExpr::UDAFCall(udaf) => {
+            let args = udaf
+                .arguments
+                .iter()
+                .map(|arg| format_scalar(arg, column_map))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{}({})", &udaf.name, args)
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",

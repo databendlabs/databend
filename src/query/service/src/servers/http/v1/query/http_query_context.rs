@@ -25,6 +25,7 @@ use poem::RequestBody;
 
 use crate::auth::Credential;
 use crate::servers::http::middleware::session_header::ClientSession;
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -49,6 +50,7 @@ pub struct HttpQueryContext {
     pub client_session: Option<ClientSession>,
     // for now only used for worksheet
     pub fixed_coordinator_node: bool,
+    pub client_caps: ClientCapabilities,
 }
 
 impl HttpQueryContext {

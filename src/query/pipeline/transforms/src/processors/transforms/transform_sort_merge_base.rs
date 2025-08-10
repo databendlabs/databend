@@ -23,7 +23,7 @@ use databend_common_expression::SortColumnDescription;
 use super::sort::RowConverter;
 use super::sort::Rows;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortSpillParams {
     /// The number of rows of each spilled block.
     pub batch_rows: usize,

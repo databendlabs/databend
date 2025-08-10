@@ -724,15 +724,24 @@ where
 order by
     s_suppkey;
 ----
-HashJoin: INNER
-├── Build
-│   └── Scan: default.tpch_test.revenue (#2) (read rows: 10000)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── Scan: default.tpch_test.revenue (#1) (read rows: 10000)
-        └── Probe
-            └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: revenue
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
+└── HashJoin: INNER
+    ├── Build
+    │   └── MaterializeCTERef
+    │       ├── cte_name: revenue
+    │       └── cte_schema: [l_suppkey (#28), total_revenue (#44)]
+    └── Probe
+        └── HashJoin: INNER
+            ├── Build
+            │   └── MaterializeCTERef
+            │       ├── cte_name: revenue
+            │       └── cte_schema: [l_suppkey (#9), total_revenue (#25)]
+            └── Probe
+                └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
 
 
 # Q16

@@ -47,6 +47,26 @@ pub mod server_metrics {
         };
     }
 
+    #[derive(Default, Debug, Clone)]
+    pub struct SnapshotStat {
+        /// The total number of blocks in the snapshot.
+        pub block_count: Gauge,
+        /// The total size in bytes of the block data section in the snapshot.
+        pub data_size: Gauge,
+        /// The total size in bytes of the block index section in the snapshot.
+        pub index_size: Gauge,
+        /// The average size in bytes of a block.
+        pub avg_block_size: Gauge,
+        /// The average number of keys per block.
+        pub avg_keys_per_block: Gauge,
+        /// The total number of read block from cache or from disk.
+        pub read_block: Gauge,
+        /// The total number of read block from cache.
+        pub read_block_from_cache: Gauge,
+        /// The total number of read block from disk.
+        pub read_block_from_disk: Gauge,
+    }
+
     struct ServerMetrics {
         current_leader_id: Gauge,
         is_leader: Gauge,
@@ -64,6 +84,8 @@ pub mod server_metrics {
 
         /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
         snapshot_expire_index_count: Gauge,
+
+        snapshot_stat: SnapshotStat,
 
         raft_log_cache_items: Gauge,
         raft_log_cache_used_size: Gauge,
@@ -92,9 +114,12 @@ pub mod server_metrics {
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
+
                 snapshot_key_count: Gauge::default(),
                 snapshot_primary_index_count: Gauge::default(),
                 snapshot_expire_index_count: Gauge::default(),
+
+                snapshot_stat: Default::default(),
 
                 raft_log_cache_items: Gauge::default(),
                 raft_log_cache_used_size: Gauge::default(),
@@ -150,6 +175,46 @@ pub mod server_metrics {
                 key!("snapshot_expire_index_count"),
                 "number of expire index keys in the last snapshot",
                 metrics.snapshot_expire_index_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_block_count"),
+                "number of blocks in the last snapshot",
+                metrics.snapshot_stat.block_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_data_size"),
+                "size of data section in the last snapshot",
+                metrics.snapshot_stat.data_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_index_size"),
+                "size of index section in the last snapshot",
+                metrics.snapshot_stat.index_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_avg_block_size"),
+                "average size of a block in the last snapshot",
+                metrics.snapshot_stat.avg_block_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_avg_keys_per_block"),
+                "average number of keys per block in the last snapshot",
+                metrics.snapshot_stat.avg_keys_per_block.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block"),
+                "total number of read block from cache or from disk",
+                metrics.snapshot_stat.read_block.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block_from_cache"),
+                "total number of read block from cache",
+                metrics.snapshot_stat.read_block_from_cache.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block_from_disk"),
+                "total number of read block from disk",
+                metrics.snapshot_stat.read_block_from_disk.clone(),
             );
 
             registry.register(
@@ -256,6 +321,10 @@ pub mod server_metrics {
     }
     pub fn set_snapshot_expire_index_count(n: u64) {
         SERVER_METRICS.snapshot_expire_index_count.set(n as i64);
+    }
+
+    pub fn snapshot() -> &'static SnapshotStat {
+        &SERVER_METRICS.snapshot_stat
     }
 
     pub fn set_raft_log_stat(st: RaftLogStat) {

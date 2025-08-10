@@ -46,7 +46,7 @@ echo "Create VIEW Query ID: $create_view_query_id"
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "insert into t values (1),(2),(3)"}')
 insert_query_id=$(echo $response | jq -r '.id')
 echo "Insert Query ID: $insert_query_id"
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json'  -H 'X-Databend-Session:new' -d '{"sql": "select * from t"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json'  -H 'X-Databend-Client-Caps: session_cookie' -d '{"sql": "select * from t"}')
 select_query_id=$(echo $response | jq -r '.id')
 select_session_id=$(echo $response | jq -r '.session_id')
 echo "Select Query ID: $select_query_id"

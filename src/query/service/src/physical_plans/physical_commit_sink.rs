@@ -162,11 +162,12 @@ impl IPhysicalPlan for CommitSink {
 
                             let extended_merged_blocks = recluster_info
                                 .merged_blocks
-                                .iter()
-                                .map(|block_meta| {
+                                .into_iter()
+                                .map(|(block_meta, column_hlls)| {
                                     Arc::new(ExtendedBlockMeta {
-                                        block_meta: Arc::unwrap_or_clone(block_meta.clone()),
+                                        block_meta: Arc::unwrap_or_clone(block_meta),
                                         draft_virtual_block_meta: None,
+                                        column_hlls,
                                     })
                                 })
                                 .collect::<Vec<Arc<ExtendedBlockMeta>>>();

@@ -27,7 +27,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_table_index::TableIndexHandler;
 use databend_enterprise_table_index::TableIndexHandlerWrapper;
-use databend_storages_common_table_meta::meta::Location;
 
 use crate::storages::fuse::operations::ngram_index::do_refresh_ngram_index;
 
@@ -61,20 +60,11 @@ impl TableIndexHandler for RealTableIndexHandler {
         ctx: Arc<dyn TableContext>,
         index_name: String,
         index_schema: TableSchemaRef,
-        segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match index_ty {
             TableIndexType::Ngram => {
-                do_refresh_ngram_index(
-                    table,
-                    ctx,
-                    index_name,
-                    index_schema,
-                    segment_locs,
-                    pipeline,
-                )
-                .await?;
+                do_refresh_ngram_index(table, ctx, index_name, index_schema, pipeline).await?;
             }
             _ => {
                 return Err(ErrorCode::RefreshIndexError("Only Ngram support Refresh"));

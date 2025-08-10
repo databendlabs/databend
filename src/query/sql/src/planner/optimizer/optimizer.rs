@@ -26,6 +26,7 @@ use crate::binder::MutationType;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
+use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
@@ -46,6 +47,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -273,7 +275,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
-        );
+        )
+        // 15. Clean up unused CTEs
+        .add(CleanupUnusedCTEOptimizer);
 
     // 15. Execute the pipeline
     let s_expr = pipeline.execute().await?;
@@ -395,7 +399,22 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
             }
         }
         MutationType::Update | MutationType::Delete => {
-            if let RelOperator::MutationSource(rel) = input_s_expr.plan() {
+            // Helper function to find MutationSource in a chain of operators
+            fn find_mutation_source(s_expr: &SExpr) -> Option<&MutationSource> {
+                match s_expr.plan() {
+                    RelOperator::MutationSource(rel) => Some(rel),
+                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) => {
+                        if s_expr.arity() == 1 {
+                            find_mutation_source(s_expr.unary_child())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            }
+
+            if let Some(rel) = find_mutation_source(&input_s_expr) {
                 if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
                     mutation.truncate_table = true;
                 }

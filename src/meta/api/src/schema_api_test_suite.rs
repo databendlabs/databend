@@ -23,6 +23,7 @@ use std::vec;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_base::base::uuid::Uuid;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -2605,6 +2606,7 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                 };
+
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
                     ..Default::default()
@@ -2643,8 +2645,79 @@ impl SchemaApiTestSuite {
                     .await?;
 
                 let err = res.unwrap_err();
-
                 assert!(!err.is_empty());
+            }
+
+            info!("--- update table meta: simulate kv txn retried after commit");
+            {
+                // 1. Update test table, bump table version, expect success -- just the normal case
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let new_table_meta = table.meta.clone();
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
+                };
+                let uuid = Uuid::new_v4();
+                let res = mt
+                    .update_multi_table_meta_with_txn_id(
+                        UpdateMultiTableMetaReq {
+                            update_table_metas: vec![(req.clone(), table.as_ref().clone())],
+                            ..Default::default()
+                        },
+                        uuid.to_string(),
+                    )
+                    .await?;
+
+                assert!(res.is_ok());
+
+                // 2. Update test table again
+                // Simulate duplicated kv_txn by using the same kv txn_id.
+                // Expects:
+                // - `update_multi_table_meta_with_txn_id` returns NO error,
+                // - the table meta shou NOT be updated
+
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let table_version = table.ident.seq;
+                let mut req = req.clone();
+                // Using a fresh table version(seq), otherwise it will fail eagerly during the
+                // version checking phase of `update_multi_table_meta_with_txn_id`
+                req.seq = MatchSeq::Exact(table_version);
+                let prev_table_meta = table.meta.clone();
+                // Change the comment, this modification should not be committed
+                req.new_table_meta.comment = "some new comment".to_string();
+                // Expects no KV api level error, and no app level error.
+                // For the convenience of reviewing, using explict type signature
+                let _r: databend_common_meta_app::schema::UpdateTableMetaReply = mt
+                    .update_multi_table_meta_with_txn_id(
+                        UpdateMultiTableMetaReq {
+                            update_table_metas: vec![(req, table.as_ref().clone())],
+                            ..Default::default()
+                        },
+                        // USING THE SAME UUID as kv txn_id
+                        uuid.to_string(),
+                    )
+                    .await?
+                    .unwrap();
+
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                // The new_table_meta should NOT be committed
+                assert_eq!(table.meta, prev_table_meta);
             }
 
             info!("--- update table meta, with upsert file req");
@@ -2792,7 +2865,7 @@ impl SchemaApiTestSuite {
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
+                assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
             }
 
             info!("--- update table meta: virtual column too many");
@@ -7762,7 +7835,7 @@ impl SchemaApiTestSuite {
             let result = mt.update_multi_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
+            assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
 
             let req = GetTableCopiedFileReq {
                 table_id,

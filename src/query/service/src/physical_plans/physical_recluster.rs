@@ -208,10 +208,14 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                let sort_pipeline_builder =
-                    SortPipelineBuilder::create(builder.ctx.clone(), schema, sort_descs.into())?
-                        .with_block_size_hit(sort_block_size)
-                        .remove_order_col_at_last();
+                let sort_pipeline_builder = SortPipelineBuilder::create(
+                    builder.ctx.clone(),
+                    schema,
+                    sort_descs.into(),
+                    None,
+                )?
+                .with_block_size_hit(sort_block_size)
+                .remove_order_col_at_last();
                 // Todo(zhyass): Recluster will no longer perform sort in the near future.
                 sort_pipeline_builder.build_full_sort_pipeline(&mut builder.main_pipeline)?;
 
@@ -299,7 +303,7 @@ impl IPhysicalPlan for HilbertPartition {
         builder.main_pipeline.exchange(
             num_processors,
             HilbertPartitionExchange::create(self.num_partitions),
-        );
+        )?;
 
         let settings = builder.settings.clone();
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;

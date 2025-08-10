@@ -34,6 +34,7 @@ pub mod number_class;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
+pub mod tuple;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
@@ -44,8 +45,6 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_ast::ast::TypeName;
 pub use databend_common_base::base::OrderedFloat;
 pub use databend_common_io::deserialize_bitmap;
@@ -62,6 +61,7 @@ pub use self::bitmap::BitmapType;
 pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
 pub use self::boolean::MutableBitmap;
+pub use self::compute_view::StringConvert;
 pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
@@ -81,6 +81,7 @@ use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::tuple::*;
 pub use self::variant::VariantType;
 pub use self::vector::VectorColumn;
 pub use self::vector::VectorColumnBuilder;
@@ -102,18 +103,7 @@ use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    EnumAsInner,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
     EmptyArray,
@@ -491,7 +481,7 @@ pub fn convert_to_type_name(ty: &DataType) -> TypeName {
 
 /// [AccessType] defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
-    type Scalar: Debug + Clone + PartialEq;
+    type Scalar: Debug + Clone + PartialEq + Send + 'static;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;

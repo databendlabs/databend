@@ -247,3 +247,32 @@ pub struct UpsertArgs {
     #[clap(long)]
     pub value: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct GetArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
+    /// The key to get
+    #[clap(long)]
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct TriggerSnapshotArgs {
+    #[clap(long, default_value = "127.0.0.1:28101")]
+    pub admin_api_address: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct LuaArgs {
+    /// Path to the Lua script file. If not provided, script is read from stdin
+    #[clap(long)]
+    pub file: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct MetricsArgs {
+    #[clap(long, default_value = "127.0.0.1:28002")]
+    pub admin_api_address: String,
+}

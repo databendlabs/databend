@@ -20,6 +20,8 @@ use enum_as_inner::EnumAsInner;
 
 use super::AggregateFunctionRef;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::DataType;
+use crate::ColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
@@ -35,7 +37,8 @@ impl StateAddr {
     }
 
     #[inline]
-    pub fn get<'a, T>(&self) -> &'a mut T {
+    pub fn get<'a, T>(&self) -> &'a mut T
+    where T: Send + 'static {
         unsafe { &mut *(self.addr as *mut T) }
     }
 
@@ -69,7 +72,10 @@ impl StateAddr {
 
     #[inline]
     pub fn write<T, F>(&self, f: F)
-    where F: FnOnce() -> T {
+    where
+        F: FnOnce() -> T,
+        T: Send + 'static,
+    {
         unsafe {
             let ptr = self.addr as *mut T;
             std::ptr::write(ptr, f());
@@ -77,7 +83,8 @@ impl StateAddr {
     }
 
     #[inline]
-    pub fn write_state<T>(&self, state: T) {
+    pub fn write_state<T>(&self, state: T)
+    where T: Send + 'static {
         unsafe {
             let ptr = self.addr as *mut T;
             std::ptr::write(ptr, state);
@@ -113,11 +120,11 @@ impl From<StateAddr> for usize {
 
 pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
     let mut registry = AggrStateRegistry::default();
-    let mut serialize_size = Vec::with_capacity(funcs.len());
+    let mut serialize_type = Vec::with_capacity(funcs.len());
     for func in funcs {
         func.register_state(&mut registry);
         registry.commit();
-        serialize_size.push(func.serialize_size_per_row());
+        serialize_type.push(StateSerdeType(func.serialize_type().into()));
     }
 
     let AggrStateRegistry { states, offsets } = registry;
@@ -132,7 +139,7 @@ pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout>
     Ok(StatesLayout {
         layout,
         states_loc,
-        serialize_size,
+        serialize_type,
     })
 }
 
@@ -192,17 +199,71 @@ impl AggrStateLoc {
 }
 
 #[derive(Debug, Clone)]
+pub enum StateSerdeItem {
+    DataType(DataType),
+    Binary(Option<usize>),
+}
+
+impl From<DataType> for StateSerdeItem {
+    fn from(value: DataType) -> Self {
+        Self::DataType(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StateSerdeType(Box<[StateSerdeItem]>);
+
+impl StateSerdeType {
+    pub fn new(items: impl Into<Box<[StateSerdeItem]>>) -> Self {
+        StateSerdeType(items.into())
+    }
+
+    pub fn data_type(&self) -> DataType {
+        DataType::Tuple(
+            self.0
+                .iter()
+                .map(|item| match item {
+                    StateSerdeItem::DataType(data_type) => data_type.clone(),
+                    StateSerdeItem::Binary(_) => DataType::Binary,
+                })
+                .collect(),
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct StatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    serialize_size: Vec<Option<usize>>,
+    pub(super) serialize_type: Vec<StateSerdeType>,
 }
 
 impl StatesLayout {
-    pub fn serialize_builders(&self, num_rows: usize) -> Vec<BinaryColumnBuilder> {
-        self.serialize_size
+    pub fn num_aggr_func(&self) -> usize {
+        self.states_loc.len()
+    }
+
+    pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
+        self.serialize_type
             .iter()
-            .map(|size| BinaryColumnBuilder::with_capacity(num_rows, num_rows * size.unwrap_or(0)))
+            .map(|serde_type| {
+                let builder = serde_type
+                    .0
+                    .iter()
+                    .map(|item| match item {
+                        StateSerdeItem::DataType(data_type) => {
+                            ColumnBuilder::with_capacity(data_type, num_rows)
+                        }
+                        StateSerdeItem::Binary(size) => {
+                            ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(
+                                num_rows,
+                                num_rows * size.unwrap_or(0),
+                            ))
+                        }
+                    })
+                    .collect();
+                ColumnBuilder::Tuple(builder)
+            })
             .collect()
     }
 }
@@ -218,7 +279,8 @@ impl<'a> AggrState<'a> {
         Self { addr, loc }
     }
 
-    pub fn get<'b, T>(&self) -> &'b mut T {
+    pub fn get<'b, T>(&self) -> &'b mut T
+    where T: Send + 'static {
         debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)
@@ -226,7 +288,10 @@ impl<'a> AggrState<'a> {
     }
 
     pub fn write<T, F>(&self, f: F)
-    where F: FnOnce() -> T {
+    where
+        F: FnOnce() -> T,
+        T: Send + 'static,
+    {
         debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)

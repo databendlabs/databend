@@ -79,6 +79,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    _block_stat_count: u32,
     check_last_snapshot: Option<()>,
     check_table_statistic_file: Option<()>,
 ) -> Result<()> {

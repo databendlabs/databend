@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -33,27 +34,30 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::assert_unary_params;
+use super::assert_variadic_arguments;
 use super::borsh_partial_deserialize;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_params;
-use crate::aggregates::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -62,14 +66,7 @@ struct AggregateWindowFunnelState<T> {
 }
 
 impl<T> AggregateWindowFunnelState<T>
-where T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Send
-        + Sync
+where T: Ord + Sub<Output = T> + AsPrimitive<u64> + BorshSerialize + BorshDeserialize + Clone + Send
 {
     pub fn new() -> Self {
         Self {
@@ -155,12 +152,12 @@ pub struct AggregateWindowFunnelFunction<T> {
     _arguments: Vec<DataType>,
     event_size: usize,
     window: u64,
-    t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -275,15 +272,52 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        Ok(state.serialize(writer)?)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let mut rhs: AggregateWindowFunnelState<T::Scalar> = borsh_partial_deserialize(reader)?;
-        state.merge(&mut rhs);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        }
         Ok(())
     }
 
@@ -294,7 +328,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let mut builder = UInt8Type::downcast_builder(builder);
         let result = self.get_event_level(place);
         builder.push(result);
@@ -330,7 +369,7 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -352,7 +391,7 @@ where
             _arguments: arguments,
             event_size,
             window,
-            t: PhantomData,
+            _t: PhantomData,
         }))
     }
 

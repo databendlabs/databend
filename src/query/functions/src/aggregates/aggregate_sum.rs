@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use boolean::TrueIdxIter;
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,58 +31,32 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
+use super::aggregate_unary::UnaryState;
+use super::assert_params;
 use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::AggrStateLoc;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_unary::UnaryState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateUnaryFunction;
+use super::StateSerde;
 
-pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
-    fn merge(&mut self, other: &Self) -> Result<()>;
-    fn mem_size() -> Option<usize> {
-        None
-    }
-
-    fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
-
-    fn accumulate_row(&mut self, column: &BlockEntry, row: usize) -> Result<()>;
-    fn accumulate_keys(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        entry: &BlockEntry,
-    ) -> Result<()>;
-
-    fn merge_result(
-        &mut self,
-        builder: &mut ColumnBuilder,
-        window_size: &Option<usize>,
-    ) -> Result<()>;
-
-    fn merge_avg_result(
-        &mut self,
-        builder: &mut ColumnBuilder,
-        count: u64,
-        scale_add: u8,
-        window_size: &Option<usize>,
-    ) -> Result<()>;
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
 pub struct NumberSumState<N>
-where N: ValueType
+where N: ArgType
 {
     pub value: N::Scalar,
 }
 
 impl<N> Default for NumberSumState<N>
 where
-    N: ValueType,
-    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    N: ArgType,
+    N::Scalar: Number,
 {
     fn default() -> Self {
         NumberSumState::<N> {
@@ -129,10 +101,10 @@ where
 
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
-    T: ArgType + Sync + Send,
-    N: ValueType,
+    T: ArgType,
+    N: ArgType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
-    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
     for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
 {
     fn add(
@@ -171,15 +143,47 @@ where
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
+impl<N> StateSerde for NumberSumState<N>
+where
+    N: ArgType,
+    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
+{
+    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        std::vec![N::data_type().into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<N, Self, _>(places, loc, builders, |state, builder| {
+            builder.push_item(N::to_scalar_ref(&state.value));
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<N, Self, _>(places, loc, state, filter, |state, data| {
+            state.value += N::to_owned_scalar(data);
+            Ok(())
+        })
+    }
+}
+
 pub struct DecimalSumState<const SHOULD_CHECK_OVERFLOW: bool, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
+where T: Decimal
 {
     pub value: T::U64Array,
 }
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> Default for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
+where T: Decimal
 {
     fn default() -> Self {
         Self {
@@ -190,7 +194,7 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
     for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAssign
+where T: Decimal + std::ops::AddAssign
 {
     fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         let mut value = T::from_u64_array(self.value);
@@ -267,7 +271,40 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> StateSerde for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
+where T: Decimal + std::ops::AddAssign
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Decimal(T::default_decimal_size()).into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<DecimalType<T>, Self, _>(places, loc, builders, |state, builder| {
+            builder.push_item(T::from_u64_array(state.value));
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<DecimalType<T>, Self, _>(places, loc, state, filter, |state, value| {
+            let rhs = Self {
+                value: value.to_u64_array(),
+            };
+            <Self as UnaryState<_, _>>::merge(state, &rhs)
+        })
+    }
+}
+
+#[derive(Default)]
 pub struct IntervalSumState {
     pub value: months_days_micros,
 }
@@ -324,12 +361,42 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
     }
 }
 
+impl StateSerde for IntervalSumState {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Interval.into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<IntervalType, Self, _>(places, loc, builders, |state, builder| {
+            builder.push(state.value);
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<IntervalType, Self, _>(places, loc, state, filter, |state, value| {
+            let rhs = IntervalSumState { value };
+            <Self as UnaryState<_, _>>::merge(state, &rhs)
+        })
+    }
+}
+
 pub fn try_create_aggregate_sum_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let mut data_type = arguments[0].clone();
@@ -346,16 +413,16 @@ pub fn try_create_aggregate_sum_function(
                 NumberSumState<NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
+            .finish()
         }
         DataType::Interval => {
             let return_type = DataType::Interval;
-            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::try_create_unary(
+            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
+            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -371,17 +438,15 @@ pub fn try_create_aggregate_sum_function(
                             DecimalSumState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create_unary(
-                            display_name, return_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, return_type)
+                        .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalSumState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create_unary(
-                            display_name, return_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, return_type)
+                        .finish()
                     }
                 }
             })
@@ -394,7 +459,7 @@ pub fn try_create_aggregate_sum_function(
 }
 
 pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

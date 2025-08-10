@@ -513,6 +513,11 @@ select stddev_samp(a) from d where b = 'abc';
 NULL
 
 query TTTTT
+select json_agg(a), json_agg(b), json_agg(c), json_agg(d), json_agg(e), json_agg('a') from d
+----
+[20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+
+query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
 [20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
@@ -559,6 +564,30 @@ select k, mode(v) from aggr group by k order by k;
 1 10.00
 2 20.00
 3 NULL
+
+statement ok
+CREATE OR REPLACE TABLE convert_string (
+    c1 STRING,
+    c2 INT,
+    c3 INT
+);
+
+statement ok
+INSERT INTO convert_string (c1, c2, c3) VALUES
+('a', 1, 1),
+('a', 2, 1),
+('b', 1, 1),
+('b', 2, 1),
+('a', 1, 1),
+('a', 1, 2),
+('a', 2, 2),
+('b', 1, 2);
+
+query IT rowsort
+select c1, string_agg(json_object('col', c2, 'no2', c3), ',') from convert_string group by c1;
+----
+a {"col":1,"no2":1},{"col":2,"no2":1},{"col":1,"no2":1},{"col":1,"no2":2},{"col":2,"no2":2}
+b {"col":1,"no2":1},{"col":2,"no2":1},{"col":1,"no2":2}
 
 statement ok
 DROP TABLE aggr

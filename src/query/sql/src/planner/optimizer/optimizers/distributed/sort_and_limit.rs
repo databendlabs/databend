@@ -104,33 +104,43 @@ impl SortAndLimitPushDownOptimizer {
             return Ok(s_expr.clone());
         }
 
-        let mut sort: Sort = s_expr.plan().clone().try_into()?;
-        sort.after_exchange = Some(false);
-        let exchange_sexpr = s_expr.child(0)?;
+        let exchange_sexpr = s_expr.unary_child();
 
-        // this is window shuffle sort
-        if matches!(
-            exchange_sexpr.plan.as_ref(),
-            RelOperator::Exchange(Exchange::Hash(_))
-        ) {
-            return Ok(s_expr.clone());
+        match exchange_sexpr.plan() {
+            RelOperator::Exchange(exchange) => match exchange {
+                // this is window shuffle sort
+                Exchange::Hash(_) => return Ok(s_expr.clone()),
+                Exchange::Merge | Exchange::MergeSort => {}
+                Exchange::Broadcast => unreachable!(),
+            },
+            _ => unreachable!(),
         }
 
-        debug_assert!(matches!(
-            exchange_sexpr.plan.as_ref(),
-            RelOperator::Exchange(Exchange::Merge) | RelOperator::Exchange(Exchange::MergeSort)
-        ));
+        let sort = s_expr.plan.as_sort().unwrap();
 
-        debug_assert!(exchange_sexpr.children.len() == 1);
-        let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
-
-        let child = exchange_sexpr.child(0)?.clone();
-        let before_exchange_sort =
-            SExpr::create_unary(Arc::new(sort.clone().into()), Arc::new(child));
-        let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(before_exchange_sort)]);
-        sort.after_exchange = Some(true);
-        let new_plan = SExpr::create_unary(Arc::new(sort.into()), Arc::new(new_exchange));
-        Ok(new_plan)
+        let new_exchange = SExpr::create_unary(
+            Arc::new(Exchange::MergeSort.into()),
+            SExpr::create_unary(
+                Arc::new(
+                    Sort {
+                        after_exchange: Some(false),
+                        ..sort.clone()
+                    }
+                    .into(),
+                ),
+                exchange_sexpr.unary_child_arc(),
+            ),
+        );
+        Ok(SExpr::create_unary(
+            Arc::new(
+                Sort {
+                    after_exchange: Some(true),
+                    ..sort.clone()
+                }
+                .into(),
+            ),
+            Arc::new(new_exchange),
+        ))
     }
 
     fn apply_limit(&self, s_expr: &SExpr) -> Result<SExpr> {

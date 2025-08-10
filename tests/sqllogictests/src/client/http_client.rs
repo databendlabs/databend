@@ -84,6 +84,10 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        header.insert(
+            "X-DATABEND-CLIENT-CAPS",
+            HeaderValue::from_str("session_header").unwrap(),
+        );
         let client = ClientBuilder::new()
             .default_headers(header)
             // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526

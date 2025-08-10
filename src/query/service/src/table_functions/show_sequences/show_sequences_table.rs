@@ -45,6 +45,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
+use databend_common_users::Object;
 
 const SHOW_SEQUENCES: &str = "show_sequences";
 
@@ -163,12 +164,20 @@ impl AsyncSource for ShowSequencesSource {
 
 async fn show_sequences(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
     let ctl = ctx.get_default_catalog()?;
-    let seqs = ctl
+    let mut seqs = ctl
         .list_sequences(ListSequencesReq {
             tenant: ctx.get_tenant(),
         })
         .await?
         .info;
+
+    let enable_seq_rbac_check = ctx
+        .get_settings()
+        .get_enable_experimental_sequence_privilege_check()?;
+    if enable_seq_rbac_check {
+        let visibility_checker = ctx.get_visibility_checker(false, Object::Sequence).await?;
+        seqs.retain(|c| visibility_checker.check_seq_visibility(&c.0));
+    }
 
     let names = seqs.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
     let interval = seqs.iter().map(|x| x.1.step).collect::<Vec<_>>();

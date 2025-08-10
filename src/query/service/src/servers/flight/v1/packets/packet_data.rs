@@ -54,6 +54,7 @@ impl Debug for FragmentData {
     }
 }
 
+#[derive(Debug)]
 pub enum DataPacket {
     ErrorCode(ErrorCode),
     Dictionary(FlightData),
