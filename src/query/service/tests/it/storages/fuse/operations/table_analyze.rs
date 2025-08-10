@@ -23,7 +23,7 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
-use databend_common_storage::MetaHLL12;
+use databend_common_storage::MetaHLL;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -216,8 +216,7 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
 
     // generate table statistics.
     let col: Vec<u8> = vec![1, 3, 0, 0, 0, 118, 5, 1, 21, 6, 3, 229, 13, 3];
-    let hll: HashMap<ColumnId, MetaHLL12> =
-        HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
+    let hll: HashMap<ColumnId, MetaHLL> = HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
     let table_statistics =
         TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id, 14);
     let table_statistics_location = location_gen.snapshot_statistics_location_from_uuid(

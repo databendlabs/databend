@@ -31,7 +31,7 @@ pub struct TableSnapshotStatistics {
     pub format_version: FormatVersion,
 
     pub snapshot_id: SnapshotId,
-    pub row_count: usize,
+    pub row_count: u64,
     pub hll: HashMap<ColumnId, MetaHLL>,
     pub histograms: HashMap<ColumnId, Histogram>,
 }
@@ -41,7 +41,7 @@ impl TableSnapshotStatistics {
         hll: HashMap<ColumnId, MetaHLL>,
         histograms: HashMap<ColumnId, Histogram>,
         snapshot_id: SnapshotId,
-        row_count: usize,
+        row_count: u64,
     ) -> Self {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
