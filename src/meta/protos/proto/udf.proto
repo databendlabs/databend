@@ -69,6 +69,17 @@ message UDAFScript {
   repeated string packages = 8;
 }
 
+message UDTF {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated string arg_names = 1;
+  repeated DataType arg_types = 2;
+  repeated string return_names = 3;
+  repeated DataType return_types = 4;
+  string sql = 5;
+}
+
 message UserDefinedFunction {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -80,6 +91,7 @@ message UserDefinedFunction {
     UDFServer udf_server = 4;
     UDFScript udf_script = 6;
     UDAFScript udaf_script = 7;
+    UDTF udtf = 8;
   }
   // The time udf created.
   optional string created_on = 5;

@@ -5049,6 +5049,21 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
+    let udtf = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            ~ RETURNS ~ TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            ~ AS ~ ^#code_string
+        },
+        |(_, arg_types, _, _, _, _, return_types, _, _, sql)| {
+            UDFDefinition::UDTFSql {
+                arg_types: BTreeMap::from_iter(arg_types),
+                return_types: BTreeMap::from_iter(return_types),
+                sql,
+            }
+        }
+    );
+
     let udaf = map(
         rule! {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
@@ -5113,7 +5128,14 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
         | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udtf: "(<arg_type>, ...) RETURNS TABLE (<return_type>, ...) AS <sql> }"
+    )(i)
+}
 
+fn udtf_arg(i:Input) -> IResult<(Identifier, TypeName)> {
+    map(
+        rule! { #ident ~ ^#type_name },
+        |(name, ty)| (name, ty),
     )(i)
 }
 

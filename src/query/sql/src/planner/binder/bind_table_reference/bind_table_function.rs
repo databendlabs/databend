@@ -25,6 +25,7 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
@@ -34,6 +35,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
@@ -45,11 +47,11 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::EvalScalar;
+use crate::plans::{EvalScalar, Plan};
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::BindContext;
+use crate::{BindContext, Planner};
 use crate::ScalarExpr;
 
 impl Binder {
@@ -128,6 +130,42 @@ impl Binder {
             &[],
         );
         let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
+
+        let tenant = self.ctx.get_tenant();
+        let udtf_result = databend_common_base::runtime::block_on(async {
+            if let Some(UDFDefinition::UDTF(udtf)) = UserApiProvider::instance().get_udf(&tenant, &func_name.name).await?.map(|udf| udf.definition) {
+                let mut sql = udtf.sql;
+
+                for (name, arg) in table_args.named.iter() {
+                    // FIXME: Parameter substitution
+                    let Some(ty) = udtf.arg_types.get(name) else { return Err(ErrorCode::InvalidArgument(format!("Function '{func_name}' does not have a parameter named '{name}'"))) };
+
+                    sql = sql.replace(name, &arg.to_string());
+                }
+                let mut planner = Planner::new(self.ctx.clone());
+                let (_, extras) = planner.plan_sql(&sql).await?;
+                let binder = Binder::new(
+                    self.ctx.clone(),
+                    CatalogManager::instance(),
+                    self.name_resolution_ctx.clone(),
+                    self.metadata.clone(),
+                )
+                    .with_subquery_executor(self.subquery_executor.clone());
+                let plan = binder.bind(&extras.statement).await?;
+
+                let Plan::Query {
+                    s_expr, bind_context, ..
+                } = plan else {
+                    return Err(ErrorCode::UDFRuntimeError("Query in UDTF returned no result set"))
+                };
+
+                return Ok(Some((*s_expr, *bind_context)))
+            }
+            Ok(None)
+        });
+        if let Some(result) = udtf_result? {
+            return Ok(result);
+        }
 
         if func_name.name.eq_ignore_ascii_case("result_scan") {
             self.bind_result_scan(bind_context, span, alias, &table_args)
