@@ -96,6 +96,7 @@ pub use task::Status;
 pub use task::Task;
 pub use task::TaskMessage;
 pub use task::TaskRun;
+pub use user_defined_function::UDTF;
 pub use task::WarehouseOptions;
 pub use task_ident::TaskIdent;
 pub use task_ident::TaskIdentRaw;

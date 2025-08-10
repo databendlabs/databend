@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::infer_schema_type;
@@ -275,6 +276,87 @@ impl FromToProto for mt::UDAFScript {
     }
 }
 
+impl FromToProto for mt::UDTF {
+    type PB = pb::Udtf;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where
+        Self: Sized
+    {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = BTreeMap::new();
+        for (arg_name, arg_ty) in p
+            .arg_names
+            .into_iter().zip(p.arg_types.into_iter()) {
+            let ty = (&TableDataType::from_pb(arg_ty)?).into();
+
+            arg_types.insert(arg_name, ty);
+        }
+
+        let mut return_types = BTreeMap::new();
+        for (return_name, arg_ty) in p
+            .return_names
+            .into_iter().zip(p.return_types.into_iter()) {
+            let ty = (&TableDataType::from_pb(arg_ty)?).into();
+
+            return_types.insert(return_name, ty);
+        }
+
+        Ok(Self {
+            arg_types,
+            return_types,
+            sql: p.sql,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut arg_names = Vec::with_capacity(self.arg_types.len());
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for (arg_name, arg_type) in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            arg_names.push(arg_name.clone());
+            arg_types.push(arg_type);
+        }
+
+        let mut return_names = Vec::with_capacity(self.return_types.len());
+        let mut return_types = Vec::with_capacity(self.return_types.len());
+        for (return_name, return_type) in self.return_types.iter() {
+            let return_type = infer_schema_type(return_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            return_names.push(return_name.clone());
+            return_types.push(return_type);
+        }
+
+        Ok(pb::Udtf {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            arg_names,
+            arg_types,
+            return_names,
+            return_types,
+            sql: self.sql.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::UserDefinedFunction {
     type PB = pb::UserDefinedFunction;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -294,6 +376,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::UdafScript(udaf_script)) => {
                 mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
+            }
+            Some(pb::user_defined_function::Definition::Udtf(udtf)) => {
+                mt::UDFDefinition::UDTF(mt::UDTF::from_pb(udtf)?)
             }
             None => {
                 return Err(Incompatible::new(
@@ -326,6 +411,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDAFScript(udaf_script) => {
                 pb::user_defined_function::Definition::UdafScript(udaf_script.to_pb()?)
+            }
+            mt::UDFDefinition::UDTF(udtf) => {
+                pb::user_defined_function::Definition::Udtf(udtf.to_pb()?)
             }
         };
 

@@ -71,6 +71,11 @@ pub enum UDFDefinition {
         language: String,
         runtime_version: String,
     },
+    UDTFSql {
+        arg_types: BTreeMap<Identifier, TypeName>,
+        return_types: BTreeMap<Identifier, TypeName>,
+        sql: String,
+    }
 }
 
 impl Display for UDFDefinition {
@@ -175,6 +180,17 @@ impl Display for UDFDefinition {
                     write!(f, ")")?;
                 }
                 write!(f, " ADDRESS = '{address}'")?;
+            }
+            UDFDefinition::UDTFSql {
+                arg_types,
+                return_types,
+                sql
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, arg_types.iter().map(|(name, ty)| format!("{name} {ty}")))?;
+                write!(f, ") RETURNS TABLE (")?;
+                write_comma_separated_list(f, return_types.iter().map(|(name, ty)| format!("{name} {ty}")))?;
+                write!(f, ") AS $$\n{sql}\n$$")?;
             }
             UDFDefinition::UDAFScript {
                 arg_types,

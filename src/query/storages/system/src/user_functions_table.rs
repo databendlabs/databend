@@ -211,6 +211,14 @@ impl UserFunctionsTable {
                             .collect(),
                         immutable: None,
                     },
+                    UDFDefinition::UDTF(x) => UserFunctionArguments {
+                        arg_types: x.arg_types.iter().map(|(name, ty)| format!("{name} {ty}")).collect(),
+                        return_type: Some(x.return_types.iter().map(|(name, ty)| format!("{name} {ty}")).collect(),),
+                        server: None,
+                        parameters: vec![],
+                        states: BTreeMap::new(),
+                        immutable: None,
+                    }
                 },
             })
             .collect())
