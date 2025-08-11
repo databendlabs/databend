@@ -51,7 +51,7 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
     ) -> databend_common_exception::Result<DataBlock> {
-        if self.use_parquet2_to_read_parquet {
+        if self.use_experimental_parquet_reader {
             self.deserialize_v2(
                 block_path,
                 num_rows,
