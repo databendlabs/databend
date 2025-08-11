@@ -101,8 +101,14 @@ impl HttpQueryRequest {
             } else {
                 s.txn_state.clone()
             };
+            let need_sticky = match &s.internal {
+                Some(internal) => internal.has_temp_table,
+                None => false,
+            };
             HttpSessionConf {
                 txn_state,
+                need_sticky,
+                need_keep_alive: need_sticky,
                 ..s.clone()
             }
         });
@@ -217,7 +223,9 @@ pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
-    variables: Vec<(String, String)>,
+    pub variables: Vec<(String, String)>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     pub last_query_result_cache_key: String,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_default")]
@@ -345,6 +353,121 @@ impl HttpSessionConf {
 
         settings.extend(values)
     }
+
+    // Read the session variables in the request, and set them to the current session.
+    // the session variables includes:
+    // - the current catalog
+    // - the current database
+    // - the current role
+    // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
+    // - the session-level query cache.
+    pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
+        let query_id = &http_ctx.query_id;
+        let http_query_manager = HttpQueryManager::instance();
+        if let Some(catalog) = &self.catalog {
+            session.set_current_catalog(catalog.clone());
+        }
+        if let Some(db) = &self.database {
+            session.set_current_database(db.clone());
+        }
+        if let Some(role) = &self.role {
+            session.set_current_role_checked(role).await?;
+        }
+        // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+        session
+            .set_secondary_roles_checked(self.secondary_roles.clone())
+            .await?;
+        // TODO(liyz): pass secondary roles here
+        if let Some(conf_settings) = &self.settings {
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
+        if let Some(state) = &self.internal {
+            if !state.variables.is_empty() {
+                session.set_all_variables(state.get_variables()?)
+            }
+            if let Some(id) = state.last_query_ids.first() {
+                if let Some(last_query) = http_query_manager.queries.get(id) {
+                    let state = *last_query.state.lock();
+                    if !matches!(
+                        state,
+                        HttpQueryState::Removed(RemoveReason::Finished | RemoveReason::Canceled)
+                    ) {
+                        warn!(
+                            "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}",
+                            id, state
+                        );
+                    }
+                }
+                if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
+                    session.update_query_ids_results(
+                        id.to_owned(),
+                        state.last_query_result_cache_key.to_owned(),
+                    );
+                }
+            }
+            let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
+            if state.has_temp_table {
+                if let Some(id) = &state.last_node_id {
+                    if http_query_manager.server_info.id != *id {
+                        if http_ctx.fixed_coordinator_node {
+                            return Err(ErrorCode::SessionLost(
+                                "Temp table lost due to server restart.",
+                            ));
+                        } else {
+                            return Err(ErrorCode::SessionLost(format!(
+                                "Temp table lost due to server restart (at {}) or route error: node_id={} (expected {}); session_id={}, query_id={}, is_sticky_node={}",
+                                http_query_manager.server_info.start_time,
+                                http_query_manager.server_info.id, id, http_ctx.client_session_id.as_deref().unwrap_or("None"),
+                                query_id,
+                                http_ctx.is_sticky_node
+                            )));
+                        }
+                    }
+                } else {
+                    return Err(ErrorCode::InvalidSessionState(
+                        "contains temporary tables but missing last_server_info field".to_string(),
+                    ));
+                }
+                if !has_temp_table {
+                    match &http_ctx.client_session {
+                        None => {
+                            return Err(ErrorCode::InvalidSessionState(
+                                "contains temporary tables but missing session info".to_string(),
+                            ));
+                        }
+                        Some(s) => {
+                            return    Err(ErrorCode::SessionTimeout(format!(
+                                "temporary tables in session {} expired after idle for more than {} seconds, when starting query {}",
+                                s.header.id, ClientSessionManager::instance().max_idle_time.as_secs(), query_id,
+                            )));
+                        }
+                    }
+                }
+            } else if has_temp_table {
+                warn!("[TEMP-TABLE] Found unexpected Temp table.");
+            }
+        }
+        try_set_txn(
+            &http_ctx.query_id,
+            session,
+            &self.txn_state,
+            &self.internal.clone().unwrap_or_default(),
+            &http_query_manager,
+        )?;
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -455,160 +578,17 @@ impl HttpQuery {
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
     ) -> Result<HttpQuery> {
-        let http_query_manager = HttpQueryManager::instance();
-        let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
+        let (session, ctx) = http_ctx
+            .create_session(&req.session, SessionType::HTTPQuery)
+            .await?;
         let query_id = http_ctx.query_id.clone();
-        let session = http_ctx
-            .upgrade_session(SessionType::HTTPQuery)
-            .map_err(|err| {
-                ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
-            })?;
-        if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &http_ctx.user_name, &session);
-        };
-
-        // Read the session variables in the request, and set them to the current session.
-        // the session variables includes:
-        // - the current catalog
-        // - the current database
-        // - the current role
-        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
-        // - the session-level query cache.
-        if let Some(session_conf) = &req.session {
-            if let Some(catalog) = &session_conf.catalog {
-                session.set_current_catalog(catalog.clone());
-            }
-            if let Some(db) = &session_conf.database {
-                session.set_current_database(db.clone());
-            }
-            if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role).await?;
-            }
-            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
-            session
-                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
-                .await?;
-            // TODO(liyz): pass secondary roles here
-            if let Some(conf_settings) = &session_conf.settings {
-                let settings = session.get_settings();
-                for (k, v) in conf_settings {
-                    settings
-                        .set_setting(k.to_string(), v.to_string())
-                        .or_else(|e| {
-                            if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
-                                Ok(())
-                            } else {
-                                Err(e)
-                            }
-                        })?;
-                }
-            }
-            if let Some(state) = &session_conf.internal {
-                if !state.variables.is_empty() {
-                    session.set_all_variables(state.get_variables()?)
-                }
-                if let Some(id) = state.last_query_ids.first() {
-                    if let Some(last_query) = http_query_manager.queries.get(id) {
-                        let state = *last_query.state.lock();
-                        if !matches!(
-                            state,
-                            HttpQueryState::Removed(
-                                RemoveReason::Finished | RemoveReason::Canceled
-                            )
-                        ) {
-                            warn!("[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}", id, state);
-                        }
-                    }
-                    if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
-                        session.update_query_ids_results(
-                            id.to_owned(),
-                            state.last_query_result_cache_key.to_owned(),
-                        );
-                    }
-                }
-                let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
-                if state.has_temp_table {
-                    if let Some(id) = &state.last_node_id {
-                        if http_query_manager.server_info.id != *id {
-                            if http_ctx.fixed_coordinator_node {
-                                return Err(ErrorCode::SessionLost(
-                                    "Temp table lost due to server restart.",
-                                ));
-                            } else {
-                                return Err(ErrorCode::SessionLost(format!(
-                                    "Temp table lost due to server restart (at {}) or route error: node_id={} (expected {}); session_id={}, query_id={}, is_sticky_node={}",
-                                    http_query_manager.server_info.start_time,
-                                    http_query_manager.server_info.id, id, http_ctx.client_session_id.as_deref().unwrap_or("None"),
-                                    query_id,
-                                    http_ctx.is_sticky_node
-                                )));
-                            }
-                        }
-                    } else {
-                        return Err(ErrorCode::InvalidSessionState(
-                            "contains temporary tables but missing last_server_info field"
-                                .to_string(),
-                        ));
-                    }
-                    if !has_temp_table {
-                        match &http_ctx.client_session {
-                            None => {
-                                return Err(ErrorCode::InvalidSessionState(
-                                    "contains temporary tables but missing session info"
-                                        .to_string(),
-                                ));
-                            }
-                            Some(s) => {
-                                return    Err(ErrorCode::SessionTimeout(format!(
-                                    "temporary tables in session {} expired after idle for more than {} seconds, when starting query {}",
-                                  s.header.id, ClientSessionManager::instance().max_idle_time.as_secs(), query_id,
-                                )));
-                            }
-                        }
-                    }
-                } else if has_temp_table {
-                    warn!("[TEMP-TABLE] Found unexpected Temp table.");
-                }
-            }
-            try_set_txn(
-                &http_ctx.query_id,
-                &session,
-                &session_conf.txn_state,
-                &session_conf.internal.clone().unwrap_or_default(),
-                &http_query_manager,
-            )?;
-        };
-
-        let settings = session.get_settings();
-        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let deduplicate_label = &http_ctx.deduplicate_label;
-        let user_agent = &http_ctx.user_agent;
-
-        session.set_client_host(http_ctx.client_host.clone());
-
-        let ctx = session.create_query_context().await?;
-
-        // Deduplicate label is used on the DML queries which may be retried by the client.
-        // It can be used to avoid the duplicated execution of the DML queries.
-        if let Some(label) = deduplicate_label {
-            unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
-            }
-        }
-        if let Some(ua) = user_agent {
-            ctx.set_ua(ua.clone());
-        }
-
-        // TODO: validate the query_id to be uuid format
-        ctx.update_init_query_id(query_id.clone());
-
+        let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let node_id = ctx.get_cluster().local_id.clone();
         let sql = &req.sql;
         info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
-        // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
+        // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
         // and the data in the stage attachment (which is mostly a s3 path) will be inserted into
         // the table.
         if let Some(attachment) = &req.stage_attachment {
@@ -633,6 +613,8 @@ impl HttpQuery {
             }),
         }));
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -748,7 +730,7 @@ impl HttpQuery {
         );
 
         if is_stopped
-            && txn_state != TxnState::AutoCommit
+            && txn_state == TxnState::Active
             && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && self
                 .is_txn_mgr_saved
@@ -764,7 +746,7 @@ impl HttpQuery {
                 .await;
         }
 
-        let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
+        let need_sticky = txn_state == TxnState::Active || has_temp_table;
         let need_keep_alive = need_sticky;
 
         Ok(HttpSessionConf {

@@ -182,6 +182,11 @@ impl Plan {
             Plan::DropDatamaskPolicy(_) => Ok("DropDatamaskPolicy".to_string()),
             Plan::DescDatamaskPolicy(_) => Ok("DescDatamaskPolicy".to_string()),
 
+            // row policy
+            Plan::CreateRowAccessPolicy(_) => Ok("CreateRowAccessPolicy".to_string()),
+            Plan::DropRowAccessPolicy(_) => Ok("DropRowAccessPolicy".to_string()),
+            Plan::DescRowAccessPolicy(_) => Ok("DescRowAccessPolicy".to_string()),
+
             // network policy
             Plan::CreateNetworkPolicy(_) => Ok("CreateNetworkPolicy".to_string()),
             Plan::AlterNetworkPolicy(_) => Ok("AlterNetworkPolicy".to_string()),

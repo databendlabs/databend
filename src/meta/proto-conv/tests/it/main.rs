@@ -132,3 +132,4 @@ mod v137_add_grant_object_connection;
 mod v138_table_statistics;
 mod v139_add_grant_ownership_object_sequence;
 mod v140_task_message;
+mod v141_row_access_policy;

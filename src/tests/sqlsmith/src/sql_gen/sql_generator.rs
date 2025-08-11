@@ -90,8 +90,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 || name == "like"
                 || name == "regexp"
                 || name == "rlike"
-                || name == "ai_embedding_vector"
-                || name == "ai_text_completion"
             {
                 continue;
             }

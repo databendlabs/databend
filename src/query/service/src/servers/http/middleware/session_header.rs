@@ -16,8 +16,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use base64::engine::general_purpose::URL_SAFE;
-use base64::Engine as _;
 use databend_common_base::headers::HEADER_SESSION;
 use databend_common_base::headers::HEADER_SESSION_ID;
 use databend_common_meta_app::tenant::Tenant;
@@ -34,6 +32,8 @@ use serde::Deserializer;
 use serde::Serializer;
 use uuid::Uuid;
 
+use crate::servers::http::middleware::json_header::decode_json_header;
+use crate::servers::http::middleware::json_header::encode_json_header;
 use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::unix_ts;
 use crate::servers::http::v1::ClientSessionManager;
@@ -72,8 +72,7 @@ pub struct ClientSessionHeader {
 
 impl ClientSessionHeader {
     fn encode(&self) -> String {
-        let s = serde_json::to_string(&self).unwrap();
-        URL_SAFE.encode(&s)
+        encode_json_header(self)
     }
 }
 
@@ -125,18 +124,7 @@ impl ClientSession {
                 // note that curl -H "X-xx:" not work
                 Self::new_session(false)
             } else {
-                let json = URL_SAFE.decode(&v).map_err(|e| {
-                    format!(
-                        "Invalid value {} for X-DATABEND-SESSION, base64 decode error: {}",
-                        v, e
-                    )
-                })?;
-                let header = serde_json::from_slice(&json).map_err(|e| {
-                    format!(
-                        "Invalid value {} for X-DATABEND-SESSION, JSON decode error: {}",
-                        v, e
-                    )
-                })?;
+                let header = decode_json_header(HEADER_SESSION, v.as_str())?;
                 Self::old_session(false, header)
             };
             Ok(Some(s))

@@ -1850,38 +1850,6 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub disable_system_table_load: bool,
 
-    /// chat base url.
-    #[clap(
-        long,
-        value_name = "VALUE",
-        default_value = "https://api.openai.com/v1/"
-    )]
-    pub openai_api_chat_base_url: String,
-
-    /// embedding base url.
-    #[clap(
-        long,
-        value_name = "VALUE",
-        default_value = "https://api.openai.com/v1/"
-    )]
-    pub openai_api_embedding_base_url: String,
-
-    // This will not show in system.configs, put it to mask.rs.
-    #[clap(long, value_name = "VALUE", default_value = "")]
-    pub openai_api_key: String,
-
-    // For azure openai.
-    #[clap(long, value_name = "VALUE", default_value = "")]
-    pub openai_api_version: String,
-
-    /// https://platform.openai.com/docs/models/embeddings
-    #[clap(long, value_name = "VALUE", default_value = "text-embedding-ada-002")]
-    pub openai_api_embedding_model: String,
-
-    /// https://platform.openai.com/docs/guides/chat
-    #[clap(long, value_name = "VALUE", default_value = "gpt-3.5-turbo")]
-    pub openai_api_completion_model: String,
-
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
@@ -2008,12 +1976,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
-            openai_api_chat_base_url: self.openai_api_chat_base_url,
-            openai_api_embedding_base_url: self.openai_api_embedding_base_url,
-            openai_api_key: self.openai_api_key,
-            openai_api_completion_model: self.openai_api_completion_model,
-            openai_api_embedding_model: self.openai_api_embedding_model,
-            openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             enable_udf_python_script: self.enable_udf_python_script,
             enable_udf_js_script: self.enable_udf_js_script,
@@ -2031,6 +1993,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .collect(),
             resources_management: self.resources_management,
             enable_queries_executor: self.enable_queries_executor,
+            check_connection_before_schedule: true,
         })
     }
 }
@@ -2121,12 +2084,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_data_bytes: None,
             //
             disable_system_table_load: inner.disable_system_table_load,
-            openai_api_chat_base_url: inner.openai_api_chat_base_url,
-            openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
-            openai_api_key: inner.openai_api_key,
-            openai_api_version: inner.openai_api_version,
-            openai_api_completion_model: inner.openai_api_completion_model,
-            openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_python_script: inner.enable_udf_python_script,
             enable_udf_js_script: inner.enable_udf_js_script,
             enable_udf_wasm_script: inner.enable_udf_wasm_script,

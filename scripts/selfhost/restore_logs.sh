@@ -42,6 +42,10 @@ INTERACTIVE CONTROLS:
     Enter            Select file
     q                Quit
 
+NOTE:
+    If a local backup file already exists, it will be used instead of downloading.
+    To use a fresh copy, delete the local file first.
+
 EXAMPLES:
     export BENDSQL_DSN="http://username:password@localhost:8000/database"
     
@@ -50,6 +54,9 @@ EXAMPLES:
     
     # Quick: Restore specific date
     $0 --stage my_backup_stage 20250109
+    
+    # To use fresh copy, delete local file first
+    rm data_2025-01-09.tar.gz && $0 --stage my_backup_stage 20250109
 EOF
 }
 
@@ -298,29 +305,45 @@ else
 	log "Source stage: @${STAGE}, Target file: ${TAR_FILE}"
 fi
 
-# Step 1: Generate download URL
-log_step "1" "6" "Generating presigned download URL for @${STAGE}/${TAR_FILE}"
-DOWNLOAD_SQL="PRESIGN DOWNLOAD @${STAGE}/${TAR_FILE}"
-DOWNLOAD_URL=$(bendsql --dsn "${DSN}" --query="${DOWNLOAD_SQL}" | awk '{print $3}')
-
-if [[ -z "$DOWNLOAD_URL" ]]; then
-	log_error "Failed to generate download URL for ${TAR_FILE}"
-	exit 1
-fi
-log "Download URL generated successfully"
-
-# Step 2: Download backup
-log_step "2" "6" "Downloading ${TAR_FILE} from stage @${STAGE}"
+# Check if local file exists
 LOCAL_TAR_FILE=$(basename "$TAR_FILE")
-curl -s -o "${LOCAL_TAR_FILE}" "${DOWNLOAD_URL}"
+USE_LOCAL_FILE=false
 
-if [[ ! -f "${LOCAL_TAR_FILE}" ]]; then
-	log_error "Failed to download ${TAR_FILE}"
-	exit 1
+if [[ -f "${LOCAL_TAR_FILE}" && -s "${LOCAL_TAR_FILE}" ]]; then
+	FILE_SIZE=$(du -h "${LOCAL_TAR_FILE}" | cut -f1)
+	log "Local file ${LOCAL_TAR_FILE} exists (${FILE_SIZE}) - using local copy"
+	USE_LOCAL_FILE=true
 fi
 
-FILE_SIZE=$(du -h "${LOCAL_TAR_FILE}" | cut -f1)
-log "Downloaded ${TAR_FILE} successfully (${FILE_SIZE})"
+# Step 1 & 2: Download or use local file
+if [[ "$USE_LOCAL_FILE" = true ]]; then
+	log_step "1" "6" "Using existing local file: ${LOCAL_TAR_FILE}"
+	FILE_SIZE=$(du -h "${LOCAL_TAR_FILE}" | cut -f1)
+	log "Using local file ${LOCAL_TAR_FILE} (${FILE_SIZE})"
+else
+	# Step 1: Generate download URL
+	log_step "1" "6" "Generating presigned download URL for @${STAGE}/${TAR_FILE}"
+	DOWNLOAD_SQL="PRESIGN DOWNLOAD @${STAGE}/${TAR_FILE}"
+	DOWNLOAD_URL=$(bendsql --dsn "${DSN}" --query="${DOWNLOAD_SQL}" | awk '{print $3}')
+
+	if [[ -z "$DOWNLOAD_URL" ]]; then
+		log_error "Failed to generate download URL for ${TAR_FILE}"
+		exit 1
+	fi
+	log "Download URL generated successfully"
+
+	# Step 2: Download backup
+	log_step "2" "6" "Downloading ${TAR_FILE} from stage @${STAGE}"
+	curl -s -o "${LOCAL_TAR_FILE}" "${DOWNLOAD_URL}"
+
+	if [[ ! -f "${LOCAL_TAR_FILE}" ]]; then
+		log_error "Failed to download ${TAR_FILE}"
+		exit 1
+	fi
+
+	FILE_SIZE=$(du -h "${LOCAL_TAR_FILE}" | cut -f1)
+	log "Downloaded ${TAR_FILE} successfully (${FILE_SIZE})"
+fi
 
 # Step 3: Extract archive
 log_step "3" "6" "Extracting ${LOCAL_TAR_FILE} to temporary directory"
@@ -396,9 +419,10 @@ done
 echo # New line after progress
 log "Upload completed: ${UPLOAD_SUCCESS} successful, ${UPLOAD_FAILED} failed"
 
-# Cleanup
-log "Cleaning up: removing ${TEMP_DIR} and ${LOCAL_TAR_FILE}"
-rm -rf "${TEMP_DIR}" "${LOCAL_TAR_FILE}"
+# Cleanup temporary directory (keep local tar file for reuse)
+log "Cleaning up: removing temporary directory ${TEMP_DIR}"
+rm -rf "${TEMP_DIR}"
+log "Local file ${LOCAL_TAR_FILE} retained for future use"
 
 # Step 6: Restore database
 RESTORE_DATABASE="${STAGE}_${YEAR}_${MONTH}_${DAY}"

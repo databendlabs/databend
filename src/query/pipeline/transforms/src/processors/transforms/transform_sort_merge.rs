@@ -82,9 +82,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
 
     fn add_block(&mut self, block: DataBlock, init_rows: R) -> Result<()> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         if unlikely(block.is_empty()) {
@@ -177,9 +175,7 @@ impl<R: Rows> TransformSortMerge<R> {
 
         while let Some(block) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
+                return Err(ErrorCode::aborting());
             }
             result.push(block);
         }

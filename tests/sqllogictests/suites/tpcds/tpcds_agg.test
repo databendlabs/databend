@@ -1,0 +1,13 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+statement ok
+set group_by_shuffle_mode = 'before_partial';
+
+include ./Q5
+
+statement ok
+UNSET group_by_shuffle_mode;

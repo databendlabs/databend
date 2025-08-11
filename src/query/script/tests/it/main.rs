@@ -166,8 +166,8 @@ fn test_script() {
         r#"
             LET x RESULTSET := SELECT * FROM numbers(3);
             LET sum := 0;
-            FOR row IN x DO
-                sum := sum + row.number;
+            FOR r IN x DO
+                sum := sum + r.number;
             END FOR;
             RETURN sum;
         "#,
@@ -176,8 +176,8 @@ fn test_script() {
         file,
         r#"
             LET sum := 0;
-            FOR row IN SELECT * FROM numbers(3) DO
-                sum := sum + row.number;
+            FOR r IN SELECT * FROM numbers(3) DO
+                sum := sum + r.number;
             END FOR;
             RETURN sum;
         "#,
@@ -387,7 +387,7 @@ fn test_script_error() {
         file,
         r#"
             LET x := 1;
-            FOR row IN x DO
+            FOR r IN x DO
                 BREAK;
             END FOR;
         "#,

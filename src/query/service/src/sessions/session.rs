@@ -136,9 +136,7 @@ impl Session {
     }
 
     pub fn force_kill_session(&self) {
-        self.force_kill_query(ErrorCode::AbortedQuery(
-            "Aborted query, because the server is shutting down or the query was killed",
-        ));
+        self.force_kill_query(ErrorCode::aborting());
         self.kill(/* shutdown io stream */);
     }
 

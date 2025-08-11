@@ -167,7 +167,7 @@ impl TxnManager {
 
     pub fn set_fail(&mut self) {
         if let TxnState::Active = self.state {
-            self.state = TxnState::Fail;
+            self.force_set_fail()
         }
     }
 
@@ -177,6 +177,8 @@ impl TxnManager {
 
     pub fn force_set_fail(&mut self) {
         self.state = TxnState::Fail;
+        self.txn_buffer.clear();
+        // keep the txn_id until commit/abort for tracing
     }
 
     pub fn is_fail(&self) -> bool {

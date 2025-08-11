@@ -649,7 +649,6 @@ fn build_mutation_row_fetch(
         has_inner_column,
         true,
         true,
-        false,
     );
 
     RowFetch {

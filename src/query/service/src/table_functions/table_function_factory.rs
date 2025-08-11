@@ -63,7 +63,6 @@ use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::system::TableStatisticsFunc;
-use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
@@ -271,11 +270,6 @@ impl TableFunctionFactory {
         creators.insert(
             "range".to_string(),
             (next_id(), Arc::new(RangeTable::create)),
-        );
-
-        creators.insert(
-            "ai_to_sql".to_string(),
-            (next_id(), Arc::new(GPT2SQLTable::create)),
         );
 
         creators.insert(

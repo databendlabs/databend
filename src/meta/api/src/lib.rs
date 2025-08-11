@@ -36,10 +36,13 @@ pub mod txn_backoff;
 pub mod util;
 
 pub mod crud;
+mod row_access_policy_api;
+mod row_access_policy_api_impl;
 mod sequence_api_impl;
 pub(crate) mod sequence_nextval_impl;
 
 pub use data_mask_api::DatamaskApi;
+pub use row_access_policy_api::RowAccessPolicyApi;
 pub use schema_api::SchemaApi;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use sequence_api::SequenceApi;

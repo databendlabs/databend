@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod ai_to_sql;
+pub mod row_access_policy_handler;
 
-pub use ai_to_sql::GPT2SQLTable;
+pub use row_access_policy_handler::get_row_access_policy_handler;
+pub use row_access_policy_handler::RowAccessPolicyHandler;
+pub use row_access_policy_handler::RowAccessPolicyHandlerWrapper;
