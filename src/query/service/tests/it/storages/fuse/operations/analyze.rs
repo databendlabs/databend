@@ -100,23 +100,37 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;
 
-    // optimize statistics three times
-    for i in 0..3 {
-        analyze_table(&fixture).await?;
-        check_data_dir(
-            &fixture,
-            case_name,
-            3 + i,
-            1 + i,
-            2,
-            2,
-            2,
-            2,
-            Some(()),
-            None,
-        )
-        .await?;
-    }
+    analyze_table(&fixture).await?;
+    check_data_dir(
+        &fixture,
+        case_name,
+        3,
+        1,
+        2,
+        2,
+        2,
+        2,
+        Some(()),
+        None,
+    )
+    .await?;
+
+    
+    append_sample_data(1, &fixture).await?;
+    analyze_table(&fixture).await?;
+    check_data_dir(
+        &fixture,
+        case_name,
+        5,
+        2,
+        3,
+        3,
+        3,
+        2,
+        Some(()),
+        None,
+    )
+    .await?;
 
     // Purge will keep at least two snapshots.
     let table = fixture.latest_default_table().await?;
@@ -126,7 +140,7 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     fuse_table
         .do_purge(&table_ctx, snapshot_files, None, true, false)
         .await?;
-    check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, 1, Some(()), Some(())).await?;
+    check_data_dir(&fixture, case_name, 1, 1, 2, 2, 2, 1, Some(()), Some(())).await?;
 
     Ok(())
 }
