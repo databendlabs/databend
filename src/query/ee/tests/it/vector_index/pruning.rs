@@ -17,23 +17,31 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::VectorColumn;
 use databend_common_expression::types::VectorDataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnRef;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
@@ -675,51 +683,295 @@ async fn test_block_pruner() -> Result<()> {
     ];
 
     let results = vec![
+        // First query: cosine_distance with query_values1
         vec![
             vec![
-                (0, 0, 0, 0.005022526),
-                (0, 0, 9, 0.05992174),
-                (0, 0, 1, 0.09289217),
+                VectorScoreResult::new(0, 0, 0, 0.005022526),
+                VectorScoreResult::new(0, 0, 9, 0.05992174),
+                VectorScoreResult::new(0, 0, 1, 0.09289217),
             ],
-            vec![(1, 0, 9, 0.05186367), (1, 0, 5, 0.07403374)],
+            vec![
+                VectorScoreResult::new(1, 0, 9, 0.05186367),
+                VectorScoreResult::new(1, 0, 5, 0.07403374),
+            ],
         ],
+        // Second query: l1_distance with query_values1
         vec![
-            vec![(0, 0, 0, 0.0), (0, 0, 9, 0.84269863), (0, 0, 1, 1.0792456)],
-            vec![(0, 4, 2, 0.9375271)],
-            vec![(1, 0, 9, 0.7167929)],
+            vec![
+                VectorScoreResult::new(0, 0, 0, 0.0),
+                VectorScoreResult::new(0, 0, 9, 0.84269863),
+                VectorScoreResult::new(0, 0, 1, 1.0792456),
+            ],
+            vec![VectorScoreResult::new(0, 4, 2, 0.9375271)],
+            vec![VectorScoreResult::new(1, 0, 9, 0.7167929)],
         ],
-        vec![vec![(0, 0, 0, 3.5187712), (0, 0, 9, 3.5518785)], vec![
-            (1, 3, 6, 3.4702706),
-            (1, 3, 7, 3.5206928),
-            (1, 3, 1, 3.556445),
-        ]],
+        // Third query: l2_distance with query_values1
         vec![
-            vec![(0, 1, 6, 0.18258381)],
-            vec![(0, 3, 8, 0.15948296)],
-            vec![(1, 1, 8, 0.008677483), (1, 1, 7, 0.21170044)],
-            vec![(1, 4, 8, 0.0657177)],
+            vec![
+                VectorScoreResult::new(0, 0, 0, 3.5187712),
+                VectorScoreResult::new(0, 0, 9, 3.5518785),
+            ],
+            vec![
+                VectorScoreResult::new(1, 3, 6, 3.4702706),
+                VectorScoreResult::new(1, 3, 7, 3.5206928),
+                VectorScoreResult::new(1, 3, 1, 3.556445),
+            ],
         ],
+        // Fourth query: cosine_distance with query_values2
         vec![
-            vec![(0, 1, 6, 0.7965471)],
-            vec![(0, 2, 7, 1.3045802)],
-            vec![(1, 1, 8, 0.0)],
-            vec![(1, 4, 8, 0.8538904), (1, 4, 7, 1.021619)],
+            vec![VectorScoreResult::new(0, 1, 6, 0.18258381)],
+            vec![VectorScoreResult::new(0, 3, 8, 0.15948296)],
+            vec![
+                VectorScoreResult::new(1, 1, 8, 0.008677483),
+                VectorScoreResult::new(1, 1, 7, 0.21170044),
+            ],
+            vec![VectorScoreResult::new(1, 4, 8, 0.0657177)],
         ],
-        vec![vec![(1, 1, 8, 3.4763064)], vec![
-            (1, 3, 5, 3.4903116),
-            (1, 3, 9, 3.4926815),
-            (1, 3, 0, 3.527872),
-            (1, 3, 8, 3.560473),
+        // Fifth query: l1_distance with query_values2
+        vec![
+            vec![VectorScoreResult::new(0, 1, 6, 0.7965471)],
+            vec![VectorScoreResult::new(0, 2, 7, 1.3045802)],
+            vec![VectorScoreResult::new(1, 1, 8, 0.0)],
+            vec![
+                VectorScoreResult::new(1, 4, 8, 0.8538904),
+                VectorScoreResult::new(1, 4, 7, 1.021619),
+            ],
+        ],
+        // Sixth query: l2_distance with query_values2
+        vec![vec![VectorScoreResult::new(1, 1, 8, 3.4763064)], vec![
+            VectorScoreResult::new(1, 3, 5, 3.4903116),
+            VectorScoreResult::new(1, 3, 9, 3.4926815),
+            VectorScoreResult::new(1, 3, 0, 3.527872),
+            VectorScoreResult::new(1, 3, 8, 3.560473),
         ]],
     ];
 
     let mut extras = Vec::new();
-    for ((func_name, query_values), result) in query_values.into_iter().zip(results.into_iter()) {
+    for ((func_name, query_values), result) in
+        query_values.clone().into_iter().zip(results.into_iter())
+    {
         let mut vector_index = vector_index.clone();
         vector_index.func_name = func_name;
         vector_index.query_values = query_values;
         let extra = PushDownInfo {
             limit: Some(5),
+            order_by: vec![(orderby_expr.clone(), true, false)],
+            vector_index: Some(vector_index),
+            ..Default::default()
+        };
+        extras.push((Some(extra), result));
+    }
+
+    // Add a filter to test filter pushdown
+    let filter_arg0_expr = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "_vector_score".to_string(),
+        data_type: DataType::Number(NumberDataType::Float32),
+        display_name: "_vector_score".to_string(),
+    });
+    let filter_arg1_expr = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::Float32(F32::from(2.0))),
+        data_type: DataType::Number(NumberDataType::Float32),
+    });
+    let filter = check_function(
+        None,
+        "gt",
+        &[],
+        &[filter_arg0_expr, filter_arg1_expr],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    let inverted_filter = check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+    let filters = Filters {
+        filter: filter.as_remote_expr(),
+        inverted_filter: inverted_filter.as_remote_expr(),
+    };
+
+    let filter_results = vec![
+        // First query: cosine_distance with filter and query_values1
+        vec![],
+        // Second query: l1_distance with filter and query_values1
+        vec![
+            vec![
+                VectorScoreResult::new(0, 0, 0, 0.0),
+                VectorScoreResult::new(0, 0, 1, 1.0792456),
+                VectorScoreResult::new(0, 0, 2, 3.7108307),
+                VectorScoreResult::new(0, 0, 3, 3.2820892),
+                VectorScoreResult::new(0, 0, 4, 2.6611536),
+                VectorScoreResult::new(0, 0, 5, 2.0845702),
+                VectorScoreResult::new(0, 0, 6, 3.6664782),
+                VectorScoreResult::new(0, 0, 7, 3.6369097),
+                VectorScoreResult::new(0, 0, 8, 4.361335),
+                VectorScoreResult::new(0, 0, 9, 0.84269863),
+            ],
+            vec![
+                VectorScoreResult::new(0, 1, 0, 1.9089664),
+                VectorScoreResult::new(0, 1, 1, 1.6205615),
+                VectorScoreResult::new(0, 1, 2, 2.6231122),
+                VectorScoreResult::new(0, 1, 3, 2.375908),
+                VectorScoreResult::new(0, 1, 4, 2.8565829),
+                VectorScoreResult::new(0, 1, 5, 3.26859),
+                VectorScoreResult::new(0, 1, 6, 2.3896415),
+                VectorScoreResult::new(0, 1, 7, 2.11497),
+                VectorScoreResult::new(0, 1, 8, 3.1175208),
+                VectorScoreResult::new(0, 1, 9, 1.9913678),
+            ],
+            vec![
+                VectorScoreResult::new(0, 2, 0, 1.5041043),
+                VectorScoreResult::new(0, 2, 1, 3.1616886),
+                VectorScoreResult::new(0, 2, 2, 2.0873284),
+                VectorScoreResult::new(0, 2, 3, 4.6504445),
+                VectorScoreResult::new(0, 2, 4, 1.6268883),
+                VectorScoreResult::new(0, 2, 5, 1.9338483),
+                VectorScoreResult::new(0, 2, 6, 5.4485407),
+                VectorScoreResult::new(0, 2, 7, 3.7449126),
+                VectorScoreResult::new(0, 2, 8, 2.3789403),
+                VectorScoreResult::new(0, 2, 9, 2.5017245),
+            ],
+            vec![
+                VectorScoreResult::new(0, 3, 0, 2.1560328),
+                VectorScoreResult::new(0, 3, 1, 3.256665),
+                VectorScoreResult::new(0, 3, 2, 2.0957243),
+                VectorScoreResult::new(0, 3, 3, 1.5981783),
+                VectorScoreResult::new(0, 3, 4, 3.4074366),
+                VectorScoreResult::new(0, 3, 5, 1.9751071),
+                VectorScoreResult::new(0, 3, 6, 3.151125),
+                VectorScoreResult::new(0, 3, 7, 3.0908165),
+                VectorScoreResult::new(0, 3, 8, 3.543131),
+                VectorScoreResult::new(0, 3, 9, 1.3117124),
+            ],
+            vec![
+                VectorScoreResult::new(1, 0, 0, 2.1198769),
+                VectorScoreResult::new(1, 0, 1, 4.0567427),
+                VectorScoreResult::new(1, 0, 2, 2.8214188),
+                VectorScoreResult::new(1, 0, 3, 4.499019),
+                VectorScoreResult::new(1, 0, 4, 2.4858987),
+                VectorScoreResult::new(1, 0, 5, 1.1590694),
+                VectorScoreResult::new(1, 0, 6, 3.8737319),
+                VectorScoreResult::new(1, 0, 7, 2.074124),
+                VectorScoreResult::new(1, 0, 8, 4.8192883),
+                VectorScoreResult::new(1, 0, 9, 0.7167929),
+            ],
+        ],
+        // Third query: l2_distance with filter and query_values1
+        vec![
+            vec![
+                VectorScoreResult::new(0, 0, 0, 3.5187712),
+                VectorScoreResult::new(0, 0, 1, 3.5688834),
+                VectorScoreResult::new(0, 0, 2, 4.158467),
+                VectorScoreResult::new(0, 0, 3, 3.8972623),
+                VectorScoreResult::new(0, 0, 4, 3.9402654),
+                VectorScoreResult::new(0, 0, 5, 3.8295133),
+                VectorScoreResult::new(0, 0, 6, 4.16049),
+                VectorScoreResult::new(0, 0, 7, 4.1032534),
+                VectorScoreResult::new(0, 0, 8, 4.2184787),
+                VectorScoreResult::new(0, 0, 9, 3.5518785),
+            ],
+            vec![
+                VectorScoreResult::new(1, 3, 0, 3.9212408),
+                VectorScoreResult::new(1, 3, 1, 3.556445),
+                VectorScoreResult::new(1, 3, 2, 3.7241573),
+                VectorScoreResult::new(1, 3, 3, 4.1835504),
+                VectorScoreResult::new(1, 3, 4, 3.6078227),
+                VectorScoreResult::new(1, 3, 5, 3.5779395),
+                VectorScoreResult::new(1, 3, 6, 3.4702706),
+                VectorScoreResult::new(1, 3, 7, 3.5206928),
+                VectorScoreResult::new(1, 3, 8, 3.8251386),
+                VectorScoreResult::new(1, 3, 9, 3.616931),
+            ],
+        ],
+        // Fourth query: cosine_distance with filter and query_values2
+        vec![],
+        // Fifth query: l1_distance with filter and query_values2
+        vec![
+            vec![
+                VectorScoreResult::new(0, 2, 0, 2.2254603),
+                VectorScoreResult::new(0, 2, 1, 2.8700764),
+                VectorScoreResult::new(0, 2, 2, 2.9007723),
+                VectorScoreResult::new(0, 2, 3, 2.1487203),
+                VectorScoreResult::new(0, 2, 4, 1.3966682),
+                VectorScoreResult::new(0, 2, 5, 3.1463404),
+                VectorScoreResult::new(0, 2, 6, 2.9468164),
+                VectorScoreResult::new(0, 2, 7, 1.3045802),
+                VectorScoreResult::new(0, 2, 8, 2.0566323),
+                VectorScoreResult::new(0, 2, 9, 1.9645443),
+            ],
+            vec![
+                VectorScoreResult::new(0, 4, 0, 3.383887),
+                VectorScoreResult::new(0, 4, 1, 2.329169),
+                VectorScoreResult::new(0, 4, 2, 2.7686348),
+                VectorScoreResult::new(0, 4, 3, 3.0909097),
+                VectorScoreResult::new(0, 4, 4, 2.2852223),
+                VectorScoreResult::new(0, 4, 5, 3.3545892),
+                VectorScoreResult::new(0, 4, 6, 2.9151235),
+                VectorScoreResult::new(0, 4, 7, 1.7139168),
+                VectorScoreResult::new(0, 4, 8, 2.0068939),
+                VectorScoreResult::new(0, 4, 9, 3.0762608),
+            ],
+            vec![
+                VectorScoreResult::new(1, 0, 0, 2.0131204),
+                VectorScoreResult::new(1, 0, 1, 4.071994),
+                VectorScoreResult::new(1, 0, 2, 2.8366697),
+                VectorScoreResult::new(1, 0, 3, 2.3181388),
+                VectorScoreResult::new(1, 0, 4, 1.921615),
+                VectorScoreResult::new(1, 0, 5, 3.4619572),
+                VectorScoreResult::new(1, 0, 6, 3.0959353),
+                VectorScoreResult::new(1, 0, 7, 2.3943932),
+                VectorScoreResult::new(1, 0, 8, 2.9434261),
+                VectorScoreResult::new(1, 0, 9, 2.3486407),
+            ],
+            vec![
+                VectorScoreResult::new(1, 3, 0, 2.011335),
+                VectorScoreResult::new(1, 3, 1, 2.4690871),
+                VectorScoreResult::new(1, 3, 2, 2.5800574),
+                VectorScoreResult::new(1, 3, 3, 2.5523148),
+                VectorScoreResult::new(1, 3, 4, 3.5649178),
+                VectorScoreResult::new(1, 3, 5, 2.1223052),
+                VectorScoreResult::new(1, 3, 6, 3.25975),
+                VectorScoreResult::new(1, 3, 7, 1.9281074),
+                VectorScoreResult::new(1, 3, 8, 2.4968297),
+                VectorScoreResult::new(1, 3, 9, 2.011335),
+            ],
+        ],
+        // Sixth query: l2_distance with filter and query_values2
+        vec![
+            vec![
+                VectorScoreResult::new(1, 1, 0, 3.819309),
+                VectorScoreResult::new(1, 1, 1, 3.8105543),
+                VectorScoreResult::new(1, 1, 2, 3.8291273),
+                VectorScoreResult::new(1, 1, 3, 3.7389958),
+                VectorScoreResult::new(1, 1, 4, 3.5913217),
+                VectorScoreResult::new(1, 1, 5, 3.870244),
+                VectorScoreResult::new(1, 1, 6, 3.7941854),
+                VectorScoreResult::new(1, 1, 7, 3.585766),
+                VectorScoreResult::new(1, 1, 8, 3.4763064),
+                VectorScoreResult::new(1, 1, 9, 3.709784),
+            ],
+            vec![
+                VectorScoreResult::new(1, 3, 0, 3.527872),
+                VectorScoreResult::new(1, 3, 1, 3.5928586),
+                VectorScoreResult::new(1, 3, 2, 3.5736349),
+                VectorScoreResult::new(1, 3, 3, 3.6239994),
+                VectorScoreResult::new(1, 3, 4, 3.8320742),
+                VectorScoreResult::new(1, 3, 5, 3.4903116),
+                VectorScoreResult::new(1, 3, 6, 3.70468),
+                VectorScoreResult::new(1, 3, 7, 3.586185),
+                VectorScoreResult::new(1, 3, 8, 3.560473),
+                VectorScoreResult::new(1, 3, 9, 3.4926815),
+            ],
+        ],
+    ];
+
+    for ((func_name, query_values), result) in
+        query_values.into_iter().zip(filter_results.into_iter())
+    {
+        let mut vector_index = vector_index.clone();
+        vector_index.func_name = func_name;
+        vector_index.query_values = query_values;
+        let extra = PushDownInfo {
+            limit: Some(5),
+            filters: Some(filters.clone()),
             order_by: vec![(orderby_expr.clone(), true, false)],
             vector_index: Some(vector_index),
             ..Default::default()
@@ -737,6 +989,7 @@ async fn test_block_pruner() -> Result<()> {
             fuse_table.bloom_index_cols(),
         )
         .await?;
+
         assert_eq!(block_metas.len(), expected_results.len());
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
@@ -745,13 +998,32 @@ async fn test_block_pruner() -> Result<()> {
             let vector_scores = block_meta_index.vector_scores.clone().unwrap();
             assert_eq!(vector_scores.len(), expected_scores.len());
             for (vector_score, expected_score) in vector_scores.iter().zip(expected_scores) {
-                assert_eq!(block_meta_index.segment_idx, expected_score.0);
-                assert_eq!(block_meta_index.block_idx, expected_score.1);
-                assert_eq!(vector_score.0, expected_score.2);
-                assert_eq!(vector_score.1, expected_score.3);
+                assert_eq!(block_meta_index.segment_idx, expected_score.segment_idx);
+                assert_eq!(block_meta_index.block_idx, expected_score.block_idx);
+                assert_eq!(vector_score.0, expected_score.vector_idx);
+                assert_eq!(vector_score.1, expected_score.score);
             }
         }
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct VectorScoreResult {
+    segment_idx: usize,
+    block_idx: usize,
+    vector_idx: usize,
+    score: f32,
+}
+
+impl VectorScoreResult {
+    fn new(segment_idx: usize, block_idx: usize, vector_idx: usize, score: f32) -> Self {
+        Self {
+            segment_idx,
+            block_idx,
+            vector_idx,
+            score,
+        }
+    }
 }

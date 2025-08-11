@@ -4915,6 +4915,7 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
  "databend-common-io",
  "databend-common-license",
  "databend-common-management",
