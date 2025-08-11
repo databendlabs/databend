@@ -177,6 +177,10 @@ impl Optimizer for CTEFilterPushdownOptimizer {
 
         self.collect_filters(s_expr)?;
 
+        if self.cte_filters.iter().all(|(_, v)| v.is_none()) {
+            return Ok(s_expr.clone());
+        }
+
         let expr_with_filters = self.add_filters_to_ctes(s_expr)?;
 
         let expr_with_pulled_up_filters = self
