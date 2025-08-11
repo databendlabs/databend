@@ -167,8 +167,6 @@ impl IPhysicalPlan for ColumnMutation {
                     self.input_num_columns,
                 )
             });
-
-            return Ok(());
         }
 
         let table = builder
