@@ -120,6 +120,7 @@ impl VectorIndexPruner {
             query_values,
         );
 
+        // If the filter only has the vector score column, we can filter the scores.
         let filter_expr = if let Some(filters) = &filters {
             let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             let column_refs = filter.column_refs();
@@ -134,6 +135,8 @@ impl VectorIndexPruner {
         };
 
         let mut vector_topn_param = None;
+        // If the first sort expr is the vector score column and has the limit value,
+        // we can do vector TopN prune to filter out the blocks.
         if !sort.is_empty() && limit.is_some() {
             let (sort_expr, asc, _nulls_first) = &sort[0];
             if let RemoteExpr::ColumnRef { id, .. } = sort_expr {
@@ -176,16 +179,16 @@ impl VectorIndexPruner {
                     .pruning_stats
                     .set_blocks_vector_index_pruning_before(metas.len() as u64);
             }
-            let pruned_metas = if param.has_filter && param.asc {
-                self.vector_index_topn_prune(param.limit, metas).await?
+            // If there are no filter conditions and sort is in ascending order,
+            // we can use the HNSW index to get the results.
+            // Otherwise, we need to calculate all the scores and then filter them
+            // by conditions or sort them in descending order to get the results.
+            let pruned_metas = if !param.has_filter && param.asc {
+                self.vector_index_hnsw_topn_prune(param.limit, metas)
+                    .await?
             } else {
-                self.vector_index_filter_topn_prune(
-                    &param.filter_expr,
-                    param.asc,
-                    param.limit,
-                    metas,
-                )
-                .await?
+                self.vector_index_topn_prune(&param.filter_expr, param.asc, param.limit, metas)
+                    .await?
             };
 
             let elapsed = start.elapsed().as_millis() as u64;
@@ -199,33 +202,34 @@ impl VectorIndexPruner {
                     .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
                 metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
             }
-            info!("[FUSE-PRUNER] Vector index topn prune elapsed: {elapsed}");
+            if !param.has_filter && param.asc {
+                info!("[FUSE-PRUNER] Vector index hnsw topn prune elapsed: {elapsed}");
+            } else {
+                info!("[FUSE-PRUNER] Vector index calculate score topn prune elapsed: {elapsed}");
+            }
 
             return Ok(pruned_metas);
         }
 
-        // fallback
-        self.vector_index_prune(metas).await
+        // Unable to do prune, fallback to only calculating the score
+        self.vector_index_scores(metas).await
     }
 
-    async fn vector_index_topn_prune(
+    async fn vector_index_hnsw_topn_prune(
         &self,
         limit: usize,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let results = self
-            .process_vector_pruning_tasks(
-                metas,
-                "vector topn pruning failure",
-                move |vector_reader, row_count, location| {
-                    let limit = limit;
-                    async move { vector_reader.prune(limit, row_count, &location).await }
-                },
-            )
+            .process_vector_pruning_tasks(metas, move |vector_reader, row_count, location| {
+                let limit = limit;
+                async move { vector_reader.prune(limit, row_count, &location).await }
+            })
             .await?;
 
         let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        let mut vector_prune_result_map = HashMap::with_capacity(results.len());
+        let len = results.len();
+        let mut vector_prune_result_map = HashMap::with_capacity(len);
         for vector_prune_result in results {
             for vector_score in &vector_prune_result.scores {
                 top_queue.push(vector_score.clone());
@@ -237,7 +241,6 @@ impl VectorIndexPruner {
         let top_indexes: HashSet<usize> = top_scores.iter().map(|s| s.index).collect();
 
         let mut pruned_metas = Vec::with_capacity(top_indexes.len());
-        let len = vector_prune_result_map.len();
         for index in 0..len {
             if !top_indexes.contains(&index) {
                 continue;
@@ -259,7 +262,7 @@ impl VectorIndexPruner {
         Ok(pruned_metas)
     }
 
-    async fn vector_index_filter_topn_prune(
+    async fn vector_index_topn_prune(
         &self,
         filter_expr: &Option<Expr>,
         asc: bool,
@@ -269,7 +272,6 @@ impl VectorIndexPruner {
         let results = self
             .process_vector_pruning_tasks(
                 metas,
-                "vector topn pruning failure",
                 move |vector_reader, row_count, location| async move {
                     vector_reader.generate_scores(row_count, &location).await
                 },
@@ -277,9 +279,11 @@ impl VectorIndexPruner {
             .await?;
 
         let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        let mut vector_prune_result_map = HashMap::with_capacity(results.len());
+        let len = results.len();
+        let mut vector_prune_result_map = HashMap::with_capacity(len);
         for vector_prune_result in results {
             if let Some(filter_expr) = filter_expr {
+                // If has filter expr, use scores to build a block and do filtering.
                 let num_rows = vector_prune_result.block_meta.row_count as usize;
                 let mut builder = Vec::with_capacity(num_rows);
                 for score in &vector_prune_result.scores {
@@ -288,19 +292,20 @@ impl VectorIndexPruner {
                 let column = Column::Number(NumberColumn::Float32(Buffer::from(builder)));
                 let block = DataBlock::new(vec![BlockEntry::from(column)], num_rows);
                 let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let res = evaluator.run(&filter_expr)?;
+                let res = evaluator.run(filter_expr)?;
                 let res_column = res.into_full_column(filter_expr.data_type(), num_rows);
                 let res_column = res_column.remove_nullable();
                 let bitmap = res_column.as_boolean().unwrap();
+                // All the scores do not meet the conditions, ignore this block.
                 if bitmap.null_count() == num_rows {
                     continue;
                 }
 
-                // If asc is false, we want to keep the largest scores
-                // We need to modify the score to reverse the ordering
                 if !asc {
                     for (i, vector_score) in vector_prune_result.scores.iter().enumerate() {
                         if bitmap.get_bit(i) {
+                            // If asc is false, we want to keep the largest scores,
+                            // modify the score to reverse the ordering
                             let modified_score = vector_score.negative_score();
                             top_queue.push(modified_score);
                         }
@@ -330,7 +335,6 @@ impl VectorIndexPruner {
         let top_indexes: HashSet<usize> = top_scores.iter().map(|s| s.index).collect();
 
         let mut pruned_metas = Vec::with_capacity(top_indexes.len());
-        let len = vector_prune_result_map.len();
         for index in 0..len {
             if !top_indexes.contains(&index) {
                 continue;
@@ -350,20 +354,16 @@ impl VectorIndexPruner {
         Ok(pruned_metas)
     }
 
-    async fn vector_index_prune(
+    async fn vector_index_scores(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let start = Instant::now();
 
         let results = self
-            .process_vector_pruning_tasks(
-                metas,
-                "vector pruning failure",
-                |vector_reader, row_count, location| async move {
-                    vector_reader.generate_scores(row_count, &location).await
-                },
-            )
+            .process_vector_pruning_tasks(metas, |vector_reader, row_count, location| async move {
+                vector_reader.generate_scores(row_count, &location).await
+            })
             .await?;
 
         let mut vector_prune_result_map = HashMap::with_capacity(results.len());
@@ -391,7 +391,7 @@ impl VectorIndexPruner {
         {
             metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] Vector index prune elapsed: {elapsed}");
+        info!("[FUSE-PRUNER] Vector index calculate score elapsed: {elapsed}");
 
         Ok(new_metas)
     }
@@ -400,7 +400,6 @@ impl VectorIndexPruner {
     async fn process_vector_pruning_tasks<F, Fut>(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-        error_message: &str,
         vector_reader_op: F,
     ) -> Result<Vec<VectorPruneResult>>
     where
@@ -463,7 +462,7 @@ impl VectorIndexPruner {
 
         let joint = future::try_join_all(join_handlers)
             .await
-            .map_err(|e| ErrorCode::StorageOther(format!("{}, {}", error_message, e)))?;
+            .map_err(|e| ErrorCode::StorageOther(format!("vector pruning failure: {}", e)))?;
 
         let mut results = Vec::with_capacity(joint.len());
         for result in joint {
@@ -474,7 +473,7 @@ impl VectorIndexPruner {
     }
 }
 
-// result of block pruning
+// result of vector index block pruning
 struct VectorPruneResult {
     // the block index in segment
     block_idx: usize,

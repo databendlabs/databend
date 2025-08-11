@@ -131,6 +131,64 @@ RowFetch
             ├── push downs: [filters: [], limit: 5]
             └── estimated rows: 16.00
 
+query T
+EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity DESC LIMIT 3;
+----
+RowFetch
+├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
+├── columns to fetch: [id]
+├── estimated rows: 3.00
+└── Limit
+    ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── Sort(Single)
+        ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+        ├── sort keys: [_vector_score DESC NULLS LAST]
+        ├── estimated rows: 16.00
+        └── TableScan
+            ├── table: default.test_vector_index.t
+            ├── output columns: [_vector_score (#2), _row_id (#3)]
+            ├── read rows: 8
+            ├── read size: 0
+            ├── partitions total: 4
+            ├── partitions scanned: 2
+            ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, vector pruning: 4 to 2>]
+            ├── push downs: [filters: [], limit: 3]
+            └── estimated rows: 16.00
+
+query T
+EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
+----
+RowFetch
+├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
+├── columns to fetch: [id]
+├── estimated rows: 0.01
+└── Limit
+    ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 0.01
+    └── Sort(Single)
+        ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+        ├── sort keys: [_vector_score ASC NULLS LAST]
+        ├── estimated rows: 0.01
+        └── Filter
+            ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+            ├── filters: [t._vector_score (#2) > 0.1]
+            ├── estimated rows: 0.01
+            └── TableScan
+                ├── table: default.test_vector_index.t
+                ├── output columns: [_vector_score (#2), _row_id (#3)]
+                ├── read rows: 12
+                ├── read size: 0
+                ├── partitions total: 4
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, vector pruning: 4 to 3>]
+                ├── push downs: [filters: [t._vector_score (#2) > 0.1], limit: 3]
+                └── estimated rows: 16.00
+
 query IF
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
@@ -241,24 +299,32 @@ SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 
 
 query IF
-SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity DESC;
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity DESC LIMIT 3;
 ----
 9 0.2568838
 16 0.25626028
 13 0.24121934
-2 0.2268933
-14 0.21996021
-5 0.17328858
-4 0.16786504
-6 0.1645267
-7 0.15616316
-15 0.150944
-3 0.14645952
-8 0.14554787
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity DESC LIMIT 3;
+----
+9 0.286018
+16 0.24571353
+13 0.23111635
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
+----
 11 0.14048636
-12 0.060161233
-10 0.033747792
-1 0.009774268
+8 0.14554787
+3 0.14645952
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
+----
+8 0.13477594
+3 0.13801938
+15 0.13881427
 
 statement ok
 use default
