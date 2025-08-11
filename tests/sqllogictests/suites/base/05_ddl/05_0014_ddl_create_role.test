@@ -61,6 +61,25 @@ show grants for role r1;
 ----
 SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
 
+## not replace return ok
+statement ok
+create role if not exists r1;
+
+query T
+show grants for role r1;
+----
+SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
+
+## not replace return error
+statement error 2216
+CREATE ROLE r1
+
+query T
+show grants for role r1;
+----
+SELECT *.* NULL ROLE r1 GRANT SELECT ON *.* TO ROLE `r1`
+
+## replace return ok
 statement ok
 create or replace role r1;
 

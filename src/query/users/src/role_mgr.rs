@@ -126,9 +126,15 @@ impl UserApiProvider {
     ) -> Result<()> {
         let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
         let client = self.role_api(tenant);
+        let name = role_info.identity().to_string();
         if let Err(_e) = client.add_role(role_info, can_replace).await? {
             if matches!(create_option, CreateOption::CreateIfNotExists) {
                 return Ok(());
+            } else {
+                return Err(ErrorCode::RoleAlreadyExists(format!(
+                    "Role {} already exists",
+                    name
+                )));
             }
         }
         return Ok(());
