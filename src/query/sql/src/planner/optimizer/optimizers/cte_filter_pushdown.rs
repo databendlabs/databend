@@ -136,6 +136,7 @@ impl CTEFilterPushdownOptimizer {
         if let RelOperator::MaterializedCTE(cte) = s_expr.plan() {
             if let Some(Some(predicates)) = self.cte_filters.get(&cte.cte_name) {
                 if !predicates.is_empty() {
+                    log::info!("Pushing predicates to CTE {}", cte.cte_name);
                     let or_predicate = if predicates.len() == 1 {
                         predicates[0].clone()
                     } else {
