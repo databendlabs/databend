@@ -129,7 +129,7 @@ analyze table `t`
 query TI
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 (empty)
+a 2 (empty)
 
 statement ok
 create or replace table t1 as select number as a from numbers(10);
