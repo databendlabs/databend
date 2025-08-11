@@ -84,7 +84,7 @@ def test_temp_table():
 
     resp = do_query(client, "select * from t1", session_state)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["data"] == [["3"], ["4"]],resp.json()
+    assert resp.json()["data"] == [["3"], ["4"]], resp.json()
     session_state = resp.json()["session"]
     assert session_state["need_sticky"], resp.text
     assert session_state["need_keep_alive"]
