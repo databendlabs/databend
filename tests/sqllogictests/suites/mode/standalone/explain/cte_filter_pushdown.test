@@ -1,0 +1,187 @@
+# Test cases for CTE filter pushdown optimization
+# This test verifies that filters can be correctly pushed down into materialized CTEs
+
+statement ok
+create table t (a int, b int, c int);
+
+statement ok
+insert into t values (1, 10, 100), (1, 20, 200), (2, 30, 300), (2, 40, 400), (3, 50, 500);
+
+# Test 1: Basic CTE filter pushdown without aggregation
+# Filter on base columns should be pushed down
+query T
+explain with cte1 as materialized (
+    select a, b from t
+)
+select * from cte1 where a = 1;
+----
+
+# Test 2: CTE with aggregation - filter on GROUP BY column should be pushed down
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt, sum(b) as sum_b
+    from t 
+    group by a
+)
+select * from cte1 where a = 1;
+----
+
+# Test 3: CTE with aggregation - filter on aggregate result should NOT be pushed down
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt, sum(b) as sum_b
+    from t 
+    group by a
+)
+select * from cte1 where sum_b > 25;
+----
+
+# Test 4: Mixed filters - GROUP BY column filter should be pushed down, aggregate filter should remain
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt, sum(b) as sum_b
+    from t 
+    group by a
+)
+select * from cte1 where a > 1 and sum_b > 25;
+----
+
+# Test 5: Multiple CTE references with different filters
+# Should create OR condition in CTE definition
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt
+    from t 
+    group by a
+)
+select * from cte1 as c1 where c1.a = 1
+union all
+select * from cte1 as c2 where c2.a = 2;
+----
+
+# Test 6: Multiple CTE references with three different filters
+# Should create complex OR condition in CTE definition
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt
+    from t 
+    group by a
+)
+select * from cte1 where a = 1
+union all
+select * from cte1 where a = 2
+union all  
+select * from cte1 where a = 3;
+----
+
+# Test 7: Nested CTE with filter pushdown
+query T
+explain with cte1 as materialized (
+    select a, b from t where c > 200
+),
+cte2 as materialized (
+    select a, count(*) as cnt from cte1 group by a
+)
+select * from cte2 where a = 1;
+----
+
+# Test 8: CTE with existing filter condition and additional pushdown filter
+query T
+explain with cte1 as materialized (
+    select a, b from t where a > 0
+)
+select * from cte1 where a = 1 and b < 50;
+----
+
+# Test 9: CTE with aggregation and HAVING clause
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt, sum(b) as sum_b
+    from t 
+    group by a
+    having count(*) > 0
+)
+select * from cte1 where a > 1;
+----
+
+# Test 10: Complex aggregation with multiple GROUP BY columns
+query T
+explain with cte1 as materialized (
+    select a, b, count(*) as cnt
+    from t 
+    group by a, b
+)
+select * from cte1 where a = 1 and b > 15;
+----
+
+# Test 11: Test case that demonstrates nested Filter issue
+# This should show merged filters, not nested Filter nodes
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt, sum(b) as sum_b
+    from t 
+    group by a
+)
+select * from cte1 
+where a = 1           -- Should be pushed down to before GROUP BY
+and sum_b > 25;       -- Should remain after aggregation
+----
+
+# Test 12: Test filter pushdown with IN clause
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt
+    from t 
+    group by a
+)
+select * from cte1 where a in (1, 2);
+----
+
+# Test 13: Test filter pushdown with complex conditions
+query T
+explain with cte1 as materialized (
+    select a, b, count(*) as cnt
+    from t 
+    group by a, b
+)
+select * from cte1 where (a = 1 or a = 2) and b > 10;
+----
+
+# Test 14: CTE not used directly (should not crash)
+query T
+explain with cte1 as materialized (
+    select a, count(*) as cnt from t group by a
+)
+select 1;
+----
+
+# Test 15: Test filter pushdown with subquery
+query T
+explain select * from (
+    with cte1 as materialized (
+        select a, count(*) as cnt from t group by a
+    )
+    select * from cte1 where a > 1
+) where cnt > 0;
+----
+
+# Test 16: Test multiple nested filters
+query T
+explain select * from (
+    select * from (
+        select * from t where a > 0
+    ) where a < 5
+) where b > 10;
+----
+
+# Test 17: CTE with window function
+query T
+explain with cte1 as materialized (
+    select a, b, row_number() over (partition by a order by b) as rn
+    from t
+)
+select * from cte1 where a = 1;
+----
+
+statement ok
+drop table t;
