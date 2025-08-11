@@ -5024,13 +5024,11 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ RETURNS ~ TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
             ~ AS ~ ^#code_string
         },
-        |(_, arg_types, _, _, _, _, return_types, _, _, sql)| {
-            UDFDefinition::UDTFSql {
-                arg_types: BTreeMap::from_iter(arg_types),
-                return_types: BTreeMap::from_iter(return_types),
-                sql,
-            }
-        }
+        |(_, arg_types, _, _, _, _, return_types, _, _, sql)| UDFDefinition::UDTFSql {
+            arg_types,
+            return_types,
+            sql,
+        },
     );
 
     let udaf = map(
@@ -5101,11 +5099,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     )(i)
 }
 
-fn udtf_arg(i:Input) -> IResult<(Identifier, TypeName)> {
-    map(
-        rule! { #ident ~ ^#type_name },
-        |(name, ty)| (name, ty),
-    )(i)
+fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
+    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty))(i)
 }
 
 fn udf_immutable(i: Input) -> IResult<bool> {

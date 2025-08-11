@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::infer_schema_type;
@@ -21,6 +20,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
+use databend_common_protos::pb::UdtfArg;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -284,27 +284,27 @@ impl FromToProto for mt::UDTF {
     }
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where
-        Self: Sized
-    {
+    where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let mut arg_types = BTreeMap::new();
-        for (arg_name, arg_ty) in p
-            .arg_names
-            .into_iter().zip(p.arg_types.into_iter()) {
-            let ty = (&TableDataType::from_pb(arg_ty)?).into();
+        let mut arg_types = Vec::new();
+        for arg_ty in p.arg_types {
+            let ty = (&TableDataType::from_pb(arg_ty.r#type.ok_or_else(|| {
+                Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
+            })?)?)
+                .into();
 
-            arg_types.insert(arg_name, ty);
+            arg_types.push((arg_ty.name, ty));
         }
 
-        let mut return_types = BTreeMap::new();
-        for (return_name, arg_ty) in p
-            .return_names
-            .into_iter().zip(p.return_types.into_iter()) {
-            let ty = (&TableDataType::from_pb(arg_ty)?).into();
+        let mut return_types = Vec::new();
+        for return_ty in p.return_types {
+            let ty = (&TableDataType::from_pb(return_ty.r#type.ok_or_else(|| {
+                Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
+            })?)?)
+                .into();
 
-            return_types.insert(return_name, ty);
+            return_types.push((return_ty.name, ty));
         }
 
         Ok(Self {
@@ -315,7 +315,6 @@ impl FromToProto for mt::UDTF {
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let mut arg_names = Vec::with_capacity(self.arg_types.len());
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for (arg_name, arg_type) in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
@@ -326,11 +325,12 @@ impl FromToProto for mt::UDTF {
                     ))
                 })?
                 .to_pb()?;
-            arg_names.push(arg_name.clone());
-            arg_types.push(arg_type);
+            arg_types.push(UdtfArg {
+                name: arg_name.clone(),
+                r#type: Some(arg_type),
+            });
         }
 
-        let mut return_names = Vec::with_capacity(self.return_types.len());
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for (return_name, return_type) in self.return_types.iter() {
             let return_type = infer_schema_type(return_type)
@@ -341,16 +341,16 @@ impl FromToProto for mt::UDTF {
                     ))
                 })?
                 .to_pb()?;
-            return_names.push(return_name.clone());
-            return_types.push(return_type);
+            return_types.push(UdtfArg {
+                name: return_name.clone(),
+                r#type: Some(return_type),
+            });
         }
 
         Ok(pb::Udtf {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            arg_names,
             arg_types,
-            return_names,
             return_types,
             sql: self.sql.clone(),
         })

@@ -53,8 +53,8 @@ pub struct UDFScript {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDTF {
-    pub arg_types: BTreeMap<String, DataType>,
-    pub return_types: BTreeMap<String, DataType>,
+    pub arg_types: Vec<(String, DataType)>,
+    pub return_types: Vec<(String, DataType)>,
     pub sql: String,
 }
 
@@ -304,7 +304,7 @@ impl Display for UDFDefinition {
                 write!(f, " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
             }
             UDFDefinition::UDTF(UDTF {
-                                    arg_types,
+                arg_types,
                 return_types,
                 sql,
             }) => {

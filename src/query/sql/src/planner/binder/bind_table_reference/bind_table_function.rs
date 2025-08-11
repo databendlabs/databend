@@ -47,11 +47,15 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::{EvalScalar, Plan};
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::{BindContext, Planner};
+use crate::BindContext;
+use crate::Planner;
 use crate::ScalarExpr;
 
 impl Binder {
@@ -133,12 +137,22 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let udtf_result = databend_common_base::runtime::block_on(async {
-            if let Some(UDFDefinition::UDTF(udtf)) = UserApiProvider::instance().get_udf(&tenant, &func_name.name).await?.map(|udf| udf.definition) {
+            if let Some(UDFDefinition::UDTF(udtf)) = UserApiProvider::instance()
+                .get_udf(&tenant, &func_name.name)
+                .await?
+                .map(|udf| udf.definition)
+            {
                 let mut sql = udtf.sql;
 
                 for (name, arg) in table_args.named.iter() {
                     // FIXME: Parameter substitution
-                    let Some(ty) = udtf.arg_types.get(name) else { return Err(ErrorCode::InvalidArgument(format!("Function '{func_name}' does not have a parameter named '{name}'"))) };
+                    let Some((_, _ty)) =
+                        udtf.arg_types.iter().find(|(arg_name, _)| arg_name == name)
+                    else {
+                        return Err(ErrorCode::InvalidArgument(format!(
+                            "Function '{func_name}' does not have a parameter named '{name}'"
+                        )));
+                    };
 
                     sql = sql.replace(name, &arg.to_string());
                 }
@@ -150,16 +164,76 @@ impl Binder {
                     self.name_resolution_ctx.clone(),
                     self.metadata.clone(),
                 )
-                    .with_subquery_executor(self.subquery_executor.clone());
+                .with_subquery_executor(self.subquery_executor.clone());
                 let plan = binder.bind(&extras.statement).await?;
 
                 let Plan::Query {
-                    s_expr, bind_context, ..
-                } = plan else {
-                    return Err(ErrorCode::UDFRuntimeError("Query in UDTF returned no result set"))
+                    s_expr,
+                    mut bind_context,
+                    ..
+                } = plan
+                else {
+                    return Err(ErrorCode::UDFRuntimeError(
+                        "Query in UDTF returned no result set",
+                    ));
                 };
+                let mut output_bindings = Vec::with_capacity(bind_context.columns.len());
+                let mut output_items = Vec::with_capacity(bind_context.columns.len());
 
-                return Ok(Some((*s_expr, *bind_context)))
+                if udtf.return_types.len() != bind_context.columns.len() {
+                    return Err(ErrorCode::UDFSchemaMismatch(format!(
+                        "return types length {} does not match output columns length {}",
+                        udtf.return_types.len(),
+                        bind_context.columns.len()
+                    )));
+                }
+
+                for ((return_name, return_type), output_binding) in udtf
+                    .return_types
+                    .into_iter()
+                    .zip(bind_context.columns.iter())
+                {
+                    let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: output_binding.clone(),
+                    });
+                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
+                        span: None,
+                        is_try: false,
+                        argument: Box::new(input_expr),
+                        target_type: Box::new(return_type.clone()),
+                    });
+                    let index = self.metadata.write().add_derived_column(
+                        return_name.clone(),
+                        return_type.clone(),
+                        Some(cast_expr.clone()),
+                    );
+                    let output_binding = ColumnBindingBuilder::new(
+                        return_name,
+                        index,
+                        Box::new(return_type),
+                        Visibility::Visible,
+                    )
+                    .build();
+
+                    output_items.push(ScalarItem {
+                        scalar: cast_expr,
+                        index: output_binding.index,
+                    });
+                    output_bindings.push(output_binding);
+                }
+                bind_context.columns = output_bindings;
+                let s_expr = SExpr::create_unary(
+                    Arc::new(
+                        EvalScalar {
+                            items: output_items,
+                        }
+                        .into(),
+                    ),
+                    s_expr,
+                );
+
+                return Ok(Some((s_expr, *bind_context)));
             }
             Ok(None)
         });

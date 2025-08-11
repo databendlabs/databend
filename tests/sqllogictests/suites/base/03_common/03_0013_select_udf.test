@@ -205,3 +205,30 @@ select date_add_days(to_date('2022-01-02T01:12:00'), 12);
 
 statement ok
 DROP FUNCTION date_add_days;
+
+statement ok
+create or replace table t1 (c1 int);
+
+statement ok
+insert into t1 values(0), (1);
+
+statement ok
+create function scan_t1 () RETURNS TABLE (c1_string string) as $$ select * from t1 $$;
+
+query T
+select * from scan_t1();
+----
+0
+1
+
+statement ok
+create function invalid_udtf_0 () RETURNS TABLE () as $$ select * from t1 $$;
+
+statement error
+select * from invalid_udtf_0();
+
+statement ok
+create function invalid_udtf_1 () RETURNS TABLE (c1_string string, c2 int) as $$ select * from t1 $$;
+
+statement error
+select * from invalid_udtf_1();
