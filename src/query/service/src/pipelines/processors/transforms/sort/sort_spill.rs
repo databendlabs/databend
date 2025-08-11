@@ -267,7 +267,11 @@ impl<A: SortAlgorithm> StepCollect<A> {
 
         let sorted = if input_data.len() == 1 {
             let data = input_data.pop().unwrap();
-            vec![base.new_block(data)].into()
+            let mut block = base.new_block(data);
+            if need_spill {
+                block.spill(&base.spiller).await?;
+            }
+            vec![block].into()
         } else {
             // todo: using multi-threaded cascade two-way merge sorting algorithm to obtain the best performance
             // also see https://arxiv.org/pdf/1406.2628
@@ -559,6 +563,9 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     fn recalculate_num_merge(&self) -> usize {
+        if self.current.len() <= 2 {
+            return self.params.num_merge;
+        }
         let mut max_rows = self.params.max_rows();
         let batch_rows = self.params.batch_rows;
         let mut num_merge = 0;
@@ -566,11 +573,9 @@ impl<A: SortAlgorithm> StepSort<A> {
             // Edge case: rows may not always equal batch_rows, recalculate num_merge to mitigate risk
             let rows = s.blocks[0].rows.max(batch_rows);
             if max_rows >= rows || num_merge < 2 {
-                max_rows -= rows;
                 num_merge += 1;
-            } else {
-                max_rows = 0;
             }
+            max_rows = max_rows.saturating_sub(rows);
         }
         num_merge
     }
