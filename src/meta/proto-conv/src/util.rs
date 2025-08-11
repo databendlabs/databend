@@ -172,6 +172,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (140, "2025-07-24: Add: TaskMessage::Delete add WarehouseOptions"),
     (141, "2025-08-06: Add: row_access.proto"),
     (142, "2025-08-15: Add: table_meta add row_access_policy"),
+    (142, "2025-08-11: Add: add UDTF"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
