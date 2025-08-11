@@ -213,7 +213,7 @@ statement ok
 insert into t1 values(0), (1);
 
 statement ok
-create function scan_t1 () RETURNS TABLE (c1_string string) as $$ select * from t1 $$;
+create or replace function scan_t1 () RETURNS TABLE (c1_string string) as $$ select * from t1 $$;
 
 query T
 select * from scan_t1();
@@ -222,13 +222,23 @@ select * from scan_t1();
 1
 
 statement ok
-create function invalid_udtf_0 () RETURNS TABLE () as $$ select * from t1 $$;
+create or replace function filter_t1 (arg0 int) RETURNS TABLE (c1_string string) as $$ select * from t1 where c1 = arg0 $$;
+
+query T
+select * from filter_t1(0);
+----
+0
+
+query T
+select * from filter_t1(1);
+----
+1
+
+statement error
+select * from filter_t1();
+
+statement ok
+create or replace function invalid_udtf_0 () RETURNS TABLE (c1_string string, c2 int) as $$ select * from t1 $$;
 
 statement error
 select * from invalid_udtf_0();
-
-statement ok
-create function invalid_udtf_1 () RETURNS TABLE (c1_string string, c2 int) as $$ select * from t1 $$;
-
-statement error
-select * from invalid_udtf_1();
