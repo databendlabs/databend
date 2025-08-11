@@ -27,12 +27,10 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::StringType;
 use databend_common_expression::types::VectorDataType;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
-use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
@@ -45,7 +43,6 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_openai::OpenAI;
 use databend_common_vector::cosine_distance;
 use databend_common_vector::cosine_distance_64;
 use databend_common_vector::inner_product;
@@ -259,106 +256,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 calculate_array_distance_64(lhs.column, rhs.column, output, ctx, inner_product_64);
             }
         ),
-    );
-
-    // embedding_vector
-    // This function takes two strings as input, sends an API request to OpenAI, and returns the Float32 array of embeddings.
-    // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
-    registry.register_passthrough_nullable_1_arg::<StringType, ArrayType<Float32Type>, _, _>(
-        "ai_embedding_vector",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, ArrayType<Float32Type>>(|data, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push(vec![F32::from(0.0)].into());
-                    return;
-                }
-            }
-
-            if ctx.func_ctx.openai_api_key.is_empty() {
-                ctx.set_error(output.len(), "openai_api_key is empty".to_string());
-                output.push(vec![F32::from(0.0)].into());
-                return;
-            }
-            let api_base = ctx.func_ctx.openai_api_embedding_base_url.clone();
-            let api_key = ctx.func_ctx.openai_api_key.clone();
-            let api_version = ctx.func_ctx.openai_api_version.clone();
-            let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
-            let completion_model = ctx.func_ctx.openai_api_completion_model.clone();
-
-            let openai = OpenAI::create(
-                api_base,
-                api_key,
-                api_version,
-                embedding_model,
-                completion_model,
-            );
-            let result = openai.embedding_request(&[data.to_string()]);
-            match result {
-                Ok((embeddings, _)) => {
-                    let result = embeddings[0]
-                        .iter()
-                        .map(|x| F32::from(*x))
-                        .collect::<Vec<F32>>();
-                    output.push(result.into());
-                }
-                Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("openai embedding request error:{:?}", e),
-                    );
-                    output.push(vec![F32::from(0.0)].into());
-                }
-            }
-        }),
-    );
-
-    // text_completion
-    // This function takes two strings as input, sends an API request to OpenAI, and returns the AI-generated completion as a string.
-    // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
-    registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
-        "ai_text_completion",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<StringType, StringType>(|data, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.put_and_commit("");
-                    return;
-                }
-            }
-
-            if ctx.func_ctx.openai_api_key.is_empty() {
-                ctx.set_error(output.len(), "openai_api_key is empty".to_string());
-                output.put_and_commit("");
-                return;
-            }
-            let api_base = ctx.func_ctx.openai_api_chat_base_url.clone();
-            let api_key = ctx.func_ctx.openai_api_key.clone();
-            let api_version = ctx.func_ctx.openai_api_version.clone();
-            let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
-            let completion_model = ctx.func_ctx.openai_api_completion_model.clone();
-
-            let openai = OpenAI::create(
-                api_base,
-                api_key,
-                api_version,
-                embedding_model,
-                completion_model,
-            );
-            let result = openai.completion_text_request(data.to_string());
-            match result {
-                Ok((resp, _)) => {
-                    output.put_and_commit(resp);
-                }
-                Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("openai completion request error:{:?}", e),
-                    );
-                    output.put_and_commit("");
-                }
-            }
-        }),
     );
 
     let cosine_distance_factory =
