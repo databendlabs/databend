@@ -516,9 +516,7 @@ impl HashJoinBuildState {
         }
 
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         let chunk_index = task;

@@ -54,14 +54,10 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         union_all: &crate::plans::UnionAll,
-        mut required: ColumnSet,
+        required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let metadata = self.metadata.read().clone();
-        let lazy_columns = metadata.lazy_columns();
-        required.extend(lazy_columns);
-
         // Use left's output columns as the offset indices
         // if the union has a CTE, the output columns are not filtered
         // otherwise, if the output columns of the union do not contain the columns used by the plan in the union, the expression will fail to obtain data.

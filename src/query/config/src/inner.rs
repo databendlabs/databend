@@ -254,6 +254,7 @@ pub struct QueryConfig {
     pub resources_management: Option<ResourcesManagementConfig>,
 
     pub enable_queries_executor: bool,
+    pub check_connection_before_schedule: bool,
 }
 
 impl Default for QueryConfig {
@@ -343,6 +344,7 @@ impl Default for QueryConfig {
             settings: HashMap::new(),
             resources_management: None,
             enable_queries_executor: false,
+            check_connection_before_schedule: true,
         }
     }
 }

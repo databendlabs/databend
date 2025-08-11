@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -217,20 +216,14 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        if !metadata.lazy_columns().is_empty() {
-            // Lazy materialization is enabled.
-            if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
+        if !name_mapping.contains_key(ROW_ID_COL_NAME) {
+            let metadata = self.metadata.read();
+            if let Some(index) = metadata.row_id_index_by_table_index(scan.table_index) {
                 let internal_column = INTERNAL_COLUMN_FACTORY
                     .get_internal_column(ROW_ID_COL_NAME)
                     .unwrap();
-                if let Some(index) = self
-                    .metadata
-                    .read()
-                    .row_id_index_by_table_index(scan.table_index)
-                {
-                    entry.insert(index);
-                    project_internal_columns.insert(index, internal_column);
-                }
+                name_mapping.insert(ROW_ID_COL_NAME.to_string(), index);
+                project_internal_columns.insert(index, internal_column);
             }
         }
 
@@ -384,7 +377,6 @@ impl PhysicalPlanBuilder {
             // or else in read_partition when search internal column from table schema will core.
             true,
             true,
-            true,
         );
         let has_virtual_column = !virtual_columns.is_empty();
 
@@ -396,7 +388,6 @@ impl PhysicalPlanBuilder {
                 has_inner_column,
                 true,
                 false,
-                true,
             ))
         } else {
             None
@@ -456,7 +447,6 @@ impl PhysicalPlanBuilder {
                     has_inner_column,
                     true,
                     false,
-                    true,
                 );
                 let prewhere_columns = Self::build_projection(
                     &metadata,
@@ -465,14 +455,12 @@ impl PhysicalPlanBuilder {
                     has_inner_column,
                     true,
                     true,
-                    true,
                 );
                 let remain_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     remain_columns.iter(),
                     has_inner_column,
-                    true,
                     true,
                     true,
                 );
@@ -741,15 +729,11 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
-        ignore_lazy_column: bool,
     ) -> Projection {
         if !has_inner_column {
             let mut col_indices = Vec::new();
             let mut virtual_col_indices = HashSet::new();
             for index in columns {
-                if ignore_lazy_column && metadata.is_lazy_column(*index) {
-                    continue;
-                }
                 let name = match metadata.column(*index) {
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
                         column_name
@@ -787,9 +771,6 @@ impl PhysicalPlanBuilder {
         } else {
             let mut col_indices = BTreeMap::new();
             for index in columns {
-                if ignore_lazy_column && metadata.is_lazy_column(*index) {
-                    continue;
-                }
                 let column = metadata.column(*index);
                 match column {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {

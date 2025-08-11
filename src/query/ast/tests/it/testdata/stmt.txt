@@ -27034,3 +27034,364 @@ AlterTable(
 )
 
 
+---------- Input ----------
+create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+case
+    when 'it_admin' = current_role() then true
+    else false
+end
+---------- Output ---------
+CREATE OR REPLACE ROW ACCESS POLICY rap_it AS (empl_id STRING) RETURNS BOOLEAN -> CASE WHEN 'it_admin' = current_role() THEN TRUE ELSE FALSE END
+---------- AST ------------
+CreateRowAccessPolicy(
+    CreateRowAccessPolicyStmt {
+        create_option: CreateOrReplace,
+        name: Identifier {
+            span: Some(
+                36..42,
+            ),
+            name: "rap_it",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: RowAccessPolicyDefinition {
+            parameters: [
+                RowAccessPolicyType {
+                    name: "empl_id",
+                    data_type: String,
+                },
+            ],
+            definition: Case {
+                span: Some(
+                    83..153,
+                ),
+                operand: None,
+                conditions: [
+                    BinaryOp {
+                        span: Some(
+                            108..109,
+                        ),
+                        op: Eq,
+                        left: Literal {
+                            span: Some(
+                                97..107,
+                            ),
+                            value: String(
+                                "it_admin",
+                            ),
+                        },
+                        right: FunctionCall {
+                            span: Some(
+                                110..124,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        110..122,
+                                    ),
+                                    name: "current_role",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                    },
+                ],
+                results: [
+                    Literal {
+                        span: Some(
+                            130..134,
+                        ),
+                        value: Boolean(
+                            true,
+                        ),
+                    },
+                ],
+                else_result: Some(
+                    Literal {
+                        span: Some(
+                            144..149,
+                        ),
+                        value: Boolean(
+                            false,
+                        ),
+                    },
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+    'sales_executive_role' = current_role()
+      or exists (
+            select 1 from salesmanagerregions
+              where sales_manager = current_role()
+                and region = sales_region
+)
+---------- Output ---------
+CREATE OR REPLACE ROW ACCESS POLICY rap_sales_manager_regions_1 AS (sales_region STRING) RETURNS BOOLEAN -> 'sales_executive_role' = current_role() OR EXISTS (SELECT 1 FROM salesmanagerregions WHERE sales_manager = current_role() AND region = sales_region)
+---------- AST ------------
+CreateRowAccessPolicy(
+    CreateRowAccessPolicyStmt {
+        create_option: CreateOrReplace,
+        name: Identifier {
+            span: Some(
+                36..63,
+            ),
+            name: "rap_sales_manager_regions_1",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: RowAccessPolicyDefinition {
+            parameters: [
+                RowAccessPolicyType {
+                    name: "sales_region",
+                    data_type: String,
+                },
+            ],
+            definition: BinaryOp {
+                span: Some(
+                    159..161,
+                ),
+                op: Or,
+                left: BinaryOp {
+                    span: Some(
+                        136..137,
+                    ),
+                    op: Eq,
+                    left: Literal {
+                        span: Some(
+                            113..135,
+                        ),
+                        value: String(
+                            "sales_executive_role",
+                        ),
+                    },
+                    right: FunctionCall {
+                        span: Some(
+                            138..152,
+                        ),
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier {
+                                span: Some(
+                                    138..150,
+                                ),
+                                name: "current_role",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            args: [],
+                            params: [],
+                            order_by: [],
+                            window: None,
+                            lambda: None,
+                        },
+                    },
+                },
+                right: Exists {
+                    span: Some(
+                        162..311,
+                    ),
+                    not: false,
+                    subquery: Query {
+                        span: Some(
+                            183..309,
+                        ),
+                        with: None,
+                        body: Select(
+                            SelectStmt {
+                                span: Some(
+                                    183..309,
+                                ),
+                                hints: None,
+                                distinct: false,
+                                top_n: None,
+                                select_list: [
+                                    AliasedExpr {
+                                        expr: Literal {
+                                            span: Some(
+                                                190..191,
+                                            ),
+                                            value: UInt64(
+                                                1,
+                                            ),
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                from: [
+                                    Table {
+                                        span: Some(
+                                            197..216,
+                                        ),
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                197..216,
+                                            ),
+                                            name: "salesmanagerregions",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                        alias: None,
+                                        temporal: None,
+                                        with_options: None,
+                                        pivot: None,
+                                        unpivot: None,
+                                        sample: None,
+                                    },
+                                ],
+                                selection: Some(
+                                    BinaryOp {
+                                        span: Some(
+                                            284..287,
+                                        ),
+                                        op: And,
+                                        left: BinaryOp {
+                                            span: Some(
+                                                251..252,
+                                            ),
+                                            op: Eq,
+                                            left: ColumnRef {
+                                                span: Some(
+                                                    237..250,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                237..250,
+                                                            ),
+                                                            name: "sales_manager",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            right: FunctionCall {
+                                                span: Some(
+                                                    253..267,
+                                                ),
+                                                func: FunctionCall {
+                                                    distinct: false,
+                                                    name: Identifier {
+                                                        span: Some(
+                                                            253..265,
+                                                        ),
+                                                        name: "current_role",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    args: [],
+                                                    params: [],
+                                                    order_by: [],
+                                                    window: None,
+                                                    lambda: None,
+                                                },
+                                            },
+                                        },
+                                        right: BinaryOp {
+                                            span: Some(
+                                                295..296,
+                                            ),
+                                            op: Eq,
+                                            left: ColumnRef {
+                                                span: Some(
+                                                    288..294,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                288..294,
+                                                            ),
+                                                            name: "region",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            right: ColumnRef {
+                                                span: Some(
+                                                    297..309,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                297..309,
+                                                            ),
+                                                            name: "sales_region",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                        },
+                                    },
+                                ),
+                                group_by: None,
+                                having: None,
+                                window_list: None,
+                                qualify: None,
+                            },
+                        ),
+                        order_by: [],
+                        limit: [],
+                        offset: None,
+                        ignore_result: false,
+                    },
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+DROP row access policy IF EXISTS r1
+---------- Output ---------
+DROP ROW ACCESS POLICY IF EXISTS r1
+---------- AST ------------
+DropRowAccessPolicy(
+    DropRowAccessPolicyStmt {
+        if_exists: true,
+        name: "r1",
+    },
+)
+
+
+---------- Input ----------
+desc row access policy r1
+---------- Output ---------
+DESCRIBE ROW ACCESS POLICY r1
+---------- AST ------------
+DescRowAccessPolicy(
+    DescRowAccessPolicyStmt {
+        name: "r1",
+    },
+)
+
+

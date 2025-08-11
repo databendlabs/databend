@@ -178,9 +178,7 @@ impl HashJoinProbeState {
                 let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
                 for result_block in result_blocks {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
+                        return Err(ErrorCode::aborting());
                     }
                     let result_block = filter_executor.filter(result_block)?;
                     if !result_block.is_empty() {
@@ -205,9 +203,7 @@ impl HashJoinProbeState {
         right_single_scan_map: &mut [*mut AtomicBool],
     ) -> Result<DataBlock> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         let probe_block = if probe_state.is_probe_projected {
