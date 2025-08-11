@@ -42,6 +42,7 @@ use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_cache::Cache;
@@ -135,7 +136,9 @@ impl UserApiProvider {
         // We can add account_admin into meta.
         {
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
-            user_mgr.add_role(tenant, public, true).await?;
+            user_mgr
+                .add_role(tenant, public, &CreateOption::CreateIfNotExists)
+                .await?;
         }
 
         Ok(Arc::new(user_mgr))

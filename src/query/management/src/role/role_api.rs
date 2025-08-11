@@ -13,16 +13,23 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {
-    async fn add_role(&self, role_info: RoleInfo) -> Result<u64>;
+    async fn add_role(
+        &self,
+        role_info: RoleInfo,
+        can_replace: bool,
+    ) -> std::result::Result<std::result::Result<(), ExistError<role_ident::Resource>>, MetaError>;
 
     #[allow(clippy::ptr_arg)]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>>;
