@@ -139,27 +139,31 @@ Sequence
 ├── MaterializedCTE: cte1
 │   └── Filter
 │       ├── output columns: [COUNT(*) (#3), sum(b) (#4), t.a (#0)]
-│       ├── filters: [is_true((t.a (#0) > 1 AND sum(b) (#4) > 25))]
+│       ├── filters: [is_true(sum(b) (#4) > 25)]
 │       ├── estimated rows: 0.00
 │       └── AggregateFinal
 │           ├── output columns: [COUNT(*) (#3), sum(b) (#4), t.a (#0)]
 │           ├── group by: [a]
 │           ├── aggregate functions: [count(), sum(b)]
-│           ├── estimated rows: 3.00
+│           ├── estimated rows: 2.00
 │           └── AggregatePartial
 │               ├── group by: [a]
 │               ├── aggregate functions: [count(), sum(b)]
-│               ├── estimated rows: 3.00
-│               └── TableScan
-│                   ├── table: default.default.t
-│                   ├── output columns: [a (#0), b (#1)]
-│                   ├── read rows: 5
-│                   ├── read size: < 1 KiB
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│                   ├── push downs: [filters: [], limit: NONE]
-│                   └── estimated rows: 5.00
+│               ├── estimated rows: 2.00
+│               └── Filter
+│                   ├── output columns: [t.a (#0), t.b (#1)]
+│                   ├── filters: [is_true(t.a (#0) > 1)]
+│                   ├── estimated rows: 3.33
+│                   └── TableScan
+│                       ├── table: default.default.t
+│                       ├── output columns: [a (#0), b (#1)]
+│                       ├── read rows: 5
+│                       ├── read size: < 1 KiB
+│                       ├── partitions total: 1
+│                       ├── partitions scanned: 1
+│                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│                       ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+│                       └── estimated rows: 5.00
 └── Filter
     ├── output columns: [t.a (#5), COUNT(*) (#8), sum(b) (#9)]
     ├── filters: [is_true(cte1.a (#5) > 1), is_true(cte1.sum_b (#9) > 25)]
@@ -307,7 +311,7 @@ Sequence
 ├── MaterializedCTE: cte1
 │   └── Filter
 │       ├── output columns: [t.a (#0), t.b (#1)]
-│       ├── filters: [is_true((t.a (#0) = 1 AND t.b (#1) < 50)), is_true(t.a (#0) > 0)]
+│       ├── filters: [is_true(t.a (#0) > 0), is_true(t.a (#0) = 1), is_true(t.b (#1) < 50)]
 │       ├── estimated rows: 1.67
 │       └── TableScan
 │           ├── table: default.default.t
@@ -317,7 +321,7 @@ Sequence
 │           ├── partitions total: 1
 │           ├── partitions scanned: 1
 │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-│           ├── push downs: [filters: [and_filters(and_filters(t.a (#0) > 0, (t.a (#0) = 1 AND t.b (#1) < 50)), true)], limit: NONE]
+│           ├── push downs: [filters: [and_filters(and_filters(t.a (#0) > 0, t.a (#0) = 1), t.b (#1) < 50)], limit: NONE]
 │           └── estimated rows: 5.00
 └── Filter
     ├── output columns: [t.a (#3), t.b (#4)]
@@ -398,7 +402,7 @@ Sequence
 │           ├── estimated rows: 1.67
 │           └── Filter
 │               ├── output columns: [t.a (#0), t.b (#1)]
-│               ├── filters: [is_true((t.a (#0) = 1 AND t.b (#1) > 15))]
+│               ├── filters: [is_true(t.a (#0) = 1), is_true(t.b (#1) > 15)]
 │               ├── estimated rows: 1.67
 │               └── TableScan
 │                   ├── table: default.default.t
@@ -408,7 +412,7 @@ Sequence
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
 │                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-│                   ├── push downs: [filters: [is_true((t.a (#0) = 1 AND t.b (#1) > 15))], limit: NONE]
+│                   ├── push downs: [filters: [and_filters(t.a (#0) = 1, t.b (#1) > 15)], limit: NONE]
 │                   └── estimated rows: 5.00
 └── Filter
     ├── output columns: [t.a (#4), t.b (#5), COUNT(*) (#7)]
@@ -435,27 +439,31 @@ Sequence
 ├── MaterializedCTE: cte1
 │   └── Filter
 │       ├── output columns: [COUNT(*) (#3), sum(b) (#4), t.a (#0)]
-│       ├── filters: [is_true((t.a (#0) = 1 AND sum(b) (#4) > 25))]
+│       ├── filters: [is_true(sum(b) (#4) > 25)]
 │       ├── estimated rows: 0.00
 │       └── AggregateFinal
 │           ├── output columns: [COUNT(*) (#3), sum(b) (#4), t.a (#0)]
 │           ├── group by: [a]
 │           ├── aggregate functions: [count(), sum(b)]
-│           ├── estimated rows: 3.00
+│           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── group by: [a]
 │               ├── aggregate functions: [count(), sum(b)]
-│               ├── estimated rows: 3.00
-│               └── TableScan
-│                   ├── table: default.default.t
-│                   ├── output columns: [a (#0), b (#1)]
-│                   ├── read rows: 5
-│                   ├── read size: < 1 KiB
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│                   ├── push downs: [filters: [], limit: NONE]
-│                   └── estimated rows: 5.00
+│               ├── estimated rows: 1.00
+│               └── Filter
+│                   ├── output columns: [t.a (#0), t.b (#1)]
+│                   ├── filters: [is_true(t.a (#0) = 1)]
+│                   ├── estimated rows: 1.67
+│                   └── TableScan
+│                       ├── table: default.default.t
+│                       ├── output columns: [a (#0), b (#1)]
+│                       ├── read rows: 5
+│                       ├── read size: < 1 KiB
+│                       ├── partitions total: 1
+│                       ├── partitions scanned: 1
+│                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+│                       ├── push downs: [filters: [is_true(t.a (#0) = 1)], limit: NONE]
+│                       └── estimated rows: 5.00
 └── Filter
     ├── output columns: [t.a (#5), COUNT(*) (#8), sum(b) (#9)]
     ├── filters: [is_true(cte1.a (#5) = 1), is_true(cte1.sum_b (#9) > 25)]
@@ -530,7 +538,7 @@ Sequence
 │           ├── estimated rows: 2.78
 │           └── Filter
 │               ├── output columns: [t.a (#0), t.b (#1)]
-│               ├── filters: [is_true((t.b (#1) > 10 AND (t.a (#0) = 1 OR t.a (#0) = 2)))]
+│               ├── filters: [is_true(t.b (#1) > 10), is_true((t.a (#0) = 1 OR t.a (#0) = 2))]
 │               ├── estimated rows: 2.78
 │               └── TableScan
 │                   ├── table: default.default.t
@@ -540,7 +548,7 @@ Sequence
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
 │                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-│                   ├── push downs: [filters: [is_true((t.b (#1) > 10 AND (t.a (#0) = 1 OR t.a (#0) = 2)))], limit: NONE]
+│                   ├── push downs: [filters: [and_filters(t.b (#1) > 10, (t.a (#0) = 1 OR t.a (#0) = 2))], limit: NONE]
 │                   └── estimated rows: 5.00
 └── Filter
     ├── output columns: [t.a (#4), t.b (#5), COUNT(*) (#7)]
