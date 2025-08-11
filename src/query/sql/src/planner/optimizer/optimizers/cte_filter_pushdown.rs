@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::Optimizer;
@@ -31,10 +32,10 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 
-#[derive(Clone)]
 pub struct CTEFilterPushdownOptimizer {
     cte_filters: HashMap<String, Option<Vec<ScalarExpr>>>,
-    inner_optimizer: RecursiveRuleOptimizer,
+    pull_up_filter_optimizer: PullUpFilterOptimizer,
+    rule_optimizer: RecursiveRuleOptimizer,
 }
 
 struct ColumnMappingRewriter {
@@ -52,10 +53,12 @@ impl VisitorMut<'_> for ColumnMappingRewriter {
 
 impl CTEFilterPushdownOptimizer {
     pub fn new(ctx: Arc<OptimizerContext>) -> Self {
+        let pull_up_filter_optimizer = PullUpFilterOptimizer::new(ctx.clone());
         let inner_optimizer = RecursiveRuleOptimizer::new(ctx.clone(), &DEFAULT_REWRITE_RULES);
         Self {
             cte_filters: HashMap::new(),
-            inner_optimizer,
+            pull_up_filter_optimizer,
+            rule_optimizer: inner_optimizer,
         }
     }
 
@@ -176,7 +179,14 @@ impl Optimizer for CTEFilterPushdownOptimizer {
 
         let expr_with_filters = self.add_filters_to_ctes(s_expr)?;
 
-        self.inner_optimizer.optimize(&expr_with_filters).await
+        let expr_with_pulled_up_filters = self
+            .pull_up_filter_optimizer
+            .optimize(&expr_with_filters)
+            .await?;
+
+        self.rule_optimizer
+            .optimize(&expr_with_pulled_up_filters)
+            .await
     }
 
     fn name(&self) -> String {
