@@ -31,6 +31,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
@@ -88,7 +89,7 @@ impl Binder {
                         return;
                     }
                     assert_eq!(self.udtf.arg_types.len(), self.table_args.positioned.len());
-                    let Some((pos, (_, _ty))) = self
+                    let Some((pos, (_, ty))) = self
                         .udtf
                         .arg_types
                         .iter()
@@ -96,10 +97,14 @@ impl Binder {
                     else {
                         return;
                     };
-
-                    *expr = Expr::Literal {
+                    *expr = Expr::Cast {
                         span: *span,
-                        value: Literal::String(self.table_args.positioned[pos].to_string()),
+                        expr: Box::new(Expr::Literal {
+                            span: *span,
+                            value: Literal::String(self.table_args.positioned[pos].to_string()),
+                        }),
+                        target_type: convert_to_type_name(ty),
+                        pg_style: false,
                     }
                 }
             }
