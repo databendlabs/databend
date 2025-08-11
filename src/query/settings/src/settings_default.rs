@@ -876,9 +876,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
-                ("use_parquet2", DefaultSettingValue {
+                ("use_experimental_parquet_reader", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "This setting is deprecated",
+                    desc: "Use experimental parquet reader to deserialize parquet data of fuse table.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
