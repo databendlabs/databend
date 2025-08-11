@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -31,6 +32,7 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_stage::BytesBatch;
+use databend_storages_common_session::TxnState;
 use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
@@ -43,13 +45,21 @@ use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Multipart;
+use poem::IntoResponse;
 use poem::Request;
+use poem::Response;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
 
 use super::HttpQueryContext;
+use super::HttpSessionConf;
+use super::HttpSessionStateInternal;
 use crate::interpreters::InterpreterFactory;
+use crate::servers::http::error::HttpErrorCode;
+use crate::servers::http::error::JsonErrorOnly;
+use crate::servers::http::error::QueryError;
+use crate::servers::http::middleware::json_header::encode_json_header;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
@@ -97,7 +107,7 @@ pub async fn streaming_load_handler(
     ctx: &HttpQueryContext,
     req: &Request,
     mut multipart: Multipart,
-) -> PoemResult<Json<LoadResponse>> {
+) -> Response {
     let query_mem_stat = MemStat::create(ctx.query_id.clone());
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(ctx.query_id.clone());
@@ -108,10 +118,64 @@ pub async fn streaming_load_handler(
         ctx,
         &ctx.query_id,
     );
-    ThreadTracker::tracking_future(
-        streaming_load_handler_inner(ctx, req, multipart, query_mem_stat).in_span(root),
+    let mut session_conf: Option<HttpSessionConf> = match req.headers().get(HEADER_QUERY_CONTEXT) {
+        Some(v) => {
+            let s = v.to_str().unwrap().to_string();
+            match serde_json::from_str(s.trim()) {
+                Ok(s) => Some(s),
+                Err(e) => return poem::Error::from_string(
+                    format!(
+                        "[HTTP-STREAMING-LOAD] invalid value for header {HEADER_QUERY_CONTEXT}({s}) in request: {e}"
+                    ),
+                    StatusCode::BAD_REQUEST,
+                )
+                .into_response(),
+            }
+        }
+        None => None,
+    };
+    let res = ThreadTracker::tracking_future(
+        streaming_load_handler_inner(ctx, req, multipart, query_mem_stat, &session_conf)
+            .in_span(root),
     )
-    .await
+    .await;
+    let is_failed = res.is_err();
+
+    let mut resp = match res {
+        Ok(r) => r.into_response(),
+        Err(err) => (
+            err.status(),
+            Json(JsonErrorOnly {
+                error: QueryError {
+                    code: err.status().as_u16(),
+                    message: err.to_string(),
+                    detail: None,
+                },
+            }),
+        )
+            .into_response(),
+    };
+    if let Some(s) = &mut session_conf {
+        if let Some(internal) = &mut s.internal {
+            internal.last_query_ids = vec![ctx.query_id.clone()];
+        } else {
+            s.internal = Some(HttpSessionStateInternal {
+                last_query_ids: vec![ctx.query_id.clone()],
+                ..Default::default()
+            })
+        }
+        if is_failed {
+            if let Some(t) = &mut s.txn_state {
+                if *t == TxnState::Active {
+                    *t = TxnState::Fail
+                }
+            }
+        }
+        let v = encode_json_header(&s);
+        resp.headers_mut()
+            .insert(HEADER_QUERY_CONTEXT, v.parse().unwrap());
+    };
+    resp
 }
 
 #[async_backtrace::framed]
@@ -120,17 +184,16 @@ async fn streaming_load_handler_inner(
     req: &Request,
     multipart: Multipart,
     mem_stat: Arc<MemStat>,
+    session_conf: &Option<HttpSessionConf>,
 ) -> PoemResult<Json<LoadResponse>> {
     info!(
         "[HTTP-STREAMING-LOAD] New streaming load request, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
-
-    let session = http_context.upgrade_session(SessionType::HTTPStreamingLoad)?;
-    let query_context = session
-        .create_query_context()
+    let (_, query_context) = http_context
+        .create_session(session_conf, SessionType::HTTPStreamingLoad)
         .await
-        .map_err(InternalServerError)?;
+        .map_err(HttpErrorCode::bad_request)?;
 
     let sql = req
         .headers()
