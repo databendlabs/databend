@@ -21,7 +21,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
@@ -30,18 +30,6 @@ use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-
-static PUSHDOWN_FILTER_RULES: &[RuleID] = &[
-    RuleID::PushDownFilterUnion,
-    RuleID::PushDownFilterAggregate,
-    RuleID::PushDownFilterWindow,
-    RuleID::PushDownFilterWindowTopN,
-    RuleID::PushDownFilterSort,
-    RuleID::PushDownFilterEvalScalar,
-    RuleID::PushDownFilterJoin,
-    RuleID::PushDownFilterProjectSet,
-    RuleID::PushDownFilterScan,
-];
 
 #[derive(Clone)]
 pub struct CTEFilterPushdownOptimizer {
@@ -64,7 +52,7 @@ impl VisitorMut<'_> for ColumnMappingRewriter {
 
 impl CTEFilterPushdownOptimizer {
     pub fn new(ctx: Arc<OptimizerContext>) -> Self {
-        let inner_optimizer = RecursiveRuleOptimizer::new(ctx.clone(), PUSHDOWN_FILTER_RULES);
+        let inner_optimizer = RecursiveRuleOptimizer::new(ctx.clone(), &DEFAULT_REWRITE_RULES);
         Self {
             cte_filters: HashMap::new(),
             inner_optimizer,
