@@ -368,7 +368,7 @@ impl ExecutingGraph {
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
         // info!("[schedule] ------------new--------------");
-        let node = &locker.graph[index];
+        let _node = &locker.graph[index];
         // info!("[schedule] Node {:?} trigger schedule", node);
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
