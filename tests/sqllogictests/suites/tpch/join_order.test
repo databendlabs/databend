@@ -312,21 +312,21 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── Scan: default.tpch_test.nation (#4) (read rows: 25)
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
+│       │       └── Probe
+│       │           └── Scan: default.tpch_test.customer (#3) (read rows: 150000)
 │       └── Probe
-│           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+│           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
 └── Probe
     └── HashJoin: INNER
         ├── Build
         │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
-        │       │       └── Probe
-        │       │           └── Scan: default.tpch_test.customer (#3) (read rows: 150000)
+        │       │   └── Scan: default.tpch_test.nation (#4) (read rows: 25)
         │       └── Probe
-        │           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
+        │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
         └── Probe
             └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
 
