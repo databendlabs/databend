@@ -9,6 +9,8 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
 
-COPY ./distro/$TARGETPLATFORM/* /
+COPY ./distro/$TARGETPLATFORM/databend-metaverifier /usr/bin/databend-metaverifier
+COPY ./distro/$TARGETPLATFORM/start-verifier.sh /start-verifier.sh
+COPY ./distro/$TARGETPLATFORM/cat-logs.sh /cat-logs.sh
 
-ENTRYPOINT ["/bin/sh"]
+ENTRYPOINT ["/start-verifier.sh"]
