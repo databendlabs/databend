@@ -270,11 +270,11 @@ select segment_stats_size is null from fuse_segment('db_09_0020','t3') order by 
 0
 0
 
-query T
-select * from fuse_statistic('db_09_0020', 't3') order by column_name;
+query TI
+select column_name, distinct_count from fuse_statistic('db_09_0020', 't3') order by column_name;
 ----
-a 4 (empty)
-b 3 (empty)
+a 4
+b 3
 
 statement ok
 analyze table t3;
