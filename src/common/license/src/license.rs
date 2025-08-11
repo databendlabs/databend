@@ -95,6 +95,12 @@ pub enum Feature {
     Unknown,
 }
 
+pub enum VerifyResult {
+    MissMatch,
+    Success,
+    Failure,
+}
+
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -159,34 +165,40 @@ impl Feature {
         }
     }
 
-    pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
+    pub fn verify(&self, feature: &Feature) -> Result<VerifyResult, ErrorCode> {
         match (self, feature) {
             (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
                 if let Some(thread_num) = c.threads_num {
                     if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
-                        return Ok(false);
+                        return Ok(VerifyResult::Failure);
                     }
                 }
 
                 if let Some(max_memory_usage) = c.memory_usage {
                     if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
-                        return Ok(false);
+                        return Ok(VerifyResult::Failure);
                     }
                 }
 
-                Ok(true)
+                Ok(VerifyResult::Success)
             }
             (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
                 if let Some(max_storage_usage) = c.storage_usage {
                     if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
-                        return Ok(false);
+                        return Ok(VerifyResult::Failure);
                     }
                 }
 
-                Ok(true)
+                Ok(VerifyResult::Success)
             }
-            (Feature::MaxCpuQuota(c), Feature::MaxCpuQuota(v)) => Ok(c > v),
-            (Feature::MaxNodeQuota(c), Feature::MaxNodeQuota(v)) => Ok(c > v),
+            (Feature::MaxCpuQuota(c), Feature::MaxCpuQuota(v)) => match c > v {
+                true => Ok(VerifyResult::Success),
+                false => Ok(VerifyResult::Failure),
+            },
+            (Feature::MaxNodeQuota(c), Feature::MaxNodeQuota(v)) => match c > v {
+                true => Ok(VerifyResult::Success),
+                false => Ok(VerifyResult::Failure),
+            },
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
             | (Feature::ComputedColumn, Feature::ComputedColumn)
@@ -201,8 +213,8 @@ impl Feature {
             | (Feature::StorageEncryption, Feature::StorageEncryption)
             | (Feature::HilbertClustering, Feature::HilbertClustering)
             | (Feature::NgramIndex, Feature::NgramIndex)
-            | (Feature::VectorIndex, Feature::VectorIndex) => Ok(true),
-            (_, _) => Ok(false),
+            | (Feature::VectorIndex, Feature::VectorIndex) => Ok(VerifyResult::Success),
+            (_, _) => Ok(VerifyResult::MissMatch),
         }
     }
 }

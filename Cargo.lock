@@ -3437,7 +3437,6 @@ dependencies = [
  "databend-common-expression",
  "databend-common-hashtable",
  "databend-common-io",
- "databend-common-openai",
  "databend-common-vector",
  "databend-functions-scalar-arithmetic",
  "databend-functions-scalar-datetime",
@@ -4008,16 +4007,6 @@ dependencies = [
  "serde_json",
  "snap",
  "zstd 0.12.4",
-]
-
-[[package]]
-name = "databend-common-openai"
-version = "0.1.0"
-dependencies = [
- "databend-common-exception",
- "databend-common-metrics",
- "log",
- "openai_api_rust",
 ]
 
 [[package]]
@@ -5301,7 +5290,6 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-metrics",
- "databend-common-openai",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
@@ -10994,17 +10982,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
-name = "openai_api_rust"
-version = "0.1.4"
-source = "git+https://github.com/datafuse-extras/openai-api?rev=819a0ed#819a0ed1384e4fe948b2bec88856e37062cb0f38"
-dependencies = [
- "log",
- "serde",
- "serde_json",
- "ureq",
-]
-
-[[package]]
 name = "opendal"
 version = "0.53.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16035,24 +16012,6 @@ name = "unty"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d49784317cd0d1ee7ec5c716dd598ec5b4483ea832a2dced265471cc0f690ae"
-
-[[package]]
-name = "ureq"
-version = "2.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02d1a66277ed75f640d608235660df48c8e3c19f3b4edb6a263315626cc3c01d"
-dependencies = [
- "base64 0.22.1",
- "flate2",
- "log",
- "once_cell",
- "rustls 0.23.27",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "url",
- "webpki-roots 0.26.11",
-]
 
 [[package]]
 name = "url"
