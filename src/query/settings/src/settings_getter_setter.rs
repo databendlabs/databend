@@ -669,12 +669,12 @@ impl Settings {
         self.try_get_u64("auto_compaction_segments_limit")
     }
 
-    pub fn get_use_parquet2(&self) -> Result<bool> {
-        Ok(self.try_get_u64("use_parquet2")? != 0)
+    pub fn get_use_experimental_parquet_reader(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_experimental_parquet_reader")? != 0)
     }
 
-    pub fn set_use_parquet2(&self, val: bool) -> Result<()> {
-        self.try_set_u64("use_parquet2", u64::from(val))
+    pub fn set_use_experimental_parquet_reader(&self, val: bool) -> Result<()> {
+        self.try_set_u64("use_experimental_parquet_reader", u64::from(val))
     }
 
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {

@@ -52,7 +52,7 @@ pub struct BlockReader {
 
     pub original_schema: TableSchemaRef,
     pub native_columns_reader: NativeColumnsReader,
-    pub use_parquet2_to_read_parquet: bool,
+    pub use_experimental_parquet_reader: bool,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -139,7 +139,8 @@ impl BlockReader {
 
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
-        let use_parquet2_to_read_parquet = ctx.get_settings().get_use_parquet2()?;
+        let use_experimental_parquet_reader =
+            ctx.get_settings().get_use_experimental_parquet_reader()?;
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -154,7 +155,7 @@ impl BlockReader {
             put_cache,
             original_schema: schema,
             native_columns_reader,
-            use_parquet2_to_read_parquet,
+            use_experimental_parquet_reader,
         }))
     }
 
