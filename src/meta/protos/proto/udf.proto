@@ -69,15 +69,18 @@ message UDAFScript {
   repeated string packages = 8;
 }
 
+message UDTFArg {
+  string name = 1;
+  DataType type = 2;
+}
+
 message UDTF {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  repeated string arg_names = 1;
-  repeated DataType arg_types = 2;
-  repeated string return_names = 3;
-  repeated DataType return_types = 4;
-  string sql = 5;
+  repeated UDTFArg arg_types = 1;
+  repeated UDTFArg return_types = 2;
+  string sql = 3;
 }
 
 message UserDefinedFunction {

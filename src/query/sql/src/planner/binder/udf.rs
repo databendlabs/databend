@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use chrono::Utc;
 use databend_common_ast::ast::AlterUDFStmt;
@@ -26,12 +26,13 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::DataField;
-use databend_common_meta_app::principal::{LambdaUDF, UDTF};
+use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::UDTF;
 use databend_common_version::UDF_CLIENT_USER_AGENT;
 
 use crate::normalize_identifier;
@@ -203,7 +204,9 @@ impl Binder {
                 })
             }
             UDFDefinition::UDTFSql {
-                arg_types, return_types, sql
+                arg_types,
+                return_types,
+                sql,
             } => {
                 let arg_types = arg_types
                     .iter()
@@ -212,16 +215,16 @@ impl Binder {
                         let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
                         Ok((column, ty))
                     })
-                    .collect::<Result<BTreeMap<_, _>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let return_types = return_types
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
                         let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
-                        Ok((column , ty))
+                        Ok((column, ty))
                     })
-                    .collect::<Result<BTreeMap<_, _>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 Ok(UserDefinedFunction {
                     name,
