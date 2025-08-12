@@ -198,6 +198,7 @@ impl GlobalHistoryLog {
                                     );
                                     return;
                                 }
+                                sleep(sleep_time).await;
                             }
                         }
                     }
