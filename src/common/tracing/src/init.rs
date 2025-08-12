@@ -15,7 +15,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
@@ -30,6 +29,7 @@ use logforth::Logger;
 use opendal::Operator;
 use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::WithTonicConfig;
 
 use crate::config::OTLPProtocol;
 use crate::filter::filter_by_thread_tracker;
@@ -142,42 +142,40 @@ pub fn init_logging(
     // initialize tracing a reporter
     if cfg.tracing.on {
         let endpoint = cfg.tracing.otlp.endpoint.clone();
-        let mut kvs = cfg
-            .tracing
-            .otlp
-            .labels
-            .iter()
-            .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
-            .collect::<Vec<_>>();
-        kvs.push(opentelemetry::KeyValue::new(
-            "service.name",
-            trace_name.clone(),
-        ));
-        for (k, v) in &labels {
-            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
-        }
         let exporter = match cfg.tracing.otlp.protocol {
-            OTLPProtocol::Grpc => opentelemetry_otlp::new_exporter()
-                .tonic()
+            OTLPProtocol::Grpc => opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_compression(Compression::Gzip)
                 .with_endpoint(endpoint)
                 .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-                .with_timeout(Duration::from_secs(
-                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                ))
-                .with_compression(Compression::Gzip)
-                .build_span_exporter()
+                .with_timeout(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT)
+                .build()
                 .expect("initialize oltp grpc exporter"),
-            OTLPProtocol::Http => opentelemetry_otlp::new_exporter()
-                .http()
+            OTLPProtocol::Http => opentelemetry_otlp::SpanExporter::builder()
+                .with_http()
                 .with_endpoint(endpoint)
                 .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
-                .with_timeout(Duration::from_secs(
-                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                ))
-                .build_span_exporter()
+                .with_timeout(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT)
+                .build()
                 .expect("initialize oltp http exporter"),
         };
-        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
+
+        let resource = opentelemetry_sdk::Resource::builder()
+            .with_service_name(trace_name.clone())
+            .with_attributes(
+                cfg.tracing
+                    .otlp
+                    .labels
+                    .iter()
+                    .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string())),
+            )
+            .with_attributes(
+                labels
+                    .iter()
+                    .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string())),
+            )
+            .build();
+        let (reporter_rt, otlp_reporter) = Thread::spawn(move || {
             // init runtime with 2 threads
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -188,8 +186,8 @@ pub fn init_logging(
                 fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
-                    Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
-                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
+                    Cow::Owned(resource),
+                    opentelemetry::InstrumentationScope::builder(trace_name).build(),
                 )
             });
             (rt, reporter)
