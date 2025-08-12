@@ -340,7 +340,9 @@ where
             if let Some(v) = T::upcast_scalar_with_type(v, &self.data_type).trim_max() {
                 v
             } else {
-                return Err(ErrorCode::Internal("Unable to trim string"));
+                return Err(ErrorCode::Internal(
+                    "Unable to trim string: first 16 chars are all replacement_point".to_string(),
+                ));
             }
         } else {
             Scalar::Null
