@@ -53,7 +53,9 @@ pub struct UDFScript {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDTF {
+    // arg name with data type
     pub arg_types: Vec<(String, DataType)>,
+    // return column name with data type
     pub return_types: Vec<(String, DataType)>,
     pub sql: String,
 }
