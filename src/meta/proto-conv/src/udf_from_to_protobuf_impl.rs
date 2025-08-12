@@ -289,22 +289,20 @@ impl FromToProto for mt::UDTF {
 
         let mut arg_types = Vec::new();
         for arg_ty in p.arg_types {
-            let ty = (&TableDataType::from_pb(arg_ty.r#type.ok_or_else(|| {
+            let ty = TableDataType::from_pb(arg_ty.ty.ok_or_else(|| {
                 Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
-            })?)?)
-                .into();
+            })?)?;
 
-            arg_types.push((arg_ty.name, ty));
+            arg_types.push((arg_ty.name, (&ty).into()));
         }
 
         let mut return_types = Vec::new();
         for return_ty in p.return_types {
-            let ty = (&TableDataType::from_pb(return_ty.r#type.ok_or_else(|| {
+            let ty = TableDataType::from_pb(return_ty.ty.ok_or_else(|| {
                 Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
-            })?)?)
-                .into();
+            })?)?;
 
-            return_types.push((return_ty.name, ty));
+            return_types.push((return_ty.name, (&ty).into()));
         }
 
         Ok(Self {
@@ -327,7 +325,7 @@ impl FromToProto for mt::UDTF {
                 .to_pb()?;
             arg_types.push(UdtfArg {
                 name: arg_name.clone(),
-                r#type: Some(arg_type),
+                ty: Some(arg_type),
             });
         }
 
@@ -343,7 +341,7 @@ impl FromToProto for mt::UDTF {
                 .to_pb()?;
             return_types.push(UdtfArg {
                 name: return_name.clone(),
-                r#type: Some(return_type),
+                ty: Some(return_type),
             });
         }
 

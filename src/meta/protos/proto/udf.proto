@@ -71,7 +71,7 @@ message UDAFScript {
 
 message UDTFArg {
   string name = 1;
-  DataType type = 2;
+  DataType ty = 2;
 }
 
 message UDTF {
