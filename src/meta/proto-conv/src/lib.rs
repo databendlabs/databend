@@ -78,6 +78,7 @@ mod ownership_from_to_protobuf_impl;
 mod procedure_from_to_protobuf_impl;
 mod role_from_to_protobuf_impl;
 mod row_access_policy_from_to_protobuf_impl;
+mod row_access_policy_table_id_form_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod sequence_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;

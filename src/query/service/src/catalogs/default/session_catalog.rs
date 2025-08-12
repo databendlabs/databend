@@ -85,6 +85,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -505,6 +507,19 @@ impl Catalog for SessionCatalog {
             }
             TxnState::Fail => unreachable!(),
         }
+    }
+
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        if is_temp_table_id(req.table_id) {
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "SetTableRowAccessPolicy: table id {} is a temporary table id",
+                req.table_id
+            )));
+        }
+        self.inner.set_table_row_access_policy(req).await
     }
 
     async fn set_table_column_mask_policy(

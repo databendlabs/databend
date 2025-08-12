@@ -169,6 +169,7 @@ fn test_decode_v122_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        row_access_policy: None,
         indexes: btreemap! {},
     };
     common::test_load_old(func_name!(), table_meta_v122.as_slice(), 122, want())?;

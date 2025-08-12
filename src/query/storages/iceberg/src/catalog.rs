@@ -83,6 +83,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -565,6 +567,14 @@ impl Catalog for IcebergMutableCatalog {
         &self,
         _req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_row_access_policy(
+        &self,
+        _req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
         unimplemented!()
     }
 

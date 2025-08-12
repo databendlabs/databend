@@ -536,3 +536,30 @@ impl RefreshTableCachePlan {
         Arc::new(DataSchema::empty())
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct AddTableRowAccessPolicyPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableRowAccessPolicyPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropAllTableRowAccessPoliciesPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}

@@ -66,7 +66,7 @@ pub trait RowAccessPolicyHandler: Sync + Send {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<RowAccessPolicyMeta>;
+    ) -> Result<(u64, RowAccessPolicyMeta)>;
 }
 
 pub struct RowAccessPolicyHandlerWrapper {
@@ -102,7 +102,7 @@ impl RowAccessPolicyHandlerWrapper {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<RowAccessPolicyMeta> {
+    ) -> Result<(u64, RowAccessPolicyMeta)> {
         self.handler.get_row_access(meta_api, tenant, name).await
     }
 }

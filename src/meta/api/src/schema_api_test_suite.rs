@@ -43,6 +43,11 @@ use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
@@ -109,6 +114,8 @@ use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
@@ -149,6 +156,7 @@ use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::DatamaskApi;
+use crate::RowAccessPolicyApi;
 use crate::SchemaApi;
 use crate::SequenceApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -263,7 +271,12 @@ impl SchemaApiTestSuite {
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
     where
         B: kvapi::ApiBuilder<MT>,
-        MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi + DatamaskApi + SequenceApi + 'static,
+        MT: kvapi::AsKVApi<Error = MetaError>
+            + SchemaApi
+            + DatamaskApi
+            + SequenceApi
+            + RowAccessPolicyApi
+            + 'static,
     {
         let suite = SchemaApiTestSuite {};
 
@@ -297,6 +310,9 @@ impl SchemaApiTestSuite {
         suite.table_rename(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
         suite.table_update_mask_policy(&b.build().await).await?;
+        suite
+            .table_update_row_access_policy(&b.build().await)
+            .await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
         suite.table_list_many(&b.build().await).await?;
@@ -3376,6 +3392,250 @@ impl SchemaApiTestSuite {
 
             let meta: DatamaskMeta = get_kv_data(mt.as_kv_api(), &id_key).await?;
             assert_eq!(meta.comment, Some("after".to_string()));
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn table_update_row_access_policy<
+        MT: SchemaApi + RowAccessPolicyApi + kvapi::AsKVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let db_name = "db1";
+        let tbl_name_1 = "tb1";
+        let tbl_name_2 = "tb2";
+        let policy1 = "mask1";
+        let policy2 = "mask2";
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: Default::default(),
+            created_on,
+            ..TableMeta::default()
+        };
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                create_option: CreateOption::Create,
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            let res = mt.create_database(plan).await?;
+            info!("create database res: {:?}", res);
+
+            assert_eq!(1, *res.db_id, "first database id is 1");
+        }
+
+        let created_on = Utc::now();
+        info!("--- create table");
+        {
+            let req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+                table_meta: table_meta(created_on),
+                as_dropped: false,
+                table_properties: None,
+                table_partition: None,
+            };
+            let _res = mt.create_table(req.clone()).await?;
+
+            let req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+                table_meta: table_meta(created_on),
+                as_dropped: false,
+                table_properties: None,
+                table_partition: None,
+            };
+            let _res = mt.create_table(req.clone()).await?;
+        }
+
+        info!("--- create row access policy");
+
+        let req = CreateRowAccessPolicyReq {
+            can_replace: false,
+            name: RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string()),
+            row_access_policy_meta: RowAccessPolicyMeta {
+                args: vec![("number".to_string(), "UInt64".to_string())],
+                body: "true".to_string(),
+                comment: None,
+                create_on: Default::default(),
+                update_on: None,
+            },
+        };
+        let s = mt.create_row_access(req).await.unwrap().unwrap();
+        let policy1_id = s.id;
+
+        let req = CreateRowAccessPolicyReq {
+            can_replace: false,
+            name: RowAccessPolicyNameIdent::new(tenant.clone(), policy2.to_string()),
+            row_access_policy_meta: RowAccessPolicyMeta {
+                args: vec![("number".to_string(), "UInt64".to_string())],
+                body: "true".to_string(),
+                comment: None,
+                create_on: Default::default(),
+                update_on: None,
+            },
+        };
+        let s = mt.create_row_access(req).await.unwrap().unwrap();
+        let _policy2_id = s.id;
+
+        let table_id_1;
+        info!("--- apply mask1 policy to table 1 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let table_id = res.ident.table_id;
+            table_id_1 = table_id;
+
+            let req = SetTableRowAccessPolicyReq {
+                tenant: tenant.clone(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id,
+                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
+                policy_id: policy1_id,
+            };
+            let _ = mt.set_table_row_access_policy(req).await?;
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+
+            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            // check mask policy id list
+            let tenant = Tenant::new_literal("tenant1");
+            let id = RowAccessPolicyIdTableId {
+                policy_id: policy1_id,
+                table_id: table_id_1,
+            };
+            let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
+            let res = mt.as_kv_api().get_pb(&ident).await?;
+
+            assert!(res.is_some());
+        }
+
+        let table_id_2;
+        info!("--- apply mask1 policy to table 2 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            let table_id = res.ident.table_id;
+            table_id_2 = table_id;
+
+            let req = SetTableRowAccessPolicyReq {
+                tenant: tenant.clone(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id,
+                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
+                policy_id: policy1_id,
+            };
+            let _ = mt.set_table_row_access_policy(req).await?;
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_2.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            // check mask policy id list
+            let tenant = Tenant::new_literal("tenant1");
+            let id = RowAccessPolicyIdTableId {
+                policy_id: policy1_id,
+                table_id: table_id_2,
+            };
+            let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
+            let res = mt.as_kv_api().get_pb(&ident).await?;
+
+            assert!(res.is_some());
+        }
+
+        info!("--- unset row access policy of table 1 and check");
+        {
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+
+            let req = SetTableRowAccessPolicyReq {
+                tenant: tenant.clone(),
+                seq: MatchSeq::Exact(res.ident.seq),
+                table_id: table_id_1,
+                action: SetTableRowAccessPolicyAction::Unset(policy1.to_string()),
+                policy_id: policy1_id,
+            };
+            let _ = mt.set_table_row_access_policy(req).await?;
+
+            // check table meta
+            let req = GetTableReq {
+                inner: TableNameIdent {
+                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name_1.to_string(),
+                },
+            };
+            let res = mt.get_table(req).await?;
+            assert!(res.meta.row_access_policy.is_none());
+
+            // check mask policy id list
+            let tenant = Tenant::new_literal("tenant1");
+            let id = RowAccessPolicyIdTableId {
+                policy_id: policy1_id,
+                table_id: table_id_1,
+            };
+            let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
+            let res = mt.as_kv_api().get_pb(&ident).await?;
+            assert!(res.is_none());
         }
 
         Ok(())
