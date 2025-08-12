@@ -46,6 +46,7 @@ use futures_util::future::join_all;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
+use log::warn;
 use opendal::raw::normalize_root;
 use parking_lot::Mutex;
 use rand::random;
@@ -161,30 +162,42 @@ impl GlobalHistoryLog {
             let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
-                let mut consecutive_error = 0;
+                let mut persistent_error_cnt = 0;
+                let mut temp_error_cnt = 0;
                 loop {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
-                                consecutive_error = 0;
+                                persistent_error_cnt = 0;
+                                temp_error_cnt = 0;
                             }
+                            sleep(sleep_time).await;
                         }
                         Err(e) => {
                             error!(
-                                "[HISTORY-TABLES] {} log transform failed due to {}, retry {}",
-                                table_clone.name, e, consecutive_error
+                                "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
+                                table_clone.name, e, persistent_error_cnt
                             );
-                            consecutive_error += 1;
-                            if consecutive_error > 3 {
-                                error!(
-                                    "[HISTORY-TABLES] {} log transform failed too many times, exit",
-                                    table_clone.name
+                            if is_temp_error(&e) {
+                                let backoff_second = 2u64.pow(temp_error_cnt);
+                                temp_error_cnt += 1;
+                                warn!(
+                                    "[HISTORY-TABLES] {} log transform failed with temporary error {}, next retry in {} seconds",
+                                    table_clone.name, e, temp_error_cnt
                                 );
-                                break;
+                                sleep(Duration::from_secs(backoff_second)).await;
+                            } else {
+                                persistent_error_cnt += 1;
+                                if persistent_error_cnt > 3 {
+                                    error!(
+                                        "[HISTORY-TABLES] {} log transform failed too many times, giving up",
+                                        table_clone.name
+                                    );
+                                    return;
+                                }
                             }
                         }
                     }
-                    sleep(sleep_time).await;
                 }
             });
             handles.push(handle);
@@ -432,4 +445,23 @@ pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
     };
     GlobalLogger::instance().set_operator(op).await;
     Ok(())
+}
+
+/// Check if the error is a temporary error,
+/// We will use this to determine if we should retry the operation.
+fn is_temp_error(e: &ErrorCode) -> bool {
+    let code = e.code();
+    let message = e.message();
+    // Storage and I/O errors are considered temporary errors
+    let storage = code == ErrorCode::STORAGE_NOT_FOUND
+        || code == ErrorCode::STORAGE_PERMISSION_DENIED
+        || code == ErrorCode::STORAGE_UNAVAILABLE
+        || code == ErrorCode::STORAGE_UNSUPPORTED
+        || code == ErrorCode::STORAGE_INSECURE
+        || code == ErrorCode::INVALID_OPERATION
+        || code == ErrorCode::STORAGE_OTHER;
+    // If acquire semaphore failed, we consider it a temporary error
+    let meta = code == ErrorCode::INTERNAL && message.contains("acquire semaphore failed");
+    let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;
+    storage || transaction || meta
 }
