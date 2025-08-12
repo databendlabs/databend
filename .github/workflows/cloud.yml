@@ -156,7 +156,6 @@ jobs:
     uses: ./.github/workflows/reuse.explain.yml
     secrets: inherit
     with:
-      sha: ${{ needs.info.outputs.sha }}
       run_id: ${{ github.run_id }}
       version: ${{ needs.docker.outputs.tag }}
 

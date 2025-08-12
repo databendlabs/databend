@@ -3,10 +3,6 @@ name: Explain
 on:
   workflow_call:
     inputs:
-      sha:
-        description: Git sha for explain
-        required: true
-        type: string
       run_id:
         description: The run id for explain
         required: true
