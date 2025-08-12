@@ -292,8 +292,9 @@ where
             }
             Inner::Spill(input_data, sort_spill) => {
                 let rows = input_data.in_memory_rows();
-                self.memory_settings.check_spill() && rows >= sort_spill.params().batch_rows * 2
-                    || input_data.in_memory_rows() >= sort_spill.max_rows()
+                let params = sort_spill.params();
+                self.memory_settings.check_spill() && rows >= params.batch_rows * 2
+                    || input_data.in_memory_rows() >= params.max_rows()
             }
             _ => unreachable!(),
         }

@@ -140,20 +140,6 @@ where A: SortAlgorithm
             .await
     }
 
-    pub async fn collect_spill_last(&mut self, target_rows: usize) -> Result<()> {
-        let Step::Collect(collect) = &mut self.step else {
-            unreachable!()
-        };
-        collect.spill_last(&self.base, target_rows).await
-    }
-
-    pub fn collect_memory_rows(&self) -> usize {
-        match &self.step {
-            Step::Collect(step_collect) => step_collect.streams.in_memory_rows(),
-            _ => unreachable!(),
-        }
-    }
-
     pub fn collect_total_rows(&self) -> usize {
         match &self.step {
             Step::Collect(step_collect) => step_collect.streams.total_rows(),
@@ -199,10 +185,6 @@ where A: SortAlgorithm
                 finish: false,
             })
         }
-    }
-
-    pub fn max_rows(&self) -> usize {
-        self.params().max_rows()
     }
 
     pub fn params(&self) -> SortSpillParams {
@@ -306,6 +288,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     #[fastrace::trace(name = "StepCollect::spill_last")]
     async fn spill_last(&mut self, base: &Base, target_rows: usize) -> Result<()> {
         let Some(s) = self.streams.last_mut() else {
