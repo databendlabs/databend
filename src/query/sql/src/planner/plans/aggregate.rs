@@ -331,10 +331,6 @@ impl Operator for Aggregate {
                     children_required.push(vec![RequiredProperty {
                         distribution: Distribution::Any,
                     }]);
-
-                    children_required.push(vec![RequiredProperty {
-                        distribution: Distribution::Serial,
-                    }]);
                 } else {
                     let settings = ctx.get_settings();
 

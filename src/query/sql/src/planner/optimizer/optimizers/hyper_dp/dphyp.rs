@@ -142,10 +142,7 @@ impl DPhpyOptimizer {
             self.table_index_map.insert(*table_index, relation_idx);
         }
 
-        self.join_relations.push(JoinRelation::new(
-            &new_s_expr,
-            self.sample_executor().clone(),
-        ));
+        self.join_relations.push(JoinRelation::new(&new_s_expr));
 
         Ok((new_s_expr, true))
     }
@@ -160,9 +157,9 @@ impl DPhpyOptimizer {
             // Check if relation contains filter, if exists, check if the filter in `filters`
             // If exists, remove it from `filters`
             self.check_filter(relation);
-            JoinRelation::new(relation, self.sample_executor().clone())
+            JoinRelation::new(relation)
         } else {
-            JoinRelation::new(s_expr, self.sample_executor().clone())
+            JoinRelation::new(s_expr)
         };
 
         if let RelOperator::Scan(op) = s_expr.plan() {
@@ -238,10 +235,7 @@ impl DPhpyOptimizer {
         if !is_inner_join {
             // For non-inner joins, process children in parallel
             let new_s_expr = self.new_children(s_expr).await?;
-            self.join_relations.push(JoinRelation::new(
-                &new_s_expr,
-                self.sample_executor().clone(),
-            ));
+            self.join_relations.push(JoinRelation::new(&new_s_expr));
             return Ok((Arc::new(new_s_expr), true));
         }
 
@@ -284,10 +278,7 @@ impl DPhpyOptimizer {
         }
 
         let new_s_expr = s_expr.replace_children([Arc::new(left_expr), Arc::new(right_expr)]);
-        self.join_relations.push(JoinRelation::new(
-            &new_s_expr,
-            self.sample_executor().clone(),
-        ));
+        self.join_relations.push(JoinRelation::new(&new_s_expr));
         Ok((Arc::new(new_s_expr), true))
     }
 
@@ -305,9 +296,9 @@ impl DPhpyOptimizer {
             // Check if relation contains filter, if exists, check if the filter in `filters`
             // If exists, remove it from `filters`
             self.check_filter(relation);
-            JoinRelation::new(relation, self.sample_executor().clone())
+            JoinRelation::new(relation)
         } else {
-            JoinRelation::new(s_expr, self.sample_executor().clone())
+            JoinRelation::new(s_expr)
         };
 
         // Map table indexes before adding to join_relations
@@ -377,10 +368,7 @@ impl DPhpyOptimizer {
     /// Process a union all node
     async fn process_union_all_node(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         let new_s_expr = self.new_children(s_expr).await?;
-        self.join_relations.push(JoinRelation::new(
-            &new_s_expr,
-            self.sample_executor().clone(),
-        ));
+        self.join_relations.push(JoinRelation::new(&new_s_expr));
         Ok((Arc::new(new_s_expr), true))
     }
 
