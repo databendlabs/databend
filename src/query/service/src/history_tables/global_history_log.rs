@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -174,19 +175,21 @@ impl GlobalHistoryLog {
                             sleep(sleep_time).await;
                         }
                         Err(e) => {
-                            error!(
-                                "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
-                                table_clone.name, e, persistent_error_cnt
-                            );
                             if is_temp_error(&e) {
-                                let backoff_second = 2u64.pow(temp_error_cnt);
+                                // If the error is temporary, we will retry with exponential backoff
+                                // The max backoff time is 10 minutes
+                                let backoff_second = min(2u64.pow(temp_error_cnt), 10 * 60);
                                 temp_error_cnt += 1;
                                 warn!(
-                                    "[HISTORY-TABLES] {} log transform failed with temporary error {}, next retry in {} seconds",
-                                    table_clone.name, e, temp_error_cnt
+                                    "[HISTORY-TABLES] {} log transform failed with temporary error {}, count {}, next retry in {} seconds",
+                                    table_clone.name, e, temp_error_cnt, backoff_second
                                 );
                                 sleep(Duration::from_secs(backoff_second)).await;
                             } else {
+                                error!(
+                                    "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
+                                    table_clone.name, e, persistent_error_cnt
+                                );
                                 persistent_error_cnt += 1;
                                 if persistent_error_cnt > 3 {
                                     error!(
