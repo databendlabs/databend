@@ -316,11 +316,11 @@ mod tests {
         let settings = ctx.get_settings();
 
         ctx.set_enable_sort_spill(true);
-        settings.set_setting("sort_spilling_batch_bytes".into(), "8192".into())?;
+        settings.set_setting("sort_spilling_batch_bytes".into(), "1048576".into())?;
 
         let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
 
-        assert_eq!(memory_settings.spill_unit_size, 8192);
+        assert_eq!(memory_settings.spill_unit_size, 1048576);
         Ok(())
     }
 
