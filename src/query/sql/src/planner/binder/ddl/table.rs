@@ -114,13 +114,16 @@ use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -1167,6 +1170,66 @@ impl Binder {
                     database,
                     table,
                 })))
+            }
+            AlterTableAction::AddRowAccessPolicy { columns, policy } => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                let columns = columns
+                    .iter()
+                    .map(|c| self.normalize_identifier(c).name)
+                    .collect();
+                let policy = self.normalize_identifier(policy).name;
+                Ok(Plan::AddTableRowAccessPolicy(Box::new(
+                    AddTableRowAccessPolicyPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        columns,
+                        policy,
+                    },
+                )))
+            }
+            AlterTableAction::DropRowAccessPolicy { policy } => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                let policy = self.normalize_identifier(policy).name;
+                Ok(Plan::DropTableRowAccessPolicy(Box::new(
+                    DropTableRowAccessPolicyPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        policy,
+                    },
+                )))
+            }
+            AlterTableAction::DropAllRowAccessPolicies => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                Ok(Plan::DropAllTableRowAccessPolicies(Box::new(
+                    DropAllTableRowAccessPoliciesPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                    },
+                )))
             }
         }
     }

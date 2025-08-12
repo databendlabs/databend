@@ -64,13 +64,13 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<RowAccessPolicyMeta> {
+    ) -> Result<(u64, RowAccessPolicyMeta)> {
         let name_ident = RowAccessPolicyNameIdent::new(tenant, name);
-        let seq_meta = meta_api
+        let (id, seq_meta) = meta_api
             .get_row_access(&name_ident)
             .await?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get row policy")))?;
-        Ok(seq_meta.data)
+        Ok((id, seq_meta.data))
     }
 }
 

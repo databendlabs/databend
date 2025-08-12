@@ -4068,6 +4068,30 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
+    let add_row_access_policy = map(
+        rule! {
+            ADD ~ ROW ~ ACCESS ~ POLICY ~ #ident ~ ON ~ "(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(_, _, _, _, policy, _, _, columns, _)| AlterTableAction::AddRowAccessPolicy {
+            columns,
+            policy,
+        },
+    );
+
+    let drop_row_access_policy = map(
+        rule! {
+            DROP ~ ROW ~ ACCESS ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, policy)| AlterTableAction::DropRowAccessPolicy { policy },
+    );
+
+    let drop_all_row_access_polices = map(
+        rule! {
+            DROP ~ ALL ~ ROW ~ ACCESS ~ POLICIES
+        },
+        |(_, _, _, _, _)| AlterTableAction::DropAllRowAccessPolicies,
+    );
+
     let drop_column = map(
         rule! {
             DROP ~ COLUMN? ~ #ident
@@ -4156,6 +4180,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #unset_table_options
         | #refresh_cache
         | #modify_table_connection
+        | #drop_all_row_access_polices
+        | #drop_row_access_policy
+        | #add_row_access_policy
     )(i)
 }
 

@@ -102,6 +102,11 @@ impl Plan {
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
             Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
+            Plan::AddTableRowAccessPolicy(_) => Ok("AddTableRowAccessPolicy".to_string()),
+            Plan::DropTableRowAccessPolicy(_) => Ok("DropTableRowAccessPolicy".to_string()),
+            Plan::DropAllTableRowAccessPolicies(_) => {
+                Ok("DropAllTableRowAccessPolicies".to_string())
+            }
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),

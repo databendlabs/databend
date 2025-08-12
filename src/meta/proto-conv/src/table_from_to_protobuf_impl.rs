@@ -237,6 +237,7 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
+            row_access_policy: p.row_access_policy,
             indexes,
             virtual_schema,
         };
@@ -279,6 +280,7 @@ impl FromToProto for mt::TableMeta {
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
+            row_access_policy: self.row_access_policy.clone(),
             indexes,
             virtual_schema: self
                 .virtual_schema

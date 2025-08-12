@@ -35,6 +35,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
@@ -84,6 +85,7 @@ use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
+use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
@@ -103,6 +105,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
@@ -281,6 +284,9 @@ pub enum Plan {
     UnsetOptions(Box<UnsetOptionsPlan>),
     RefreshTableCache(Box<RefreshTableCachePlan>),
     ModifyTableConnection(Box<ModifyTableConnectionPlan>),
+    AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
+    DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
+    DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

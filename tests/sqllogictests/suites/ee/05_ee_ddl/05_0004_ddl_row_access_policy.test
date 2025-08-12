@@ -33,7 +33,7 @@ create row access policy IF NOT EXISTS rap_it as (empl_id varchar) returns boole
   end;
 
 statement ok
-create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+create or replace row access policy rap_it as (empl_id string null) returns boolean ->
   case
       when 'it_admin' = current_role() then false
       else true
@@ -48,6 +48,27 @@ CREATE OR REPLACE row access policy IF NOT EXISTS rap2 AS (val STRING) RETURNS S
 
 statement ok
 desc row access policy rap1;
+
+statement ok
+create or replace table t(id int, empl_id string);
+
+statement error 1114
+alter table t ADD ROW ACCESS POLICY rap_it ON (id);
+
+statement ok
+alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
+
+statement error 1132
+alter table t ADD ROW ACCESS POLICY rap_it ON (id);
+
+statement error 1132
+ALTER TABLE t drop row access policy p1;
+
+statement ok
+ALTER TABLE t drop row access policy rap_it;
+
+statement ok
+ALTER TABLE t drop all row access policies;
 
 statement ok
 drop row access policy if exists rap1;

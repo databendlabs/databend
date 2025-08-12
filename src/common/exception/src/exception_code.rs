@@ -285,6 +285,8 @@ build_exceptions! {
     EmptyShareEndpointConfig(1130),
     /// Unknown row policy
     UnknownRowAccessPolicy(1131),
+    /// Alter Table error
+    AlterTableError(1132),
 }
 
 // Sequence Errors [1124-1126, 3101]
