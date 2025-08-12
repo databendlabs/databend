@@ -205,7 +205,7 @@ CommitSink
             │   ├── filter id:0, build key:p.c_code (#9), probe key:c.c_code (#1), filter type:inlist,min_max
             │   ├── filter id:1, build key:p.id (#8), probe key:c.id (#0), filter type:inlist,min_max
             │   └── filter id:2, build key:p.me_id (#10), probe key:c.me_id (#2), filter type:inlist,min_max
-            ├── estimated rows: 3.20
+            ├── estimated rows: 0.16
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── output columns: [id (#8), c_code (#9), me_id (#10), p_id (#11), m_p_id (#12), lkp_id (#13), l_p_id (#14), l_m_p_id (#15)]

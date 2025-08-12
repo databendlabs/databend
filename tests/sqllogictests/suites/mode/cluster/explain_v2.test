@@ -357,7 +357,7 @@ AggregateFinal
             ├── probe keys: [x.a (#2)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── estimated rows: 50.00
+            ├── estimated rows: 5.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
             │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))

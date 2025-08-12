@@ -421,7 +421,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
-├── estimated rows: 50.00
+├── estimated rows: 41.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 │   ├── join type: CROSS
@@ -944,7 +944,7 @@ HashJoin
 ├── build join filters:
 │   ├── filter id:0, build key:scalar_subquery_2 (#2), probe key:a.id (#0), filter type:inlist,min_max
 │   └── filter id:1, build key:id (#2), probe key:a.id (#0), filter type:inlist,min_max
-├── estimated rows: 0.40
+├── estimated rows: 0.13
 ├── Filter(Build)
 │   ├── output columns: [b.id (#2)]
 │   ├── filters: [is_true(b.id (#2) = b.id (#2))]
@@ -1677,7 +1677,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:numbers.number (#1), probe key:a.number (#0), filter type:inlist,min_max
-├── estimated rows: 100.00
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [NOT CAST(numbers.number (#1) AS Boolean)]

@@ -63,7 +63,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t.number (#0), probe key:t1.number (#1), filter type:inlist,min_max
-├── estimated rows: 1.00
+├── estimated rows: 0.50
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
@@ -850,7 +850,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
-├── estimated rows: 200.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#1)]
@@ -1036,7 +1036,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_2 (#2)]
-├── estimated rows: 4.00
+├── estimated rows: 0.80
 ├── EvalScalar(Build)
 │   ├── output columns: [MAX(a) (#2)]
 │   ├── expressions: [1]
@@ -1063,7 +1063,7 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
-├── estimated rows: 4.00
+├── estimated rows: 0.80
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#1)]
 │   ├── filters: [is_true(t2.a (#1) > 0)]
