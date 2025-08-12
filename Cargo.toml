@@ -373,9 +373,9 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
-logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "global-max-files-v0.14", features = [
+logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
     'json',
-    'rolling_file',
+    'rolling-file',
     'opentelemetry',
     'fastrace',
 ] }
