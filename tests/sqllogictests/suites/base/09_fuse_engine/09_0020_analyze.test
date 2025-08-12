@@ -282,7 +282,7 @@ analyze table t3;
 query I
 select count() from fuse_snapshot('db_09_0020', 't3');
 ----
-3
+4
 
 statement ok
 DROP TABLE t3;

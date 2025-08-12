@@ -99,21 +99,21 @@ enum AnalyzeStep {
 impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     pub fn do_analyze(
+        &self,
         ctx: Arc<dyn TableContext>,
-        table: &FuseTable,
         snapshot_id: SnapshotId,
         pipeline: &mut Pipeline,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| AnalyzeCollectNDVSource::try_create(output, table, ctx.clone()),
+            |output| AnalyzeCollectNDVSource::try_create(output, self, ctx.clone()),
             ctx.get_settings().get_max_threads()? as usize,
         )?;
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| {
             SinkAnalyzeState::create(
                 ctx.clone(),
-                table,
+                self,
                 snapshot_id,
                 input,
                 histogram_info_receivers.clone(),

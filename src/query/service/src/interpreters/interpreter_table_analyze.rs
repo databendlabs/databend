@@ -132,16 +132,6 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let table_statistics = table
-            .read_table_snapshot_statistics(Some(&snapshot))
-            .await?;
-        if let Some(table_statistics) = &table_statistics {
-            let prev_snapshot_id = snapshot.prev_snapshot_id.map(|(id, _)| id);
-            if Some(table_statistics.snapshot_id) == prev_snapshot_id {
-                return Ok(PipelineBuildResult::create());
-            }
-        }
-
         let mut parts = Vec::with_capacity(snapshot.segments.len());
         for (idx, segment_location) in snapshot.segments.iter().enumerate() {
             parts.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
@@ -212,9 +202,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 histogram_info_receivers.insert(col_id, rx);
             }
         }
-        FuseTable::do_analyze(
+        table.do_analyze(
             self.ctx.clone(),
-            table,
             snapshot.snapshot_id,
             &mut build_res.main_pipeline,
             histogram_info_receivers,
