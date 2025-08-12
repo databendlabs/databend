@@ -68,7 +68,6 @@ jobs:
           bendsql-dsn1: ${{ steps.warehouse-base.outputs.dsn }}
           bendsql-dsn2: ${{ steps.warehouse-compare.outputs.dsn }}
           runbend: 'true'
-          verbose: 'true'
 
       - name: Upload Report
         uses: actions/upload-artifact@v4
