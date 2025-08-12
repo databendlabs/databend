@@ -188,22 +188,12 @@ where
     }
 
     fn determine_params(&self, bytes: ByteSize, rows: usize) -> SortSpillParams {
-        // We use the first memory calculation to estimate the batch size and the number of merge.
-        let spill_unit_size = self.memory_settings.spill_unit_size;
-        let block = usize::max(
-            (bytes.0 as usize).div_ceil(spill_unit_size),
-            rows.div_ceil(self.max_block_size),
-        );
-        let batch_rows = (rows / block).max(1);
-
-        /// The memory will be doubled during merging.
-        const MERGE_RATIO: usize = 2;
-        let num_merge = (rows / MERGE_RATIO / batch_rows).max(2);
-        log::info!(buffer_bytes:? = bytes, buffer_rows = rows, spill_unit_size, batch_rows, batch_num_merge = num_merge; "determine sort spill params");
-        SortSpillParams {
-            batch_rows,
-            num_merge,
-        }
+        SortSpillParams::determine(
+            bytes,
+            rows,
+            ByteSize(self.memory_settings.spill_unit_size as _),
+            self.max_block_size,
+        )
     }
 
     fn collect_block(&mut self, block: DataBlock) -> Result<()> {
