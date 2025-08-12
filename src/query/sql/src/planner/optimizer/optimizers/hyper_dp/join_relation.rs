@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::planner::QueryExecutor;
 use crate::IndexType;
 use crate::MetadataRef;
 

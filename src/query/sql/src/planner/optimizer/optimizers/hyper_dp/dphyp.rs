@@ -33,7 +33,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
-use crate::planner::QueryExecutor;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
@@ -80,10 +79,6 @@ impl DPhpyOptimizer {
 
     fn metadata(&self) -> MetadataRef {
         self.opt_ctx.get_metadata()
-    }
-
-    fn sample_executor(&self) -> Option<Arc<dyn QueryExecutor>> {
-        self.opt_ctx.get_sample_executor()
     }
 
     /// Process children of a node in parallel
