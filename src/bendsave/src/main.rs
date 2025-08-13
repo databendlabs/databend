@@ -18,10 +18,8 @@ use clap::Subcommand;
 use databend_bendsave::backup;
 use databend_bendsave::restore;
 use databend_common_version::DATABEND_COMMIT_VERSION;
-use logforth::append;
+use logforth::append::Stderr;
 use logforth::filter::EnvFilter;
-use logforth::Dispatch;
-use logforth::Logger;
 
 #[derive(Parser)]
 #[command(name = "bendsave")]
@@ -63,13 +61,13 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    Logger::new()
-        .dispatch(
-            Dispatch::new()
+    logforth::builder()
+        .dispatch(|dispatch| {
+            dispatch
                 .filter(EnvFilter::from_default_env())
-                .append(append::Stderr::default()),
-        )
-        .apply()?;
+                .append(Stderr::default())
+        })
+        .try_apply()?;
 
     let cli = Cli::parse();
 

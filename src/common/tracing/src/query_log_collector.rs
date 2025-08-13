@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::path::Path;
 
 use databend_common_base::runtime::ThreadTracker;
 use log::Record;
-use logforth::layout::KvDisplay;
 use logforth::Append;
+use logforth::Diagnostic;
+
+use crate::loggers::KvWriter;
 
 #[derive(Debug)]
 pub struct QueryLogCollector {}
@@ -29,26 +32,31 @@ impl QueryLogCollector {
 }
 
 impl Append for QueryLogCollector {
-    fn append(&self, record: &Record) -> anyhow::Result<()> {
-        if let Some(settings) = ThreadTracker::capture_log_settings() {
-            if let Some(queue) = settings.queue.as_ref() {
-                // ignore push error
-                let _ = queue.push(format!(
-                    "{} {:>5} {}: {}:{} {}{}",
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-                    record.level(),
-                    record.module_path().unwrap_or(""),
-                    Path::new(record.file().unwrap_or_default())
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default(),
-                    record.line().unwrap_or(0),
-                    record.args(),
-                    KvDisplay::new(record.key_values()),
-                ));
-            }
-        }
+    fn append(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
+        let Some(settings) = ThreadTracker::capture_log_settings() else {
+            return Ok(());
+        };
+        let Some(queue) = settings.queue.as_ref() else {
+            return Ok(());
+        };
 
+        let mut buf = Vec::new();
+        write!(
+            buf,
+            "{} {:>5} {}: {}:{} {}",
+            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+            record.level(),
+            record.module_path().unwrap_or(""),
+            Path::new(record.file().unwrap_or_default())
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+            record.line().unwrap_or(0),
+            record.args(),
+        )?;
+        record.key_values().visit(&mut KvWriter(&mut buf))?;
+        // ignore push error
+        let _ = queue.push(String::from_utf8(buf)?);
         Ok(())
     }
 

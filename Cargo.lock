@@ -2341,16 +2341,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
-dependencies = [
- "lazy_static",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3357,7 +3347,7 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "lexical-core",
  "log",
@@ -3405,7 +3395,7 @@ dependencies = [
  "geozero",
  "goldenfile",
  "hex",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -3458,7 +3448,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-std",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3552,7 +3542,7 @@ dependencies = [
  "geo",
  "geozero",
  "hex",
- "jiff 0.2.13",
+ "jiff",
  "lexical-core",
  "micromarshal",
  "rmp-serde",
@@ -4525,7 +4515,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
- "jiff 0.2.13",
+ "jiff",
  "log",
  "opendal",
  "orc-rust",
@@ -4562,7 +4552,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures",
- "jiff 0.2.13",
+ "jiff",
  "log",
  "opendal",
  "parquet",
@@ -4718,7 +4708,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures",
  "itertools 0.13.0",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "log",
  "once_cell",
@@ -4765,9 +4755,9 @@ dependencies = [
  "log",
  "logforth",
  "opendal",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
+ "opentelemetry 0.26.0",
+ "opentelemetry-otlp 0.26.0",
+ "opentelemetry_sdk 0.26.0",
  "parquet",
  "serde",
  "serde_json",
@@ -5068,7 +5058,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "dtparse",
- "jiff 0.2.13",
+ "jiff",
  "num-traits",
 ]
 
@@ -5348,7 +5338,7 @@ dependencies = [
  "hyper-util",
  "indicatif",
  "itertools 0.13.0",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5361,8 +5351,8 @@ dependencies = [
  "num_cpus",
  "opendal",
  "opensrv-mysql",
- "opentelemetry",
- "opentelemetry_sdk",
+ "opentelemetry 0.26.0",
+ "opentelemetry_sdk 0.26.0",
  "p256",
  "parking_lot 0.12.3",
  "parquet",
@@ -5451,7 +5441,7 @@ dependencies = [
  "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
- "jiff 0.2.13",
+ "jiff",
  "jsonb",
  "rand 0.8.5",
  "reqwest",
@@ -5607,7 +5597,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
- "jiff 0.2.13",
+ "jiff",
  "serde",
  "typetag",
 ]
@@ -6360,7 +6350,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "env_filter",
- "jiff 0.2.13",
+ "jiff",
  "log",
 ]
 
@@ -6555,8 +6545,8 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opentelemetry",
- "opentelemetry_sdk",
+ "opentelemetry 0.26.0",
+ "opentelemetry_sdk 0.26.0",
 ]
 
 [[package]]
@@ -9375,20 +9365,6 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c04ef77ae73f3cf50510712722f0c4e8b46f5aaa1bf5ffad2ae213e6495e78e5"
-dependencies = [
- "jiff-tzdb-platform",
- "log",
- "portable-atomic",
- "portable-atomic-util",
- "serde",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "jiff"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f02000660d30638906021176af16b17498bd0d12813dbfe7b276d8bc7f3c0806"
@@ -9459,7 +9435,7 @@ dependencies = [
  "ethnum",
  "fast-float2",
  "itoa",
- "jiff 0.2.13",
+ "jiff",
  "nom 8.0.0",
  "num-traits",
  "ordered-float 5.0.0",
@@ -9901,21 +9877,18 @@ dependencies = [
 
 [[package]]
 name = "logforth"
-version = "0.14.0"
-source = "git+https://github.com/datafuse-extras/logforth?branch=global-max-files-v0.14#cedfff08d59a683ac2bf08ff54724e0b43bd218b"
+version = "0.23.0"
+source = "git+https://github.com/datafuse-extras/logforth?branch=main#3999c8cfa42e00d6a5ea836af52b03f4848b1ac0"
 dependencies = [
  "anyhow",
- "colored",
  "crossbeam-channel",
  "env_filter",
  "fastrace",
- "jiff 0.1.29",
+ "jiff",
  "log",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "parking_lot 0.12.3",
- "paste",
+ "opentelemetry 0.28.0",
+ "opentelemetry-otlp 0.28.0",
+ "opentelemetry_sdk 0.28.0",
  "serde",
  "serde_json",
 ]
@@ -11135,6 +11108,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "236e667b670a5cdf90c258f5a55794ec5ac5027e960c224bff8367a59e1e6426"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
 name = "opentelemetry-http"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11143,8 +11130,22 @@ dependencies = [
  "async-trait",
  "bytes",
  "http 1.3.1",
- "opentelemetry",
+ "opentelemetry 0.26.0",
  "reqwest",
+]
+
+[[package]]
+name = "opentelemetry-http"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8863faf2910030d139fb48715ad5ff2f35029fc5f244f6d5f689ddcf4d26253"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http 1.3.1",
+ "opentelemetry 0.28.0",
+ "reqwest",
+ "tracing",
 ]
 
 [[package]]
@@ -11156,16 +11157,37 @@ dependencies = [
  "async-trait",
  "futures-core",
  "http 1.3.1",
- "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-proto",
- "opentelemetry_sdk",
+ "opentelemetry 0.26.0",
+ "opentelemetry-http 0.26.0",
+ "opentelemetry-proto 0.26.1",
+ "opentelemetry_sdk 0.26.0",
  "prost",
  "reqwest",
- "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
+]
+
+[[package]]
+name = "opentelemetry-otlp"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bef114c6d41bea83d6dc60eb41720eedd0261a67af57b66dd2b84ac46c01d91"
+dependencies = [
+ "async-trait",
+ "futures-core",
+ "http 1.3.1",
+ "opentelemetry 0.28.0",
+ "opentelemetry-http 0.28.0",
+ "opentelemetry-proto 0.28.0",
+ "opentelemetry_sdk 0.28.0",
+ "prost",
+ "reqwest",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tonic",
+ "tracing",
 ]
 
 [[package]]
@@ -11174,9 +11196,22 @@ version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9d3968ce3aefdcca5c27e3c4ea4391b37547726a70893aab52d3de95d5f8b34"
 dependencies = [
+ "opentelemetry 0.26.0",
+ "opentelemetry_sdk 0.26.0",
+ "prost",
+ "tonic",
+]
+
+[[package]]
+name = "opentelemetry-proto"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56f8870d3024727e99212eb3bb1762ec16e255e3e6f58eeb3dc8db1aa226746d"
+dependencies = [
+ "base64 0.22.1",
  "hex",
- "opentelemetry",
- "opentelemetry_sdk",
+ "opentelemetry 0.28.0",
+ "opentelemetry_sdk 0.28.0",
  "prost",
  "serde",
  "tonic",
@@ -11194,13 +11229,34 @@ dependencies = [
  "futures-util",
  "glob",
  "once_cell",
- "opentelemetry",
+ "opentelemetry 0.26.0",
  "percent-encoding",
  "rand 0.8.5",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84dfad6042089c7fc1f6118b7040dc2eb4ab520abbf410b79dc481032af39570"
+dependencies = [
+ "async-trait",
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "glob",
+ "opentelemetry 0.28.0",
+ "percent-encoding",
+ "rand 0.8.5",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
