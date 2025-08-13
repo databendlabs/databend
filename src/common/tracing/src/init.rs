@@ -372,17 +372,14 @@ pub fn init_logging(
                 .chain(&endpoint.labels)
                 .map(|(k, v)| (Cow::from(k.clone()), Cow::from(v.clone())))
                 .chain([(Cow::from("category"), Cow::from("profile"))]);
-            let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
+            let otel = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
                 format!("{}/v1/logs", &endpoint.endpoint),
             )
-            .protocol(endpoint.protocol.into());
-            for (k, v) in labels {
-                otel_builder = otel_builder.label(k, v);
-            }
-            let otel = otel_builder
-                .build()
-                .expect("initialize opentelemetry logger");
+            .protocol(endpoint.protocol.into())
+            .labels(labels)
+            .build()
+            .expect("initialize opentelemetry logger");
             logger = logger.dispatch(|dispatch| {
                 dispatch
                     .filter(EnvFilter::new(
