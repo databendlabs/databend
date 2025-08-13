@@ -46,7 +46,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
@@ -340,7 +340,7 @@ impl IPhysicalPlan for Sort {
                 Ok(())
             }
             SortStep::Shuffled => {
-                if self.input.downcast_ref::<Exchange>().is_some() {
+                if Exchange::check_physical_plan(&self.input) {
                     let exchange = TransformSortBuilder::exchange_injector();
                     let old_inject = std::mem::replace(&mut builder.exchange_injector, exchange);
                     self.input.build_pipeline(builder)?;

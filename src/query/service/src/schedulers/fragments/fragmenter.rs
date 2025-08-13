@@ -32,12 +32,14 @@ use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
 use crate::physical_plans::ReplaceInto;
 use crate::physical_plans::TableScan;
+use crate::physical_plans::VisitorCast;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
@@ -51,23 +53,6 @@ pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     query_id: String,
     fragments: Vec<PlanFragment>,
-}
-
-/// A state to track if is visiting a source fragment, useful when building fragments.
-///
-/// SelectLeaf: visiting a source fragment of select statement.
-///
-/// DeleteLeaf: visiting a source fragment of delete statement.
-///
-/// Replace: visiting a fragment that contains a replace into plan.
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum State {
-    SelectLeaf,
-    MutationSource,
-    ReplaceInto,
-    Compact,
-    Recluster,
-    Other,
 }
 
 impl Fragmenter {
@@ -109,7 +94,7 @@ impl Fragmenter {
         };
 
         let mut fragment_type = FragmentType::Root;
-        if let Some(_broadcast_sink) = plan.downcast_ref::<BroadcastSink>() {
+        if BroadcastSink::check_physical_plan(plan) {
             fragment_type = FragmentType::Intermediate;
         }
 
@@ -129,7 +114,7 @@ impl Fragmenter {
                 continue;
             };
 
-            if let Some(exchange_sink) = fragment.plan.downcast_mut_ref::<ExchangeSink>() {
+            if let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut fragment.plan) {
                 exchange_sink.destination_fragment_id = target;
             }
         }
@@ -164,7 +149,7 @@ impl Fragmenter {
             }
 
             fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-                if let Some(v) = plan.downcast_ref::<ExchangeSource>() {
+                if let Some(v) = ExchangeSource::from_physical_plan(plan) {
                     if let Some(v) = self
                         .map
                         .insert(v.source_fragment_id, self.target_fragment_id)
@@ -191,7 +176,6 @@ impl Fragmenter {
 }
 
 struct FragmentDeriveHandle {
-    state: State,
     query_id: String,
     ctx: Arc<QueryContext>,
     fragments: HashMap<usize, PlanFragment>,
@@ -202,7 +186,6 @@ impl FragmentDeriveHandle {
         Box::new(FragmentDeriveHandle {
             ctx,
             query_id,
-            state: State::Other,
             fragments: HashMap::new(),
         })
     }
@@ -215,7 +198,7 @@ impl FragmentDeriveHandle {
         cluster: Arc<Cluster>,
         plan: &PhysicalPlan,
     ) -> Result<Option<DataExchange>> {
-        let Some(exchange_sink) = plan.downcast_ref::<ExchangeSink>() else {
+        let Some(exchange_sink) = ExchangeSink::from_physical_plan(plan) else {
             return Ok(None);
         };
 
@@ -256,21 +239,7 @@ impl DeriveHandle for FragmentDeriveHandle {
         v: &PhysicalPlan,
         mut children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        if let Some(_recluster) = v.downcast_ref::<Recluster>() {
-            self.state = State::Recluster;
-        } else if let Some(_table_scan) = v.downcast_ref::<TableScan>() {
-            self.state = State::SelectLeaf;
-        } else if let Some(_const_table_scan) = v.downcast_ref::<ConstantTableScan>() {
-            self.state = State::SelectLeaf;
-        } else if let Some(_compact_source) = v.downcast_ref::<CompactSource>() {
-            self.state = State::Compact;
-        } else if let Some(_replace_into) = v.downcast_ref::<ReplaceInto>() {
-            self.state = State::ReplaceInto;
-        } else if let Some(_mutation_source) = v.downcast_ref::<MutationSource>() {
-            self.state = State::MutationSource;
-        }
-
-        if let Some(exchange) = v.downcast_ref::<Exchange>() {
+        if let Some(exchange) = Exchange::from_physical_plan(v) {
             let input = children.remove(0);
             let input_schema = input.output_schema().unwrap();
 
@@ -293,16 +262,12 @@ impl DeriveHandle for FragmentDeriveHandle {
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSink", plan_id),
             });
 
-            let fragment_type = match self.state {
-                State::SelectLeaf => FragmentType::Source,
-                State::MutationSource => FragmentType::MutationSource,
-                State::Other => FragmentType::Intermediate,
-                State::ReplaceInto => FragmentType::ReplaceInto,
-                State::Compact => FragmentType::Compact,
-                State::Recluster => FragmentType::Recluster,
-            };
+            let mut visitor = FragmentTypeVisitor::create();
+            plan.visit(&mut visitor).unwrap();
 
-            self.state = State::Other;
+            let fragment_type_visitor = FragmentTypeVisitor::from_visitor(&mut visitor);
+            let fragment_type = fragment_type_visitor.fragment_type.clone();
+
             let cluster = self.ctx.get_cluster();
             let exchange = Self::get_exchange(cluster, &plan).unwrap();
 
@@ -376,4 +341,50 @@ impl DeriveHandle for FragmentDeriveHandle {
     //     self.fragments.push(fragment);
     //     Ok(plan)
     // }
+}
+
+struct FragmentTypeVisitor {
+    fragment_type: FragmentType,
+}
+
+impl FragmentTypeVisitor {
+    pub fn create() -> Box<dyn PhysicalPlanVisitor> {
+        Box::new(FragmentTypeVisitor {
+            fragment_type: FragmentType::Intermediate,
+        })
+    }
+}
+
+impl PhysicalPlanVisitor for FragmentTypeVisitor {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn visit(&mut self, v: &PhysicalPlan) -> Result<()> {
+        if Recluster::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Recluster;
+        }
+
+        if TableScan::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Source;
+        }
+
+        if ConstantTableScan::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Source;
+        }
+
+        if CompactSource::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Compact;
+        }
+
+        if ReplaceInto::check_physical_plan(v) {
+            self.fragment_type = FragmentType::ReplaceInto;
+        }
+
+        if MutationSource::check_physical_plan(v) {
+            self.fragment_type = FragmentType::MutationSource;
+        }
+
+        Ok(())
+    }
 }

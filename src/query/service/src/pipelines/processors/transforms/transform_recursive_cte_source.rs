@@ -49,6 +49,7 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::RecursiveCteScan;
@@ -253,7 +254,7 @@ async fn create_memory_table_for_cte_scan(
         }
 
         fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-            if let Some(recursive_cte_scan) = plan.downcast_ref::<RecursiveCteScan>() {
+            if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
                 let table_fields = recursive_cte_scan
                     .output_schema
                     .fields()

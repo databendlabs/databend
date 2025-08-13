@@ -56,16 +56,16 @@ impl IPhysicalPlan for MaterializedCTE {
         &mut self.meta
     }
 
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
+
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
-    }
-
-    fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

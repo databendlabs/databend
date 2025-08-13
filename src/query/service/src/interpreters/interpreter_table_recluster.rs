@@ -71,7 +71,7 @@ use crate::physical_plans::CompactSource;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::HilbertPartition;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::Recluster;
 use crate::pipelines::executor::ExecutorSettings;
@@ -422,11 +422,11 @@ impl ReclusterTableInterpreter {
 
         // Check if the plan already has an exchange operator
         let mut is_exchange = false;
-        if let Some(exchange) = plan.downcast_ref::<Exchange>()
-            && exchange.kind == FragmentKind::Merge
-        {
-            is_exchange = true;
-            plan = exchange.input.clone();
+        if let Some(exchange) = Exchange::from_physical_plan(&plan) {
+            if exchange.kind == FragmentKind::Merge {
+                is_exchange = true;
+                plan = exchange.input.clone();
+            }
         }
 
         // Determine if we need distributed execution

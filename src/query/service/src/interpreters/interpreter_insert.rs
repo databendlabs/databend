@@ -45,6 +45,7 @@ use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
@@ -195,7 +196,7 @@ impl Interpreter for InsertInterpreter {
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let mut insert_select_plan = {
                     if table.support_distributed_insert()
-                        && let Some(exchange) = select_plan.downcast_ref::<Exchange>()
+                        && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
                     {
                         // insert can be dispatched to different nodes if table support_distributed_insert
                         let input = exchange.input.clone();

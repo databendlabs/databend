@@ -56,7 +56,7 @@ use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::ReplaceAsyncSourcer;
 use crate::physical_plans::ReplaceDeduplicate;
@@ -268,11 +268,11 @@ impl ReplaceInterpreter {
         let mut is_exchange = false;
         let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
 
-        if let Some(exchange) = root.downcast_ref::<Exchange>()
-            && exchange.kind == FragmentKind::Merge
-        {
-            is_exchange = true;
-            root = exchange.input.clone();
+        if let Some(exchange) = Exchange::from_physical_plan(&root) {
+            if exchange.kind == FragmentKind::Merge {
+                is_exchange = true;
+                root = exchange.input.clone();
+            }
         }
 
         if is_distributed {

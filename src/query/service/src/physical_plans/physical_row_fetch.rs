@@ -37,7 +37,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::MutationSplit;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -144,7 +144,7 @@ impl IPhysicalPlan for RowFetch {
             self.need_wrap_nullable,
         )?;
 
-        if self.input.downcast_ref::<MutationSplit>().is_none() {
+        if !MutationSplit::check_physical_plan(&self.input) {
             builder.main_pipeline.add_transform(processor)?;
         } else {
             let output_len = builder.main_pipeline.output_len();

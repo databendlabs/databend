@@ -36,6 +36,7 @@ use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
@@ -87,9 +88,9 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         actions: &mut QueryFragmentsActions,
     ) -> Result<()> {
-        for input in self.source_fragments.iter() {
-            input.get_actions(ctx.clone(), actions)?;
-        }
+        // for input in self.source_fragments.iter() {
+        //     input.get_actions(ctx.clone(), actions)?;
+        // }
 
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
@@ -229,7 +230,7 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let Some(plan) = self.plan.downcast_ref::<ExchangeSink>() else {
+        let Some(plan) = ExchangeSink::from_physical_plan(&self.plan) else {
             unreachable!("logic error");
         };
 
@@ -275,7 +276,7 @@ impl PlanFragment {
             }
 
             fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-                if let Some(v) = plan.downcast_ref::<ReplaceInto>() {
+                if let Some(v) = ReplaceInto::from_physical_plan(plan) {
                     assert!(self.partitions.is_empty());
                     self.partitions = v.segments.clone();
                 }
@@ -356,7 +357,7 @@ impl PlanFragment {
             }
 
             fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-                if let Some(v) = plan.downcast_ref::<CompactSource>() {
+                if let Some(v) = CompactSource::from_physical_plan(plan) {
                     assert!(self.partitions.is_none());
                     self.partitions = Some(v.parts.clone());
                 }
@@ -411,7 +412,7 @@ impl PlanFragment {
             }
 
             fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-                if let Some(recluster) = plan.downcast_ref::<Recluster>() {
+                if let Some(recluster) = Recluster::from_physical_plan(plan) {
                     if !self.tasks.is_empty() {
                         unreachable!("logic error, expect only one recluster");
                     }
@@ -519,10 +520,10 @@ impl PlanFragment {
             }
 
             fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
-                if let Some(scan) = plan.downcast_ref::<TableScan>() {
+                if let Some(scan) = TableScan::from_physical_plan(plan) {
                     self.data_sources
                         .insert(plan.get_id(), DataSource::Table(*scan.source.clone()));
-                } else if let Some(scan) = plan.downcast_ref::<ConstantTableScan>() {
+                } else if let Some(scan) = ConstantTableScan::from_physical_plan(plan) {
                     self.data_sources.insert(
                         plan.get_id(),
                         DataSource::ConstTable(ConstTableColumn {
@@ -604,7 +605,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        if let Some(table_scan) = v.downcast_ref::<TableScan>() {
+        if let Some(table_scan) = TableScan::from_physical_plan(v) {
             let Some(source) = self.sources.remove(&table_scan.get_id()) else {
                 unreachable!(
                     "Cannot find data source for table scan plan {}",
@@ -620,7 +621,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 source: Box::new(source),
                 ..table_scan.clone()
             }));
-        } else if let Some(table_scan) = v.downcast_ref::<ConstantTableScan>() {
+        } else if let Some(table_scan) = ConstantTableScan::from_physical_plan(v) {
             let Some(source) = self.sources.remove(&table_scan.get_id()) else {
                 unreachable!(
                     "Cannot find data source for constant table scan plan {}",
@@ -663,7 +664,7 @@ impl DeriveHandle for ReclusterDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        let Some(recluster) = v.downcast_ref::<Recluster>() else {
+        let Some(recluster) = Recluster::from_physical_plan(v) else {
             return Err(children);
         };
 
@@ -694,7 +695,7 @@ impl DeriveHandle for MutationSourceDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        let Some(mutation_source) = v.downcast_ref::<MutationSource>() else {
+        let Some(mutation_source) = MutationSource::from_physical_plan(v) else {
             return Err(children);
         };
 
@@ -725,7 +726,7 @@ impl DeriveHandle for CompactSourceDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        let Some(compact_source) = v.downcast_ref::<CompactSource>() else {
+        let Some(compact_source) = CompactSource::from_physical_plan(v) else {
             return Err(children);
         };
 
@@ -767,7 +768,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
         v: &PhysicalPlan,
         mut children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        if let Some(replace_into) = v.downcast_ref::<ReplaceInto>() {
+        if let Some(replace_into) = ReplaceInto::from_physical_plan(v) {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceInto {
                 input: children.remove(0),
@@ -776,7 +777,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
                 block_slots: self.slot.clone(),
                 ..replace_into.clone()
             }));
-        } else if let Some(replace_deduplicate) = v.downcast_ref::<ReplaceDeduplicate>() {
+        } else if let Some(replace_deduplicate) = ReplaceDeduplicate::from_physical_plan(v) {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceDeduplicate {
                 input: children.remove(0),

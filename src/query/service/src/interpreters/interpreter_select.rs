@@ -48,6 +48,7 @@ use crate::interpreters::Interpreter;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -127,7 +128,7 @@ impl SelectInterpreter {
         &self,
         mut physical_plan: PhysicalPlan,
     ) -> Result<PipelineBuildResult> {
-        if let Some(exchange) = physical_plan.downcast_mut_ref::<Exchange>() {
+        if let Some(exchange) = Exchange::from_mut_physical_plan(&mut physical_plan) {
             if exchange.kind == FragmentKind::Merge && self.ignore_result {
                 exchange.ignore_exchange = self.ignore_result;
             }

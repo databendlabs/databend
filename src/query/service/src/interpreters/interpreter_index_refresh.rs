@@ -51,6 +51,7 @@ use crate::interpreters::Interpreter;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
@@ -385,7 +386,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
-        let Some(table_scan) = v.downcast_ref::<TableScan>() else {
+        let Some(table_scan) = TableScan::from_physical_plan(v) else {
             return Err(children);
         };
 

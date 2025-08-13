@@ -28,7 +28,7 @@ use databend_common_meta_types::NodeInfo;
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -140,7 +140,7 @@ impl QueryFragmentsActions {
             }
 
             let plan = &fragment_actions.fragment_actions[0].physical_plan;
-            if plan.downcast_ref::<ExchangeSink>().is_none() {
+            if !ExchangeSink::check_physical_plan(plan) {
                 fragment_ids.push(fragment_actions.fragment_id);
             }
         }

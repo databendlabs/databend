@@ -40,7 +40,7 @@ use super::AggregateExpand;
 use super::AggregatePartial;
 use super::Exchange;
 use super::ExchangeSource;
-use super::PhysicalPlanDynExt;
+use super::PhysicalPlanCast;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -185,7 +185,7 @@ impl IPhysicalPlan for AggregateFinal {
         let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
 
         let mut is_cluster_aggregate = false;
-        if self.input.downcast_ref::<ExchangeSource>().is_some() {
+        if ExchangeSource::check_physical_plan(&self.input) {
             is_cluster_aggregate = true;
         }
 
@@ -214,7 +214,7 @@ impl IPhysicalPlan for AggregateFinal {
 
         let old_inject = builder.exchange_injector.clone();
 
-        if self.input.downcast_ref::<ExchangeSource>().is_some() {
+        if ExchangeSource::check_physical_plan(&self.input) {
             builder.exchange_injector =
                 AggregateInjector::create(builder.ctx.clone(), params.clone());
         }
@@ -426,7 +426,7 @@ impl PhysicalPlanBuilder {
                 });
 
                 if group_by_shuffle_mode == "before_merge"
-                    && let Some(exchange) = input.downcast_ref::<Exchange>()
+                    && let Some(exchange) = Exchange::from_physical_plan(&input)
                 {
                     let kind = exchange.kind.clone();
                     let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
@@ -521,11 +521,11 @@ impl PhysicalPlanBuilder {
                 let input_schema = {
                     let mut plan = &input;
 
-                    if let Some(exchange) = plan.downcast_ref::<Exchange>() {
+                    if let Some(exchange) = Exchange::from_physical_plan(plan) {
                         plan = &exchange.input;
                     }
 
-                    let Some(aggregate) = plan.downcast_ref::<AggregatePartial>() else {
+                    let Some(aggregate) = AggregatePartial::from_physical_plan(plan) else {
                         return Err(ErrorCode::Internal(format!(
                             "invalid input physical plan: {}",
                             input.get_name(),
@@ -653,7 +653,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
-                if let Some(partial) = input.downcast_ref::<AggregatePartial>() {
+                if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
 
@@ -667,14 +667,15 @@ impl PhysicalPlanBuilder {
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                     })
                 } else {
-                    let Some(exchange) = input.downcast_ref::<Exchange>() else {
+                    let Some(exchange) = Exchange::from_physical_plan(&input) else {
                         return Err(ErrorCode::Internal(format!(
                             "invalid input physical plan: {}",
                             input.get_name(),
                         )));
                     };
 
-                    let Some(partial) = exchange.input.downcast_ref::<AggregatePartial>() else {
+                    let Some(partial) = AggregatePartial::from_physical_plan(&exchange.input)
+                    else {
                         return Err(ErrorCode::Internal(format!(
                             "invalid input physical plan: {}",
                             input.get_name(),

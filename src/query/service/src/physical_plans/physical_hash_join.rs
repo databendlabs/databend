@@ -43,13 +43,13 @@ use tokio::sync::Barrier;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
+use super::PhysicalPlanCast;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
-use crate::physical_plans::physical_plan::PhysicalPlanDynExt;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -187,8 +187,8 @@ impl IPhysicalPlan for HashJoin {
             .join(", ");
 
         assert_eq!(children.len(), 2);
-        children[0].payload = format!("{}(Build)", children[0].payload);
-        children[1].payload = format!("{}(Probe)", children[1].payload);
+        children[0].payload = format!("{}(Probe)", children[0].payload);
+        children[1].payload = format!("{}(Build)", children[1].payload);
 
         let mut build_runtime_filters = vec![];
         for rf in self.runtime_filter.filters.iter() {
@@ -252,6 +252,7 @@ impl IPhysicalPlan for HashJoin {
             node_children.extend(items);
         }
 
+        children.reverse();
         node_children.extend(children);
 
         Ok(FormatTreeNode::with_children(
@@ -434,10 +435,12 @@ impl HashJoin {
                 build_state.clone(),
             )?))
         };
+
         // For distributed merge-into when source as build side
         if self.need_hold_hash_table {
             builder.join_state = Some(build_state.clone())
         }
+
         build_res.main_pipeline.add_sink(create_sink_processor)?;
 
         builder
@@ -557,11 +560,11 @@ impl PhysicalPlanBuilder {
         build_side: &mut PhysicalPlan,
     ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
-        let Some(probe_exchange) = probe_side.downcast_mut_ref::<Exchange>() else {
+        let Some(probe_exchange) = Exchange::from_mut_physical_plan(probe_side) else {
             return Ok(());
         };
 
-        let Some(build_exchange) = build_side.downcast_mut_ref::<Exchange>() else {
+        let Some(build_exchange) = Exchange::from_mut_physical_plan(build_side) else {
             return Ok(());
         };
 

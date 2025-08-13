@@ -31,7 +31,7 @@ use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
@@ -149,7 +149,7 @@ impl PipelineBuilder {
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
         self.is_exchange_stack
-            .push(plan.downcast_ref::<ExchangeSink>().is_some());
+            .push(ExchangeSink::check_physical_plan(plan));
         plan.build_pipeline(self)?;
         self.is_exchange_stack.pop();
 

@@ -186,6 +186,19 @@ pub trait PhysicalPlanVisitor: Send + Sync + 'static {
     fn visit(&mut self, plan: &PhysicalPlan) -> Result<()>;
 }
 
+pub trait VisitorCast {
+    fn from_visitor(x: &mut Box<dyn PhysicalPlanVisitor>) -> &mut Self;
+}
+
+impl<T: PhysicalPlanVisitor> VisitorCast for T {
+    fn from_visitor(x: &mut Box<dyn PhysicalPlanVisitor>) -> &mut T {
+        match x.as_any().downcast_mut::<T>() {
+            Some(x) => x,
+            None => unreachable!(),
+        }
+    }
+}
+
 pub trait PhysicalPlanDynExt {
     fn format(
         &self,
@@ -206,13 +219,37 @@ pub trait PhysicalPlanDynExt {
         ctx: &mut FormatContext<'_>,
     ) -> Result<FormatTreeNode<String>>;
 
-    fn downcast_ref<To: 'static>(&self) -> Option<&To>;
-
-    fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To>;
-
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan;
 
     fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
+}
+
+pub trait PhysicalPlanCast {
+    fn check_physical_plan(plan: &PhysicalPlan) -> bool;
+
+    fn from_physical_plan(plan: &PhysicalPlan) -> Option<&Self>;
+
+    fn from_mut_physical_plan(plan: &mut PhysicalPlan) -> Option<&mut Self>;
+}
+
+impl<T: IPhysicalPlan> PhysicalPlanCast for T {
+    fn check_physical_plan(plan: &PhysicalPlan) -> bool {
+        plan.as_any().downcast_ref::<T>().is_some()
+    }
+
+    fn from_physical_plan(plan: &PhysicalPlan) -> Option<&T> {
+        plan.as_any().downcast_ref()
+    }
+
+    fn from_mut_physical_plan(plan: &mut PhysicalPlan) -> Option<&mut T> {
+        unsafe {
+            match T::from_physical_plan(plan) {
+                None => None,
+                #[allow(invalid_reference_casting)]
+                Some(v) => Some(&mut *(v as *const T as *mut T)),
+            }
+        }
+    }
 }
 
 impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
@@ -245,20 +282,6 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         }
 
         Ok(format_tree_node)
-    }
-
-    fn downcast_ref<To: 'static>(&self) -> Option<&To> {
-        self.as_any().downcast_ref()
-    }
-
-    fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To> {
-        unsafe {
-            match self.downcast_ref::<To>() {
-                None => None,
-                #[allow(invalid_reference_casting)]
-                Some(v) => Some(&mut *(v as *const To as *mut To)),
-            }
-        }
     }
 
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
