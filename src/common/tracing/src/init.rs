@@ -229,8 +229,8 @@ pub fn init_logging(
                 .filter(env_filter(&cfg.file.level))
                 .filter(ThreadTrackerFilter)
                 .append(match cfg.file.format.as_str() {
-                    "text" => normal_log_file.with_layout(TextLayout),
-                    "json" => normal_log_file.with_layout(JsonLayout),
+                    "text" => normal_log_file.with_layout(TextLayout::<false>),
+                    "json" => normal_log_file.with_layout(JsonLayout::<false>),
                     "identical" => normal_log_file.with_layout(IdenticalLayout),
                     _ => {
                         unimplemented!("file logging format {} is not supported", &cfg.file.format)
@@ -246,8 +246,8 @@ pub fn init_logging(
                 .filter(env_filter(&cfg.stderr.level))
                 .filter(ThreadTrackerFilter)
                 .append(match cfg.stderr.format.as_str() {
-                    "text" => logforth::append::Stderr::default().with_layout(TextLayout),
-                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout),
+                    "text" => logforth::append::Stderr::default().with_layout(TextLayout::<false>),
+                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout::<false>),
                     "identical" => logforth::append::Stderr::default().with_layout(IdenticalLayout),
                     _ => {
                         unimplemented!(

@@ -82,20 +82,27 @@ impl Layout for IdenticalLayout {
 }
 
 #[derive(Debug)]
+pub struct TextLayout<const FIXED_TIME: bool = false>;
 
-pub struct TextLayout;
-
-impl Layout for TextLayout {
+impl<const FIXED_TIME: bool> Layout for TextLayout<FIXED_TIME> {
     fn format(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<Vec<u8>> {
         let mut buf = Vec::new();
         if let Some(query_id) = ThreadTracker::query_id() {
             write!(buf, "{query_id} ")?;
         }
 
+        let timestamp = if FIXED_TIME {
+            chrono::DateTime::from_timestamp(1431648000, 123456789)
+                .unwrap()
+                .with_timezone(&chrono::Local)
+        } else {
+            chrono::Local::now()
+        };
+
         write!(
             buf,
             "{} {:>5} {}: {}:{} {}",
-            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+            timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             record.level(),
             record.module_path().unwrap_or(""),
             Path::new(record.file().unwrap_or_default())
@@ -112,9 +119,9 @@ impl Layout for TextLayout {
 }
 
 #[derive(Debug)]
-pub struct JsonLayout;
+pub struct JsonLayout<const FIXED_TIME: bool = false>;
 
-impl Layout for JsonLayout {
+impl<const FIXED_TIME: bool> Layout for JsonLayout<FIXED_TIME> {
     fn format(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<Vec<u8>> {
         let mut fields = Map::new();
         fields.insert("message".to_string(), format!("{}", record.args()).into());
@@ -122,11 +129,19 @@ impl Layout for JsonLayout {
             fields.insert(k, v.into());
         }
 
+        let timestamp = if FIXED_TIME {
+            chrono::DateTime::from_timestamp(1431648000, 123456789)
+                .unwrap()
+                .with_timezone(&chrono::Local)
+        } else {
+            chrono::Local::now()
+        };
+
         let s = match ThreadTracker::query_id() {
             None => {
                 format!(
                     r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                    timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                     record.level(),
                     serde_json::to_string(&fields).unwrap_or_default(),
                 )
@@ -134,7 +149,7 @@ impl Layout for JsonLayout {
             Some(query_id) => {
                 format!(
                     r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                    timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                     record.level(),
                     query_id,
                     serde_json::to_string(&fields).unwrap_or_default(),
@@ -177,5 +192,167 @@ impl<'kvs> log::kv::VisitSource<'kvs> for KvCollector {
     ) -> Result<(), log::kv::Error> {
         self.kv.push((key.to_string(), value.to_string()));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use log::Level;
+    use log::Record;
+
+    use super::*;
+
+    // Test case structure for shared test data
+    struct TestCase {
+        name: &'static str,
+        message: &'static str,
+        record: Record<'static>,
+        expected_text_output: &'static str, /* Expected complete output for TextLayout with fixed time */
+        expected_json_output: &'static str, /* Expected complete output for JsonLayout with fixed time */
+    }
+
+    // Helper function to create test cases with records
+    fn create_test_cases() -> Vec<TestCase> {
+        vec![
+            TestCase {
+                name: "basic message",
+                message: "test message",
+                record: Record::builder()
+                    .args(format_args!("test message"))
+                    .level(Level::Info)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00  INFO test::module: test_file.rs:42 test message",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"INFO","fields":{"message":"test message"}}"#,
+            },
+            TestCase {
+                name: "empty message",
+                message: "",
+                record: Record::builder()
+                    .args(format_args!(""))
+                    .level(Level::Info)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00  INFO test::module: test_file.rs:42 ",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"INFO","fields":{"message":""}}"#,
+            },
+            TestCase {
+                name: "error level",
+                message: "error occurred",
+                record: Record::builder()
+                    .args(format_args!("error occurred"))
+                    .level(Level::Error)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00 ERROR test::module: test_file.rs:42 error occurred",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"ERROR","fields":{"message":"error occurred"}}"#,
+            },
+            TestCase {
+                name: "warn level",
+                message: "warning message",
+                record: Record::builder()
+                    .args(format_args!("warning message"))
+                    .level(Level::Warn)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00  WARN test::module: test_file.rs:42 warning message",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"WARN","fields":{"message":"warning message"}}"#,
+            },
+            TestCase {
+                name: "debug level",
+                message: "debug info",
+                record: Record::builder()
+                    .args(format_args!("debug info"))
+                    .level(Level::Debug)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00 DEBUG test::module: test_file.rs:42 debug info",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"DEBUG","fields":{"message":"debug info"}}"#,
+            },
+            TestCase {
+                name: "trace level",
+                message: "trace data",
+                record: Record::builder()
+                    .args(format_args!("trace data"))
+                    .level(Level::Trace)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: "2015-05-15T08:00:00.123456+08:00 TRACE test::module: test_file.rs:42 trace data",
+                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"TRACE","fields":{"message":"trace data"}}"#,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_identical_layout() {
+        let layout = IdenticalLayout;
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            // IdenticalLayout should return the message as-is
+            assert_eq!(
+                output, test_case.message,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.message, output
+            );
+        }
+    }
+
+    #[test]
+    fn test_text_layout() {
+        let layout = TextLayout::<true>; // Use fixed time
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            assert_eq!(
+                output, test_case.expected_text_output,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.expected_text_output, output
+            );
+        }
+    }
+
+    #[test]
+    fn test_json_layout() {
+        let layout = JsonLayout::<true>; // Use fixed time
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            assert_eq!(
+                output, test_case.expected_json_output,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.expected_json_output, output
+            );
+        }
     }
 }
