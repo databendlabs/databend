@@ -178,7 +178,8 @@ impl GlobalHistoryLog {
                             if is_temp_error(&e) {
                                 // If the error is temporary, we will retry with exponential backoff
                                 // The max backoff time is 10 minutes
-                                let backoff_second = min(2u64.pow(temp_error_cnt), 10 * 60);
+                                let backoff_second =
+                                    min(2u64.saturating_pow(temp_error_cnt), 10 * 60);
                                 temp_error_cnt += 1;
                                 warn!(
                                     "[HISTORY-TABLES] {} log transform failed with temporary error {}, count {}, next retry in {} seconds",
