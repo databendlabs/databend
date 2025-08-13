@@ -14,7 +14,6 @@
 
 use std::net::Ipv4Addr;
 use std::path::Path;
-use std::sync::LazyLock;
 
 use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
@@ -24,18 +23,6 @@ use databend_common_meta_types::MetaStartupError;
 
 use crate::ondisk::DATA_VERSION;
 use crate::raft_log_v004;
-
-pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    match (
-        databend_common_version::VERGEN_BUILD_SEMVER,
-        databend_common_version::VERGEN_GIT_SHA,
-        databend_common_version::VERGEN_RUSTC_SEMVER,
-        databend_common_version::VERGEN_BUILD_TIMESTAMP,
-    ) {
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-        _ => String::new(),
-    }
-});
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct RaftConfig {
