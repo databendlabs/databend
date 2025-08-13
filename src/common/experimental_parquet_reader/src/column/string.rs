@@ -115,6 +115,7 @@ impl<'a> StringIter<'a> {
         } else {
             // Store large strings in buffer and reference them
             let current_offset = *page_offset;
+            // TODO use memcpy
             page_bytes.extend_from_slice(string_data);
             *page_offset += string_data.len();
 
@@ -160,7 +161,8 @@ impl<'a> StringIter<'a> {
         total_bytes_len: &mut usize,
     ) -> Result<(), ErrorCode> {
         let mut offset = 0;
-        let mut page_bytes = Vec::new();
+        let estimated_capacity = values_buffer.len();
+        let mut page_bytes = Vec::with_capacity(estimated_capacity);
         let mut page_offset = 0;
         let buffer_index = buffers.len() as u32;
 
@@ -512,15 +514,16 @@ impl<'a> Iterator for StringIter<'a> {
             return None;
         }
 
-        let chunk_size = self.chunk_size.unwrap_or(self.num_rows);
-        let current_chunk_size = std::cmp::min(chunk_size, self.num_rows);
+        // let chunk_size = self.chunk_size.unwrap_or(self.num_rows);
+        // let limit = std::cmp::min(chunk_size, self.num_rows);
+        let limit = self.chunk_size.unwrap_or(self.num_rows);
 
-        let mut views = Vec::new();
+        let mut views = Vec::with_capacity(limit);
         let mut buffers = Vec::new();
         let mut total_bytes_len = 0;
         let mut processed_rows = 0;
 
-        while processed_rows < current_chunk_size {
+        while processed_rows < limit {
             let page = match self.pages.next_owned() {
                 Ok(Some(page)) => page,
                 Ok(None) => break,
@@ -536,7 +539,7 @@ impl<'a> Iterator for StringIter<'a> {
                         )));
                     }
 
-                    let remaining_in_chunk = current_chunk_size - processed_rows;
+                    let remaining_in_chunk = limit - processed_rows;
                     let page_rows = std::cmp::min(data_page.num_values(), remaining_in_chunk);
 
                     if let Err(e) = self.process_data_page(
