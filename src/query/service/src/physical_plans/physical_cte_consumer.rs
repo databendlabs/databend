@@ -76,7 +76,7 @@ impl IPhysicalPlan for MaterializeCTERef {
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_cte_consumer(
         &mut self,
-        cte_consumer: &databend_common_sql::plans::MaterializeCTERef,
+        cte_consumer: &databend_common_sql::plans::MaterializedCTERef,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut fields = Vec::new();

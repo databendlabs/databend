@@ -151,6 +151,14 @@ jobs:
 
             > note: this image tag is only available for internal use.
 
+  explain:
+    needs: [info, build, docker]
+    uses: ./.github/workflows/reuse.explain.yml
+    secrets: inherit
+    with:
+      run_id: ${{ github.run_id }}
+      version: ${{ needs.docker.outputs.tag }}
+
   benchmark:
     if: needs.info.outputs.target
     needs: [info, build, docker]

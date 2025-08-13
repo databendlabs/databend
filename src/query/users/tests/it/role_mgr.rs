@@ -22,6 +22,9 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::CreateOption::Create;
+use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
+use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use pretty_assertions::assert_eq;
@@ -46,13 +49,15 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(&tenant, role_info, false).await?;
+        role_mgr
+            .add_role(&tenant, role_info, &CreateOrReplace)
+            .await?;
     }
 
     // add role again, error
     {
         let role_info = RoleInfo::new(&role_name);
-        let res = role_mgr.add_role(&tenant, role_info, false).await;
+        let res = role_mgr.add_role(&tenant, role_info, &Create).await;
         assert!(res.is_err());
         assert_eq!(res.err().unwrap().code(), ErrorCode::ROLE_ALREADY_EXISTS,);
     }
@@ -60,7 +65,9 @@ async fn test_role_manager() -> Result<()> {
     // add role
     {
         let role_info = RoleInfo::new(&role_name);
-        role_mgr.add_role(&tenant, role_info, true).await?;
+        role_mgr
+            .add_role(&tenant, role_info, &CreateIfNotExists)
+            .await?;
     }
 
     // get role

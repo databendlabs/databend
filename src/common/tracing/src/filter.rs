@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
-use logforth::filter::CustomFilter;
 use logforth::filter::FilterResult;
 
-pub fn filter_by_thread_tracker() -> CustomFilter {
-    CustomFilter::new(|metadata| {
+#[derive(Debug)]
+pub struct ThreadTrackerFilter;
+
+impl logforth::Filter for ThreadTrackerFilter {
+    fn enabled(&self, metadata: &log::Metadata) -> FilterResult {
         if let Some(settings) = ThreadTracker::capture_log_settings() {
             if metadata.level() > settings.level {
                 return FilterResult::Reject;
@@ -25,5 +27,5 @@ pub fn filter_by_thread_tracker() -> CustomFilter {
         }
 
         FilterResult::Neutral
-    })
+    }
 }

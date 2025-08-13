@@ -5,7 +5,7 @@ Sequence
 ├── MaterializedCTE: t1
 │   └── TableScan
 │       ├── table: default.system.numbers
-│       ├── output columns: [number (#2)]
+│       ├── output columns: [number (#0)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
@@ -13,22 +13,22 @@ Sequence
 │       ├── push downs: [filters: [], limit: NONE]
 │       └── estimated rows: 10.00
 └── HashJoin
-    ├── output columns: [numbers.number (#0)]
+    ├── output columns: [numbers.number (#1)]
     ├── join type: INNER
-    ├── build keys: [t2.b (#1)]
-    ├── probe keys: [t1.a (#0)]
+    ├── build keys: [t2.b (#2)]
+    ├── probe keys: [t1.a (#1)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:t2.b (#2), probe key:t1.a (#1), filter type:inlist,min_max
     ├── estimated rows: 100.00
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: t1
-    │   ├── cte_schema: [number (#1)]
+    │   ├── cte_schema: [number (#2)]
     │   └── estimated rows: 10.00
     └── MaterializeCTERef(Probe)
         ├── cte_name: t1
-        ├── cte_schema: [number (#0)]
+        ├── cte_schema: [number (#1)]
         └── estimated rows: 10.00
 
 query T
@@ -38,7 +38,7 @@ Sequence
 ├── MaterializedCTE: t1
 │   └── TableScan
 │       ├── table: default.system.numbers
-│       ├── output columns: [number (#3)]
+│       ├── output columns: [number (#0)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
@@ -49,23 +49,23 @@ Sequence
     ├── MaterializedCTE: t2
     │   └── MaterializeCTERef
     │       ├── cte_name: t1
-    │       ├── cte_schema: [number (#2)]
+    │       ├── cte_schema: [number (#1)]
     │       └── estimated rows: 10.00
     └── HashJoin
-        ├── output columns: [numbers.number (#0)]
+        ├── output columns: [numbers.number (#2)]
         ├── join type: INNER
-        ├── build keys: [t2.b (#1)]
-        ├── probe keys: [t1.a (#0)]
+        ├── build keys: [t2.b (#3)]
+        ├── probe keys: [t1.a (#2)]
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:
-        │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
+        │   └── filter id:0, build key:t2.b (#3), probe key:t1.a (#2), filter type:inlist,min_max
         ├── estimated rows: 100.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: t2
-        │   ├── cte_schema: [number (#1)]
+        │   ├── cte_schema: [number (#3)]
         │   └── estimated rows: 10.00
         └── MaterializeCTERef(Probe)
             ├── cte_name: t1
-            ├── cte_schema: [number (#0)]
+            ├── cte_schema: [number (#2)]
             └── estimated rows: 10.00

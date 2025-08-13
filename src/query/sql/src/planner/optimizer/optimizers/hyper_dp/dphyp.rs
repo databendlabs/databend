@@ -283,7 +283,7 @@ impl DPhpyOptimizer {
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
         let cte_consumer = match s_expr.plan() {
-            RelOperator::MaterializeCTERef(consumer) => consumer,
+            RelOperator::MaterializedCTERef(consumer) => consumer,
             _ => unreachable!(),
         };
 
@@ -318,7 +318,7 @@ impl DPhpyOptimizer {
             table_indexes.push(scan.table_index);
         }
 
-        if let RelOperator::MaterializeCTERef(cte_consumer) = s_expr.plan() {
+        if let RelOperator::MaterializedCTERef(cte_consumer) = s_expr.plan() {
             Self::collect_table_indexes_recursive(&cte_consumer.def, table_indexes);
         }
 
@@ -387,7 +387,7 @@ impl DPhpyOptimizer {
             RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
 
             RelOperator::Sequence(_) => self.process_sequence_node(s_expr).await,
-            RelOperator::MaterializeCTERef(_) => {
+            RelOperator::MaterializedCTERef(_) => {
                 self.process_cte_consumer_node(s_expr, join_relation).await
             }
 

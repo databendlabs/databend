@@ -55,6 +55,8 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 
 static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V3(PhantomData);
+static SNAPSHOT_STATISTICS_V4: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V4(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -225,19 +227,30 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {
-        if table_statistics_location
-            .as_ref()
-            .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
-        {
-            SNAPSHOT_STATISTICS_V0.version()
-        } else if table_statistics_location
-            .as_ref()
-            .ends_with(SNAPSHOT_STATISTICS_V2.suffix().as_str())
-        {
-            SNAPSHOT_STATISTICS_V2.version()
-        } else {
-            SNAPSHOT_STATISTICS_V3.version()
-        }
+        let version_map = [
+            (
+                SNAPSHOT_STATISTICS_V0.suffix(),
+                SNAPSHOT_STATISTICS_V0.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V2.suffix(),
+                SNAPSHOT_STATISTICS_V2.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V3.suffix(),
+                SNAPSHOT_STATISTICS_V3.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V4.suffix(),
+                SNAPSHOT_STATISTICS_V4.version(),
+            ),
+        ];
+
+        version_map
+            .iter()
+            .find(|(suffix, _)| table_statistics_location.as_ref().ends_with(suffix))
+            .map(|(_, version)| *version)
+            .unwrap_or(SNAPSHOT_STATISTICS_V4.version())
     }
 
     pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
@@ -375,6 +388,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
             TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
             TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
+            TableSnapshotStatisticsVersion::V4(_) => "_ts_v4.json".to_string(),
         }
     }
 }

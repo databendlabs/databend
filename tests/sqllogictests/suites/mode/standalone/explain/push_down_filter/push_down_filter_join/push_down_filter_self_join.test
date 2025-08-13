@@ -14,11 +14,11 @@ select * from D;
 Sequence
 ├── MaterializedCTE: a
 │   └── UnionAll
-│       ├── output columns: [a (#22), b (#23)]
+│       ├── output columns: [a (#4), b (#5)]
 │       ├── estimated rows: 20.00
 │       ├── TableScan
 │       │   ├── table: default.default.t1
-│       │   ├── output columns: [a (#18), b (#19)]
+│       │   ├── output columns: [a (#0), b (#1)]
 │       │   ├── read rows: 10
 │       │   ├── read size: < 1 KiB
 │       │   ├── partitions total: 1
@@ -28,7 +28,7 @@ Sequence
 │       │   └── estimated rows: 10.00
 │       └── TableScan
 │           ├── table: default.default.t2
-│           ├── output columns: [a (#20), b (#21)]
+│           ├── output columns: [a (#2), b (#3)]
 │           ├── read rows: 10
 │           ├── read size: < 1 KiB
 │           ├── partitions total: 1
@@ -40,21 +40,21 @@ Sequence
     ├── MaterializedCTE: b
     │   └── MaterializeCTERef
     │       ├── cte_name: a
-    │       ├── cte_schema: [a (#16), b (#17)]
+    │       ├── cte_schema: [a (#10), b (#11)]
     │       └── estimated rows: 20.00
     └── HashJoin
-        ├── output columns: [a (#4), b (#5), b (#11), a (#10)]
+        ├── output columns: [a (#16), b (#17), b (#23), a (#22)]
         ├── join type: INNER
-        ├── build keys: [b2.a (#10)]
-        ├── probe keys: [b1.a (#4)]
+        ├── build keys: [b2.a (#22)]
+        ├── probe keys: [b1.a (#16)]
         ├── keys is null equal: [false]
-        ├── filters: [d.b (#5) < d.b (#11)]
+        ├── filters: [d.b (#17) < d.b (#23)]
         ├── estimated rows: 400.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: b
-        │   ├── cte_schema: [a (#10), b (#11)]
+        │   ├── cte_schema: [a (#22), b (#23)]
         │   └── estimated rows: 20.00
         └── MaterializeCTERef(Probe)
             ├── cte_name: b
-            ├── cte_schema: [a (#4), b (#5)]
+            ├── cte_schema: [a (#16), b (#17)]
             └── estimated rows: 20.00

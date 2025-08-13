@@ -13055,7 +13055,7 @@ create role test
 CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
-    if_not_exists: false,
+    create_option: Create,
     role_name: "test",
 }
 
@@ -13066,7 +13066,7 @@ create role 'test'
 CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
-    if_not_exists: false,
+    create_option: Create,
     role_name: "test",
 }
 

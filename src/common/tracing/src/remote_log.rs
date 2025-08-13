@@ -40,8 +40,8 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use log::Record;
-use logforth::layout::collect_kvs;
 use logforth::Append;
+use logforth::Diagnostic;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -50,6 +50,7 @@ use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
 
+use crate::loggers::collect_kvs;
 use crate::Config;
 use crate::GlobalLogger;
 
@@ -245,7 +246,7 @@ impl RemoteLog {
 }
 
 impl Append for RemoteLog {
-    fn append(&self, record: &Record) -> anyhow::Result<()> {
+    fn append(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
         // fsync wal
         let log_element = self.prepare_log_element(record);
         self.buffer

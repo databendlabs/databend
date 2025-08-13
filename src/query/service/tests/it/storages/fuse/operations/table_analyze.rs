@@ -23,6 +23,7 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -33,7 +34,7 @@ use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::MetaHLL12;
+use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV3;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -218,8 +219,9 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let col: Vec<u8> = vec![1, 3, 0, 0, 0, 118, 5, 1, 21, 6, 3, 229, 13, 3];
     let hll: HashMap<ColumnId, MetaHLL12> =
         HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
-    let table_statistics =
-        TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id);
+    let table_statistics_v3 =
+        TableSnapshotStatisticsV3::new(hll, HashMap::new(), snapshot_1.snapshot_id);
+    let table_statistics = TableSnapshotStatistics::from(table_statistics_v3);
     let table_statistics_location = location_gen.snapshot_statistics_location_from_uuid(
         &table_statistics.snapshot_id,
         table_statistics.format_version(),

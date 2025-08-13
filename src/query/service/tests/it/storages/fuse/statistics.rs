@@ -43,7 +43,7 @@ use databend_common_sql::ApproxDistinctColumns;
 use databend_common_storages_fuse::io::build_column_hlls;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_common_storages_fuse::statistics::Trim;
-use databend_common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
+use databend_common_storages_fuse::statistics::END_OF_UNICODE_RANGE;
 use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -593,7 +593,7 @@ fn is_degenerated_case(value: &str) -> bool {
     let prefixed_with_irreplaceable_chars = value
         .chars()
         .take(STATS_STRING_PREFIX_LEN)
-        .all(|c| c >= STATS_REPLACEMENT_CHAR);
+        .all(|c| c >= END_OF_UNICODE_RANGE);
 
     larger_than_prefix_len && prefixed_with_irreplaceable_chars
 }

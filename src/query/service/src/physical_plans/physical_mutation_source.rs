@@ -178,7 +178,7 @@ impl IPhysicalPlan for MutationSource {
             let mut segment_locations = Vec::with_capacity(self.partitions.partitions.len());
             for part in &self.partitions.partitions {
                 // Safe to downcast because we know the partition is lazy
-                let part: &FuseLazyPartInfo = FuseLazyPartInfo::from_part(part)?;
+                let part = FuseLazyPartInfo::from_part(part)?;
                 segment_locations.push(SegmentLocation {
                     segment_idx: part.segment_index,
                     location: part.segment_location.clone(),
