@@ -207,12 +207,18 @@ mod tests {
         name: &'static str,
         message: &'static str,
         record: Record<'static>,
-        expected_text_output: &'static str, /* Expected complete output for TextLayout with fixed time */
-        expected_json_output: &'static str, /* Expected complete output for JsonLayout with fixed time */
+        expected_text_output: String,
+        expected_json_output: String,
     }
 
     // Helper function to create test cases with records
     fn create_test_cases() -> Vec<TestCase> {
+        // Generate the expected timestamp string with current timezone
+        let fixed_timestamp = chrono::DateTime::from_timestamp(1431648000, 123456789)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        let timestamp_str = fixed_timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
+
         vec![
             TestCase {
                 name: "basic message",
@@ -225,8 +231,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00  INFO test::module: test_file.rs:42 test message",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"INFO","fields":{"message":"test message"}}"#,
+                expected_text_output: format!(
+                    "{}  INFO test::module: test_file.rs:42 test message",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"INFO","fields":{{"message":"test message"}}}}"#,
+                    timestamp_str
+                ),
             },
             TestCase {
                 name: "empty message",
@@ -239,8 +251,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00  INFO test::module: test_file.rs:42 ",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"INFO","fields":{"message":""}}"#,
+                expected_text_output: format!(
+                    "{}  INFO test::module: test_file.rs:42 ",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"INFO","fields":{{"message":""}}}}"#,
+                    timestamp_str
+                ),
             },
             TestCase {
                 name: "error level",
@@ -253,8 +271,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00 ERROR test::module: test_file.rs:42 error occurred",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"ERROR","fields":{"message":"error occurred"}}"#,
+                expected_text_output: format!(
+                    "{} ERROR test::module: test_file.rs:42 error occurred",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"ERROR","fields":{{"message":"error occurred"}}}}"#,
+                    timestamp_str
+                ),
             },
             TestCase {
                 name: "warn level",
@@ -267,8 +291,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00  WARN test::module: test_file.rs:42 warning message",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"WARN","fields":{"message":"warning message"}}"#,
+                expected_text_output: format!(
+                    "{}  WARN test::module: test_file.rs:42 warning message",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"WARN","fields":{{"message":"warning message"}}}}"#,
+                    timestamp_str
+                ),
             },
             TestCase {
                 name: "debug level",
@@ -281,8 +311,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00 DEBUG test::module: test_file.rs:42 debug info",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"DEBUG","fields":{"message":"debug info"}}"#,
+                expected_text_output: format!(
+                    "{} DEBUG test::module: test_file.rs:42 debug info",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"DEBUG","fields":{{"message":"debug info"}}}}"#,
+                    timestamp_str
+                ),
             },
             TestCase {
                 name: "trace level",
@@ -295,8 +331,14 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: "2015-05-15T08:00:00.123456+08:00 TRACE test::module: test_file.rs:42 trace data",
-                expected_json_output: r#"{"timestamp":"2015-05-15T08:00:00.123456+08:00","level":"TRACE","fields":{"message":"trace data"}}"#,
+                expected_text_output: format!(
+                    "{} TRACE test::module: test_file.rs:42 trace data",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"TRACE","fields":{{"message":"trace data"}}}}"#,
+                    timestamp_str
+                ),
             },
         ]
     }
