@@ -25,6 +25,7 @@ use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -79,7 +80,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
-    _block_stat_count: u32,
+    segment_stats_count: u32,
     check_last_snapshot: Option<()>,
     check_table_statistic_file: Option<()>,
 ) -> Result<()> {
@@ -91,6 +92,7 @@ pub async fn check_data_dir(
     let mut ss_count = 0;
     let mut ts_count = 0;
     let mut sg_count = 0;
+    let mut hs_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
     let mut table_statistic_files = vec![];
@@ -99,6 +101,7 @@ pub async fn check_data_dir(
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+    let prefix_segment_stats = FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -117,6 +120,8 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
                 table_statistic_files.push(entry_path.to_string());
+            } else if path.starts_with(prefix_segment_stats) {
+                hs_count += 1;
             }
         }
     }
@@ -134,6 +139,11 @@ pub async fn check_data_dir(
     assert_eq!(
         sg_count, segment_count,
         "case [{}], check segment count",
+        case_name
+    );
+    assert_eq!(
+        hs_count, segment_stats_count,
+        "case [{}], check segment statistics count",
         case_name
     );
 

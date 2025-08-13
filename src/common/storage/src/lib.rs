@@ -85,6 +85,7 @@ pub use histogram::HistogramBucket;
 pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
+pub use meta_hll::MetaHLL12;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

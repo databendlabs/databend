@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Utc;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -26,20 +26,19 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_storages_factory::NavigationPoint;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::AnalyzeLightMutator;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_cache::Partitions;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
-use itertools::Itertools;
 use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
-use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -133,82 +132,23 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let table_statistics = table
-            .read_table_snapshot_statistics(Some(&snapshot))
-            .await?;
+        let mut parts = Vec::with_capacity(snapshot.segments.len());
+        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+            parts.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+        }
+        self.ctx
+            .set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 
-        // plan sql
-        let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {
-            let is_full = match table
-                .navigate_to_point(
-                    &NavigationPoint::SnapshotID(table_statistics.snapshot_id.simple().to_string()),
-                    self.ctx.clone().get_abort_checker(),
-                )
-                .await
-            {
-                Ok(t) => !t
-                    .read_table_snapshot()
-                    .await
-                    .is_ok_and(|s| s.is_some_and(|s| s.prev_table_seq.is_some())),
-                Err(_) => true,
-            };
-
-            let temporal_str = if is_full {
-                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple())
-            } else {
-                // analyze only need to collect the added blocks.
-                let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
-                format!(
-                        "CHANGES(INFORMATION => DEFAULT) AT (snapshot => '{}') END (snapshot => '{}') AS {table_alias}",
-                        table_statistics.snapshot_id.simple(),
-                        snapshot.snapshot_id.simple(),
-                    )
-            };
-            (is_full, temporal_str)
-        } else {
-            (
-                true,
-                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple()),
-            )
-        };
-
+        let mut build_res = PipelineBuildResult::create();
+        // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
+        // It's possible to OOM if the table is too large and spilling isn't enabled.
+        // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
+        let mut histogram_info_receivers = HashMap::new();
         let quote = self
             .ctx
             .get_settings()
             .get_sql_dialect()?
             .default_ident_quote();
-
-        // 0.01625 --> 12 buckets --> 4K size per column
-        // 1.04 / math.sqrt(1<<12) --> 0.01625
-        const DISTINCT_ERROR_RATE: f64 = 0.01625;
-        let ndv_select_expr = snapshot
-                .schema
-                .fields()
-                .iter()
-                .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
-                .map(|f| {
-                    format!(
-                        "approx_count_distinct_state({DISTINCT_ERROR_RATE})({quote}{}{quote}) as ndv_{}",
-                        f.name,
-                        f.column_id()
-                    )
-                })
-                .join(", ");
-
-        let sql = format!(
-            "SELECT {ndv_select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
-            plan.database, plan.table,
-        );
-
-        info!("Analyze via sql: {sql}");
-
-        let (physical_plan, bind_context) = self.plan_sql(sql, false).await?;
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
-        // It's possible to OOM if the table is too large and spilling isn't enabled.
-        // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
-        let mut histogram_info_receivers = HashMap::new();
         if self.ctx.get_settings().get_enable_analyze_histogram()? {
             let histogram_sqls = table
                     .schema()
@@ -262,12 +202,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 histogram_info_receivers.insert(col_id, rx);
             }
         }
-        FuseTable::do_analyze(
+        table.do_analyze(
             self.ctx.clone(),
-            bind_context.output_schema(),
-            &self.plan.catalog,
-            &self.plan.database,
-            &self.plan.table,
             snapshot.snapshot_id,
             &mut build_res.main_pipeline,
             histogram_info_receivers,

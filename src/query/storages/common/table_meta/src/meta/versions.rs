@@ -105,6 +105,7 @@ impl SnapshotVersion {
 impl Versioned<0> for v1::TableSnapshotStatistics {}
 impl Versioned<2> for v2::TableSnapshotStatistics {}
 impl Versioned<3> for v3::TableSnapshotStatistics {}
+impl Versioned<4> for v4::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
@@ -112,6 +113,7 @@ pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
     V2(PhantomData<v2::TableSnapshotStatistics>),
     V3(PhantomData<v3::TableSnapshotStatistics>),
+    V4(PhantomData<v4::TableSnapshotStatistics>),
 }
 
 impl TableSnapshotStatisticsVersion {
@@ -120,6 +122,7 @@ impl TableSnapshotStatisticsVersion {
             TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
             TableSnapshotStatisticsVersion::V2(a) => Self::ver(a),
             TableSnapshotStatisticsVersion::V3(a) => Self::ver(a),
+            TableSnapshotStatisticsVersion::V4(a) => Self::ver(a),
         }
     }
 
@@ -206,8 +209,11 @@ mod converters {
                 3 => Ok(TableSnapshotStatisticsVersion::V3(testify_version::<_, 3>(
                     PhantomData,
                 ))),
+                4 => Ok(TableSnapshotStatisticsVersion::V4(testify_version::<_, 4>(
+                    PhantomData,
+                ))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown table snapshot statistics version {value}, versions supported: 0, 2, 3"
+                    "unknown table snapshot statistics version {value}, versions supported: 0, 2, 3, 4"
                 ))),
             }
         }
