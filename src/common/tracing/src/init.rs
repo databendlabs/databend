@@ -15,7 +15,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
@@ -26,7 +25,9 @@ use log::LevelFilter;
 use logforth::filter::env_filter::EnvFilterBuilder;
 use logforth::filter::EnvFilter;
 use opendal::Operator;
+use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::WithTonicConfig;
 
 use crate::config::OTLPProtocol;
 use crate::filter::ThreadTrackerFilter;
@@ -141,41 +142,40 @@ pub fn init_logging(
     // initialize tracing a reporter
     if cfg.tracing.on {
         let endpoint = cfg.tracing.otlp.endpoint.clone();
-        let mut kvs = cfg
-            .tracing
-            .otlp
-            .labels
-            .iter()
-            .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
-            .collect::<Vec<_>>();
-        kvs.push(opentelemetry::KeyValue::new(
-            "service.name",
-            trace_name.clone(),
-        ));
-        for (k, v) in &labels {
-            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
-        }
         let exporter = match cfg.tracing.otlp.protocol {
-            OTLPProtocol::Grpc => opentelemetry_otlp::new_exporter()
-                .tonic()
+            OTLPProtocol::Grpc => opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_compression(Compression::Gzip)
                 .with_endpoint(endpoint)
                 .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-                .with_timeout(Duration::from_secs(
-                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                ))
-                .build_span_exporter()
+                .with_timeout(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT)
+                .build()
                 .expect("initialize oltp grpc exporter"),
-            OTLPProtocol::Http => opentelemetry_otlp::new_exporter()
-                .http()
+            OTLPProtocol::Http => opentelemetry_otlp::SpanExporter::builder()
+                .with_http()
                 .with_endpoint(endpoint)
                 .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
-                .with_timeout(Duration::from_secs(
-                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                ))
-                .build_span_exporter()
+                .with_timeout(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT)
+                .build()
                 .expect("initialize oltp http exporter"),
         };
-        let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
+
+        let resource = opentelemetry_sdk::Resource::builder()
+            .with_service_name(trace_name.clone())
+            .with_attributes(
+                cfg.tracing
+                    .otlp
+                    .labels
+                    .iter()
+                    .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string())),
+            )
+            .with_attributes(
+                labels
+                    .iter()
+                    .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string())),
+            )
+            .build();
+        let (reporter_rt, otlp_reporter) = Thread::spawn(move || {
             // init runtime with 2 threads
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
@@ -186,8 +186,8 @@ pub fn init_logging(
                 fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
-                    Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
-                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
+                    Cow::Owned(resource),
+                    opentelemetry::InstrumentationScope::builder(trace_name).build(),
                 )
             });
             (rt, reporter)
@@ -195,11 +195,12 @@ pub fn init_logging(
         .join()
         .unwrap();
 
+        let trace_config = fastrace::collector::Config::default();
         if cfg.structlog.on {
             let reporter = StructLogReporter::wrap(otlp_reporter);
-            fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+            fastrace::set_reporter(reporter, trace_config);
         } else {
-            fastrace::set_reporter(otlp_reporter, fastrace::collector::Config::default());
+            fastrace::set_reporter(otlp_reporter, trace_config);
         }
 
         _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
@@ -228,8 +229,8 @@ pub fn init_logging(
                 .filter(env_filter(&cfg.file.level))
                 .filter(ThreadTrackerFilter)
                 .append(match cfg.file.format.as_str() {
-                    "text" => normal_log_file.with_layout(TextLayout),
-                    "json" => normal_log_file.with_layout(JsonLayout),
+                    "text" => normal_log_file.with_layout(TextLayout::<false>),
+                    "json" => normal_log_file.with_layout(JsonLayout::<false>),
                     "identical" => normal_log_file.with_layout(IdenticalLayout),
                     _ => {
                         unimplemented!("file logging format {} is not supported", &cfg.file.format)
@@ -245,8 +246,8 @@ pub fn init_logging(
                 .filter(env_filter(&cfg.stderr.level))
                 .filter(ThreadTrackerFilter)
                 .append(match cfg.stderr.format.as_str() {
-                    "text" => logforth::append::Stderr::default().with_layout(TextLayout),
-                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout),
+                    "text" => logforth::append::Stderr::default().with_layout(TextLayout::<false>),
+                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout::<false>),
                     "identical" => logforth::append::Stderr::default().with_layout(IdenticalLayout),
                     _ => {
                         unimplemented!(
@@ -371,17 +372,14 @@ pub fn init_logging(
                 .chain(&endpoint.labels)
                 .map(|(k, v)| (Cow::from(k.clone()), Cow::from(v.clone())))
                 .chain([(Cow::from("category"), Cow::from("profile"))]);
-            let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
+            let otel = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
                 format!("{}/v1/logs", &endpoint.endpoint),
             )
-            .protocol(endpoint.protocol.into());
-            for (k, v) in labels {
-                otel_builder = otel_builder.label(k, v);
-            }
-            let otel = otel_builder
-                .build()
-                .expect("initialize opentelemetry logger");
+            .protocol(endpoint.protocol.into())
+            .labels(labels)
+            .build()
+            .expect("initialize opentelemetry logger");
             logger = logger.dispatch(|dispatch| {
                 dispatch
                     .filter(EnvFilter::new(

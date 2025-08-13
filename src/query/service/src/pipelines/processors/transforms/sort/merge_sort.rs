@@ -19,6 +19,7 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use bytesize::ByteSize;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -40,7 +41,7 @@ use super::sort_spill::MemoryMerger;
 use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use super::Base;
-use super::MemoryRows;
+use super::RowsStat;
 use crate::spillers::Spiller;
 
 #[derive(Debug)]
@@ -164,8 +165,8 @@ where
     fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
         let (num_rows, num_bytes) = input_data
             .iter()
-            .map(|block| (block.num_rows(), block.memory_size()))
-            .fold((0, 0), |(acc_rows, acc_bytes), (rows, bytes)| {
+            .map(|block| (block.num_rows(), ByteSize(block.memory_size() as _)))
+            .fold((0, ByteSize(0)), |(acc_rows, acc_bytes), (rows, bytes)| {
                 (acc_rows + rows, acc_bytes + bytes)
             });
         let params = self.determine_params(num_bytes, num_rows);
@@ -186,20 +187,13 @@ where
         }
     }
 
-    fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
-        // We use the first memory calculation to estimate the batch size and the number of merge.
-        let unit_size = self.memory_settings.spill_unit_size;
-        let num_merge = bytes.div_ceil(unit_size).max(2);
-        let batch_rows = rows.div_ceil(num_merge);
-
-        /// The memory will be doubled during merging.
-        const MERGE_RATIO: usize = 2;
-        let num_merge = num_merge.div_ceil(MERGE_RATIO).max(2);
-        log::info!("determine sort spill params, buffer_bytes: {bytes}, buffer_rows: {rows}, spill_unit_size: {unit_size}, batch_rows: {batch_rows}, batch_num_merge {num_merge}");
-        SortSpillParams {
-            batch_rows,
-            num_merge,
-        }
+    fn determine_params(&self, bytes: ByteSize, rows: usize) -> SortSpillParams {
+        SortSpillParams::determine(
+            bytes,
+            rows,
+            ByteSize(self.memory_settings.spill_unit_size as _),
+            self.max_block_size,
+        )
     }
 
     fn collect_block(&mut self, block: DataBlock) -> Result<()> {
@@ -275,28 +269,32 @@ where
         self.output.push_data(Ok(block));
     }
 
-    fn input_rows(&self) -> usize {
+    fn input_rows(&self) -> (usize, usize) {
         match &self.inner {
-            Inner::Collect(input_data) | Inner::Spill(input_data, _) => input_data.in_memory_rows(),
-            _ => 0,
+            Inner::Collect(input_data) | Inner::Spill(input_data, _) => {
+                (input_data.len(), input_data.in_memory_rows())
+            }
+            _ => (0, 0),
         }
     }
 
     fn check_spill(&self) -> bool {
-        if !self.memory_settings.check_spill() {
-            return false;
-        }
-
         match &self.inner {
             Inner::Limit(limit_sort) => {
-                limit_sort.num_bytes() > self.memory_settings.spill_unit_size * 2
+                self.memory_settings.check_spill()
+                    && limit_sort.num_bytes()
+                        >= ByteSize(self.memory_settings.spill_unit_size as _) * 2_u64
             }
             Inner::Collect(input_data) => {
-                input_data.iter().map(|b| b.memory_size()).sum::<usize>()
-                    > self.memory_settings.spill_unit_size * 2
+                self.memory_settings.check_spill()
+                    && input_data.iter().map(|b| b.memory_size()).sum::<usize>()
+                        >= self.memory_settings.spill_unit_size * 2
             }
             Inner::Spill(input_data, sort_spill) => {
-                input_data.in_memory_rows() > sort_spill.max_rows()
+                let rows = input_data.in_memory_rows();
+                let params = sort_spill.params();
+                self.memory_settings.check_spill() && rows >= params.batch_rows * 2
+                    || input_data.in_memory_rows() >= params.max_rows()
             }
             _ => unreachable!(),
         }
@@ -422,22 +420,16 @@ where
                 let finished = self.input.is_finished();
                 self.trans_to_spill()?;
 
-                let input = self.input_rows();
+                let (incoming_block, incoming) = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
                 };
-                let memory_rows = spill_sort.collect_memory_rows();
-                let max = spill_sort.max_rows();
 
-                if memory_rows > 0 && memory_rows + input > max {
+                if incoming > 0 {
+                    let total_rows = spill_sort.collect_total_rows();
+                    log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
                     spill_sort
-                        .collect_spill_last(memory_rows + input - max)
-                        .await?;
-                }
-                let need_spill = input > max;
-                if need_spill || finished && input > 0 {
-                    spill_sort
-                        .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
+                        .sort_input_data(std::mem::take(input_data), !finished, &self.aborting)
                         .await?;
                 }
                 if finished {
@@ -450,7 +442,8 @@ where
                     unreachable!()
                 };
                 assert!(input_data.is_empty());
-                let OutputData { block, finish, .. } = spill_sort.on_restore().await?;
+                let OutputData { block, finish, .. } =
+                    spill_sort.on_restore(&self.memory_settings).await?;
                 self.output_data.extend(block);
                 if finish {
                     self.state = State::Finish

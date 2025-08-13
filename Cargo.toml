@@ -274,7 +274,7 @@ byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
-bytesize = "1.1.0"
+bytesize = "2"
 cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.40", features = ["serde"] }
@@ -568,19 +568,22 @@ vergen = { version = "8.3.1", default-features = false, features = ["build", "ca
 
 # Observability
 env_logger = "0.11"
-fastrace = { version = "0.7.4", features = ["enable"] }
-fastrace-opentelemetry = "0.7.4"
+fastrace = { version = "0.7.14", features = ["enable"] }
+fastrace-opentelemetry = "0.10"
 log = { version = "0.4.27", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.26.0", features = [
+opentelemetry = { version = "0.29", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "trace",
     "logs",
+    "metrics",
+    "internal-logs",
     "grpc-tonic",
+    "gzip-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.26.0", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 tracing = "0.1.40"

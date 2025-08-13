@@ -102,7 +102,7 @@ impl QueryPipelineExecutor {
         }
     }
 
-    #[fastrace::trace]
+    #[fastrace::trace(name = "QueryPipelineExecutor::from_pipelines")]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -192,6 +192,7 @@ impl QueryPipelineExecutor {
         }))
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::on_finished")]
     fn on_finished(&self, info: ExecutionInfo) -> Result<()> {
         let mut on_finished_chain = self.on_finished_chain.lock();
 
@@ -201,6 +202,7 @@ impl QueryPipelineExecutor {
         on_finished_chain.apply(info)
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::finish")]
     pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
         let cause =
             cause.map(|err| err.with_context("[PIPELINE-EXECUTOR] Pipeline executor finished"));
@@ -223,7 +225,7 @@ impl QueryPipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
-    #[fastrace::trace]
+    #[fastrace::trace(name = "QueryPipelineExecutor::execute")]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init(self.graph.clone())?;
 

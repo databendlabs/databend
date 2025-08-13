@@ -167,6 +167,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
+    #[fastrace::trace(name = "PipelineExecutor::execute")]
     pub fn execute(&self) -> Result<()> {
         let instants = Instant::now();
         let _guard = defer(move || {
