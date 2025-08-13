@@ -196,9 +196,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Column(NullableColumn::new_unchecked(col.into(), validity))
                     }
                 },
-                _ => {
-                    Value::Scalar(None)
-                }
+                _ => Value::Scalar(None)
             }
         },
     );
