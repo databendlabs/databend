@@ -24,17 +24,17 @@ anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-flight = { workspace = true }
-arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
+arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
-arrow-udf-runtime = { workspace = true, features = ["javascript", "wasm"] }
+arrow-udf-runtime = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-compat = { workspace = true }
 async-recursion = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-backoff = { workspace = true, features = ["futures", "tokio"] }
+backoff = { workspace = true }
 backon = { workspace = true }
 base64 = { workspace = true }
 buf-list = { workspace = true }
@@ -171,9 +171,9 @@ sqlx = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true, features = ["net"] }
+tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
-toml = { workspace = true, features = ["parse"] }
+toml = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
 url = { workspace = true }

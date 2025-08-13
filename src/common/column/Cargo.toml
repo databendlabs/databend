@@ -17,7 +17,7 @@ column-default = [
 ]
 
 [dependencies]
-borsh = { workspace = true, features = ["derive"] }
+borsh = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 
@@ -32,7 +32,7 @@ hex = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
-serde = { workspace = true, features = ["rc"], optional = true }
+serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 simdutf8 = { workspace = true }

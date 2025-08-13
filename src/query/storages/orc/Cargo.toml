@@ -24,7 +24,7 @@ databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 arrow-array = { workspace = true }
-arrow-schema = { workspace = true, features = ["serde"] }
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }

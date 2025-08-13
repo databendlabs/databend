@@ -11,7 +11,7 @@ anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 async-channel = { workspace = true }
-backtrace = { workspace = true, features = ["std", "serialize-serde"] }
+backtrace = { workspace = true }
 chrono = { workspace = true }
 concurrent-queue = { workspace = true }
 databend-common-base = { workspace = true }

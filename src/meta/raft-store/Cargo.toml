@@ -40,7 +40,7 @@ raft-log = { workspace = true }
 rmp-serde = { workspace = true }
 rotbl = { workspace = true }
 semver = { workspace = true }
-seq-marked = { workspace = true, features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
+seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state-machine-api = { workspace = true }

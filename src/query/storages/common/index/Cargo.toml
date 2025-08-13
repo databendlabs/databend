@@ -17,9 +17,9 @@ databend-common-functions = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
-bincode = { workspace = true, features = ["serde"] }
+bincode = { workspace = true }
 bitvec = { workspace = true }
-bytemuck = { workspace = true, features = ["derive", "extern_crate_alloc", "must_cast", "transparentwrapper_extra"] }
+bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
 fastrace = { workspace = true }
@@ -45,8 +45,8 @@ tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
-xorfilter-rs = { workspace = true, features = ["cbordata"] }
-zerocopy = { workspace = true, features = ["derive"] }
+xorfilter-rs = { workspace = true }
+zerocopy = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
