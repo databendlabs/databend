@@ -14,6 +14,7 @@
 
 use std::any::Any;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::optimizer::ir::RelExpr;
@@ -21,6 +22,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnBinding;
 
 use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -73,6 +75,17 @@ impl IPhysicalPlan for MaterializedCTE {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn to_format_node(
+        &self,
+        _ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(
+            format!("MaterializedCTE: {}", self.cte_name),
+            children,
+        ))
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

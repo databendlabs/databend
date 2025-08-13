@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::assert_matches::debug_assert_matches;
+use std::collections::HashMap;
 use std::fmt::Display;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -47,6 +48,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
@@ -201,13 +203,19 @@ impl IPhysicalPlan for Sort {
             FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
         ];
 
+        if let Some(id) = self.broadcast_id {
+            node_children.push(FormatTreeNode::new(format!("broadcast id: {id}")));
+        }
+
         if let Some(info) = &self.stat_info {
-            node_children.extend(plan_stats_info_to_format_tree(info));
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
         }
 
         node_children.extend(children);
+
         Ok(FormatTreeNode::with_children(
-            "Sort".to_string(),
+            format!("Sort({})", self.step),
             node_children,
         ))
     }
@@ -398,6 +406,7 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        eprintln!("build sort physical plan");
         // 1. Prune unused Columns.
         sort.items.iter().for_each(|s| {
             required.insert(s.index);
@@ -437,6 +446,7 @@ impl PhysicalPlanBuilder {
 
             let input_plan = self.build(s_expr.unary_child(), required).await?;
 
+            eprintln!("build sort physical plan -1 ");
             return Ok(Box::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: input_plan,
@@ -458,6 +468,7 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let Some(after_exchange) = sort.after_exchange else {
+            eprintln!("build sort physical plan -2 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return Ok(Box::new(Sort {
                 input: input_plan,
@@ -473,6 +484,7 @@ impl PhysicalPlanBuilder {
 
         let settings = self.ctx.get_settings();
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
+            eprintln!("build sort physical plan -3 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return if !after_exchange {
                 Ok(Box::new(Sort {
@@ -500,6 +512,7 @@ impl PhysicalPlanBuilder {
         }
 
         if after_exchange {
+            eprintln!("build sort physical plan -4 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return Ok(Box::new(Sort {
                 input: input_plan,
@@ -533,7 +546,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("Exchange"),
         });
 
-        Ok(Box::new(Sort {
+        let v: PhysicalPlan = Box::new(Sort {
             input: exchange,
             order_by,
             limit: sort.limit,
@@ -542,6 +555,17 @@ impl PhysicalPlanBuilder {
             broadcast_id: None,
             stat_info: Some(stat_info),
             meta: PhysicalPlanMeta::new("Sort"),
-        }))
+        });
+
+        let metadata = self.metadata.read();
+        eprintln!(
+            "plan: {}",
+            v.format(&metadata, HashMap::new())
+                .unwrap()
+                .format_pretty()
+                .unwrap()
+        );
+
+        Ok(v)
     }
 }

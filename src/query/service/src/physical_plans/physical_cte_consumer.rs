@@ -14,12 +14,16 @@
 
 use std::any::Any;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::plan_stats_info_to_format_tree;
+use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -62,6 +66,33 @@ impl IPhysicalPlan for MaterializeCTERef {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut children = Vec::new();
+        children.push(FormatTreeNode::new(format!(
+            "cte_name: {}",
+            self.cte_name.clone()
+        )));
+        children.push(FormatTreeNode::new(format!(
+            "cte_schema: [{}]",
+            format_output_columns(self.cte_schema.clone(), ctx.metadata, false)
+        )));
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        Ok(FormatTreeNode::with_children(
+            "MaterializeCTERef".to_string(),
+            children,
+        ))
+    }
+
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let receiver = builder.ctx.get_materialized_cte_receiver(&self.cte_name);
         builder.main_pipeline.add_source(

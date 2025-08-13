@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,6 +31,8 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MaterializedCTE;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
@@ -38,6 +41,7 @@ use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
 use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::Sequence;
 use crate::physical_plans::TableScan;
 use crate::physical_plans::VisitorCast;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
@@ -178,7 +182,7 @@ impl Fragmenter {
 struct FragmentDeriveHandle {
     query_id: String,
     ctx: Arc<QueryContext>,
-    fragments: HashMap<usize, PlanFragment>,
+    fragments: BTreeMap<usize, PlanFragment>,
 }
 
 impl FragmentDeriveHandle {
@@ -186,11 +190,11 @@ impl FragmentDeriveHandle {
         Box::new(FragmentDeriveHandle {
             ctx,
             query_id,
-            fragments: HashMap::new(),
+            fragments: BTreeMap::new(),
         })
     }
 
-    pub fn take_fragments(&mut self) -> HashMap<usize, PlanFragment> {
+    pub fn take_fragments(&mut self) -> BTreeMap<usize, PlanFragment> {
         std::mem::take(&mut self.fragments)
     }
 
@@ -291,56 +295,36 @@ impl DeriveHandle for FragmentDeriveHandle {
             }));
         }
 
+        if Sequence::check_physical_plan(v) {
+            assert_eq!(children.len(), 2);
+            return Ok(children.remove(1));
+        }
+
+        if let Some(materialized_cte) = MaterializedCTE::from_physical_plan(v) {
+            let plan = materialized_cte.derive(children);
+
+            let mut visitor = FragmentTypeVisitor::create();
+            plan.visit(&mut visitor).unwrap();
+
+            let fragment_type_visitor = FragmentTypeVisitor::from_visitor(&mut visitor);
+            let fragment_type = fragment_type_visitor.fragment_type.clone();
+
+            let fragment_id = self.ctx.get_fragment_id();
+            let fragment = PlanFragment {
+                plan: plan.clone(),
+                fragment_type,
+                fragment_id,
+                exchange: None,
+                query_id: self.query_id.clone(),
+                source_fragments: vec![],
+            };
+
+            self.fragments.insert(fragment_id, fragment);
+            return Ok(plan);
+        }
+
         Err(children)
     }
-    // fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
-    //     let mut fragments = vec![];
-    //     let _left = self.replace(plan.left.as_ref())?;
-    //
-    //     fragments.append(&mut self.fragments);
-    //     let right = self.replace(plan.right.as_ref())?;
-    //     fragments.append(&mut self.fragments);
-    //
-    //     self.fragments = fragments;
-    //     Ok(right)
-    // }
-    //
-    // fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
-    //     let input = self.replace(plan.input.as_ref())?;
-    //     let plan = PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
-    //         input: Box::new(input),
-    //         ..plan.clone()
-    //     }));
-    //
-    //     let fragment_type = match self.state {
-    //         State::SelectLeaf => FragmentType::Source,
-    //         State::MutationSource => FragmentType::MutationSource,
-    //         State::Other => FragmentType::Intermediate,
-    //         State::ReplaceInto => FragmentType::ReplaceInto,
-    //         State::Compact => FragmentType::Compact,
-    //         State::Recluster => FragmentType::Recluster,
-    //     };
-    //     self.state = State::Other;
-    //
-    //     let fragment_id = self.ctx.get_fragment_id();
-    //
-    //     let mut fragment = PlanFragment {
-    //         plan: plan.clone(),
-    //         fragment_type,
-    //
-    //         fragment_id,
-    //         exchange: None,
-    //         query_id: self.query_id.clone(),
-    //
-    //         source_fragments: self.fragments.drain(..).collect(),
-    //     };
-    //
-    //     // Fill the destination_fragment_id for source fragments of `fragment`.
-    //     Self::resolve_fragment_connection(&mut fragment);
-    //
-    //     self.fragments.push(fragment);
-    //     Ok(plan)
-    // }
 }
 
 struct FragmentTypeVisitor {
