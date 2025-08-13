@@ -112,7 +112,8 @@ async fn test_set_setting() -> Result<()> {
 }
 
 async fn new_setting_api() -> Result<(Arc<MetaStore>, SettingMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api =
+        MetaStore::new_local_testing(databend_common_version::DATABEND_SEMVER.clone()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = SettingMgr::create(

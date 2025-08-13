@@ -151,12 +151,13 @@ impl TaskService {
 
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
-            .create_meta_store()
-            .await
-            .map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-            })?;
+        let meta_store = MetaStoreProvider::new(
+            cfg.meta
+                .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+        )
+        .create_meta_store()
+        .await
+        .map_err(|e| ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e)))?;
         let meta_client = meta_store.deref().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(

@@ -51,14 +51,15 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
-use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
 use mlua::Lua;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
-#[clap(name = "databend-metactl", about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(name = "databend-metactl", about, version = METASRV_COMMIT_VERSION.as_str(), author)]
 struct App {
     #[clap(subcommand)]
     command: Option<CtlCommand>,
@@ -76,7 +77,15 @@ impl App {
 
     async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
-        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            DATABEND_SEMVER.clone(),
+            "root",
+            "xxx",
+            None,
+            None,
+            None,
+        )?;
 
         let res = client.get_cluster_status().await?;
         println!("BinaryVersion: {}", res.binary_version);
@@ -150,8 +159,15 @@ impl App {
         let mut i = 0;
         loop {
             i += 1;
-            let client =
-                MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None, None)?;
+            let client = MetaGrpcClient::try_create(
+                vec![addr.clone()],
+                DATABEND_SEMVER.clone(),
+                "root",
+                "xxx",
+                None,
+                None,
+                None,
+            )?;
             let res = client.get_kv("foo").await;
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
@@ -179,7 +195,7 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args).await?;
+                export_from_grpc::export_from_running_node(args, DATABEND_SEMVER.clone()).await?;
             }
             Some(ref _dir) => {
                 export_from_disk::export_from_dir(args).await?;
@@ -235,7 +251,7 @@ impl App {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua)?;
+        lua_support::setup_lua_environment(&lua, DATABEND_SEMVER.clone())?;
 
         let script = match &args.file {
             Some(path) => std::fs::read_to_string(path)?,
@@ -270,14 +286,14 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script).await? {
+        match lua_support::run_lua_script_with_result(&lua_script, DATABEND_SEMVER.clone()).await? {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
     }
 
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        lua_support::new_grpc_client(addresses)
+        lua_support::new_grpc_client(addresses, DATABEND_SEMVER.clone())
     }
 }
 

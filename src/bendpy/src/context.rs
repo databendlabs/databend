@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_version::DATABEND_SEMVER;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -61,9 +62,14 @@ impl PySessionContext {
             let session = session_manager.register_session(session).unwrap();
 
             let config = GlobalConfig::instance();
-            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
-                .await
-                .unwrap();
+            UserApiProvider::try_create_simple(
+                config
+                    .meta
+                    .to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
+                &tenant,
+            )
+            .await
+            .unwrap();
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(

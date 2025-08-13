@@ -63,6 +63,7 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
+use semver::Version;
 use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -89,11 +90,11 @@ use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
-use crate::version::METASRV_SEMVER;
 use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
+    version: Version,
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
@@ -113,6 +114,7 @@ impl Drop for MetaServiceImpl {
 impl MetaServiceImpl {
     pub fn create(meta_node: Weak<MetaNode>) -> Self {
         Self {
+            version: meta_node.upgrade().unwrap().version.clone(),
             token: GrpcToken::create(),
             meta_node,
         }
@@ -273,7 +275,7 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
-                protocol_version: to_digit_ver(&METASRV_SEMVER),
+                protocol_version: to_digit_ver(&self.version),
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });

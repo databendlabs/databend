@@ -237,7 +237,8 @@ fn create_test_udf_script() -> UserDefinedFunction {
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaStore>, UdfMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api =
+        MetaStore::new_local_testing(databend_common_version::DATABEND_SEMVER.clone()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));

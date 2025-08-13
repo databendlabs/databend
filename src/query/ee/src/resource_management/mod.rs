@@ -25,6 +25,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_SEMVER;
 use databend_enterprise_resources_management::ResourcesManagement;
 pub use resources_management_kubernetes::KubernetesResourcesManagement;
 pub use resources_management_self_managed::SelfManagedResourcesManagement;
@@ -48,8 +50,9 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
                 "self_managed" => SelfManagedResourcesManagement::create(cfg),
                 "kubernetes_managed" => KubernetesResourcesManagement::create(),
                 "system_managed" => {
-                    let meta_api_provider =
-                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+                    let meta_api_provider = MetaStoreProvider::new(
+                        cfg.meta.to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
+                    );
                     match meta_api_provider.create_meta_store().await {
                         Err(cause) => {
                             let err = ErrorCode::MetaServiceError(format!(
@@ -66,6 +69,7 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
                                 metastore,
                                 tenant_id.tenant_name(),
                                 lift_time,
+                                DATABEND_COMMIT_VERSION.clone(),
                             )?;
                             SystemResourcesManagement::create(Arc::new(warehouse_manager))
                         }

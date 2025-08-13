@@ -41,7 +41,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     {
         GlobalConfig::init(&InnerConfig::default()).unwrap();
     }
-    let conf = RpcClientConf::default();
+    let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant = Tenant::new_literal("tenant1");
 
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;

@@ -42,7 +42,6 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
 
@@ -76,10 +75,16 @@ pub struct WarehouseMgr {
     node_key_prefix: String,
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
+    version: String,
 }
 
 impl WarehouseMgr {
-    pub fn create(metastore: MetaStore, tenant: &str, lift_time: Duration) -> Result<Self> {
+    pub fn create(
+        metastore: MetaStore,
+        tenant: &str,
+        lift_time: Duration,
+        version: String,
+    ) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while cluster mgr create)",
@@ -89,6 +94,7 @@ impl WarehouseMgr {
         Ok(WarehouseMgr {
             metastore,
             lift_time,
+            version,
             // Prefix for all online nodes of the tenant
             node_key_prefix: format!(
                 "{}/{}/online_nodes",
@@ -2167,13 +2173,11 @@ impl WarehouseApi for WarehouseMgr {
             return Ok(vec![node]);
         }
 
-        let expect_version = DATABEND_COMMIT_VERSION.to_string();
-
         Ok(self
             .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == expect_version)
+            .filter(|x| x.binary_version == self.version)
             .collect::<Vec<_>>())
     }
 
@@ -2193,13 +2197,11 @@ impl WarehouseApi for WarehouseMgr {
             return Ok(vec![node]);
         }
 
-        let expect_version = DATABEND_COMMIT_VERSION.to_string();
-
         Ok(self
             .list_warehouse_nodes(node.warehouse_id.clone())
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == expect_version)
+            .filter(|x| x.binary_version == self.version)
             .collect::<Vec<_>>())
     }
 

@@ -139,7 +139,8 @@ fn create_test_stage_info() -> StageInfo {
 }
 
 async fn new_stage_api() -> Result<(Arc<MetaStore>, StageMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api =
+        MetaStore::new_local_testing(databend_common_version::DATABEND_SEMVER.clone()).await;
     let test_api = Arc::new(test_api);
 
     let mgr = StageMgr::create(

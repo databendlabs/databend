@@ -24,6 +24,7 @@ futures = { workspace = true }
 mlua = { workspace = true }
 raft-log = { workspace = true }
 reqwest = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

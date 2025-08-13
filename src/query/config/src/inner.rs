@@ -34,6 +34,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
+use semver::Version;
 
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
@@ -426,7 +427,7 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
+    pub fn to_meta_grpc_client_conf(&self, version: Version) -> RpcClientConf {
         let embedded_dir = if self.embedded_dir.is_empty() {
             None
         } else {
@@ -434,6 +435,7 @@ impl MetaConfig {
         };
         RpcClientConf {
             embedded_dir,
+            version,
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),

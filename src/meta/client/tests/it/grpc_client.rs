@@ -150,7 +150,9 @@ async fn test_grpc_client_reconnect() -> anyhow::Result<()> {
 }
 
 fn new_client(addr: impl ToString, timeout: Option<Duration>) -> anyhow::Result<Arc<ClientHandle>> {
-    let client = MetaGrpcClient::try_create(vec![addr.to_string()], "", "", timeout, None, None)?;
+    let version = databend_common_version::DATABEND_SEMVER.clone();
+    let client =
+        MetaGrpcClient::try_create(vec![addr.to_string()], version, "", "", timeout, None, None)?;
 
     Ok(client)
 }

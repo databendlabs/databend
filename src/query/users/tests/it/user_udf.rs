@@ -37,7 +37,7 @@ async fn test_user_lambda_udf() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default()).unwrap();
     }
 
-    let conf = RpcClientConf::default();
+    let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
@@ -113,7 +113,7 @@ async fn test_user_udf_server() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default()).unwrap();
     }
 
-    let conf = RpcClientConf::default();
+    let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant = Tenant::new_literal("test");
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

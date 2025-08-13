@@ -39,6 +39,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
+databend-common-version = { workspace = true }
 pretty_assertions = { workspace = true }
 wiremock = { workspace = true }
 

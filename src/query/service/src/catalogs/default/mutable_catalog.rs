@@ -168,7 +168,10 @@ impl MutableCatalog {
     #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let provider = Arc::new(MetaStoreProvider::new(
+                conf.meta
+                    .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+            ));
 
             provider.create_meta_store().await.map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))

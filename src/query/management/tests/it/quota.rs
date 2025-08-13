@@ -85,7 +85,8 @@ async fn test_update_quota_from_json_to_pb() -> Result<()> {
 }
 
 async fn new_quota_api() -> Result<(Arc<MetaStore>, QuotaMgr<false>, QuotaMgr<true>)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api =
+        MetaStore::new_local_testing(databend_common_version::DATABEND_SEMVER.clone()).await;
     let test_api = Arc::new(test_api);
     let mgr_json = QuotaMgr::<false>::create(test_api.clone(), &Tenant::new_literal("admin"));
     let mgr_pb = QuotaMgr::<true>::create(test_api.clone(), &Tenant::new_literal("admin"));

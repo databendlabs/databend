@@ -38,10 +38,9 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
-use crate::version::METASRV_COMMIT_VERSION;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(about, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command

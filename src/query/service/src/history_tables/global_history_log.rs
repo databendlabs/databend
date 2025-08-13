@@ -86,8 +86,11 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
-            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_client = MetaGrpcClient::try_new(
+            &cfg.meta
+                .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+        )
+        .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(

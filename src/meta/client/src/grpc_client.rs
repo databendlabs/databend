@@ -156,6 +156,7 @@ impl MetaGrpcClient {
     pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
+            conf.version.clone(),
             &conf.username,
             &conf.password,
             conf.timeout,
@@ -168,6 +169,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -176,6 +178,7 @@ impl MetaGrpcClient {
     ) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create_with_features(
             endpoints_str,
+            version,
             username,
             password,
             timeout,
@@ -201,6 +204,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create_with_features(
         endpoints_str: Vec<String>,
+        version: Version,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -213,6 +217,7 @@ impl MetaGrpcClient {
         let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
 
         let mgr = MetaChannelManager::new(
+            version,
             username,
             password,
             timeout,

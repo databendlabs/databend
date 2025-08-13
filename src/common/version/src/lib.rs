@@ -76,3 +76,18 @@ pub static DATABEND_GIT_SHA: LazyLock<String> = LazyLock::new(|| match VERGEN_GI
     Some(sha) => sha.to_string(),
     None => "unknown".to_string(),
 });
+
+pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
+    let build_semver = DATABEND_GIT_SEMVER;
+    let git_sha = VERGEN_GIT_SHA;
+    let rustc_semver = VERGEN_RUSTC_SEMVER;
+    let timestamp = VERGEN_BUILD_TIMESTAMP;
+
+    // simd is enabled by default now
+    match (build_semver, git_sha, rustc_semver, timestamp) {
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
+            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+        }
+        _ => String::new(),
+    }
+});

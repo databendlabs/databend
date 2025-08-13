@@ -91,7 +91,8 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> databend_common_exception::Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api =
+        MetaStore::new_local_testing(databend_common_version::DATABEND_SEMVER.clone()).await;
     let client = test_api.deref().clone();
 
     let test_api = Arc::new(test_api);

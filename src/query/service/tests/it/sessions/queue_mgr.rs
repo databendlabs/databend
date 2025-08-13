@@ -21,9 +21,11 @@ use std::time::UNIX_EPOCH;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_grpc::RpcClientConf;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
+use databend_common_version::DATABEND_SEMVER;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
 use databend_query::sessions::QueueData;
@@ -436,7 +438,8 @@ async fn test_heavy_actions() -> Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    Ok(MetaStoreProvider::new(Default::default())
+    let conf = RpcClientConf::empty(DATABEND_SEMVER.clone());
+    Ok(MetaStoreProvider::new(conf)
         .create_meta_store()
         .await
         .unwrap())

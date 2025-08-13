@@ -42,7 +42,7 @@ async fn test_user_manager() -> Result<()> {
         GlobalConfig::init(&InnerConfig::default()).unwrap();
     }
 
-    let conf = RpcClientConf::default();
+    let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

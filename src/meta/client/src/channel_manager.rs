@@ -28,6 +28,7 @@ use databend_common_meta_types::MetaNetworkError;
 use log::info;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+use semver::Version;
 use tonic::async_trait;
 use tonic::transport::Channel;
 
@@ -37,10 +38,10 @@ use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
 use crate::FeatureSpec;
 use crate::MetaGrpcClient;
-use crate::METACLI_COMMIT_SEMVER;
 
 #[derive(Debug)]
 pub struct MetaChannelManager {
+    version: Version,
     username: String,
     password: String,
     timeout: Option<Duration>,
@@ -57,6 +58,7 @@ pub struct MetaChannelManager {
 
 impl MetaChannelManager {
     pub fn new(
+        version: Version,
         username: impl ToString,
         password: impl ToString,
         timeout: Option<Duration>,
@@ -65,6 +67,7 @@ impl MetaChannelManager {
         endpoints: Arc<Mutex<Endpoints>>,
     ) -> Self {
         Self {
+            version,
             username: username.to_string(),
             password: password.to_string(),
             timeout,
@@ -90,7 +93,7 @@ impl MetaChannelManager {
 
         let handshake_res = MetaGrpcClient::handshake(
             &mut real_client,
-            &METACLI_COMMIT_SEMVER,
+            &self.version,
             self.required_features,
             &self.username,
             &self.password,

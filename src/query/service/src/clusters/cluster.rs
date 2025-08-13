@@ -219,7 +219,10 @@ impl ClusterHelper for Cluster {
 impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+        let meta_api_provider = MetaStoreProvider::new(
+            cfg.meta
+                .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+        );
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -272,7 +275,12 @@ impl ClusterDiscovery {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
+        let cluster_manager = WarehouseMgr::create(
+            metastore,
+            tenant_id.tenant_name(),
+            lift_time,
+            DATABEND_COMMIT_VERSION.clone(),
+        )?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }

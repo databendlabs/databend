@@ -37,7 +37,8 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::StderrConfig;
-use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::METASRV_COMMIT_VERSION;
 use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
@@ -47,7 +48,7 @@ use serde::Serialize;
 pub static VERIFIER_RESULT_FILE: &str = "/tmp/meta-verifier";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = METASRV_COMMIT_VERSION.as_str(), author)]
 struct Config {
     /// The prefix of keys to write.
     #[clap(long, default_value = "0")]
@@ -130,7 +131,15 @@ async fn main() -> Result<()> {
             .collect();
 
         let handle = runtime::spawn(async move {
-            let client = MetaGrpcClient::try_create(addrs.clone(), "root", "xxx", None, None, None);
+            let client = MetaGrpcClient::try_create(
+                addrs.clone(),
+                DATABEND_SEMVER.clone(),
+                "root",
+                "xxx",
+                None,
+                None,
+                None,
+            );
 
             let client = match client {
                 Ok(client) => client,
