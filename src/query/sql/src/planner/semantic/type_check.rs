@@ -3644,6 +3644,10 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
             Ascii::new("equal_null"),
+            Ascii::new("hex_decode_string"),
+            Ascii::new("base64_decode_string"),
+            Ascii::new("try_hex_decode_string"),
+            Ascii::new("try_base64_decode_string"),
         ];
         FUNCTIONS
     }
@@ -4301,6 +4305,36 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     Some(self.resolve_map_access(span, expr, paths))
                 }
+            }
+            (func_name, &[expr])
+                if matches!(
+                    func_name,
+                    "hex_decode_string"
+                        | "try_hex_decode_string"
+                        | "base64_decode_string"
+                        | "try_base64_decode_string"
+                ) =>
+            {
+                Some(self.resolve(&Expr::Cast {
+                    span,
+                    expr: Box::new(Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: func_name.starts_with("try_"),
+                            name: Identifier::from_name(
+                                span,
+                                func_name.replace("_string", "_binary"),
+                            ),
+                            args: vec![expr.clone()],
+                            params: vec![],
+                            order_by: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    }),
+                    target_type: TypeName::String,
+                    pg_style: false,
+                }))
             }
             _ => None,
         }
