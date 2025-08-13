@@ -67,6 +67,8 @@ jobs:
         timeout-minutes: 60
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
+          DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
+          DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
@@ -75,7 +77,7 @@ jobs:
           features: python-udf
 
   docker:
-    needs: [info, build]
+    needs: [ info, build ]
     timeout-minutes: 10
     runs-on:
       - self-hosted
@@ -153,7 +155,7 @@ jobs:
 
   benchmark:
     if: needs.info.outputs.target
-    needs: [info, build, docker]
+    needs: [ info, build, docker ]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
