@@ -90,7 +90,7 @@ impl HistoryMetaHandle {
             Duration::from_secs(3),
         ))
         .await
-        .map_err(|_e| "acquire semaphore failed from GlobalHistoryLog")?;
+        .map_err(|e| format!("acquire semaphore failed from GlobalHistoryLog {}", e))?;
         if interval == 0 {
             return Ok(Some(acquired_guard));
         }

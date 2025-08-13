@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::path::Path;
 
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::ThreadTracker;
 use log::Record;
-use logforth::append::rolling_file::NonBlockingBuilder;
 use logforth::append::rolling_file::RollingFileWriter;
 use logforth::append::rolling_file::Rotation;
 use logforth::append::RollingFile;
-use logforth::layout::collect_kvs;
-use logforth::layout::CustomLayout;
-use logforth::layout::KvDisplay;
+use logforth::non_blocking::NonBlockingBuilder;
 use logforth::Append;
+use logforth::Diagnostic;
 use logforth::Layout;
 use serde_json::Map;
 
@@ -42,9 +41,7 @@ pub(crate) fn new_rolling_file_appender(
         .max_file_size(max_file_size)
         .build(dir)
         .expect("failed to initialize rolling file appender");
-    let (non_blocking, guard) = NonBlockingBuilder::default()
-        .thread_name("log-file-appender")
-        .finish(rolling);
+    let (non_blocking, guard) = NonBlockingBuilder::new("log-file-appender", rolling).finish();
 
     (
         RollingFileWarp::new(RollingFile::new(non_blocking)),
@@ -63,81 +60,88 @@ impl RollingFileWarp {
     }
 
     /// Sets the layout used to format log records as bytes.
-    pub fn with_layout(self, layout: impl Into<Layout>) -> Self {
+    pub fn with_layout(self, layout: impl Layout) -> Self {
         Self::new(self.inner.with_layout(layout))
     }
 }
 
 impl Append for RollingFileWarp {
-    fn append(&self, record: &Record) -> anyhow::Result<()> {
+    fn append(&self, record: &Record, diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
         let _guard = LimitMemGuard::enter_unlimited();
-        self.inner.append(record)
+        self.inner.append(record, diagnostics)
     }
 }
 
-pub fn get_layout(format: &str) -> Layout {
-    match format {
-        "text" => text_layout(),
-        "json" => json_layout(),
-        "identical" => identical_layout(),
-        _ => unimplemented!("file logging format {format} is not supported"),
+#[derive(Debug)]
+pub struct IdenticalLayout;
+
+impl Layout for IdenticalLayout {
+    fn format(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<Vec<u8>> {
+        Ok(format!("{}", record.args()).into_bytes())
     }
 }
 
-fn identical_layout() -> Layout {
-    CustomLayout::new(|record: &Record| Ok(format!("{}", record.args()).into_bytes())).into()
-}
+#[derive(Debug)]
+pub struct TextLayout<const FIXED_TIME: bool = false>;
 
-fn text_layout() -> Layout {
-    CustomLayout::new(|record: &Record| {
-        let s = match ThreadTracker::query_id() {
-            None => format!(
-                "{} {:>5} {}: {}:{} {}{}",
-                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-                record.level(),
-                record.module_path().unwrap_or(""),
-                Path::new(record.file().unwrap_or_default())
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default(),
-                record.line().unwrap_or(0),
-                record.args(),
-                KvDisplay::new(record.key_values()),
-            ),
-            Some(query_id) => format!(
-                "{} {} {:>5} {}: {}:{} {}{}",
-                query_id,
-                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-                record.level(),
-                record.module_path().unwrap_or(""),
-                Path::new(record.file().unwrap_or_default())
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default(),
-                record.line().unwrap_or(0),
-                record.args(),
-                KvDisplay::new(record.key_values()),
-            ),
+impl<const FIXED_TIME: bool> Layout for TextLayout<FIXED_TIME> {
+    fn format(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        if let Some(query_id) = ThreadTracker::query_id() {
+            write!(buf, "{query_id} ")?;
+        }
+
+        let timestamp = if FIXED_TIME {
+            chrono::DateTime::from_timestamp(1431648000, 123456789)
+                .unwrap()
+                .with_timezone(&chrono::Local)
+        } else {
+            chrono::Local::now()
         };
 
-        Ok(s.into_bytes())
-    })
-    .into()
+        write!(
+            buf,
+            "{} {:>5} {}: {}:{} {}",
+            timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+            record.level(),
+            record.module_path().unwrap_or(""),
+            Path::new(record.file().unwrap_or_default())
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+            record.line().unwrap_or(0),
+            record.args(),
+        )?;
+        record.key_values().visit(&mut KvWriter(&mut buf))?;
+
+        Ok(buf)
+    }
 }
 
-fn json_layout() -> Layout {
-    CustomLayout::new(|record: &Record| {
+#[derive(Debug)]
+pub struct JsonLayout<const FIXED_TIME: bool = false>;
+
+impl<const FIXED_TIME: bool> Layout for JsonLayout<FIXED_TIME> {
+    fn format(&self, record: &Record, _diagnostics: &[Diagnostic]) -> anyhow::Result<Vec<u8>> {
         let mut fields = Map::new();
         fields.insert("message".to_string(), format!("{}", record.args()).into());
         for (k, v) in collect_kvs(record.key_values()) {
             fields.insert(k, v.into());
         }
 
+        let timestamp = if FIXED_TIME {
+            chrono::DateTime::from_timestamp(1431648000, 123456789)
+                .unwrap()
+                .with_timezone(&chrono::Local)
+        } else {
+            chrono::Local::now()
+        };
+
         let s = match ThreadTracker::query_id() {
             None => {
                 format!(
                     r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                    timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                     record.level(),
                     serde_json::to_string(&fields).unwrap_or_default(),
                 )
@@ -145,7 +149,7 @@ fn json_layout() -> Layout {
             Some(query_id) => {
                 format!(
                     r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
-                    chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                    timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                     record.level(),
                     query_id,
                     serde_json::to_string(&fields).unwrap_or_default(),
@@ -154,6 +158,243 @@ fn json_layout() -> Layout {
         };
 
         Ok(s.into_bytes())
-    })
-    .into()
+    }
+}
+
+pub struct KvWriter<'a>(pub &'a mut Vec<u8>);
+
+impl<'kvs> log::kv::VisitSource<'kvs> for KvWriter<'_> {
+    fn visit_pair(
+        &mut self,
+        key: log::kv::Key<'kvs>,
+        value: log::kv::Value<'kvs>,
+    ) -> Result<(), log::kv::Error> {
+        write!(self.0, " {key}={value}")?;
+        Ok(())
+    }
+}
+
+pub fn collect_kvs(kv: &dyn log::kv::Source) -> Vec<(String, String)> {
+    let mut collector = KvCollector { kv: Vec::new() };
+    kv.visit(&mut collector).ok();
+    collector.kv
+}
+
+struct KvCollector {
+    kv: Vec<(String, String)>,
+}
+
+impl<'kvs> log::kv::VisitSource<'kvs> for KvCollector {
+    fn visit_pair(
+        &mut self,
+        key: log::kv::Key<'kvs>,
+        value: log::kv::Value<'kvs>,
+    ) -> Result<(), log::kv::Error> {
+        self.kv.push((key.to_string(), value.to_string()));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use log::Level;
+    use log::Record;
+
+    use super::*;
+
+    // Test case structure for shared test data
+    struct TestCase {
+        name: &'static str,
+        message: &'static str,
+        record: Record<'static>,
+        expected_text_output: String,
+        expected_json_output: String,
+    }
+
+    // Helper function to create test cases with records
+    fn create_test_cases() -> Vec<TestCase> {
+        // Generate the expected timestamp string with current timezone
+        let fixed_timestamp = chrono::DateTime::from_timestamp(1431648000, 123456789)
+            .unwrap()
+            .with_timezone(&chrono::Local);
+        let timestamp_str = fixed_timestamp.to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
+
+        vec![
+            TestCase {
+                name: "basic message",
+                message: "test message",
+                record: Record::builder()
+                    .args(format_args!("test message"))
+                    .level(Level::Info)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{}  INFO test::module: test_file.rs:42 test message",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"INFO","fields":{{"message":"test message"}}}}"#,
+                    timestamp_str
+                ),
+            },
+            TestCase {
+                name: "empty message",
+                message: "",
+                record: Record::builder()
+                    .args(format_args!(""))
+                    .level(Level::Info)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{}  INFO test::module: test_file.rs:42 ",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"INFO","fields":{{"message":""}}}}"#,
+                    timestamp_str
+                ),
+            },
+            TestCase {
+                name: "error level",
+                message: "error occurred",
+                record: Record::builder()
+                    .args(format_args!("error occurred"))
+                    .level(Level::Error)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{} ERROR test::module: test_file.rs:42 error occurred",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"ERROR","fields":{{"message":"error occurred"}}}}"#,
+                    timestamp_str
+                ),
+            },
+            TestCase {
+                name: "warn level",
+                message: "warning message",
+                record: Record::builder()
+                    .args(format_args!("warning message"))
+                    .level(Level::Warn)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{}  WARN test::module: test_file.rs:42 warning message",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"WARN","fields":{{"message":"warning message"}}}}"#,
+                    timestamp_str
+                ),
+            },
+            TestCase {
+                name: "debug level",
+                message: "debug info",
+                record: Record::builder()
+                    .args(format_args!("debug info"))
+                    .level(Level::Debug)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{} DEBUG test::module: test_file.rs:42 debug info",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"DEBUG","fields":{{"message":"debug info"}}}}"#,
+                    timestamp_str
+                ),
+            },
+            TestCase {
+                name: "trace level",
+                message: "trace data",
+                record: Record::builder()
+                    .args(format_args!("trace data"))
+                    .level(Level::Trace)
+                    .target("test_target")
+                    .module_path(Some("test::module"))
+                    .file(Some("test_file.rs"))
+                    .line(Some(42))
+                    .build(),
+                expected_text_output: format!(
+                    "{} TRACE test::module: test_file.rs:42 trace data",
+                    timestamp_str
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{}","level":"TRACE","fields":{{"message":"trace data"}}}}"#,
+                    timestamp_str
+                ),
+            },
+        ]
+    }
+
+    #[test]
+    fn test_identical_layout() {
+        let layout = IdenticalLayout;
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            // IdenticalLayout should return the message as-is
+            assert_eq!(
+                output, test_case.message,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.message, output
+            );
+        }
+    }
+
+    #[test]
+    fn test_text_layout() {
+        let layout = TextLayout::<true>; // Use fixed time
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            assert_eq!(
+                output, test_case.expected_text_output,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.expected_text_output, output
+            );
+        }
+    }
+
+    #[test]
+    fn test_json_layout() {
+        let layout = JsonLayout::<true>; // Use fixed time
+        let diagnostics = [];
+        let test_cases = create_test_cases();
+
+        for test_case in &test_cases {
+            let result = layout.format(&test_case.record, &diagnostics).unwrap();
+            let output = String::from_utf8(result).unwrap();
+
+            assert_eq!(
+                output, test_case.expected_json_output,
+                "Failed test case '{}': expected '{}', got '{}'",
+                test_case.name, test_case.expected_json_output, output
+            );
+        }
+    }
 }

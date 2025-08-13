@@ -66,6 +66,7 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-functions = { workspace = true }
 jsonb = { workspace = true }
 tantivy = { workspace = true }
 

@@ -18,6 +18,8 @@ use std::hash::Hash;
 
 use ahash::RandomState;
 
+pub type MetaHLL12 = simple_hll::HyperLogLog<12>;
+
 const P: usize = 7_usize;
 const Q: usize = 64 - P;
 const M: usize = 1 << P;
@@ -51,6 +53,11 @@ impl MetaHLL {
         }
     }
 
+    pub fn with_registers(registers: Vec<u8>) -> Self {
+        assert_eq!(registers.len(), M);
+        Self { registers }
+    }
+
     /// Adds an hash to the MetaHLL.
     /// hash value is dertermined by caller
     #[inline]
@@ -67,7 +74,7 @@ impl MetaHLL {
 
     /// Adds an object to the MetaHLL.
     /// Though we could pass different types into this method, caller should notice that
-    pub fn add_object<T: Hash>(&mut self, obj: &T) {
+    pub fn add_object<T: ?Sized + Hash>(&mut self, obj: &T) {
         let hash = SEED.hash_one(obj);
         self.add_hash(hash);
     }
@@ -158,6 +165,20 @@ fn hll_tau(x: f64) -> f64 {
             }
         }
         z / 3.0
+    }
+}
+
+impl From<MetaHLL12> for MetaHLL {
+    fn from(value: MetaHLL12) -> Self {
+        let registers = value.get_registers();
+        let mut new_registers = vec![0; M];
+        let group_size = registers.len() / M;
+        for i in 0..M {
+            for j in 0..group_size {
+                new_registers[i] = new_registers[i].max(registers[i * group_size + j]);
+            }
+        }
+        Self::with_registers(new_registers)
     }
 }
 
@@ -365,5 +386,21 @@ mod tests {
             hll.add_object(&(i % 1000));
         }
         compare_with_delta(hll.count(), 1000);
+    }
+
+    #[test]
+    fn test_from_hll() {
+        let mut hll = MetaHLL12::new();
+        for i in 0..100_000 {
+            hll.add_object(&i);
+        }
+
+        let hll = MetaHLL::from(hll);
+        let count = hll.count();
+        let error_rate = 1.04 / ((M as f64).sqrt());
+        let diff = count as f64 / 100_000f64;
+
+        assert!(diff >= 1.0 - error_rate);
+        assert!(diff <= 1.0 + error_rate);
     }
 }

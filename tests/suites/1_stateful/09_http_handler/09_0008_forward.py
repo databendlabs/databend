@@ -29,9 +29,12 @@ def do_query(query, port=8000, session=None, node_id=None, wait=100):
 
 
 def get_txn_state(resp):
-    return (resp.get("state") == "Succeeded",
-    resp.get("session").get("need_sticky"),
-    resp.get("session").get("txn_state"))
+    return (
+        resp.get("state") == "Succeeded",
+        resp.get("session").get("need_sticky"),
+        resp.get("session").get("txn_state"),
+    )
+
 
 def test_txn_success():
     resp = do_query("create or replace table t1(a int)").json()
@@ -63,22 +66,16 @@ def test_txn_fail():
     session = resp.get("session")
 
     # fail
-    resp = do_query(
-        "select 1/0",  session=session
-    ).json()
+    resp = do_query("select 1/0", session=session).json()
     assert get_txn_state(resp) == (False, False, "Fail"), resp
 
     # fail because wrong node
-    resp = do_query(
-        "select 1", port=8002, session=session
-    ).json()
+    resp = do_query("select 1", port=8002, session=session).json()
     session = resp.get("session")
     assert get_txn_state(resp) == (False, False, "Fail"), resp
 
     # keep fail state until commit/abort
-    resp = do_query(
-        "select 1", session=session, node_id=node_id
-    ).json()
+    resp = do_query("select 1", session=session, node_id=node_id).json()
     assert get_txn_state(resp) == (False, False, "Fail"), resp
     session = resp.get("session")
 

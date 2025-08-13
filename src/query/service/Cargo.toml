@@ -41,6 +41,7 @@ buf-list = { workspace = true }
 bumpalo = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
@@ -73,7 +74,6 @@ databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
-databend-common-openai = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }

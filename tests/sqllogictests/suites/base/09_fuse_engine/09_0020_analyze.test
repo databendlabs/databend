@@ -129,7 +129,7 @@ analyze table `t`
 query TI
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 (empty)
+a 2 (empty)
 
 statement ok
 create or replace table t1 as select number as a from numbers(10);
@@ -242,6 +242,50 @@ select count() from fuse_snapshot('db_09_0020','t2');
 
 statement ok
 DROP TABLE t2;
+
+statement ok
+CREATE TABLE t3(a int, b string) approx_distinct_columns = '';
+
+statement ok
+insert into t3 values(1, 'a'), (2, 'b');
+
+statement ok
+alter table t3 set options(approx_distinct_columns = 'a, b');
+
+statement ok
+insert into t3 values(4, 'c'), (3, 'b');
+
+query B
+select segment_stats_size is null from fuse_segment('db_09_0020','t3') order by file_location;
+----
+1
+0
+
+statement ok
+analyze table t3;
+
+query B
+select segment_stats_size is null from fuse_segment('db_09_0020','t3') order by file_location;
+----
+0
+0
+
+query TI
+select column_name, distinct_count from fuse_statistic('db_09_0020', 't3') order by column_name;
+----
+a 4
+b 3
+
+statement ok
+analyze table t3;
+
+query I
+select count() from fuse_snapshot('db_09_0020', 't3');
+----
+4
+
+statement ok
+DROP TABLE t3;
 
 statement ok
 DROP DATABASE db_09_0020

@@ -36,12 +36,13 @@ use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
+use databend_common_pipeline_transforms::MemorySettings;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::bounds::Bounds;
 use super::Base;
-use super::MemoryRows;
+use super::RowsStat;
 use super::SortCollectedMeta;
 use crate::spillers::Location;
 use crate::spillers::Spiller;
@@ -139,21 +140,14 @@ where A: SortAlgorithm
             .await
     }
 
-    pub async fn collect_spill_last(&mut self, target_rows: usize) -> Result<()> {
-        let Step::Collect(collect) = &mut self.step else {
-            unreachable!()
-        };
-        collect.spill_last(&self.base, target_rows).await
-    }
-
-    pub fn collect_memory_rows(&self) -> usize {
+    pub fn collect_total_rows(&self) -> usize {
         match &self.step {
-            Step::Collect(step_collect) => step_collect.streams.in_memory_rows(),
+            Step::Collect(step_collect) => step_collect.streams.total_rows(),
             _ => unreachable!(),
         }
     }
 
-    pub async fn on_restore(&mut self) -> Result<OutputData> {
+    pub async fn on_restore(&mut self, _memory_settings: &MemorySettings) -> Result<OutputData> {
         match &mut self.step {
             Step::Collect(collect) => self.step = Step::Sort(collect.next_step(&self.base)?),
             Step::Sort(_) => (),
@@ -164,35 +158,40 @@ where A: SortAlgorithm
         };
 
         if sort.output_merger.is_some() {
-            return sort.restore_and_output(&self.base).await;
+            return sort
+                .restore_and_output(&self.base, sort.params.num_merge)
+                .await;
         }
 
         while sort.current.is_empty() {
             sort.choice_streams_by_bound();
         }
 
+        let num_merge = sort.recalculate_num_merge();
+        assert!(num_merge >= 2);
         log::debug!(
             current_len = sort.current.len(),
             subsequent_len = sort.subsequent.len(),
-            params:? = sort.params; "restore status");
-        if sort.current.len() <= sort.params.num_merge {
-            return sort.restore_and_output(&self.base).await;
+            num_merge,
+            batch_rows = sort.params.batch_rows;
+        "restore params");
+        if sort.current.len() <= num_merge {
+            sort.restore_and_output(&self.base, num_merge).await
+        } else {
+            sort.merge_current(&self.base, num_merge).await?;
+            Ok(OutputData {
+                block: None,
+                bound: (u32::MAX, None),
+                finish: false,
+            })
         }
-
-        sort.merge_current(&self.base).await?;
-        Ok(OutputData {
-            block: None,
-            bound: (u32::MAX, None),
-            finish: false,
-        })
     }
 
-    pub fn max_rows(&self) -> usize {
-        let params = match &self.step {
+    pub fn params(&self) -> SortSpillParams {
+        match &self.step {
             Step::Collect(collect) => collect.params,
             Step::Sort(sort) => sort.params,
-        };
-        params.num_merge * params.batch_rows
+        }
     }
 
     #[expect(unused)]
@@ -250,7 +249,11 @@ impl<A: SortAlgorithm> StepCollect<A> {
 
         let sorted = if input_data.len() == 1 {
             let data = input_data.pop().unwrap();
-            vec![base.new_block(data)].into()
+            let mut block = base.new_block(data);
+            if need_spill {
+                block.spill(&base.spiller).await?;
+            }
+            vec![block].into()
         } else {
             // todo: using multi-threaded cascade two-way merge sorting algorithm to obtain the best performance
             // also see https://arxiv.org/pdf/1406.2628
@@ -283,6 +286,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     #[fastrace::trace(name = "StepCollect::spill_last")]
     async fn spill_last(&mut self, base: &Base, target_rows: usize) -> Result<()> {
         let Some(s) = self.streams.last_mut() else {
@@ -336,14 +340,11 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::merge_current")]
-    async fn merge_current(&mut self, base: &Base) -> Result<()> {
+    async fn merge_current(&mut self, base: &Base, num_merge: usize) -> Result<()> {
         for s in &mut self.subsequent {
             s.spill(0).await?;
         }
-        let SortSpillParams {
-            batch_rows,
-            num_merge,
-        } = self.params;
+        let batch_rows = self.params.batch_rows;
         for (i, s) in self.current.iter_mut().rev().enumerate() {
             if i < num_merge {
                 s.spill(1).await?;
@@ -375,7 +376,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::restore_and_output")]
-    async fn restore_and_output(&mut self, base: &Base) -> Result<OutputData> {
+    async fn restore_and_output(&mut self, base: &Base, num_merge: usize) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -406,7 +407,8 @@ impl<A: SortAlgorithm> StepSort<A> {
                     });
                 }
 
-                self.sort_spill(base, self.params).await?;
+                self.sort_spill(base, self.params.batch_rows, num_merge)
+                    .await?;
 
                 let streams = mem::take(&mut self.current);
                 let merger = Merger::<A, _>::create(
@@ -471,14 +473,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::sort_spill")]
-    async fn sort_spill(
-        &mut self,
-        base: &Base,
-        SortSpillParams {
-            batch_rows,
-            num_merge,
-        }: SortSpillParams,
-    ) -> Result<()> {
+    async fn sort_spill(&mut self, base: &Base, batch_rows: usize, num_merge: usize) -> Result<()> {
         let need = self
             .current
             .iter()
@@ -547,6 +542,24 @@ impl<A: SortAlgorithm> StepSort<A> {
 
         self.current.sort_by_key(|s| s.blocks[0].data.is_some());
     }
+
+    fn recalculate_num_merge(&self) -> usize {
+        if self.current.len() <= 2 {
+            return self.params.num_merge;
+        }
+        let mut max_rows = self.params.max_rows();
+        let batch_rows = self.params.batch_rows;
+        let mut num_merge = 0;
+        for s in self.current.iter().rev() {
+            // Edge case: rows may not always equal batch_rows, recalculate num_merge to mitigate risk
+            let rows = s.blocks[0].rows.max(batch_rows);
+            if max_rows >= rows || num_merge < 2 {
+                num_merge += 1;
+            }
+            max_rows = max_rows.saturating_sub(rows);
+        }
+        num_merge
+    }
 }
 
 impl Base {
@@ -613,7 +626,11 @@ impl Base {
     }
 }
 
-impl<R: Rows, S> MemoryRows for Vec<BoundBlockStream<R, S>> {
+impl<R: Rows, S> RowsStat for Vec<BoundBlockStream<R, S>> {
+    fn total_rows(&self) -> usize {
+        self.iter().map(|s| s.total_rows()).sum::<usize>()
+    }
+
     fn in_memory_rows(&self) -> usize {
         self.iter().map(|s| s.in_memory_rows()).sum::<usize>()
     }
@@ -802,6 +819,10 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
 
     fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    fn total_rows(&self) -> usize {
+        self.blocks.iter().map(|b| b.rows).sum()
     }
 
     fn in_memory_rows(&self) -> usize {

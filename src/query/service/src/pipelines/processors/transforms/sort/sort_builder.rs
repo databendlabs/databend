@@ -340,6 +340,7 @@ impl Build<'_> {
             self.output.clone(),
             self.params.new_base(),
             self.params.output_order_col,
+            self.params.memory_settings.clone(),
         )?))
     }
 

@@ -41,7 +41,7 @@ impl CleanupUnusedCTEOptimizer {
         referenced_ctes: &mut HashMap<String, usize>,
     ) -> Result<()> {
         // Check if current node is a MaterializeCTERef
-        if let RelOperator::MaterializeCTERef(consumer) = s_expr.plan() {
+        if let RelOperator::MaterializedCTERef(consumer) = s_expr.plan() {
             *referenced_ctes
                 .entry(consumer.cte_name.clone())
                 .or_insert(0) += 1;

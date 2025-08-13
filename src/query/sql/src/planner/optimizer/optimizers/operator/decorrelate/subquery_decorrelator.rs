@@ -335,7 +335,7 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::MaterializeCTERef(_)
+            | RelOperator::MaterializedCTERef(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }

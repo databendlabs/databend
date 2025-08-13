@@ -23,7 +23,6 @@ members = [
     "src/common/http",
     "src/common/io",
     "src/common/metrics",
-    "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
     "src/common/vector",
@@ -161,7 +160,6 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
-databend-common-openai = { path = "src/common/openai" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
 databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
@@ -278,7 +276,7 @@ byte-unit = "5.1.6"
 bytemuck = { version = "1", features = ["derive"] }
 byteorder = "1.4.3"
 bytes = "1.5.0"
-bytesize = "1.1.0"
+bytesize = "2"
 cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.40", features = ["serde"] }
@@ -377,9 +375,9 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
-logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "global-max-files-v0.14", features = [
+logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
     'json',
-    'rolling_file',
+    'rolling-file',
     'opentelemetry',
     'fastrace',
 ] }
@@ -403,7 +401,6 @@ num_cpus = "1.17"
 object = "0.36.5"
 object_store_opendal = { version = "0.52.0" }
 once_cell = "1.15.0"
-openai_api_rust = "0.1"
 opendal = { version = "0.53.2", features = [
     "layers-fastrace",
     "layers-prometheus-client",
@@ -496,7 +493,7 @@ sha1 = "0.10.5"
 sha2 = "0.10.8"
 simdutf8 = "0.1.4"
 similar = "2.7.0"
-simple_hll = { version = "0.0.1", features = ["serde_borsh"] }
+simple_hll = { version = "0.0.4", features = ["serde_borsh"] }
 simsearch = "0.2"
 siphasher = "0.3"
 sled = { version = "0.34", default-features = false }
@@ -573,19 +570,22 @@ vergen = { version = "8.3.1", default-features = false, features = ["build", "ca
 
 # Observability
 env_logger = "0.11"
-fastrace = { version = "0.7.4", features = ["enable"] }
-fastrace-opentelemetry = "0.7.4"
+fastrace = { version = "0.7.14", features = ["enable"] }
+fastrace-opentelemetry = "0.10"
 log = { version = "0.4.27", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.26.0", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.26.0", features = [
+opentelemetry = { version = "0.29", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "trace",
     "logs",
+    "metrics",
+    "internal-logs",
     "grpc-tonic",
+    "gzip-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.26.0", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 tracing = "0.1.40"
@@ -664,7 +664,6 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.7" }
-openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
