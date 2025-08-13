@@ -43,8 +43,8 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
-use crate::plans::MaterializeCTERef;
 use crate::plans::MaterializedCTE;
+use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
@@ -167,7 +167,7 @@ pub enum RelOperator {
     CompactBlock(CompactBlock),
     MutationSource(MutationSource),
     MaterializedCTE(MaterializedCTE),
-    MaterializeCTERef(MaterializeCTERef),
+    MaterializedCTERef(MaterializedCTERef),
     Sequence(Sequence),
 }
 
@@ -175,6 +175,18 @@ impl RelOperator {
     pub fn has_subquery(&self) -> bool {
         let mut iter = self.scalar_expr_iter();
         iter.any(|expr| expr.has_subquery())
+    }
+
+    pub fn support_lazy_materialize(&self) -> bool {
+        !matches!(
+            self,
+            RelOperator::Join(_)
+                | RelOperator::CacheScan(_)
+                | RelOperator::UnionAll(_)
+                | RelOperator::DummyTableScan(_)
+                | RelOperator::ExpressionScan(_)
+                | RelOperator::ConstantTableScan(_)
+        )
     }
 
     pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
@@ -260,6 +272,6 @@ impl_try_from_rel_operator! {
     CompactBlock,
     MutationSource,
     MaterializedCTE,
-    MaterializeCTERef,
+    MaterializedCTERef,
     Sequence
 }

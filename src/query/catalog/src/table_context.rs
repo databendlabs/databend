@@ -275,6 +275,13 @@ pub trait TableContext: Send + Sync {
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
         -> Result<Arc<dyn Table>>;
 
+    async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog("default").await?;
+        catalog
+            .get_table(&self.get_tenant(), "system", "zero")
+            .await
+    }
+
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
     async fn get_table_with_batch(

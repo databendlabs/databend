@@ -153,7 +153,7 @@ fn find_group_by_keys(
         | RelOperator::Mutation(_)
         | RelOperator::MutationSource(_)
         | RelOperator::MaterializedCTE(_)
-        | RelOperator::MaterializeCTERef(_)
+        | RelOperator::MaterializedCTERef(_)
         | RelOperator::CompactBlock(_)
         | RelOperator::Sequence(_) => {}
     }

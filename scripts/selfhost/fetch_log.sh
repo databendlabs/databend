@@ -160,11 +160,11 @@ parse_arguments() {
 
 	OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
 	HOURS="${HOURS:-$DEFAULT_HOURS}"
-	
+
 	if [[ -n "$DATE" ]]; then
 		format_date "$DATE"
 	fi
-	
+
 	calculate_archive_info
 }
 
@@ -183,7 +183,7 @@ validate_arguments() {
 			exit 1
 		fi
 	fi
-	
+
 	# Validate hours parameter
 	if [[ ! "$HOURS" =~ ^[0-9]+$ ]] || [[ $HOURS -le 0 ]]; then
 		log ERROR "Invalid hours value: $HOURS (must be a positive integer)"
@@ -216,32 +216,32 @@ execute_query() {
 # Get server time range
 get_server_time_range() {
 	echo "Querying server time range..."
-	
+
 	local time_query
 	if [[ -n "$DATE" ]]; then
 		time_query="SELECT DATE('$FORMATTED_DATE') AS start_time, DATE('$FORMATTED_DATE') + INTERVAL 1 DAY AS end_time"
 	else
 		time_query="SELECT NOW() - INTERVAL $HOURS HOUR AS start_time, NOW() AS end_time"
 	fi
-	
+
 	local time_result
 	time_result=$(execute_query "$time_query")
-	
+
 	if [[ -z "$time_result" ]]; then
 		log ERROR "Failed to get server time range"
 		exit 1
 	fi
-	
+
 	# Parse the result - assuming tab-separated format
 	SERVER_START_TIME=$(echo "$time_result" | tail -n 1 | awk '{print $1" "$2}')
 	SERVER_END_TIME=$(echo "$time_result" | tail -n 1 | awk '{print $3" "$4}')
-	
+
 	if [[ -n "$DATE" ]]; then
 		echo "Server time range: $FORMATTED_DATE (full day, server timezone)"
 	else
 		echo "Server time range: $SERVER_START_TIME ~ $SERVER_END_TIME ($HOURS hours)"
 	fi
-	
+
 	log DEBUG "Server start time: $SERVER_START_TIME"
 	log DEBUG "Server end time: $SERVER_END_TIME"
 }
@@ -264,7 +264,7 @@ download_file() {
 		log ERROR "Empty presigned URL for $filename"
 		return 1
 	fi
-	
+
 	if [[ ! "$presign_url" =~ ^https?:// ]]; then
 		log ERROR "Invalid URL format for $filename"
 		return 1
@@ -309,7 +309,7 @@ create_archive() {
 	file_list=$(mktemp)
 	find "${dirs[@]}" -type f -print >"$file_list" 2>/dev/null
 	local total_files
-	total_files=$(wc -l < "$file_list")
+	total_files=$(wc -l <"$file_list")
 
 	echo "  Archiving $total_files files..."
 	if ! tar -czf "$ARCHIVE_NAME" --files-from="$file_list" 2>>"$temp_log"; then
@@ -387,7 +387,7 @@ process_stage() {
 	echo "  Found $file_count files"
 
 	mkdir -p "$OUTPUT_DIR/$output_subdir"
-	
+
 	local current=0
 	local success=0
 	while IFS= read -r filename; do
@@ -398,20 +398,20 @@ process_stage() {
 	done <<<"$file_list"
 
 	echo "  Stage completed: $success/$current files downloaded"
-	
+
 	# Return counts via global variables for main function
 	stage_total=$current
 	stage_success=$success
-	
+
 	return 0
 }
 
 main() {
 	START_TIME=$(date +%s)
-	
+
 	parse_arguments "$@"
 	validate_arguments
-	
+
 	echo "================================================================"
 	echo "Databend Log Fetcher - Started at $(date '+%Y-%m-%d %H:%M:%S')"
 	echo "================================================================"
@@ -422,7 +422,7 @@ main() {
 		echo "Mode: Past $HOURS hours (filename uses current date)"
 	fi
 	echo "================================================================"
-	
+
 	build_base_command
 
 	# Get and display server time range
@@ -440,7 +440,7 @@ main() {
 
 	local total=0
 	local success=0
-	
+
 	# Stage 1: Columns
 	process_stage "Fetch System Columns" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.columns;" \
@@ -495,7 +495,7 @@ main() {
 	echo "  Successfully downloaded: $success"
 	echo "  Failed: $((total - success))"
 	if [[ $total -gt 0 ]]; then
-		echo "  Success rate: $(( success * 100 / total ))%"
+		echo "  Success rate: $((success * 100 / total))%"
 	fi
 
 	if [[ $success -gt 0 ]]; then

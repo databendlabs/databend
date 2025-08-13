@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod completion;
-mod embedding;
+syntax = "proto3";
 
-#[allow(clippy::module_inception)]
-mod openai;
+package databend_proto;
 
-pub use openai::OpenAI;
+message RowAccessPolicyMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  map<string, string> args = 1;
+  string body = 2;
+  optional string comment = 3;
+  string create_on = 4;
+  optional string update_on = 5;
+}

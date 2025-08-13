@@ -413,12 +413,9 @@ impl QueryContextShared {
 
     pub fn check_aborting(&self) -> Result<(), ContextError> {
         if self.aborting.load(Ordering::Acquire) {
-            Err(self.get_error().unwrap_or_else(|| {
-                ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                )
-                .with_context("query aborted")
-            }))
+            Err(self
+                .get_error()
+                .unwrap_or_else(|| ErrorCode::aborting().with_context("query aborted")))
         } else {
             Ok(())
         }

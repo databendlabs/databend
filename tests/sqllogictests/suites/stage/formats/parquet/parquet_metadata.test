@@ -14,7 +14,7 @@ parquet/ii/f3.parquet 5 0 5
 
 
 statement ok
-create or replace table t(file_name string, id string,  row int)
+create or replace table t(file_name string, id string,  `row` int)
 
 query ok
 copy into t from (select metadata$filename, c1, metadata$file_row_number + 1 from @data_s3/parquet/ii/)

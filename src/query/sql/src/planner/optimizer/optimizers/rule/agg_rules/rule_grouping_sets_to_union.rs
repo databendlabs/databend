@@ -34,8 +34,8 @@ use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
-use crate::plans::MaterializeCTERef;
 use crate::plans::MaterializedCTE;
+use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
 use crate::plans::Sequence;
 use crate::plans::UnionAll;
@@ -106,6 +106,11 @@ impl Rule for RuleGroupingSetsToUnion {
             .cloned()
             .collect();
 
+        let column_mapping = agg_input_columns
+            .iter()
+            .map(|index| (*index, *index))
+            .collect();
+
         if let Some(grouping_sets) = &agg.grouping_sets {
             if !grouping_sets.sets.is_empty() {
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
@@ -127,10 +132,11 @@ impl Rule for RuleGroupingSetsToUnion {
                     agg_input.clone(),
                 );
 
-                let cte_consumer = SExpr::create_leaf(MaterializeCTERef {
+                let cte_consumer = SExpr::create_leaf(MaterializedCTERef {
                     cte_name: temp_cte_name,
                     output_columns: agg_input_columns.clone(),
                     def: agg_input.clone(),
+                    column_mapping,
                 });
 
                 let mask = (1 << grouping_sets.dup_group_items.len()) - 1;

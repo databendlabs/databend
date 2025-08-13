@@ -1008,7 +1008,6 @@ impl TableContext for QueryContext {
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
-        let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
@@ -1017,13 +1016,6 @@ impl TableContext for QueryContext {
             rounding_mode,
             disable_variant_check,
             enable_selector_executor: settings.get_enable_selector_executor()?,
-
-            openai_api_key: query_config.openai_api_key.clone(),
-            openai_api_version: query_config.openai_api_version.clone(),
-            openai_api_chat_base_url: query_config.openai_api_chat_base_url.clone(),
-            openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
-            openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
-            openai_api_completion_model: query_config.openai_api_completion_model.clone(),
 
             geometry_output_format,
             parse_datetime_ignore_remainder,
@@ -1771,6 +1763,7 @@ impl TableContext for QueryContext {
                         read_options = read_options.with_do_prewhere(false);
                     }
                     ParquetTable::create(
+                        self,
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -1823,7 +1816,7 @@ impl TableContext for QueryContext {
                     stage_root,
                     is_variant,
                 };
-                OrcTable::try_create(info).await
+                OrcTable::try_create(self, info).await
             }
             FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(

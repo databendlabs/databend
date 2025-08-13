@@ -12,7 +12,7 @@ def test_spawn_basic():
     """Test basic spawn functionality without gRPC."""
     print_title("Test basic spawn functionality")
 
-    lua_script = f'''
+    lua_script = f"""
 print("Testing basic spawn functionality...")
 
 local task1 = metactl.spawn(function()
@@ -36,24 +36,26 @@ task2:join()
 print("Task 2 joined")
 
 print("All tasks completed!")
-'''
+"""
 
     output = metactl_run_lua(lua_script=lua_script)
 
     expected_phrases = [
         "Testing basic spawn functionality...",
         "Task 1: Starting",
-        "Task 2: Starting", 
+        "Task 2: Starting",
         "Created both tasks, now joining...",
         "Task 1: Finished",
         "Task 1 joined",
         "Task 2: Finished",
         "Task 2 joined",
-        "All tasks completed!"
+        "All tasks completed!",
     ]
 
     for phrase in expected_phrases:
-        assert phrase in output, f"Expected phrase '{phrase}' not found in output:\n{output}"
+        assert phrase in output, (
+            f"Expected phrase '{phrase}' not found in output:\n{output}"
+        )
     print("✓ Basic spawn functionality test passed")
 
 

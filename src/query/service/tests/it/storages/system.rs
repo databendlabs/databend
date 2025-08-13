@@ -25,6 +25,9 @@ use databend_common_meta_app::principal::AuthType;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateOption::Create;
+use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
+use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
@@ -381,7 +384,7 @@ async fn test_roles_table() -> Result<()> {
     {
         let role_info = RoleInfo::new("test");
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, false)
+            .add_role(&tenant, role_info, &CreateOrReplace)
             .await?;
     }
 
@@ -389,9 +392,18 @@ async fn test_roles_table() -> Result<()> {
         let mut role_info = RoleInfo::new("test1");
         role_info.grants.grant_role("test".to_string());
         UserApiProvider::instance()
-            .add_role(&tenant, role_info, false)
+            .add_role(&tenant, role_info, &Create)
             .await?;
     }
+
+    {
+        let mut role_info = RoleInfo::new("test1");
+        role_info.grants.grant_role("t2".to_string());
+        UserApiProvider::instance()
+            .add_role(&tenant, role_info, &CreateIfNotExists)
+            .await?;
+    }
+
     let table = RolesTable::create(1);
     let source_plan = table
         .read_plan(ctx.clone(), None, None, false, true)

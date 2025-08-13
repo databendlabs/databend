@@ -244,7 +244,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     CreateRole {
-        if_not_exists: bool,
+        create_option: CreateOption,
         role_name: String,
     },
     DropRole {
@@ -267,6 +267,11 @@ pub enum Statement {
         udf_name: Identifier,
     },
     AlterUDF(AlterUDFStmt),
+
+    // RowAccessPolicy
+    CreateRowAccessPolicy(CreateRowAccessPolicyStmt),
+    DropRowAccessPolicy(DropRowAccessPolicyStmt),
+    DescRowAccessPolicy(DescRowAccessPolicyStmt),
 
     // Stages
     CreateStage(CreateStageStmt),
@@ -498,6 +503,7 @@ impl Statement {
             | Statement::ShowFileFormats
             | Statement::Presign(..)
             | Statement::DescDatamaskPolicy(..)
+            | Statement::DescRowAccessPolicy(..)
             | Statement::DescNetworkPolicy(..)
             | Statement::ShowNetworkPolicies
             | Statement::DescPasswordPolicy(..)
@@ -560,6 +566,8 @@ impl Statement {
             | Statement::CreateUDF(..)
             | Statement::DropUDF { .. }
             | Statement::AlterUDF(..)
+            | Statement::CreateRowAccessPolicy(..)
+            | Statement::DropRowAccessPolicy(..)
             | Statement::DropStage { .. }
             | Statement::DropConnection(..)
             | Statement::CreateFileFormat { .. }
@@ -867,11 +875,15 @@ impl Display for Statement {
                 write!(f, " {}", user)?;
             }
             Statement::CreateRole {
-                if_not_exists,
+                create_option,
                 role_name: role,
             } => {
-                write!(f, "CREATE ROLE")?;
-                if *if_not_exists {
+                write!(f, "CREATE")?;
+                if let CreateOption::CreateOrReplace = create_option {
+                    write!(f, " OR REPLACE")?;
+                }
+                write!(f, " ROLE")?;
+                if let CreateOption::CreateIfNotExists = create_option {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {}", QuotedString(role, '\''))?;
@@ -915,6 +927,9 @@ impl Display for Statement {
                 write!(f, " {udf_name}")?;
             }
             Statement::AlterUDF(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropRowAccessPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
                 if let Some(pattern) = pattern {

@@ -94,16 +94,16 @@ error:
 
 ---------- Input ----------
 LET x := 1;
-FOR row IN x DO
+FOR r IN x DO
     BREAK;
 END FOR;
 ---------- Output ----------
 error: 
-  --> SQL:2:12
+  --> SQL:2:10
   |
 1 | LET x := 1;
-2 | FOR row IN x DO
-  |            ^ `x` is not a set
+2 | FOR r IN x DO
+  |          ^ `x` is not a set
 
 
 ---------- Input ----------

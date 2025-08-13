@@ -5,9 +5,7 @@ import os
 import shutil
 import time
 from metactl_utils import metactl_bin
-from utils import (
-    run_command, kill_databend_meta, start_meta_node, print_title
-)
+from utils import run_command, kill_databend_meta, start_meta_node, print_title
 
 
 def test_trigger_snapshot():
@@ -26,13 +24,12 @@ def test_trigger_snapshot():
     else:
         initial_snapshots = []
 
-    print("Initial_snapshots:",  initial_snapshots)
+    print("Initial_snapshots:", initial_snapshots)
 
     # Test trigger snapshot
-    result = run_command([
-        metactl_bin, "trigger-snapshot",
-        "--admin-api-address", admin_addr
-    ])
+    result = run_command(
+        [metactl_bin, "trigger-snapshot", "--admin-api-address", admin_addr]
+    )
 
     assert "triggered snapshot successfully" in result
     print("✓ Trigger snapshot command executed successfully")
@@ -41,12 +38,15 @@ def test_trigger_snapshot():
     time.sleep(2)
 
     # Verify snapshot file is generated
-    assert os.path.exists(snapshot_dir), f"Snapshot directory does not exist: {snapshot_dir}"
+    assert os.path.exists(snapshot_dir), (
+        f"Snapshot directory does not exist: {snapshot_dir}"
+    )
 
     current_snapshots = glob.glob(f"{snapshot_dir}/*.snap")
-    print("Current_snapshots:",  current_snapshots)
-    assert len(current_snapshots) > len(initial_snapshots), \
+    print("Current_snapshots:", current_snapshots)
+    assert len(current_snapshots) > len(initial_snapshots), (
         f"No new snapshot file created. Before: {len(initial_snapshots)}, After: {len(current_snapshots)}"
+    )
 
     print(f"✓ Snapshot file created: {len(current_snapshots)} total snapshot(s)")
     print("✓ Trigger snapshot test passed")

@@ -260,6 +260,14 @@ impl<C> ErrorCode<C> {
     }
 }
 
+impl ErrorCode {
+    pub fn aborting() -> Self {
+        ErrorCode::AbortedQuery(
+            "Aborted query, because the server is shutting down or the query was killed.",
+        )
+    }
+}
+
 /// Provides the `map_err_to_code` method for `Result`.
 ///
 /// ```

@@ -156,6 +156,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'dropped_on'                      | 'system'             | 'views'                  | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | NULL     | NULL      | NULL      |
 | 'dropped_on'                      | 'system'             | 'views_with_history'     | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       | NULL     | NULL      | NULL      |
 | 'dummy'                           | 'system'             | 'one'                    | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
+| 'dummy'                           | 'system'             | 'zero'                   | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'enabled'                         | 'system'             | 'notifications'          | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'end_time'                        | 'system'             | 'clustering_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |
 | 'engine'                          | 'information_schema' | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | NULL     | NULL      | NULL      |

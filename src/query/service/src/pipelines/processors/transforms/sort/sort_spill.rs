@@ -268,9 +268,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
             let mut sorted = VecDeque::new();
             while let Some(data) = merger.next_block()? {
                 if unlikely(aborting.load(atomic::Ordering::Relaxed)) {
-                    return Err(ErrorCode::AbortedQuery(
-                        "Aborted query, because the server is shutting down or the query was killed.",
-                    ));
+                    return Err(ErrorCode::aborting());
                 }
 
                 let mut block = base.new_block(data);

@@ -2906,30 +2906,6 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
 
-        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
-        if (func_name == "substr" || func_name == "substring")
-            && self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()
-                .unwrap()
-                .substr_index_zero_literal_as_one()
-        {
-            Self::rewrite_substring(&mut args);
-        }
-
-        if func_name == "grouping" {
-            // `grouping` will be rewritten again after resolving grouping sets.
-            return Ok(Box::new((
-                ScalarExpr::FunctionCall(FunctionCall {
-                    span,
-                    params: vec![],
-                    arguments: args,
-                    func_name: "grouping".to_string(),
-                }),
-                DataType::Number(NumberDataType::UInt32),
-            )));
-        }
         if let Some(rewritten_variant_expr) =
             self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
@@ -2949,11 +2925,22 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         mut params: Vec<Scalar>,
-        args: Vec<ScalarExpr>,
+        mut args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
+        if (func_name == "substr" || func_name == "substring")
+            && self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()
+                .unwrap()
+                .substr_index_zero_literal_as_one()
+        {
+            Self::rewrite_substring(&mut args);
+        }
+
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
-
         // inject the params
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()

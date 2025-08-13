@@ -639,7 +639,9 @@ impl Binder {
 
         // Single table, the table index is 0.
         let table_index = 0;
-        if metadata.row_id_index_by_table_index(table_index).is_none() {
+        if !metadata.lazy_columns().is_empty()
+            && metadata.row_id_index_by_table_index(table_index).is_none()
+        {
             let internal_column = INTERNAL_COLUMN_FACTORY
                 .get_internal_column(ROW_ID_COL_NAME)
                 .unwrap();

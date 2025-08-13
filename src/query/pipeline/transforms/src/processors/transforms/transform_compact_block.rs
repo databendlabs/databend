@@ -60,9 +60,7 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 
     fn transform(&mut self, meta: BlockCompactMeta) -> Result<Vec<DataBlock>> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         match meta {

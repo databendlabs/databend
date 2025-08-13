@@ -227,7 +227,11 @@ impl PhysicalPlanBuilder {
                     .collect::<Result<_>>()?;
 
                 let settings = self.ctx.get_settings();
-                let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+                let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+                if agg.grouping_sets.is_some() {
+                    group_by_shuffle_mode = "before_merge".to_string();
+                }
+
                 let enable_experimental_aggregate_hashtable =
                     settings.get_enable_experimental_aggregate_hashtable()?;
 

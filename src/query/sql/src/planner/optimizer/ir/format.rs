@@ -81,7 +81,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::MutationSource(_) => "MutationSource".to_string(),
         RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
         RelOperator::MaterializedCTE(_) => "MaterializedCTE".to_string(),
-        RelOperator::MaterializeCTERef(_) => "MaterializeCTERef".to_string(),
+        RelOperator::MaterializedCTERef(_) => "MaterializeCTERef".to_string(),
         RelOperator::Sequence(_) => "Sequence".to_string(),
     }
 }

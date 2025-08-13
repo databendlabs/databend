@@ -572,6 +572,7 @@ impl ExprBuilder {
             limit: Some(limit),
             offset,
             before_exchange: false,
+            lazy_columns: Default::default(),
         };
         SExpr::create_unary(Arc::new(RelOperator::Limit(limit_op)), Arc::new(input))
     }

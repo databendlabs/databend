@@ -316,7 +316,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     // Do not check grouping
     if name == "grouping" {
-        debug_assert!(candidates.len() == 1);
+        debug_assert!(!candidates.is_empty());
         let (id, function) = candidates.into_iter().next().unwrap();
         let return_type = function.signature.return_type.clone();
         return Ok(Expr::FunctionCall(FunctionCall {

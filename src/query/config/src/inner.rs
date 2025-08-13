@@ -228,14 +228,6 @@ pub struct QueryConfig {
     /// Max data retention time in days.
     pub data_retention_time_in_days_max: u64,
 
-    /// (azure) openai
-    pub openai_api_key: String,
-    pub openai_api_version: String,
-    pub openai_api_chat_base_url: String,
-    pub openai_api_embedding_base_url: String,
-    pub openai_api_embedding_model: String,
-    pub openai_api_completion_model: String,
-
     pub enable_udf_python_script: bool,
     pub enable_udf_js_script: bool,
     pub enable_udf_wasm_script: bool,
@@ -254,6 +246,7 @@ pub struct QueryConfig {
     pub resources_management: Option<ResourcesManagementConfig>,
 
     pub enable_queries_executor: bool,
+    pub check_connection_before_schedule: bool,
 }
 
 impl Default for QueryConfig {
@@ -321,12 +314,6 @@ impl Default for QueryConfig {
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
             flight_sql_tls_server_key: "".to_string(),
-            openai_api_chat_base_url: "https://api.openai.com/v1/".to_string(),
-            openai_api_embedding_base_url: "https://api.openai.com/v1/".to_string(),
-            openai_api_key: "".to_string(),
-            openai_api_version: "".to_string(),
-            openai_api_completion_model: "gpt-3.5-turbo".to_string(),
-            openai_api_embedding_model: "text-embedding-ada-002".to_string(),
 
             enable_udf_js_script: true,
             enable_udf_python_script: true,
@@ -343,6 +330,7 @@ impl Default for QueryConfig {
             settings: HashMap::new(),
             resources_management: None,
             enable_queries_executor: false,
+            check_connection_before_schedule: true,
         }
     }
 }
@@ -362,7 +350,6 @@ impl QueryConfig {
             .databend_enterprise_license
             .clone()
             .map(|s| mask_string(&s, 3));
-        sanitized.openai_api_key = mask_string(&self.openai_api_key, 3);
         sanitized
     }
 }

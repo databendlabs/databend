@@ -4,9 +4,7 @@ import json
 import shutil
 import time
 from metactl_utils import metactl_bin, metactl_upsert, metactl_trigger_snapshot
-from utils import (
-    run_command, kill_databend_meta, start_meta_node, print_title
-)
+from utils import run_command, kill_databend_meta, start_meta_node, print_title
 
 
 def test_export_from_grpc():
@@ -23,7 +21,7 @@ def test_export_from_grpc():
     test_keys = [
         ("app/db/host", "localhost"),
         ("app/db/port", "5432"),
-        ("app/config/timeout", "30")
+        ("app/config/timeout", "30"),
     ]
 
     for key, value in test_keys:
@@ -38,16 +36,13 @@ def test_export_from_grpc():
     time.sleep(2)
 
     # Test export from grpc
-    result = run_command([
-        metactl_bin, "export",
-        "--grpc-api-address", grpc_addr
-    ])
+    result = run_command([metactl_bin, "export", "--grpc-api-address", grpc_addr])
 
-    lines = result.strip().split('\n')
+    lines = result.strip().split("\n")
     for l in lines:
         print("Got:", l)
 
-    want = '''["header",{"DataHeader":{"key":"header","value":{"version":"V004"}}}]
+    want = """["header",{"DataHeader":{"key":"header","value":{"version":"V004"}}}]
 ["raft_log",{"NodeId":1}]
 ["raft_log",{"Vote":{"leader_id":{"term":1,"node_id":1},"committed":true}}]
 ["raft_log",{"Committed":{"leader_id":{"term":1,"node_id":1},"index":7}}]
@@ -66,9 +61,9 @@ def test_export_from_grpc():
 ["state_machine/0",{"Nodes":{"key":1,"value":{"name":"1","endpoint":{"addr":"localhost","port":28103},"grpc_api_advertise_address":"127.0.0.1:9191"}}}]
 ["state_machine/0",{"GenericKV":{"key":"app/config/timeout","value":{"seq":3,"meta":null,"data":[51,48]}}}]
 ["state_machine/0",{"GenericKV":{"key":"app/db/host","value":{"seq":1,"meta":null,"data":[108,111,99,97,108,104,111,115,116]}}}]
-["state_machine/0",{"GenericKV":{"key":"app/db/port","value":{"seq":2,"meta":null,"data":[53,52,51,50]}}}]'''.strip().split('\n')
-
-
+["state_machine/0",{"GenericKV":{"key":"app/db/port","value":{"seq":2,"meta":null,"data":[53,52,51,50]}}}]""".strip().split(
+        "\n"
+    )
 
     # Verify export result contains data
     assert result, "Export from GRPC should return data"
@@ -76,7 +71,9 @@ def test_export_from_grpc():
 
     # Compare with expected output by converting all to JSON
     print(f"Got {len(lines)} lines, expected {len(want)} lines")
-    assert len(lines) == len(want), f"Line count mismatch: got {len(lines)}, expected {len(want)}"
+    assert len(lines) == len(want), (
+        f"Line count mismatch: got {len(lines)}, expected {len(want)}"
+    )
 
     def normalize_json(obj):
         """Remove dynamic fields like time_ms from JSON object for comparison"""
@@ -103,7 +100,9 @@ def test_export_from_grpc():
 
         want_json = normalize_json(want_json)
 
-        assert actual_json == want_json, f"Line {i} JSON mismatch:\nActual: {actual_json}\nExpected: {want_json}"
+        assert actual_json == want_json, (
+            f"Line {i} JSON mismatch:\nActual: {actual_json}\nExpected: {want_json}"
+        )
 
     print(f"✓ All {len(lines)} JSON lines match expected output")
 

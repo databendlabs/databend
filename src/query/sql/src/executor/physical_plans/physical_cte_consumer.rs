@@ -41,7 +41,7 @@ impl MaterializeCTERef {
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_cte_consumer(
         &mut self,
-        cte_consumer: &crate::plans::MaterializeCTERef,
+        cte_consumer: &crate::plans::MaterializedCTERef,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut fields = Vec::new();

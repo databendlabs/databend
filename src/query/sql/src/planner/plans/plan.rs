@@ -33,6 +33,7 @@ use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::ir::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
+use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
@@ -77,6 +78,7 @@ use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
+use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
@@ -93,6 +95,7 @@ use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
+use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
@@ -331,6 +334,11 @@ pub enum Plan {
     CreateUDF(Box<CreateUDFPlan>),
     AlterUDF(Box<AlterUDFPlan>),
     DropUDF(Box<DropUDFPlan>),
+
+    // RowAccessPolicy
+    CreateRowAccessPolicy(Box<CreateRowAccessPolicyPlan>),
+    DropRowAccessPolicy(Box<DropRowAccessPolicyPlan>),
+    DescRowAccessPolicy(Box<DescRowAccessPolicyPlan>),
 
     // Role
     CreateRole(Box<CreateRolePlan>),

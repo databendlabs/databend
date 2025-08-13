@@ -66,9 +66,6 @@ impl QueryConfig {
             .as_ref()
             .map(|license| mask_sensitive_field(license));
 
-        // Mask OpenAI API key
-        masked_config.openai_api_key = mask_sensitive_field(&self.openai_api_key);
-
         masked_config
     }
 }

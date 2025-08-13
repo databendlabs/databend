@@ -22,19 +22,19 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
-use logforth::filter::env::EnvFilterBuilder;
+use logforth::filter::env_filter::EnvFilterBuilder;
 use logforth::filter::EnvFilter;
-use logforth::Dispatch;
-use logforth::Logger;
 use opendal::Operator;
 use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::WithTonicConfig;
 
 use crate::config::OTLPProtocol;
-use crate::filter::filter_by_thread_tracker;
-use crate::loggers::get_layout;
+use crate::filter::ThreadTrackerFilter;
 use crate::loggers::new_rolling_file_appender;
+use crate::loggers::IdenticalLayout;
+use crate::loggers::JsonLayout;
+use crate::loggers::TextLayout;
 use crate::predefined_tables::table_to_target;
 use crate::query_log_collector::QueryLogCollector;
 use crate::remote_log::RemoteLog;
@@ -216,7 +216,7 @@ pub fn init_logging(
     }
 
     // initialize logging
-    let mut logger = Logger::new();
+    let mut logger = logforth::builder();
 
     // file logger
     if cfg.file.on {
@@ -224,22 +224,39 @@ pub fn init_logging(
             new_rolling_file_appender(&cfg.file.dir, log_name, cfg.file.limit, cfg.file.max_size);
         _drop_guards.push(flush_guard);
 
-        let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.file.level))
-            .filter(filter_by_thread_tracker())
-            .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(env_filter(&cfg.file.level))
+                .filter(ThreadTrackerFilter)
+                .append(match cfg.file.format.as_str() {
+                    "text" => normal_log_file.with_layout(TextLayout),
+                    "json" => normal_log_file.with_layout(JsonLayout),
+                    "identical" => normal_log_file.with_layout(IdenticalLayout),
+                    _ => {
+                        unimplemented!("file logging format {} is not supported", &cfg.file.format)
+                    }
+                })
+        });
     }
 
     // console logger
     if cfg.stderr.on {
-        let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.stderr.level))
-            .filter(filter_by_thread_tracker())
-            .append(
-                logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
-            );
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(env_filter(&cfg.stderr.level))
+                .filter(ThreadTrackerFilter)
+                .append(match cfg.stderr.format.as_str() {
+                    "text" => logforth::append::Stderr::default().with_layout(TextLayout),
+                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout),
+                    "identical" => logforth::append::Stderr::default().with_layout(IdenticalLayout),
+                    _ => {
+                        unimplemented!(
+                            "stderr logging format {} is not supported",
+                            &cfg.stderr.format
+                        )
+                    }
+                })
+        });
     }
 
     // opentelemetry logger
@@ -260,20 +277,22 @@ pub fn init_logging(
         let otel = otel_builder
             .build()
             .expect("initialize opentelemetry logger");
-        let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.otlp.level))
-            .filter(filter_by_thread_tracker())
-            .append(otel);
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(env_filter(&cfg.otlp.level))
+                .filter(ThreadTrackerFilter)
+                .append(otel)
+        });
     }
 
     // log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
-        let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.tracing.capture_log_level))
-            .filter(filter_by_thread_tracker())
-            .append(logforth::append::FastraceEvent::default());
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(env_filter(&cfg.tracing.capture_log_level))
+                .filter(ThreadTrackerFilter)
+                .append(logforth::append::FastraceEvent::default())
+        });
     }
 
     // query logger
@@ -287,14 +306,15 @@ pub fn init_logging(
             );
             _drop_guards.push(flush_guard);
 
-            let dispatch = Dispatch::new()
-                .filter(EnvFilter::new(
-                    EnvFilterBuilder::new()
-                        .filter(Some("databend::log::query::file"), LevelFilter::Trace),
-                ))
-                .filter(filter_by_thread_tracker())
-                .append(query_log_file.with_layout(get_layout("identical")));
-            logger = logger.dispatch(dispatch);
+            logger = logger.dispatch(|dispatch| {
+                dispatch
+                    .filter(EnvFilter::new(
+                        EnvFilterBuilder::new()
+                            .filter(Some("databend::log::query::file"), LevelFilter::Trace),
+                    ))
+                    .filter(ThreadTrackerFilter)
+                    .append(query_log_file.with_layout(IdenticalLayout))
+            });
         }
         if let Some(endpoint) = &cfg.query.otlp {
             let labels = labels
@@ -313,14 +333,15 @@ pub fn init_logging(
             let otel = otel_builder
                 .build()
                 .expect("initialize opentelemetry logger");
-            let dispatch = Dispatch::new()
-                .filter(EnvFilter::new(
-                    EnvFilterBuilder::new()
-                        .filter(Some("databend::log::query::file"), LevelFilter::Trace),
-                ))
-                .filter(filter_by_thread_tracker())
-                .append(otel);
-            logger = logger.dispatch(dispatch);
+            logger = logger.dispatch(|dispatch| {
+                dispatch
+                    .filter(EnvFilter::new(
+                        EnvFilterBuilder::new()
+                            .filter(Some("databend::log::query::file"), LevelFilter::Trace),
+                    ))
+                    .filter(ThreadTrackerFilter)
+                    .append(otel)
+            });
         }
     }
 
@@ -335,14 +356,15 @@ pub fn init_logging(
             );
             _drop_guards.push(flush_guard);
 
-            let dispatch = Dispatch::new()
-                .filter(EnvFilter::new(
-                    EnvFilterBuilder::new()
-                        .filter(Some("databend::log::profile"), LevelFilter::Trace),
-                ))
-                .filter(filter_by_thread_tracker())
-                .append(profile_log_file.with_layout(get_layout("identical")));
-            logger = logger.dispatch(dispatch);
+            logger = logger.dispatch(|dispatch| {
+                dispatch
+                    .filter(EnvFilter::new(
+                        EnvFilterBuilder::new()
+                            .filter(Some("databend::log::profile"), LevelFilter::Trace),
+                    ))
+                    .filter(ThreadTrackerFilter)
+                    .append(profile_log_file.with_layout(IdenticalLayout))
+            });
         }
         if let Some(endpoint) = &cfg.profile.otlp {
             let labels = labels
@@ -361,14 +383,15 @@ pub fn init_logging(
             let otel = otel_builder
                 .build()
                 .expect("initialize opentelemetry logger");
-            let dispatch = Dispatch::new()
-                .filter(EnvFilter::new(
-                    EnvFilterBuilder::new()
-                        .filter(Some("databend::log::profile"), LevelFilter::Trace),
-                ))
-                .filter(filter_by_thread_tracker())
-                .append(otel);
-            logger = logger.dispatch(dispatch);
+            logger = logger.dispatch(|dispatch| {
+                dispatch
+                    .filter(EnvFilter::new(
+                        EnvFilterBuilder::new()
+                            .filter(Some("databend::log::profile"), LevelFilter::Trace),
+                    ))
+                    .filter(ThreadTrackerFilter)
+                    .append(otel)
+            });
         }
     }
 
@@ -382,14 +405,15 @@ pub fn init_logging(
         );
         _drop_guards.push(flush_guard);
 
-        let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::structlog"), LevelFilter::Trace),
-            ))
-            .filter(filter_by_thread_tracker())
-            .append(structlog_log_file);
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(EnvFilter::new(
+                    EnvFilterBuilder::new()
+                        .filter(Some("databend::log::structlog"), LevelFilter::Trace),
+                ))
+                .filter(ThreadTrackerFilter)
+                .append(structlog_log_file)
+        });
     }
     if cfg.history.on {
         let (remote_log, flush_guard) =
@@ -409,26 +433,26 @@ pub fn init_logging(
             filter_builder = filter_builder.filter(Some(&target), LevelFilter::Off);
         }
 
-        let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
-            .filter(filter_by_thread_tracker())
-            .append(remote_log);
-
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
+                .filter(ThreadTrackerFilter)
+                .append(remote_log)
+        });
         _drop_guards.push(flush_guard);
     }
 
     // Query log collector
     {
-        let dispatch = Dispatch::new()
-            .filter(filter_by_thread_tracker())
-            .append(QueryLogCollector::new());
-
-        logger = logger.dispatch(dispatch);
+        logger = logger.dispatch(|dispatch| {
+            dispatch
+                .filter(ThreadTrackerFilter)
+                .append(QueryLogCollector::new())
+        });
     }
 
     // set global logger
-    if logger.apply().is_err() {
+    if logger.try_apply().is_err() {
         eprintln!("logger has already been set");
         return Vec::new();
     }

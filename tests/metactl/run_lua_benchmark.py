@@ -30,13 +30,17 @@ def run_lua_script(script_path):
         raise FileNotFoundError(f"Lua script not found: {script_path}")
 
     try:
-        process = subprocess.Popen([
-            metactl_bin, "lua", "--file", str(script_file)
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=0)
+        process = subprocess.Popen(
+            [metactl_bin, "lua", "--file", str(script_file)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=0,
+        )
 
         while process.poll() is None:
             ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
-            
+
             for stream in ready:
                 line = stream.readline()
                 if line:
@@ -44,7 +48,7 @@ def run_lua_script(script_path):
                         print(line.rstrip())
                     else:
                         print("STDERR:", line.rstrip(), file=sys.stderr)
-        
+
         for line in process.stdout:
             print(line.rstrip())
         for line in process.stderr:
@@ -52,7 +56,9 @@ def run_lua_script(script_path):
 
         return_code = process.wait()
         if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, [metactl_bin, "lua", "--file", str(script_file)])
+            raise subprocess.CalledProcessError(
+                return_code, [metactl_bin, "lua", "--file", str(script_file)]
+            )
 
     except subprocess.CalledProcessError as e:
         print(f"Error running Lua script: {e}")

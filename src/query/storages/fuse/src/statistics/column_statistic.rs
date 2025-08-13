@@ -168,7 +168,7 @@ pub trait Trim: Sized {
     fn may_be_trimmed(&self) -> bool;
 }
 
-pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
+pub const END_OF_UNICODE_RANGE: char = '\u{10FFFF}';
 pub const STATS_STRING_PREFIX_LEN: usize = 16;
 
 impl Trim for Scalar {
@@ -220,7 +220,7 @@ impl Trim for Scalar {
                     // in reversed order, break at the first one we met
                     let mut idx = None;
                     for (i, c) in sliced.char_indices().rev() {
-                        if c < STATS_REPLACEMENT_CHAR {
+                        if c < END_OF_UNICODE_RANGE {
                             idx = Some(i);
                             break;
                         }
@@ -235,7 +235,7 @@ impl Trim for Scalar {
                         if i < replacement_point {
                             r.push(c)
                         } else {
-                            r.push(STATS_REPLACEMENT_CHAR);
+                            r.push(END_OF_UNICODE_RANGE);
                         }
                     }
 
@@ -250,6 +250,55 @@ impl Trim for Scalar {
         match self {
             Scalar::String(s) => s.len() >= STATS_STRING_PREFIX_LEN,
             _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+
+    use crate::statistics::Trim;
+    use crate::statistics::END_OF_UNICODE_RANGE;
+    use crate::statistics::STATS_STRING_PREFIX_LEN;
+
+    #[test]
+    fn test_trim_max() {
+        {
+            let invalid = END_OF_UNICODE_RANGE
+                .to_string()
+                .repeat(STATS_STRING_PREFIX_LEN + 1);
+            assert_eq!(Scalar::String(invalid).trim_max(), None);
+        }
+
+        {
+            let s = END_OF_UNICODE_RANGE
+                .to_string()
+                .repeat(STATS_STRING_PREFIX_LEN);
+            let scalar = Scalar::String(s.clone());
+            assert_eq!(scalar.clone().trim_max(), Some(scalar));
+        }
+
+        {
+            let s = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN + 1);
+            let res = Scalar::String(s.clone()).trim_max();
+            let mut exp = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 1);
+            exp.push(END_OF_UNICODE_RANGE);
+            assert_eq!(res, Some(Scalar::String(exp)));
+        }
+
+        {
+            let mut s = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 1);
+            s.push(END_OF_UNICODE_RANGE);
+            s.push(END_OF_UNICODE_RANGE);
+
+            let res = Scalar::String(s.clone()).trim_max();
+
+            let mut exp = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 2);
+            exp.push(END_OF_UNICODE_RANGE);
+            exp.push(END_OF_UNICODE_RANGE);
+
+            assert_eq!(res, Some(Scalar::String(exp)));
         }
     }
 }

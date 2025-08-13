@@ -155,10 +155,6 @@ Functions overloads:
 1 age(Timestamp NULL, Timestamp NULL) :: Interval NULL
 2 age(Timestamp) :: Interval
 3 age(Timestamp NULL) :: Interval NULL
-0 ai_embedding_vector(String) :: Array(Float32)
-1 ai_embedding_vector(String NULL) :: Array(Float32) NULL
-0 ai_text_completion(String) :: String
-1 ai_text_completion(String NULL) :: String NULL
 0 and(Boolean, Boolean) :: Boolean
 1 and(Boolean NULL, Boolean NULL) :: Boolean NULL
 0 and_filters FACTORY
@@ -1998,6 +1994,7 @@ Functions overloads:
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 grouping FACTORY
+1 grouping FACTORY
 0 gt(Variant, Variant) :: Boolean
 1 gt(Variant NULL, Variant NULL) :: Boolean NULL
 2 gt(String, String) :: Boolean

@@ -201,19 +201,10 @@ impl StageFilesInfo {
     }
 
     #[async_backtrace::framed]
-    pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
+    pub async fn first_file(&self, operator: &Operator) -> Result<Option<StageFileInfo>> {
         // We only fetch first file.
         let mut files = self.list(operator, 1, Some(1)).await?;
-        files
-            .pop()
-            .ok_or_else(|| ErrorCode::BadArguments("no file found"))
-    }
-
-    pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
-        let mut files = self.blocking_list(operator, Some(1))?;
-        files
-            .pop()
-            .ok_or_else(|| ErrorCode::BadArguments("no file found"))
+        Ok(files.pop())
     }
 
     pub fn blocking_list(

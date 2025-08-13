@@ -16,11 +16,8 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use base64::engine::general_purpose::URL_SAFE;
-use base64::Engine as _;
 use databend_common_base::headers::HEADER_SESSION;
 use databend_common_base::headers::HEADER_SESSION_ID;
-use databend_common_exception::ErrorCode;
 use databend_common_meta_app::tenant::Tenant;
 use http::HeaderMap;
 use jwt_simple::prelude::Deserialize;
@@ -35,6 +32,9 @@ use serde::Deserializer;
 use serde::Serializer;
 use uuid::Uuid;
 
+use crate::servers::http::middleware::json_header::decode_json_header;
+use crate::servers::http::middleware::json_header::encode_json_header;
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::unix_ts;
 use crate::servers::http::v1::ClientSessionManager;
 
@@ -72,16 +72,18 @@ pub struct ClientSessionHeader {
 
 impl ClientSessionHeader {
     fn encode(&self) -> String {
-        let s = serde_json::to_string(&self).unwrap();
-        URL_SAFE.encode(&s)
+        encode_json_header(self)
     }
 }
 
 impl ClientSession {
-    pub fn try_decode(req: &Request) -> Result<Option<ClientSession>, String> {
-        if let Some(s) = Self::from_custom_header(req.headers())? {
+    pub fn try_decode(
+        req: &Request,
+        caps: &mut ClientCapabilities,
+    ) -> Result<Option<ClientSession>, String> {
+        if let Some(s) = Self::from_custom_header(req.headers(), caps)? {
             Ok(Some(s))
-        } else if let Some(s) = Self::from_cookie(req.cookie())? {
+        } else if let Some(s) = Self::from_cookie(req.cookie(), caps)? {
             Ok(Some(s))
         } else {
             Ok(None)
@@ -111,35 +113,33 @@ impl ClientSession {
         }
     }
 
-    fn from_custom_header(headers: &HeaderMap) -> Result<Option<ClientSession>, String> {
+    fn from_custom_header(
+        headers: &HeaderMap,
+        caps: &mut ClientCapabilities,
+    ) -> Result<Option<ClientSession>, String> {
         if let Some(v) = headers.get(HEADER_SESSION) {
+            caps.session_header = true;
             let v = v.to_str().unwrap().to_string().trim().to_owned();
-            // curl -H "X-xx:" not work
-            let s = if v.is_empty() || v.to_lowercase() == "new" {
+            let s = if v.is_empty() {
+                // note that curl -H "X-xx:" not work
                 Self::new_session(false)
             } else {
-                let json = URL_SAFE.decode(&v).map_err(|e| {
-                    format!(
-                        "Invalid value {} for X-DATABEND-SESSION, base64 decode error: {}",
-                        v, e
-                    )
-                })?;
-                let header = serde_json::from_slice(&json).map_err(|e| {
-                    format!(
-                        "Invalid value {} for X-DATABEND-SESSION, JSON decode error: {}",
-                        v, e
-                    )
-                })?;
+                let header = decode_json_header(HEADER_SESSION, v.as_str())?;
                 Self::old_session(false, header)
             };
             Ok(Some(s))
+        } else if caps.session_header {
+            Ok(Some(Self::new_session(false)))
         } else {
             Ok(None)
         }
     }
 
-    fn from_cookie(cookie: &CookieJar) -> Result<Option<ClientSession>, String> {
-        let cookie_enabled = cookie.get(COOKIE_COOKIE_ENABLED).is_some();
+    fn from_cookie(
+        cookie: &CookieJar,
+        caps: &mut ClientCapabilities,
+    ) -> Result<Option<ClientSession>, String> {
+        let cookie_enabled = cookie.get(COOKIE_COOKIE_ENABLED).is_some() || caps.session_cookie;
         if cookie_enabled {
             let s = if let Some(sid) = cookie.get(COOKIE_SESSION_ID) {
                 let id = sid.value_str().to_string();
@@ -188,25 +188,17 @@ impl ClientSession {
         let client_session_mgr = ClientSessionManager::instance();
         match self.header.last_refresh_time.elapsed() {
             Ok(elapsed) => {
-                if is_worksheet
-                    && elapsed
-                        > client_session_mgr.max_idle_time + client_session_mgr.min_refresh_interval
-                {
-                    return Err(ErrorCode::SessionTimeout(format!(
-                        "session expired after idle for more than {} seconds",
-                        client_session_mgr.max_idle_time.as_secs()
-                    )));
-                }
-                if elapsed > client_session_mgr.min_refresh_interval {
-                    info!(
-                        "[HTTP-SESSION] refreshing session {} after {} seconds",
-                        self.header.id,
-                        elapsed.as_secs(),
-                    );
+                // worksheet
+                if is_worksheet || elapsed > client_session_mgr.min_refresh_interval {
                     if client_session_mgr.refresh_in_memory_states(&self.header.id, user_name) {
                         client_session_mgr
                             .refresh_session_handle(tenant, user_name.to_string(), &self.header.id)
                             .await?;
+                        info!(
+                            "[HTTP-SESSION] refreshing session {} after {} seconds",
+                            self.header.id,
+                            elapsed.as_secs(),
+                        );
                     }
                     self.refreshed = true;
                     if self.use_cookie {

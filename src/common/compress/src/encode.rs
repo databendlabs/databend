@@ -192,6 +192,7 @@ impl CompressCodec {
         let mut zip = ZipWriter::new(&mut cursor);
         let options: FileOptions<()> = FileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
+            .large_file(to_compress.len() as u64 >= u32::MAX as u64)
             .unix_permissions(0o644);
 
         // zip for archive files

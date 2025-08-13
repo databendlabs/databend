@@ -1643,13 +1643,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowRoles { show_options },
     );
-    let create_role = map(
+    let create_role = map_res(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
         },
-        |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
-            if_not_exists: opt_if_not_exists.is_some(),
-            role_name,
+        |(_, opt_or_replace, _, opt_if_not_exists, role_name)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRole {
+                create_option,
+                role_name,
+            })
         },
     );
     let drop_role = map(
@@ -1761,6 +1765,52 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
                 definition,
+            })
+        },
+    );
+
+    // row policy
+    // CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+    // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
+    // [ COMMENT = '<string_literal>' ]
+    let create_row_access = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ #row_access_definition
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, opt_or_replace, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRowAccessPolicy(
+                CreateRowAccessPolicyStmt {
+                    create_option,
+                    name,
+                    description: opt_comment.map(|(_, _, description)| description),
+                    definition,
+                },
+            ))
+        },
+    );
+    let drop_row_access = map(
+        rule! {
+            DROP ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, _, _, opt_if_exists, name)| {
+            let stmt = DropRowAccessPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropRowAccessPolicy(stmt)
+        },
+    );
+    let describe_row_access = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ ROW ~ ACCESS ~ POLICY ~ ^#ident
+        },
+        |(_, _, _, _, name)| {
+            Statement::DescRowAccessPolicy(DescRowAccessPolicyStmt {
+                name: name.to_string(),
             })
         },
     );
@@ -2477,7 +2527,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let describe_procedure = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            ( DESC | DESCRIBE ) ~ ^PROCEDURE ~ #ident ~ #procedure_type_name
         },
         |(_, _, name, args)| {
             Statement::DescProcedure(DescProcedureStmt {
@@ -2730,6 +2780,9 @@ AS
             | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
+            | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+            | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
+            | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
             | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
             | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
@@ -5042,6 +5095,32 @@ fn udf_immutable(i: Input) -> IResult<bool> {
         value(false, rule! { VOLATILE }),
         value(true, rule! { IMMUTABLE }),
     ))(i)
+}
+
+pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
+    pub fn row_access_type(i: Input) -> IResult<RowAccessPolicyType> {
+        map(rule! { #ident ~ #type_name }, |(name, data_type)| {
+            RowAccessPolicyType {
+                name: name.to_string(),
+                data_type,
+            }
+        })(i)
+    }
+
+    let row_access_def = map(
+        rule! {
+            AS ~ "(" ~ #comma_separated_list1(row_access_type) ~ ")" ~ RETURNS ~ BOOLEAN
+            ~ "->" ~ #expr
+        },
+        |(_, _, parameters, _, _, _, _, definition)| RowAccessPolicyDefinition {
+            parameters,
+            definition: Box::new(definition),
+        },
+    );
+
+    rule!(
+        #row_access_def: "AS (<arg_name> <arg_type> [ , ... ]) RETURNS BOOLEAN -> <definition expr>"
+    )(i)
 }
 
 pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {
