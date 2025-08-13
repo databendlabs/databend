@@ -81,14 +81,7 @@ impl Interpreter for CreateTableIndexInterpreter {
                 ));
             }
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
-            ast::TableIndexType::Ngram => {
-                if column_ids.len() != 1 {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Ngram Index has one and only one column",
-                    ));
-                }
-                TableIndexType::Ngram
-            }
+            ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
         };
 
