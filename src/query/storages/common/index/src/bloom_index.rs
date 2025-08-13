@@ -641,7 +641,7 @@ struct ColumnFilterBuilder {
     builder: FilterImplBuilder,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct NgramArgs {
     index: FieldIndex,
     field: TableField,
@@ -661,6 +661,10 @@ impl NgramArgs {
 
     pub fn field(&self) -> &TableField {
         &self.field
+    }
+
+    pub fn column_id(&self) -> ColumnId {
+        self.field.column_id
     }
 
     pub fn gram_size(&self) -> usize {

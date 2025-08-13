@@ -299,8 +299,11 @@ impl FuseTable {
                 )
             };
         let bloom_index_cols = self.bloom_index_cols();
-        let ngram_args =
-            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
+        let ngram_args = Self::create_ngram_index_args(
+            &self.table_info.meta,
+            &self.table_info.meta.schema,
+            false,
+        )?;
 
         info!(
             "[FUSE-CHANGE-TRACKING] prune snapshot block start, at node {}",

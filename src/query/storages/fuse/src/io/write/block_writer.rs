@@ -80,8 +80,13 @@ pub fn serialize_block(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+            let result = blocks_to_parquet(
+                &schema,
+                vec![block],
+                buf,
+                write_settings.table_compression,
+                None,
+            )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
         }

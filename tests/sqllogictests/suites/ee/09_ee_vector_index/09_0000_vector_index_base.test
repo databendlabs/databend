@@ -327,8 +327,120 @@ SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.5584
 15 0.13881427
 
 statement ok
+CREATE TABLE IF NOT EXISTS t2(id Int, embedding1 Vector(4), embedding2 Vector(4));
+
+statement ok
+INSERT INTO t2 VALUES
+(1, [0.50515236, 0.8561939, 0.87169914, 0.55843271], [0.73689797, 0.49985862, 0.64527255, 0.29313098]),
+(2, [0.17790798, 0.0132427, 0.55352279, 0.49129727], [0.74246407, 0.97345777, 0.83489323, 0.86012174]),
+(3, [0.2703968, 0.26768266, 0.96587005, 0.04760408], [0.92289409, 0.15799311, 0.86381163, 0.2922287]),
+(4, [0.0810719, 0.27882267, 0.6015564, 0.34236571], [0.58889543, 0.83293431, 0.67012723, 0.76303241])
+
+statement ok
+INSERT INTO t2 VALUES
+(5, [0.66399931, 0.35041433, 0.2159864, 0.89537508], [0.44577037, 0.57896497, 0.36630178, 0.33816571]),
+(6, [0.32052319, 0.38567453, 0.62853221, 0.84816365], [0.15853234, 0.33207714, 0.7673085, 0.69513879]),
+(7, [0.82590676, 0.35860656, 0.6277274, 0.95148122], [0.81893313, 0.91440945, 0.15803721, 0.5866869]),
+(8, [0.42135513, 0.05637937, 0.88864157, 0.59217909], [0.98435169, 0.39234101, 0.41490889,  0.02760555])
+
+statement ok
+CREATE VECTOR INDEX idx1 ON t2(embedding1) distance='l1,l2'
+
+statement ok
+CREATE VECTOR INDEX idx2 ON t2(embedding2) distance='cosine'
+
+query B
+SELECT vector_index_size IS NULL FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+statement ok
+REFRESH VECTOR INDEX idx1 ON t2
+
+query B
+SELECT vector_index_size > 2000 FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+statement ok
+REFRESH VECTOR INDEX idx2 ON t2
+
+query B
+SELECT vector_index_size > 3000 FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+query IF
+SELECT id, l1_distance(embedding1, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+1 0.0
+
+query T
+EXPLAIN SELECT id, l1_distance(embedding1, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+RowFetch
+├── output columns: [t2._vector_score (#3), t2._row_id (#4), t2.id (#0)]
+├── columns to fetch: [id]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Sort(Single)
+        ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+        ├── sort keys: [_vector_score ASC NULLS LAST]
+        ├── estimated rows: 8.00
+        └── TableScan
+            ├── table: default.test_vector_index.t2
+            ├── output columns: [_vector_score (#3), _row_id (#4)]
+            ├── read rows: 4
+            ├── read size: 0
+            ├── partitions total: 2
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, vector pruning: 2 to 1>]
+            ├── push downs: [filters: [], limit: 1]
+            └── estimated rows: 8.00
+
+query IF
+SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+5 0.03522873
+
+query T
+EXPLAIN SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+RowFetch
+├── output columns: [t2._vector_score (#3), t2._row_id (#4), t2.id (#0)]
+├── columns to fetch: [id]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Sort(Single)
+        ├── output columns: [t2._vector_score (#3), t2._row_id (#4)]
+        ├── sort keys: [_vector_score ASC NULLS LAST]
+        ├── estimated rows: 8.00
+        └── TableScan
+            ├── table: default.test_vector_index.t2
+            ├── output columns: [_vector_score (#3), _row_id (#4)]
+            ├── read rows: 4
+            ├── read size: 0
+            ├── partitions total: 2
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, vector pruning: 2 to 1>]
+            ├── push downs: [filters: [], limit: 1]
+            └── estimated rows: 8.00
+
+statement ok
 use default
 
 statement ok
 drop database test_vector_index
+
 
