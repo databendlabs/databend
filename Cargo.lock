@@ -4010,6 +4010,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-parquet-reader-experimental"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "databend-common-column",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-storages-common-table-meta",
+ "lz4_flex",
+ "parquet",
+ "parquet-format-safe",
+ "parquet2",
+ "streaming-decompression",
+ "zstd 0.12.4",
+]
+
+[[package]]
 name = "databend-common-pipeline-core"
 version = "0.1.0"
 dependencies = [
@@ -4330,6 +4347,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-native",
+ "databend-common-parquet-reader-experimental",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
@@ -4360,6 +4378,7 @@ dependencies = [
  "opendal",
  "parking_lot 0.12.3",
  "parquet",
+ "parquet2",
  "paste",
  "rand 0.8.5",
  "serde",
@@ -11408,6 +11427,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "parquet-format-safe"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1131c54b167dd4e4799ce762e1ab01549ebb94d5bdd13e6ec1b467491c378e1f"
+dependencies = [
+ "async-trait",
+ "futures",
+]
+
+[[package]]
+name = "parquet2"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "579fe5745f02cef3d5f236bfed216fd4693e49e4e920a13475c6132233283bce"
+dependencies = [
+ "async-stream",
+ "brotli 3.5.0",
+ "flate2",
+ "futures",
+ "lz4",
+ "parquet-format-safe",
+ "seq-macro",
+ "serde",
+ "snap",
+ "streaming-decompression",
+ "xxhash-rust",
+ "zstd 0.12.4",
+]
+
+[[package]]
 name = "parse-display"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14568,6 +14617,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "streaming-decompression"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf6cc3b19bfb128a8ad11026086e31d3ce9ad23f8ea37354b31383a187c44cf3"
+dependencies = [
+ "fallible-streaming-iterator",
+]
+
+[[package]]
 name = "strength_reduce"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17525,6 +17583,12 @@ source = "git+https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#
 dependencies = [
  "cbordata",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "xz2"
