@@ -46,6 +46,10 @@ pub const DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: &str =
 
 pub const DATABEND_CARGO_CFG_TARGET_FEATURE: &str = env!("DATABEND_CARGO_CFG_TARGET_FEATURE");
 
+pub const DATABEND_TELEMETRY_ENDPOINT: &str = env!("DATABEND_TELEMETRY_ENDPOINT");
+
+pub const DATABEND_TELEMETRY_API_KEY: &str = env!("DATABEND_TELEMETRY_API_KEY");
+
 pub static DATABEND_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let build_semver = DATABEND_GIT_SEMVER;
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");

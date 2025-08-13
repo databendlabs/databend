@@ -51,6 +51,7 @@ impl Config {
             catalog: self.catalog,
             cache: self.cache,
             spill: self.spill.mask_display(),
+            telemetry: self.telemetry,
             catalogs: self.catalogs,
         }
     }

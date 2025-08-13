@@ -54,6 +54,7 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::Settings;
+use databend_common_telemetry::report_node_telemetry;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
@@ -640,10 +641,15 @@ impl ClusterDiscovery {
         self.drop_invalid_nodes(&node_info).await?;
 
         let online_nodes = self.warehouse_manager.list_online_nodes().await?;
-        self.check_license_key(online_nodes).await?;
+        self.check_license_key(online_nodes.clone()).await?;
 
-        match self.warehouse_manager.start_node(node_info).await {
-            Ok(seq_node) => self.start_heartbeat(seq_node).await,
+        match self.warehouse_manager.start_node(node_info.clone()).await {
+            Ok(seq_node) => {
+                self.start_heartbeat(seq_node).await?;
+                self.report_telemetry_data(&node_info, cfg, online_nodes)
+                    .await;
+                Ok(())
+            }
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
@@ -680,6 +686,48 @@ impl ClusterDiscovery {
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;
         Ok(settings.get_enterprise_license())
+    }
+
+    async fn report_telemetry_data(
+        &self,
+        _node_info: &NodeInfo,
+        cfg: &InnerConfig,
+        online_nodes: Vec<NodeInfo>,
+    ) {
+        if let Ok(key) = Self::get_license_key(&self.tenant_id).await {
+            if !key.is_empty() {
+                if let Ok(claims) = LicenseManagerSwitch::instance().parse_license(&key) {
+                    let license_type = claims.custom.r#type.as_deref().unwrap_or("").to_lowercase();
+                    if license_type != "trial" && !cfg.telemetry.enabled {
+                        return;
+                    }
+                }
+            }
+        }
+
+        let payload = serde_json::json!({
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            "cluster_id": self.cluster_id,
+            "node_id": self.local_id,
+            "tenant_name": self.tenant_id,
+            "version": DATABEND_COMMIT_VERSION.as_str(),
+            "cpu_cores": num_cpus::get(),
+            "storage_info": cfg.storage.params.to_string(),
+            "nodes": online_nodes.iter().map(|node| serde_json::json!({
+                "id": node.id,
+                "secret": node.secret,
+                "cpu_nums": node.cpu_nums,
+                "version": node.version,
+                "binary_version": node.binary_version,
+                "cluster_id": node.cluster_id,
+                "warehouse_id": node.warehouse_id,
+            })).collect::<Vec<_>>(),
+        });
+
+        let _ = report_node_telemetry(payload).await;
     }
 }
 

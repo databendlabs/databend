@@ -4755,6 +4755,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-telemetry"
+version = "0.1.0"
+dependencies = [
+ "databend-common-version",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
@@ -5324,6 +5334,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-system",
  "databend-common-storages-view",
+ "databend-common-telemetry",
  "databend-common-tracing",
  "databend-common-users",
  "databend-common-version",
