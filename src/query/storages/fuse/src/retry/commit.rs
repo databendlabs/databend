@@ -70,6 +70,12 @@ async fn try_rebuild_req(
 ) -> Result<()> {
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
+        if table_meta.engine == "stream".to_string() {
+            return Err(ErrorCode::UnresolvableConflict(format!(
+                "Concurrent transaction commit failed. Stream table {} has unresolvable conflicts.",
+                tid
+            )));
+        }
         let latest_table = FuseTable::from_table_meta(tid, seq, table_meta)?;
         let default_cluster_key_id = latest_table.cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
