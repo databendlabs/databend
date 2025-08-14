@@ -129,7 +129,6 @@ headers = { workspace = true }
 hex = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
-indicatif = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
@@ -160,7 +159,6 @@ reqwest = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rustls-pki-types = { workspace = true }
-rustyline = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
