@@ -326,7 +326,12 @@ impl<'a> StringIter<'a> {
 
         // Decode indices and populate views in single pass
         let start_len = views.len();
-        let mut indices = vec![0i32; remaining];
+        // TODO hotspot
+        // let mut indices = vec![0i32; remaining];
+        let mut indices: Vec<i32> = Vec::with_capacity(remaining);
+        unsafe {
+            indices.set_len(remaining);
+        }
 
         let decoded_count = rle_decoder
             .get_batch(&mut indices)
