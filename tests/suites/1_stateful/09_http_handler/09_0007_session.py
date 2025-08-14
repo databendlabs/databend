@@ -10,6 +10,7 @@ from pprint import pprint
 from requests import Response
 
 HEADER_SESSION = "X-DATABEND-SESSION"
+HEADER_CAPS = "X-DATABEND-CLIENT-CAPS"
 # Define the URLs and credentials
 query_url = "http://localhost:8000/v1/query"
 login_url = "http://localhost:8000/v1/session/login"
@@ -22,10 +23,9 @@ def check(func):
         print(f"---- {func.__name__}{args[:1]}")
         resp: Response = func(self, *args, **kwargs)
         self.session_header = resp.headers.get(HEADER_SESSION)
+        json_str = base64.urlsafe_b64decode(self.session_header)
         last = self.session_header_json
-        self.session_header_json = json.loads(
-            base64.urlsafe_b64decode(self.session_header)
-        )
+        self.session_header_json = json.loads(json_str)
         if last:
             if last["id"] != self.session_header_json["id"]:
                 print(
@@ -72,7 +72,7 @@ class Client(object):
             auth=auth,
             headers={
                 "Content-Type": "application/json",
-                "X-DATABEND-CLIENT-CAPS": "session_header",
+                HEADER_CAPS: "session_header",
             },
             json=payload,
         )
@@ -83,7 +83,10 @@ class Client(object):
         response = self.client.post(
             logout_url,
             auth=auth,
-            headers={HEADER_SESSION: self.session_header},
+            headers={
+                HEADER_CAPS: "session_header",
+                HEADER_SESSION: self.session_header
+            },
         )
         return response
 
@@ -95,6 +98,7 @@ class Client(object):
             auth=auth,
             headers={
                 "Content-Type": "application/json",
+                HEADER_CAPS: "session_header",
                 HEADER_SESSION: self.session_header,
             },
             json=query_payload,
@@ -109,7 +113,7 @@ class Client(object):
         ).decode("ascii")
 
 
-def main():
+def test_session():
     client = Client()
     client.login()
 
@@ -132,6 +136,32 @@ def main():
     query_resp = client.do_query("drop TABLE t")
     pprint(query_resp.get("session").get("need_sticky"))
     pprint(query_resp.get("session").get("need_keep_alive"))
+
+
+# without X-DATABEND-CLIENT-CAPS:
+# 1. query still works
+# 2. X-DATABEND-SESSION is ignored
+def test_no_session():
+    client = requests.session()
+    payload =  {"sql": "select * from numbers(100)", "pagination": {"max_rows_per_page": 2}}
+    resp = client.post(
+        query_url,
+        auth=auth,
+        headers={"Content-Type": "application/json", HEADER_SESSION: "xxx"},
+        json=payload,
+    )
+    resp = resp.json()
+    next_uri = resp.get("next_uri")
+    resp = client.get(
+        f"http://localhost:8000/{next_uri}",
+        auth=auth,
+    )
+    resp = resp.json()
+    assert len(resp["data"]) == 2, resp
+
+def main():
+    test_no_session()
+    test_session()
 
 
 if __name__ == "__main__":

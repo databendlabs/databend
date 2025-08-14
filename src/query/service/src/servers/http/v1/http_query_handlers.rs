@@ -346,7 +346,6 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
-                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
