@@ -228,9 +228,9 @@ mod tests {
 
     // Helper function to create test cases with records
     fn create_test_cases() -> Vec<TestCase> {
-        let fixed_timestamp = jiff::Timestamp::new(1431648000, 123456789)
+        let fixed_timestamp = Timestamp::new(1431648000, 123456789)
             .unwrap()
-            .to_zoned(jiff::tz::TimeZone::system());
+            .to_zoned(TimeZone::system());
         let timestamp = format_timestamp(&fixed_timestamp);
 
         vec![

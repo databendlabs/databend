@@ -654,11 +654,13 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
     let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
+        .version(DATABEND_SEMVER.clone())
         .build()
         .await?;
     let mn1 = MetaNode::builder(&config.raft_config)
         .node_id(1)
         .sto(sto1)
+        .version(DATABEND_SEMVER.clone())
         .build()
         .await?;
 
