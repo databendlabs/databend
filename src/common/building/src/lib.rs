@@ -107,7 +107,9 @@ pub fn add_license_public_key() {
 pub fn add_env_telemetry() {
     println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_ENDPOINT");
     let endpoint = env::var("DATABEND_TELEMETRY_ENDPOINT")
-        .unwrap_or_else(|_| "https://telemetry.databend.com/v1/report".to_string());
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "https://telemetry.databend.cloud/v1/report".to_string());
     println!("cargo:rustc-env=DATABEND_TELEMETRY_ENDPOINT={endpoint}");
 
     println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_API_KEY");

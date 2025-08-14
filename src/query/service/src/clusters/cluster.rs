@@ -56,6 +56,8 @@ use databend_common_metrics::cluster::*;
 use databend_common_settings::Settings;
 use databend_common_telemetry::report_node_telemetry;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_TELEMETRY_API_KEY;
+use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -827,7 +829,12 @@ impl ClusterDiscovery {
             }
         });
 
-        let _ = report_node_telemetry(payload).await;
+        let _ = report_node_telemetry(
+            payload,
+            DATABEND_TELEMETRY_ENDPOINT,
+            DATABEND_TELEMETRY_API_KEY,
+        )
+        .await;
     }
 }
 

@@ -14,10 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_version::DATABEND_TELEMETRY_API_KEY;
-use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
-
-pub async fn report_node_telemetry(payload: serde_json::Value) {
+pub async fn report_node_telemetry(payload: serde_json::Value, endpoint: &str, api_key: &str) {
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .connect_timeout(Duration::from_secs(2))
@@ -34,16 +31,12 @@ pub async fn report_node_telemetry(payload: serde_json::Value) {
         .unwrap_or("unknown");
 
     let mut request = client
-        .post(DATABEND_TELEMETRY_ENDPOINT)
+        .post(endpoint)
         .header("Content-Type", "application/json")
         .header("User-Agent", format!("Databend/{}", version));
 
-    #[allow(clippy::const_is_empty)]
-    if !DATABEND_TELEMETRY_API_KEY.is_empty() {
-        request = request.header(
-            "Authorization",
-            format!("Bearer {}", DATABEND_TELEMETRY_API_KEY),
-        );
+    if !api_key.is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", api_key));
     }
 
     let _ = tokio::time::timeout(Duration::from_secs(3), request.json(&payload).send()).await;
