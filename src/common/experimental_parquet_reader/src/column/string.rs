@@ -366,6 +366,8 @@ impl<'a> StringIter<'a> {
             let dict_views_len = dict_views.len();
 
             let dict_lengths = self.cached_dict_lengths.as_ref().unwrap();
+            let dict_views_ptr = dict_views.as_ptr();
+            let dict_lengths_ptr = dict_lengths.as_ptr();
 
             for (i, &index) in indices.iter().enumerate() {
                 let dict_idx = index as usize;
@@ -381,8 +383,8 @@ impl<'a> StringIter<'a> {
                 //*views_ptr.add(i) = dict_views[dict_idx];
                 //*total_bytes_len += dict[dict_idx].len();
 
-                *views_ptr.add(i) = *dict_views.get_unchecked(dict_idx);
-                local_bytes_len += *dict_lengths.get_unchecked(dict_idx);
+                *views_ptr.add(i) = *dict_views_ptr.add(dict_idx);
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx);
             }
             // TODO Make sure this is panic safe
             views.set_len(start_len + remaining);
