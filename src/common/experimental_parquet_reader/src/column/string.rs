@@ -35,6 +35,8 @@ pub struct StringIter<'a> {
     dictionary: Option<Vec<Vec<u8>>>,
     // Cached dictionary views
     cached_dict_views: Option<Vec<View>>,
+    // Scratch buffer for rle decoding
+    rle_index_buffer: Option<Vec<i32>>,
 }
 
 impl<'a> StringIter<'a> {
@@ -45,6 +47,7 @@ impl<'a> StringIter<'a> {
             num_rows,
             dictionary: None,
             cached_dict_views: None,
+            rle_index_buffer: None,
         }
     }
 
@@ -321,6 +324,7 @@ impl<'a> StringIter<'a> {
         rle_decoder.set_data(bytes::Bytes::copy_from_slice(&values_buffer[1..]));
 
         // Ensure dictionary views are cached
+        // TODO any better way?
         self.ensure_dict_views_cached(dict);
         let dict_views = self.cached_dict_views.as_ref().unwrap();
 
@@ -328,13 +332,26 @@ impl<'a> StringIter<'a> {
         let start_len = views.len();
         // TODO hotspot
         // let mut indices = vec![0i32; remaining];
-        let mut indices: Vec<i32> = Vec::with_capacity(remaining);
-        unsafe {
-            indices.set_len(remaining);
-        }
+
+        let indices: &mut Vec<i32> = if let Some(indices) = self.rle_index_buffer.as_mut() {
+            if indices.capacity() < remaining {
+                indices.reserve_exact(remaining - indices.capacity());
+                unsafe {
+                    indices.set_len(remaining);
+                }
+            }
+            indices
+        } else {
+            let mut indices: Vec<i32> = Vec::with_capacity(remaining);
+            unsafe {
+                indices.set_len(remaining);
+            }
+            self.rle_index_buffer = Some(indices);
+            self.rle_index_buffer.as_mut().unwrap()
+        };
 
         let decoded_count = rle_decoder
-            .get_batch(&mut indices)
+            .get_batch(indices)
             .map_err(|e| ErrorCode::Internal(format!("Failed to decode RLE indices: {}", e)))?;
         if decoded_count != remaining {
             return Err(ErrorCode::Internal(format!(
