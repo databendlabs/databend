@@ -14,7 +14,6 @@
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -46,7 +45,7 @@ impl<'a> PhysicalFormat for AsyncFunctionFormatter<'a> {
         }
 
         let input_formatter = self.inner.input.formater()?;
-        children.push(input_formatter.format(ctx)?);
+        children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "AsyncFunction".to_string(),

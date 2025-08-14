@@ -137,11 +137,11 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
         }
 
         let build_formatter = self.inner.build.formater()?;
-        let mut build_payload = build_formatter.format(ctx)?;
+        let mut build_payload = build_formatter.dispatch(ctx)?;
         build_payload.payload = format!("{}(Build)", build_payload.payload);
 
         let probe_formatter = self.inner.probe.formater()?;
-        let mut probe_payload = probe_formatter.format(ctx)?;
+        let mut probe_payload = probe_formatter.dispatch(ctx)?;
         probe_payload.payload = format!("{}(Probe)", probe_payload.payload);
 
         node_children.push(build_payload);

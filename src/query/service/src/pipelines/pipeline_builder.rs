@@ -26,7 +26,6 @@ use databend_common_settings::Settings;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;

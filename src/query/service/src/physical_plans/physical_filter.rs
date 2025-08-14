@@ -26,7 +26,6 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
-use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::FilterFormatter;

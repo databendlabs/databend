@@ -68,7 +68,6 @@ use databend_common_sql::TypeCheck;
 use databend_common_sql::VirtualColumn;
 use databend_common_sql::DUMMY_COLUMN_INDEX;
 use databend_common_sql::DUMMY_TABLE_INDEX;
-use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;

@@ -21,7 +21,6 @@ use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::AggregatePartial;
-use crate::physical_plans::IPhysicalPlan;
 
 pub struct AggregatePartialFormatter<'a> {
     inner: &'a AggregatePartial,
@@ -64,7 +63,7 @@ impl<'a> PhysicalFormat for AggregatePartialFormatter<'a> {
         }
 
         let input_formatter = self.inner.input.formater()?;
-        children.push(input_formatter.format(ctx)?);
+        children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "AggregatePartial".to_string(),

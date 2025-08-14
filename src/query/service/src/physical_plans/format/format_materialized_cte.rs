@@ -32,7 +32,7 @@ impl<'a> MaterializedCTEFormatter<'a> {
 impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input_formatter = self.inner.input.formater()?;
-        let input_payload = input_formatter.format(ctx)?;
+        let input_payload = input_formatter.dispatch(ctx)?;
 
         Ok(FormatTreeNode::with_children(
             format!("MaterializedCTE: {}", self.inner.cte_name),

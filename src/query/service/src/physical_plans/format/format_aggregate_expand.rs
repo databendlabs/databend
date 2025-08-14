@@ -64,7 +64,7 @@ impl<'a> PhysicalFormat for AggregateExpandFormatter<'a> {
         }
 
         let formatter = self.inner.input.formater()?;
-        children.push(formatter.format(ctx)?);
+        children.push(formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "AggregateExpand".to_string(),

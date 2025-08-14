@@ -116,7 +116,7 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
         node_children.extend(unmatched_children);
 
         let input_formatter = self.inner.input.formater()?;
-        node_children.push(input_formatter.format(ctx)?);
+        node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "MutationManipulate".to_string(),

@@ -37,7 +37,7 @@ impl<'a> PhysicalFormat for EvalScalarFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.exprs.is_empty() {
             let input_formatter = self.inner.input.formater()?;
-            return input_formatter.format(ctx);
+            return input_formatter.dispatch(ctx);
         }
 
         let scalars = self
@@ -61,7 +61,7 @@ impl<'a> PhysicalFormat for EvalScalarFormatter<'a> {
         }
 
         let input_formatter = self.inner.input.formater()?;
-        node_children.push(input_formatter.format(ctx)?);
+        node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "EvalScalar".to_string(),

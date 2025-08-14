@@ -37,7 +37,6 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
-use itertools::Itertools;
 use tokio::sync::Barrier;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;

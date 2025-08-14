@@ -35,7 +35,7 @@ impl<'a> PhysicalFormat for ReplaceIntoFormatter<'a> {
         // ReplaceInto uses default to_format_node implementation
         let mut children = vec![];
         let input_formatter = self.inner.input.formater()?;
-        children.push(input_formatter.format(ctx)?);
+        children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             self.inner.get_name(),

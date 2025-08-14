@@ -57,7 +57,7 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
         ];
 
         let input_formatter = self.inner.input.formater()?;
-        node_children.push(input_formatter.format(ctx)?);
+        node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "Exchange".to_string(),

@@ -24,7 +24,6 @@ use databend_common_sql::Metadata;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::physical_format::PhysicalFormat;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalRuntimeFilter;
 
 pub struct FormatContext<'a> {
@@ -196,7 +195,7 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = vec![];
         for child in self.children.iter() {
-            children.push(child.format(ctx)?);
+            children.push(child.dispatch(ctx)?);
         }
 
         Ok(FormatTreeNode::with_children(self.name.clone(), children))

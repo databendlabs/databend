@@ -32,7 +32,7 @@ impl<'a> ChunkAppendDataFormatter<'a> {
 impl<'a> PhysicalFormat for ChunkAppendDataFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input_formatter = self.inner.input.formater()?;
-        let input_payload = input_formatter.format(ctx)?;
+        let input_payload = input_formatter.dispatch(ctx)?;
 
         Ok(FormatTreeNode::with_children(
             "WriteData".to_string(),

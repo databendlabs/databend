@@ -34,7 +34,7 @@ impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.predicates.iter().all(|x| x.is_none()) {
             let input_formatter = self.inner.input.formater()?;
-            return input_formatter.format(ctx);
+            return input_formatter.dispatch(ctx);
         }
 
         let mut node_children = Vec::new();
@@ -51,7 +51,7 @@ impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
         }
 
         let input_formatter = self.inner.input.formater()?;
-        node_children.push(input_formatter.format(ctx)?);
+        node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(
             "Filter".to_string(),

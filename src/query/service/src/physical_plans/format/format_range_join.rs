@@ -78,10 +78,10 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
         }
 
         let left_formatter = self.inner.left.formater()?;
-        let mut left_child = left_formatter.format(ctx)?;
+        let mut left_child = left_formatter.dispatch(ctx)?;
 
         let right_formatter = self.inner.right.formater()?;
-        let mut right_child = right_formatter.format(ctx)?;
+        let mut right_child = right_formatter.dispatch(ctx)?;
 
         left_child.payload = format!("{}(Left)", left_child.payload);
         right_child.payload = format!("{}(Right)", right_child.payload);

@@ -70,7 +70,7 @@ impl<'a> PhysicalFormat for AggregateFinalFormatter<'a> {
         }
 
         let input_formatter = self.inner.input.formater()?;
-        node_children.push(input_formatter.format(ctx)?);
+        node_children.push(input_formatter.dispatch(ctx)?);
         Ok(FormatTreeNode::with_children(
             "AggregateFinal".to_string(),
             node_children,

@@ -51,10 +51,10 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
         };
 
         let left_formatter = self.inner.left.formater()?;
-        node_children.push(left_formatter.format(ctx)?);
+        node_children.push(left_formatter.dispatch(ctx)?);
 
         let right_formatter = self.inner.right.formater()?;
-        node_children.push(right_formatter.format(ctx)?);
+        node_children.push(right_formatter.dispatch(ctx)?);
         Ok(FormatTreeNode::with_children(root, node_children))
     }
 }

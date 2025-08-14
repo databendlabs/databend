@@ -33,6 +33,6 @@ impl<'a> PhysicalFormat for ChunkFillAndReorderFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         // ignore self
         let input_formatter = self.inner.input.formater()?;
-        input_formatter.format(ctx)
+        input_formatter.dispatch(ctx)
     }
 }

@@ -38,11 +38,11 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
         match &self.inner.source {
             CopyIntoTableSource::Query(input) => {
                 let formatter = input.formater()?;
-                children.push(formatter.format(ctx)?);
+                children.push(formatter.dispatch(ctx)?);
             }
             CopyIntoTableSource::Stage(input) => {
                 let formatter = input.formater()?;
-                children.push(formatter.format(ctx)?);
+                children.push(formatter.dispatch(ctx)?);
             }
         }
 

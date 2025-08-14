@@ -32,6 +32,6 @@ impl<'a> ChunkCastSchemaFormatter<'a> {
 impl<'a> PhysicalFormat for ChunkCastSchemaFormatter<'a> {
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input_formatter = self.inner.input.formater()?;
-        input_formatter.format(ctx)
+        input_formatter.dispatch(ctx)
     }
 }
