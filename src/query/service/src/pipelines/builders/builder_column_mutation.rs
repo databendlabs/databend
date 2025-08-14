@@ -115,10 +115,10 @@ impl PipelineBuilder {
                 let expr = remote_expr
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|index| {
-                        *schema_offset_to_new_offset.get(index).ok_or_else(|| {
+                        schema_offset_to_new_offset.get(index).ok_or_else(|| {
                             ErrorCode::BadArguments(format!("Invalid column index: {}", index))
                         })
-                    });
+                    })?;
                 let schema_index = field_id_to_schema_index.get(&id).unwrap();
                 schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
                 field_id_to_schema_index

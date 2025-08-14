@@ -137,7 +137,7 @@ impl AddStreamColumn {
             exprs.push(
                 new_stream_column_scalar_expr
                     .as_expr()?
-                    .project_column_ref(|col| col.index)
+                    .project_column_ref(|col| Ok(col.index))?
                     .as_remote_expr(),
             );
         }

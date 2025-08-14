@@ -124,8 +124,8 @@ pub fn create_push_down_filters(
     let predicates = predicates
         .iter()
         .map(|p| {
-            Ok(p.as_expr()?
-                .project_column_ref(|col| col.column_name.clone()))
+            p.as_expr()?
+                .project_column_ref(|col| Ok(col.column_name.clone()))
         })
         .collect::<Result<Vec<_>>>()?;
 

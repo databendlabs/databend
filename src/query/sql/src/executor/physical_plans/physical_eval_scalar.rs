@@ -16,7 +16,6 @@ use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -138,17 +137,7 @@ impl PhysicalPlanBuilder {
                 let expr = item
                     .scalar
                     .type_check(input_schema.as_ref())?
-                    .project_column_ref(|index| {
-                        input_schema
-                            .index_of(&index.to_string())
-                            .map_err(|err| {
-                                let m = self.metadata.read();
-                                let column_entry = m.column(*index);
-                                log::error!("Unable to get field named \"{}\". Valid fields: {:?}, column: {:?}", index, input_schema.fields(), column_entry);
-                                return Err::<PhysicalPlan, ErrorCode>(err);
-                            })
-                            .unwrap()
-                    });
+                    .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok((expr.as_remote_expr(), item.index))
             })
