@@ -20,6 +20,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ExchangeSinkFormatter<'a> {
     inner: &'a ExchangeSink,
@@ -32,6 +33,10 @@ impl<'a> ExchangeSinkFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ExchangeSinkFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let output_schema = self.inner.output_schema()?;
         let mut node_children = vec![FormatTreeNode::new(format!(
@@ -44,7 +49,7 @@ impl<'a> PhysicalFormat for ExchangeSinkFormatter<'a> {
             self.inner.destination_fragment_id
         )));
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

@@ -21,6 +21,8 @@ use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::AggregatePartial;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct AggregatePartialFormatter<'a> {
     inner: &'a AggregatePartial,
@@ -33,6 +35,10 @@ impl<'a> AggregatePartialFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for AggregatePartialFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let group_by = self
             .inner
@@ -62,7 +68,7 @@ impl<'a> PhysicalFormat for AggregatePartialFormatter<'a> {
             children.push(FormatTreeNode::new(format!("rank limit: {r}")));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

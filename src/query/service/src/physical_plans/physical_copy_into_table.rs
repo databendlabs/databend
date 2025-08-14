@@ -82,7 +82,7 @@ impl IPhysicalPlan for CopyIntoTable {
         }
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(CopyIntoTableFormatter::create(self))
     }
 

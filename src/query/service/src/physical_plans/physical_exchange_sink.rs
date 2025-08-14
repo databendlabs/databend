@@ -70,7 +70,7 @@ impl IPhysicalPlan for ExchangeSink {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ExchangeSinkFormatter::create(self))
     }
 

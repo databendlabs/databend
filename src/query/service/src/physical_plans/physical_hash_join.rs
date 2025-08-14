@@ -148,7 +148,7 @@ impl IPhysicalPlan for HashJoin {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(HashJoinFormatter::create(self))
     }
 

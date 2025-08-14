@@ -21,6 +21,7 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::RangeJoin;
 use crate::physical_plans::RangeJoinType;
 
@@ -35,6 +36,10 @@ impl<'a> RangeJoinFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let range_join_conditions = self
             .inner
@@ -77,10 +82,10 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
             node_children.extend(items);
         }
 
-        let left_formatter = self.inner.left.formater()?;
+        let left_formatter = self.inner.left.formatter()?;
         let mut left_child = left_formatter.dispatch(ctx)?;
 
-        let right_formatter = self.inner.right.formater()?;
+        let right_formatter = self.inner.right.formatter()?;
         let mut right_child = right_formatter.dispatch(ctx)?;
 
         left_child.payload = format!("{}(Left)", left_child.payload);

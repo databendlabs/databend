@@ -23,6 +23,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct HashJoinFormatter<'a> {
     inner: &'a HashJoin,
@@ -35,6 +36,10 @@ impl<'a> HashJoinFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         for rf in self.inner.runtime_filter.filters.iter() {
             ctx.scan_id_to_runtime_filters
@@ -136,11 +141,11 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
             node_children.extend(items);
         }
 
-        let build_formatter = self.inner.build.formater()?;
+        let build_formatter = self.inner.build.formatter()?;
         let mut build_payload = build_formatter.dispatch(ctx)?;
         build_payload.payload = format!("{}(Build)", build_payload.payload);
 
-        let probe_formatter = self.inner.probe.formater()?;
+        let probe_formatter = self.inner.probe.formatter()?;
         let mut probe_payload = probe_formatter.dispatch(ctx)?;
         probe_payload.payload = format!("{}(Probe)", probe_payload.payload);
 

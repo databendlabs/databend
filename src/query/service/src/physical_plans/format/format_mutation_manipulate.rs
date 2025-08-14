@@ -19,7 +19,9 @@ use itertools::Itertools;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationManipulate;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MutationManipulateFormatter<'a> {
     inner: &'a MutationManipulate,
@@ -32,6 +34,10 @@ impl<'a> MutationManipulateFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table_entry = ctx.metadata.table(self.inner.target_table_index).clone();
         let target_schema = table_entry.table().schema_with_stream();
@@ -115,7 +121,7 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
         node_children.extend(matched_children);
         node_children.extend(unmatched_children);
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

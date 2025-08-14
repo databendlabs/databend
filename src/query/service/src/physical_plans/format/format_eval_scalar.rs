@@ -22,6 +22,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::EvalScalar;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct EvalScalarFormatter<'a> {
     inner: &'a EvalScalar,
@@ -34,9 +35,13 @@ impl<'a> EvalScalarFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for EvalScalarFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.exprs.is_empty() {
-            let input_formatter = self.inner.input.formater()?;
+            let input_formatter = self.inner.input.formatter()?;
             return input_formatter.dispatch(ctx);
         }
 
@@ -60,7 +65,7 @@ impl<'a> PhysicalFormat for EvalScalarFormatter<'a> {
             node_children.extend(plan_stats_info_to_format_tree(info));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

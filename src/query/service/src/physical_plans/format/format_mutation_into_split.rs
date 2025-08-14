@@ -17,7 +17,9 @@ use databend_common_exception::Result;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSplit;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MutationSplitFormatter<'a> {
     inner: &'a MutationSplit,
@@ -30,9 +32,13 @@ impl<'a> MutationSplitFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MutationSplitFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         // ignore self
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         input_formatter.dispatch(ctx)
     }
 }

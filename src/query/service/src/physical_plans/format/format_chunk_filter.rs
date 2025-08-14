@@ -19,6 +19,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ChunkFilter;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ChunkFilterFormatter<'a> {
     inner: &'a ChunkFilter,
@@ -31,9 +33,13 @@ impl<'a> ChunkFilterFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.predicates.iter().all(|x| x.is_none()) {
-            let input_formatter = self.inner.input.formater()?;
+            let input_formatter = self.inner.input.formatter()?;
             return input_formatter.dispatch(ctx);
         }
 
@@ -50,7 +56,7 @@ impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
             }
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

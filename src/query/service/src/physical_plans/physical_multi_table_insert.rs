@@ -80,7 +80,7 @@ impl IPhysicalPlan for Duplicate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(DuplicateFormatter::create(self))
     }
 
@@ -126,7 +126,7 @@ impl IPhysicalPlan for Shuffle {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ShuffleFormatter::create(self))
     }
 
@@ -206,7 +206,7 @@ impl IPhysicalPlan for ChunkFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkFilterFormatter::create(self))
     }
 
@@ -268,7 +268,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkEvalScalarFormatter::create(self))
     }
 
@@ -337,7 +337,7 @@ impl IPhysicalPlan for ChunkCastSchema {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkCastSchemaFormatter::create(self))
     }
 
@@ -407,7 +407,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkFillAndReorderFormatter::create(self))
     }
 
@@ -481,7 +481,7 @@ impl IPhysicalPlan for ChunkAppendData {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkAppendDataFormatter::create(self))
     }
 
@@ -637,7 +637,7 @@ impl IPhysicalPlan for ChunkMerge {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ChunkMergeFormatter::create(self))
     }
 

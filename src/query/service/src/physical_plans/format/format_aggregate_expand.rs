@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::AggregateExpand;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct AggregateExpandFormatter<'a> {
     inner: &'a AggregateExpand,
@@ -33,6 +34,10 @@ impl<'a> AggregateExpandFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for AggregateExpandFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let sets = self
             .inner
@@ -63,7 +68,7 @@ impl<'a> PhysicalFormat for AggregateExpandFormatter<'a> {
             children.extend(items);
         }
 
-        let formatter = self.inner.input.formater()?;
+        let formatter = self.inner.input.formatter()?;
         children.push(formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

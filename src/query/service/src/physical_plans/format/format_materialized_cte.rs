@@ -17,7 +17,9 @@ use databend_common_exception::Result;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MaterializedCTE;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MaterializedCTEFormatter<'a> {
     inner: &'a MaterializedCTE,
@@ -30,8 +32,12 @@ impl<'a> MaterializedCTEFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         let input_payload = input_formatter.dispatch(ctx)?;
 
         Ok(FormatTreeNode::with_children(

@@ -22,6 +22,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::AggregateFinal;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct AggregateFinalFormatter<'a> {
     inner: &'a AggregateFinal,
@@ -34,6 +35,10 @@ impl<'a> AggregateFinalFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for AggregateFinalFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let group_by = self
             .inner
@@ -69,7 +74,7 @@ impl<'a> PhysicalFormat for AggregateFinalFormatter<'a> {
             node_children.extend(items);
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
         Ok(FormatTreeNode::with_children(
             "AggregateFinal".to_string(),

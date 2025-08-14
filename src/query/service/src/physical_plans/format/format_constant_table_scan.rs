@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ConstantTableScanFormatter<'a> {
     inner: &'a ConstantTableScan,
@@ -33,6 +34,10 @@ impl<'a> ConstantTableScanFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ConstantTableScanFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.num_rows == 0 {
             return Ok(FormatTreeNode::new(self.inner.name().to_string()));

@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::ReplaceInto;
 
 pub struct ReplaceIntoFormatter<'a> {
@@ -31,10 +32,14 @@ impl<'a> ReplaceIntoFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ReplaceIntoFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         // ReplaceInto uses default to_format_node implementation
         let mut children = vec![];
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

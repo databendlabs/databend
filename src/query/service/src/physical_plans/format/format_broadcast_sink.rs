@@ -18,18 +18,24 @@ use databend_common_exception::Result;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::BroadcastSink;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct BroadcastSinkFormatter<'a> {
-    _inner: &'a BroadcastSink,
+    inner: &'a BroadcastSink,
 }
 
 impl<'a> BroadcastSinkFormatter<'a> {
-    pub fn create(_inner: &'a BroadcastSink) -> Box<dyn PhysicalFormat + 'a> {
-        Box::new(BroadcastSinkFormatter { _inner })
+    pub fn create(inner: &'a BroadcastSink) -> Box<dyn PhysicalFormat + 'a> {
+        Box::new(BroadcastSinkFormatter { inner })
     }
 }
 
 impl<'a> PhysicalFormat for BroadcastSinkFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, _ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
     }

@@ -20,6 +20,7 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::UnionAll;
 
 pub struct UnionAllFormatter<'a> {
@@ -33,6 +34,10 @@ impl<'a> UnionAllFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![FormatTreeNode::new(format!(
             "output columns: [{}]",
@@ -50,10 +55,10 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
             "UnionAll".to_string()
         };
 
-        let left_formatter = self.inner.left.formater()?;
+        let left_formatter = self.inner.left.formatter()?;
         node_children.push(left_formatter.dispatch(ctx)?);
 
-        let right_formatter = self.inner.right.formater()?;
+        let right_formatter = self.inner.right.formatter()?;
         node_children.push(right_formatter.dispatch(ctx)?);
         Ok(FormatTreeNode::with_children(root, node_children))
     }

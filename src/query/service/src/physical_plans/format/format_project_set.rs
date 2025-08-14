@@ -21,6 +21,7 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::ProjectSet;
 
 pub struct ProjectSetFormatter<'a> {
@@ -34,6 +35,10 @@ impl<'a> ProjectSetFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ProjectSetFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![FormatTreeNode::new(format!(
             "output columns: [{}]",
@@ -55,7 +60,7 @@ impl<'a> PhysicalFormat for ProjectSetFormatter<'a> {
                 .join(", ")
         ))]);
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

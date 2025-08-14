@@ -65,7 +65,7 @@ impl IPhysicalPlan for MaterializeCTERef {
         Box::new(self.clone())
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(MaterializeCTERefFormatter::create(self))
     }
 

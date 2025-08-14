@@ -92,7 +92,7 @@ impl IPhysicalPlan for RangeJoin {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(RangeJoinFormatter::create(self))
     }
 

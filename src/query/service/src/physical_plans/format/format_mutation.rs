@@ -17,7 +17,9 @@ use databend_common_exception::Result;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::Mutation;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MutationFormatter<'a> {
     inner: &'a Mutation,
@@ -30,6 +32,10 @@ impl<'a> MutationFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MutationFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table_entry = ctx.metadata.table(self.inner.target_table_index).clone();
         let mut node_children = vec![FormatTreeNode::new(format!(
@@ -39,7 +45,7 @@ impl<'a> PhysicalFormat for MutationFormatter<'a> {
             table_entry.name()
         ))];
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

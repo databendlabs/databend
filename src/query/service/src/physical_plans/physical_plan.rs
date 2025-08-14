@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -38,8 +37,8 @@ use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PhysicalPlanMeta {
-    plan_id: u32,
-    name: String,
+    pub plan_id: u32,
+    pub name: String,
 }
 
 impl PhysicalPlanMeta {
@@ -110,13 +109,13 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         Box::new(std::iter::empty())
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         let mut children = vec![];
         for child in self.children() {
-            children.push(child.formater()?);
+            children.push(child.formatter()?);
         }
 
-        Ok(SimplePhysicalFormat::create(self.get_name(), children))
+        Ok(SimplePhysicalFormat::create(self.get_meta(), children))
     }
 
     fn to_format_node(
@@ -241,28 +240,15 @@ impl<T: PhysicalPlanVisitor> VisitorCast for T {
 }
 
 pub trait PhysicalPlanDynExt {
+    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan;
+
+    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
+
     fn format(
         &self,
         metadata: &Metadata,
         profs: HashMap<u32, PlanProfile>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut context = FormatContext {
-            metadata,
-            scan_id_to_runtime_filters: HashMap::new(),
-        };
-
-        self.to_format_tree(&profs, &mut context)
-    }
-
-    fn to_format_tree(
-        &self,
-        profs: &HashMap<u32, PlanProfile>,
-        ctx: &mut FormatContext<'_>,
     ) -> Result<FormatTreeNode<String>>;
-
-    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan;
-
-    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
 }
 
 pub trait PhysicalPlanCast {
@@ -294,37 +280,6 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
 }
 
 impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
-    fn to_format_tree(
-        &self,
-        profs: &HashMap<u32, PlanProfile>,
-        ctx: &mut FormatContext<'_>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut children = Vec::with_capacity(4);
-        for child in self.children() {
-            children.push(child.to_format_tree(profs, ctx)?);
-        }
-
-        let mut format_tree_node = self.to_format_node(ctx, children)?;
-
-        if let Some(prof) = profs.get(&self.get_id()) {
-            let mut children = Vec::with_capacity(format_tree_node.children.len() + 10);
-            for (_, desc) in get_statistics_desc().iter() {
-                if prof.statistics[desc.index] != 0 {
-                    children.push(FormatTreeNode::new(format!(
-                        "{}: {}",
-                        desc.display_name.to_lowercase(),
-                        desc.human_format(prof.statistics[desc.index])
-                    )));
-                }
-            }
-
-            children.append(&mut format_tree_node.children);
-            format_tree_node.children = children;
-        }
-
-        Ok(format_tree_node)
-    }
-
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
         let mut children = vec![];
         for child in self.children() {
@@ -343,6 +298,20 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         }
 
         visitor.visit(self)
+    }
+
+    fn format(
+        &self,
+        metadata: &Metadata,
+        profs: HashMap<u32, PlanProfile>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut context = FormatContext {
+            profs,
+            metadata,
+            scan_id_to_runtime_filters: HashMap::new(),
+        };
+
+        self.formatter()?.format(&mut context)
     }
 }
 

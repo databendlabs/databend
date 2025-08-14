@@ -93,7 +93,7 @@ impl IPhysicalPlan for AggregateExpand {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(AggregateExpandFormatter::create(self))
     }
 

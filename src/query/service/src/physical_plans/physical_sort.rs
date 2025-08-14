@@ -168,7 +168,7 @@ impl IPhysicalPlan for Sort {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(SortFormatter::create(self))
     }
 

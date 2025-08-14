@@ -20,6 +20,7 @@ use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::Window;
 use crate::physical_plans::WindowFunction;
 
@@ -34,6 +35,10 @@ impl<'a> WindowFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for WindowFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let partition_by = self
             .inner
@@ -71,7 +76,7 @@ impl<'a> PhysicalFormat for WindowFormatter<'a> {
         }
 
         // Add child nodes at the end (format input)
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

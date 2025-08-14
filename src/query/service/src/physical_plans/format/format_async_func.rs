@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::AsyncFunction;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct AsyncFunctionFormatter<'a> {
     inner: &'a AsyncFunction,
@@ -33,6 +34,10 @@ impl<'a> AsyncFunctionFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for AsyncFunctionFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let output_schema = self.inner.output_schema()?;
         let mut children = vec![FormatTreeNode::new(format!(
@@ -44,7 +49,7 @@ impl<'a> PhysicalFormat for AsyncFunctionFormatter<'a> {
             children.extend(plan_stats_info_to_format_tree(info));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

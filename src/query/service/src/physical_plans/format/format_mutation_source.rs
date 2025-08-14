@@ -23,6 +23,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MutationSourceFormatter<'a> {
     inner: &'a MutationSource,
@@ -35,6 +36,10 @@ impl<'a> MutationSourceFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table = ctx.metadata.table(self.inner.table_index);
         let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());

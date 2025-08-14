@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::CacheScan;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct CacheScanFormatter<'a> {
     inner: &'a CacheScan,
@@ -33,6 +34,10 @@ impl<'a> CacheScanFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for CacheScanFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = Vec::with_capacity(2);
         children.push(FormatTreeNode::new(format!(

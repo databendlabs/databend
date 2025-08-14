@@ -21,6 +21,7 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::RowFetch;
 
 pub struct RowFetchFormatter<'a> {
@@ -34,6 +35,10 @@ impl<'a> RowFetchFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for RowFetchFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table_schema = self.inner.source.source_info.schema();
         let projected_schema = self.inner.cols_to_fetch.project_schema(&table_schema);
@@ -54,7 +59,7 @@ impl<'a> PhysicalFormat for RowFetchFormatter<'a> {
             node_children.extend(plan_stats_info_to_format_tree(info));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

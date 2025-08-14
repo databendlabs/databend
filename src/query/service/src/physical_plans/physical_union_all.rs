@@ -80,7 +80,7 @@ impl IPhysicalPlan for UnionAll {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(UnionAllFormatter::create(self))
     }
 

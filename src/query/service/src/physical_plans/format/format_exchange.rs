@@ -22,6 +22,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ExchangeFormatter<'a> {
     inner: &'a Exchange,
@@ -34,6 +35,10 @@ impl<'a> ExchangeFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
@@ -56,7 +61,7 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
             })),
         ];
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

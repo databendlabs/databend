@@ -22,6 +22,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_expression_scan::ExpressionScan;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ExpressionScanFormatter<'a> {
     inner: &'a ExpressionScan,
@@ -34,6 +35,10 @@ impl<'a> ExpressionScanFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ExpressionScanFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = Vec::with_capacity(self.inner.values.len() + 1);
         let output_schema = self.inner.output_schema()?;
@@ -50,7 +55,7 @@ impl<'a> PhysicalFormat for ExpressionScanFormatter<'a> {
             node_children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

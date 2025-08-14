@@ -54,7 +54,7 @@ impl IPhysicalPlan for ExchangeSource {
         Ok(self.schema.clone())
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(ExchangeSourceFormatter::create(self))
     }
 

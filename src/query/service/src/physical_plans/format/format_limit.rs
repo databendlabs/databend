@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::Limit;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct LimitFormatter<'a> {
     inner: &'a Limit,
@@ -33,6 +34,10 @@ impl<'a> LimitFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for LimitFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let output_schema = self.inner.output_schema()?;
         let mut node_children = vec![
@@ -53,7 +58,7 @@ impl<'a> PhysicalFormat for LimitFormatter<'a> {
             node_children.extend(plan_stats_info_to_format_tree(info));
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

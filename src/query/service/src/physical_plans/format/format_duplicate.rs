@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::Duplicate;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct DuplicateFormatter<'a> {
     inner: &'a Duplicate,
@@ -30,13 +32,17 @@ impl<'a> DuplicateFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for DuplicateFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![FormatTreeNode::new(format!(
             "Duplicate data to {} branch",
             self.inner.n
         ))];
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

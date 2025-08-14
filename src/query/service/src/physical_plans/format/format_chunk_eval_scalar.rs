@@ -20,6 +20,8 @@ use itertools::Itertools;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ChunkEvalScalar;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ChunkEvalScalarFormatter<'a> {
     inner: &'a ChunkEvalScalar,
@@ -32,9 +34,13 @@ impl<'a> ChunkEvalScalarFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ChunkEvalScalarFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.eval_scalars.iter().all(|x| x.is_none()) {
-            let input_formatter = self.inner.input.formater()?;
+            let input_formatter = self.inner.input.formatter()?;
             return input_formatter.dispatch(ctx);
         }
 
@@ -55,7 +61,7 @@ impl<'a> PhysicalFormat for ChunkEvalScalarFormatter<'a> {
             }
         }
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

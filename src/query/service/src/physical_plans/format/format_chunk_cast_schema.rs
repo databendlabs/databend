@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::ChunkCastSchema;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct ChunkCastSchemaFormatter<'a> {
     inner: &'a ChunkCastSchema,
@@ -30,8 +32,12 @@ impl<'a> ChunkCastSchemaFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for ChunkCastSchemaFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         input_formatter.dispatch(ctx)
     }
 }

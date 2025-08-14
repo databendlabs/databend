@@ -90,7 +90,7 @@ impl IPhysicalPlan for MutationSource {
         Ok(self.output_schema.clone())
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(MutationSourceFormatter::create(self))
     }
 

@@ -21,6 +21,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_udf::Udf;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct UdfFormatter<'a> {
     inner: &'a Udf,
@@ -33,6 +34,10 @@ impl<'a> UdfFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for UdfFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let output_schema = self.inner.output_schema()?;
         let mut node_children = vec![FormatTreeNode::new(format!(
@@ -58,7 +63,7 @@ impl<'a> PhysicalFormat for UdfFormatter<'a> {
                 .join(", ")
         ))]);
 
-        let input_formatter = self.inner.input.formater()?;
+        let input_formatter = self.inner.input.formatter()?;
         node_children.push(input_formatter.dispatch(ctx)?);
 
         Ok(FormatTreeNode::with_children(

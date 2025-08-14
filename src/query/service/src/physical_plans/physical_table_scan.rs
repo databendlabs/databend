@@ -133,7 +133,7 @@ impl IPhysicalPlan for TableScan {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(TableScanFormatter::create(self))
     }
 

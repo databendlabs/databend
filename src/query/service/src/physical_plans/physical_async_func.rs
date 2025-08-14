@@ -78,7 +78,7 @@ impl IPhysicalPlan for AsyncFunction {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(AsyncFunctionFormatter::create(self))
     }
 

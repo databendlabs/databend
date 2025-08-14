@@ -24,10 +24,12 @@ use databend_common_sql::Metadata;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::physical_format::PhysicalFormat;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalRuntimeFilter;
 
 pub struct FormatContext<'a> {
     pub metadata: &'a Metadata,
+    pub profs: HashMap<u32, PlanProfile>,
     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
 }
 
@@ -176,28 +178,36 @@ pub fn format_output_columns(
 }
 
 use databend_common_exception::Result;
+use databend_common_pipeline_core::PlanProfile;
 
 pub struct SimplePhysicalFormat<'a> {
-    name: String,
+    meta: &'a PhysicalPlanMeta,
     children: Vec<Box<dyn PhysicalFormat + 'a>>,
 }
 
 impl<'a> SimplePhysicalFormat<'a> {
     pub fn create(
-        name: String,
+        meta: &'a PhysicalPlanMeta,
         children: Vec<Box<dyn PhysicalFormat + 'a>>,
     ) -> Box<dyn PhysicalFormat + 'a> {
-        Box::new(Self { name, children })
+        Box::new(Self { meta, children })
     }
 }
 
 impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.meta
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = vec![];
         for child in self.children.iter() {
             children.push(child.dispatch(ctx)?);
         }
 
-        Ok(FormatTreeNode::with_children(self.name.clone(), children))
+        Ok(FormatTreeNode::with_children(
+            self.meta.name.clone(),
+            children,
+        ))
     }
 }

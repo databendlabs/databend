@@ -19,7 +19,9 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MaterializeCTERef;
+use crate::physical_plans::PhysicalPlanMeta;
 
 pub struct MaterializeCTERefFormatter<'a> {
     inner: &'a MaterializeCTERef,
@@ -32,6 +34,10 @@ impl<'a> MaterializeCTERefFormatter<'a> {
 }
 
 impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        self.inner.get_meta()
+    }
+
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = Vec::new();
         children.push(FormatTreeNode::new(format!(
