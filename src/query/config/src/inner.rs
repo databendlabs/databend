@@ -37,6 +37,7 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
+use super::config::TelemetryConfig;
 use crate::BuiltInConfig;
 
 /// Inner config for query.
@@ -67,6 +68,9 @@ pub struct InnerConfig {
 
     // Spill Config
     pub spill: SpillConfig,
+
+    // Telemetry Config
+    pub telemetry: TelemetryConfig,
 }
 
 impl InnerConfig {
