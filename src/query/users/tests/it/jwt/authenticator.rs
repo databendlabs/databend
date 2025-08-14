@@ -15,6 +15,7 @@
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::tokio;
+use databend_common_config::QueryConfig;
 use databend_common_exception::Result;
 use databend_common_users::JwtAuthenticator;
 use jwt_simple::prelude::*;
@@ -53,7 +54,11 @@ async fn test_parse_non_custom_claim() -> Result<()> {
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let auth = JwtAuthenticator::create(first_url, vec![], 600, 10).unwrap();
+    let mut cfg = QueryConfig::default();
+    cfg.jwt_key_file = first_url;
+    cfg.jwks_refresh_interval = 600;
+    cfg.jwks_refresh_timeout = 10;
+    let auth = JwtAuthenticator::create(&cfg).unwrap();
     let user_name = "test-user2";
     let my_additional_data = MyAdditionalData {
         user_is_admin: false,

@@ -22,6 +22,7 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use log::info;
@@ -103,6 +104,7 @@ pub struct JwkKeys {
 /// error, as the key is not found in the cache. We'll try to refresh the keys and try again.
 pub struct JwkKeyStore {
     url: String,
+    user_agent: String,
     recent_cached_maps: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
     last_refreshed_time: RwLock<Option<Instant>>,
     last_retry_time: RwLock<Option<Instant>>,
@@ -117,6 +119,7 @@ impl JwkKeyStore {
     pub fn new(url: String) -> Self {
         Self {
             url,
+            user_agent: format!("Databend/{}", *DATABEND_SEMVER),
             recent_cached_maps: Arc::new(RwLock::new(VecDeque::new())),
             max_recent_cached_maps: 2,
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
@@ -134,6 +137,11 @@ impl JwkKeyStore {
         func: Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>,
     ) -> Self {
         self.load_keys_func = Some(func);
+        self
+    }
+
+    pub fn with_user_agent(mut self, user_agent: &str) -> Self {
+        self.user_agent = user_agent.to_string();
         self
     }
 
@@ -170,6 +178,7 @@ impl JwkKeyStore {
         }
 
         let client = reqwest::Client::builder()
+            .user_agent(&self.user_agent)
             .timeout(self.refresh_timeout)
             .build()
             .map_err(|e| {
