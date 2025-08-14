@@ -53,6 +53,7 @@ use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::FormatContext;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -73,6 +74,7 @@ pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     config: ExplainConfig,
     kind: ExplainKind,
+    partial: bool,
     graphical: bool,
     plan: Plan,
 }
@@ -163,11 +165,35 @@ impl Interpreter for ExplainInterpreter {
                 _ => self.explain_plan(&self.plan)?,
             },
 
-            ExplainKind::Join => {
-                return Err(ErrorCode::Unimplemented(
+            ExplainKind::Join => match &self.plan {
+                Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
+                } => {
+                    let ctx = self.ctx.clone();
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
+
+                    let metadata = metadata.read();
+                    let mut context = FormatContext {
+                        profs: HashMap::new(),
+                        metadata: &metadata,
+                        scan_id_to_runtime_filters: HashMap::new(),
+                    };
+
+                    let formatter = plan.formatter()?;
+                    let format_node = formatter.format_join(&mut context)?;
+                    let result = format_node.format_pretty()?;
+                    let line_split_result: Vec<&str> = result.lines().collect();
+                    let formatted_plan = StringType::from_data(line_split_result);
+                    vec![DataBlock::new_from_columns(vec![formatted_plan])]
+                }
+                _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN JOIN statement",
-                ));
-            }
+                ))?,
+            },
 
             ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
                 Plan::Query {
@@ -287,6 +313,7 @@ impl ExplainInterpreter {
         plan: Plan,
         kind: ExplainKind,
         config: ExplainConfig,
+        partial: bool,
         graphical: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
@@ -294,6 +321,7 @@ impl ExplainInterpreter {
             plan,
             kind,
             config,
+            partial,
             graphical,
         })
     }
@@ -458,11 +486,27 @@ impl ExplainInterpreter {
         if !pruned_partitions_stats.is_empty() {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
-        let result = {
-            let metadata = metadata.read();
-            plan.format(&metadata, query_profiles.clone())?
-                .format_pretty()?
+
+        let result = match self.partial {
+            true => {
+                let metadata = metadata.read();
+                let mut context = FormatContext {
+                    profs: query_profiles.clone(),
+                    metadata: &metadata,
+                    scan_id_to_runtime_filters: HashMap::new(),
+                };
+
+                let formatter = plan.formatter()?;
+                let format_node = formatter.partial_format(&mut context)?;
+                format_node.format_pretty()?
+            }
+            false => {
+                let metadata = metadata.read();
+                plan.format(&metadata, query_profiles.clone())?
+                    .format_pretty()?
+            }
         };
+
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         if self.graphical {

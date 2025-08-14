@@ -244,6 +244,25 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
             children.push(child.format_join(ctx)?);
         }
 
-        Ok(FormatTreeNode::with_children(self.meta.name.clone(), children))
+        Ok(FormatTreeNode::with_children(
+            self.meta.name.clone(),
+            children,
+        ))
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        if self.children.len() == 1 {
+            return self.children[0].partial_format(ctx);
+        }
+
+        let mut children = vec![];
+        for child in self.children.iter() {
+            children.push(child.partial_format(ctx)?);
+        }
+
+        Ok(FormatTreeNode::with_children(
+            self.meta.name.clone(),
+            children,
+        ))
     }
 }

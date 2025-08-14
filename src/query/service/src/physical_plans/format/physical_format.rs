@@ -49,7 +49,5 @@ pub trait PhysicalFormat {
 
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>>;
 
-    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        unreachable!()
-    }
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>>;
 }

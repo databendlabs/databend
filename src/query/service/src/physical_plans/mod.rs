@@ -119,5 +119,6 @@ pub mod physical_plan_builder;
 mod physical_plan_visitor;
 mod physical_sequence;
 
+pub use format::FormatContext;
 pub use physical_plan::*;
 pub use physical_plan_builder::*;

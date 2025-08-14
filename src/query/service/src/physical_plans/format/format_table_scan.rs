@@ -18,7 +18,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
-use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
+use crate::physical_plans::format::append_output_rows_info;
+use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
@@ -176,7 +177,10 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
             return Ok(FormatTreeNode::with_children(
-                format!("Scan: dummy, rows: {}", self.inner.source.statistics.read_rows),
+                format!(
+                    "Scan: dummy, rows: {}",
+                    self.inner.source.statistics.read_rows
+                ),
                 vec![],
             ));
         }

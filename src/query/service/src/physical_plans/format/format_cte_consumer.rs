@@ -65,7 +65,7 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
             FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),
             FormatTreeNode::new(format!(
                 "cte_schema: [{}]",
-                format_output_columns(self.inner.cte_schema.clone(), &ctx.metadata, false)
+                format_output_columns(self.inner.cte_schema.clone(), ctx.metadata, false)
             )),
         ];
         Ok(FormatTreeNode::with_children(

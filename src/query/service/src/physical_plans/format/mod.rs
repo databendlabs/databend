@@ -58,6 +58,7 @@ mod format_window;
 mod format_window_partition;
 mod physical_format;
 
+pub use common::FormatContext;
 pub use common::*;
 pub use format_add_stream_column::*;
 pub use format_aggregate_expand::*;

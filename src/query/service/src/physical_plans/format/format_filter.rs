@@ -17,7 +17,8 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
+use crate::physical_plans::format::append_output_rows_info;
+use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -74,7 +75,8 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
     }
 
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
-        let filter = self.inner
+        let filter = self
+            .inner
             .predicates
             .iter()
             .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())

@@ -15,7 +15,8 @@
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 
-use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
+use crate::physical_plans::format::append_output_rows_info;
+use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;

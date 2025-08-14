@@ -17,7 +17,8 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::binder::MutationType;
 
-use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
+use crate::physical_plans::format::append_output_rows_info;
+use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -75,7 +76,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         ))
     }
 
-    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+    fn format_join(&self, _ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
     }
 

@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::HashMap;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -31,7 +30,6 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ColumnMutationFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

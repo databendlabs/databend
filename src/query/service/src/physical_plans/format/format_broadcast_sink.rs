@@ -40,7 +40,7 @@ impl<'a> PhysicalFormat for BroadcastSinkFormatter<'a> {
         Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
     }
 
-    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+    fn format_join(&self, _ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
     }
 }
