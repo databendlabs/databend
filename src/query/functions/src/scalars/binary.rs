@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
 
 use databend_common_expression::error_to_null;
@@ -209,11 +210,18 @@ fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value
     vectorize_binary_to_string(
         |col| col.total_bytes_len(),
         |val, output, ctx| {
-            if let Ok(val) = simdutf8::basic::from_utf8(val) {
-                output.put_str(val);
+            let val = if ctx.func_ctx.enable_binary_to_utf8_lossy {
+                String::from_utf8_lossy(val)
             } else {
-                ctx.set_error(output.len(), "invalid utf8 sequence");
-            }
+                if let Ok(val) = simdutf8::basic::from_utf8(val) {
+                    Cow::Borrowed(val)
+                } else {
+                    ctx.set_error(output.len(), "invalid utf8 sequence");
+                    output.commit_row();
+                    return;
+                }
+            };
+            output.put_str(&val);
             output.commit_row();
         },
     )(val, ctx)
