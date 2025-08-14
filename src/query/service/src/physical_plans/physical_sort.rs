@@ -406,7 +406,6 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        eprintln!("build sort physical plan");
         // 1. Prune unused Columns.
         sort.items.iter().for_each(|s| {
             required.insert(s.index);
@@ -446,7 +445,6 @@ impl PhysicalPlanBuilder {
 
             let input_plan = self.build(s_expr.unary_child(), required).await?;
 
-            eprintln!("build sort physical plan -1 ");
             return Ok(Box::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: input_plan,
@@ -468,7 +466,6 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let Some(after_exchange) = sort.after_exchange else {
-            eprintln!("build sort physical plan -2 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return Ok(Box::new(Sort {
                 input: input_plan,
@@ -484,7 +481,6 @@ impl PhysicalPlanBuilder {
 
         let settings = self.ctx.get_settings();
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
-            eprintln!("build sort physical plan -3 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return if !after_exchange {
                 Ok(Box::new(Sort {
@@ -512,7 +508,6 @@ impl PhysicalPlanBuilder {
         }
 
         if after_exchange {
-            eprintln!("build sort physical plan -4 ");
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return Ok(Box::new(Sort {
                 input: input_plan,
@@ -546,7 +541,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("Exchange"),
         });
 
-        let v: PhysicalPlan = Box::new(Sort {
+        Ok(Box::new(Sort {
             input: exchange,
             order_by,
             limit: sort.limit,
@@ -555,17 +550,6 @@ impl PhysicalPlanBuilder {
             broadcast_id: None,
             stat_info: Some(stat_info),
             meta: PhysicalPlanMeta::new("Sort"),
-        });
-
-        let metadata = self.metadata.read();
-        eprintln!(
-            "plan: {}",
-            v.format(&metadata, HashMap::new())
-                .unwrap()
-                .format_pretty()
-                .unwrap()
-        );
-
-        Ok(v)
+        }))
     }
 }

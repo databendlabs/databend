@@ -15,18 +15,22 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::Metadata;
 
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::MutationSource;
 use crate::pipelines::PipelineBuilder;
 
@@ -168,7 +172,33 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan;
 
     fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        self.build_pipeline2(builder)
+        let is_exchange_sink = self.as_any().downcast_ref::<ExchangeSink>().is_some();
+        builder.is_exchange_stack.push(is_exchange_sink);
+
+        if !self.display_in_profile() {
+            self.build_pipeline2(builder)?;
+            builder.is_exchange_stack.pop();
+            return Ok(());
+        }
+
+        let desc = self.get_desc()?;
+        let plan_labels = self.get_labels()?;
+        let mut profile_labels = Vec::with_capacity(plan_labels.len());
+        for (name, value) in plan_labels {
+            profile_labels.push(ProfileLabel::create(name, value));
+        }
+
+        let scope = PlanScope::create(
+            self.get_id(),
+            self.get_name(),
+            Arc::new(desc),
+            Arc::new(profile_labels),
+        );
+
+        let _guard = scope.enter_scope_guard();
+        self.build_pipeline2(builder)?;
+        builder.is_exchange_stack.pop();
+        Ok(())
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

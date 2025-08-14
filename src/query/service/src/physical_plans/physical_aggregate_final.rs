@@ -450,7 +450,7 @@ impl PhysicalPlanBuilder {
                         })
                     } else {
                         Box::new(AggregatePartial {
-                            input,
+                            input: exchange.input.clone(),
                             agg_funcs,
                             rank_limit,
                             group_by_display,
