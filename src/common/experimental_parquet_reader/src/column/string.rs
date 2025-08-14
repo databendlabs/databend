@@ -35,7 +35,7 @@ pub struct StringIter<'a> {
     dictionary: Option<Vec<Vec<u8>>>,
     // Cached dictionary views
     cached_dict_views: Option<Vec<View>>,
-    cached_dict_lengths: Option<Vec<usize>>,
+    cached_dict_lengths: Option<Vec<u8>>,
     // Scratch buffer for rle decoding
     rle_index_buffer: Option<Vec<i32>>,
 }
@@ -384,7 +384,7 @@ impl<'a> StringIter<'a> {
                 //*total_bytes_len += dict[dict_idx].len();
 
                 *views_ptr.add(i) = *dict_views_ptr.add(dict_idx);
-                local_bytes_len += *dict_lengths_ptr.add(dict_idx);
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx) as usize;
             }
             // TODO Make sure this is panic safe
             views.set_len(start_len + remaining);
@@ -404,7 +404,8 @@ impl<'a> StringIter<'a> {
                     .collect::<Vec<_>>(),
             );
 
-            let lengths: Vec<usize> = dict.iter().map(|s| s.len()).collect();
+            // Working on small strings, u8 is enough for lengths
+            let lengths: Vec<u8> = dict.iter().map(|s| s.len() as u8).collect();
             self.cached_dict_lengths = Some(lengths);
         }
     }
