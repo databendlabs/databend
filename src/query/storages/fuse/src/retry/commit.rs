@@ -28,6 +28,7 @@ use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use log::info;
 
 use super::diff::SegmentsDiff;
 use crate::operations::set_backoff;
@@ -68,6 +69,10 @@ async fn try_rebuild_req(
     req: &mut UpdateMultiTableMetaReq,
     update_failed_tbls: Vec<(u64, u64, TableMeta)>,
 ) -> Result<()> {
+    info!(
+        "try_rebuild_req: update_failed_tbls={:?}",
+        update_failed_tbls
+    );
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
         if table_meta.engine == "STREAM" {

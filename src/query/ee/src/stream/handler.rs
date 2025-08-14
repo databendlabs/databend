@@ -119,7 +119,7 @@ impl StreamHandler for RealStreamHandler {
             .get(OPT_KEY_DATABASE_ID)
             .ok_or_else(|| {
                 ErrorCode::Internal(format!(
-                    "Invalid fuse table, table option {} not found",
+                    "Invalid fuse table, table option {} not found when creating stream",
                     OPT_KEY_DATABASE_ID
                 ))
             })?;
