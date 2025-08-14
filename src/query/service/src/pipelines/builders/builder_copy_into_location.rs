@@ -17,6 +17,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_storages_stage::StageSinkTable;
+use databend_common_version::DATABEND_SEMVER;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::pipelines::PipelineBuilder;
@@ -35,7 +36,11 @@ impl PipelineBuilder {
         )?;
 
         // The stage table that copying into
-        let to_table = StageSinkTable::create(copy.info.clone(), copy.input_table_schema.clone())?;
+        let to_table = StageSinkTable::create(
+            copy.info.clone(),
+            copy.input_table_schema.clone(),
+            sink_create_by(),
+        )?;
 
         // StageSinkTable needs not to hold the table meta timestamps invariants, just pass a dummy one
         let dummy_table_meta_timestamps = TableMetaTimestamps::new(None, Duration::hours(1));
@@ -51,4 +56,24 @@ impl PipelineBuilder {
             dummy_table_meta_timestamps,
         )
     }
+}
+
+fn sink_create_by() -> String {
+    const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
+
+    // example:  1.2.333-nightly
+    // tags may contain other items like `1.2.680-p2`, we will fill it with `1.2.680-p2.....`
+    let mut create_by = format!(
+        "Databend {}.{}.{}-{:.<7}",
+        DATABEND_SEMVER.major,
+        DATABEND_SEMVER.minor,
+        DATABEND_SEMVER.patch,
+        DATABEND_SEMVER.pre.as_str()
+    );
+
+    if create_by.len() != CREATE_BY_LEN {
+        create_by = format!("{:.<24}", create_by);
+        create_by.truncate(24);
+    }
+    create_by
 }
