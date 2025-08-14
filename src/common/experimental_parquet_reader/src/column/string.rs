@@ -365,23 +365,36 @@ impl<'a> StringIter<'a> {
             let views_ptr = views.as_mut_ptr().add(start_len);
             let dict_views_len = dict_views.len();
 
-            let dict_lengths = self.cached_dict_lengths.as_ref().unwrap();
             let dict_views_ptr = dict_views.as_ptr();
-            let dict_lengths_ptr = dict_lengths.as_ptr();
+            let dict_lengths_ptr = self.cached_dict_lengths.as_ref().unwrap().as_ptr();
 
-            for (i, &index) in indices.iter().enumerate() {
-                let dict_idx = index as usize;
-                if dict_idx >= dict_views_len {
-                    return Err(ErrorCode::Internal(format!(
-                        "Dictionary index {} out of bounds (dictionary size: {})",
-                        dict_idx,
-                        dict_views.len()
-                    )));
-                }
+            let pairs = indices.chunks_exact(2);
+            let remainder = pairs.remainder();
 
-                // Copy view and accumulate length in one operation
-                //*views_ptr.add(i) = dict_views[dict_idx];
-                //*total_bytes_len += dict[dict_idx].len();
+            let mut i = 0;
+
+            // Process pairs of elements
+            for pair in pairs {
+                let dict_idx1 = pair[0] as usize;
+                let dict_idx2 = pair[1] as usize;
+
+                debug_assert!(dict_idx1 < dict_views_len);
+                debug_assert!(dict_idx2 < dict_views_len);
+
+                // Process two elements in one iteration
+                *views_ptr.add(i) = *dict_views_ptr.add(dict_idx1);
+                *views_ptr.add(i + 1) = *dict_views_ptr.add(dict_idx2);
+
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx1) as usize;
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx2) as usize;
+
+                i += 2;
+            }
+
+            // Process remaining single element if any
+            if let [index] = remainder {
+                let dict_idx = *index as usize;
+                debug_assert!(dict_idx < dict_views_len);
 
                 *views_ptr.add(i) = *dict_views_ptr.add(dict_idx);
                 local_bytes_len += *dict_lengths_ptr.add(dict_idx) as usize;
