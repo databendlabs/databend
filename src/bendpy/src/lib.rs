@@ -90,7 +90,7 @@ allow_insecure = true
             .block_on(async {
                 GlobalServices::init(&conf, false).await?;
                 // init oss license manager
-                OssLicenseManager::init("".to_string()).unwrap();
+                OssLicenseManager::init("".to_string(), "".to_string()).unwrap();
                 // Cluster register.
                 ClusterDiscovery::instance()
                     .register_to_metastore(&conf)

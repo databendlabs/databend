@@ -24,6 +24,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::clusters::ClusterDiscovery;
 use crate::GlobalServices;
@@ -44,7 +45,11 @@ pub async fn query_local(
 
     GlobalServices::init(&conf, false).await?;
     // init oss license manager
-    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
+    OssLicenseManager::init(
+        conf.query.tenant_id.tenant_name().to_string(),
+        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+    )
+    .unwrap();
     // Cluster register.
     ClusterDiscovery::instance()
         .register_to_metastore(&conf)

@@ -19,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
@@ -589,15 +588,9 @@ impl Settings {
     }
 
     pub fn get_enterprise_license(&self) -> String {
-        let license = unsafe {
+        unsafe {
             self.unchecked_try_get_string("enterprise_license")
                 .unwrap_or_default()
-        };
-        if license.is_empty() {
-            // Try load license from embedded env if failed to load from settings.
-            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
-        } else {
-            license
         }
     }
 

@@ -38,6 +38,7 @@ use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::UserApiProvider;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_common_version::DATABEND_SEMVER;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::sessions::SessionManager;
@@ -105,7 +106,10 @@ pub fn init_query(cfg: &InnerConfig) -> Result<()> {
 /// We only need to call it while backup since we can't access metasrv while
 /// restoring.
 pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
-    RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
+    RealLicenseManager::init(
+        cfg.query.tenant_id.tenant_name().to_string(),
+        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+    )?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
         cfg.meta.to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),

@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
@@ -32,7 +33,11 @@ pub struct MockServices;
 impl MockServices {
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig, public_key: String) -> Result<()> {
-        let rm = RealLicenseManager::new(cfg.query.tenant_id.tenant_name().to_string(), public_key);
+        let rm = RealLicenseManager::new(
+            cfg.query.tenant_id.tenant_name().to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+            public_key,
+        );
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;

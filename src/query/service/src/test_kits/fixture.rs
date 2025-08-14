@@ -61,6 +61,7 @@ use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
@@ -275,7 +276,10 @@ impl TestFixture {
         }
 
         GlobalServices::init_with(config, false).await?;
-        OssLicenseManager::init(config.query.tenant_id.tenant_name().to_string())?;
+        OssLicenseManager::init(
+            config.query.tenant_id.tenant_name().to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+        )?;
 
         // Cluster register.
         {

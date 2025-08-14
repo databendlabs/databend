@@ -43,6 +43,7 @@ pub const LICENSE_URL: &str = "https://docs.databend.com/guides/products/dee/";
 pub struct RealLicenseManager {
     tenant: String,
     public_keys: Vec<String>,
+    license_embedded: String,
 
     // cache available settings to get avoid of unneeded license parsing time.
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
@@ -79,7 +80,7 @@ impl RealLicenseManager {
 }
 
 impl LicenseManager for RealLicenseManager {
-    fn init(tenant: String) -> Result<()> {
+    fn init(tenant: String, license_embedded: String) -> Result<()> {
         let public_key_str = embedded_public_keys()?;
 
         let mut public_keys = Vec::new();
@@ -96,6 +97,7 @@ impl LicenseManager for RealLicenseManager {
 
         let rm = RealLicenseManager {
             tenant,
+            license_embedded,
             public_keys,
             cache: DashMap::new(),
         };
@@ -111,6 +113,7 @@ impl LicenseManager for RealLicenseManager {
     }
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
+        let license_key = self.or_embedded(license_key);
         if license_key.is_empty() {
             return feature.verify_default(format!(
                 "[LicenseManager] Feature '{}' requires Databend Enterprise Edition license. No license key found for tenant: {}. Learn more at {}",
@@ -155,6 +158,7 @@ impl LicenseManager for RealLicenseManager {
     }
 
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
+        let license_key = self.or_embedded(license_key);
         if license_key.is_empty() {
             return Ok(StorageQuota::default());
         }
@@ -185,13 +189,18 @@ impl LicenseManager for RealLicenseManager {
         self.cache.insert(license_key, license);
         Ok(quota)
     }
+
+    fn license_embedded(&self) -> &str {
+        &self.license_embedded
+    }
 }
 
 impl RealLicenseManager {
     // this method mainly used for unit tests
-    pub fn new(tenant: String, public_key: String) -> Self {
+    pub fn new(tenant: String, license_embedded: String, public_key: String) -> Self {
         RealLicenseManager {
             tenant,
+            license_embedded,
             cache: DashMap::new(),
             public_keys: vec![public_key],
         }
@@ -253,6 +262,14 @@ impl RealLicenseManager {
             ))
         )
     }
+
+    fn or_embedded(&self, license_key: String) -> String {
+        if license_key.is_empty() {
+            self.license_embedded.clone()
+        } else {
+            license_key
+        }
+    }
 }
 
 fn embedded_public_keys() -> Result<String> {
@@ -283,6 +300,7 @@ fn embedded_public_keys() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
     use jwt_simple::algorithms::ECDSAP256KeyPairLike;
     use jwt_simple::prelude::Duration;
     use jwt_simple::prelude::ES256KeyPair;
@@ -346,8 +364,11 @@ mod tests {
     #[test]
     fn test_parse_license_expired_in_cache() {
         // Test retrieving expired license from cache
-        let manager =
-            RealLicenseManager::new("test-tenant".to_string(), LICENSE_PUBLIC_KEY.to_string());
+        let manager = RealLicenseManager::new(
+            "test-tenant".to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+            LICENSE_PUBLIC_KEY.to_string(),
+        );
 
         let expired_claims = create_expired_claims();
         let license_key = "expired-license";
@@ -365,8 +386,11 @@ mod tests {
     #[test]
     fn test_parse_license_valid_in_cache() {
         // Test retrieving valid license from cache
-        let manager =
-            RealLicenseManager::new("test-tenant".to_string(), LICENSE_PUBLIC_KEY.to_string());
+        let manager = RealLicenseManager::new(
+            "test-tenant".to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+            LICENSE_PUBLIC_KEY.to_string(),
+        );
 
         let valid_claims = create_valid_claims();
         let license_key = "valid-license";
@@ -389,7 +413,11 @@ mod tests {
         let valid_claims = create_valid_claims();
         let token = key_pair.sign(valid_claims.clone()).unwrap();
 
-        let manager = RealLicenseManager::new("test-tenant".to_string(), public_key);
+        let manager = RealLicenseManager::new(
+            "test-tenant".to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+            public_key,
+        );
         assert!(!manager.is_in_cache(&token));
 
         // Verify successful validation adds to cache
@@ -431,7 +459,11 @@ mod tests {
         // Use a different public key to force validation failure
         let different_key_pair = ES256KeyPair::generate();
         let wrong_public_key = different_key_pair.public_key().to_pem().unwrap();
-        let manager = RealLicenseManager::new("test-tenant".to_string(), wrong_public_key);
+        let manager = RealLicenseManager::new(
+            "test-tenant".to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+            wrong_public_key,
+        );
 
         assert!(!manager.is_in_cache(&token));
         let result = manager.parse_license(&token);

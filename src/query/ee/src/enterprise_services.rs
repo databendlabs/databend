@@ -15,6 +15,7 @@
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
@@ -35,7 +36,10 @@ pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
     pub async fn init(cfg: InnerConfig) -> Result<()> {
-        RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
+        RealLicenseManager::init(
+            cfg.query.tenant_id.tenant_name().to_string(),
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+        )?;
         RealStorageEncryptionHandler::init(&cfg)?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;

@@ -30,6 +30,7 @@ use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
 use databend_common_tracing::SignalListener;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use entry::MainError;
 
 use self::cmd::Cmd;
@@ -77,7 +78,10 @@ async fn main_entrypoint() -> Result<(), MainError> {
     let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
     init_services(&conf, false).await?;
     // init oss license manager
-    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string())
-        .with_context(make_error)?;
+    OssLicenseManager::init(
+        conf.query.tenant_id.tenant_name().to_string(),
+        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
+    )
+    .with_context(make_error)?;
     start_services(&conf).await
 }

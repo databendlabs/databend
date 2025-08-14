@@ -101,24 +101,25 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("[INTERPRETER] Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        let mut allow_disk_cache = false;
-        {
+        let allow_disk_cache = {
             let license_key = ctx.get_license_key();
-            if !license_key.is_empty() {
-                let validate_result = LicenseManagerSwitch::instance().check_license(license_key);
-                allow_disk_cache = validate_result.is_ok();
-                if let Err(e) = validate_result {
+            let manager = LicenseManagerSwitch::instance();
+            match manager.check_license(license_key.clone()) {
+                Ok(_) => true,
+                Err(e) if !license_key.is_empty() || !manager.license_embedded().is_empty() => {
                     let msg =
                             format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                                     e);
-                    log::error!("{}", msg);
+                    log::error!("{msg}");
 
                     // Also log at warning level to ensure the message could be propagated to client applications
                     // (e.g., BendSQL and MySQL interactive sessions)
-                    log::warn!("{}", msg);
-                };
+                    log::warn!("{msg}");
+                    false
+                }
+                _ => false,
             }
-        }
+        };
 
         CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
 
