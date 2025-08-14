@@ -159,9 +159,51 @@ def test_no_session():
     resp = resp.json()
     assert len(resp["data"]) == 2, resp
 
+
+HEADER_SESSION_ID = "X-DATABEND-SESSION-ID"
+HEADER_SESSION_ID_V = "101010"
+
+def do_query_from_worksheet(client, sql, sid=HEADER_SESSION_ID_V):
+    payload =  {"sql": sql, "pagination": {"max_rows_per_page": 2, "wait_time_secs": 10}}
+    resp = client.post(
+        query_url,
+        auth=auth,
+        headers={"Content-Type": "application/json",
+                 "USER-AGENT": "worksheet",
+                 HEADER_SESSION_ID: sid,
+                 },
+        json=payload,
+    )
+    return resp.json()
+
+def test_worksheet_session():
+    client = requests.session()
+    resp = do_query_from_worksheet(client, "select * from numbers(100)")
+    next_uri = resp.get("next_uri")
+
+    resp = client.get(
+        f"http://localhost:8000/{next_uri}",
+        auth=auth,
+        headers={
+            "USER-AGENT": "worksheet",
+            HEADER_SESSION_ID: HEADER_SESSION_ID_V
+        },
+    )
+    resp = resp.json()
+    assert len(resp["data"]) == 2, resp
+
+    resp = do_query_from_worksheet(client, "create or replace temp table t09_0007(a int)")
+    assert resp["state"] == "Succeeded", resp
+    resp = do_query_from_worksheet(client, "insert into t09_0007 values (1)")
+    assert resp["state"] == "Succeeded", resp
+    resp = do_query_from_worksheet(client, "select * from t09_0007")
+    assert resp["data"] == [["1"]], resp
+
+
 def main():
     test_no_session()
     test_session()
+    test_worksheet_session()
 
 
 if __name__ == "__main__":
