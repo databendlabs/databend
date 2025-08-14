@@ -74,7 +74,11 @@ use serfig::collectors::from_self;
 #[serde(default)]
 pub struct TelemetryConfig {
     /// Enable/disable telemetry reporting (only works with EE license)
-    #[clap(long = "telemetry-enabled", value_name = "BOOL")]
+    #[clap(
+        long = "telemetry-enabled",
+        value_name = "BOOL",
+        default_value = "true"
+    )]
     #[serde(default = "default_telemetry_enabled")]
     pub enabled: bool,
 }

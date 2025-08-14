@@ -28,7 +28,8 @@ pub async fn report_node_telemetry(payload: serde_json::Value) {
     };
 
     let version = payload
-        .get("version")
+        .get("node")
+        .and_then(|node| node.get("version"))
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
