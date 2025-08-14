@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -26,10 +25,7 @@ use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::IndexType;
 
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::AggregateExpandFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

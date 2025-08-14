@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
@@ -50,9 +49,6 @@ use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::part_stats_info_to_format_tree;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::MutationSourceFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

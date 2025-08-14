@@ -14,11 +14,9 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::MutationOrganizeFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

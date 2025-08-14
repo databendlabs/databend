@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
@@ -38,9 +37,6 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::plan_stats_info_to_format_tree;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::RangeJoinFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

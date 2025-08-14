@@ -17,7 +17,6 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -76,7 +75,6 @@ use tokio::sync::Semaphore;
 
 use super::ColumnMutation;
 use super::CommitType;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::MutationFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

@@ -15,24 +15,19 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::processors::PlanScope;
-use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
-use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;

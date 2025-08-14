@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -31,9 +30,6 @@ use databend_common_sql::TypeCheck;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::plan_stats_info_to_format_tree;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::ProjectSetFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

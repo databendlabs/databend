@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -29,7 +28,6 @@ use databend_common_sql::ColumnBinding;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::CopyIntoTableFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

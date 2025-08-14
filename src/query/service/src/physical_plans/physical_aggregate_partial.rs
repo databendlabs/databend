@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -39,10 +38,7 @@ use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::plan_stats_info_to_format_tree;
-use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::AggregatePartialFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

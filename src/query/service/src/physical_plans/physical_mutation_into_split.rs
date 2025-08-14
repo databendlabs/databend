@@ -14,13 +14,11 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipe;
 use databend_common_sql::IndexType;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::MutationSplitFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

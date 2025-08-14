@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -45,9 +44,6 @@ use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use super::PhysicalPlanCast;
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::plan_stats_info_to_format_tree;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::HashJoinFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;

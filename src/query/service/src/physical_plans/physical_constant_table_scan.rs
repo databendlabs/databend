@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -22,11 +21,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
-use itertools::Itertools;
 
-use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::ConstantTableScanFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

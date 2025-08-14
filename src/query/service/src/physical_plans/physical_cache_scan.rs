@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -22,9 +21,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_sql::plans::CacheSource;
 use databend_common_sql::ColumnSet;
 
-use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::CacheScanFormatter;
-use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
