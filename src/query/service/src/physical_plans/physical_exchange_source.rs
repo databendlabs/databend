@@ -55,7 +55,7 @@ impl IPhysicalPlan for ExchangeSource {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ExchangeSourceFormatter::new(self))
+        Ok(ExchangeSourceFormatter::create(self))
     }
 
     fn is_distributed_plan(&self) -> bool {

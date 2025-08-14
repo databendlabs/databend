@@ -24,7 +24,7 @@ pub struct MaterializedCTEFormatter<'a> {
 }
 
 impl<'a> MaterializedCTEFormatter<'a> {
-    pub fn new(inner: &'a MaterializedCTE) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MaterializedCTE) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MaterializedCTEFormatter { inner })
     }
 }

@@ -71,7 +71,7 @@ impl IPhysicalPlan for ExchangeSink {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ExchangeSinkFormatter::new(self))
+        Ok(ExchangeSinkFormatter::create(self))
     }
 
     #[recursive::recursive]

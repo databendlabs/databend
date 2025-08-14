@@ -29,7 +29,7 @@ pub struct MutationSourceFormatter<'a> {
 }
 
 impl<'a> MutationSourceFormatter<'a> {
-    pub fn new(inner: &'a MutationSource) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MutationSource) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MutationSourceFormatter { inner })
     }
 }

@@ -55,7 +55,7 @@ impl IPhysicalPlan for MutationSplit {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MutationSplitFormatter::new(self))
+        Ok(MutationSplitFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

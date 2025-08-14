@@ -126,7 +126,7 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(AggregatePartialFormatter::new(self))
+        Ok(AggregatePartialFormatter::create(self))
     }
 
     fn get_desc(&self) -> Result<String> {

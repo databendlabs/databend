@@ -29,7 +29,7 @@ pub struct RangeJoinFormatter<'a> {
 }
 
 impl<'a> RangeJoinFormatter<'a> {
-    pub fn new(inner: &'a RangeJoin) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a RangeJoin) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(RangeJoinFormatter { inner })
     }
 }

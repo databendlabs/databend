@@ -28,7 +28,7 @@ pub struct ProjectSetFormatter<'a> {
 }
 
 impl<'a> ProjectSetFormatter<'a> {
-    pub fn new(inner: &'a ProjectSet) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ProjectSet) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ProjectSetFormatter { inner })
     }
 }

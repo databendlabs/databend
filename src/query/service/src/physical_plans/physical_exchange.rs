@@ -63,7 +63,7 @@ impl IPhysicalPlan for Exchange {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ExchangeFormatter::new(self))
+        Ok(ExchangeFormatter::create(self))
     }
 
     #[recursive::recursive]

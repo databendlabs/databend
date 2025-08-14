@@ -169,7 +169,7 @@ impl IPhysicalPlan for Sort {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(SortFormatter::new(self))
+        Ok(SortFormatter::create(self))
     }
 
     #[recursive::recursive]

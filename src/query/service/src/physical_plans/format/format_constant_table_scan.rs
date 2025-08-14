@@ -27,7 +27,7 @@ pub struct ConstantTableScanFormatter<'a> {
 }
 
 impl<'a> ConstantTableScanFormatter<'a> {
-    pub fn new(inner: &'a ConstantTableScan) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ConstantTableScan) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ConstantTableScanFormatter { inner })
     }
 }

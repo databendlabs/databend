@@ -81,7 +81,7 @@ impl IPhysicalPlan for Duplicate {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(DuplicateFormatter::new(self))
+        Ok(DuplicateFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -127,7 +127,7 @@ impl IPhysicalPlan for Shuffle {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ShuffleFormatter::new(self))
+        Ok(ShuffleFormatter::create(self))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -207,7 +207,7 @@ impl IPhysicalPlan for ChunkFilter {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkFilterFormatter::new(self))
+        Ok(ChunkFilterFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -269,7 +269,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkEvalScalarFormatter::new(self))
+        Ok(ChunkEvalScalarFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -338,7 +338,7 @@ impl IPhysicalPlan for ChunkCastSchema {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkCastSchemaFormatter::new(self))
+        Ok(ChunkCastSchemaFormatter::create(self))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -408,7 +408,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkFillAndReorderFormatter::new(self))
+        Ok(ChunkFillAndReorderFormatter::create(self))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -482,7 +482,7 @@ impl IPhysicalPlan for ChunkAppendData {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkAppendDataFormatter::new(self))
+        Ok(ChunkAppendDataFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -638,7 +638,7 @@ impl IPhysicalPlan for ChunkMerge {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ChunkMergeFormatter::new(self))
+        Ok(ChunkMergeFormatter::create(self))
     }
 
     fn display_in_profile(&self) -> bool {

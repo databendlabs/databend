@@ -24,7 +24,7 @@ pub struct MutationOrganizeFormatter<'a> {
 }
 
 impl<'a> MutationOrganizeFormatter<'a> {
-    pub fn new(inner: &'a MutationOrganize) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MutationOrganize) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MutationOrganizeFormatter { inner })
     }
 }

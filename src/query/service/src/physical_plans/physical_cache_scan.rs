@@ -57,7 +57,7 @@ impl IPhysicalPlan for CacheScan {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(CacheScanFormatter::new(self))
+        Ok(CacheScanFormatter::create(self))
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

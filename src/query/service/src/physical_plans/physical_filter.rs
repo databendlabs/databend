@@ -82,7 +82,7 @@ impl IPhysicalPlan for Filter {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(FilterFormatter::new(self))
+        Ok(FilterFormatter::create(self))
     }
 
     #[recursive::recursive]

@@ -25,7 +25,7 @@ pub struct ReplaceIntoFormatter<'a> {
 }
 
 impl<'a> ReplaceIntoFormatter<'a> {
-    pub fn new(inner: &'a ReplaceInto) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ReplaceInto) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ReplaceIntoFormatter { inner })
     }
 }

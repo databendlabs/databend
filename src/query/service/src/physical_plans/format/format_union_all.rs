@@ -27,7 +27,7 @@ pub struct UnionAllFormatter<'a> {
 }
 
 impl<'a> UnionAllFormatter<'a> {
-    pub fn new(inner: &'a UnionAll) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a UnionAll) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(UnionAllFormatter { inner })
     }
 }

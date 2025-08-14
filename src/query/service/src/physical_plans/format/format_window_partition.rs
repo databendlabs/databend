@@ -27,7 +27,7 @@ pub struct WindowPartitionFormatter<'a> {
 }
 
 impl<'a> WindowPartitionFormatter<'a> {
-    pub fn new(inner: &'a WindowPartition) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a WindowPartition) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(WindowPartitionFormatter { inner })
     }
 }

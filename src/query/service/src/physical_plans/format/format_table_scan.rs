@@ -31,7 +31,7 @@ pub struct TableScanFormatter<'a> {
 }
 
 impl<'a> TableScanFormatter<'a> {
-    pub fn new(inner: &'a TableScan) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a TableScan) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(TableScanFormatter { inner })
     }
 }

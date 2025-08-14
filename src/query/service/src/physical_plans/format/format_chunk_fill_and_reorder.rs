@@ -24,7 +24,7 @@ pub struct ChunkFillAndReorderFormatter<'a> {
 }
 
 impl<'a> ChunkFillAndReorderFormatter<'a> {
-    pub fn new(inner: &'a ChunkFillAndReorder) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkFillAndReorder) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkFillAndReorderFormatter { inner })
     }
 }

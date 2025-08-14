@@ -24,7 +24,7 @@ pub struct DuplicateFormatter<'a> {
 }
 
 impl<'a> DuplicateFormatter<'a> {
-    pub fn new(inner: &'a Duplicate) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Duplicate) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(DuplicateFormatter { inner })
     }
 }

@@ -24,7 +24,7 @@ pub struct ChunkCastSchemaFormatter<'a> {
 }
 
 impl<'a> ChunkCastSchemaFormatter<'a> {
-    pub fn new(inner: &'a ChunkCastSchema) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkCastSchema) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkCastSchemaFormatter { inner })
     }
 }

@@ -24,7 +24,7 @@ pub struct ChunkMergeFormatter<'a> {
 }
 
 impl<'a> ChunkMergeFormatter<'a> {
-    pub fn new(inner: &'a ChunkMerge) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkMerge) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkMergeFormatter { inner })
     }
 }

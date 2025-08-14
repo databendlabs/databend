@@ -24,7 +24,7 @@ pub struct ColumnMutationFormatter<'a> {
 }
 
 impl<'a> ColumnMutationFormatter<'a> {
-    pub fn new(inner: &'a ColumnMutation) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ColumnMutation) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ColumnMutationFormatter { inner })
     }
 }

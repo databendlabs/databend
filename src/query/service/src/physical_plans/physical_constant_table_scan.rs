@@ -56,7 +56,7 @@ impl IPhysicalPlan for ConstantTableScan {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ConstantTableScanFormatter::new(self))
+        Ok(ConstantTableScanFormatter::create(self))
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

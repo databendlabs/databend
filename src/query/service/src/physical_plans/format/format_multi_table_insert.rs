@@ -24,7 +24,7 @@ pub struct ChunkAppendDataFormatter<'a> {
 }
 
 impl<'a> ChunkAppendDataFormatter<'a> {
-    pub fn new(inner: &'a ChunkAppendData) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkAppendData) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkAppendDataFormatter { inner })
     }
 }

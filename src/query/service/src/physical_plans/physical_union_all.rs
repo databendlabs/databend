@@ -81,7 +81,7 @@ impl IPhysicalPlan for UnionAll {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(UnionAllFormatter::new(self))
+        Ok(UnionAllFormatter::create(self))
     }
 
     fn get_desc(&self) -> Result<String> {

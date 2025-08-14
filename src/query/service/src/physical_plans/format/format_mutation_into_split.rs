@@ -24,7 +24,7 @@ pub struct MutationSplitFormatter<'a> {
 }
 
 impl<'a> MutationSplitFormatter<'a> {
-    pub fn new(inner: &'a MutationSplit) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MutationSplit) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MutationSplitFormatter { inner })
     }
 }

@@ -24,7 +24,7 @@ pub struct AddStreamColumnFormatter<'a> {
 }
 
 impl<'a> AddStreamColumnFormatter<'a> {
-    pub fn new(inner: &'a AddStreamColumn) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a AddStreamColumn) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(AddStreamColumnFormatter { inner })
     }
 }

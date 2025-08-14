@@ -94,7 +94,7 @@ impl IPhysicalPlan for AggregateExpand {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(AggregateExpandFormatter::new(self))
+        Ok(AggregateExpandFormatter::create(self))
     }
 
     fn get_desc(&self) -> Result<String> {

@@ -66,7 +66,7 @@ impl IPhysicalPlan for MaterializeCTERef {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MaterializeCTERefFormatter::new(self))
+        Ok(MaterializeCTERefFormatter::create(self))
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

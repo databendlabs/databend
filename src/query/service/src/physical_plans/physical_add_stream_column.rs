@@ -77,7 +77,7 @@ impl IPhysicalPlan for AddStreamColumn {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(AddStreamColumnFormatter::new(self))
+        Ok(AddStreamColumnFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

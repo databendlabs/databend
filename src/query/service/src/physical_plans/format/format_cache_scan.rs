@@ -27,7 +27,7 @@ pub struct CacheScanFormatter<'a> {
 }
 
 impl<'a> CacheScanFormatter<'a> {
-    pub fn new(inner: &'a CacheScan) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a CacheScan) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(CacheScanFormatter { inner })
     }
 }

@@ -69,7 +69,7 @@ impl IPhysicalPlan for Limit {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(LimitFormatter::new(self))
+        Ok(LimitFormatter::create(self))
     }
 
     #[recursive::recursive]

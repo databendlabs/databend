@@ -83,7 +83,7 @@ impl IPhysicalPlan for CopyIntoTable {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(CopyIntoTableFormatter::new(self))
+        Ok(CopyIntoTableFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

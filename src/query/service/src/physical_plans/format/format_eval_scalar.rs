@@ -28,7 +28,7 @@ pub struct EvalScalarFormatter<'a> {
 }
 
 impl<'a> EvalScalarFormatter<'a> {
-    pub fn new(inner: &'a EvalScalar) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a EvalScalar) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(EvalScalarFormatter { inner })
     }
 }

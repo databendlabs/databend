@@ -25,7 +25,7 @@ pub struct CopyIntoTableFormatter<'a> {
 }
 
 impl<'a> CopyIntoTableFormatter<'a> {
-    pub fn new(inner: &'a CopyIntoTable) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a CopyIntoTable) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(CopyIntoTableFormatter { inner })
     }
 }

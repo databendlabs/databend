@@ -28,7 +28,7 @@ pub struct AsyncFunctionFormatter<'a> {
 }
 
 impl<'a> AsyncFunctionFormatter<'a> {
-    pub fn new(inner: &'a AsyncFunction) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a AsyncFunction) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(AsyncFunctionFormatter { inner })
     }
 }

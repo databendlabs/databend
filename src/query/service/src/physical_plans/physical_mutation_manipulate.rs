@@ -76,7 +76,7 @@ impl IPhysicalPlan for MutationManipulate {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MutationManipulateFormatter::new(self))
+        Ok(MutationManipulateFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

@@ -71,7 +71,7 @@ impl IPhysicalPlan for MaterializedCTE {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MaterializedCTEFormatter::new(self))
+        Ok(MaterializedCTEFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

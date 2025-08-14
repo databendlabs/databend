@@ -26,7 +26,7 @@ pub struct MaterializeCTERefFormatter<'a> {
 }
 
 impl<'a> MaterializeCTERefFormatter<'a> {
-    pub fn new(inner: &'a MaterializeCTERef) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MaterializeCTERef) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MaterializeCTERefFormatter { inner })
     }
 }

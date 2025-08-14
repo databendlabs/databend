@@ -85,7 +85,7 @@ impl IPhysicalPlan for Udf {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(UdfFormatter::new(self))
+        Ok(UdfFormatter::create(self))
     }
 
     #[recursive::recursive]

@@ -28,7 +28,7 @@ pub struct WindowFormatter<'a> {
 }
 
 impl<'a> WindowFormatter<'a> {
-    pub fn new(inner: &'a Window) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Window) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(WindowFormatter { inner })
     }
 }

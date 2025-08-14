@@ -79,7 +79,7 @@ impl IPhysicalPlan for ColumnMutation {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ColumnMutationFormatter::new(self))
+        Ok(ColumnMutationFormatter::create(self))
     }
 
     fn to_format_node(

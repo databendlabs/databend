@@ -150,7 +150,7 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(HashJoinFormatter::new(self))
+        Ok(HashJoinFormatter::create(self))
     }
 
     fn get_desc(&self) -> Result<String> {

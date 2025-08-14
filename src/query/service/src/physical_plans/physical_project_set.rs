@@ -89,7 +89,7 @@ impl IPhysicalPlan for ProjectSet {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ProjectSetFormatter::new(self))
+        Ok(ProjectSetFormatter::create(self))
     }
 
     #[recursive::recursive]

@@ -24,7 +24,7 @@ pub struct ShuffleFormatter<'a> {
 }
 
 impl<'a> ShuffleFormatter<'a> {
-    pub fn new(inner: &'a Shuffle) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Shuffle) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ShuffleFormatter { inner })
     }
 }

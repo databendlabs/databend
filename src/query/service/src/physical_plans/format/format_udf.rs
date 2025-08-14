@@ -27,7 +27,7 @@ pub struct UdfFormatter<'a> {
 }
 
 impl<'a> UdfFormatter<'a> {
-    pub fn new(inner: &'a Udf) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Udf) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(UdfFormatter { inner })
     }
 }

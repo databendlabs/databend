@@ -27,7 +27,7 @@ pub struct AggregateExpandFormatter<'a> {
 }
 
 impl<'a> AggregateExpandFormatter<'a> {
-    pub fn new(inner: &'a AggregateExpand) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a AggregateExpand) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(AggregateExpandFormatter { inner })
     }
 }

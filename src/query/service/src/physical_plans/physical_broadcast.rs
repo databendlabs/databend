@@ -98,7 +98,7 @@ impl IPhysicalPlan for BroadcastSink {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(BroadcastSinkFormatter::new(self))
+        Ok(BroadcastSinkFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

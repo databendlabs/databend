@@ -28,7 +28,7 @@ pub struct RowFetchFormatter<'a> {
 }
 
 impl<'a> RowFetchFormatter<'a> {
-    pub fn new(inner: &'a RowFetch) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a RowFetch) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(RowFetchFormatter { inner })
     }
 }

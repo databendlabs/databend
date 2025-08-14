@@ -79,7 +79,7 @@ impl IPhysicalPlan for AsyncFunction {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(AsyncFunctionFormatter::new(self))
+        Ok(AsyncFunctionFormatter::create(self))
     }
 
     #[recursive::recursive]

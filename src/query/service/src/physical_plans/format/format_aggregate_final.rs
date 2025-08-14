@@ -28,7 +28,7 @@ pub struct AggregateFinalFormatter<'a> {
 }
 
 impl<'a> AggregateFinalFormatter<'a> {
-    pub fn new(inner: &'a AggregateFinal) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a AggregateFinal) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(AggregateFinalFormatter { inner })
     }
 }

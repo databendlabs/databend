@@ -26,7 +26,7 @@ pub struct ExchangeSinkFormatter<'a> {
 }
 
 impl<'a> ExchangeSinkFormatter<'a> {
-    pub fn new(inner: &'a ExchangeSink) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ExchangeSink) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ExchangeSinkFormatter { inner })
     }
 }

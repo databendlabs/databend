@@ -27,7 +27,7 @@ pub struct SortFormatter<'a> {
 }
 
 impl<'a> SortFormatter<'a> {
-    pub fn new(inner: &'a Sort) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Sort) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(SortFormatter { inner })
     }
 }

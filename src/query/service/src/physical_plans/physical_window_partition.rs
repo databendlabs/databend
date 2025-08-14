@@ -75,7 +75,7 @@ impl IPhysicalPlan for WindowPartition {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(WindowPartitionFormatter::new(self))
+        Ok(WindowPartitionFormatter::create(self))
     }
 
     #[recursive::recursive]

@@ -26,7 +26,7 @@ pub struct ChunkEvalScalarFormatter<'a> {
 }
 
 impl<'a> ChunkEvalScalarFormatter<'a> {
-    pub fn new(inner: &'a ChunkEvalScalar) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkEvalScalar) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkEvalScalarFormatter { inner })
     }
 }

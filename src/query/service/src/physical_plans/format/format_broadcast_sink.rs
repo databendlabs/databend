@@ -24,7 +24,7 @@ pub struct BroadcastSinkFormatter<'a> {
 }
 
 impl<'a> BroadcastSinkFormatter<'a> {
-    pub fn new(_inner: &'a BroadcastSink) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(_inner: &'a BroadcastSink) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(BroadcastSinkFormatter { _inner })
     }
 }

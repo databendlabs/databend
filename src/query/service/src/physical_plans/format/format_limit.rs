@@ -27,7 +27,7 @@ pub struct LimitFormatter<'a> {
 }
 
 impl<'a> LimitFormatter<'a> {
-    pub fn new(inner: &'a Limit) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Limit) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(LimitFormatter { inner })
     }
 }

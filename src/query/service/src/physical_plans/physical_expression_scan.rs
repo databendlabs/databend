@@ -67,7 +67,7 @@ impl IPhysicalPlan for ExpressionScan {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ExpressionScanFormatter::new(self))
+        Ok(ExpressionScanFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

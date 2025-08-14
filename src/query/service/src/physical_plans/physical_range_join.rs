@@ -93,7 +93,7 @@ impl IPhysicalPlan for RangeJoin {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(RangeJoinFormatter::new(self))
+        Ok(RangeJoinFormatter::create(self))
     }
 
     fn get_desc(&self) -> Result<String> {

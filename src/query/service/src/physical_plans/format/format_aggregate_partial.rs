@@ -28,7 +28,7 @@ pub struct AggregatePartialFormatter<'a> {
 }
 
 impl<'a> AggregatePartialFormatter<'a> {
-    pub fn new(inner: &'a AggregatePartial) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a AggregatePartial) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(AggregatePartialFormatter { inner })
     }
 }

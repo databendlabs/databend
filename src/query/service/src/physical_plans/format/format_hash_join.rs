@@ -29,7 +29,7 @@ pub struct HashJoinFormatter<'a> {
 }
 
 impl<'a> HashJoinFormatter<'a> {
-    pub fn new(inner: &'a HashJoin) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a HashJoin) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(HashJoinFormatter { inner })
     }
 }

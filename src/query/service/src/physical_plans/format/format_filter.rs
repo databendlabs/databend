@@ -29,7 +29,7 @@ pub struct FilterFormatter<'a> {
 }
 
 impl<'a> FilterFormatter<'a> {
-    pub fn new(inner: &'a Filter) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a Filter) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(FilterFormatter { inner })
     }
 }

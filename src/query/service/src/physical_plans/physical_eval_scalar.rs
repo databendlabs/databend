@@ -111,7 +111,7 @@ impl IPhysicalPlan for EvalScalar {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(EvalScalarFormatter::new(self))
+        Ok(EvalScalarFormatter::create(self))
     }
 
     #[recursive::recursive]

@@ -53,7 +53,7 @@ impl IPhysicalPlan for MutationOrganize {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MutationOrganizeFormatter::new(self))
+        Ok(MutationOrganizeFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

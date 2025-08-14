@@ -82,7 +82,7 @@ impl IPhysicalPlan for RowFetch {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(RowFetchFormatter::new(self))
+        Ok(RowFetchFormatter::create(self))
     }
 
     #[recursive::recursive]

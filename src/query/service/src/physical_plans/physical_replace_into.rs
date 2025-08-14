@@ -83,7 +83,7 @@ impl IPhysicalPlan for ReplaceInto {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(ReplaceIntoFormatter::new(self))
+        Ok(ReplaceIntoFormatter::create(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

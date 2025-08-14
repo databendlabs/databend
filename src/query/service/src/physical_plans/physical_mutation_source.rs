@@ -91,7 +91,7 @@ impl IPhysicalPlan for MutationSource {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(MutationSourceFormatter::new(self))
+        Ok(MutationSourceFormatter::create(self))
     }
 
     fn try_find_mutation_source(&self) -> Option<MutationSource> {

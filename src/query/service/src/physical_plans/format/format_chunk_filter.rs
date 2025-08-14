@@ -25,7 +25,7 @@ pub struct ChunkFilterFormatter<'a> {
 }
 
 impl<'a> ChunkFilterFormatter<'a> {
-    pub fn new(inner: &'a ChunkFilter) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ChunkFilter) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ChunkFilterFormatter { inner })
     }
 }

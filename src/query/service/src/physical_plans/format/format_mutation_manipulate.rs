@@ -26,7 +26,7 @@ pub struct MutationManipulateFormatter<'a> {
 }
 
 impl<'a> MutationManipulateFormatter<'a> {
-    pub fn new(inner: &'a MutationManipulate) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a MutationManipulate) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MutationManipulateFormatter { inner })
     }
 }

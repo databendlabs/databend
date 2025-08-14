@@ -135,7 +135,7 @@ impl IPhysicalPlan for TableScan {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(TableScanFormatter::new(self))
+        Ok(TableScanFormatter::create(self))
     }
 
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {

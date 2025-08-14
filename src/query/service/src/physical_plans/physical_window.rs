@@ -109,7 +109,7 @@ impl IPhysicalPlan for Window {
     }
 
     fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        Ok(WindowFormatter::new(self))
+        Ok(WindowFormatter::create(self))
     }
 
     fn to_format_node(

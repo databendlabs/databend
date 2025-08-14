@@ -28,7 +28,7 @@ pub struct ExpressionScanFormatter<'a> {
 }
 
 impl<'a> ExpressionScanFormatter<'a> {
-    pub fn new(inner: &'a ExpressionScan) -> Box<dyn PhysicalFormat + 'a> {
+    pub fn create(inner: &'a ExpressionScan) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(ExpressionScanFormatter { inner })
     }
 }
