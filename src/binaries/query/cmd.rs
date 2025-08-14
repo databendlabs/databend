@@ -64,12 +64,4 @@ impl Cmd {
 pub enum Commands {
     #[command(about = "Print version and quit")]
     Ver,
-    Local {
-        #[clap(long, short = 'q', default_value_t)]
-        query: String,
-        #[clap(long, default_value_t)]
-        output_format: String,
-        #[clap(long, short = 'c')]
-        config: String,
-    },
 }

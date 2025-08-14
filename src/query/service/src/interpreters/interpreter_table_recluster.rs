@@ -582,7 +582,7 @@ impl ReclusterTableInterpreter {
                 let filter = cast_expr_to_non_null_boolean(
                     scalar
                         .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone()),
+                        .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
                 // prepare the inverse filter expression
                 let inverted_filter =

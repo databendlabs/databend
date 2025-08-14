@@ -2127,7 +2127,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
+                    let cast_expr = cast_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&cast_expr) {
                         return (
                             Expr::Constant(Constant {
@@ -2260,7 +2260,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant(Constant {
@@ -2411,7 +2411,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant(Constant {
@@ -2458,7 +2458,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
-                    let func_expr = func_expr.project_column_ref(|_| unreachable!());
+                    let func_expr = func_expr.project_column_ref(|_| unreachable!()).unwrap();
                     if let Ok(Value::Scalar(scalar)) = evaluator.run(&func_expr) {
                         return (
                             Expr::Constant(Constant {
