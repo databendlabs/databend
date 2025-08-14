@@ -70,7 +70,7 @@ async fn try_rebuild_req(
 ) -> Result<()> {
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
-        if table_meta.engine == "stream".to_string() {
+        if table_meta.engine == "STREAM" {
             return Err(ErrorCode::UnresolvableConflict(format!(
                 "Concurrent transaction commit failed. Stream table {} has unresolvable conflicts.",
                 tid

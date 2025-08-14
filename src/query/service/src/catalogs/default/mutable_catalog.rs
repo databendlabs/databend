@@ -713,15 +713,17 @@ impl Catalog for MutableCatalog {
             .collect();
 
         info!(
-            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}]",
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], req={:?}",
             table_updates.join("; "),
-            stream_updates.join("; ")
+            stream_updates.join("; "),
+            req
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
-            "[CATALOG] Multiple table metadata update completed: elapsed_time={:?}",
-            begin.elapsed()
+            "[CATALOG] Multiple table metadata update completed: elapsed_time={:?}, result={:?}",
+            begin.elapsed(),
+            res
         );
         Ok(res?)
     }
