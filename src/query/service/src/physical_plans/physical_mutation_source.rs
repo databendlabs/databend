@@ -53,6 +53,8 @@ use databend_common_storages_fuse::SegmentLocation;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::MutationSourceFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -92,42 +94,8 @@ impl IPhysicalPlan for MutationSource {
         Ok(self.output_schema.clone())
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        _: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let table = ctx.metadata.table(self.table_index);
-        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
-
-        let filters = self
-            .filters
-            .as_ref()
-            .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .unwrap_or_default();
-
-        let mut node_children = vec![
-            FormatTreeNode::new(format!("table: {table_name}")),
-            FormatTreeNode::new(format!(
-                "output columns: [{}]",
-                format_output_columns(self.output_schema()?, ctx.metadata, false)
-            )),
-            FormatTreeNode::new(format!("filters: [{filters}]")),
-        ];
-
-        let payload = match self.input_type {
-            MutationType::Update => "Update",
-            MutationType::Delete if self.truncate_table => "DeleteAll",
-            MutationType::Delete => "Delete",
-            MutationType::Merge => "Merge",
-        };
-
-        // Part stats.
-        node_children.extend(part_stats_info_to_format_tree(&self.statistics));
-        Ok(FormatTreeNode::with_children(
-            format!("MutationSource({})", payload),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(MutationSourceFormatter::new(self))
     }
 
     fn try_find_mutation_source(&self) -> Option<MutationSource> {

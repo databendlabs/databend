@@ -48,6 +48,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::HashJoinFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -151,114 +153,8 @@ impl IPhysicalPlan for HashJoin {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        for rf in self.runtime_filter.filters.iter() {
-            ctx.scan_id_to_runtime_filters
-                .entry(rf.scan_id)
-                .or_default()
-                .push(rf.clone());
-        }
-
-        let build_keys = self
-            .build_keys
-            .iter()
-            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let probe_keys = self
-            .probe_keys
-            .iter()
-            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let is_null_equal = self.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
-
-        let filters = self
-            .non_equi_conditions
-            .iter()
-            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        assert_eq!(children.len(), 2);
-        children[0].payload = format!("{}(Probe)", children[0].payload);
-        children[1].payload = format!("{}(Build)", children[1].payload);
-
-        let mut build_runtime_filters = vec![];
-        for rf in self.runtime_filter.filters.iter() {
-            let mut s = format!(
-                "filter id:{}, build key:{}, probe key:{}, filter type:",
-                rf.id,
-                rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-                rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-            );
-            if rf.enable_bloom_runtime_filter {
-                s += "bloom,";
-            }
-            if rf.enable_inlist_runtime_filter {
-                s += "inlist,";
-            }
-            if rf.enable_min_max_runtime_filter {
-                s += "min_max,";
-            }
-            s = s.trim_end_matches(',').to_string();
-            build_runtime_filters.push(FormatTreeNode::new(s));
-        }
-
-        let mut node_children = vec![
-            FormatTreeNode::new(format!(
-                "output columns: [{}]",
-                format_output_columns(self.output_schema()?, ctx.metadata, true)
-            )),
-            FormatTreeNode::new(format!("join type: {}", self.join_type)),
-            FormatTreeNode::new(format!("build keys: [{build_keys}]")),
-            FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
-            FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
-            FormatTreeNode::new(format!("filters: [{filters}]")),
-        ];
-
-        if !build_runtime_filters.is_empty() {
-            if self.broadcast_id.is_some() {
-                node_children.push(FormatTreeNode::with_children(
-                    format!("build join filters(distributed):"),
-                    build_runtime_filters,
-                ));
-            } else {
-                node_children.push(FormatTreeNode::with_children(
-                    format!("build join filters:"),
-                    build_runtime_filters,
-                ));
-            }
-        }
-
-        if let Some((cache_index, column_map)) = &self.build_side_cache_info {
-            let mut column_indexes = column_map.keys().collect::<Vec<_>>();
-            column_indexes.sort();
-            node_children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
-            node_children.push(FormatTreeNode::new(format!(
-                "cache columns: {:?}",
-                column_indexes
-            )));
-        }
-
-        if let Some(info) = &self.stat_info {
-            let items = plan_stats_info_to_format_tree(info);
-            node_children.extend(items);
-        }
-
-        children.reverse();
-        node_children.extend(children);
-
-        Ok(FormatTreeNode::with_children(
-            "HashJoin".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(HashJoinFormatter::new(self))
     }
 
     fn get_desc(&self) -> Result<String> {

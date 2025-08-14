@@ -34,6 +34,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::ProjectSetFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -90,35 +92,8 @@ impl IPhysicalPlan for ProjectSet {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = vec![FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        ))];
-
-        if let Some(info) = &self.stat_info {
-            let items = plan_stats_info_to_format_tree(info);
-            node_children.extend(items);
-        }
-
-        node_children.extend(vec![FormatTreeNode::new(format!(
-            "set returning functions: {}",
-            self.srf_exprs
-                .iter()
-                .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ))]);
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "ProjectSet".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ProjectSetFormatter::new(self))
     }
 
     #[recursive::recursive]

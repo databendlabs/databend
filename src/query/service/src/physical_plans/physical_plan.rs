@@ -30,6 +30,8 @@ use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::Metadata;
 
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::SimplePhysicalFormat;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::MutationSource;
 use crate::pipelines::PipelineBuilder;
@@ -106,6 +108,15 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
 
     fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
         Box::new(std::iter::empty())
+    }
+
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        let mut children = vec![];
+        for child in self.children() {
+            children.push(child.formater()?);
+        }
+
+        Ok(SimplePhysicalFormat::new(self.get_name(), children))
     }
 
     fn to_format_node(

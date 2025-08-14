@@ -21,7 +21,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 
 use super::Exchange;
+use crate::physical_plans::format::BroadcastSinkFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -97,13 +99,8 @@ impl IPhysicalPlan for BroadcastSink {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        _: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore children
-        Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(BroadcastSinkFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

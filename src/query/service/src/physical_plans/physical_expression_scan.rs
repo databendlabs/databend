@@ -27,7 +27,9 @@ use databend_common_sql::TypeCheck;
 use itertools::Itertools;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::ExpressionScanFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -68,31 +70,8 @@ impl IPhysicalPlan for ExpressionScan {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = Vec::with_capacity(self.values.len() + 1);
-        node_children.push(FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        )));
-
-        for (i, value) in self.values.iter().enumerate() {
-            let column = value
-                .iter()
-                .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", ");
-            node_children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
-        }
-
-        node_children.extend(children);
-
-        Ok(FormatTreeNode::with_children(
-            "ExpressionScan".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ExpressionScanFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

@@ -23,6 +23,8 @@ use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 
 use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::physical_format::PhysicalFormat;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalRuntimeFilter;
 
 pub struct FormatContext<'a> {
@@ -172,4 +174,31 @@ pub fn format_output_columns(
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+use databend_common_exception::Result;
+
+pub struct SimplePhysicalFormat<'a> {
+    name: String,
+    children: Vec<Box<dyn PhysicalFormat + 'a>>,
+}
+
+impl<'a> SimplePhysicalFormat<'a> {
+    pub fn new(
+        name: String,
+        children: Vec<Box<dyn PhysicalFormat + 'a>>,
+    ) -> Box<dyn PhysicalFormat + 'a> {
+        Box::new(Self { name, children })
+    }
+}
+
+impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
+    fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let mut children = vec![];
+        for child in self.children.iter() {
+            children.push(child.format(ctx)?);
+        }
+
+        Ok(FormatTreeNode::with_children(self.name.clone(), children))
+    }
 }

@@ -23,6 +23,8 @@ use databend_common_sql::ColumnBinding;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::MaterializedCTEFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -70,22 +72,15 @@ impl IPhysicalPlan for MaterializedCTE {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(MaterializedCTEFormatter::new(self))
+    }
+
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
-    }
-
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        Ok(FormatTreeNode::with_children(
-            format!("MaterializedCTE: {}", self.cte_name),
-            children,
-        ))
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

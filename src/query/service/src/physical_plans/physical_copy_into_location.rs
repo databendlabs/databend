@@ -74,17 +74,6 @@ impl IPhysicalPlan for CopyIntoLocation {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        Ok(FormatTreeNode::with_children(
-            "CopyIntoLocation".to_string(),
-            children,
-        ))
-    }
-
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()

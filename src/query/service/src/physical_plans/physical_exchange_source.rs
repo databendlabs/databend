@@ -20,7 +20,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::PlanScope;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::ExchangeSourceFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -55,26 +57,8 @@ impl IPhysicalPlan for ExchangeSource {
         Ok(self.schema.clone())
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = vec![FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        ))];
-
-        node_children.push(FormatTreeNode::new(format!(
-            "source fragment: [{}]",
-            self.source_fragment_id
-        )));
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "ExchangeSource".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ExchangeSourceFormatter::new(self))
     }
 
     fn is_distributed_plan(&self) -> bool {

@@ -28,7 +28,9 @@ use databend_common_sql::plans::ValidationMode;
 use databend_common_sql::ColumnBinding;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::physical_plans::format::CopyIntoTableFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -82,15 +84,8 @@ impl IPhysicalPlan for CopyIntoTable {
         }
     }
 
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        Ok(FormatTreeNode::with_children(
-            format!("CopyIntoTable: {}", self.table_info),
-            children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(CopyIntoTableFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

@@ -26,7 +26,9 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::ExchangeFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -55,44 +57,16 @@ impl IPhysicalPlan for Exchange {
         &mut self.meta
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = vec![
-            FormatTreeNode::new(format!(
-                "output columns: [{}]",
-                format_output_columns(self.output_schema()?, ctx.metadata, true)
-            )),
-            FormatTreeNode::new(format!("exchange type: {}", match self.kind {
-                FragmentKind::Init => "Init-Partition".to_string(),
-                FragmentKind::Normal => format!(
-                    "Hash({})",
-                    self.keys
-                        .iter()
-                        .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                FragmentKind::Expansive => "Broadcast".to_string(),
-                FragmentKind::Merge => "Merge".to_string(),
-            })),
-        ];
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "Exchange".to_string(),
-            node_children,
-        ))
-    }
-
     fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ExchangeFormatter::new(self))
     }
 
     #[recursive::recursive]

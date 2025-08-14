@@ -41,6 +41,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::RangeJoinFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -94,62 +96,8 @@ impl IPhysicalPlan for RangeJoin {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let range_join_conditions = self
-            .conditions
-            .iter()
-            .map(|condition| {
-                let left = condition
-                    .left_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .sql_display();
-                let right = condition
-                    .right_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .sql_display();
-                format!("{left} {:?} {right}", condition.operator)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let other_conditions = self
-            .other_conditions
-            .iter()
-            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        assert_eq!(children.len(), 2);
-        children[0].payload = format!("{}(Left)", children[0].payload);
-        children[1].payload = format!("{}(Right)", children[1].payload);
-
-        let mut node_children = vec![
-            FormatTreeNode::new(format!(
-                "output columns: [{}]",
-                format_output_columns(self.output_schema()?, ctx.metadata, true)
-            )),
-            FormatTreeNode::new(format!("join type: {}", self.join_type)),
-            FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
-            FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
-        ];
-
-        if let Some(info) = &self.stat_info {
-            let items = plan_stats_info_to_format_tree(info);
-            node_children.extend(items);
-        }
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            match self.range_join_type {
-                RangeJoinType::IEJoin => "IEJoin".to_string(),
-                RangeJoinType::Merge => "MergeJoin".to_string(),
-            },
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(RangeJoinFormatter::new(self))
     }
 
     fn get_desc(&self) -> Result<String> {

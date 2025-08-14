@@ -36,6 +36,8 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use tokio::sync::Semaphore;
 
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::ReplaceIntoFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -78,6 +80,10 @@ impl IPhysicalPlan for ReplaceInto {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ReplaceIntoFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

@@ -30,7 +30,9 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::physical_plans::format::ColumnMutationFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -74,6 +76,10 @@ impl IPhysicalPlan for ColumnMutation {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ColumnMutationFormatter::new(self))
     }
 
     fn to_format_node(

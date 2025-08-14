@@ -23,7 +23,9 @@ use databend_common_sql::plans::CacheSource;
 use databend_common_sql::ColumnSet;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::CacheScanFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -57,33 +59,8 @@ impl IPhysicalPlan for CacheScan {
         Ok(self.output_schema.clone())
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        _: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut children = Vec::with_capacity(2);
-        children.push(FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        )));
-
-        match &self.cache_source {
-            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                let mut column_indexes = column_indexes.clone();
-                column_indexes.sort();
-                children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
-                children.push(FormatTreeNode::new(format!(
-                    "column indexes: {:?}",
-                    column_indexes
-                )));
-            }
-        }
-
-        Ok(FormatTreeNode::with_children(
-            "CacheScan".to_string(),
-            children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(CacheScanFormatter::new(self))
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

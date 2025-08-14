@@ -32,6 +32,8 @@ use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 use itertools::Itertools;
 
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::MutationManipulateFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -77,98 +79,8 @@ impl IPhysicalPlan for MutationManipulate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let table_entry = ctx.metadata.table(self.target_table_index).clone();
-        let target_schema = table_entry.table().schema_with_stream();
-
-        // Matched clauses.
-        let mut matched_children = Vec::with_capacity(self.matched.len());
-        for evaluator in &self.matched {
-            let condition_format = evaluator.0.as_ref().map_or_else(
-                || "condition: None".to_string(),
-                |predicate| {
-                    format!(
-                        "condition: {}",
-                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                    )
-                },
-            );
-
-            if evaluator.1.is_none() {
-                matched_children.push(FormatTreeNode::new(format!(
-                    "matched delete: [{}]",
-                    condition_format
-                )));
-            } else {
-                let mut update_list = evaluator.1.as_ref().unwrap().clone();
-                update_list.sort_by(|a, b| a.0.cmp(&b.0));
-                let update_format = update_list
-                    .iter()
-                    .map(|(field_idx, expr)| {
-                        format!(
-                            "{} = {}",
-                            target_schema.field(*field_idx).name(),
-                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                        )
-                    })
-                    .join(",");
-                matched_children.push(FormatTreeNode::new(format!(
-                    "matched update: [{}, update set {}]",
-                    condition_format, update_format
-                )));
-            }
-        }
-
-        // UnMatched clauses.
-        let mut unmatched_children = Vec::with_capacity(self.unmatched.len());
-        for evaluator in &self.unmatched {
-            let condition_format = evaluator.1.as_ref().map_or_else(
-                || "condition: None".to_string(),
-                |predicate| {
-                    format!(
-                        "condition: {}",
-                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                    )
-                },
-            );
-            let insert_schema_format = evaluator
-                .0
-                .fields
-                .iter()
-                .map(|field| field.name())
-                .join(",");
-
-            let values_format = evaluator
-                .2
-                .iter()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(",");
-
-            let unmatched_format = format!(
-                "insert into ({}) values({})",
-                insert_schema_format, values_format
-            );
-
-            unmatched_children.push(FormatTreeNode::new(format!(
-                "unmatched insert: [{}, {}]",
-                condition_format, unmatched_format
-            )));
-        }
-
-        let mut node_children = vec![];
-
-        node_children.extend(matched_children);
-        node_children.extend(unmatched_children);
-        node_children.extend(children);
-
-        Ok(FormatTreeNode::with_children(
-            "MutationManipulate".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(MutationManipulateFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

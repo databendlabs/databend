@@ -39,7 +39,9 @@ use databend_common_sql::Visibility;
 use databend_common_sql::CURRENT_BLOCK_ID_COL_NAME;
 use databend_common_sql::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 
+use crate::physical_plans::format::AddStreamColumnFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -76,14 +78,8 @@ impl IPhysicalPlan for AddStreamColumn {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore self
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(AddStreamColumnFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

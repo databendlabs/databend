@@ -41,7 +41,16 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use itertools::Itertools;
 
+use crate::physical_plans::format::ChunkAppendDataFormatter;
+use crate::physical_plans::format::ChunkCastSchemaFormatter;
+use crate::physical_plans::format::ChunkEvalScalarFormatter;
+use crate::physical_plans::format::ChunkFillAndReorderFormatter;
+use crate::physical_plans::format::ChunkFilterFormatter;
+use crate::physical_plans::format::ChunkMergeFormatter;
+use crate::physical_plans::format::DuplicateFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::ShuffleFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -75,22 +84,8 @@ impl IPhysicalPlan for Duplicate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = vec![FormatTreeNode::new(format!(
-            "Duplicate data to {} branch",
-            self.n
-        ))];
-
-        node_children.extend(children);
-
-        Ok(FormatTreeNode::with_children(
-            "Duplicate".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(DuplicateFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -135,14 +130,8 @@ impl IPhysicalPlan for Shuffle {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore self
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ShuffleFormatter::new(self))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -221,33 +210,8 @@ impl IPhysicalPlan for ChunkFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        if self.predicates.iter().all(|x| x.is_none()) {
-            assert_eq!(children.len(), 1);
-            return Ok(children.pop().unwrap());
-        }
-        let mut node_children = Vec::new();
-        for (i, predicate) in self.predicates.iter().enumerate() {
-            if let Some(predicate) = predicate {
-                node_children.push(FormatTreeNode::new(format!(
-                    "branch {}: {}",
-                    i,
-                    predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                )));
-            } else {
-                node_children.push(FormatTreeNode::new(format!("branch {}: None", i)));
-            }
-        }
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "Filter".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkFilterFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -308,38 +272,8 @@ impl IPhysicalPlan for ChunkEvalScalar {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        if self.eval_scalars.iter().all(|x| x.is_none()) {
-            assert_eq!(children.len(), 1);
-            return Ok(children.pop().unwrap());
-        }
-
-        let mut node_children = Vec::new();
-        for (i, eval_scalar) in self.eval_scalars.iter().enumerate() {
-            if let Some(eval_scalar) = eval_scalar {
-                node_children.push(FormatTreeNode::new(format!(
-                    "branch {}: {}",
-                    i,
-                    eval_scalar
-                        .remote_exprs
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .join(", ")
-                )));
-            } else {
-                node_children.push(FormatTreeNode::new(format!("branch {}: None", i)));
-            }
-        }
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "EvalScalar".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkEvalScalarFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -407,17 +341,12 @@ impl IPhysicalPlan for ChunkCastSchema {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn display_in_profile(&self) -> bool {
-        false
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkCastSchemaFormatter::new(self))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
+    fn display_in_profile(&self) -> bool {
+        false
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -482,14 +411,8 @@ impl IPhysicalPlan for ChunkFillAndReorder {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore self
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkFillAndReorderFormatter::new(self))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -562,15 +485,8 @@ impl IPhysicalPlan for ChunkAppendData {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        Ok(FormatTreeNode::with_children(
-            "WriteData".to_string(),
-            children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkAppendDataFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -725,14 +641,8 @@ impl IPhysicalPlan for ChunkMerge {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore self
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ChunkMergeFormatter::new(self))
     }
 
     fn display_in_profile(&self) -> bool {

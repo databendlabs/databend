@@ -25,7 +25,9 @@ use databend_common_sql::IndexType;
 use itertools::Itertools;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::ConstantTableScanFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -57,29 +59,8 @@ impl IPhysicalPlan for ConstantTableScan {
         Ok(self.output_schema.clone())
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        _: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        if self.num_rows == 0 {
-            return Ok(FormatTreeNode::new(self.name().to_string()));
-        }
-
-        let mut children = Vec::with_capacity(self.values.len() + 1);
-        children.push(FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        )));
-        for (i, value) in self.values.iter().enumerate() {
-            let column = value.iter().map(|val| format!("{val}")).join(", ");
-            children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
-        }
-
-        Ok(FormatTreeNode::with_children(
-            self.name().to_string(),
-            children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ConstantTableScanFormatter::new(self))
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

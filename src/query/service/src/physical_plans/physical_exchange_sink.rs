@@ -22,7 +22,9 @@ use databend_common_expression::RemoteExpr;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 
 use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::ExchangeSinkFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -71,26 +73,8 @@ impl IPhysicalPlan for ExchangeSink {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut node_children = vec![FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(self.output_schema()?, ctx.metadata, true)
-        ))];
-
-        node_children.push(FormatTreeNode::new(format!(
-            "destination fragment: [{}]",
-            self.destination_fragment_id
-        )));
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "ExchangeSink".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(ExchangeSinkFormatter::new(self))
     }
 
     #[recursive::recursive]

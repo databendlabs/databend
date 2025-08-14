@@ -77,6 +77,8 @@ use tokio::sync::Semaphore;
 use super::ColumnMutation;
 use super::CommitType;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::MutationFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -133,24 +135,8 @@ impl IPhysicalPlan for Mutation {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let table_entry = ctx.metadata.table(self.target_table_index).clone();
-        let mut node_children = vec![FormatTreeNode::new(format!(
-            "target table: [catalog: {}] [database: {}] [table: {}]",
-            table_entry.catalog(),
-            table_entry.database(),
-            table_entry.name()
-        ))];
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "DataMutation".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(MutationFormatter::new(self))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {

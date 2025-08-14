@@ -41,7 +41,9 @@ use itertools::Itertools;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::pretty_display_agg_desc;
+use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -127,43 +129,8 @@ impl IPhysicalPlan for AggregatePartial {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let group_by = self
-            .group_by
-            .iter()
-            .map(|&index| ctx.metadata.column(index).name())
-            .join(", ");
-
-        let agg_funcs = self
-            .agg_funcs
-            .iter()
-            .map(|agg| pretty_display_agg_desc(agg, ctx.metadata))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let mut node_children = vec![
-            FormatTreeNode::new(format!("group by: [{group_by}]")),
-            FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
-        ];
-
-        if let Some(info) = &self.stat_info {
-            node_children.extend(plan_stats_info_to_format_tree(info));
-        }
-
-        if let Some((_, r)) = &self.rank_limit {
-            node_children.push(FormatTreeNode::new(format!("rank limit: {r}")));
-        }
-
-        node_children.extend(children);
-
-        Ok(FormatTreeNode::with_children(
-            "AggregatePartial".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(AggregatePartialFormatter::new(self))
     }
 
     fn get_desc(&self) -> Result<String> {

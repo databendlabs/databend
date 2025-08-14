@@ -31,6 +31,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::WindowPartitionFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -76,39 +78,8 @@ impl IPhysicalPlan for WindowPartition {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn to_format_node(
-        &self,
-        ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        let partition_by = self
-            .partition_by
-            .iter()
-            .map(|&index| Ok(ctx.metadata.column(index).name()))
-            .collect::<Result<Vec<_>>>()?
-            .join(", ");
-
-        let mut node_children = vec![
-            FormatTreeNode::new(format!(
-                "output columns: [{}]",
-                format_output_columns(self.output_schema()?, ctx.metadata, true)
-            )),
-            FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
-        ];
-
-        if let Some(top_n) = &self.top_n {
-            node_children.push(FormatTreeNode::new(format!("top: {}", top_n.top)));
-        }
-
-        if let Some(info) = &self.stat_info {
-            node_children.extend(plan_stats_info_to_format_tree(info));
-        }
-
-        node_children.extend(children);
-        Ok(FormatTreeNode::with_children(
-            "WindowPartition".to_string(),
-            node_children,
-        ))
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(WindowPartitionFormatter::new(self))
     }
 
     #[recursive::recursive]

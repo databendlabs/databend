@@ -52,6 +52,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::WindowFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -104,6 +106,10 @@ impl IPhysicalPlan for Window {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn formater(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        Ok(WindowFormatter::new(self))
     }
 
     fn to_format_node(
