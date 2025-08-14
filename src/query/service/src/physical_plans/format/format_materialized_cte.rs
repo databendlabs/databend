@@ -59,4 +59,8 @@ impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
             children,
         ))
     }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.partial_format(ctx)
+    }
 }

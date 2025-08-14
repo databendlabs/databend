@@ -51,4 +51,8 @@ impl<'a> PhysicalFormat for ReplaceIntoFormatter<'a> {
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.partial_format(ctx)
+    }
 }

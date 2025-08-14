@@ -70,4 +70,17 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
             }
         }
     }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        match &self.inner.source {
+            CopyIntoTableSource::Query(input) => {
+                let formatter = input.formatter()?;
+                formatter.partial_format(ctx)
+            }
+            CopyIntoTableSource::Stage(input) => {
+                let formatter = input.formatter()?;
+                formatter.partial_format(ctx)
+            }
+        }
+    }
 }

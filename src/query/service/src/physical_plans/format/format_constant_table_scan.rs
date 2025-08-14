@@ -64,4 +64,8 @@ impl<'a> PhysicalFormat for ConstantTableScanFormatter<'a> {
     fn format_join(&self, _ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
     }
+
+    fn partial_format(&self, _ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
+    }
 }
