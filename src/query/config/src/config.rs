@@ -47,6 +47,7 @@ use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::HistoryConfig as InnerHistoryConfig;
 use databend_common_tracing::HistoryTableConfig as InnerHistoryTableConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
@@ -2373,11 +2374,15 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
                     .to_string(),
             ));
         }
+        let format = self
+            .file_format
+            .parse::<LogFormat>()
+            .map_err(ErrorCode::InvalidConfig)?;
         Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
-            format: self.file_format,
+            format,
             limit: self.file_limit,
             max_size: self.file_max_size,
         })
@@ -2390,7 +2395,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
-            file_format: inner.format,
+            file_format: inner.format.to_string(),
             file_limit: inner.limit,
             file_max_size: inner.max_size,
 
@@ -2437,10 +2442,14 @@ impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStderrLogConfig> {
+        let format = self
+            .stderr_format
+            .parse::<LogFormat>()
+            .map_err(ErrorCode::InvalidConfig)?;
         Ok(InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
-            format: self.stderr_format,
+            format,
         })
     }
 }
@@ -2450,7 +2459,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
-            stderr_format: inner.format,
+            stderr_format: inner.format.to_string(),
         }
     }
 }

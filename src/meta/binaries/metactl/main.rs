@@ -51,6 +51,7 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
@@ -332,7 +333,7 @@ async fn main() -> anyhow::Result<()> {
             on: true,
             level: app.globals.log_level.clone(),
             dir: ".databend/logs".to_string(),
-            format: "text".to_string(),
+            format: LogFormat::Text,
             limit: 48,
             max_size: 4294967296,
         },

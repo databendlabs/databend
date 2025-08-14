@@ -72,7 +72,8 @@ pub fn load_query_storage(cfg: &InnerConfig) -> Result<Operator> {
 pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
     let content = std::fs::read_to_string(path)?;
     let outer_config: databend_meta::configs::outer_v0::Config = toml::from_str(&content)?;
-    let inner_config: databend_meta::configs::Config = outer_config.into();
+    let inner_config: databend_meta::configs::Config =
+        outer_config.try_into().map_err(|msg| anyhow!("{msg}"))?;
 
     if !inner_config.raft_config.raft_dir.starts_with("/") {
         return Err(anyhow!(
