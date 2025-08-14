@@ -101,7 +101,6 @@ impl<'a> Decompressor<'a> {
         Ok(page)
     }
 
-    #[allow(dead_code)]
     pub fn next_owned(&mut self) -> Result<Option<Page>, Error> {
         let page_tuple = self.page_reader.next_page()?;
 

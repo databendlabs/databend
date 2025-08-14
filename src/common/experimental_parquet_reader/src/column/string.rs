@@ -35,6 +35,7 @@ pub struct StringIter<'a> {
     dictionary: Option<Vec<Vec<u8>>>,
     // Cached dictionary views
     cached_dict_views: Option<Vec<View>>,
+    cached_dict_lengths: Option<Vec<usize>>,
     // Scratch buffer for rle decoding
     rle_index_buffer: Option<Vec<i32>>,
 }
@@ -47,6 +48,7 @@ impl<'a> StringIter<'a> {
             num_rows,
             dictionary: None,
             cached_dict_views: None,
+            cached_dict_lengths: None,
             rle_index_buffer: None,
         }
     }
@@ -336,19 +338,16 @@ impl<'a> StringIter<'a> {
         let indices: &mut Vec<i32> = if let Some(indices) = self.rle_index_buffer.as_mut() {
             if indices.capacity() < remaining {
                 indices.reserve_exact(remaining - indices.capacity());
-                unsafe {
-                    indices.set_len(remaining);
-                }
             }
             indices
         } else {
-            let mut indices: Vec<i32> = Vec::with_capacity(remaining);
-            unsafe {
-                indices.set_len(remaining);
-            }
+            let indices: Vec<i32> = Vec::with_capacity(remaining);
             self.rle_index_buffer = Some(indices);
             self.rle_index_buffer.as_mut().unwrap()
         };
+        unsafe {
+            indices.set_len(remaining);
+        }
 
         let decoded_count = rle_decoder
             .get_batch(indices)
@@ -360,12 +359,17 @@ impl<'a> StringIter<'a> {
             )));
         }
 
+        let mut local_bytes_len = 0usize;
         // Single pass: populate views and calculate total_bytes_len simultaneously
         unsafe {
             let views_ptr = views.as_mut_ptr().add(start_len);
+            let dict_views_len = dict_views.len();
+
+            let dict_lengths = self.cached_dict_lengths.as_ref().unwrap();
+
             for (i, &index) in indices.iter().enumerate() {
                 let dict_idx = index as usize;
-                if dict_idx >= dict_views.len() {
+                if dict_idx >= dict_views_len {
                     return Err(ErrorCode::Internal(format!(
                         "Dictionary index {} out of bounds (dictionary size: {})",
                         dict_idx,
@@ -374,12 +378,17 @@ impl<'a> StringIter<'a> {
                 }
 
                 // Copy view and accumulate length in one operation
-                *views_ptr.add(i) = dict_views[dict_idx];
-                *total_bytes_len += dict[dict_idx].len();
+                //*views_ptr.add(i) = dict_views[dict_idx];
+                //*total_bytes_len += dict[dict_idx].len();
+
+                *views_ptr.add(i) = *dict_views.get_unchecked(dict_idx);
+                local_bytes_len += *dict_lengths.get_unchecked(dict_idx);
             }
             // TODO Make sure this is panic safe
             views.set_len(start_len + remaining);
         }
+
+        *total_bytes_len += local_bytes_len;
 
         Ok(())
     }
@@ -392,6 +401,9 @@ impl<'a> StringIter<'a> {
                     .map(|s| Self::create_inline_view(s))
                     .collect::<Vec<_>>(),
             );
+
+            let lengths: Vec<usize> = dict.iter().map(|s| s.len()).collect();
+            self.cached_dict_lengths = Some(lengths);
         }
     }
 
