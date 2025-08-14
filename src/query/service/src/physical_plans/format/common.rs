@@ -184,7 +184,7 @@ pub struct SimplePhysicalFormat<'a> {
 }
 
 impl<'a> SimplePhysicalFormat<'a> {
-    pub fn new(
+    pub fn create(
         name: String,
         children: Vec<Box<dyn PhysicalFormat + 'a>>,
     ) -> Box<dyn PhysicalFormat + 'a> {

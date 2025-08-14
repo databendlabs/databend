@@ -116,7 +116,7 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
             children.push(child.formater()?);
         }
 
-        Ok(SimplePhysicalFormat::new(self.get_name(), children))
+        Ok(SimplePhysicalFormat::create(self.get_name(), children))
     }
 
     fn to_format_node(
