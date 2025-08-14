@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -155,6 +155,51 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
         Ok(FormatTreeNode::with_children(
             "HashJoin".to_string(),
             node_children,
+        ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let build_formatter = self.inner.build.formatter()?;
+        let build_child = build_formatter.format_join(ctx)?;
+
+        let probe_formatter = self.inner.probe.formatter()?;
+        let probe_child = probe_formatter.format_join(ctx)?;
+
+        let children = vec![
+            FormatTreeNode::with_children("Build".to_string(), vec![build_child]),
+            FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
+        ];
+
+        let _estimated_rows = if let Some(info) = &self.inner.stat_info {
+            format!("{0:.2}", info.estimated_rows)
+        } else {
+            String::from("None")
+        };
+
+        Ok(FormatTreeNode::with_children(
+            format!("HashJoin: {}", self.inner.join_type),
+            children,
+        ))
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let build_child = self.inner.build.formatter()?.partial_format(ctx)?;
+        let probe_child = self.inner.probe.formatter()?.partial_format(ctx)?;
+
+        let mut children = vec![];
+        if let Some(info) = &self.inner.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+
+        children.push(build_child);
+        children.push(probe_child);
+
+        Ok(FormatTreeNode::with_children(
+            format!("HashJoin: {}", self.inner.join_type),
+            children,
         ))
     }
 }

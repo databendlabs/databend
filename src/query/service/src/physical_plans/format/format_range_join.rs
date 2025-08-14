@@ -16,7 +16,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -99,6 +99,50 @@ impl<'a> PhysicalFormat for RangeJoinFormatter<'a> {
                 RangeJoinType::Merge => "MergeJoin".to_string(),
             },
             node_children,
+        ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let left_child = self.inner.left.formatter()?.format_join(ctx)?;
+        let right_child = self.inner.right.formatter()?.format_join(ctx)?;
+
+        let children = vec![
+            FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+            FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+        ];
+
+        let _estimated_rows = if let Some(info) = &self.inner.stat_info {
+            format!("{0:.2}", info.estimated_rows)
+        } else {
+            String::from("none")
+        };
+
+        Ok(FormatTreeNode::with_children(
+            format!("RangeJoin: {}", self.inner.join_type),
+            children,
+        ))
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let left_child = self.inner.left.formatter()?.partial_format(ctx)?;
+        let right_child = self.inner.right.formatter()?.partial_format(ctx)?;
+
+        let mut children = vec![];
+        if let Some(info) = &self.inner.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+
+        let children = vec![
+            FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+            FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+        ];
+
+        Ok(FormatTreeNode::with_children(
+            format!("RangeJoin: {}", self.inner.join_type),
+            children,
         ))
     }
 }

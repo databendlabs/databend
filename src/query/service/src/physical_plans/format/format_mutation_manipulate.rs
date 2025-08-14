@@ -129,4 +129,8 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
             node_children,
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.format_join(ctx)
+    }
 }

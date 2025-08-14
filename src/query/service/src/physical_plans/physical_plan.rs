@@ -118,14 +118,6 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         Ok(SimplePhysicalFormat::create(self.get_meta(), children))
     }
 
-    fn to_format_node(
-        &self,
-        _ctx: &mut FormatContext<'_>,
-        children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        Ok(FormatTreeNode::with_children(self.get_name(), children))
-    }
-
     /// Used to find data source info in a non-aggregation and single-table query plan.
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         None

@@ -66,4 +66,8 @@ impl<'a> PhysicalFormat for LimitFormatter<'a> {
             node_children,
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.format_join(ctx)
+    }
 }

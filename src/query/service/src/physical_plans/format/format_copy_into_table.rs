@@ -57,4 +57,17 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
             children,
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        match &self.inner.source {
+            CopyIntoTableSource::Query(input) => {
+                let formatter = input.formatter()?;
+                formatter.format_join(ctx)
+            }
+            CopyIntoTableSource::Stage(input) => {
+                let formatter = input.formatter()?;
+                formatter.format_join(ctx)
+            }
+        }
+    }
 }

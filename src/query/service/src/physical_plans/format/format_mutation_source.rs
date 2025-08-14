@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::binder::MutationType;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -72,6 +72,26 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         Ok(FormatTreeNode::with_children(
             format!("MutationSource({})", payload),
             node_children,
+        ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let table = ctx.metadata.table(self.inner.table_index).clone();
+        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+        let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+        if let Some(filters) = &self.inner.filters {
+            let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+            children.push(FormatTreeNode::new(format!("filters: [{filter}]")));
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+        Ok(FormatTreeNode::with_children(
+            "MutationSource".to_string(),
+            children,
         ))
     }
 }

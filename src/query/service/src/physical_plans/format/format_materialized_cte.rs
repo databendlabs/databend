@@ -45,4 +45,18 @@ impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
             vec![input_payload],
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let input = self.inner.input.formatter()?.format_join(ctx)?;
+        let children = vec![
+            FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),
+            FormatTreeNode::new(format!("ref_count: {}", self.inner.ref_count)),
+            input,
+        ];
+
+        Ok(FormatTreeNode::with_children(
+            "MaterializedCTE".to_string(),
+            children,
+        ))
+    }
 }

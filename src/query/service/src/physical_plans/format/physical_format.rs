@@ -46,4 +46,10 @@ pub trait PhysicalFormat {
     fn get_meta(&self) -> &PhysicalPlanMeta;
 
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>>;
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>>;
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        unreachable!()
+    }
 }

@@ -15,7 +15,7 @@
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -61,5 +61,43 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
         let right_formatter = self.inner.right.formatter()?;
         node_children.push(right_formatter.dispatch(ctx)?);
         Ok(FormatTreeNode::with_children(root, node_children))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let left_child = self.inner.left.formatter()?.format_join(ctx)?;
+        let right_child = self.inner.right.formatter()?.format_join(ctx)?;
+
+        let children = vec![
+            FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+            FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+        ];
+
+        Ok(FormatTreeNode::with_children(
+            "UnionAll".to_string(),
+            children,
+        ))
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let left_child = self.inner.left.formatter()?.partial_format(ctx)?;
+        let right_child = self.inner.right.formatter()?.partial_format(ctx)?;
+
+        let mut children = vec![];
+        if let Some(info) = &self.inner.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+
+        let children = vec![
+            FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+            FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+        ];
+
+        Ok(FormatTreeNode::with_children(
+            "UnionAll".to_string(),
+            children,
+        ))
     }
 }

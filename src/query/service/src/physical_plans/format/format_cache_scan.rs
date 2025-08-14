@@ -62,4 +62,8 @@ impl<'a> PhysicalFormat for CacheScanFormatter<'a> {
             children,
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
+    }
 }

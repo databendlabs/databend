@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -66,6 +66,32 @@ impl<'a> PhysicalFormat for FilterFormatter<'a> {
         Ok(FormatTreeNode::with_children(
             "Filter".to_string(),
             node_children,
+        ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.format_join(ctx)
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let filter = self.inner
+            .predicates
+            .iter()
+            .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ");
+        let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
+        if let Some(info) = &self.inner.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+        let input_formatter = self.inner.input.formatter()?;
+        children.push(input_formatter.partial_format(ctx)?);
+
+        Ok(FormatTreeNode::with_children(
+            "Filter".to_string(),
+            children,
         ))
     }
 }

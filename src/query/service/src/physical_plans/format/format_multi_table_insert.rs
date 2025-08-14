@@ -45,4 +45,8 @@ impl<'a> PhysicalFormat for ChunkAppendDataFormatter<'a> {
             vec![input_payload],
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.format_join(ctx)
+    }
 }

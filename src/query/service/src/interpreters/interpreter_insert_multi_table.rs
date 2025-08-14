@@ -231,7 +231,7 @@ impl InsertMultiTableInterpreter {
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
-            meta: PhysicalPlanMeta::new("ChunkCommitInsert"),
+            meta: PhysicalPlanMeta::new("Commit"),
         });
 
         let mut next_plan_id = 0;

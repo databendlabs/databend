@@ -41,4 +41,8 @@ impl<'a> PhysicalFormat for MutationSplitFormatter<'a> {
         let input_formatter = self.inner.input.formatter()?;
         input_formatter.dispatch(ctx)
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        self.inner.input.formatter()?.format_join(ctx)
+    }
 }

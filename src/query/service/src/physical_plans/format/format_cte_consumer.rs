@@ -59,4 +59,18 @@ impl<'a> PhysicalFormat for MaterializeCTERefFormatter<'a> {
             children,
         ))
     }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        let children = vec![
+            FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),
+            FormatTreeNode::new(format!(
+                "cte_schema: [{}]",
+                format_output_columns(self.inner.cte_schema.clone(), &ctx.metadata, false)
+            )),
+        ];
+        Ok(FormatTreeNode::with_children(
+            "MaterializeCTERef".to_string(),
+            children,
+        ))
+    }
 }

@@ -18,7 +18,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
-use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::{append_output_rows_info, format_output_columns};
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
@@ -166,6 +166,69 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         if let Some(info) = &self.inner.stat_info {
             children.extend(plan_stats_info_to_format_tree(info));
         }
+
+        Ok(FormatTreeNode::with_children(
+            "TableScan".to_string(),
+            children,
+        ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
+            return Ok(FormatTreeNode::with_children(
+                format!("Scan: dummy, rows: {}", self.inner.source.statistics.read_rows),
+                vec![],
+            ));
+        }
+
+        match self.inner.table_index {
+            None => Ok(FormatTreeNode::with_children(
+                format!(
+                    "Scan: {}.{} (read rows: {})",
+                    self.inner.source.source_info.catalog_name(),
+                    self.inner.source.source_info.desc(),
+                    self.inner.source.statistics.read_rows
+                ),
+                vec![],
+            )),
+            Some(table_index) => {
+                let table = ctx.metadata.table(table_index).clone();
+                let table_name =
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+                Ok(FormatTreeNode::with_children(
+                    format!(
+                        "Scan: {} (#{}) (read rows: {})",
+                        table_name, table_index, self.inner.source.statistics.read_rows
+                    ),
+                    vec![],
+                ))
+            }
+        }
+    }
+
+    fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
+            return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+        }
+        let table_name = match self.inner.table_index {
+            None => format!(
+                "{}.{}",
+                self.inner.source.source_info.catalog_name(),
+                self.inner.source.source_info.desc()
+            ),
+            Some(table_index) => {
+                let table = ctx.metadata.table(table_index).clone();
+                format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+            }
+        };
+        let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+        if let Some(info) = &self.inner.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            children.extend(items);
+        }
+
+        append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
 
         Ok(FormatTreeNode::with_children(
             "TableScan".to_string(),

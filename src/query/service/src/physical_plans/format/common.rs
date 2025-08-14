@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
+use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -177,6 +178,28 @@ pub fn format_output_columns(
         .join(", ")
 }
 
+pub fn append_output_rows_info(
+    children: &mut Vec<FormatTreeNode<String>>,
+    profs: &HashMap<u32, PlanProfile>,
+    plan_id: u32,
+) {
+    if let Some(prof) = profs.get(&plan_id) {
+        for (_, desc) in get_statistics_desc().iter() {
+            if desc.display_name != "output rows" {
+                continue;
+            }
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+            break;
+        }
+    }
+}
+
 use databend_common_exception::Result;
 use databend_common_pipeline_core::PlanProfile;
 
@@ -209,5 +232,18 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
             self.meta.name.clone(),
             children,
         ))
+    }
+
+    fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        if self.children.len() == 1 {
+            return self.children[0].format_join(ctx);
+        }
+
+        let mut children = vec![];
+        for child in self.children.iter() {
+            children.push(child.format_join(ctx)?);
+        }
+
+        Ok(FormatTreeNode::with_children(self.meta.name.clone(), children))
     }
 }

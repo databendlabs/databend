@@ -82,16 +82,6 @@ impl IPhysicalPlan for ColumnMutation {
         Ok(ColumnMutationFormatter::create(self))
     }
 
-    fn to_format_node(
-        &self,
-        _: &mut FormatContext<'_>,
-        mut children: Vec<FormatTreeNode<String>>,
-    ) -> Result<FormatTreeNode<String>> {
-        // ignore self
-        assert_eq!(children.len(), 1);
-        Ok(children.pop().unwrap())
-    }
-
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
