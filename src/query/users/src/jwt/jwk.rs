@@ -224,11 +224,30 @@ impl JwkKeyStore {
 
     #[async_backtrace::framed]
     async fn maybe_refresh_cached_keys(&self, force: bool) -> Result<()> {
-        let need_reload = force
-            || match *self.last_refreshed_time.read() {
-                None => true,
-                Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
-            };
+        let mut need_reload = false;
+        let mut reason = LoadKeyReason::Refresh;
+
+        if force {
+            need_reload = true;
+            reason = LoadKeyReason::Force;
+        } else {
+            match *self.last_refreshed_time.read() {
+                None => {
+                    need_reload = true;
+                    reason = LoadKeyReason::Initial;
+                }
+                Some(last_refreshed_at) => {
+                    if last_refreshed_at.elapsed() > self.refresh_interval {
+                        need_reload = true;
+                        reason = LoadKeyReason::Refresh;
+                    }
+                }
+            }
+        }
+
+        if !need_reload {
+            return Ok(());
+        }
 
         let old_keys = self
             .recent_cached_maps
@@ -237,12 +256,9 @@ impl JwkKeyStore {
             .last()
             .cloned()
             .unwrap_or(HashMap::new());
-        if !need_reload {
-            return Ok(());
-        }
 
         // if got network issues on loading JWKS, fallback to the cached keys if available
-        let new_keys = match self.load_keys().await {
+        let new_keys = match self.load_keys(reason).await {
             Ok(new_keys) => new_keys,
             Err(err) => {
                 warn!("Failed to load JWKS from {}: {}", self.url, err);
