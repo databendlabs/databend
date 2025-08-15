@@ -585,7 +585,10 @@ impl TaskService {
         };
 
         let session = create_session(user, role).await?;
-        session.create_query_context_with_cluster(dummy_cluster)
+        session.create_query_context_with_cluster(
+            dummy_cluster,
+            databend_common_version::BUILD_INFO.clone(),
+        )
     }
 
     pub async fn lasted_task_run(&self, task_name: &str) -> Result<Option<TaskRun>> {

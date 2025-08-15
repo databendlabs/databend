@@ -112,7 +112,7 @@ async fn test_query() -> Result<()> {
         let stream = UnixListenerStream::new(uds);
 
         // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
-        let service = FlightSqlServiceImpl::create();
+        let service = FlightSqlServiceImpl::create(databend_common_version::BUILD_INFO.clone());
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let serve_future = Server::builder()
             .add_service(FlightServiceServer::new(service))

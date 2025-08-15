@@ -471,6 +471,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string());
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
 
+        let version = GlobalConfig::version();
         Ok(HttpQueryContext {
             session,
             query_id,
@@ -490,6 +491,7 @@ impl<E> HTTPSessionEndpoint<E> {
             client_session,
             fixed_coordinator_node: is_worksheet,
             client_caps,
+            version,
         })
     }
 }

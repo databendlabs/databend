@@ -699,6 +699,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_version(&self) -> &databend_query::sessions::BuildInfo {
+        todo!()
+    }
+
     fn get_format_settings(&self) -> Result<FormatSettings> {
         todo!()
     }

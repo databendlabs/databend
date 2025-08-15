@@ -77,7 +77,7 @@ impl GlobalServices {
 
         // The order of initialization is very important
         // 1. global config init.
-        GlobalConfig::init(config)?;
+        GlobalConfig::init(config, databend_common_version::BUILD_INFO.clone())?;
 
         // 2. log init.
         let mut log_labels = BTreeMap::new();
@@ -186,7 +186,7 @@ impl GlobalServices {
         Self::init_workload_mgr(config).await?;
 
         if config.log.history.on {
-            GlobalHistoryLog::init(config).await?;
+            GlobalHistoryLog::init(config, databend_common_version::BUILD_INFO.clone()).await?;
         }
         if config.task.on {
             if config.query.cloud_control_grpc_server_address.is_some() {

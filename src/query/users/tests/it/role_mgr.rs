@@ -37,7 +37,11 @@ async fn test_role_manager() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(
+            &InnerConfig::default(),
+            databend_common_version::BUILD_INFO.clone(),
+        )
+        .unwrap();
     }
     let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant = Tenant::new_literal("tenant1");

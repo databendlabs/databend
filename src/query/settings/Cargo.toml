@@ -25,6 +25,7 @@ sys-info = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
+databend-common-version = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 

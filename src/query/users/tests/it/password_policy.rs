@@ -39,7 +39,11 @@ async fn test_password_policy() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(
+            &InnerConfig::default(),
+            databend_common_version::BUILD_INFO.clone(),
+        )
+        .unwrap();
     }
     let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
     let tenant_name = "test";

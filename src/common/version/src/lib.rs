@@ -17,6 +17,7 @@
 
 use std::sync::LazyLock;
 
+use databend_common_base::base::BuildInfo;
 use semver::Version;
 
 pub const VERGEN_GIT_SHA: Option<&'static str> = option_env!("VERGEN_GIT_SHA");
@@ -90,4 +91,8 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
         }
         _ => String::new(),
     }
+});
+
+pub static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(|| BuildInfo {
+    version: DATABEND_SEMVER.clone(),
 });

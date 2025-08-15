@@ -124,7 +124,7 @@ impl Client for ScriptClient {
         let ctx = self
             .ctx
             .get_current_session()
-            .create_query_context()
+            .create_query_context(databend_common_version::BUILD_INFO.clone())
             .await?;
 
         let mut planner = Planner::new(ctx.clone());

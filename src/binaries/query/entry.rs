@@ -74,7 +74,8 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
                 .init_inner_config(false)
                 .await
                 .with_context(make_error)?;
-            local::query_local(conf, query, output_format)
+            let version = databend_common_version::BUILD_INFO.clone();
+            local::query_local(conf, version, query, output_format)
                 .await
                 .with_context(make_error)?
         }
@@ -265,7 +266,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             "{}:{}",
             conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
         );
-        let mut srv = FlightSQLServer::create(conf.clone()).with_context(make_error)?;
+        let mut srv =
+            FlightSQLServer::create(conf.clone(), databend_common_version::BUILD_INFO.clone())
+                .with_context(make_error)?;
         let listening = srv
             .start(address.parse().with_context(make_error)?)
             .await

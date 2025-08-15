@@ -88,7 +88,9 @@ async fn test_status() -> Result<()> {
     let http_session = fixture
         .new_session_with_type(SessionType::HTTPQuery)
         .await?;
-    let query_ctx = http_session.create_query_context().await?;
+    let query_ctx = http_session
+        .create_query_context(databend_common_version::BUILD_INFO.clone())
+        .await?;
 
     {
         let interpreter = run_query(&query_ctx).await?;

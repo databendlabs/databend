@@ -94,7 +94,7 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
 pub fn init_query(cfg: &InnerConfig) -> Result<()> {
     GlobalInstance::init_production();
 
-    GlobalConfig::init(cfg)?;
+    GlobalConfig::init(cfg, databend_common_version::BUILD_INFO.clone())?;
     GlobalIORuntime::init(cfg.storage.num_cpus as usize)?;
 
     Ok(())

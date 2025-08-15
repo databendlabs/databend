@@ -28,7 +28,11 @@ fn test_find_all_related_roles() {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(
+            &InnerConfig::default(),
+            databend_common_version::BUILD_INFO.clone(),
+        )
+        .unwrap();
     }
 
     // Create some test RoleInfo instances for the cache

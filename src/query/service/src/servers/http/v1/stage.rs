@@ -91,7 +91,7 @@ pub async fn upload_to_stage(
 ) -> PoemResult<Json<UploadToStageResponse>> {
     let session = ctx.upgrade_session(SessionType::HTTPAPI("UploadToStage".to_string()))?;
     let context = session
-        .create_query_context()
+        .create_query_context(ctx.version.clone())
         .await
         .map_err(InternalServerError)?;
     let args = UploadToStageArgs::parse(req)?;

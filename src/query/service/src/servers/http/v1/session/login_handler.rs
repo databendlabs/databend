@@ -57,7 +57,7 @@ async fn check_login(
     req: &LoginRequest,
 ) -> databend_common_exception::Result<()> {
     let session = &ctx.session;
-    let table_ctx = session.create_query_context().await?;
+    let table_ctx = session.create_query_context(ctx.version.clone()).await?;
     if let Some(database) = &req.database {
         let cat = session.get_current_catalog();
         let cat = table_ctx.get_catalog(&cat).await?;

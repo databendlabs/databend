@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
@@ -23,7 +24,8 @@ pub static TRUNCATE_TABLE: &str = "/actions/truncate_table";
 
 pub async fn truncate_table(plan: TruncateTablePlan) -> Result<()> {
     let session = create_session()?;
-    let query_context = session.create_query_context().await?;
+    let version = GlobalConfig::version();
+    let query_context = session.create_query_context(version).await?;
     let interpreter = TruncateTableInterpreter::from_flight(query_context, plan)?;
     interpreter.execute2().await.map(|_| ())
 }

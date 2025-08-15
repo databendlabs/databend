@@ -35,6 +35,7 @@ use tonic::Status;
 use uuid::Uuid;
 
 use crate::servers::http::v1::ExpiringMap;
+use crate::sessions::BuildInfo;
 use crate::sessions::Session;
 
 #[macro_export]
@@ -52,14 +53,16 @@ type DoGetStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send 
 pub struct FlightSqlServiceImpl {
     pub sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     statements: Arc<DashMap<Uuid, (Plan, PlanExtras)>>,
+    version: BuildInfo,
 }
 
 /// in current official JDBC driver, Statement is based on PreparedStatement too, so we impl it first.
 impl FlightSqlServiceImpl {
-    pub fn create() -> Self {
+    pub fn create(version: BuildInfo) -> Self {
         FlightSqlServiceImpl {
             sessions: Mutex::new(Default::default()),
             statements: Default::default(),
+            version,
         }
     }
 }

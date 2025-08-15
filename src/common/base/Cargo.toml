@@ -51,6 +51,7 @@ replace_with = { workspace = true }
 reqwest = { workspace = true }
 reqwest-hickory-resolver = { workspace = true }
 rustix = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state = { workspace = true }

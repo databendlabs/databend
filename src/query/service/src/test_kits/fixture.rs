@@ -160,7 +160,9 @@ impl TestFixture {
         use crate::history_tables::session::create_session;
         let default_session =
             create_session(conf.query.tenant_id.tenant_name(), &conf.query.cluster_id).await?;
-        let default_ctx = default_session.create_query_context().await?;
+        let default_ctx = default_session
+            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
         let thread_name = std::thread::current().name().unwrap().to_string();
@@ -188,7 +190,9 @@ impl TestFixture {
 
         // This will use a max_active_sessions number.
         let default_session = Self::create_session(SessionType::Dummy).await?;
-        let default_ctx = default_session.create_query_context().await?;
+        let default_ctx = default_session
+            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
         let thread_name = std::thread::current().name().unwrap().to_string();
@@ -301,7 +305,9 @@ impl TestFixture {
 
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
-        self.default_session.create_query_context().await
+        self.default_session
+            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .await
     }
 
     /// returns new QueryContext of default session with cluster
@@ -315,6 +321,7 @@ impl TestFixture {
         let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
             self.default_session.clone(),
             Cluster::create(nodes, local_id),
+            databend_common_version::BUILD_INFO.clone(),
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;

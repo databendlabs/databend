@@ -34,7 +34,11 @@ async fn test_user_lambda_udf() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(
+            &InnerConfig::default(),
+            databend_common_version::BUILD_INFO.clone(),
+        )
+        .unwrap();
     }
 
     let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
@@ -110,7 +114,11 @@ async fn test_user_udf_server() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(
+            &InnerConfig::default(),
+            databend_common_version::BUILD_INFO.clone(),
+        )
+        .unwrap();
     }
 
     let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());

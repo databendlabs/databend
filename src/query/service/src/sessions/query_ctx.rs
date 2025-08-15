@@ -145,6 +145,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
+use crate::sessions::BuildInfo;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
@@ -957,6 +958,10 @@ impl TableContext for QueryContext {
             SessionType::MySQL => self.mysql_version.clone(),
             _ => self.version.clone(),
         }
+    }
+
+    fn get_version(&self) -> &BuildInfo {
+        &self.shared.version
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {

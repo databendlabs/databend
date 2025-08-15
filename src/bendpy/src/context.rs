@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_SEMVER;
+use databend_query::sessions::BuildInfo;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -38,6 +39,7 @@ use crate::utils::RUNTIME;
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
     pub(crate) session: Arc<Session>,
+    version: BuildInfo,
 }
 
 #[pymethods]
@@ -81,7 +83,10 @@ impl PySessionContext {
             Ok::<Arc<Session>, PyErr>(session)
         })?;
 
-        let mut res = Self { session };
+        let mut res = Self {
+            session,
+            version: databend_common_version::BUILD_INFO.clone(),
+        };
 
         res.sql("CREATE DATABASE IF NOT EXISTS default", py)
             .and_then(|df| df.collect(py))?;
@@ -89,7 +94,8 @@ impl PySessionContext {
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
+        let ctx =
+            wait_for_future(py, self.session.create_query_context(self.version.clone())).unwrap();
         let res = wait_for_future(py, plan_sql(&ctx, sql));
 
         match res {

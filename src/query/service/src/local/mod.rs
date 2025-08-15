@@ -20,6 +20,7 @@ pub(crate) mod helper;
 use std::io::stdin;
 use std::io::IsTerminal;
 
+use databend_common_base::base::BuildInfo;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -31,6 +32,7 @@ use crate::GlobalServices;
 
 pub async fn query_local(
     mut conf: InnerConfig,
+    version: BuildInfo,
     query_sql: &str,
     output_format: &str,
 ) -> Result<()> {
@@ -57,7 +59,7 @@ pub async fn query_local(
 
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && query_sql.is_empty();
-    let mut executor = executor::SessionExecutor::try_new(is_repl, output_format).await?;
+    let mut executor = executor::SessionExecutor::try_new(is_repl, version, output_format).await?;
 
     let query_sql = query_sql.replace("$STDIN", "'fs:///dev/fd/0'");
     executor.handle(&query_sql).await;

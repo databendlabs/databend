@@ -238,7 +238,7 @@ pub async fn clickhouse_handler_get(
             session.set_current_database(db.clone());
         }
         let context = session
-            .create_query_context()
+            .create_query_context(ctx.version.clone())
             .await
             .map_err(InternalServerError)?;
 
@@ -300,7 +300,7 @@ pub async fn clickhouse_handler_post(
             session.set_current_database(db.clone());
         }
         let ctx = session
-            .create_query_context()
+            .create_query_context(ctx.version.clone())
             .await
             .map_err(InternalServerError)?;
 
