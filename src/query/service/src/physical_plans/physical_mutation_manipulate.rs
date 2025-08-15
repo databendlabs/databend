@@ -80,10 +80,21 @@ impl IPhysicalPlan for MutationManipulate {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(MutationManipulate {
+            meta: self.meta.clone(),
+            input,
+            table_info: self.table_info.clone(),
+            unmatched: self.unmatched.clone(),
+            matched: self.matched.clone(),
+            field_index_of_input_schema: self.field_index_of_input_schema.clone(),
+            strategy: self.strategy.clone(),
+            row_id_idx: self.row_id_idx,
+            can_try_update_column_only: self.can_try_update_column_only,
+            unmatched_schema: self.unmatched_schema.clone(),
+            target_table_index: self.target_table_index,
+        })
     }
 
     // Handle matched and unmatched data separately.

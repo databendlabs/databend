@@ -66,11 +66,16 @@ impl IPhysicalPlan for Sequence {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_sequence = self.clone();
         assert_eq!(children.len(), 2);
-        new_sequence.right = children.pop().unwrap();
-        new_sequence.left = children.pop().unwrap();
-        Box::new(new_sequence)
+        let right = children.pop().unwrap();
+        let left = children.pop().unwrap();
+        Box::new(Sequence {
+            plan_id: self.plan_id,
+            stat_info: self.stat_info.clone(),
+            left,
+            right,
+            meta: self.meta.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

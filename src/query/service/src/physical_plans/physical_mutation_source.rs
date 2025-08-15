@@ -100,7 +100,18 @@ impl IPhysicalPlan for MutationSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(MutationSource {
+            meta: self.meta.clone(),
+            table_index: self.table_index,
+            table_info: self.table_info.clone(),
+            filters: self.filters.clone(),
+            output_schema: self.output_schema.clone(),
+            input_type: self.input_type.clone(),
+            read_partition_columns: self.read_partition_columns.clone(),
+            truncate_table: self.truncate_table,
+            partitions: self.partitions.clone(),
+            statistics: self.statistics.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

@@ -68,7 +68,12 @@ impl IPhysicalPlan for ExchangeSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(ExchangeSource {
+            meta: self.meta.clone(),
+            schema: self.schema.clone(),
+            source_fragment_id: self.source_fragment_id,
+            query_id: self.query_id.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

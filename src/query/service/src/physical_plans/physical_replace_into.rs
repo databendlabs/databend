@@ -87,10 +87,20 @@ impl IPhysicalPlan for ReplaceInto {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ReplaceInto {
+            meta: self.meta.clone(),
+            input,
+            block_thresholds: self.block_thresholds.clone(),
+            table_info: self.table_info.clone(),
+            on_conflicts: self.on_conflicts.clone(),
+            bloom_filter_column_indexes: self.bloom_filter_column_indexes.clone(),
+            segments: self.segments.clone(),
+            block_slots: self.block_slots.clone(),
+            need_insert: self.need_insert,
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

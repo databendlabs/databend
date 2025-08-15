@@ -191,7 +191,15 @@ impl IPhysicalPlan for TableScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(TableScan {
+            meta: self.meta.clone(),
+            scan_id: self.scan_id,
+            name_mapping: self.name_mapping.clone(),
+            source: self.source.clone(),
+            internal_column: self.internal_column.clone(),
+            table_index: self.table_index,
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

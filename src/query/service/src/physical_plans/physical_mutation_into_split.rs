@@ -59,10 +59,13 @@ impl IPhysicalPlan for MutationSplit {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(MutationSplit {
+            meta: self.meta.clone(),
+            input,
+            split_index: self.split_index,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

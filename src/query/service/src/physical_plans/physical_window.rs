@@ -142,10 +142,18 @@ impl IPhysicalPlan for Window {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(Window {
+            meta: self.meta.clone(),
+            index: self.index,
+            input,
+            func: self.func.clone(),
+            partition_by: self.partition_by.clone(),
+            order_by: self.order_by.clone(),
+            window_frame: self.window_frame.clone(),
+            limit: self.limit,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

@@ -138,10 +138,21 @@ impl IPhysicalPlan for Mutation {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(Mutation {
+            meta: self.meta.clone(),
+            input,
+            table_info: self.table_info.clone(),
+            unmatched: self.unmatched.clone(),
+            segments: self.segments.clone(),
+            strategy: self.strategy.clone(),
+            target_table_index: self.target_table_index,
+            need_match: self.need_match,
+            distributed: self.distributed,
+            target_build_optimization: self.target_build_optimization,
+            table_meta_timestamps: self.table_meta_timestamps,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

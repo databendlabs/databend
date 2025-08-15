@@ -81,7 +81,12 @@ impl IPhysicalPlan for Recluster {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(Recluster {
+            meta: self.meta.clone(),
+            tasks: self.tasks.clone(),
+            table_info: self.table_info.clone(),
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+        })
     }
 
     /// The flow of Pipeline is as follows:
@@ -285,10 +290,16 @@ impl IPhysicalPlan for HilbertPartition {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(HilbertPartition {
+            meta: self.meta.clone(),
+            input,
+            table_info: self.table_info.clone(),
+            num_partitions: self.num_partitions,
+            table_meta_timestamps: self.table_meta_timestamps,
+            rows_per_block: self.rows_per_block,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

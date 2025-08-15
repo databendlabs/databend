@@ -97,10 +97,18 @@ impl IPhysicalPlan for RowFetch {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(RowFetch {
+            meta: self.meta.clone(),
+            input,
+            source: self.source.clone(),
+            cols_to_fetch: self.cols_to_fetch.clone(),
+            row_id_col_offset: self.row_id_col_offset,
+            fetched_fields: self.fetched_fields.clone(),
+            need_wrap_nullable: self.need_wrap_nullable,
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

@@ -71,10 +71,18 @@ impl IPhysicalPlan for DistributedInsertSelect {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(DistributedInsertSelect {
+            meta: self.meta.clone(),
+            input,
+            table_info: self.table_info.clone(),
+            insert_schema: self.insert_schema.clone(),
+            select_schema: self.select_schema.clone(),
+            select_column_bindings: self.select_column_bindings.clone(),
+            cast_needed: self.cast_needed,
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

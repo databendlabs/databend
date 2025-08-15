@@ -85,10 +85,13 @@ impl IPhysicalPlan for Duplicate {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(Duplicate {
+            meta: self.meta.clone(),
+            input,
+            n: self.n,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -135,10 +138,13 @@ impl IPhysicalPlan for Shuffle {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(Shuffle {
+            meta: self.meta.clone(),
+            input,
+            strategy: self.strategy.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -211,10 +217,13 @@ impl IPhysicalPlan for ChunkFilter {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkFilter {
+            meta: self.meta.clone(),
+            input,
+            predicates: self.predicates.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -273,10 +282,13 @@ impl IPhysicalPlan for ChunkEvalScalar {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkEvalScalar {
+            meta: self.meta.clone(),
+            input,
+            eval_scalars: self.eval_scalars.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -346,10 +358,13 @@ impl IPhysicalPlan for ChunkCastSchema {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkCastSchema {
+            meta: self.meta.clone(),
+            input,
+            cast_schemas: self.cast_schemas.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -416,10 +431,13 @@ impl IPhysicalPlan for ChunkFillAndReorder {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkFillAndReorder {
+            meta: self.meta.clone(),
+            input,
+            fill_and_reorders: self.fill_and_reorders.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -486,10 +504,13 @@ impl IPhysicalPlan for ChunkAppendData {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkAppendData {
+            meta: self.meta.clone(),
+            input,
+            target_tables: self.target_tables.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -646,10 +667,13 @@ impl IPhysicalPlan for ChunkMerge {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkMerge {
+            meta: self.meta.clone(),
+            input,
+            group_ids: self.group_ids.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -707,10 +731,16 @@ impl IPhysicalPlan for ChunkCommitInsert {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ChunkCommitInsert {
+            meta: self.meta.clone(),
+            input,
+            update_stream_meta: self.update_stream_meta.clone(),
+            overwrite: self.overwrite,
+            deduplicated_label: self.deduplicated_label.clone(),
+            targets: self.targets.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

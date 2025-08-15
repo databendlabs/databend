@@ -94,11 +94,19 @@ impl IPhysicalPlan for UnionAll {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_union_all = self.clone();
         assert_eq!(children.len(), 2);
-        new_union_all.right = children.pop().unwrap();
-        new_union_all.left = children.pop().unwrap();
-        Box::new(new_union_all)
+        let right = children.pop().unwrap();
+        let left = children.pop().unwrap();
+        Box::new(UnionAll {
+            meta: self.meta.clone(),
+            left,
+            right,
+            left_outputs: self.left_outputs.clone(),
+            right_outputs: self.right_outputs.clone(),
+            schema: self.schema.clone(),
+            cte_scan_names: self.cte_scan_names.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

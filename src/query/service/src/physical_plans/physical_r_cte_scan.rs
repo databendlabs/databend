@@ -54,7 +54,12 @@ impl IPhysicalPlan for RecursiveCteScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(RecursiveCteScan {
+            meta: self.meta.clone(),
+            output_schema: self.output_schema.clone(),
+            table_name: self.table_name.clone(),
+            stat: self.stat.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

@@ -83,10 +83,21 @@ impl IPhysicalPlan for ReplaceDeduplicate {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ReplaceDeduplicate {
+            meta: self.meta.clone(),
+            input,
+            on_conflicts: self.on_conflicts.clone(),
+            bloom_filter_column_indexes: self.bloom_filter_column_indexes.clone(),
+            table_is_empty: self.table_is_empty,
+            table_info: self.table_info.clone(),
+            target_schema: self.target_schema.clone(),
+            select_ctx: self.select_ctx.clone(),
+            table_level_range_index: self.table_level_range_index.clone(),
+            need_insert: self.need_insert,
+            delete_when: self.delete_when.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

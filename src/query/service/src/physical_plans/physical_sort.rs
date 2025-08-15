@@ -193,10 +193,18 @@ impl IPhysicalPlan for Sort {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(Sort {
+            meta: self.meta.clone(),
+            input,
+            order_by: self.order_by.clone(),
+            limit: self.limit,
+            step: self.step,
+            pre_projection: self.pre_projection.clone(),
+            broadcast_id: self.broadcast_id,
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

@@ -89,18 +89,40 @@ impl IPhysicalPlan for CopyIntoTable {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         match &self.source {
             CopyIntoTableSource::Query(_) => {
-                let mut new_copy_into_table = self.clone();
                 assert_eq!(children.len(), 1);
                 let input = children.pop().unwrap();
-                new_copy_into_table.source = CopyIntoTableSource::Query(input);
-                Box::new(new_copy_into_table)
+                Box::new(CopyIntoTable {
+                    meta: self.meta.clone(),
+                    required_values_schema: self.required_values_schema.clone(),
+                    values_consts: self.values_consts.clone(),
+                    required_source_schema: self.required_source_schema.clone(),
+                    write_mode: self.write_mode.clone(),
+                    validation_mode: self.validation_mode.clone(),
+                    stage_table_info: self.stage_table_info.clone(),
+                    table_info: self.table_info.clone(),
+                    project_columns: self.project_columns.clone(),
+                    source: CopyIntoTableSource::Query(input),
+                    is_transform: self.is_transform,
+                    table_meta_timestamps: self.table_meta_timestamps.clone(),
+                })
             }
             CopyIntoTableSource::Stage(_) => {
-                let mut new_copy_into_table = self.clone();
                 assert_eq!(children.len(), 1);
                 let input = children.pop().unwrap();
-                new_copy_into_table.source = CopyIntoTableSource::Stage(input);
-                Box::new(new_copy_into_table)
+                Box::new(CopyIntoTable {
+                    meta: self.meta.clone(),
+                    required_values_schema: self.required_values_schema.clone(),
+                    values_consts: self.values_consts.clone(),
+                    required_source_schema: self.required_source_schema.clone(),
+                    write_mode: self.write_mode.clone(),
+                    validation_mode: self.validation_mode.clone(),
+                    stage_table_info: self.stage_table_info.clone(),
+                    table_info: self.table_info.clone(),
+                    project_columns: self.project_columns.clone(),
+                    source: CopyIntoTableSource::Stage(input),
+                    is_transform: self.is_transform,
+                    table_meta_timestamps: self.table_meta_timestamps.clone(),
+                })
             }
         }
     }

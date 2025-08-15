@@ -62,7 +62,13 @@ impl IPhysicalPlan for MaterializeCTERef {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(MaterializeCTERef {
+            plan_id: self.plan_id,
+            stat_info: self.stat_info.clone(),
+            cte_name: self.cte_name.clone(),
+            cte_schema: self.cte_schema.clone(),
+            meta: self.meta.clone(),
+        })
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {

@@ -106,10 +106,15 @@ impl IPhysicalPlan for ProjectSet {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ProjectSet {
+            meta: self.meta.clone(),
+            projections: self.projections.clone(),
+            input,
+            srf_exprs: self.srf_exprs.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

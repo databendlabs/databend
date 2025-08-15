@@ -71,10 +71,14 @@ impl IPhysicalPlan for ExpressionScan {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ExpressionScan {
+            meta: self.meta.clone(),
+            values: self.values.clone(),
+            input,
+            output_schema: self.output_schema.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

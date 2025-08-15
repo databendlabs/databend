@@ -88,10 +88,19 @@ impl IPhysicalPlan for ExchangeSink {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        let input = children.pop().unwrap();
+        Box::new(ExchangeSink {
+            meta: self.meta.clone(),
+            input,
+            schema: self.schema.clone(),
+            kind: self.kind.clone(),
+            keys: self.keys.clone(),
+            destination_fragment_id: self.destination_fragment_id,
+            query_id: self.query_id.clone(),
+            ignore_exchange: self.ignore_exchange,
+            allow_adjust_parallelism: self.allow_adjust_parallelism,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
