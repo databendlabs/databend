@@ -59,7 +59,20 @@ statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
 statement error 1132
+alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
+
+statement error 1114
 alter table t ADD ROW ACCESS POLICY rap_it ON (id);
+
+statement error 1131
+ALTER TABLE t drop row access policy p1;
+
+statement ok
+create row access policy IF NOT EXISTS p1 as (empl_id varchar) returns boolean ->
+  case
+      when 'it_admin' = current_role() then true
+      else false
+  end;
 
 statement error 1132
 ALTER TABLE t drop row access policy p1;

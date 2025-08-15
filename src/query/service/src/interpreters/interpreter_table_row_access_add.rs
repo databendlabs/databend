@@ -22,7 +22,6 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::AddTableRowAccessPolicyPlan;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
@@ -70,11 +69,6 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         table.check_mutable()?;
 
         let table_info = table.get_table_info();
-
-        if table_info.meta.row_access_policy.is_some() {
-            return Err(ErrorCode::AlterTableError(format!("Table {} already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.
-", tbl_name)));
-        }
 
         if table.is_temp() {
             return Err(ErrorCode::StorageOther(format!(
@@ -132,11 +126,9 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         }
 
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
 
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
-            seq: MatchSeq::Exact(table_version),
             table_id,
             policy_id,
             action: SetTableRowAccessPolicyAction::Set(policy_name),

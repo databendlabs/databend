@@ -923,7 +923,6 @@ pub struct SetTableRowAccessPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
     pub policy_id: u64,
-    pub seq: MatchSeq,
     pub action: SetTableRowAccessPolicyAction,
 }
 

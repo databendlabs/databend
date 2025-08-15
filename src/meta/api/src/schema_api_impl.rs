@@ -27,6 +27,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;
@@ -189,19 +190,15 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 use display_more::DisplaySliceExt;
 use fastrace::func_name;
@@ -221,7 +218,6 @@ use crate::fetch_id;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::kv_pb_api::UpsertPB;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
 use crate::meta_txn_error::MetaTxnError;
@@ -2480,17 +2476,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall]
-    #[fastrace::trace]
+    //#[logcall::logcall]
+    //#[fastrace::trace]
     async fn set_table_row_access_policy(
         &self,
         req: SetTableRowAccessPolicyReq,
-    ) -> Result<SetTableRowAccessPolicyReply, KVAppError> {
+    ) -> Result<databend_common_exception::Result<SetTableRowAccessPolicyReply>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let tbid = TableId {
             table_id: req.table_id,
         };
-        let req_seq = req.seq;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
@@ -2506,49 +2501,58 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )));
             };
 
-            if req_seq.match_seq(&seq_meta.seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        seq_meta.seq,
-                        "set_table_row_access_policy",
-                    ),
-                )));
-            }
-
             // upsert row access policy
             let table_meta = seq_meta.data;
-
             let mut new_table_meta = table_meta.clone();
+            let id = RowAccessPolicyIdTableId {
+                policy_id: req.policy_id,
+                table_id: req.table_id,
+            };
+            let ident = RowAccessPolicyTableIdIdent::new_generic(req.tenant.clone(), id);
 
-            match &req.action {
+            let txn_req = match &req.action {
                 SetTableRowAccessPolicyAction::Set(new_mask_name) => {
+                    if table_meta.row_access_policy.is_some() {
+                        return Ok(Err(ErrorCode::AlterTableError("Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.
+".to_string())));
+                    }
                     new_table_meta.row_access_policy = Some(new_mask_name.to_string());
+                    TxnRequest::new(
+                        vec![
+                            // table is not changed
+                            txn_cond_seq(&tbid, Eq, seq_meta.seq),
+                        ],
+                        vec![
+                            txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                            txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
+                        ],
+                    )
                 }
-                SetTableRowAccessPolicyAction::Unset(_) => {
+                SetTableRowAccessPolicyAction::Unset(old_policy) => {
+                    // drop row access policy and table does not have row access policy
+                    if let Some(policy) = &table_meta.row_access_policy {
+                        if policy != old_policy {
+                            return Ok(Err(ErrorCode::AlterTableError(format!(
+                                "Unknown row access policy {} on table",
+                                policy
+                            ))));
+                        }
+                    } else {
+                        return Ok(Ok(SetTableRowAccessPolicyReply {}));
+                    }
                     new_table_meta.row_access_policy = None;
+                    TxnRequest::new(
+                        vec![
+                            // table is not changed
+                            txn_cond_seq(&tbid, Eq, seq_meta.seq),
+                        ],
+                        vec![
+                            txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                            txn_op_del(&ident), // table drop row access policy, del policy_tb_id
+                        ],
+                    )
                 }
-            }
-
-            let txn_req = TxnRequest::new(
-                vec![
-                    // table is not changed
-                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
-                ],
-                vec![
-                    txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
-                ],
-            );
-
-            let _ = update_row_access_policy(
-                self,
-                &req.action,
-                &req.tenant,
-                req.table_id,
-                req.policy_id,
-            )
-            .await;
+            };
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
@@ -2559,7 +2563,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(SetTableRowAccessPolicyReply {});
+                return Ok(Ok(SetTableRowAccessPolicyReply {}));
             }
         }
     }
@@ -4215,47 +4219,6 @@ async fn update_mask_policy(
         }
     }
 
-    Ok(())
-}
-
-async fn update_row_access_policy(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    action: &SetTableRowAccessPolicyAction,
-    tenant: &Tenant,
-    table_id: u64,
-    policy_id: u64,
-) -> Result<(), KVAppError> {
-    match action {
-        SetTableRowAccessPolicyAction::Set(_) => {
-            let id = RowAccessPolicyIdTableId {
-                policy_id,
-                table_id,
-            };
-            let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
-            let seq = MatchSeq::GE(0);
-            let upsert = UpsertPB::update(ident, RowAccessPolicyTableId {}).with(seq);
-
-            kv_api.upsert_pb(&upsert).await?;
-        }
-        SetTableRowAccessPolicyAction::Unset(_) => {
-            let id = RowAccessPolicyIdTableId {
-                policy_id,
-                table_id,
-            };
-            let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
-            let key = ident.to_string_key();
-
-            // simply ignore the result
-            kv_api
-                .upsert_kv(UpsertKV::new(
-                    &key,
-                    MatchSeq::GE(0),
-                    Operation::Delete,
-                    None,
-                ))
-                .await?;
-        }
-    }
     Ok(())
 }
 

@@ -3523,12 +3523,11 @@ impl SchemaApiTestSuite {
 
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
-                seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
                 policy_id: policy1_id,
             };
-            let _ = mt.set_table_row_access_policy(req).await?;
+            let _ = mt.set_table_row_access_policy(req).await??;
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
@@ -3568,12 +3567,11 @@ impl SchemaApiTestSuite {
 
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
-                seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
                 policy_id: policy1_id,
             };
-            let _ = mt.set_table_row_access_policy(req).await?;
+            let _ = mt.set_table_row_access_policy(req).await??;
             // check table meta
             let req = GetTableReq {
                 inner: TableNameIdent {
@@ -3598,23 +3596,13 @@ impl SchemaApiTestSuite {
 
         info!("--- unset row access policy of table 1 and check");
         {
-            let req = GetTableReq {
-                inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_1.to_string(),
-                },
-            };
-            let res = mt.get_table(req).await?;
-
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
-                seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 action: SetTableRowAccessPolicyAction::Unset(policy1.to_string()),
                 policy_id: policy1_id,
             };
-            let _ = mt.set_table_row_access_policy(req).await?;
+            let _ = mt.set_table_row_access_policy(req).await??;
 
             // check table meta
             let req = GetTableReq {

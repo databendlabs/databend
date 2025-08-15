@@ -66,11 +66,11 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         name: String,
     ) -> Result<(u64, RowAccessPolicyMeta)> {
         let name_ident = RowAccessPolicyNameIdent::new(tenant, name);
-        let (id, seq_meta) = meta_api
+        let res = meta_api
             .get_row_access(&name_ident)
             .await?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get row policy")))?;
-        Ok((id, seq_meta.data))
+        Ok((res.0.seq, res.1.data))
     }
 }
 

@@ -741,7 +741,7 @@ impl Catalog for MutableCatalog {
         &self,
         req: SetTableRowAccessPolicyReq,
     ) -> Result<SetTableRowAccessPolicyReply> {
-        Ok(self.ctx.meta.set_table_row_access_policy(req).await?)
+        self.ctx.meta.set_table_row_access_policy(req).await?
     }
 
     #[async_backtrace::framed]
