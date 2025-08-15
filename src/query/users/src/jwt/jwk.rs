@@ -22,6 +22,8 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::auth::metrics_incr_auth_jwks_requests_count;
+use databend_common_metrics::auth::metrics_observe_auth_jwks_refresh_duration;
 use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
@@ -37,6 +39,22 @@ use super::PubKey;
 
 const JWKS_REFRESH_TIMEOUT: u64 = 10;
 const JWKS_REFRESH_INTERVAL: u64 = 86400;
+
+enum LoadKeyReason {
+    Initial,
+    Refresh,
+    Force,
+}
+
+impl LoadKeyReason {
+    fn as_str(&self) -> &str {
+        match self {
+            LoadKeyReason::Initial => "initial",
+            LoadKeyReason::Refresh => "refresh",
+            LoadKeyReason::Force => "force",
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwkKey {
@@ -172,7 +190,7 @@ impl JwkKeyStore {
 
 impl JwkKeyStore {
     #[async_backtrace::framed]
-    async fn load_keys(&self) -> Result<HashMap<String, PubKey>> {
+    async fn load_keys(&self, reason: LoadKeyReason) -> Result<HashMap<String, PubKey>> {
         if let Some(load_keys_func) = &self.load_keys_func {
             return Ok(load_keys_func());
         }
@@ -184,6 +202,8 @@ impl JwkKeyStore {
             .map_err(|e| {
                 ErrorCode::InvalidConfig(format!("Failed to create jwks client: {}", e))
             })?;
+        metrics_incr_auth_jwks_requests_count(self.url.clone(), reason.as_str().to_string());
+        let start_time = Instant::now();
         let response = client
             .get(&self.url)
             .send()
@@ -193,6 +213,8 @@ impl JwkKeyStore {
             .json()
             .await
             .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse JWKS: {}", e)))?;
+        let duration = start_time.elapsed();
+        metrics_observe_auth_jwks_refresh_duration(self.url.clone(), duration);
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
         for k in &jwk_keys.keys {
             new_keys.insert(k.kid.to_string(), k.get_public_key()?);

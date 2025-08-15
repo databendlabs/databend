@@ -26,6 +26,7 @@ databend-common-meta-cache = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
 databend-common-version = { workspace = true }
 enumflags2 = { workspace = true }
 itertools = { workspace = true }
