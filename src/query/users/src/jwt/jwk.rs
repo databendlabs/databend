@@ -241,7 +241,7 @@ impl JwkKeyStore {
         if new_keys.keys().eq(old_keys.keys()) {
             return Ok(());
         }
-        info!("JWKS keys changed.");
+        info!("JWKS keys from {} changed.", self.url);
 
         // append the new keys to the end of recent_cached_maps
         {
