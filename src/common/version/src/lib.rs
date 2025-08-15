@@ -30,7 +30,7 @@ pub const VERGEN_CARGO_FEATURES: Option<&'static str> = option_env!("VERGEN_CARG
 
 pub const VERGEN_BUILD_SEMVER: Option<&'static str> = option_env!("VERGEN_BUILD_SEMVER");
 
-pub const DATABEND_GIT_SEMVER: Option<&'static str> = option_env!("DATABEND_GIT_SEMVER");
+pub const DATABEND_GIT_SEMVER: &str = env!("DATABEND_GIT_SEMVER");
 
 pub const DATABEND_COMMIT_AUTHORS: &str = env!("DATABEND_COMMIT_AUTHORS");
 
@@ -48,23 +48,21 @@ pub const DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: &str =
 pub const DATABEND_CARGO_CFG_TARGET_FEATURE: &str = env!("DATABEND_CARGO_CFG_TARGET_FEATURE");
 
 pub static DATABEND_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = DATABEND_GIT_SEMVER;
-    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
-
-    let semver = semver.strip_prefix('v').unwrap_or(semver);
+    let semver = DATABEND_GIT_SEMVER
+        .strip_prefix('v')
+        .unwrap_or(DATABEND_GIT_SEMVER);
 
     Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
 });
 
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    let semver = DATABEND_GIT_SEMVER;
     let git_sha = VERGEN_GIT_SHA;
     let rustc_semver = VERGEN_RUSTC_SEMVER;
     let timestamp = VERGEN_BUILD_TIMESTAMP;
 
-    match (semver, git_sha, rustc_semver, timestamp) {
-        (Some(semver), Some(git_sha), Some(rustc_semver), Some(timestamp)) => {
-            format!("{semver}-{git_sha}(rust-{rustc_semver}-{timestamp})")
+    match (git_sha, rustc_semver, timestamp) {
+        (Some(git_sha), Some(rustc_semver), Some(timestamp)) => {
+            format!("{DATABEND_GIT_SEMVER}-{git_sha}(rust-{rustc_semver}-{timestamp})")
         }
         _ => String::new(),
     }
@@ -76,15 +74,14 @@ pub static DATABEND_GIT_SHA: LazyLock<String> = LazyLock::new(|| match VERGEN_GI
 });
 
 pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    let build_semver = DATABEND_GIT_SEMVER;
     let git_sha = VERGEN_GIT_SHA;
     let rustc_semver = VERGEN_RUSTC_SEMVER;
     let timestamp = VERGEN_BUILD_TIMESTAMP;
 
     // simd is enabled by default now
-    match (build_semver, git_sha, rustc_semver, timestamp) {
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+    match (git_sha, rustc_semver, timestamp) {
+        (Some(v2), Some(v3), Some(v4)) => {
+            format!("{DATABEND_GIT_SEMVER}-{}-simd({}-{})", v2, v3, v4)
         }
         _ => String::new(),
     }
@@ -93,4 +90,5 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
 pub static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(|| BuildInfo {
     semantic: DATABEND_SEMVER.clone(),
     commit_detail: DATABEND_COMMIT_VERSION.clone(),
+    embedded_license: DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
 });

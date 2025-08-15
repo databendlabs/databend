@@ -103,10 +103,9 @@ pub trait Interpreter: Sync + Send {
 
         let allow_disk_cache = {
             let license_key = ctx.get_license_key();
-            let manager = LicenseManagerSwitch::instance();
-            match manager.check_license(license_key.clone()) {
+            match LicenseManagerSwitch::instance().check_license(license_key.clone()) {
                 Ok(_) => true,
-                Err(e) if !license_key.is_empty() || !manager.license_embedded().is_empty() => {
+                Err(e) if !license_key.is_empty() => {
                     let msg =
                             format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                                     e);

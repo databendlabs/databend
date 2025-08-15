@@ -25,7 +25,7 @@ use crate::license::LicenseInfo;
 use crate::license::StorageQuota;
 
 pub trait LicenseManager: Sync + Send {
-    fn init(tenant: String, license_embedded: String) -> Result<()>
+    fn init(tenant: String) -> Result<()>
     where Self: Sized;
 
     fn instance() -> Arc<Box<dyn LicenseManager>>
@@ -65,10 +65,6 @@ pub trait LicenseManager: Sync + Send {
 
     /// Get the storage quota from license key.
     fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota>;
-
-    fn license_embedded(&self) -> &str {
-        ""
-    }
 }
 
 pub struct LicenseManagerSwitch {
@@ -96,7 +92,7 @@ impl Deref for LicenseManagerSwitch {
 pub struct OssLicenseManager {}
 
 impl LicenseManager for OssLicenseManager {
-    fn init(_tenant: String, _: String) -> Result<()> {
+    fn init(_tenant: String) -> Result<()> {
         let rm = OssLicenseManager {};
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         Ok(())
@@ -179,7 +175,7 @@ mod tests {
     }
 
     impl LicenseManager for MockLicenseManager {
-        fn init(_tenant: String, _: String) -> Result<()> {
+        fn init(_tenant: String) -> Result<()> {
             unimplemented!()
         }
 

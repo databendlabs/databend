@@ -233,11 +233,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Metric API service.
     {
-        set_system_version(
-            "query",
-            DATABEND_GIT_SEMVER.unwrap_or("unknown"),
-            DATABEND_GIT_SHA.as_str(),
-        );
+        set_system_version("query", DATABEND_GIT_SEMVER, DATABEND_GIT_SHA.as_str());
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv

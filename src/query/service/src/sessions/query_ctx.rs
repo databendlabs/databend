@@ -1229,10 +1229,8 @@ impl TableContext for QueryContext {
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
         {
-            LicenseManagerSwitch::instance().check_enterprise_enabled(
-                self.get_settings().get_enterprise_license(),
-                Feature::SystemHistory,
-            )?;
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::SystemHistory)?;
 
             if GlobalConfig::instance().log.history.is_invisible(table) {
                 return Err(ErrorCode::InvalidArgument(format!(
@@ -1467,7 +1465,8 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        self.get_settings().get_enterprise_license()
+        self.get_settings()
+            .get_enterprise_license(self.get_version())
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {

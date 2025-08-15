@@ -39,8 +39,8 @@ use databend_common_storage::init_operator;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_enterprise_query::license::RealLicenseManager;
+use databend_query::sessions::BuildInfo;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
 use futures::TryStreamExt;
@@ -105,11 +105,8 @@ pub fn init_query(cfg: &InnerConfig) -> Result<()> {
 ///
 /// We only need to call it while backup since we can't access metasrv while
 /// restoring.
-pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
-    RealLicenseManager::init(
-        cfg.query.tenant_id.tenant_name().to_string(),
-        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
-    )?;
+pub async fn verify_query_license(cfg: &InnerConfig, version: &BuildInfo) -> Result<()> {
+    RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
         cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
@@ -125,8 +122,10 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     let session = session_manager.register_session(session)?;
     let settings = session.get_settings();
 
-    LicenseManagerSwitch::instance()
-        .check_enterprise_enabled(settings.get_enterprise_license(), Feature::SystemManagement)?;
+    LicenseManagerSwitch::instance().check_enterprise_enabled(
+        settings.get_enterprise_license(version),
+        Feature::SystemManagement,
+    )?;
 
     debug!("databend license check passed");
     Ok(())

@@ -16,7 +16,6 @@ use databend_common_base::base::tokio;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license_manager::LicenseManager;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::test_kits::*;
 use jwt_simple::algorithms::ES256KeyPair;
@@ -45,7 +44,6 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
         fixture.default_tenant().tenant_name().to_string(),
-        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
         key_pair.public_key().to_pem().unwrap(),
     );
     let claims = Claims::with_custom_claims(
@@ -88,7 +86,6 @@ async fn test_license_features() -> databend_common_exception::Result<()> {
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
         fixture.default_tenant().tenant_name().to_string(),
-        DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
         key_pair.public_key().to_pem().unwrap(),
     );
     let claims = Claims::with_custom_claims(

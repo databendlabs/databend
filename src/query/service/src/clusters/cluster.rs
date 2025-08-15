@@ -75,6 +75,7 @@ use crate::servers::flight::FlightClient;
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
+    version: BuildInfo,
     heartbeat: Mutex<ClusterHeartbeat>,
     warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
@@ -245,11 +246,12 @@ impl ClusterDiscovery {
         version: BuildInfo,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version.clone(), metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
             local_secret: cfg.query.node_secret.clone(),
+            version,
             warehouse_manager: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -667,7 +669,7 @@ impl ClusterDiscovery {
     }
 
     async fn check_license_key(&self, nodes: Vec<NodeInfo>) -> Result<()> {
-        let license_key = Self::get_license_key(&self.tenant_id).await?;
+        let license_key = self.get_license_key(&self.tenant_id).await?;
 
         let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
 
@@ -684,11 +686,11 @@ impl ClusterDiscovery {
             .check_enterprise_enabled(license_key, Feature::MaxCpuQuota(total_cpu_nums as usize))
     }
 
-    async fn get_license_key(tenant: &str) -> Result<String> {
+    async fn get_license_key(&self, tenant: &str) -> Result<String> {
         // We must get the license key from settings. It may be in the configuration file.
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;
-        Ok(settings.get_enterprise_license())
+        Ok(settings.get_enterprise_license(&self.version))
     }
 }
 

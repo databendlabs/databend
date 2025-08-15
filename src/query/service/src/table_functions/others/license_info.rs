@@ -194,25 +194,19 @@ impl AsyncSource for LicenseInfoSource {
         let settings = self.ctx.get_settings();
         // sync global changes on distributed node cluster.
         settings.load_changes().await?;
-        let license = settings.get_enterprise_license();
+        let license = settings.get_enterprise_license(self.ctx.get_version());
 
-        let manager = LicenseManagerSwitch::instance();
-        manager.check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
-        let license = if license.is_empty() {
-            manager.license_embedded()
-        } else {
-            license.as_str()
-        };
-        let info =
-            manager
-                .parse_license(license)
-                .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
-                    format!(
-                        "current license invalid for {}",
-                        self.ctx.get_tenant().display()
-                    )
-                })?;
+        let info = LicenseManagerSwitch::instance()
+            .parse_license(license.as_str())
+            .map_err_to_code(ErrorCode::LicenseKeyInvalid, || {
+                format!(
+                    "current license invalid for {}",
+                    self.ctx.get_tenant().display()
+                )
+            })?;
         Ok(Some(self.to_block(&info)?))
     }
 }

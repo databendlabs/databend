@@ -18,6 +18,7 @@ pub use semver::Version;
 pub struct BuildInfo {
     pub semantic: Version,
     pub commit_detail: String,
+    pub embedded_license: String,
 }
 
 impl BuildInfo {

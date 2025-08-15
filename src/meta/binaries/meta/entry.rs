@@ -164,7 +164,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     // HTTP API service.
     {
         server_metrics::set_version(
-            DATABEND_GIT_SEMVER.unwrap_or("unknown").to_string(),
+            DATABEND_GIT_SEMVER.to_string(),
             VERGEN_GIT_SHA.unwrap_or("unknown").to_string(),
         );
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());

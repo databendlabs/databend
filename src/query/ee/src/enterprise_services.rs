@@ -15,7 +15,6 @@
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 use databend_query::sessions::BuildInfo;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
@@ -37,11 +36,8 @@ pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
     pub async fn init(cfg: InnerConfig, version: BuildInfo) -> Result<()> {
-        RealLicenseManager::init(
-            cfg.query.tenant_id.tenant_name().to_string(),
-            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
-        )?;
-        RealStorageEncryptionHandler::init(&cfg)?;
+        RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
+        RealStorageEncryptionHandler::init(&cfg, version.clone())?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
@@ -50,7 +46,7 @@ impl EnterpriseServices {
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
         RealTableIndexHandler::init()?;
-        RealStorageQuotaHandler::init(&cfg)?;
+        RealStorageQuotaHandler::init(&cfg, version.clone())?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg, version).await?;
         RealHilbertClusteringHandler::init()?;
