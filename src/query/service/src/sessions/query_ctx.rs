@@ -1009,6 +1009,7 @@ impl TableContext for QueryContext {
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
         let random_function_seed = settings.get_random_function_seed()?;
+        let enable_binary_to_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
 
         Ok(FunctionContext {
             now,
@@ -1023,6 +1024,7 @@ impl TableContext for QueryContext {
             random_function_seed,
             week_start,
             date_format_style,
+            enable_binary_to_utf8_lossy,
         })
     }
 
