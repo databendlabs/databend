@@ -360,50 +360,209 @@ impl<'a> StringIter<'a> {
         }
 
         let mut local_bytes_len = 0usize;
-        // Single pass: populate views and calculate total_bytes_len simultaneously
-        unsafe {
-            let views_ptr = views.as_mut_ptr().add(start_len);
-            let dict_views_len = dict_views.len();
+        let chunks_4 = indices.chunks_exact(4);
+        let remainder_after_4 = chunks_4.remainder();
+        let dict_views_len = dict_views.len();
+        let dict_views_ptr = dict_views.as_ptr();
+        let dict_lengths_ptr = self.cached_dict_lengths.as_ref().unwrap().as_ptr();
 
-            let dict_views_ptr = dict_views.as_ptr();
-            let dict_lengths_ptr = self.cached_dict_lengths.as_ref().unwrap().as_ptr();
+        let mut i = 0;
 
-            let pairs = indices.chunks_exact(2);
-            let remainder = pairs.remainder();
+        // Process 4 elements at once using best available SIMD
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            // AVX2 path: 256-bit operations for maximum throughput
+            #[cfg(debug_assertions)]
+            eprintln!("🚀 Using AVX2 SIMD path for string RLE decoding");
 
-            let mut i = 0;
+            use std::arch::x86_64::*;
 
-            // Process pairs of elements
-            for pair in pairs {
-                let dict_idx1 = pair[0] as usize;
-                let dict_idx2 = pair[1] as usize;
+            for chunk in chunks_4 {
+                let idx1 = chunk[0] as usize;
+                let _idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let _idx4 = chunk[3] as usize;
 
-                debug_assert!(dict_idx1 < dict_views_len);
-                debug_assert!(dict_idx2 < dict_views_len);
+                unsafe {
+                    // Load 2 Views at once using AVX2 (32 bytes = 2 Views)
+                    let views_12_ptr = dict_views_ptr.add(idx1) as *const __m256i;
+                    let views_34_ptr = dict_views_ptr.add(idx3) as *const __m256i;
 
-                // Process two elements in one iteration
-                *views_ptr.add(i) = *dict_views_ptr.add(dict_idx1);
-                *views_ptr.add(i + 1) = *dict_views_ptr.add(dict_idx2);
+                    let views_12 = _mm256_loadu_si256(views_12_ptr);
+                    let views_34 = _mm256_loadu_si256(views_34_ptr);
 
-                local_bytes_len += *dict_lengths_ptr.add(dict_idx1) as usize;
-                local_bytes_len += *dict_lengths_ptr.add(dict_idx2) as usize;
+                    // Store 2 Views at once
+                    let output_12_ptr = views.as_mut_ptr().add(start_len + i) as *mut __m256i;
+                    let output_34_ptr = views.as_mut_ptr().add(start_len + i + 2) as *mut __m256i;
 
-                i += 2;
+                    _mm256_storeu_si256(output_12_ptr, views_12);
+                    _mm256_storeu_si256(output_34_ptr, views_34);
+                }
+                i += 4;
             }
+        } else if is_x86_feature_detected!("sse2") {
+            // Fallback to SSE2 for older CPUs (SSE4.2 uses same instructions)
+            #[cfg(debug_assertions)]
+            eprintln!("🔧 Using SSE2 SIMD path for string RLE decoding");
 
-            // Process remaining single element if any
-            if let [index] = remainder {
-                let dict_idx = *index as usize;
-                debug_assert!(dict_idx < dict_views_len);
+            use std::arch::x86_64::*;
 
-                *views_ptr.add(i) = *dict_views_ptr.add(dict_idx);
-                local_bytes_len += *dict_lengths_ptr.add(dict_idx) as usize;
+            for chunk in chunks_4 {
+                let idx1 = chunk[0] as usize;
+                let idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let idx4 = chunk[3] as usize;
+
+                unsafe {
+                    // Batch load 4 Views using SSE2 (16 bytes each)
+                    // Using aligned instructions - safe with 16-byte aligned View structs
+                    let view1 = _mm_load_si128(dict_views_ptr.add(idx1) as *const __m128i);
+                    let view2 = _mm_load_si128(dict_views_ptr.add(idx2) as *const __m128i);
+                    let view3 = _mm_load_si128(dict_views_ptr.add(idx3) as *const __m128i);
+                    let view4 = _mm_load_si128(dict_views_ptr.add(idx4) as *const __m128i);
+
+                    // Batch store 4 Views
+                    _mm_store_si128(views.as_mut_ptr().add(start_len + i) as *mut __m128i, view1);
+                    _mm_store_si128(
+                        views.as_mut_ptr().add(start_len + i + 1) as *mut __m128i,
+                        view2,
+                    );
+                    _mm_store_si128(
+                        views.as_mut_ptr().add(start_len + i + 2) as *mut __m128i,
+                        view3,
+                    );
+                    _mm_store_si128(
+                        views.as_mut_ptr().add(start_len + i + 3) as *mut __m128i,
+                        view4,
+                    );
+                }
+
+                i += 4;
             }
-            // TODO Make sure this is panic safe
-            views.set_len(start_len + remaining);
+        } else {
+            // Fallback to scalar implementation for non-x86_64 architectures
+            for chunk in chunks_4 {
+                let idx1 = chunk[0] as usize;
+                let idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let idx4 = chunk[3] as usize;
+
+                unsafe {
+                    *views.as_mut_ptr().add(start_len + i) = *dict_views_ptr.add(idx1);
+                    *views.as_mut_ptr().add(start_len + i + 1) = *dict_views_ptr.add(idx2);
+                    *views.as_mut_ptr().add(start_len + i + 2) = *dict_views_ptr.add(idx3);
+                    *views.as_mut_ptr().add(start_len + i + 3) = *dict_views_ptr.add(idx4);
+                }
+
+                i += 4;
+            }
         }
 
+        // Handle remaining elements with 2x unrolling
+        let pairs = remainder_after_4.chunks_exact(2);
+        let final_remainder = pairs.remainder();
+
+        for pair in pairs {
+            let dict_idx1 = pair[0] as usize;
+            let dict_idx2 = pair[1] as usize;
+
+            debug_assert!(dict_idx1 < dict_views_len);
+            debug_assert!(dict_idx2 < dict_views_len);
+
+            unsafe {
+                *views.as_mut_ptr().add(start_len + i) = *dict_views_ptr.add(dict_idx1);
+                *views.as_mut_ptr().add(start_len + i + 1) = *dict_views_ptr.add(dict_idx2);
+            }
+
+            i += 2;
+        }
+
+        // Handle final single element if any
+        if let [index] = final_remainder {
+            let dict_idx = *index as usize;
+            debug_assert!(dict_idx < dict_views_len);
+
+            unsafe {
+                *views.as_mut_ptr().add(start_len + i) = *dict_views_ptr.add(dict_idx);
+            }
+        }
+
+        // Use SIMD to accumulate lengths - collect indices first to avoid iterator move issues
+        let chunk_indices: Vec<_> = indices.chunks_exact(4).collect();
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") {
+            use std::arch::x86_64::*;
+
+            unsafe {
+                let mut sum = _mm256_setzero_si256();
+                for chunk in &chunk_indices {
+                    let idx1 = chunk[0] as usize;
+                    let idx2 = chunk[1] as usize;
+                    let idx3 = chunk[2] as usize;
+                    let idx4 = chunk[3] as usize;
+
+                    let len1 = *dict_lengths_ptr.add(idx1) as i32;
+                    let len2 = *dict_lengths_ptr.add(idx2) as i32;
+                    let len3 = *dict_lengths_ptr.add(idx3) as i32;
+                    let len4 = *dict_lengths_ptr.add(idx4) as i32;
+
+                    let lens = _mm_set_epi32(len4, len3, len2, len1);
+                    sum = _mm256_add_epi32(sum, _mm256_castsi128_si256(lens));
+                }
+
+                let mut sum_arr = [0i32; 8];
+                _mm256_store_si256(sum_arr.as_mut_ptr() as *mut __m256i, sum);
+                for &x in &sum_arr {
+                    local_bytes_len += x as usize;
+                }
+            }
+        } else {
+            for chunk in &chunk_indices {
+                let idx1 = chunk[0] as usize;
+                let idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let idx4 = chunk[3] as usize;
+
+                unsafe {
+                    local_bytes_len += *dict_lengths_ptr.add(idx1) as usize;
+                    local_bytes_len += *dict_lengths_ptr.add(idx2) as usize;
+                    local_bytes_len += *dict_lengths_ptr.add(idx3) as usize;
+                    local_bytes_len += *dict_lengths_ptr.add(idx4) as usize;
+                }
+            }
+        }
+
+        // Handle remaining pairs
+        let pair_indices: Vec<_> = remainder_after_4.chunks_exact(2).collect();
+        for pair in &pair_indices {
+            let dict_idx1 = pair[0] as usize;
+            let dict_idx2 = pair[1] as usize;
+
+            debug_assert!(dict_idx1 < dict_views_len);
+            debug_assert!(dict_idx2 < dict_views_len);
+
+            unsafe {
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx1) as usize;
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx2) as usize;
+            }
+        }
+
+        // Handle final single element
+        let final_remainder = remainder_after_4.chunks_exact(2).remainder();
+        if let [index] = final_remainder {
+            let dict_idx = *index as usize;
+            debug_assert!(dict_idx < dict_views_len);
+
+            unsafe {
+                local_bytes_len += *dict_lengths_ptr.add(dict_idx) as usize;
+            }
+        }
         *total_bytes_len += local_bytes_len;
+
+        unsafe {
+            views.set_len(start_len + remaining);
+        }
 
         Ok(())
     }
