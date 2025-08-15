@@ -27,8 +27,8 @@ static AUTH_JWKS_REQUESTS_COUNT: LazyLock<FamilyCounter<VecLabels>> =
 static AUTH_JWKS_REFRESH_DURATION: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| register_histogram_family_in_milliseconds("auth_jwks_refresh_duration_ms"));
 
-pub fn metrics_incr_auth_jwks_requests_count(url: String) {
-    let labels = vec![("url", url)];
+pub fn metrics_incr_auth_jwks_requests_count(url: String, reason: &str) {
+    let labels = vec![("url", url), ("reason", reason.to_string())];
     AUTH_JWKS_REQUESTS_COUNT.get_or_create(&labels).inc();
 }
 
