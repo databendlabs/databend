@@ -214,12 +214,12 @@ impl JwkKeyStore {
             .json()
             .await
             .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse JWKS: {}", e)))?;
+        let duration = start_time.elapsed();
         metrics_incr_auth_jwks_requests_count(
             self.url.clone(),
             reason.as_str().to_string(),
             status.as_u16(),
         );
-        let duration = start_time.elapsed();
         metrics_observe_auth_jwks_refresh_duration(self.url.clone(), duration);
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
         for k in &jwk_keys.keys {
