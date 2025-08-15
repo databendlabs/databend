@@ -220,6 +220,8 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
             );
     }
 
+    log::info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
+
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
         error!("[INTERPRETER] Failed to log query finish: {:?}", error)
     }
@@ -338,6 +340,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
 }
 
+#[fastrace::trace]
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);

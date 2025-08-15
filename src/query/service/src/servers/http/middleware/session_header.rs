@@ -117,18 +117,15 @@ impl ClientSession {
         headers: &HeaderMap,
         caps: &mut ClientCapabilities,
     ) -> Result<Option<ClientSession>, String> {
-        if let Some(v) = headers.get(HEADER_SESSION) {
-            caps.session_header = true;
-            let v = v.to_str().unwrap().to_string().trim().to_owned();
-            let s = if v.is_empty() {
-                // note that curl -H "X-xx:" not work
-                Self::new_session(false)
-            } else {
-                let header = decode_json_header(HEADER_SESSION, v.as_str())?;
-                Self::old_session(false, header)
-            };
-            Ok(Some(s))
-        } else if caps.session_header {
+        if caps.session_header {
+            if let Some(v) = headers.get(HEADER_SESSION) {
+                caps.session_header = true;
+                let v = v.to_str().unwrap().to_string().trim().to_owned();
+                if !v.is_empty() {
+                    let header = decode_json_header(HEADER_SESSION, &v)?;
+                    return Ok(Some(Self::old_session(false, header)));
+                };
+            }
             Ok(Some(Self::new_session(false)))
         } else {
             Ok(None)

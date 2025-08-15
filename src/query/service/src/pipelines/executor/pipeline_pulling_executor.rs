@@ -197,6 +197,7 @@ impl PipelinePullingExecutor {
         }
     }
 
+    #[fastrace::trace]
     pub fn finish(&self, cause: Option<ErrorCode>) {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 

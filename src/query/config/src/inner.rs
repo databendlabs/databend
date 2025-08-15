@@ -37,6 +37,7 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
+use super::config::TelemetryConfig;
 use crate::BuiltInConfig;
 
 /// Inner config for query.
@@ -67,6 +68,9 @@ pub struct InnerConfig {
 
     // Spill Config
     pub spill: SpillConfig,
+
+    // Telemetry Config
+    pub telemetry: TelemetryConfig,
 }
 
 impl InnerConfig {
@@ -301,7 +305,7 @@ impl Default for QueryConfig {
             max_storage_io_requests: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
-            jwks_refresh_interval: 600,
+            jwks_refresh_interval: 86400,
             jwks_refresh_timeout: 10,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),

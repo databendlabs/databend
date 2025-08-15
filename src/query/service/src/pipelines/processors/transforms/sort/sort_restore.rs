@@ -25,6 +25,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::HookTransform;
 use databend_common_pipeline_transforms::HookTransformer;
+use databend_common_pipeline_transforms::MemorySettings;
 
 use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
@@ -40,6 +41,7 @@ pub struct TransformSortRestore<A: SortAlgorithm> {
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
     /// we can generate and output the order column to avoid the extra converting in the next transform.
     remove_order_col: bool,
+    memory_settings: MemorySettings,
 
     base: Base,
     inner: Option<SortSpill<A>>,
@@ -53,6 +55,7 @@ where A: SortAlgorithm + Send + 'static
         output: Arc<OutputPort>,
         base: Base,
         output_order_col: bool,
+        memory_settings: MemorySettings,
     ) -> Result<HookTransformer<Self>> {
         Ok(HookTransformer::new(input, output, Self {
             input: Vec::new(),
@@ -60,6 +63,7 @@ where A: SortAlgorithm + Send + 'static
             remove_order_col: !output_order_col,
             base,
             inner: None,
+            memory_settings,
         }))
     }
 }
@@ -120,7 +124,7 @@ where
             block,
             bound: (bound_index, _),
             finish,
-        } = spill_sort.on_restore().await?;
+        } = spill_sort.on_restore(&self.memory_settings).await?;
         if let Some(block) = block {
             let mut block =
                 block.add_meta(Some(SortBound::create(bound_index, SortBoundNext::More)))?;

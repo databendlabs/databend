@@ -41,6 +41,7 @@ buf-list = { workspace = true }
 bumpalo = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
@@ -96,6 +97,7 @@ databend-common-storages-stage = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
 databend-common-storages-view = { workspace = true }
+databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }

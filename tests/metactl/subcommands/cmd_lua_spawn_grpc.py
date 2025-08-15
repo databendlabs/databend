@@ -20,7 +20,7 @@ def test_grpc_cross_task_access():
 
     grpc_addr = setup_test_environment()
 
-    lua_script = f'''
+    lua_script = f"""
 local task1 = metactl.spawn(function()
     local client = metactl.new_grpc_client("{grpc_addr}")
     
@@ -55,7 +55,7 @@ end)
 task1:join()
 task2:join()
 print("Done")
-'''
+"""
 
     result = subprocess.run(
         [metactl_bin, "lua"],
@@ -76,9 +76,9 @@ print("Done")
     ]
 
     for phrase in expected_phrases:
-        assert phrase in output, (
-            f"Expected phrase '{phrase}' not found in output:\n{output}"
-        )
+        assert (
+            phrase in output
+        ), f"Expected phrase '{phrase}' not found in output:\n{output}"
 
     print("✓ Cross-task access test passed")
     kill_databend_meta()

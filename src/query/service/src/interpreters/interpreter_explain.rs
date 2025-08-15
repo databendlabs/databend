@@ -650,7 +650,7 @@ impl ExplainInterpreter {
             return Ok(None);
         }
         let meta = metadata.read();
-        let table_entry = meta.table(source.scan_id);
+        let table_entry = meta.table(source.table_index);
         if let Some(fuse_table) = table_entry.table().as_any().downcast_ref::<FuseTable>() {
             let mut dummy_pipeline = Pipeline::create();
             let prune_pipeline = fuse_table.do_build_prune_pipeline(

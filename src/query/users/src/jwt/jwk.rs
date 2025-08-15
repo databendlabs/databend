@@ -22,6 +22,9 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::auth::metrics_incr_auth_jwks_requests_count;
+use databend_common_metrics::auth::metrics_observe_auth_jwks_refresh_duration;
+use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use log::info;
@@ -35,7 +38,24 @@ use serde::Serialize;
 use super::PubKey;
 
 const JWKS_REFRESH_TIMEOUT: u64 = 10;
-const JWKS_REFRESH_INTERVAL: u64 = 600;
+const JWKS_REFRESH_INTERVAL: u64 = 86400;
+
+#[derive(Clone)]
+enum LoadKeyReason {
+    Initial,
+    Refresh,
+    Force,
+}
+
+impl LoadKeyReason {
+    fn as_str(&self) -> &str {
+        match self {
+            LoadKeyReason::Initial => "initial",
+            LoadKeyReason::Refresh => "refresh",
+            LoadKeyReason::Force => "force",
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwkKey {
@@ -103,6 +123,7 @@ pub struct JwkKeys {
 /// error, as the key is not found in the cache. We'll try to refresh the keys and try again.
 pub struct JwkKeyStore {
     url: String,
+    user_agent: String,
     recent_cached_maps: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
     last_refreshed_time: RwLock<Option<Instant>>,
     last_retry_time: RwLock<Option<Instant>>,
@@ -117,6 +138,7 @@ impl JwkKeyStore {
     pub fn new(url: String) -> Self {
         Self {
             url,
+            user_agent: format!("Databend/{}", *DATABEND_SEMVER),
             recent_cached_maps: Arc::new(RwLock::new(VecDeque::new())),
             max_recent_cached_maps: 2,
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
@@ -134,6 +156,11 @@ impl JwkKeyStore {
         func: Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>,
     ) -> Self {
         self.load_keys_func = Some(func);
+        self
+    }
+
+    pub fn with_user_agent(mut self, user_agent: &str) -> Self {
+        self.user_agent = user_agent.to_string();
         self
     }
 
@@ -164,26 +191,36 @@ impl JwkKeyStore {
 
 impl JwkKeyStore {
     #[async_backtrace::framed]
-    async fn load_keys(&self) -> Result<HashMap<String, PubKey>> {
+    async fn load_keys(&self, reason: &LoadKeyReason) -> Result<HashMap<String, PubKey>> {
         if let Some(load_keys_func) = &self.load_keys_func {
             return Ok(load_keys_func());
         }
 
         let client = reqwest::Client::builder()
+            .user_agent(&self.user_agent)
             .timeout(self.refresh_timeout)
             .build()
             .map_err(|e| {
                 ErrorCode::InvalidConfig(format!("Failed to create jwks client: {}", e))
             })?;
+        let start_time = Instant::now();
         let response = client
             .get(&self.url)
             .send()
             .await
             .map_err(|e| ErrorCode::Internal(format!("Could not download JWKS: {}", e)))?;
+        let status = response.status();
         let jwk_keys: JwkKeys = response
             .json()
             .await
             .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse JWKS: {}", e)))?;
+        let duration = start_time.elapsed();
+        metrics_incr_auth_jwks_requests_count(
+            self.url.clone(),
+            reason.as_str().to_string(),
+            status.as_u16(),
+        );
+        metrics_observe_auth_jwks_refresh_duration(self.url.clone(), duration);
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
         for k in &jwk_keys.keys {
             new_keys.insert(k.kid.to_string(), k.get_public_key()?);
@@ -193,11 +230,30 @@ impl JwkKeyStore {
 
     #[async_backtrace::framed]
     async fn maybe_refresh_cached_keys(&self, force: bool) -> Result<()> {
-        let need_reload = force
-            || match *self.last_refreshed_time.read() {
-                None => true,
-                Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
-            };
+        let mut need_reload = false;
+        let mut reason = LoadKeyReason::Refresh;
+
+        if force {
+            need_reload = true;
+            reason = LoadKeyReason::Force;
+        } else {
+            match *self.last_refreshed_time.read() {
+                None => {
+                    need_reload = true;
+                    reason = LoadKeyReason::Initial;
+                }
+                Some(last_refreshed_at) => {
+                    if last_refreshed_at.elapsed() > self.refresh_interval {
+                        need_reload = true;
+                        reason = LoadKeyReason::Refresh;
+                    }
+                }
+            }
+        }
+
+        if !need_reload {
+            return Ok(());
+        }
 
         let old_keys = self
             .recent_cached_maps
@@ -206,15 +262,17 @@ impl JwkKeyStore {
             .last()
             .cloned()
             .unwrap_or(HashMap::new());
-        if !need_reload {
-            return Ok(());
-        }
 
         // if got network issues on loading JWKS, fallback to the cached keys if available
-        let new_keys = match self.load_keys().await {
+        let new_keys = match self.load_keys(&reason).await {
             Ok(new_keys) => new_keys,
             Err(err) => {
-                warn!("Failed to load JWKS: {}", err);
+                metrics_incr_auth_jwks_requests_count(
+                    self.url.clone(),
+                    reason.as_str().to_string(),
+                    err.code(),
+                );
+                warn!("Failed to load JWKS from {}: {}", self.url, err);
                 if !old_keys.is_empty() {
                     return Ok(());
                 }
@@ -232,7 +290,7 @@ impl JwkKeyStore {
         if new_keys.keys().eq(old_keys.keys()) {
             return Ok(());
         }
-        info!("JWKS keys changed.");
+        info!("JWKS keys from {} changed.", self.url);
 
         // append the new keys to the end of recent_cached_maps
         {

@@ -169,6 +169,7 @@ pub struct FunctionContext {
     pub random_function_seed: bool,
     pub week_start: u8,
     pub date_format_style: String,
+    pub enable_binary_to_utf8_lossy: bool,
 }
 
 impl Default for FunctionContext {
@@ -186,6 +187,7 @@ impl Default for FunctionContext {
             random_function_seed: false,
             week_start: 0,
             date_format_style: "oracle".to_string(),
+            enable_binary_to_utf8_lossy: false,
         }
     }
 }

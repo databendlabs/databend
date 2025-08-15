@@ -676,11 +676,11 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_batch_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(8 * 1024 * 1024),
+                    value: UserSettingValue::UInt64(20 * 1024 * 1024),
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
                 ("enable_shuffle_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1420,6 +1420,13 @@ impl DefaultSettings {
                 ("enable_parallel_union_all", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_binary_to_utf8_lossy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable binary-to-UTF8 lossy conversion, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
