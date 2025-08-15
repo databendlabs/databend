@@ -96,14 +96,14 @@ impl IPhysicalPlan for CopyIntoTable {
                     required_values_schema: self.required_values_schema.clone(),
                     values_consts: self.values_consts.clone(),
                     required_source_schema: self.required_source_schema.clone(),
-                    write_mode: self.write_mode.clone(),
+                    write_mode: self.write_mode,
                     validation_mode: self.validation_mode.clone(),
                     stage_table_info: self.stage_table_info.clone(),
                     table_info: self.table_info.clone(),
                     project_columns: self.project_columns.clone(),
                     source: CopyIntoTableSource::Query(input),
                     is_transform: self.is_transform,
-                    table_meta_timestamps: self.table_meta_timestamps.clone(),
+                    table_meta_timestamps: self.table_meta_timestamps,
                 })
             }
             CopyIntoTableSource::Stage(_) => {
@@ -114,14 +114,14 @@ impl IPhysicalPlan for CopyIntoTable {
                     required_values_schema: self.required_values_schema.clone(),
                     values_consts: self.values_consts.clone(),
                     required_source_schema: self.required_source_schema.clone(),
-                    write_mode: self.write_mode.clone(),
+                    write_mode: self.write_mode,
                     validation_mode: self.validation_mode.clone(),
                     stage_table_info: self.stage_table_info.clone(),
                     table_info: self.table_info.clone(),
                     project_columns: self.project_columns.clone(),
                     source: CopyIntoTableSource::Stage(input),
                     is_transform: self.is_transform,
-                    table_meta_timestamps: self.table_meta_timestamps.clone(),
+                    table_meta_timestamps: self.table_meta_timestamps,
                 })
             }
         }

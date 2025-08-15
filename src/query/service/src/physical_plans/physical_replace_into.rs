@@ -92,14 +92,14 @@ impl IPhysicalPlan for ReplaceInto {
         Box::new(ReplaceInto {
             meta: self.meta.clone(),
             input,
-            block_thresholds: self.block_thresholds.clone(),
+            block_thresholds: self.block_thresholds,
             table_info: self.table_info.clone(),
             on_conflicts: self.on_conflicts.clone(),
             bloom_filter_column_indexes: self.bloom_filter_column_indexes.clone(),
             segments: self.segments.clone(),
             block_slots: self.block_slots.clone(),
             need_insert: self.need_insert,
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            table_meta_timestamps: self.table_meta_timestamps,
         })
     }
 

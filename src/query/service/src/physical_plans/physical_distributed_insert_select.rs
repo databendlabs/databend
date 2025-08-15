@@ -81,7 +81,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
             select_schema: self.select_schema.clone(),
             select_column_bindings: self.select_column_bindings.clone(),
             cast_needed: self.cast_needed,
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            table_meta_timestamps: self.table_meta_timestamps,
         })
     }
 

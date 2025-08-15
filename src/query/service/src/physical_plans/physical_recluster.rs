@@ -85,7 +85,7 @@ impl IPhysicalPlan for Recluster {
             meta: self.meta.clone(),
             tasks: self.tasks.clone(),
             table_info: self.table_info.clone(),
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            table_meta_timestamps: self.table_meta_timestamps,
         })
     }
 

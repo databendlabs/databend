@@ -91,7 +91,7 @@ impl IPhysicalPlan for WindowPartition {
             input,
             partition_by: self.partition_by.clone(),
             order_by: self.order_by.clone(),
-            sort_step: self.sort_step.clone(),
+            sort_step: self.sort_step,
             top_n: self.top_n.clone(),
             stat_info: self.stat_info.clone(),
         })
