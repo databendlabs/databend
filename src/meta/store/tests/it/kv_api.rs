@@ -15,6 +15,7 @@
 use async_trait::async_trait;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_store::LocalMetaService;
+use databend_common_version::BUILD_INFO;
 
 #[derive(Clone)]
 struct MetaNodeUnitTestBuilder {}
@@ -22,8 +23,9 @@ struct MetaNodeUnitTestBuilder {}
 #[async_trait]
 impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
     async fn build(&self) -> LocalMetaService {
-        let version = databend_common_version::DATABEND_SEMVER.clone();
-        LocalMetaService::new("UT-Meta", version).await.unwrap()
+        LocalMetaService::new("UT-Meta", BUILD_INFO.clone())
+            .await
+            .unwrap()
     }
 
     async fn build_cluster(&self) -> Vec<LocalMetaService> {

@@ -16,11 +16,12 @@ pub use semver::Version;
 
 #[derive(Debug, Clone)]
 pub struct BuildInfo {
-    pub version: Version,
+    pub semantic: Version,
+    pub commit_detail: String,
 }
 
 impl BuildInfo {
     pub fn udf_client_user_agent(&self) -> String {
-        format!("databend-query/{}", self.version)
+        format!("databend-query/{}", self.semantic)
     }
 }

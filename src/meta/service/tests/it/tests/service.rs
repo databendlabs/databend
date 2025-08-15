@@ -21,7 +21,6 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use databend_common_base::base::tokio;
-use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_client::errors::CreationError;
@@ -270,10 +269,9 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
     async fn build(&self) -> Arc<ClientHandle> {
         let (tc, addr) = start_metasrv().await.unwrap();
 
-        let version = DATABEND_SEMVER.clone();
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            BuildInfo { version },
+            BUILD_INFO.clone(),
             "root",
             "xxx",
             None,

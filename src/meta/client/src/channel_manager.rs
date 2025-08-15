@@ -93,7 +93,7 @@ impl MetaChannelManager {
 
         let handshake_res = MetaGrpcClient::handshake(
             &mut real_client,
-            &self.version.version,
+            &self.version.semantic,
             self.required_features,
             &self.username,
             &self.password,

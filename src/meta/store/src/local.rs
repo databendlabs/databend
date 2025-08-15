@@ -33,7 +33,6 @@ use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use log::warn;
-use semver::Version;
 use tokio::time::sleep;
 
 /// A container for a locally started meta service, mainly for testing purpose.
@@ -86,7 +85,7 @@ impl Drop for LocalMetaService {
 impl LocalMetaService {
     pub async fn new(
         name: impl fmt::Display,
-        version: Version,
+        version: BuildInfo,
     ) -> anyhow::Result<LocalMetaService> {
         Self::new_with_fixed_dir(None, name, version).await
     }
@@ -99,7 +98,7 @@ impl LocalMetaService {
     pub async fn new_with_fixed_dir(
         dir: Option<String>,
         name: impl fmt::Display,
-        version: Version,
+        version: BuildInfo,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
@@ -154,7 +153,7 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_node = MetaNode::start(&config, version.clone()).await?;
+        let meta_node = MetaNode::start(&config, version.semantic.clone()).await?;
         let mut grpc_server = GrpcServer::create(config.clone(), meta_node);
         grpc_server.start().await?;
 
@@ -186,13 +185,12 @@ impl LocalMetaService {
 
     async fn grpc_client(
         config: &configs::Config,
-        version: Version,
+        version: BuildInfo,
     ) -> Result<Arc<ClientHandle>, CreationError> {
         let addr = config.grpc_api_address.clone();
-
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            BuildInfo { version },
+            version,
             "root",
             "xxx",
             None,

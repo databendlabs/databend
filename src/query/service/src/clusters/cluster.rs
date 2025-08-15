@@ -233,8 +233,8 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig, version: BuildInfo) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(cfg, version).await?;
-        GlobalInstance::set(Self::try_create(cfg, metastore).await?);
+        let metastore = Self::create_meta_client(cfg, version.clone()).await?;
+        GlobalInstance::set(Self::try_create(cfg, version, metastore).await?);
 
         Ok(())
     }
@@ -242,9 +242,10 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn try_create(
         cfg: &InnerConfig,
+        version: BuildInfo,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
@@ -269,6 +270,7 @@ impl ClusterDiscovery {
 
     fn create_provider(
         cfg: &InnerConfig,
+        version: BuildInfo,
         metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
@@ -278,7 +280,7 @@ impl ClusterDiscovery {
             metastore,
             tenant_id.tenant_name(),
             lift_time,
-            DATABEND_COMMIT_VERSION.clone(),
+            version.semantic.to_string(),
         )?;
 
         Ok((lift_time, Arc::new(cluster_manager)))

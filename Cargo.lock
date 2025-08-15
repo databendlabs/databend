@@ -3933,7 +3933,6 @@ dependencies = [
  "databend-common-version",
  "databend-meta",
  "log",
- "semver",
  "tempfile",
  "tokio",
  "tokio-stream",

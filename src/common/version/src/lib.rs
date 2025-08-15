@@ -56,9 +56,6 @@ pub static DATABEND_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
 });
 
-pub static UDF_CLIENT_USER_AGENT: LazyLock<String> =
-    LazyLock::new(|| format!("databend-query/{}", *DATABEND_SEMVER));
-
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let semver = DATABEND_GIT_SEMVER;
     let git_sha = VERGEN_GIT_SHA;
@@ -94,5 +91,6 @@ pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
 });
 
 pub static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(|| BuildInfo {
-    version: DATABEND_SEMVER.clone(),
+    semantic: DATABEND_SEMVER.clone(),
+    commit_detail: DATABEND_COMMIT_VERSION.clone(),
 });

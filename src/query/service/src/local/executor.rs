@@ -31,7 +31,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use futures_util::StreamExt;
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -100,7 +99,7 @@ impl SessionExecutor {
         settings.merge_config(config.settings);
 
         if is_repl {
-            println!("Welcome to Databend, version {}.", *DATABEND_COMMIT_VERSION);
+            println!("Welcome to Databend, version {}.", version.commit_detail);
             println!();
 
             let rows = Self::query(&session, version.clone(), PROMPT_SQL).await;

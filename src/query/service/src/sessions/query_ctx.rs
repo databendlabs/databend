@@ -122,7 +122,6 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
@@ -186,8 +185,8 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
-            mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", shared.version.commit_detail),
+            mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             query_settings,

@@ -31,8 +31,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 use databend_common_meta_types::SeqV;
-use databend_common_version::DATABEND_COMMIT_VERSION;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_id_with_self_managed() -> Result<()> {
@@ -1563,8 +1562,9 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 }
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
+    let version = &*BUILD_INFO;
     let test_api = MetaStore::L(Arc::new(
-        LocalMetaService::new("management-test", DATABEND_SEMVER.clone())
+        LocalMetaService::new("management-test", version.clone())
             .await
             .unwrap(),
     ));
@@ -1572,7 +1572,7 @@ async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
         test_api.clone(),
         "test-tenant-id",
         lift,
-        DATABEND_COMMIT_VERSION.clone(),
+        version.semantic.to_string(),
     )?;
     Ok((test_api, cluster_manager))
 }
