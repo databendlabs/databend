@@ -4320,7 +4320,7 @@ impl<'a> TypeChecker<'a> {
                     expr: Box::new(Expr::FunctionCall {
                         span,
                         func: ASTFunctionCall {
-                            distinct: func_name.starts_with("try_"),
+                            distinct: false,
                             name: Identifier::from_name(
                                 span,
                                 func_name.replace("_string", "_binary"),
