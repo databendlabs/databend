@@ -151,10 +151,20 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+
+        Box::new(AggregatePartial {
+            input: children.remove(0),
+            meta: self.meta.clone(),
+            group_by: self.group_by.clone(),
+            agg_funcs: self.agg_funcs.clone(),
+            enable_experimental_aggregate_hashtable: self
+                .enable_experimental_aggregate_hashtable
+                .clone(),
+            group_by_display: self.group_by_display.clone(),
+            rank_limit: self.rank_limit.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

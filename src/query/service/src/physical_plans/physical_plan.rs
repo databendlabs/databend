@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::Metadata;
+use dyn_clone::DynClone;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -65,7 +66,7 @@ pub trait DeriveHandle: Send + Sync + 'static {
 }
 
 #[typetag::serde]
-pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
+pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
 
     fn get_meta(&self) -> &PhysicalPlanMeta;
@@ -307,15 +308,6 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
     }
 }
 
-impl Clone for PhysicalPlan {
-    fn clone(&self) -> Self {
-        let mut children = vec![];
-        for child in self.children() {
-            children.push(child.clone());
-        }
-
-        self.derive(children)
-    }
-}
+dyn_clone::clone_trait_object!(IPhysicalPlan);
 
 pub type PhysicalPlan = Box<dyn IPhysicalPlan>;

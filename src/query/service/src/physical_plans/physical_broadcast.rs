@@ -50,7 +50,10 @@ impl IPhysicalPlan for BroadcastSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(BroadcastSource {
+            meta: self.meta.clone(),
+            broadcast_id: self.broadcast_id,
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
@@ -102,10 +105,12 @@ impl IPhysicalPlan for BroadcastSink {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        Box::new(BroadcastSink {
+            meta: self.meta.clone(),
+            broadcast_id: self.broadcast_id,
+            input: children.pop().unwrap(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

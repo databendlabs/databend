@@ -81,10 +81,21 @@ impl IPhysicalPlan for ColumnMutation {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+
+        Box::new(ColumnMutation {
+            input: children.remove(0),
+            meta: self.meta.clone(),
+            table_info: self.table_info.clone(),
+            mutation_expr: self.mutation_expr.clone(),
+            computed_expr: self.computed_expr.clone(),
+            mutation_kind: self.mutation_kind.clone(),
+            field_id_to_schema_index: self.field_id_to_schema_index.clone(),
+            input_num_columns: self.input_num_columns.clone(),
+            has_filter_column: self.has_filter_column.clone(),
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            udf_col_num: self.udf_col_num.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

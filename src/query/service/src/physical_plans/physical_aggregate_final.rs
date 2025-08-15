@@ -128,10 +128,17 @@ impl IPhysicalPlan for AggregateFinal {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+
+        Box::new(AggregateFinal {
+            input: children.remove(0),
+            meta: self.meta.clone(),
+            group_by: self.group_by.clone(),
+            agg_funcs: self.agg_funcs.clone(),
+            before_group_by_schema: self.before_group_by_schema.clone(),
+            group_by_display: self.group_by_display.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

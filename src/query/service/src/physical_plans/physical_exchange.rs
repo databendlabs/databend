@@ -80,10 +80,15 @@ impl IPhysicalPlan for Exchange {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        Box::new(Exchange {
+            meta: self.meta.clone(),
+            input: children.pop().unwrap(),
+            kind: self.kind.clone(),
+            keys: self.keys.clone(),
+            ignore_exchange: self.ignore_exchange,
+            allow_adjust_parallelism: self.allow_adjust_parallelism,
+        })
     }
 }
 

@@ -74,7 +74,13 @@ impl IPhysicalPlan for CompactSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(CompactSource {
+            meta: self.meta.clone(),
+            parts: self.parts.clone(),
+            table_info: self.table_info.clone(),
+            column_ids: self.column_ids.clone(),
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

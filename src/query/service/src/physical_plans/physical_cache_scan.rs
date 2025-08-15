@@ -62,7 +62,11 @@ impl IPhysicalPlan for CacheScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(CacheScan {
+            meta: self.meta.clone(),
+            cache_source: self.cache_source.clone(),
+            output_schema: self.output_schema.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

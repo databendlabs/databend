@@ -83,10 +83,19 @@ impl IPhysicalPlan for CommitSink {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+
+        Box::new(CommitSink {
+            input: children.remove(0),
+            meta: self.meta.clone(),
+            snapshot: self.snapshot.clone(),
+            table_info: self.table_info.clone(),
+            commit_type: self.commit_type.clone(),
+            update_stream_meta: self.update_stream_meta.clone(),
+            deduplicated_label: self.deduplicated_label.clone(),
+            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            recluster_info: self.recluster_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

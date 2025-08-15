@@ -78,10 +78,15 @@ impl IPhysicalPlan for CopyIntoLocation {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+        Box::new(CopyIntoLocation {
+            input: children.remove(0),
+            meta: self.meta.clone(),
+            project_columns: self.project_columns.clone(),
+            input_data_schema: self.input_data_schema.clone(),
+            input_table_schema: self.input_table_schema.clone(),
+            info: self.info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

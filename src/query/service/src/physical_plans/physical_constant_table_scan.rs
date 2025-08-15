@@ -61,7 +61,12 @@ impl IPhysicalPlan for ConstantTableScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(self.clone())
+        Box::new(ConstantTableScan {
+            meta: self.meta.clone(),
+            values: self.values.clone(),
+            num_rows: self.num_rows.clone(),
+            output_schema: self.output_schema.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

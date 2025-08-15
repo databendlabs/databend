@@ -114,10 +114,15 @@ impl IPhysicalPlan for AggregateExpand {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
-        new_physical_plan.input = children.pop().unwrap();
-        Box::new(new_physical_plan)
+
+        Box::new(AggregateExpand {
+            meta: self.meta.clone(),
+            input: children.remove(0),
+            group_bys: self.group_bys.clone(),
+            grouping_sets: self.grouping_sets.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

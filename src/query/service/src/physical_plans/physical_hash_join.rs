@@ -213,11 +213,35 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_hash_join = self.clone();
         assert_eq!(children.len(), 2);
-        new_hash_join.build = children.pop().unwrap();
-        new_hash_join.probe = children.pop().unwrap();
-        Box::new(new_hash_join)
+        let probe_child = children.remove(0);
+        let build_child = children.remove(0);
+
+        Box::new(HashJoin {
+            build: build_child,
+            probe: probe_child,
+
+            meta: self.meta.clone(),
+            projections: self.projections.clone(),
+            probe_projections: self.probe_projections.clone(),
+            build_projections: self.build_projections.clone(),
+
+            build_keys: self.build_keys.clone(),
+            probe_keys: self.probe_keys.clone(),
+            is_null_equal: self.is_null_equal.clone(),
+            non_equi_conditions: self.non_equi_conditions.clone(),
+            join_type: self.join_type.clone(),
+            marker_index: self.marker_index.clone(),
+            from_correlated_subquery: self.from_correlated_subquery.clone(),
+            probe_to_build: self.probe_to_build.clone(),
+            output_schema: self.output_schema.clone(),
+            need_hold_hash_table: self.need_hold_hash_table.clone(),
+            stat_info: self.stat_info.clone(),
+            single_to_inner: self.single_to_inner.clone(),
+            build_side_cache_info: self.build_side_cache_info.clone(),
+            runtime_filter: self.runtime_filter.clone(),
+            broadcast_id: self.broadcast_id.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

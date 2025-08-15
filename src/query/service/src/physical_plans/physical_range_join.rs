@@ -123,11 +123,21 @@ impl IPhysicalPlan for RangeJoin {
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        let mut new_range_join = self.clone();
         assert_eq!(children.len(), 2);
-        new_range_join.right = children.pop().unwrap();
-        new_range_join.left = children.pop().unwrap();
-        Box::new(new_range_join)
+        let right_child = children.pop().unwrap();
+        let left_child = children.pop().unwrap();
+
+        Box::new(RangeJoin {
+            meta: self.meta.clone(),
+            left: left_child,
+            right: right_child,
+            conditions: self.conditions.clone(),
+            other_conditions: self.other_conditions.clone(),
+            join_type: self.join_type.clone(),
+            range_join_type: self.range_join_type.clone(),
+            output_schema: self.output_schema.clone(),
+            stat_info: self.stat_info.clone(),
+        })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
