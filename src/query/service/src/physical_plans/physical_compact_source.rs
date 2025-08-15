@@ -79,7 +79,7 @@ impl IPhysicalPlan for CompactSource {
             parts: self.parts.clone(),
             table_info: self.table_info.clone(),
             column_ids: self.column_ids.clone(),
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            table_meta_timestamps: self.table_meta_timestamps,
         })
     }
 

@@ -64,7 +64,7 @@ impl IPhysicalPlan for ConstantTableScan {
         Box::new(ConstantTableScan {
             meta: self.meta.clone(),
             values: self.values.clone(),
-            num_rows: self.num_rows.clone(),
+            num_rows: self.num_rows,
             output_schema: self.output_schema.clone(),
         })
     }

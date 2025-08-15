@@ -93,7 +93,7 @@ impl IPhysicalPlan for CommitSink {
             commit_type: self.commit_type.clone(),
             update_stream_meta: self.update_stream_meta.clone(),
             deduplicated_label: self.deduplicated_label.clone(),
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
+            table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
         })
     }

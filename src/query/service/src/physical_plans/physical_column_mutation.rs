@@ -89,12 +89,12 @@ impl IPhysicalPlan for ColumnMutation {
             table_info: self.table_info.clone(),
             mutation_expr: self.mutation_expr.clone(),
             computed_expr: self.computed_expr.clone(),
-            mutation_kind: self.mutation_kind.clone(),
+            mutation_kind: self.mutation_kind,
             field_id_to_schema_index: self.field_id_to_schema_index.clone(),
-            input_num_columns: self.input_num_columns.clone(),
-            has_filter_column: self.has_filter_column.clone(),
-            table_meta_timestamps: self.table_meta_timestamps.clone(),
-            udf_col_num: self.udf_col_num.clone(),
+            input_num_columns: self.input_num_columns,
+            has_filter_column: self.has_filter_column,
+            table_meta_timestamps: self.table_meta_timestamps,
+            udf_col_num: self.udf_col_num,
         })
     }
 

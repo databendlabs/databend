@@ -231,16 +231,16 @@ impl IPhysicalPlan for HashJoin {
             is_null_equal: self.is_null_equal.clone(),
             non_equi_conditions: self.non_equi_conditions.clone(),
             join_type: self.join_type.clone(),
-            marker_index: self.marker_index.clone(),
-            from_correlated_subquery: self.from_correlated_subquery.clone(),
+            marker_index: self.marker_index,
+            from_correlated_subquery: self.from_correlated_subquery,
             probe_to_build: self.probe_to_build.clone(),
             output_schema: self.output_schema.clone(),
-            need_hold_hash_table: self.need_hold_hash_table.clone(),
+            need_hold_hash_table: self.need_hold_hash_table,
             stat_info: self.stat_info.clone(),
             single_to_inner: self.single_to_inner.clone(),
             build_side_cache_info: self.build_side_cache_info.clone(),
             runtime_filter: self.runtime_filter.clone(),
-            broadcast_id: self.broadcast_id.clone(),
+            broadcast_id: self.broadcast_id,
         })
     }
 

@@ -158,9 +158,7 @@ impl IPhysicalPlan for AggregatePartial {
             meta: self.meta.clone(),
             group_by: self.group_by.clone(),
             agg_funcs: self.agg_funcs.clone(),
-            enable_experimental_aggregate_hashtable: self
-                .enable_experimental_aggregate_hashtable
-                .clone(),
+            enable_experimental_aggregate_hashtable: self.enable_experimental_aggregate_hashtable,
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
