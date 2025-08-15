@@ -666,6 +666,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         visitor.0
     }
 
+    #[recursive::recursive]
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
         col_index_mapper: impl Fn(&Index) -> databend_common_exception::Result<ToIndex> + Copy,
