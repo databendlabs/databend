@@ -309,7 +309,9 @@ impl RaftStoreInner {
             snapshot_stat :% = db.stat(); "do_build_snapshot complete");
 
         {
-            let mut sm = self.get_state_machine_write("do_build_snapshot").await;
+            let mut sm = self
+                .get_state_machine_write("do_build_snapshot-replace-compacted")
+                .await;
             sm.levels_mut()
                 .replace_with_compacted(compactor, db.clone());
         }
