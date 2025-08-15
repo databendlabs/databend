@@ -307,6 +307,9 @@ where D: Deserializer<'de> {
     let json_string: Option<String> = Option::deserialize(deserializer)?;
     match json_string {
         Some(s) => {
+            if s.is_empty() {
+                return Ok(None);
+            }
             let complex_value = serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
             Ok(Some(complex_value))
         }
@@ -365,13 +368,19 @@ impl HttpSessionConf {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
         if let Some(catalog) = &self.catalog {
-            session.set_current_catalog(catalog.clone());
+            if !catalog.is_empty() {
+                session.set_current_catalog(catalog.clone());
+            }
         }
         if let Some(db) = &self.database {
-            session.set_current_database(db.clone());
+            if !db.is_empty() {
+                session.set_current_database(db.clone());
+            }
         }
         if let Some(role) = &self.role {
-            session.set_current_role_checked(role).await?;
+            if !role.is_empty() {
+                session.set_current_role_checked(role).await?;
+            }
         }
         // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
         session
