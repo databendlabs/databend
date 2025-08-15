@@ -289,7 +289,7 @@ pub trait SchemaApi: Send + Sync {
     async fn set_table_row_access_policy(
         &self,
         req: SetTableRowAccessPolicyReq,
-    ) -> Result<SetTableRowAccessPolicyReply, KVAppError>;
+    ) -> Result<databend_common_exception::Result<SetTableRowAccessPolicyReply>, KVAppError>;
 
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<(), KVAppError>;
 

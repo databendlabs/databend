@@ -19,7 +19,6 @@ use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropAllTableRowAccessPoliciesPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
@@ -67,7 +66,6 @@ impl Interpreter for DropAllTableRowAccessPoliciesInterpreter {
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
 
         if let Some(row_access_policy) = &table_info.meta.row_access_policy {
             let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -82,7 +80,6 @@ impl Interpreter for DropAllTableRowAccessPoliciesInterpreter {
 
             let req = SetTableRowAccessPolicyReq {
                 tenant: self.ctx.get_tenant(),
-                seq: MatchSeq::Exact(table_version),
                 table_id,
                 policy_id,
                 action: SetTableRowAccessPolicyAction::Unset(row_access_policy.to_string()),

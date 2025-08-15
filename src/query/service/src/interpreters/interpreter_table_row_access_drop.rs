@@ -14,13 +14,11 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableRowAccessPolicyPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
@@ -65,33 +63,21 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let policy = if let Some(row_access_policy) = &table_info.meta.row_access_policy {
-            if &self.plan.policy == row_access_policy {
-                row_access_policy
-            } else {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Unknown row access policy {} on table {}",
-                    row_access_policy, tbl_name
-                )));
-            }
-        } else {
-            // Prev row access policy is empty directly return
-            return Ok(PipelineBuildResult::create());
-        };
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         let (policy_id, _) = handler
-            .get_row_access(meta_api, &self.ctx.get_tenant(), policy.to_string())
+            .get_row_access(
+                meta_api,
+                &self.ctx.get_tenant(),
+                self.plan.policy.to_string(),
+            )
             .await?;
 
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
-            seq: MatchSeq::Exact(table_version),
             table_id,
-            action: SetTableRowAccessPolicyAction::Unset(policy.to_string()),
+            action: SetTableRowAccessPolicyAction::Unset(self.plan.policy.to_string()),
             policy_id,
         };
 
