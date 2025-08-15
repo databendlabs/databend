@@ -1778,7 +1778,7 @@ pub struct QueryConfig {
     pub jwt_key_file: String,
 
     /// Interval in seconds to refresh jwks
-    #[clap(long, value_name = "VALUE", default_value = "600")]
+    #[clap(long, value_name = "VALUE", default_value = "86400")]
     pub jwks_refresh_interval: u64,
 
     /// Timeout in seconds to refresh jwks
