@@ -83,12 +83,7 @@ impl AuthMgr {
 
     fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
         Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::create(
-                cfg.query.jwt_key_file.clone(),
-                cfg.query.jwt_key_files.clone(),
-                cfg.query.jwks_refresh_interval,
-                cfg.query.jwks_refresh_timeout,
-            ),
+            jwt_auth: JwtAuthenticator::create(&cfg.query),
         })
     }
 

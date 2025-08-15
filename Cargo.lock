@@ -4745,7 +4745,6 @@ dependencies = [
 name = "databend-common-telemetry"
 version = "0.1.0"
 dependencies = [
- "databend-common-version",
  "reqwest",
  "serde_json",
  "tokio",
@@ -4804,6 +4803,8 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
+ "databend-common-version",
  "enumflags2",
  "itertools 0.13.0",
  "jwt-simple",

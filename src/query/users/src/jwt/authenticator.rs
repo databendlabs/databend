@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::QueryConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::algorithms::ECDSAP256PublicKeyLike;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::algorithms::RS256PublicKey;
@@ -78,29 +80,33 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn create(
-        jwt_key_file: String,
-        jwt_key_files: Vec<String>,
-        jwks_refresh_interval: u64,
-        jwks_refresh_timeout: u64,
-    ) -> Option<Self> {
-        if jwt_key_file.is_empty() && jwt_key_files.is_empty() {
+    pub fn create(cfg: &QueryConfig) -> Option<Self> {
+        if cfg.jwt_key_file.is_empty() && cfg.jwt_key_files.is_empty() {
             return None;
         }
+        let user_agent = format!(
+            "Databend/{}/{}/{}",
+            *DATABEND_SEMVER,
+            cfg.tenant_id.tenant_name(),
+            cfg.cluster_id
+        );
+
         // init a vec of key store
         let mut key_stores = vec![];
-        if !jwt_key_file.is_empty() {
+        if !cfg.jwt_key_file.is_empty() {
             key_stores.push(
-                jwk::JwkKeyStore::new(jwt_key_file)
-                    .with_refresh_interval(jwks_refresh_interval)
-                    .with_refresh_timeout(jwks_refresh_timeout),
+                jwk::JwkKeyStore::new(cfg.jwt_key_file.clone())
+                    .with_user_agent(&user_agent)
+                    .with_refresh_interval(cfg.jwks_refresh_interval)
+                    .with_refresh_timeout(cfg.jwks_refresh_timeout),
             );
         }
-        for u in jwt_key_files {
+        for u in &cfg.jwt_key_files {
             key_stores.push(
-                jwk::JwkKeyStore::new(u)
-                    .with_refresh_interval(jwks_refresh_interval)
-                    .with_refresh_timeout(jwks_refresh_timeout),
+                jwk::JwkKeyStore::new(u.clone())
+                    .with_user_agent(&user_agent)
+                    .with_refresh_interval(cfg.jwks_refresh_interval)
+                    .with_refresh_timeout(cfg.jwks_refresh_timeout),
             );
         }
         Some(JwtAuthenticator { key_stores })
