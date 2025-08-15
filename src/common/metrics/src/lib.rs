@@ -22,6 +22,7 @@ mod metrics;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
+pub use crate::metrics::auth;
 pub use crate::metrics::cache;
 pub use crate::metrics::cluster;
 pub use crate::metrics::external_server;

@@ -59,7 +59,7 @@ async fn test_parse_non_custom_claim() -> Result<()> {
         tenant_id: Tenant::new_literal("test-tenant"),
         cluster_id: "test-cluster".to_string(),
         jwt_key_file: first_url,
-        jwks_refresh_interval: 600,
+        jwks_refresh_interval: 86400,
         jwks_refresh_timeout: 10,
         ..Default::default()
     };
