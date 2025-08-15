@@ -40,6 +40,7 @@ use super::PubKey;
 const JWKS_REFRESH_TIMEOUT: u64 = 10;
 const JWKS_REFRESH_INTERVAL: u64 = 86400;
 
+#[derive(Clone)]
 enum LoadKeyReason {
     Initial,
     Refresh,
@@ -190,7 +191,7 @@ impl JwkKeyStore {
 
 impl JwkKeyStore {
     #[async_backtrace::framed]
-    async fn load_keys(&self, reason: LoadKeyReason) -> Result<HashMap<String, PubKey>> {
+    async fn load_keys(&self, reason: &LoadKeyReason) -> Result<HashMap<String, PubKey>> {
         if let Some(load_keys_func) = &self.load_keys_func {
             return Ok(load_keys_func());
         }
@@ -202,17 +203,22 @@ impl JwkKeyStore {
             .map_err(|e| {
                 ErrorCode::InvalidConfig(format!("Failed to create jwks client: {}", e))
             })?;
-        metrics_incr_auth_jwks_requests_count(self.url.clone(), reason.as_str().to_string());
         let start_time = Instant::now();
         let response = client
             .get(&self.url)
             .send()
             .await
             .map_err(|e| ErrorCode::Internal(format!("Could not download JWKS: {}", e)))?;
+        let status = response.status();
         let jwk_keys: JwkKeys = response
             .json()
             .await
             .map_err(|e| ErrorCode::InvalidConfig(format!("Failed to parse JWKS: {}", e)))?;
+        metrics_incr_auth_jwks_requests_count(
+            self.url.clone(),
+            reason.as_str().to_string(),
+            status.as_u16(),
+        );
         let duration = start_time.elapsed();
         metrics_observe_auth_jwks_refresh_duration(self.url.clone(), duration);
         let mut new_keys: HashMap<String, PubKey> = HashMap::new();
@@ -258,9 +264,14 @@ impl JwkKeyStore {
             .unwrap_or(HashMap::new());
 
         // if got network issues on loading JWKS, fallback to the cached keys if available
-        let new_keys = match self.load_keys(reason).await {
+        let new_keys = match self.load_keys(&reason).await {
             Ok(new_keys) => new_keys,
             Err(err) => {
+                metrics_incr_auth_jwks_requests_count(
+                    self.url.clone(),
+                    reason.as_str().to_string(),
+                    err.code(),
+                );
                 warn!("Failed to load JWKS from {}: {}", self.url, err);
                 if !old_keys.is_empty() {
                     return Ok(());
