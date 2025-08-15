@@ -36,7 +36,7 @@ use serde::Serialize;
 use super::PubKey;
 
 const JWKS_REFRESH_TIMEOUT: u64 = 10;
-const JWKS_REFRESH_INTERVAL: u64 = 600;
+const JWKS_REFRESH_INTERVAL: u64 = 86400;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwkKey {
