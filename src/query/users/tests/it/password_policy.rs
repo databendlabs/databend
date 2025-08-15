@@ -45,7 +45,7 @@ async fn test_password_policy() -> Result<()> {
         )
         .unwrap();
     }
-    let conf = RpcClientConf::empty(databend_common_version::DATABEND_SEMVER.clone());
+    let conf = RpcClientConf::empty(databend_common_version::BUILD_INFO.clone());
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

@@ -109,7 +109,7 @@ impl SetInterpreter {
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
                             config.meta.to_meta_grpc_client_conf(
-                                databend_common_version::DATABEND_SEMVER.clone(),
+                                databend_common_version::BUILD_INFO.clone(),
                             ),
                             &Tenant::new_or_err(tenant, func_name!())?,
                         )

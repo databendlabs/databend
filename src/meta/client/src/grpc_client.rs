@@ -27,6 +27,7 @@ use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::base::BuildInfo;
 use databend_common_base::containers::Pool;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
@@ -169,7 +170,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
-        version: Version,
+        version: BuildInfo,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -204,7 +205,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create_with_features(
         endpoints_str: Vec<String>,
-        version: Version,
+        version: BuildInfo,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -681,8 +682,7 @@ impl MetaGrpcClient {
         password: &str,
     ) -> Result<(Vec<u8>, u64, Features), MetaHandshakeError> {
         debug!(
-            "client version: {}, required server versions: {:?}",
-            client_ver, required_server_features
+            "client version: {client_ver}, required server versions: {required_server_features:?}"
         );
 
         let auth = BasicAuth {

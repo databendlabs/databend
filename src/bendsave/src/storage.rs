@@ -38,8 +38,8 @@ use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
-use databend_common_version::DATABEND_SEMVER;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
@@ -112,7 +112,7 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     )?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
-        cfg.meta.to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
+        cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
         &CacheConfig::default(),
         BuiltIn::default(),
         &cfg.query.tenant_id,
@@ -147,7 +147,7 @@ pub async fn load_databend_meta() -> Result<(
     impl TryStream<Ok = Bytes, Error = anyhow::Error>,
 )> {
     let cfg = GlobalConfig::instance();
-    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf(DATABEND_SEMVER.clone());
+    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf(BUILD_INFO.clone());
     debug!("connect meta services on {:?}", grpc_client_conf.endpoints);
 
     let meta_client = MetaGrpcClient::try_new(&grpc_client_conf)?;

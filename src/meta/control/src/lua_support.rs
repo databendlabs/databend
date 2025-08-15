@@ -17,6 +17,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfo;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -27,7 +28,6 @@ use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::UserDataMethods;
 use mlua::Value;
-use semver::Version;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
@@ -168,7 +168,7 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> {
+pub fn setup_lua_environment(lua: &Lua, version: BuildInfo) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
@@ -265,7 +265,7 @@ pub fn setup_lua_environment(lua: &Lua, version: Version) -> anyhow::Result<()> 
 
 pub fn new_grpc_client(
     addresses: Vec<String>,
-    version: Version,
+    version: BuildInfo,
 ) -> Result<Arc<ClientHandle>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
@@ -286,7 +286,7 @@ pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str, version: BuildInfo) -> anyhow::Result<()> {
     let lua = Lua::new();
 
     setup_lua_environment(&lua, version)?;
@@ -303,7 +303,7 @@ pub async fn run_lua_script(script: &str, version: Version) -> anyhow::Result<()
 
 pub async fn run_lua_script_with_result(
     script: &str,
-    version: Version,
+    version: BuildInfo,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 

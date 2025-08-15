@@ -28,6 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
@@ -218,11 +219,9 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(
-            cfg.meta
-                .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
-        );
+    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfo) -> Result<MetaStore> {
+        let meta_api_provider =
+            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.clone()));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -233,8 +232,8 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(cfg).await?;
+    pub async fn init(cfg: &InnerConfig, version: BuildInfo) -> Result<()> {
+        let metastore = ClusterDiscovery::create_meta_client(cfg, version).await?;
         GlobalInstance::set(Self::try_create(cfg, metastore).await?);
 
         Ok(())

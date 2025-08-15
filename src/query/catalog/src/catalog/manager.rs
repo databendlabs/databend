@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
@@ -39,7 +40,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
 use databend_storages_common_session::SessionState;
 use parking_lot::RwLock;
-use semver::Version;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -72,7 +72,7 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
-        version: Version,
+        version: BuildInfo,
     ) -> Result<()> {
         GlobalInstance::set(
             Self::try_create(conf, default_catalog, catalog_creators, version).await?,
@@ -87,7 +87,7 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
-        version: Version,
+        version: BuildInfo,
     ) -> Result<Arc<CatalogManager>> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(

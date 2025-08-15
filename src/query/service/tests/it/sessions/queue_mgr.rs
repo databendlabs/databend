@@ -25,7 +25,7 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
 use databend_query::sessions::QueueData;
@@ -438,7 +438,7 @@ async fn test_heavy_actions() -> Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    let conf = RpcClientConf::empty(DATABEND_SEMVER.clone());
+    let conf = RpcClientConf::empty(BUILD_INFO.clone());
     Ok(MetaStoreProvider::new(conf)
         .create_meta_store()
         .await

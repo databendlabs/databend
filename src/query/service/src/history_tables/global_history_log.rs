@@ -89,7 +89,7 @@ impl GlobalHistoryLog {
             None
         };
         let meta_client =
-            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.version.clone()))
+            MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version.clone()))
                 .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();

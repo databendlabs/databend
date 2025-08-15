@@ -22,7 +22,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfo;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -65,9 +65,7 @@ impl PySessionContext {
 
             let config = GlobalConfig::instance();
             UserApiProvider::try_create_simple(
-                config
-                    .meta
-                    .to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
+                config.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
                 &tenant,
             )
             .await

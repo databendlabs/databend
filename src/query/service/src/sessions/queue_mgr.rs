@@ -104,7 +104,7 @@ impl<Data: QueueData> QueueManager<Data> {
         let metastore = {
             let provider = Arc::new(MetaStoreProvider::new(
                 conf.meta
-                    .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+                    .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.clone()),
             ));
 
             provider.create_meta_store().await.map_err(|e| {

@@ -38,7 +38,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TempDirManager;
@@ -77,7 +77,8 @@ impl GlobalServices {
 
         // The order of initialization is very important
         // 1. global config init.
-        GlobalConfig::init(config, databend_common_version::BUILD_INFO.clone())?;
+        let version = databend_common_version::BUILD_INFO.clone();
+        GlobalConfig::init(config, version.clone())?;
 
         // 2. log init.
         let mut log_labels = BTreeMap::new();
@@ -99,7 +100,7 @@ impl GlobalServices {
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
-        ClusterDiscovery::init(config).await?;
+        ClusterDiscovery::init(config, version.clone()).await?;
 
         // TODO(xuanwo):
         //
@@ -109,7 +110,8 @@ impl GlobalServices {
         // Maybe we can do some refactor to simplify the logic here.
         {
             // Init default catalog.
-            let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
+            let default_catalog =
+                DatabaseCatalog::try_create_with_config(config.clone(), version).await?;
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
@@ -120,7 +122,7 @@ impl GlobalServices {
                 config,
                 Arc::new(default_catalog),
                 catalog_creator,
-                DATABEND_SEMVER.clone(),
+                BUILD_INFO.clone(),
             )
             .await?;
         }
@@ -145,9 +147,7 @@ impl GlobalServices {
                 udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
-                config
-                    .meta
-                    .to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
+                config.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
                 &config.cache,
                 builtin,
                 &config.query.tenant_id,
@@ -203,11 +203,8 @@ impl GlobalServices {
     }
 
     async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
-        let meta_api_provider = MetaStoreProvider::new(
-            config
-                .meta
-                .to_meta_grpc_client_conf(DATABEND_SEMVER.clone()),
-        );
+        let meta_api_provider =
+            MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()));
         let meta_store = match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(

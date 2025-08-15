@@ -21,6 +21,7 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use databend_common_base::base::tokio;
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_client::errors::CreationError;
@@ -29,6 +30,7 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::NodeId;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_SEMVER;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -95,7 +97,7 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
 pub fn make_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses,
-        DATABEND_SEMVER.clone(),
+        BUILD_INFO.clone(),
         "root",
         "xxx",
         Some(Duration::from_secs(2)), // timeout
@@ -209,7 +211,7 @@ impl MetaSrvTestContext {
 
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            DATABEND_SEMVER.clone(),
+            BUILD_INFO.clone(),
             "root",
             "xxx",
             None,
@@ -269,9 +271,16 @@ impl kvapi::ApiBuilder<Arc<ClientHandle>> for MetaSrvBuilder {
         let (tc, addr) = start_metasrv().await.unwrap();
 
         let version = DATABEND_SEMVER.clone();
-        let client =
-            MetaGrpcClient::try_create(vec![addr], version, "root", "xxx", None, None, None)
-                .unwrap();
+        let client = MetaGrpcClient::try_create(
+            vec![addr],
+            BuildInfo { version },
+            "root",
+            "xxx",
+            None,
+            None,
+            None,
+        )
+        .unwrap();
 
         {
             let mut tcs = self.test_contexts.lock().unwrap();

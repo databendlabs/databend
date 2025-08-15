@@ -147,7 +147,7 @@ async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
 fn make_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
     let client = MetaGrpcClient::try_create(
         addresses, // a1() will be shut down
-        databend_common_version::DATABEND_SEMVER.clone(),
+        databend_common_version::BUILD_INFO.clone(),
         "root",
         "xxx",
         None,

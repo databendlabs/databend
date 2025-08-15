@@ -21,7 +21,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -52,7 +52,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
 
     let client = MetaGrpcClient::try_create(
         vec![addr],
-        DATABEND_SEMVER.clone(),
+        BUILD_INFO.clone(),
         "root",
         "xxx",
         None,
@@ -91,7 +91,7 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
 
     let r = MetaGrpcClient::try_create(
         vec!["addr".to_string()],
-        DATABEND_SEMVER.clone(),
+        BUILD_INFO.clone(),
         "root",
         "xxx",
         None,

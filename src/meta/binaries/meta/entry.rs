@@ -31,6 +31,7 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_SEMVER;
@@ -230,7 +231,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
-                ..RpcClientConf::empty(DATABEND_SEMVER.clone())
+                ..RpcClientConf::empty(BUILD_INFO.clone())
             };
             let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),

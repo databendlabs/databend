@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use databend_common_base::base::mask_string;
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
@@ -34,7 +35,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
-use semver::Version;
 
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
@@ -427,7 +427,7 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self, version: Version) -> RpcClientConf {
+    pub fn to_meta_grpc_client_conf(&self, version: BuildInfo) -> RpcClientConf {
         let embedded_dir = if self.embedded_dir.is_empty() {
             None
         } else {

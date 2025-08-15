@@ -52,7 +52,7 @@ use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
@@ -80,7 +80,7 @@ impl App {
         let addr = args.grpc_api_address.clone();
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            DATABEND_SEMVER.clone(),
+            BUILD_INFO.clone(),
             "root",
             "xxx",
             None,
@@ -162,7 +162,7 @@ impl App {
             i += 1;
             let client = MetaGrpcClient::try_create(
                 vec![addr.clone()],
-                DATABEND_SEMVER.clone(),
+                BUILD_INFO.clone(),
                 "root",
                 "xxx",
                 None,
@@ -196,7 +196,7 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args, DATABEND_SEMVER.clone()).await?;
+                export_from_grpc::export_from_running_node(args, BUILD_INFO.clone()).await?;
             }
             Some(ref _dir) => {
                 export_from_disk::export_from_dir(args).await?;
@@ -252,7 +252,7 @@ impl App {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua, DATABEND_SEMVER.clone())?;
+        lua_support::setup_lua_environment(&lua, BUILD_INFO.clone())?;
 
         let script = match &args.file {
             Some(path) => std::fs::read_to_string(path)?,
@@ -287,14 +287,14 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script, DATABEND_SEMVER.clone()).await? {
+        match lua_support::run_lua_script_with_result(&lua_script, BUILD_INFO.clone()).await? {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
     }
 
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        lua_support::new_grpc_client(addresses, DATABEND_SEMVER.clone())
+        lua_support::new_grpc_client(addresses, BUILD_INFO.clone())
     }
 }
 

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::BuildInfo;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -166,11 +167,10 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfo) -> Result<Self> {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(
-                conf.meta
-                    .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+                conf.meta.to_meta_grpc_client_conf(version.clone()),
             ));
 
             provider.create_meta_store().await.map_err(|e| {

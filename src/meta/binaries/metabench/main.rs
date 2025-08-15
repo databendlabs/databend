@@ -52,7 +52,7 @@ use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
@@ -132,7 +132,7 @@ async fn main() {
         let handle = runtime::spawn(async move {
             let client = MetaGrpcClient::try_create_with_features(
                 vec![addr.to_string()],
-                DATABEND_SEMVER.clone(),
+                BUILD_INFO.clone(),
                 "root",
                 "xxx",
                 None,

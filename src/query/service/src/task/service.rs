@@ -153,7 +153,7 @@ impl TaskService {
         let tenant = cfg.query.tenant_id.clone();
         let meta_store = MetaStoreProvider::new(
             cfg.meta
-                .to_meta_grpc_client_conf(databend_common_version::DATABEND_SEMVER.clone()),
+                .to_meta_grpc_client_conf(databend_common_version::BUILD_INFO.clone()),
         )
         .create_meta_store()
         .await

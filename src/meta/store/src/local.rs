@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_client::errors::CreationError;
@@ -191,7 +192,7 @@ impl LocalMetaService {
 
         let client = MetaGrpcClient::try_create(
             vec![addr],
-            version,
+            BuildInfo { version },
             "root",
             "xxx",
             None,
