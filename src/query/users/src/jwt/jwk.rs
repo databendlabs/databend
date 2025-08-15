@@ -223,7 +223,7 @@ impl JwkKeyStore {
         let new_keys = match self.load_keys().await {
             Ok(new_keys) => new_keys,
             Err(err) => {
-                warn!("Failed to load JWKS: {}", err);
+                warn!("Failed to load JWKS from {}: {}", self.url, err);
                 if !old_keys.is_empty() {
                     return Ok(());
                 }
