@@ -19,7 +19,6 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
-use log::debug;
 use log::info;
 use rotbl::v001::SeqMarked;
 use tokio::sync::mpsc;
@@ -93,7 +92,7 @@ impl WriterV003 {
         mut kv_rx: mpsc::Receiver<WriteEntry<(String, SeqMarked), (MetaSnapshotId, SysData)>>,
     ) -> Result<DB, io::Error> {
         while let Some(ent) = kv_rx.blocking_recv() {
-            debug!(entry :? =(&ent); "write kv");
+            // debug!(entry :? =(&ent); "write kv");
 
             let (k, v) = match ent {
                 WriteEntry::Data(ent) => ent,
