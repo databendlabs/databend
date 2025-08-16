@@ -348,7 +348,11 @@ async fn test_segment_builder() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_cache() -> Result<()> {
-    let _fixture = TestFixture::setup_with_segment_cache_bytes(1024 * 1024 * 10).await?;
+    let _fixture = TestFixture::setup_with_segment_cache_bytes(
+        1024 * 1024 * 10,
+        databend_common_version::BUILD_INFO.clone(),
+    )
+    .await?;
     let operator = Operator::new(opendal::services::Memory::default())
         .unwrap()
         .finish();

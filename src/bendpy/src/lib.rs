@@ -29,6 +29,7 @@ use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
@@ -88,7 +89,7 @@ allow_insecure = true
     INIT.call_once(|| {
         RUNTIME
             .block_on(async {
-                GlobalServices::init(&conf, false).await?;
+                GlobalServices::init(&conf, BUILD_INFO.clone(), false).await?;
                 // init oss license manager
                 OssLicenseManager::init("".to_string()).unwrap();
                 // Cluster register.

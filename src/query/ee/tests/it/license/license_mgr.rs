@@ -16,6 +16,7 @@ use databend_common_base::base::tokio;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license_manager::LicenseManager;
+use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
 use databend_query::test_kits::*;
 use jwt_simple::algorithms::ES256KeyPair;
@@ -39,7 +40,7 @@ fn build_custom_claims(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parse_license() -> databend_common_exception::Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
@@ -81,7 +82,7 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_license_features() -> databend_common_exception::Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(

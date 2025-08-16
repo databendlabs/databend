@@ -67,7 +67,7 @@ use rand::Rng;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     // setup
     let qry = "create table t(c int)  block_per_segment=10";
@@ -107,7 +107,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_resolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
     fixture.execute_command(create_tbl_command).await?;
@@ -165,7 +165,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     // setup
     let create_tbl_command = "create table t(c int)  block_per_segment=10";
@@ -281,7 +281,7 @@ async fn build_mutator(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_segment_compactor() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
     let threshold_10 = BlockThresholds {
         block_per_segment: 10,
@@ -973,7 +973,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
         ..Default::default()
     };
 
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
     let data_accessor = ctx.get_application_level_data_operator()?.operator();

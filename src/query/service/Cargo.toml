@@ -183,6 +183,7 @@ xorf = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
+databend-common-version = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }

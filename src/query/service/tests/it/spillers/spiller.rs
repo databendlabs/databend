@@ -31,7 +31,7 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_with_partition() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let location_prefix = ctx.query_id_spill_prefix();

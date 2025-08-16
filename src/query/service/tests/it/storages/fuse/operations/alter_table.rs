@@ -131,7 +131,7 @@ async fn check_segment_column_ids(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize_alter_table() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     fixture.create_default_database().await?;
 
     let tbl_name = fixture.default_table_name();

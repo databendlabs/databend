@@ -44,7 +44,7 @@ pub async fn query_local(
         conf.query.warehouse_id = conf.query.cluster_id.clone();
     }
 
-    GlobalServices::init(&conf, false).await?;
+    GlobalServices::init(&conf, version.clone(), false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
     // Cluster register.

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_ast::ast::Engine;
+use databend_common_base::base::BuildInfo;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::session_type::SessionType;
@@ -60,7 +61,6 @@ use databend_common_pipeline_sources::BlocksSource;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_tracing::set_panic_hook;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
@@ -94,6 +94,7 @@ pub struct TestFixture {
     pub(crate) default_ctx: Arc<QueryContext>,
     default_session: Arc<Session>,
     conf: InnerConfig,
+    version: BuildInfo,
     prefix: String,
     // Keep in the end.
     // Session will drop first then the guard drop.
@@ -125,18 +126,19 @@ impl Drop for TestGuard {
 
 #[async_trait::async_trait]
 pub trait Setup {
-    async fn setup(&self) -> Result<InnerConfig>;
+    async fn setup(&self) -> Result<(InnerConfig, BuildInfo)>;
 }
 
 struct OSSSetup {
     config: InnerConfig,
+    version: BuildInfo,
 }
 
 #[async_trait::async_trait]
 impl Setup for OSSSetup {
-    async fn setup(&self) -> Result<InnerConfig> {
-        TestFixture::init_global_with_config(&self.config).await?;
-        Ok(self.config.clone())
+    async fn setup(&self) -> Result<(InnerConfig, BuildInfo)> {
+        TestFixture::init_global_with_config(&self.config, self.version.clone()).await?;
+        Ok((self.config.clone(), self.version.clone()))
     }
 }
 
@@ -146,21 +148,21 @@ impl TestFixture {
     pub fn keep_alive(&self) {}
 
     /// Create a new TestFixture with default config.
-    pub async fn setup() -> Result<TestFixture> {
+    pub async fn setup(version: BuildInfo) -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();
-        Self::setup_with_custom(OSSSetup { config }).await
+        Self::setup_with_custom(OSSSetup { config, version }).await
     }
 
     /// Create a new TestFixture with default config.
-    pub async fn setup_with_history_log() -> Result<TestFixture> {
+    pub async fn setup_with_history_log(version: BuildInfo) -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();
-        let conf = OSSSetup { config }.setup().await?;
+        let (conf, version) = OSSSetup { config, version }.setup().await?;
 
         use crate::history_tables::session::create_session;
         let default_session =
             create_session(conf.query.tenant_id.tenant_name(), &conf.query.cluster_id).await?;
         let default_ctx = default_session
-            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .create_query_context(version.clone())
             .await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -170,27 +172,31 @@ impl TestFixture {
             default_ctx,
             default_session,
             conf,
+            version,
             prefix: random_prefix,
             _guard: guard,
         })
     }
 
-    pub async fn setup_with_segment_cache_bytes(segment_bytes: u64) -> Result<TestFixture> {
+    pub async fn setup_with_segment_cache_bytes(
+        segment_bytes: u64,
+        version: BuildInfo,
+    ) -> Result<TestFixture> {
         let config = ConfigBuilder::create()
             .enable_table_meta_cache()
             .table_meta_segment_bytes(segment_bytes)
             .config();
-        Self::setup_with_custom(OSSSetup { config }).await
+        Self::setup_with_custom(OSSSetup { config, version }).await
     }
 
     /// Create a new TestFixture with setup impl.
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
-        let conf = setup.setup().await?;
+        let (conf, version) = setup.setup().await?;
 
         // This will use a max_active_sessions number.
         let default_session = Self::create_session(SessionType::Dummy).await?;
         let default_ctx = default_session
-            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .create_query_context(version.clone())
             .await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -200,14 +206,19 @@ impl TestFixture {
             default_ctx,
             default_session,
             conf,
+            version,
             prefix: random_prefix,
             _guard: guard,
         })
     }
 
-    pub async fn setup_with_config(config: &InnerConfig) -> Result<TestFixture> {
+    pub async fn setup_with_config(
+        config: &InnerConfig,
+        version: BuildInfo,
+    ) -> Result<TestFixture> {
         Self::setup_with_custom(OSSSetup {
             config: config.clone(),
+            version,
         })
         .await
     }
@@ -267,9 +278,8 @@ impl TestFixture {
     /// Init the global services.
     /// Init the license manager.
     /// Register the cluster to the metastore.
-    async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
-        let binary_version = DATABEND_COMMIT_VERSION.clone();
-        set_panic_hook(binary_version);
+    async fn init_global_with_config(config: &InnerConfig, version: BuildInfo) -> Result<()> {
+        set_panic_hook(version.commit_detail.clone());
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
@@ -278,7 +288,7 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config, false).await?;
+        GlobalServices::init_with(config, version, false).await?;
         OssLicenseManager::init(config.query.tenant_id.tenant_name().to_string())?;
 
         // Cluster register.
@@ -302,7 +312,7 @@ impl TestFixture {
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
         self.default_session
-            .create_query_context(databend_common_version::BUILD_INFO.clone())
+            .create_query_context(self.version.clone())
             .await
     }
 
@@ -317,7 +327,7 @@ impl TestFixture {
         let dummy_query_context = QueryContext::create_from_shared(QueryContextShared::try_create(
             self.default_session.clone(),
             Cluster::create(nodes, local_id),
-            databend_common_version::BUILD_INFO.clone(),
+            self.version.clone(),
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;

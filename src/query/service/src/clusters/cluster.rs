@@ -55,7 +55,6 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::Settings;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -641,7 +640,7 @@ impl ClusterDiscovery {
             http_address,
             address,
             discovery_address,
-            DATABEND_COMMIT_VERSION.to_string(),
+            self.version.commit_detail.clone(),
             cache_id,
         );
 

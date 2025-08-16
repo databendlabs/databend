@@ -71,7 +71,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
     let status = get_status(&ep).await;

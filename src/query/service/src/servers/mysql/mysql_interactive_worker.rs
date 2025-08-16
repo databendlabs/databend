@@ -35,7 +35,6 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::StreamExt;
@@ -533,9 +532,9 @@ impl InteractiveWorker {
         }
 
         InteractiveWorker {
+            version: format!("{MYSQL_VERSION}-{}", version.commit_detail),
             base: InteractiveWorkerBase { session, version },
             salt: scramble,
-            version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
             keep_alive_task_started: false,
         }

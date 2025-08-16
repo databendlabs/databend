@@ -71,7 +71,7 @@ async fn apply_block_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_block_pruner() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;

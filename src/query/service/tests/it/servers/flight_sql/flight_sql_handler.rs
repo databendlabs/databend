@@ -100,7 +100,11 @@ fn prepare_config() -> InnerConfig {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_query() -> Result<()> {
-    let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
+    let _fixture = TestFixture::setup_with_config(
+        &prepare_config(),
+        databend_common_version::BUILD_INFO.clone(),
+    )
+    .await?;
 
     let runtime = Runtime::with_default_worker_threads()?;
     runtime.block_on(async {

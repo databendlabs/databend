@@ -26,6 +26,7 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_GIT_SHA;
@@ -74,7 +75,7 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
                 .init_inner_config(false)
                 .await
                 .with_context(make_error)?;
-            let version = databend_common_version::BUILD_INFO.clone();
+            let version = BUILD_INFO.clone();
             local::query_local(conf, version, query, output_format)
                 .await
                 .with_context(make_error)?
@@ -108,7 +109,7 @@ pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), Main
         .with_context(make_error);
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf, ee_mode)
+    GlobalServices::init(conf, BUILD_INFO.clone(), ee_mode)
         .await
         .with_context(make_error)
 }
@@ -263,8 +264,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
         );
         let mut srv =
-            FlightSQLServer::create(conf.clone(), databend_common_version::BUILD_INFO.clone())
-                .with_context(make_error)?;
+            FlightSQLServer::create(conf.clone(), BUILD_INFO.clone()).with_context(make_error)?;
         let listening = srv
             .start(address.parse().with_context(make_error)?)
             .await

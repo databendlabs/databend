@@ -183,13 +183,14 @@ mod tests {
     use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_pipeline_transforms::MemorySettings;
+    use databend_common_version::BUILD_INFO;
 
     use crate::pipelines::memory_settings::MemorySettingsExt;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_global_spill_disabled_when_max_memory_zero() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -208,7 +209,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_query_spill_disabled_when_max_query_memory_zero() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -225,7 +226,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_both_global_and_query_spill_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -244,7 +245,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sort_spill_disabled_globally() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
 
         ctx.set_enable_sort_spill(false);
@@ -259,7 +260,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_global_sort_spill_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -279,7 +280,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_global_sort_spill_disabled_when_max_memory_zero() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -295,7 +296,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_query_level_spill_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -311,7 +312,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sort_spilling_batch_bytes() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -326,7 +327,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_global_window_spill_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -345,7 +346,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_global_window_spill_disabled_when_max_memory_zero() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -360,7 +361,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_query_level_window_spill_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -375,7 +376,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_both_window_spills_enabled() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
@@ -394,7 +395,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_window_spill_unit_size_conversion() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
+        let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 

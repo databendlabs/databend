@@ -20,7 +20,7 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let mut session = TestFixture::create_dummy_session().await;
 
     // Tenant.
@@ -48,7 +48,9 @@ async fn test_session() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_in_management_mode() -> Result<()> {
     let config = ConfigBuilder::create().with_management_mode().build();
-    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let _fixture =
+        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
+            .await?;
 
     let mut session = TestFixture::create_dummy_session().await;
 

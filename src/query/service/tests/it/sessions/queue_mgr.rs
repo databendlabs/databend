@@ -390,7 +390,7 @@ async fn test_heavy_actions() -> Result<()> {
         }
     ];
 
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_enable_table_lock(0)?;
 

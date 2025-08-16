@@ -26,7 +26,9 @@ use databend_query::test_kits::TestFixture;
 pub async fn create_parquet_test_fixture() -> TestFixture {
     let mut conf = ConfigBuilder::create().config();
     conf.storage.allow_insecure = true;
-    TestFixture::setup_with_config(&conf).await.unwrap()
+    TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap()
 }
 
 pub async fn get_data_source_plan(ctx: Arc<dyn TableContext>, sql: &str) -> Result<DataSourcePlan> {

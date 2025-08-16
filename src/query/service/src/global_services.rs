@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfo;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
@@ -63,13 +64,13 @@ pub struct GlobalServices;
 
 impl GlobalServices {
     #[async_backtrace::framed]
-    pub async fn init(config: &InnerConfig, ee_mode: bool) -> Result<()> {
+    pub async fn init(config: &InnerConfig, version: BuildInfo, ee_mode: bool) -> Result<()> {
         GlobalInstance::init_production();
-        GlobalServices::init_with(config, ee_mode).await
+        GlobalServices::init_with(config, version, ee_mode).await
     }
 
     #[async_backtrace::framed]
-    pub async fn init_with(config: &InnerConfig, ee_mode: bool) -> Result<()> {
+    pub async fn init_with(config: &InnerConfig, version: BuildInfo, ee_mode: bool) -> Result<()> {
         StackTrace::pre_load_symbol();
 
         // app name format: node_id[0..7]@cluster_id
@@ -77,7 +78,6 @@ impl GlobalServices {
 
         // The order of initialization is very important
         // 1. global config init.
-        let version = databend_common_version::BUILD_INFO.clone();
         GlobalConfig::init(config, version.clone())?;
 
         // 2. log init.
@@ -111,7 +111,7 @@ impl GlobalServices {
         {
             // Init default catalog.
             let default_catalog =
-                DatabaseCatalog::try_create_with_config(config.clone(), version).await?;
+                DatabaseCatalog::try_create_with_config(config.clone(), version.clone()).await?;
 
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
@@ -122,7 +122,7 @@ impl GlobalServices {
                 config,
                 Arc::new(default_catalog),
                 catalog_creator,
-                BUILD_INFO.clone(),
+                version.clone(),
             )
             .await?;
         }
@@ -147,7 +147,7 @@ impl GlobalServices {
                 udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
-                config.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
+                config.meta.to_meta_grpc_client_conf(version.clone()),
                 &config.cache,
                 builtin,
                 &config.query.tenant_id,
@@ -186,7 +186,7 @@ impl GlobalServices {
         Self::init_workload_mgr(config).await?;
 
         if config.log.history.on {
-            GlobalHistoryLog::init(config, databend_common_version::BUILD_INFO.clone()).await?;
+            GlobalHistoryLog::init(config, version.clone()).await?;
         }
         if config.task.on {
             if config.query.cloud_control_grpc_server_address.is_some() {

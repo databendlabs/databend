@@ -38,7 +38,7 @@ use crate::tests::tls_constants::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -59,7 +59,7 @@ async fn test_connect_with_tls() -> Result<()> {
     // See: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let _fixture = TestFixture::setup().await?;
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
@@ -83,7 +83,8 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     let conf = ConfigBuilder::create()
         .max_active_sessions(max_active_sessions)
         .build();
-    let _fixture = TestFixture::setup_with_config(&conf).await?;
+    let _fixture =
+        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -155,7 +156,8 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     let conf = ConfigBuilder::create()
         .max_active_sessions(max_active_sessions)
         .build();
-    let _fixture = TestFixture::setup_with_config(&conf).await?;
+    let _fixture =
+        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;

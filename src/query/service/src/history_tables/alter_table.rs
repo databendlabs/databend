@@ -178,13 +178,14 @@ pub async fn get_log_table(context: Arc<QueryContext>) -> Result<Option<Arc<dyn 
 mod tests {
     mod alter_table_tests {
         use databend_common_exception::ErrorCode;
+        use databend_common_version::BUILD_INFO;
 
         use crate::history_tables::alter_table::get_alter_table_sql;
         use crate::test_kits::TestFixture;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_get_alter_table_sql() -> Result<(), ErrorCode> {
-            let test_fixture = TestFixture::setup_with_history_log().await?;
+            let test_fixture = TestFixture::setup_with_history_log(BUILD_INFO.clone()).await?;
             let ctx = test_fixture.new_query_ctx().await?;
             let create_db = "CREATE DATABASE system_history";
             let create_table = "CREATE TABLE system_history.test_table_alter (id INT, name String)";
@@ -220,7 +221,7 @@ mod tests {
             // - The node with the older schema version is restarted.
             // - Upon restart, the older node should not attempt to alter the table again.
 
-            let test_fixture = TestFixture::setup_with_history_log().await?;
+            let test_fixture = TestFixture::setup_with_history_log(BUILD_INFO.clone()).await?;
             let ctx = test_fixture.new_query_ctx().await?;
             let create_db = "CREATE DATABASE system_history";
             let create_table =
@@ -244,6 +245,7 @@ mod tests {
         use std::collections::BTreeMap;
 
         use databend_common_exception::ErrorCode;
+        use databend_common_version::BUILD_INFO;
 
         use crate::history_tables::alter_table::should_reset;
         use crate::history_tables::external::ExternalStorageConnection;
@@ -252,7 +254,7 @@ mod tests {
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_should_reset_table_not_exists() -> Result<(), ErrorCode> {
             // Test: When log_history table doesn't exist, should_reset should return false
-            let test_fixture = TestFixture::setup_with_history_log().await?;
+            let test_fixture = TestFixture::setup_with_history_log(BUILD_INFO.clone()).await?;
             let ctx = test_fixture.new_query_ctx().await?;
 
             // Don't create the table, it should not exist
@@ -266,7 +268,7 @@ mod tests {
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_should_reset_both_inner() -> Result<(), ErrorCode> {
             // Test: When log_history table is internal, config also internal, should_reset should return false
-            let test_fixture = TestFixture::setup_with_history_log().await?;
+            let test_fixture = TestFixture::setup_with_history_log(BUILD_INFO.clone()).await?;
             let ctx = test_fixture.new_query_ctx().await?;
 
             // Create system_history database and internal log_history table
@@ -285,7 +287,7 @@ mod tests {
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_should_reset_inner_to_external() -> Result<(), ErrorCode> {
             // Test Condition: Internal -> External conversion should trigger reset
-            let test_fixture = TestFixture::setup_with_history_log().await?;
+            let test_fixture = TestFixture::setup_with_history_log(BUILD_INFO.clone()).await?;
             let ctx = test_fixture.new_query_ctx().await?;
 
             // Create system_history database and internal log_history table

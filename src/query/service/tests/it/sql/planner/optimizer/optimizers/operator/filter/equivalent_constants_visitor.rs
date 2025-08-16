@@ -35,7 +35,7 @@ use parking_lot::RwLock;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_equivalent_constants() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let cases = [

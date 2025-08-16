@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
+use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
@@ -43,7 +44,7 @@ use opendal::OperatorBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
 
     fixture
         .default_session()
@@ -122,7 +123,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_do_vacuum_temporary_files() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let _fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
 
     let operator = DataOperator::instance().spill_operator();
     operator.write("test_dir/test1", vec![1, 2]).await?;
@@ -522,7 +523,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
     // errors should not be swallowed in remove_file_in_batch
     let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
     let file_util = Files::create(ctx, operator);
 

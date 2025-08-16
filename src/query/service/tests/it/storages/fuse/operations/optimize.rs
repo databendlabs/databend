@@ -34,7 +34,7 @@ async fn test_fuse_snapshot_optimize_all() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_optimize() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();

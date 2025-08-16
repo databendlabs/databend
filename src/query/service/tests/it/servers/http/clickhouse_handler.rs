@@ -50,7 +50,9 @@ macro_rules! assert_ok {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_select() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
 
@@ -98,7 +100,9 @@ async fn test_select() -> PoemResult<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_insert_values() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
     {
@@ -127,7 +131,9 @@ async fn test_insert_values() -> PoemResult<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_formats() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
     {
@@ -167,7 +173,9 @@ async fn test_output_formats() -> PoemResult<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_output_format_compress() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
     let sql = "select 1 format TabSeparated";
@@ -189,7 +197,9 @@ async fn test_output_format_compress() -> PoemResult<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_settings() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
 
@@ -244,7 +254,9 @@ async fn test_settings() -> PoemResult<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_federated() -> PoemResult<()> {
-    let _fixture = TestFixture::setup().await.unwrap();
+    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone())
+        .await
+        .unwrap();
 
     let server = Server::new().await;
     {
