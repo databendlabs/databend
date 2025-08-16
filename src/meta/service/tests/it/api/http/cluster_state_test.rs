@@ -24,7 +24,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::UpsertKV;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::HttpService;
 use databend_meta::meta_service::MetaNode;
@@ -57,9 +57,9 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::start(&tc0.config, DATABEND_SEMVER.clone()).await?;
+    let _mn0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
 
-    let mn1 = MetaNode::start(&tc1.config, DATABEND_SEMVER.clone()).await?;
+    let mn1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
     let res = mn1
         .join_cluster(
             &tc1.config.raft_config,
@@ -97,9 +97,9 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let mn0 = MetaNode::start(&tc0.config, DATABEND_SEMVER.clone()).await?;
+    let mn0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
 
-    let mn1 = MetaNode::start(&tc1.config, DATABEND_SEMVER.clone()).await?;
+    let mn1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
     let _ = mn1
         .join_cluster(
             &tc1.config.raft_config,
@@ -249,9 +249,9 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let _meta_node0 = MetaNode::start(&tc0.config, DATABEND_SEMVER.clone()).await?;
+    let _meta_node0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config, DATABEND_SEMVER.clone()).await?;
+    let meta_node1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
     let _ = meta_node1
         .join_cluster(
             &tc1.config.raft_config,

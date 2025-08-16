@@ -59,6 +59,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_sql::Planner;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_version::BUILD_INFO;
 use futures::Stream;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
@@ -151,13 +152,12 @@ impl TaskService {
 
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_store = MetaStoreProvider::new(
-            cfg.meta
-                .to_meta_grpc_client_conf(&databend_common_version::BUILD_INFO),
-        )
-        .create_meta_store()
-        .await
-        .map_err(|e| ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e)))?;
+        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(&BUILD_INFO))
+            .create_meta_store()
+            .await
+            .map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?;
         let meta_client = meta_store.deref().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(
@@ -585,8 +585,7 @@ impl TaskService {
         };
 
         let session = create_session(user, role).await?;
-        session
-            .create_query_context_with_cluster(dummy_cluster, &databend_common_version::BUILD_INFO)
+        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO)
     }
 
     pub async fn lasted_task_run(&self, task_name: &str) -> Result<Option<TaskRun>> {

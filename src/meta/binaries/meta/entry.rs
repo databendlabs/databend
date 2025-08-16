@@ -156,7 +156,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_node = MetaNode::start(&conf, DATABEND_SEMVER.clone()).await?;
+    let meta_node = MetaNode::start(&conf, &BUILD_INFO).await?;
 
     let mut stop_handler = StopHandle::<AnyError>::create();
     let stop_tx = StopHandle::<AnyError>::install_termination_handle();

@@ -31,6 +31,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use futures::stream;
 use itertools::Itertools;
@@ -61,7 +62,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     tc.config.raft_config.max_applied_log_to_keep = 0;
 
-    let mn = MetaNode::boot(&tc.config, databend_common_version::DATABEND_SEMVER.clone()).await?;
+    let mn = MetaNode::boot(&tc.config, &BUILD_INFO).await?;
 
     tc.assert_raft_server_connection().await?;
 

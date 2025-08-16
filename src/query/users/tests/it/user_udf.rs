@@ -24,6 +24,7 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -34,14 +35,10 @@ async fn test_user_lambda_udf() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(
-            &InnerConfig::default(),
-            &databend_common_version::BUILD_INFO,
-        )
-        .unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
+    let conf = RpcClientConf::empty(&BUILD_INFO);
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 
@@ -114,14 +111,10 @@ async fn test_user_udf_server() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(
-            &InnerConfig::default(),
-            &databend_common_version::BUILD_INFO,
-        )
-        .unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
-    let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
+    let conf = RpcClientConf::empty(&BUILD_INFO);
     let tenant = Tenant::new_literal("test");
 
     let user_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

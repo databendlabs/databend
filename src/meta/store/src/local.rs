@@ -153,7 +153,7 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_node = MetaNode::start(&config, version.semantic.clone()).await?;
+        let meta_node = MetaNode::start(&config, version).await?;
         let mut grpc_server = GrpcServer::create(config.clone(), meta_node);
         grpc_server.start().await?;
 

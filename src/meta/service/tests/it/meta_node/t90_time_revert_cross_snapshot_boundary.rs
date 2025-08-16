@@ -21,7 +21,7 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use maplit::btreeset;
@@ -118,7 +118,7 @@ async fn write_two_logs(
 
         sleep(Duration::from_secs(2)).await;
 
-        meta_node = MetaNode::open(&tc0.config.raft_config, DATABEND_SEMVER.clone()).await?;
+        meta_node = MetaNode::open(&tc0.config.raft_config, &BUILD_INFO).await?;
     }
 
     // Apply second log

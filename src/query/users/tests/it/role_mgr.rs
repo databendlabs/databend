@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
 use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -37,13 +38,9 @@ async fn test_role_manager() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(
-            &InnerConfig::default(),
-            &databend_common_version::BUILD_INFO,
-        )
-        .unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
+    let conf = RpcClientConf::empty(&BUILD_INFO);
     let tenant = Tenant::new_literal("tenant1");
 
     let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

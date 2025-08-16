@@ -19,6 +19,7 @@ use databend_common_config::InnerConfig;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_version::BUILD_INFO;
 
 #[test]
 fn test_find_all_related_roles() {
@@ -28,11 +29,7 @@ fn test_find_all_related_roles() {
 
     // Init with default.
     {
-        GlobalConfig::init(
-            &InnerConfig::default(),
-            &databend_common_version::BUILD_INFO,
-        )
-        .unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
     // Create some test RoleInfo instances for the cache

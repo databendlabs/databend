@@ -20,6 +20,7 @@ use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingGuard;
@@ -63,7 +64,6 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
-use semver::Version;
 use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -94,7 +94,7 @@ use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
-    version: Version,
+    version: BuildInfoRef,
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
@@ -114,7 +114,7 @@ impl Drop for MetaServiceImpl {
 impl MetaServiceImpl {
     pub fn create(meta_node: Weak<MetaNode>) -> Self {
         Self {
-            version: meta_node.upgrade().unwrap().version.clone(),
+            version: meta_node.upgrade().unwrap().version,
             token: GrpcToken::create(),
             meta_node,
         }
@@ -275,7 +275,7 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
-                protocol_version: to_digit_ver(&self.version),
+                protocol_version: to_digit_ver(&self.version.semantic),
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });

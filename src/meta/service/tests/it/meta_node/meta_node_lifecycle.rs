@@ -27,7 +27,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::UpsertKV;
-use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::BUILD_INFO;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
@@ -55,7 +55,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
-    let mn = MetaNode::boot(&tc.config, DATABEND_SEMVER.clone()).await?;
+    let mn = MetaNode::boot(&tc.config, &BUILD_INFO).await?;
 
     let got = mn.get_node(&0).await;
     assert_eq!(addr, got.unwrap().endpoint);
@@ -108,7 +108,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let node_id = 2;
     let mut tc2 = MetaSrvTestContext::new(node_id);
     {
-        let mn2 = MetaNode::open(&tc2.config.raft_config, DATABEND_SEMVER.clone()).await?;
+        let mn2 = MetaNode::open(&tc2.config.raft_config, &BUILD_INFO).await?;
         all.push(mn2);
     }
 
@@ -144,7 +144,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let node_id = 3;
     let mut tc3 = MetaSrvTestContext::new(node_id);
     {
-        let mn3 = MetaNode::open(&tc3.config.raft_config, DATABEND_SEMVER.clone()).await?;
+        let mn3 = MetaNode::open(&tc3.config.raft_config, &BUILD_INFO).await?;
         all.push(mn3.clone());
     }
 
@@ -190,10 +190,10 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     sleep(Duration::from_secs(1)).await;
 
-    let mn0 = MetaNode::open(&tc0.config.raft_config, DATABEND_SEMVER.clone()).await?;
-    let mn1 = MetaNode::open(&tc1.config.raft_config, DATABEND_SEMVER.clone()).await?;
-    let mn2 = MetaNode::open(&tc2.config.raft_config, DATABEND_SEMVER.clone()).await?;
-    let mn3 = MetaNode::open(&tc3.config.raft_config, DATABEND_SEMVER.clone()).await?;
+    let mn0 = MetaNode::open(&tc0.config.raft_config, &BUILD_INFO).await?;
+    let mn1 = MetaNode::open(&tc1.config.raft_config, &BUILD_INFO).await?;
+    let mn2 = MetaNode::open(&tc2.config.raft_config, &BUILD_INFO).await?;
+    let mn3 = MetaNode::open(&tc3.config.raft_config, &BUILD_INFO).await?;
 
     let all = [mn0, mn1, mn2, mn3];
 
@@ -228,7 +228,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 1;
     let tc1 = MetaSrvTestContext::new(node_id);
 
-    let mn1 = MetaNode::open(&tc1.config.raft_config, DATABEND_SEMVER.clone()).await?;
+    let mn1 = MetaNode::open(&tc1.config.raft_config, &BUILD_INFO).await?;
 
     info!("--- join non-voter 1 to cluster");
 
@@ -262,7 +262,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let node_id = 2;
     let tc2 = MetaSrvTestContext::new(node_id);
 
-    let mn2 = MetaNode::open(&tc2.config.raft_config, DATABEND_SEMVER.clone()).await?;
+    let mn2 = MetaNode::open(&tc2.config.raft_config, &BUILD_INFO).await?;
 
     info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
@@ -320,7 +320,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     tc2.config.raft_config.single = false;
     tc2.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let n1 = MetaNode::start(&tc0.config, DATABEND_SEMVER.clone()).await?;
+    let n1 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
     // Initial membership log, leader blank log, add node-0 log.
     let mut log_index = 3;
 
@@ -332,7 +332,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
         .await?;
     assert_eq!(Err("Did not join: --join is empty".to_string()), res);
 
-    let n1 = MetaNode::start(&tc1.config, DATABEND_SEMVER.clone()).await?;
+    let n1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
     let res = n1
         .join_cluster(
             &tc1.config.raft_config,
@@ -350,7 +350,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- initialize store for node-2");
     {
-        let n2 = MetaNode::start(&tc2.config, DATABEND_SEMVER.clone()).await?;
+        let n2 = MetaNode::start(&tc2.config, &BUILD_INFO).await?;
         n2.stop().await?;
     }
 
@@ -359,7 +359,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- Allow to join node-2 with initialized store");
     {
-        let n2 = MetaNode::start(&tc2.config, DATABEND_SEMVER.clone()).await?;
+        let n2 = MetaNode::start(&tc2.config, &BUILD_INFO).await?;
         let res = n2
             .join_cluster(
                 &tc2.config.raft_config,
@@ -387,7 +387,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 
     info!("--- Not allowed to join node-2 with store with membership");
     {
-        let n2 = MetaNode::start(&tc2.config, DATABEND_SEMVER.clone()).await?;
+        let n2 = MetaNode::start(&tc2.config, &BUILD_INFO).await?;
         let res = n2
             .join_cluster(
                 &tc2.config.raft_config,
@@ -502,8 +502,8 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
     let tc0 = &tcs[0];
     let tc2 = &tcs[2];
 
-    let mn0 = MetaNode::open(&tc0.config.raft_config, DATABEND_SEMVER.clone()).await?;
-    let mn2 = MetaNode::open(&tc2.config.raft_config, DATABEND_SEMVER.clone()).await?;
+    let mn0 = MetaNode::open(&tc0.config.raft_config, &BUILD_INFO).await?;
+    let mn2 = MetaNode::open(&tc2.config.raft_config, &BUILD_INFO).await?;
 
     let all = [mn0, mn2];
 
@@ -593,7 +593,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
         tc.config.raft_config.max_applied_log_to_keep = 0;
         let addr = tc.config.raft_config.raft_api_advertise_host_endpoint();
 
-        let mn = MetaNode::boot(&tc.config, DATABEND_SEMVER.clone()).await?;
+        let mn = MetaNode::boot(&tc.config, &BUILD_INFO).await?;
 
         tc.meta_node = Some(mn.clone());
 
@@ -651,16 +651,17 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 
     // restart
     let config = configs::Config::default();
+    let version = &BUILD_INFO;
     let mn0 = MetaNode::builder(&config.raft_config)
         .node_id(0)
         .sto(sto0)
-        .version(DATABEND_SEMVER.clone())
+        .version(version)
         .build()
         .await?;
     let mn1 = MetaNode::builder(&config.raft_config)
         .node_id(1)
         .sto(sto1)
-        .version(DATABEND_SEMVER.clone())
+        .version(version)
         .build()
         .await?;
 
@@ -741,7 +742,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     let raft_conf = &tc.config.raft_config;
 
-    let leader = MetaNode::open(raft_conf, DATABEND_SEMVER.clone()).await?;
+    let leader = MetaNode::open(raft_conf, &BUILD_INFO).await?;
 
     log_index += 1;
 

@@ -30,7 +30,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_version::BUILD_INFO;
-use databend_common_version::DATABEND_SEMVER;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
@@ -52,7 +51,7 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let mn = MetaNode::start(&tc.config, DATABEND_SEMVER.clone()).await?;
+    let mn = MetaNode::start(&tc.config, &BUILD_INFO).await?;
     let _ = mn
         .join_cluster(
             &tc.config.raft_config,

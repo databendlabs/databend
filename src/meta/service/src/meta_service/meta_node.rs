@@ -28,6 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::Instant;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::reply_to_api_result;
@@ -78,7 +79,6 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
-use semver::Version;
 use tokio::sync::mpsc;
 use tonic::Status;
 use watcher::dispatch::Dispatcher;
@@ -125,7 +125,7 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
-    pub version: Version,
+    pub version: BuildInfoRef,
 }
 
 impl Drop for MetaNode {
@@ -143,7 +143,7 @@ pub struct MetaNodeBuilder {
     raft_config: Option<Config>,
     sto: Option<RaftStore>,
     raft_service_endpoint: Option<Endpoint>,
-    version: Option<Version>,
+    version: Option<BuildInfoRef>,
 }
 
 impl MetaNodeBuilder {
@@ -238,7 +238,7 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn version(mut self, version: Version) -> Self {
+    pub fn version(mut self, version: BuildInfoRef) -> Self {
         self.version = Some(version);
         self
     }
@@ -350,7 +350,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn open(
         config: &RaftConfig,
-        version: Version,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
@@ -394,7 +394,7 @@ impl MetaNode {
     pub async fn open_boot(
         config: &RaftConfig,
         initialize_cluster: Option<Node>,
-        version: Version,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(config, version).await?;
 
@@ -546,7 +546,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn start(
         config: &MetaConfig,
-        version: Version,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config, version).await?;
@@ -819,12 +819,12 @@ impl MetaNode {
 
     async fn do_start(
         conf: &MetaConfig,
-        version: Version,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open(raft_conf, version.clone()).await?;
+            let mn = MetaNode::open(raft_conf, version).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
@@ -838,7 +838,7 @@ impl MetaNode {
     #[fastrace::trace]
     pub async fn boot(
         config: &MetaConfig,
-        version: Version,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open(&config.raft_config, version).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -982,7 +982,7 @@ impl MetaNode {
 
         Ok(MetaNodeStatus {
             id: self.raft_store.id,
-            binary_version: self.version.to_string(),
+            binary_version: self.version.semantic.to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             raft_log: raft_log_status,
