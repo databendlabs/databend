@@ -57,7 +57,7 @@ fn test_simple_cluster() -> Result<()> {
                 let inner_async = async move {
                     let fixture = TestFixture::setup_with_config(
                         &conf_clone,
-                        databend_common_version::BUILD_INFO.clone(),
+                        &databend_common_version::BUILD_INFO,
                     )
                     .await?;
 

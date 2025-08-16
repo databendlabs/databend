@@ -23,7 +23,7 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use databend_query::sessions::BuildInfo;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -39,7 +39,7 @@ use crate::utils::RUNTIME;
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
     pub(crate) session: Arc<Session>,
-    version: BuildInfo,
+    version: BuildInfoRef,
 }
 
 #[pymethods]
@@ -65,7 +65,7 @@ impl PySessionContext {
 
             let config = GlobalConfig::instance();
             UserApiProvider::try_create_simple(
-                config.meta.to_meta_grpc_client_conf(BUILD_INFO.clone()),
+                config.meta.to_meta_grpc_client_conf(&BUILD_INFO),
                 &tenant,
             )
             .await
@@ -83,7 +83,7 @@ impl PySessionContext {
 
         let mut res = Self {
             session,
-            version: databend_common_version::BUILD_INFO.clone(),
+            version: &BUILD_INFO,
         };
 
         res.sql("CREATE DATABASE IF NOT EXISTS default", py)
@@ -92,8 +92,7 @@ impl PySessionContext {
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        let ctx =
-            wait_for_future(py, self.session.create_query_context(self.version.clone())).unwrap();
+        let ctx = wait_for_future(py, self.session.create_query_context(self.version)).unwrap();
         let res = wait_for_future(py, plan_sql(&ctx, sql));
 
         match res {

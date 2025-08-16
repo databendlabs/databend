@@ -22,13 +22,13 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_cluster_discovery() -> Result<()> {
-    let _guard = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let config = ConfigBuilder::create().build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config, BUILD_INFO.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config, &BUILD_INFO).await?;
     let cluster_discovery =
-        ClusterDiscovery::try_create(&config, BUILD_INFO.clone(), metastore.clone()).await?;
+        ClusterDiscovery::try_create(&config, &BUILD_INFO, metastore.clone()).await?;
 
     let discover_cluster = cluster_discovery.discover(&config).await?;
 
@@ -44,8 +44,7 @@ async fn test_empty_cluster_discovery() -> Result<()> {
 async fn test_single_cluster_discovery() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 
@@ -59,7 +58,7 @@ async fn test_single_cluster_discovery() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_remove_invalid_nodes() -> Result<()> {
-    let _guard = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let config_1 = ConfigBuilder::create()
         .query_flight_address("invalid_address_1")
@@ -68,11 +67,11 @@ async fn test_remove_invalid_nodes() -> Result<()> {
         .query_flight_address("invalid_address_2")
         .build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config_1, BUILD_INFO.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
     let cluster_discovery_1 =
-        ClusterDiscovery::try_create(&config_1, BUILD_INFO.clone(), metastore.clone()).await?;
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
     let cluster_discovery_2 =
-        ClusterDiscovery::try_create(&config_2, BUILD_INFO.clone(), metastore.clone()).await?;
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
 
     cluster_discovery_1.register_to_metastore(&config_1).await?;
     cluster_discovery_2.register_to_metastore(&config_2).await?;
@@ -94,7 +93,7 @@ async fn test_remove_invalid_nodes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lost_local_cluster_discovery() -> Result<()> {
-    let _guard = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let mut config_1 = ConfigBuilder::create()
         .query_flight_address("10.0.0.1")
@@ -106,11 +105,11 @@ async fn test_lost_local_cluster_discovery() -> Result<()> {
     config_1.query.check_connection_before_schedule = false;
     config_2.query.check_connection_before_schedule = false;
 
-    let metastore = ClusterDiscovery::create_meta_client(&config_1, BUILD_INFO.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
     let cluster_discovery_1 =
-        ClusterDiscovery::try_create(&config_1, BUILD_INFO.clone(), metastore.clone()).await?;
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
     let cluster_discovery_2 =
-        ClusterDiscovery::try_create(&config_2, BUILD_INFO.clone(), metastore.clone()).await?;
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
 
     cluster_discovery_2.register_to_metastore(&config_2).await?;
 

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -48,7 +48,7 @@ pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
 
 async fn list_nodes(
     session_manager: &Arc<SessionManager>,
-    version: BuildInfo,
+    version: BuildInfoRef,
 ) -> Result<Vec<Arc<NodeInfo>>> {
     let session = session_manager
         .create_session(SessionType::HTTPAPI("WatchCluster".to_string()))

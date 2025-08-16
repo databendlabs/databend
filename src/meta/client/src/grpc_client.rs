@@ -27,7 +27,7 @@ use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::containers::Pool;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
@@ -157,7 +157,7 @@ impl MetaGrpcClient {
     pub fn try_new(conf: &RpcClientConf) -> Result<Arc<ClientHandle>, CreationError> {
         Self::try_create(
             conf.get_endpoints(),
-            conf.version.clone(),
+            conf.version,
             &conf.username,
             &conf.password,
             conf.timeout,
@@ -170,7 +170,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create(
         endpoints_str: Vec<String>,
-        version: BuildInfo,
+        version: BuildInfoRef,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
@@ -205,7 +205,7 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     pub fn try_create_with_features(
         endpoints_str: Vec<String>,
-        version: BuildInfo,
+        version: BuildInfoRef,
         username: &str,
         password: &str,
         timeout: Option<Duration>,

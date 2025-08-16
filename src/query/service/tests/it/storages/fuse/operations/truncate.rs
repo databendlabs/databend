@@ -28,7 +28,7 @@ use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;
@@ -113,7 +113,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
     //
     //        s3 should be a valid snapshot,full-scan should work as expected
 
-    let fixture = Arc::new(TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?);
+    let fixture = Arc::new(TestFixture::setup(&databend_common_version::BUILD_INFO).await?);
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;

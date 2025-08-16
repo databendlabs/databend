@@ -31,7 +31,7 @@ use crate::storages::fuse::operations::mutation::compact_segment;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
@@ -70,7 +70,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
@@ -180,7 +180,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     //  - 3 segments left: seg_c, seg_2, seg_1
     //  - 3 blocks left: block_c, block_2, block_1
 
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
@@ -272,7 +272,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_older_version() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
     fixture.create_normal_table().await?;
 

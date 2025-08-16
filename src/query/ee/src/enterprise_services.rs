@@ -15,7 +15,7 @@
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
-use databend_query::sessions::BuildInfo;
+use databend_query::sessions::BuildInfoRef;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
@@ -35,9 +35,9 @@ use crate::virtual_column::RealVirtualColumnHandler;
 pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
-    pub async fn init(cfg: InnerConfig, version: BuildInfo) -> Result<()> {
+    pub async fn init(cfg: InnerConfig, version: BuildInfoRef) -> Result<()> {
         RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
-        RealStorageEncryptionHandler::init(&cfg, version.clone())?;
+        RealStorageEncryptionHandler::init(&cfg, version)?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
@@ -46,7 +46,7 @@ impl EnterpriseServices {
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
         RealTableIndexHandler::init()?;
-        RealStorageQuotaHandler::init(&cfg, version.clone())?;
+        RealStorageQuotaHandler::init(&cfg, version)?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg, version).await?;
         RealHilbertClusteringHandler::init()?;

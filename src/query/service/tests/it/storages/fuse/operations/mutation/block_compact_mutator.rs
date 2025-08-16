@@ -50,7 +50,7 @@ use crate::storages::fuse::operations::mutation::segments_compact_mutator::Compa
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     let tbl_name = fixture.default_table_name();
     let db_name = fixture.default_db_name();
@@ -166,7 +166,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_application_level_data_operator()?.operator();
     let settings = ctx.get_settings();

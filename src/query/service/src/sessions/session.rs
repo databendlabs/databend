@@ -47,7 +47,7 @@ use parking_lot::RwLock;
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
-use crate::sessions::BuildInfo;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -153,7 +153,7 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn create_query_context(
         self: &Arc<Self>,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
@@ -163,7 +163,7 @@ impl Session {
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster, version)?;

@@ -31,7 +31,7 @@ use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
-use crate::sessions::BuildInfo;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -57,7 +57,7 @@ pub struct HttpQueryContext {
     // for now only used for worksheet
     pub fixed_coordinator_node: bool,
     pub client_caps: ClientCapabilities,
-    pub version: BuildInfo,
+    pub version: BuildInfoRef,
 }
 
 impl HttpQueryContext {
@@ -134,7 +134,7 @@ impl HttpQueryContext {
         let user_agent = &self.user_agent;
         session.set_client_host(self.client_host.clone());
 
-        let ctx = session.create_query_context(self.version.clone()).await?;
+        let ctx = session.create_query_context(self.version).await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
         // It can be used to avoid the duplicated execution of the DML queries.

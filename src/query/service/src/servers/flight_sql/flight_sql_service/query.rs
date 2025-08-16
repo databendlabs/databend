@@ -140,7 +140,7 @@ impl FlightSqlServiceImpl {
         query: &str,
     ) -> Result<(Plan, PlanExtras)> {
         let context = session
-            .create_query_context(self.version.clone())
+            .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
@@ -156,7 +156,7 @@ impl FlightSqlServiceImpl {
         plan_extras: &PlanExtras,
     ) -> Result<i64> {
         let context = session
-            .create_query_context(self.version.clone())
+            .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
@@ -184,7 +184,7 @@ impl FlightSqlServiceImpl {
         let is_native_client = session.get_status().read().is_native_client;
 
         let context = session
-            .create_query_context(self.version.clone())
+            .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 

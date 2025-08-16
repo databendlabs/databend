@@ -41,12 +41,12 @@ async fn test_user_manager() -> Result<()> {
     {
         GlobalConfig::init(
             &InnerConfig::default(),
-            databend_common_version::BUILD_INFO.clone(),
+            &databend_common_version::BUILD_INFO,
         )
         .unwrap();
     }
 
-    let conf = RpcClientConf::empty(databend_common_version::BUILD_INFO.clone());
+    let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
     let tenant_name = "test";
     let tenant = Tenant::new_literal(tenant_name);
 

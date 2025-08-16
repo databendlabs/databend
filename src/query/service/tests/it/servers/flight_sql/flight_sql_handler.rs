@@ -100,11 +100,9 @@ fn prepare_config() -> InnerConfig {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_query() -> Result<()> {
-    let _fixture = TestFixture::setup_with_config(
-        &prepare_config(),
-        databend_common_version::BUILD_INFO.clone(),
-    )
-    .await?;
+    let _fixture =
+        TestFixture::setup_with_config(&prepare_config(), &databend_common_version::BUILD_INFO)
+            .await?;
 
     let runtime = Runtime::with_default_worker_threads()?;
     runtime.block_on(async {
@@ -116,7 +114,7 @@ async fn test_query() -> Result<()> {
         let stream = UnixListenerStream::new(uds);
 
         // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
-        let service = FlightSqlServiceImpl::create(databend_common_version::BUILD_INFO.clone());
+        let service = FlightSqlServiceImpl::create(&databend_common_version::BUILD_INFO);
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let serve_future = Server::builder()
             .add_service(FlightServiceServer::new(service))

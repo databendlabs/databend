@@ -20,7 +20,7 @@ use databend_common_ast::parser::token::Tokenizer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::time::Instant;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -57,13 +57,17 @@ pub(crate) struct SessionExecutor {
     settings: Settings,
     query: String,
     keywords: Arc<Vec<String>>,
-    version: BuildInfo,
+    version: BuildInfoRef,
 }
 
 static PROMPT_SQL: &str = "select name from default.system.tables union all select name from default.system.columns union all select name from default.system.databases union all select name from default.system.functions";
 
 impl SessionExecutor {
-    pub async fn try_new(is_repl: bool, version: BuildInfo, output_format: &str) -> Result<Self> {
+    pub async fn try_new(
+        is_repl: bool,
+        version: BuildInfoRef,
+        output_format: &str,
+    ) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
         let session_manager = SessionManager::instance();
 
@@ -102,7 +106,7 @@ impl SessionExecutor {
             println!("Welcome to Databend, version {}.", version.commit_detail);
             println!();
 
-            let rows = Self::query(&session, version.clone(), PROMPT_SQL).await;
+            let rows = Self::query(&session, version, PROMPT_SQL).await;
             if let Ok((mut rows, _, _, _)) = rows {
                 while let Some(row) = rows.next().await {
                     if let Ok(row) = row {
@@ -127,7 +131,7 @@ impl SessionExecutor {
 
     async fn query(
         session: &Arc<Session>,
-        version: BuildInfo,
+        version: BuildInfoRef,
         sql: &str,
     ) -> Result<(SendableDataBlockStream, Arc<QueryContext>, Plan, Statement)> {
         let context = session.create_query_context(version).await?;
@@ -304,8 +308,7 @@ impl SessionExecutor {
 
         let start = Instant::now();
 
-        let (stream, ctx, plan, stmt) =
-            Self::query(&self.session, self.version.clone(), query).await?;
+        let (stream, ctx, plan, stmt) = Self::query(&self.session, self.version, query).await?;
 
         let mut displayer =
             FormatDisplay::new(ctx, self.is_repl, &self.settings, stmt, start, plan, stream);

@@ -134,7 +134,7 @@ async fn main() -> Result<()> {
         let handle = runtime::spawn(async move {
             let client = MetaGrpcClient::try_create(
                 addrs.clone(),
-                BUILD_INFO.clone(),
+                &BUILD_INFO,
                 "root",
                 "xxx",
                 None,

@@ -22,12 +22,12 @@ use databend_common_license::license::StorageQuota;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_storage_quota::StorageQuotaHandler;
 use databend_enterprise_storage_quota::StorageQuotaHandlerWrapper;
-use databend_query::sessions::BuildInfo;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 
 pub struct RealStorageQuotaHandler {
     cfg: InnerConfig,
-    version: BuildInfo,
+    version: BuildInfoRef,
 }
 
 #[async_trait::async_trait]
@@ -42,12 +42,12 @@ impl StorageQuotaHandler for RealStorageQuotaHandler {
         let settings = session.get_settings();
         // check for valid license
         LicenseManagerSwitch::instance()
-            .get_storage_quota(settings.get_enterprise_license(&self.version))
+            .get_storage_quota(settings.get_enterprise_license(self.version))
     }
 }
 
 impl RealStorageQuotaHandler {
-    pub fn init(cfg: &InnerConfig, version: BuildInfo) -> Result<()> {
+    pub fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
         let handler = RealStorageQuotaHandler {
             cfg: cfg.clone(),
             version,

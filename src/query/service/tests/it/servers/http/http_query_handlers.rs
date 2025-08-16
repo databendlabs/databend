@@ -312,7 +312,7 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint()?;
@@ -389,7 +389,7 @@ async fn test_simple_sql() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_show_databases() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sql = "show databases";
     let (status, result) = post_sql(sql, 3).await?;
@@ -410,7 +410,7 @@ async fn test_show_databases() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_return_when_finish() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
@@ -445,7 +445,7 @@ async fn test_return_when_finish() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_client_query_id() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let wait_time_secs = 5;
     let sql = "select * from numbers(1)";
@@ -462,7 +462,7 @@ async fn test_client_query_id() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_client_compatible_query_id() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let wait_time_secs = 5;
     let sql = "select * from numbers(1)";
@@ -529,7 +529,7 @@ async fn test_active_sessions() -> Result<()> {
         .max_active_sessions(max_active_sessions)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
     let ep = create_endpoint()?;
     let sql = "select sleep(1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
@@ -552,7 +552,7 @@ async fn test_active_sessions() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_wait_time_secs() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let ep = create_endpoint()?;
     let sql = "select sleep(0.001)";
@@ -603,7 +603,7 @@ async fn test_wait_time_secs() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_buffer_size() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let rows = 100;
     let sql = format!("select * from numbers({})", rows);
@@ -626,7 +626,7 @@ async fn test_buffer_size() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_pagination() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let ep = create_endpoint()?;
     let sql = "select * from numbers(10)";
@@ -681,8 +681,7 @@ async fn test_pagination() -> Result<()> {
 async fn test_result_timeout() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
@@ -713,7 +712,7 @@ async fn test_result_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_system_tables() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let ep = create_endpoint()?;
 
@@ -761,7 +760,7 @@ async fn test_system_tables() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_insert() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let route = create_endpoint()?;
 
@@ -790,7 +789,7 @@ async fn test_insert() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_catalog_apis() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ep = create_endpoint()?;
 
     let sql = "create table t1(a int)";
@@ -843,7 +842,7 @@ async fn test_catalog_apis() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_user_apis() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ep = create_endpoint()?;
 
     let req = CreateUserRequest {
@@ -878,7 +877,7 @@ async fn test_user_apis() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_role_apis() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ep = create_endpoint()?;
 
     let response = get_uri(&ep, "/v1/roles").await;
@@ -1018,8 +1017,7 @@ async fn test_auth_jwt() -> Result<()> {
         .jwt_key_file(format!("http://{}{}", server.address(), json_path))
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let ep = create_endpoint()?;
 
@@ -1206,8 +1204,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .jwt_key_file(format!("http://{}{}", server.address(), json_path))
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let ep = create_endpoint()?;
 
@@ -1246,8 +1243,7 @@ async fn test_http_handler_tls_server() -> Result<()> {
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1292,8 +1288,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
         .http_handler_tls_server_cert(TEST_SERVER_CERT)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1322,8 +1317,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
         .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
     let mut srv = HttpHandler::create(HttpHandlerKind::Query);
@@ -1375,8 +1369,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
         .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let address_str = format!("127.0.0.1:{}", get_free_tcp_port());
 
@@ -1404,7 +1397,7 @@ async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_func_object_keys() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sqls = vec![
         (
@@ -1435,7 +1428,7 @@ async fn test_func_object_keys() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
@@ -1463,7 +1456,7 @@ async fn test_multi_partition() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_affect() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sqls = vec![
         (
@@ -1595,7 +1588,7 @@ async fn test_affect() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_session_secondary_roles() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let route = create_endpoint()?;
 
@@ -1642,8 +1635,7 @@ async fn test_auth_configured_user() -> Result<()> {
         .add_user(user_name, user_config)
         .build();
     let _fixture =
-        TestFixture::setup_with_config(&config, databend_common_version::BUILD_INFO.clone())
-            .await?;
+        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
 
     let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
@@ -1662,7 +1654,7 @@ async fn test_auth_configured_user() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_txn_error() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let wait_time_secs = 5;
 
     let json =
@@ -1711,7 +1703,7 @@ async fn test_txn_error() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_txn_timeout() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let wait_time_secs = 5;
 
     let json = serde_json::json!({"sql": "begin", "session": { "settings": {"idle_transaction_timeout_secs": "1"}}, "pagination": {"wait_time_secs": wait_time_secs}});
@@ -1748,7 +1740,7 @@ async fn test_txn_timeout() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_has_result_set() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
@@ -1774,7 +1766,7 @@ async fn test_has_result_set() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_max_size_per_page() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let sql = "select repeat('1', 1000) as a, repeat('2', 1000) from numbers(10000)";
     let wait_time_secs = 5;
@@ -1792,7 +1784,7 @@ async fn test_max_size_per_page() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_max_size_per_page_total_rows() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     // bytes_limit / rows_limit = 1024 * 1024 * 10 / 10000 = 1048.567
     let sql = "select repeat('1', 1050) as a from numbers(20000)";
     let wait_time_secs = 5;
@@ -1806,7 +1798,7 @@ async fn test_max_size_per_page_total_rows() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_null_response() -> Result<()> {
-    let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     {
         let sql = "select NULL";

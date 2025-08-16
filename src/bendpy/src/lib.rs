@@ -89,7 +89,7 @@ allow_insecure = true
     INIT.call_once(|| {
         RUNTIME
             .block_on(async {
-                GlobalServices::init(&conf, BUILD_INFO.clone(), false).await?;
+                GlobalServices::init(&conf, &BUILD_INFO, false).await?;
                 // init oss license manager
                 OssLicenseManager::init("".to_string()).unwrap();
                 // Cluster register.

@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::containers::ItemManager;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
@@ -41,7 +41,7 @@ use crate::MetaGrpcClient;
 
 #[derive(Debug)]
 pub struct MetaChannelManager {
-    version: BuildInfo,
+    version: BuildInfoRef,
     username: String,
     password: String,
     timeout: Option<Duration>,
@@ -58,7 +58,7 @@ pub struct MetaChannelManager {
 
 impl MetaChannelManager {
     pub fn new(
-        version: BuildInfo,
+        version: BuildInfoRef,
         username: impl ToString,
         password: impl ToString,
         timeout: Option<Duration>,

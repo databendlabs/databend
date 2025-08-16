@@ -571,7 +571,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_js_pool() -> Result<()> {
-        let _fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+        let _fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
         let agg_name = "weighted_avg".to_string();
         let fields = vec![
             Field::new("sum", ArrowType::Int64, false),

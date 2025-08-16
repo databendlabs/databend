@@ -71,7 +71,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
     let status = get_status(&ep).await;
@@ -89,7 +89,7 @@ async fn test_status() -> Result<()> {
         .new_session_with_type(SessionType::HTTPQuery)
         .await?;
     let query_ctx = http_session
-        .create_query_context(databend_common_version::BUILD_INFO.clone())
+        .create_query_context(&databend_common_version::BUILD_INFO)
         .await?;
 
     {

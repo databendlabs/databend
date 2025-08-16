@@ -19,7 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_client::errors::CreationError;
@@ -85,7 +85,7 @@ impl Drop for LocalMetaService {
 impl LocalMetaService {
     pub async fn new(
         name: impl fmt::Display,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> anyhow::Result<LocalMetaService> {
         Self::new_with_fixed_dir(None, name, version).await
     }
@@ -98,7 +98,7 @@ impl LocalMetaService {
     pub async fn new_with_fixed_dir(
         dir: Option<String>,
         name: impl fmt::Display,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
@@ -185,7 +185,7 @@ impl LocalMetaService {
 
     async fn grpc_client(
         config: &configs::Config,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> Result<Arc<ClientHandle>, CreationError> {
         let addr = config.grpc_api_address.clone();
         let client = MetaGrpcClient::try_create(

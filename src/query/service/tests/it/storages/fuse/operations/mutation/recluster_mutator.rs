@@ -56,7 +56,7 @@ use crate::storages::fuse::utils::new_empty_snapshot;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
 
@@ -178,7 +178,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_safety_for_recluster() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     let operator = ctx.get_application_level_data_operator()?.operator();
 

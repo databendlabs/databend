@@ -28,7 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
@@ -74,7 +74,7 @@ use crate::servers::flight::FlightClient;
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
-    version: BuildInfo,
+    version: BuildInfoRef,
     heartbeat: Mutex<ClusterHeartbeat>,
     warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
@@ -219,9 +219,8 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfo) -> Result<MetaStore> {
-        let meta_api_provider =
-            MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version.clone()));
+    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
+        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -232,8 +231,8 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: &InnerConfig, version: BuildInfo) -> Result<()> {
-        let metastore = Self::create_meta_client(cfg, version.clone()).await?;
+    pub async fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        let metastore = Self::create_meta_client(cfg, version).await?;
         GlobalInstance::set(Self::try_create(cfg, version, metastore).await?);
 
         Ok(())
@@ -242,10 +241,10 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn try_create(
         cfg: &InnerConfig,
-        version: BuildInfo,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, version.clone(), metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
@@ -271,7 +270,7 @@ impl ClusterDiscovery {
 
     fn create_provider(
         cfg: &InnerConfig,
-        version: BuildInfo,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
@@ -689,7 +688,7 @@ impl ClusterDiscovery {
         // We must get the license key from settings. It may be in the configuration file.
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;
-        Ok(settings.get_enterprise_license(&self.version))
+        Ok(settings.get_enterprise_license(self.version))
     }
 }
 

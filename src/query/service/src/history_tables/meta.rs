@@ -212,7 +212,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
-        let conf = RpcClientConf::empty(databend_common_version::BUILD_INFO.clone());
+        let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
         let meta_store = MetaStoreProvider::new(conf)
             .create_meta_store()
             .await

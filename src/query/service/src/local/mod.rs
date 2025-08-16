@@ -20,7 +20,7 @@ pub(crate) mod helper;
 use std::io::stdin;
 use std::io::IsTerminal;
 
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -31,7 +31,7 @@ use crate::GlobalServices;
 
 pub async fn query_local(
     mut conf: InnerConfig,
-    version: BuildInfo,
+    version: BuildInfoRef,
     query_sql: &str,
     output_format: &str,
 ) -> Result<()> {
@@ -44,7 +44,7 @@ pub async fn query_local(
         conf.query.warehouse_id = conf.query.cluster_id.clone();
     }
 
-    GlobalServices::init(&conf, version.clone(), false).await?;
+    GlobalServices::init(&conf, version, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
     // Cluster register.

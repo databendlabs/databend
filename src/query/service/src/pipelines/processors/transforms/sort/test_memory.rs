@@ -192,7 +192,7 @@ impl MockDataGen {
 async fn init() -> Result<(TestFixture, Arc<QueryContext>, Spiller)> {
     let mut config = ConfigBuilder::create().config();
     config.spill = SpillConfig::new_for_test("test_data".to_string(), 0.01, 1 << 30);
-    let fixture = TestFixture::setup_with_config(&config, BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup_with_config(&config, &BUILD_INFO).await?;
 
     let ctx = fixture.new_query_ctx().await?;
 

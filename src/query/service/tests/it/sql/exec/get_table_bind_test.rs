@@ -139,6 +139,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
@@ -699,7 +700,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_version(&self) -> &databend_query::sessions::BuildInfo {
+    fn get_version(&self) -> BuildInfoRef {
         todo!()
     }
 
@@ -1025,7 +1026,7 @@ impl TableContext for CtxDelegation {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
 
     let query = format!(

@@ -390,7 +390,7 @@ async fn test_heavy_actions() -> Result<()> {
         }
     ];
 
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_enable_table_lock(0)?;
 
@@ -438,7 +438,7 @@ async fn test_heavy_actions() -> Result<()> {
 }
 
 async fn create_meta_store() -> Result<MetaStore> {
-    let conf = RpcClientConf::empty(BUILD_INFO.clone());
+    let conf = RpcClientConf::empty(&BUILD_INFO);
     Ok(MetaStoreProvider::new(conf)
         .create_meta_store()
         .await

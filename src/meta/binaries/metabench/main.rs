@@ -132,7 +132,7 @@ async fn main() {
         let handle = runtime::spawn(async move {
             let client = MetaGrpcClient::try_create_with_features(
                 vec![addr.to_string()],
-                BUILD_INFO.clone(),
+                &BUILD_INFO,
                 "root",
                 "xxx",
                 None,

@@ -29,7 +29,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_number_table() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let tbl_args = TableArgs::new_positioned(vec![Scalar::from(8u64)]);

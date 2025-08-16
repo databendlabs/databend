@@ -272,8 +272,7 @@ mod tests {
     use super::*;
 
     async fn create_workload_mgr() -> WorkloadMgr {
-        let test_api =
-            MetaStore::new_local_testing(databend_common_version::BUILD_INFO.clone()).await;
+        let test_api = MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await;
         WorkloadMgr::create(test_api.clone(), "test-tenant-id").unwrap()
     }
 

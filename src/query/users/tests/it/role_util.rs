@@ -30,7 +30,7 @@ fn test_find_all_related_roles() {
     {
         GlobalConfig::init(
             &InnerConfig::default(),
-            databend_common_version::BUILD_INFO.clone(),
+            &databend_common_version::BUILD_INFO,
         )
         .unwrap();
     }

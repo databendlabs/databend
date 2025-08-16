@@ -39,11 +39,11 @@ async fn test_role_manager() -> Result<()> {
     {
         GlobalConfig::init(
             &InnerConfig::default(),
-            databend_common_version::BUILD_INFO.clone(),
+            &databend_common_version::BUILD_INFO,
         )
         .unwrap();
     }
-    let conf = RpcClientConf::empty(databend_common_version::BUILD_INFO.clone());
+    let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
     let tenant = Tenant::new_literal("tenant1");
 
     let role_mgr = UserApiProvider::try_create_simple(conf, &tenant).await?;

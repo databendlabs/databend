@@ -40,7 +40,7 @@ fn build_custom_claims(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_parse_license() -> databend_common_exception::Result<()> {
-    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&BUILD_INFO).await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(
@@ -82,7 +82,7 @@ async fn test_parse_license() -> databend_common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_license_features() -> databend_common_exception::Result<()> {
-    let fixture = TestFixture::setup(BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&BUILD_INFO).await?;
 
     let key_pair = ES256KeyPair::generate();
     let license_mgr = RealLicenseManager::new(

@@ -139,7 +139,7 @@ async fn apply_snapshot_pruning(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_snapshot_pruner() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;

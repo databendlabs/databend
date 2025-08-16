@@ -15,7 +15,7 @@
 use std::str::FromStr;
 
 use databend_common_ast::parser::Dialect;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
@@ -588,7 +588,7 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    pub fn get_enterprise_license(&self, version: &BuildInfo) -> String {
+    pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
         let license = unsafe {
             self.unchecked_try_get_string("enterprise_license")
                 .unwrap_or_default()

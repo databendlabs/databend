@@ -76,7 +76,7 @@ pub async fn main_entrypoint() -> Result<(), MainError> {
 
     let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
     init_services(&conf, true).await.with_context(make_error)?;
-    EnterpriseServices::init(conf.clone(), BUILD_INFO.clone())
+    EnterpriseServices::init(conf.clone(), &BUILD_INFO)
         .await
         .with_context(make_error)?;
     start_services(&conf).await.with_context(make_error)

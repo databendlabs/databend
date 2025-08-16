@@ -36,8 +36,7 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config, databend_common_version::BUILD_INFO.clone(), false)
-            .await?;
+        GlobalServices::init_with(config, &databend_common_version::BUILD_INFO, false).await?;
         MockServices::init(config, public_key).await?;
 
         // Cluster register.

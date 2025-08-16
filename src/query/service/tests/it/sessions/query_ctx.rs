@@ -46,7 +46,7 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         ..Default::default()
     });
     let fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let _ = ctx.get_application_level_data_operator()?;
@@ -61,7 +61,7 @@ async fn test_get_storage_accessor_fs() -> Result<()> {
         root: "/tmp".to_string(),
     });
     let fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
     let ctx = fixture.new_query_ctx().await?;
     let _ = ctx.get_application_level_data_operator()?;
 

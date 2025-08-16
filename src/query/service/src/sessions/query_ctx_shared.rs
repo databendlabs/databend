@@ -75,7 +75,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
-use crate::sessions::BuildInfo;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::storages::Table;
 
@@ -106,7 +106,7 @@ pub struct QueryContextShared {
     pub(super) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(super) result_progress: Arc<Progress>,
-    pub(super) version: BuildInfo,
+    pub(super) version: BuildInfoRef,
     error: Arc<Mutex<Option<ErrorCode<ContextError>>>>,
     warnings: Arc<Mutex<Vec<String>>>,
     pub(super) session: Arc<Session>,
@@ -200,7 +200,7 @@ impl QueryContextShared {
     pub fn try_create(
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
-        version: BuildInfo,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
@@ -319,7 +319,7 @@ impl QueryContextShared {
         }
     }
 
-    pub fn get_version(&self) -> &BuildInfo {
+    pub fn get_version(&self) -> &BuildInfoRef {
         &self.version
     }
 

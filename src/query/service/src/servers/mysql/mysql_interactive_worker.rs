@@ -19,7 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::tokio::io::AsyncWrite;
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -71,7 +71,7 @@ use crate::stream::DataBlockStream;
 
 struct InteractiveWorkerBase {
     session: Arc<Session>,
-    version: BuildInfo,
+    version: BuildInfoRef,
 }
 
 pub struct InteractiveWorker {
@@ -303,10 +303,7 @@ impl InteractiveWorkerBase {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_api = UserApiProvider::instance();
-        let ctx = self
-            .session
-            .create_query_context(self.version.clone())
-            .await?;
+        let ctx = self.session.create_query_context(self.version).await?;
         let tenant = ctx.get_tenant();
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -419,10 +416,7 @@ impl InteractiveWorkerBase {
             }
             None => {
                 info!("Normal query: {}", query);
-                let context = self
-                    .session
-                    .create_query_context(self.version.clone())
-                    .await?;
+                let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
@@ -516,7 +510,7 @@ impl InteractiveWorkerBase {
 impl InteractiveWorker {
     pub fn create(
         session: Arc<Session>,
-        version: BuildInfo,
+        version: BuildInfoRef,
         client_addr: String,
     ) -> InteractiveWorker {
         let mut bs = vec![0u8; 20];

@@ -24,7 +24,7 @@ use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
 
     let ctx = fixture.new_query_ctx().await?;
@@ -49,7 +49,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
 
     let db = fixture.default_db_name();
@@ -93,7 +93,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
 
     let ctx = fixture.new_query_ctx().await?;

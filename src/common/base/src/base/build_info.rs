@@ -14,6 +14,8 @@
 
 pub use semver::Version;
 
+pub type BuildInfoRef = &'static BuildInfo;
+
 #[derive(Debug, Clone)]
 pub struct BuildInfo {
     pub semantic: Version,

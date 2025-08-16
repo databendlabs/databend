@@ -82,7 +82,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
     let _fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
 
@@ -237,7 +237,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     conf.query.jwt_key_file = jwks_url.clone();
 
     let _fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
 
@@ -472,7 +472,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     conf.query.jwt_key_file = jwks_url.clone();
 
     let _fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
 
@@ -702,7 +702,7 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
     let mut conf = ConfigBuilder::create().with_management_mode().config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
     let _fixture =
-        TestFixture::setup_with_config(&conf, databend_common_version::BUILD_INFO.clone()).await?;
+        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
 
     let mut session = TestFixture::create_dummy_session().await;
 

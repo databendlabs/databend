@@ -15,7 +15,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_base::base::BuildInfo;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 
@@ -24,7 +24,7 @@ use crate::InnerConfig;
 pub struct GlobalConfig;
 
 impl GlobalConfig {
-    pub fn init(config: &InnerConfig, version: BuildInfo) -> Result<()> {
+    pub fn init(config: &InnerConfig, version: BuildInfoRef) -> Result<()> {
         GlobalInstance::set(Arc::new(config.clone()));
         GlobalInstance::set(Arc::new(version));
         Ok(())
@@ -34,9 +34,9 @@ impl GlobalConfig {
         GlobalInstance::get()
     }
 
-    pub fn version() -> BuildInfo {
-        let version: Arc<BuildInfo> = GlobalInstance::get();
-        version.deref().clone()
+    pub fn version() -> BuildInfoRef {
+        let version: Arc<BuildInfoRef> = GlobalInstance::get();
+        version.deref()
     }
 
     pub fn try_get_instance() -> Option<Arc<InnerConfig>> {

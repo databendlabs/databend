@@ -17,6 +17,6 @@ use databend_query::catalogs::DatabaseCatalog;
 
 pub async fn create_catalog() -> Result<DatabaseCatalog> {
     let conf = databend_query::test_kits::ConfigBuilder::create().config();
-    let version = databend_common_version::BUILD_INFO.clone();
+    let version = &databend_common_version::BUILD_INFO;
     DatabaseCatalog::try_create_with_config(conf, version).await
 }

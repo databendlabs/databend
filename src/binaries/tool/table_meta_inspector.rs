@@ -90,7 +90,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                     let inner_config: InnerConfig = read_config.clone().try_into()?;
                     GlobalServices::init(
                         &inner_config,
-                        databend_common_version::BUILD_INFO.clone(),
+                        &databend_common_version::BUILD_INFO,
                         false,
                     )
                     .await?;

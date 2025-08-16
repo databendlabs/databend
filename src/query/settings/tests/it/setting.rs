@@ -142,7 +142,7 @@ async fn test_set_data_retention_time_in_days() {
     {
         GlobalConfig::init(
             &InnerConfig::default(),
-            databend_common_version::BUILD_INFO.clone(),
+            &databend_common_version::BUILD_INFO,
         )
         .unwrap();
     }
@@ -196,7 +196,7 @@ async fn test_set_data_retention_time_in_days_from_config() {
     {
         let mut conf = InnerConfig::default();
         conf.query.data_retention_time_in_days_max = 33;
-        GlobalConfig::init(&conf, databend_common_version::BUILD_INFO.clone()).unwrap();
+        GlobalConfig::init(&conf, &databend_common_version::BUILD_INFO).unwrap();
     }
 
     let settings = Settings::create(Tenant::new_literal("test"));

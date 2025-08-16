@@ -7,7 +7,7 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_kind() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
@@ -15,7 +15,7 @@ async fn test_query_kind() -> Result<()> {
         .new_session_with_type(SessionType::HTTPQuery)
         .await?;
     let ctx = http_session
-        .create_query_context(databend_common_version::BUILD_INFO.clone())
+        .create_query_context(&databend_common_version::BUILD_INFO)
         .await?;
     let mut planner = Planner::new(ctx.clone());
     let sql = format!(
@@ -31,7 +31,7 @@ async fn test_query_kind() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_planner() -> Result<()> {
-    let fixture = TestFixture::setup(databend_common_version::BUILD_INFO.clone()).await?;
+    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let mut planner = Planner::new(ctx.clone());
