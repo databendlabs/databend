@@ -13947,6 +13947,205 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1);
+---------- Output ---------
+ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AddRowAccessPolicy {
+            columns: [
+                Identifier {
+                    span: Some(
+                        43..47,
+                    ),
+                    name: "col1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            policy: Identifier {
+                span: Some(
+                    36..38,
+                ),
+                name: "p1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1, col2, col3);
+---------- Output ---------
+ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1, col2, col3)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AddRowAccessPolicy {
+            columns: [
+                Identifier {
+                    span: Some(
+                        43..47,
+                    ),
+                    name: "col1",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        49..53,
+                    ),
+                    name: "col2",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        55..59,
+                    ),
+                    name: "col3",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            policy: Identifier {
+                span: Some(
+                    36..38,
+                ),
+                name: "p1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t drop row access policy p1;
+---------- Output ---------
+ALTER TABLE t DROP ROW ACCESS POLICY p1
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropRowAccessPolicy {
+            policy: Identifier {
+                span: Some(
+                    37..39,
+                ),
+                name: "p1",
+                quote: None,
+                ident_type: None,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t drop all row access policies;
+---------- Output ---------
+ALTER TABLE t DROP ALL ROW ACCESS POLICIES
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropAllRowAccessPolicies,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32 DEFAULT 1, b Float32

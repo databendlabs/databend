@@ -44,5 +44,5 @@ pub trait RowAccessPolicyApi: Send + Sync {
     async fn get_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<SeqV<RowAccessPolicyMeta>>, MetaError>;
+    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError>;
 }

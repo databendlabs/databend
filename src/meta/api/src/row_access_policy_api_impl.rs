@@ -157,11 +157,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
     async fn get_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<SeqV<RowAccessPolicyMeta>>, MetaError> {
+    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError> {
         debug!(req :? =(&name_ident); "RowAccessPolicyApi: {}", func_name!());
 
         let res = self.get_id_and_value(name_ident).await?;
 
-        Ok(res.map(|(_, seq_meta)| seq_meta))
+        Ok(res)
     }
 }
