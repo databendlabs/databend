@@ -146,9 +146,11 @@ impl LeveledMap {
         self.immutable_levels = b;
     }
 
-    /// Replace several bottom immutable levels and persisted level
-    /// with the compacted data.
-    pub fn replace_with_compacted(&mut self, mut compactor: Compactor, db: DB) {
+    /// Replace bottom immutable levels and persisted level with compacted data.
+    ///
+    /// **Important**: Do not drop the compactor within this function when called
+    /// under a state machine lock, as dropping may take ~250ms.
+    pub fn replace_with_compacted(&mut self, compactor: &mut Compactor, db: DB) {
         let len = compactor.immutable_levels.len();
         let corresponding_index = compactor
             .immutable_levels
@@ -169,7 +171,7 @@ impl LeveledMap {
 
         self.persisted = Some(db);
 
-        info!("compaction finished replacing the db");
+        info!("replace_with_compacted: finished replacing the db");
     }
 
     /// Get a singleton `Compactor` instance specific to `self`.
