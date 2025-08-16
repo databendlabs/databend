@@ -27,7 +27,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::vec_ext::VecExt;
-use databend_common_exception::ErrorCode;
 use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;
@@ -214,6 +213,7 @@ use ConditionResult::Eq;
 use crate::assert_table_exist;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
+use crate::error::TableError;
 use crate::fetch_id;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
@@ -2481,7 +2481,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn set_table_row_access_policy(
         &self,
         req: SetTableRowAccessPolicyReq,
-    ) -> Result<databend_common_exception::Result<SetTableRowAccessPolicyReply>, KVAppError> {
+    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let tbid = TableId {
             table_id: req.table_id,
@@ -2510,49 +2510,47 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
             let ident = RowAccessPolicyTableIdIdent::new_generic(req.tenant.clone(), id);
 
-            let txn_req = match &req.action {
+            let mut txn_req = TxnRequest::default();
+
+            txn_req
+                .condition
+                .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
+
+            match &req.action {
                 SetTableRowAccessPolicyAction::Set(new_mask_name) => {
                     if table_meta.row_access_policy.is_some() {
-                        return Ok(Err(ErrorCode::AlterTableError("Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.
-".to_string())));
+                        return Ok(Err(TableError::AlterErr {
+                            tenant: req.tenant.tenant_name().to_string(),
+                            context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.
+                            ".to_string(),
+                        }));
                     }
                     new_table_meta.row_access_policy = Some(new_mask_name.to_string());
-                    TxnRequest::new(
-                        vec![
-                            // table is not changed
-                            txn_cond_seq(&tbid, Eq, seq_meta.seq),
-                        ],
-                        vec![
-                            txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
-                            txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
-                        ],
-                    )
+                    txn_req.if_then = vec![
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                        txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
+                    ];
                 }
                 SetTableRowAccessPolicyAction::Unset(old_policy) => {
                     // drop row access policy and table does not have row access policy
                     if let Some(policy) = &table_meta.row_access_policy {
                         if policy != old_policy {
-                            return Ok(Err(ErrorCode::AlterTableError(format!(
-                                "Unknown row access policy {} on table",
-                                policy
-                            ))));
+                            return Ok(Err(TableError::AlterErr {
+                                tenant: req.tenant.tenant_name().to_string(),
+                                context: format!("Unknown row access policy {} on table", policy),
+                            }));
                         }
                     } else {
                         return Ok(Ok(SetTableRowAccessPolicyReply {}));
                     }
                     new_table_meta.row_access_policy = None;
-                    TxnRequest::new(
-                        vec![
-                            // table is not changed
-                            txn_cond_seq(&tbid, Eq, seq_meta.seq),
-                        ],
-                        vec![
-                            txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
-                            txn_op_del(&ident), // table drop row access policy, del policy_tb_id
-                        ],
-                    )
+                    txn_req.if_then.push(txn_op_del(&ident));
+                    txn_req.if_then = vec![
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                        txn_op_del(&ident), // table drop row access policy, del policy_tb_id
+                    ];
                 }
-            };
+            }
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 

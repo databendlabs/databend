@@ -19,6 +19,9 @@ statement ok
 drop row access policy if exists rap1;
 
 statement ok
+drop row access policy if exists p1;
+
+statement ok
 create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
   case
       when 'it_admin' = current_role() then true
@@ -88,6 +91,9 @@ drop row access policy if exists rap1;
 
 statement ok
 drop row access policy if exists rap3;
+
+statement ok
+drop row access policy if exists p1;
 
 statement ok
 unset global enable_experimental_row_access_policy;
