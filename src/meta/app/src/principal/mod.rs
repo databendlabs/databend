@@ -114,6 +114,7 @@ pub use user_defined_function::UDFDefinition;
 pub use user_defined_function::UDFScript;
 pub use user_defined_function::UDFServer;
 pub use user_defined_function::UserDefinedFunction;
+pub use user_defined_function::UDTF;
 pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;
 pub use user_grant::UserGrantSet;

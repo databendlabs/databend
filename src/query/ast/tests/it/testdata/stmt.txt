@@ -25418,6 +25418,46 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE FUNCTION binary_reverse_table () RETURNS TABLE (c1 int) AS $$ select * from binary_reverse $$;
+---------- Output ---------
+CREATE FUNCTION binary_reverse_table () RETURNS TABLE (c1 Int32) AS $$
+select * from binary_reverse
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: Create,
+        udf_name: Identifier {
+            span: Some(
+                16..36,
+            ),
+            name: "binary_reverse_table",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDTFSql {
+            arg_types: [],
+            return_types: [
+                (
+                    Identifier {
+                        span: Some(
+                            55..57,
+                        ),
+                        name: "c1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    Int32,
+                ),
+            ],
+            sql: "select * from binary_reverse",
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
 ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'

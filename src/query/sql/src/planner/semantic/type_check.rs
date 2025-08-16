@@ -4796,6 +4796,7 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDAFScript(udf_def) => Ok(Some(
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
+            UDFDefinition::UDTF(_) => unreachable!(),
         }
     }
 
