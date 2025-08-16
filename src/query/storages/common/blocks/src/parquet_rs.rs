@@ -20,6 +20,7 @@ use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Encoding;
+use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::format::FileMetaData;
@@ -30,6 +31,7 @@ pub fn blocks_to_parquet(
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
+    metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
     let props = WriterProperties::builder()
@@ -40,6 +42,7 @@ pub fn blocks_to_parquet(
         .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
+        .set_key_value_metadata(metadata)
         .build();
     let batches = blocks
         .into_iter()

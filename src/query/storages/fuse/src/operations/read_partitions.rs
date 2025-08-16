@@ -725,17 +725,7 @@ impl FuseTable {
             if !matches!(index.index_type, TableIndexType::Ngram) {
                 continue;
             }
-            if !index.sync_creation {
-                continue;
-            }
 
-            let Some((pos, field)) = table_schema
-                .fields()
-                .iter()
-                .find_position(|field| field.column_id() == index.column_ids[0])
-            else {
-                continue;
-            };
             let gram_size = match index.options.get("gram_size") {
                 None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
@@ -744,7 +734,17 @@ impl FuseTable {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
-            ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+
+            for column_id in &index.column_ids {
+                let Some((pos, field)) = table_schema
+                    .fields()
+                    .iter()
+                    .find_position(|field| field.column_id() == *column_id)
+                else {
+                    continue;
+                };
+                ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+            }
         }
         Ok(ngram_index_args)
     }

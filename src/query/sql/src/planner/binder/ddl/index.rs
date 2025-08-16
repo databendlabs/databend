@@ -28,7 +28,7 @@ use databend_common_ast::ast::RefreshIndexStmt;
 use databend_common_ast::ast::RefreshTableIndexStmt;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::ast::TableIndexType;
+use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -42,6 +42,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -473,24 +474,61 @@ impl Binder {
         let table_id = table.get_id();
         let index_name = self.normalize_object_identifier(index_name);
 
-        let (column_ids, index_options) = match index_type {
-            TableIndexType::Inverted => {
-                let column_ids = self.validate_inverted_index_columns(table_schema, columns)?;
+        let (column_ids, index_options, meta_index_type) = match index_type {
+            AstTableIndexType::Inverted => {
+                let column_ids =
+                    self.validate_inverted_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_inverted_index_options(index_options)?;
-                (column_ids, index_options)
+                (column_ids, index_options, TableIndexType::Inverted)
             }
-            TableIndexType::Ngram => {
-                let column_ids = self.validate_ngram_index_columns(table_schema, columns)?;
+            AstTableIndexType::Ngram => {
+                let column_ids =
+                    self.validate_ngram_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_ngram_index_options(index_options)?;
-                (column_ids, index_options)
+                (column_ids, index_options, TableIndexType::Ngram)
             }
-            TableIndexType::Vector => {
-                let column_ids = self.validate_vector_index_columns(table_schema, columns)?;
+            AstTableIndexType::Vector => {
+                let column_ids =
+                    self.validate_vector_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_vector_index_options(index_options)?;
-                (column_ids, index_options)
+                (column_ids, index_options, TableIndexType::Vector)
             }
-            TableIndexType::Aggregating => unreachable!(),
+            AstTableIndexType::Aggregating => unreachable!(),
         };
+
+        let table_info = table.get_table_info();
+        let column_ids_set = column_ids.iter().copied().collect::<HashSet<_>>();
+        for table_index in table_info.meta.indexes.values() {
+            if index_name == table_index.name {
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "Index `{}` already exist",
+                    index_name
+                )));
+            }
+            if meta_index_type != table_index.index_type {
+                continue;
+            }
+            let old_column_ids_set = table_index
+                .column_ids
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let intersection_column_ids = old_column_ids_set
+                .intersection(&column_ids_set)
+                .collect::<HashSet<_>>();
+            if !intersection_column_ids.is_empty() {
+                let field_names = intersection_column_ids
+                    .iter()
+                    .map(|id| table_schema.field_of_column_id(**id).unwrap().name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "{} index for columns ({}) already exist",
+                    index_type, field_names
+                )));
+            }
+        }
 
         let plan = CreateTableIndexPlan {
             index_type: *index_type,
@@ -850,7 +888,10 @@ impl Binder {
             limit: _,
         } = stmt;
 
-        if !matches!(index_type, TableIndexType::Inverted | TableIndexType::Ngram) {
+        if !matches!(
+            index_type,
+            AstTableIndexType::Inverted | AstTableIndexType::Ngram | AstTableIndexType::Vector
+        ) {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table index {} does not support refresh",
                 index_type

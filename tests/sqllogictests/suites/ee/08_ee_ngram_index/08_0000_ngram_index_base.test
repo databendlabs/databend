@@ -66,8 +66,8 @@ CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 511
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
 
-statement error
-CREATE NGRAM INDEX idx2 ON t2(content, name) gram_size = 5 bloom_size = 1048576
+#statement error
+#CREATE NGRAM INDEX idx2 ON t2(content, name) gram_size = 5 bloom_size = 1048576
 
 statement ok
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576
