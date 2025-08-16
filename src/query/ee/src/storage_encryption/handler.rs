@@ -22,10 +22,12 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_storage_encryption::StorageEncryptionHandler;
 use databend_enterprise_storage_encryption::StorageEncryptionHandlerWrapper;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 
 pub struct RealStorageEncryptionHandler {
     cfg: InnerConfig,
+    version: BuildInfoRef,
 }
 
 #[async_trait::async_trait]
@@ -41,15 +43,18 @@ impl StorageEncryptionHandler for RealStorageEncryptionHandler {
 
         // check for valid license
         LicenseManagerSwitch::instance().check_enterprise_enabled(
-            settings.get_enterprise_license(),
+            settings.get_enterprise_license(self.version),
             Feature::StorageEncryption,
         )
     }
 }
 
 impl RealStorageEncryptionHandler {
-    pub fn init(cfg: &InnerConfig) -> Result<()> {
-        let handler = RealStorageEncryptionHandler { cfg: cfg.clone() };
+    pub fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        let handler = RealStorageEncryptionHandler {
+            cfg: cfg.clone(),
+            version,
+        };
         let wrapper = StorageEncryptionHandlerWrapper::new(Box::new(handler));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())

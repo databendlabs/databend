@@ -22,12 +22,12 @@ hashbrown_v0_14 = { workspace = true }
 log = { workspace = true }
 lz4 = { workspace = true }
 match-template = { workspace = true }
-num = { workspace = true, features = ["std"] }
+num = { workspace = true }
 opendal = { workspace = true }
 rand = { workspace = true }
 ringbuffer = { workspace = true }
 roaring = { workspace = true }
-serde = { workspace = true, features = ["rc"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 snap = { workspace = true }
 zstd = { workspace = true }

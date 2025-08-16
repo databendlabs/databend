@@ -28,6 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
@@ -55,7 +56,6 @@ use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::Settings;
 use databend_common_telemetry::report_node_telemetry;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_TELEMETRY_API_KEY;
 use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_enterprise_resources_management::ResourcesManagement;
@@ -77,6 +77,7 @@ use crate::servers::flight::FlightClient;
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
+    version: BuildInfoRef,
     heartbeat: Mutex<ClusterHeartbeat>,
     warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
@@ -221,8 +222,8 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
+        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -233,9 +234,9 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(cfg).await?;
-        GlobalInstance::set(Self::try_create(cfg, metastore).await?);
+    pub async fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        let metastore = Self::create_meta_client(cfg, version).await?;
+        GlobalInstance::set(Self::try_create(cfg, version, metastore).await?);
 
         Ok(())
     }
@@ -243,13 +244,15 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn try_create(
         cfg: &InnerConfig,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
             local_secret: cfg.query.node_secret.clone(),
+            version,
             warehouse_manager: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -270,12 +273,14 @@ impl ClusterDiscovery {
 
     fn create_provider(
         cfg: &InnerConfig,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
+        let cluster_manager =
+            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
@@ -639,7 +644,7 @@ impl ClusterDiscovery {
             http_address,
             address,
             discovery_address,
-            DATABEND_COMMIT_VERSION.to_string(),
+            self.version.commit_detail.clone(),
             cache_id,
         );
 
@@ -671,7 +676,7 @@ impl ClusterDiscovery {
     }
 
     async fn check_license_key(&self, nodes: Vec<NodeInfo>) -> Result<()> {
-        let license_key = Self::get_license_key(&self.tenant_id).await?;
+        let license_key = self.get_license_key(&self.tenant_id).await?;
 
         let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
 
@@ -688,17 +693,18 @@ impl ClusterDiscovery {
             .check_enterprise_enabled(license_key, Feature::MaxCpuQuota(total_cpu_nums as usize))
     }
 
-    async fn get_license_key(tenant: &str) -> Result<String> {
+    async fn get_license_key(&self, tenant: &str) -> Result<String> {
         // We must get the license key from settings. It may be in the configuration file.
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;
-        Ok(settings.get_enterprise_license())
+        Ok(settings.get_enterprise_license(self.version))
     }
 
     async fn report_telemetry_data(&self, cfg: &InnerConfig, online_nodes: Option<Vec<NodeInfo>>) {
         let start_time = std::time::Instant::now();
 
-        let license_result = Self::get_license_key(&self.tenant_id)
+        let license_result = self
+            .get_license_key(&self.tenant_id)
             .await
             .ok()
             .filter(|key| !key.is_empty())
@@ -749,7 +755,7 @@ impl ClusterDiscovery {
             },
             "node": {
                 "node_id": self.local_id,
-                "version": DATABEND_COMMIT_VERSION.as_str()
+                "version": self.version.commit_detail.as_str()
             },
             "system": {
                 "os_name": sysinfo::System::name().unwrap_or_else(|| "unknown".to_string()),

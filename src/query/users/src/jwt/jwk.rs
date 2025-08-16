@@ -20,11 +20,11 @@ use std::time::Instant;
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::auth::metrics_incr_auth_jwks_requests_count;
 use databend_common_metrics::auth::metrics_observe_auth_jwks_refresh_duration;
-use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
 use log::info;
@@ -135,10 +135,10 @@ pub struct JwkKeyStore {
 }
 
 impl JwkKeyStore {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: String, version: BuildInfoRef) -> Self {
         Self {
             url,
-            user_agent: format!("Databend/{}", *DATABEND_SEMVER),
+            user_agent: format!("Databend/{}", version.semantic),
             recent_cached_maps: Arc::new(RwLock::new(VecDeque::new())),
             max_recent_cached_maps: 2,
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),

@@ -41,12 +41,12 @@ databend-storages-common-table-meta = { workspace = true }
 ahash = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
-arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
+arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
-backoff = { workspace = true, features = ["futures", "tokio"] }
+backoff = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 enum-as-inner = { workspace = true }
@@ -75,7 +75,7 @@ tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
-xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
+xorf = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

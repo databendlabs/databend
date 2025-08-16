@@ -425,7 +425,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         info!("do_get_tables({query:?})");
         let session = self.get_session(&request)?;
         let context = session
-            .create_query_context()
+            .create_query_context(self.version)
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
         Ok(Response::new(

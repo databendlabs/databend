@@ -15,11 +15,11 @@
 use std::str::FromStr;
 
 use databend_common_ast::parser::Dialect;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
@@ -588,14 +588,14 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    pub fn get_enterprise_license(&self) -> String {
+    pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
         let license = unsafe {
             self.unchecked_try_get_string("enterprise_license")
                 .unwrap_or_default()
         };
         if license.is_empty() {
             // Try load license from embedded env if failed to load from settings.
-            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
+            version.embedded_license.clone()
         } else {
             license
         }

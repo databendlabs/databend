@@ -16,10 +16,12 @@ use std::io::Write;
 use std::path::Path;
 
 use databend_common_base::runtime::ThreadTracker;
+use jiff::Zoned;
 use log::Record;
 use logforth::Append;
 use logforth::Diagnostic;
 
+use crate::loggers::format_timestamp;
 use crate::loggers::KvWriter;
 
 #[derive(Debug)]
@@ -44,7 +46,7 @@ impl Append for QueryLogCollector {
         write!(
             buf,
             "{} {:>5} {}: {}:{} {}",
-            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+            format_timestamp(&Zoned::now()),
             record.level(),
             record.module_path().unwrap_or(""),
             Path::new(record.file().unwrap_or_default())

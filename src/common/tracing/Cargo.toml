@@ -11,8 +11,7 @@ anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 async-channel = { workspace = true }
-backtrace = { workspace = true, features = ["std", "serialize-serde"] }
-chrono = { workspace = true }
+backtrace = { workspace = true }
 concurrent-queue = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -21,6 +20,7 @@ defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 logforth = { workspace = true }

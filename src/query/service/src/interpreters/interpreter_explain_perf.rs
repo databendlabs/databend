@@ -70,7 +70,8 @@ impl ExplainPerfInterpreter {
 
     pub async fn acquire_semaphore(&self) -> Result<Permit> {
         let config = GlobalConfig::instance();
-        let meta_conf = config.meta.to_meta_grpc_client_conf();
+        let version = GlobalConfig::version();
+        let meta_conf = config.meta.to_meta_grpc_client_conf(version);
         let meta_store = MetaStoreProvider::new(meta_conf)
             .create_meta_store()
             .await

@@ -12,46 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::LazyLock;
-
 use feature_set::FeatureSet;
 use semver::Version;
-
-pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
-    let git_sha = databend_common_version::VERGEN_GIT_SHA;
-    let rustc_semver = databend_common_version::VERGEN_RUSTC_SEMVER;
-    let timestamp = databend_common_version::VERGEN_BUILD_TIMESTAMP;
-
-    // simd is enabled by default now
-    match (build_semver, git_sha, rustc_semver, timestamp) {
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-        }
-        _ => String::new(),
-    }
-});
-
-pub static METASRV_GIT_SEMVER: LazyLock<String> =
-    LazyLock::new(|| match databend_common_version::DATABEND_GIT_SEMVER {
-        Some(v) => v.to_string(),
-        None => "unknown".to_string(),
-    });
-
-pub static METASRV_GIT_SHA: LazyLock<String> =
-    LazyLock::new(|| match databend_common_version::VERGEN_GIT_SHA {
-        Some(sha) => sha.to_string(),
-        None => "unknown".to_string(),
-    });
-
-pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
-    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
-
-    let semver = semver.strip_prefix('v').unwrap_or(semver);
-
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
-});
 
 /// Oldest compatible nightly meta-client version
 ///

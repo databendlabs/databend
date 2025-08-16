@@ -14,7 +14,9 @@ async fn test_query_kind() -> Result<()> {
     let http_session = fixture
         .new_session_with_type(SessionType::HTTPQuery)
         .await?;
-    let ctx = http_session.create_query_context().await?;
+    let ctx = http_session
+        .create_query_context(&databend_common_version::BUILD_INFO)
+        .await?;
     let mut planner = Planner::new(ctx.clone());
     let sql = format!(
         "COPY INTO {}.{} from  @~/ pattern='.*' FILE_FORMAT = (TYPE = 'csv') PURGE=true FORCE=true max_files=10000;",

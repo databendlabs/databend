@@ -23,6 +23,7 @@ use databend_common_meta_types::MetaStartupError;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::HistoryConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_tracing::OTLPConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
@@ -38,10 +39,9 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
-use crate::version::METASRV_COMMIT_VERSION;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(about, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command
@@ -140,9 +140,11 @@ impl Default for Config {
     }
 }
 
-impl From<Config> for InnerConfig {
-    fn from(outer: Config) -> Self {
-        let mut log: InnerLogConfig = outer.log.into();
+impl TryFrom<Config> for InnerConfig {
+    type Error = String;
+
+    fn try_from(outer: Config) -> Result<Self, Self::Error> {
+        let mut log: InnerLogConfig = outer.log.try_into()?;
         if outer.log_level != CONFIG_DEFAULT_LOG_LEVEL {
             log.file.level = outer.log_level.to_string();
         }
@@ -150,7 +152,7 @@ impl From<Config> for InnerConfig {
             log.file.dir = outer.log_dir.to_string();
         }
 
-        InnerConfig {
+        Ok(InnerConfig {
             cmd: outer.cmd,
             key: outer.key,
             value: outer.value,
@@ -168,7 +170,7 @@ impl From<Config> for InnerConfig {
             grpc_tls_server_cert: outer.grpc_tls_server_cert,
             grpc_tls_server_key: outer.grpc_tls_server_key,
             raft_config: outer.raft_config.into(),
-        }
+        })
     }
 }
 
@@ -679,19 +681,20 @@ impl Default for LogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerLogConfig> for LogConfig {
-    fn into(self) -> InnerLogConfig {
-        InnerLogConfig {
-            file: self.file.into(),
-            stderr: self.stderr.into(),
+impl TryInto<InnerLogConfig> for LogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerLogConfig, Self::Error> {
+        Ok(InnerLogConfig {
+            file: self.file.try_into()?,
+            stderr: self.stderr.try_into()?,
             otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
             profile: ProfileLogConfig::default(),
             structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
             history: HistoryConfig::default(),
-        }
+        })
     }
 }
 
@@ -750,17 +753,23 @@ impl Default for FileLogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerFileLogConfig> for FileLogConfig {
-    fn into(self) -> InnerFileLogConfig {
-        InnerFileLogConfig {
+impl TryInto<InnerFileLogConfig> for FileLogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerFileLogConfig, Self::Error> {
+        let format = self
+            .file_format
+            .parse::<LogFormat>()
+            .map_err(|e| format!("Invalid file log format: {}", e))?;
+
+        Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
-            format: self.file_format,
+            format,
             limit: self.file_limit,
             max_size: self.file_max_size,
-        }
+        })
     }
 }
 
@@ -770,7 +779,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
-            file_format: inner.format,
+            file_format: inner.format.to_string(),
             file_limit: inner.limit,
             file_max_size: inner.max_size,
 
@@ -805,14 +814,20 @@ impl Default for StderrLogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerStderrLogConfig> for StderrLogConfig {
-    fn into(self) -> InnerStderrLogConfig {
-        InnerStderrLogConfig {
+impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerStderrLogConfig, Self::Error> {
+        let format = self
+            .stderr_format
+            .parse::<LogFormat>()
+            .map_err(|e| format!("Invalid stderr log format: {}", e))?;
+
+        Ok(InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
-            format: self.stderr_format,
-        }
+            format,
+        })
     }
 }
 
@@ -821,7 +836,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
-            stderr_format: inner.format,
+            stderr_format: inner.format.to_string(),
         }
     }
 }

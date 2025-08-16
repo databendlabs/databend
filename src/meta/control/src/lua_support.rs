@@ -17,6 +17,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
@@ -167,7 +168,7 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
+pub fn setup_lua_environment(lua: &Lua, version: BuildInfoRef) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
@@ -175,9 +176,10 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
 
     // Register new_grpc_client function
     let new_grpc_client = lua
-        .create_function(|_lua, address: String| {
+        .create_function(move |_lua, address: String| {
             let client = MetaGrpcClient::try_create(
                 vec![address],
+                version,
                 "root",
                 "xxx",
                 Some(Duration::from_secs(2)),
@@ -261,13 +263,17 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn new_grpc_client(addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
+pub fn new_grpc_client(
+    addresses: Vec<String>,
+    version: BuildInfoRef,
+) -> Result<Arc<ClientHandle>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
         serde_json::to_string(&addresses).unwrap()
     );
     MetaGrpcClient::try_create(
         addresses,
+        version,
         "root",
         "xxx",
         Some(Duration::from_secs(2)),
@@ -280,10 +286,10 @@ pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str, version: BuildInfoRef) -> anyhow::Result<()> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua)?;
+    setup_lua_environment(&lua, version)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -297,10 +303,11 @@ pub async fn run_lua_script(script: &str) -> anyhow::Result<()> {
 
 pub async fn run_lua_script_with_result(
     script: &str,
+    version: BuildInfoRef,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua)?;
+    setup_lua_environment(&lua, version)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();

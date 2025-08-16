@@ -26,11 +26,12 @@ use databend_common_exception::Result;
 use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use databend_query::sessions::BuildInfoRef;
 pub use resources_management_kubernetes::KubernetesResourcesManagement;
 pub use resources_management_self_managed::SelfManagedResourcesManagement;
 pub use resources_management_system::SystemResourcesManagement;
 
-pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
+pub async fn init_resources_management(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
     let service: Arc<dyn ResourcesManagement> = match &cfg.query.resources_management {
         None => match cfg.query.cluster_id.is_empty() {
             true => Err(ErrorCode::InvalidConfig(
@@ -49,7 +50,7 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
                 "kubernetes_managed" => KubernetesResourcesManagement::create(),
                 "system_managed" => {
                     let meta_api_provider =
-                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+                        MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
                     match meta_api_provider.create_meta_store().await {
                         Err(cause) => {
                             let err = ErrorCode::MetaServiceError(format!(
@@ -66,6 +67,7 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
                                 metastore,
                                 tenant_id.tenant_name(),
                                 lift_time,
+                                version,
                             )?;
                             SystemResourcesManagement::create(Arc::new(warehouse_manager))
                         }

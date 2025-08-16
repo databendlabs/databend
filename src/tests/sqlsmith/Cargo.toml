@@ -23,7 +23,7 @@ itertools = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true, features = ["cookies"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

@@ -50,14 +50,16 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
-use databend_meta::version::METASRV_COMMIT_VERSION;
+use databend_common_version::BUILD_INFO;
+use databend_common_version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::sleep;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = METASRV_COMMIT_VERSION.as_str(), author)]
 struct Config {
     /// The prefix of keys to write.
     #[clap(long, default_value = "0")]
@@ -94,14 +96,14 @@ async fn main() {
             on: true,
             level: config.log_level.clone(),
             dir: "./.databend/logs".to_string(),
-            format: "text".to_string(),
+            format: LogFormat::Text,
             limit: 48,
             max_size: 4294967296,
         },
         stderr: StderrConfig {
             on: true,
             level: "WARN".to_string(),
-            format: "text".to_string(),
+            format: LogFormat::Text,
         },
         ..Default::default()
     };
@@ -130,6 +132,7 @@ async fn main() {
         let handle = runtime::spawn(async move {
             let client = MetaGrpcClient::try_create_with_features(
                 vec![addr.to_string()],
+                &BUILD_INFO,
                 "root",
                 "xxx",
                 None,

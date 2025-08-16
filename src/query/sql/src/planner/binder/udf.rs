@@ -32,7 +32,6 @@ use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_version::UDF_CLIENT_USER_AGENT;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -111,7 +110,7 @@ impl Binder {
                     address,
                     connect_timeout,
                     request_timeout,
-                    UDF_CLIENT_USER_AGENT.as_str(),
+                    &self.ctx.get_version().udf_client_user_agent(),
                 )?;
 
                 let mut client =

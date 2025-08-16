@@ -63,6 +63,7 @@ use crate::history_tables::external::ExternalStorageConnection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 
 pub struct GlobalHistoryLog {
@@ -75,18 +76,19 @@ pub struct GlobalHistoryLog {
     tables: Vec<Arc<HistoryTable>>,
     connection: Option<ExternalStorageConnection>,
     current_params: Mutex<Option<StorageParams>>,
+    version: BuildInfoRef,
     _runtime: Arc<Runtime>,
 }
 
 impl GlobalHistoryLog {
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
+    pub async fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
         let connection = if let Some(params) = &cfg.log.history.storage_params {
             let connection = get_external_storage_connection(params);
             Some(connection)
         } else {
             None
         };
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
+        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version))
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
@@ -105,6 +107,7 @@ impl GlobalHistoryLog {
             tables: init_history_tables(&cfg.log.history)?,
             connection,
             current_params: Mutex::new(None),
+            version,
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
@@ -427,7 +430,7 @@ impl GlobalHistoryLog {
 
         let cluster_id = dummy_cluster.get_cluster_id()?;
         let session = create_session(&self.tenant_id, &cluster_id).await?;
-        session.create_query_context_with_cluster(dummy_cluster)
+        session.create_query_context_with_cluster(dummy_cluster, self.version)
     }
 }
 

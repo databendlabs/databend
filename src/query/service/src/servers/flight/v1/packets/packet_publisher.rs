@@ -174,11 +174,14 @@ impl QueryEnv {
             session.set_current_workload_group(workload_group.clone());
         }
 
-        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: self.cluster.unassign,
-            nodes: self.cluster.nodes.clone(),
-            local_id: GlobalConfig::instance().query.node_id.clone(),
-        }))?;
+        let query_ctx = session.create_query_context_with_cluster(
+            Arc::new(Cluster {
+                unassign: self.cluster.unassign,
+                nodes: self.cluster.nodes.clone(),
+                local_id: GlobalConfig::instance().query.node_id.clone(),
+            }),
+            GlobalConfig::version(),
+        )?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());

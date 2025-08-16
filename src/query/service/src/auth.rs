@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -72,8 +73,8 @@ impl Credential {
 }
 
 impl AuthMgr {
-    pub fn init(cfg: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(AuthMgr::create(cfg));
+    pub fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        GlobalInstance::set(AuthMgr::create(cfg, version));
         Ok(())
     }
 
@@ -81,9 +82,9 @@ impl AuthMgr {
         GlobalInstance::get()
     }
 
-    fn create(cfg: &InnerConfig) -> Arc<AuthMgr> {
+    fn create(cfg: &InnerConfig, version: BuildInfoRef) -> Arc<AuthMgr> {
         Arc::new(AuthMgr {
-            jwt_auth: JwtAuthenticator::create(&cfg.query),
+            jwt_auth: JwtAuthenticator::create(&cfg.query, version),
         })
     }
 

@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 
 use databend_common_storages_fuse::TableContext;
-use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
@@ -57,7 +56,7 @@ async fn check_login(
     req: &LoginRequest,
 ) -> databend_common_exception::Result<()> {
     let session = &ctx.session;
-    let table_ctx = session.create_query_context().await?;
+    let table_ctx = session.create_query_context(ctx.version).await?;
     if let Some(database) = &req.database {
         let cat = session.get_current_catalog();
         let cat = table_ctx.get_catalog(&cat).await?;
@@ -97,13 +96,13 @@ pub async fn login_handler(
         .as_ref()
         .expect("login_handler expect session id in ctx")
         .clone();
-    let version = DATABEND_SEMVER.to_string();
     check_login(ctx, &req)
         .await
         .map_err(HttpErrorCode::bad_request)?;
+    let version = &ctx.version.semantic;
     let id_only = || {
         Ok(Json(LoginResponse {
-            version: version.clone(),
+            version: version.to_string(),
             session_id: session_id.clone(),
             tokens: None,
         }))
@@ -111,26 +110,23 @@ pub async fn login_handler(
 
     match ctx.credential {
         Credential::Jwt { .. } => id_only(),
+        Credential::Password { .. } if query.disable_session_token.unwrap_or(false) => id_only(),
         Credential::Password { .. } => {
-            if query.disable_session_token.unwrap_or(false) {
-                id_only()
-            } else {
-                let (session_id, token_pair) = ClientSessionManager::instance()
-                    .new_token_pair(&ctx.session, session_id, None, None)
-                    .await
-                    .map_err(HttpErrorCode::server_error)?;
-                Ok(Json(LoginResponse {
-                    version,
-                    session_id,
-                    tokens: Some(TokensInfo {
-                        session_token_ttl_in_secs: ClientSessionManager::instance()
-                            .max_idle_time
-                            .as_secs(),
-                        session_token: token_pair.session.clone(),
-                        refresh_token: token_pair.refresh.clone(),
-                    }),
-                }))
-            }
+            let (session_id, token_pair) = ClientSessionManager::instance()
+                .new_token_pair(&ctx.session, session_id, None, None)
+                .await
+                .map_err(HttpErrorCode::server_error)?;
+            Ok(Json(LoginResponse {
+                version: version.to_string(),
+                session_id,
+                tokens: Some(TokensInfo {
+                    session_token_ttl_in_secs: ClientSessionManager::instance()
+                        .max_idle_time
+                        .as_secs(),
+                    session_token: token_pair.session.clone(),
+                    refresh_token: token_pair.refresh.clone(),
+                }),
+            }))
         }
         _ => unreachable!(
             "[HTTP-SESSION] /session/login endpoint requires password or JWT authentication"

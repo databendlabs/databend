@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use databend_common_base::base::mask_string;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
@@ -430,7 +431,7 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
+    pub fn to_meta_grpc_client_conf(&self, version: BuildInfoRef) -> RpcClientConf {
         let embedded_dir = if self.embedded_dir.is_empty() {
             None
         } else {
@@ -438,6 +439,7 @@ impl MetaConfig {
         };
         RpcClientConf {
             embedded_dir,
+            version,
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),

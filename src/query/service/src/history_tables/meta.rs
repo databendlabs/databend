@@ -204,6 +204,7 @@ mod tests {
     use std::ops::Deref;
     use std::time::Duration;
 
+    use databend_common_grpc::RpcClientConf;
     use databend_common_meta_store::MetaStoreProvider;
     use tokio::time::timeout;
 
@@ -211,7 +212,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
-        let meta_store = MetaStoreProvider::new(Default::default())
+        let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
+        let meta_store = MetaStoreProvider::new(conf)
             .create_meta_store()
             .await
             .unwrap();

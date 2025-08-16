@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_query::catalogs::DatabaseCatalog;
+pub use semver::Version;
 
-pub async fn create_catalog() -> Result<DatabaseCatalog> {
-    let conf = databend_query::test_kits::ConfigBuilder::create().config();
-    let version = &databend_common_version::BUILD_INFO;
-    DatabaseCatalog::try_create_with_config(conf, version).await
+pub type BuildInfoRef = &'static BuildInfo;
+
+#[derive(Debug, Clone)]
+pub struct BuildInfo {
+    pub semantic: Version,
+    pub commit_detail: String,
+    pub embedded_license: String,
+}
+
+impl BuildInfo {
+    pub fn udf_client_user_agent(&self) -> String {
+        format!("databend-query/{}", self.semantic)
+    }
 }

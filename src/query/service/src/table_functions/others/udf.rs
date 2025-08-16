@@ -50,7 +50,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_storages_factory::Table;
-use databend_common_version::UDF_CLIENT_USER_AGENT;
 use url::Url;
 
 pub struct UdfEchoTable {
@@ -145,7 +144,7 @@ impl Table for UdfEchoTable {
             &self.address,
             connect_timeout,
             request_timeout,
-            UDF_CLIENT_USER_AGENT.as_str(),
+            &ctx.get_version().udf_client_user_agent(),
         )?;
         let name = "builtin_echo";
         let mut client = UDFFlightClient::connect(name, endpoint, connect_timeout, 65536)

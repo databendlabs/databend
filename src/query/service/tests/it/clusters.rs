@@ -14,6 +14,7 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use databend_query::test_kits::*;
@@ -25,8 +26,9 @@ async fn test_empty_cluster_discovery() -> Result<()> {
 
     let config = ConfigBuilder::create().build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config).await?;
-    let cluster_discovery = ClusterDiscovery::try_create(&config, metastore.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config, &BUILD_INFO).await?;
+    let cluster_discovery =
+        ClusterDiscovery::try_create(&config, &BUILD_INFO, metastore.clone()).await?;
 
     let discover_cluster = cluster_discovery.discover(&config).await?;
 
@@ -64,9 +66,11 @@ async fn test_remove_invalid_nodes() -> Result<()> {
         .query_flight_address("invalid_address_2")
         .build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config_1).await?;
-    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, metastore.clone()).await?;
-    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, metastore.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
+    let cluster_discovery_1 =
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
+    let cluster_discovery_2 =
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
 
     cluster_discovery_1.register_to_metastore(&config_1).await?;
     cluster_discovery_2.register_to_metastore(&config_2).await?;
@@ -100,9 +104,11 @@ async fn test_lost_local_cluster_discovery() -> Result<()> {
     config_1.query.check_connection_before_schedule = false;
     config_2.query.check_connection_before_schedule = false;
 
-    let metastore = ClusterDiscovery::create_meta_client(&config_1).await?;
-    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, metastore.clone()).await?;
-    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, metastore.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
+    let cluster_discovery_1 =
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
+    let cluster_discovery_2 =
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
 
     cluster_discovery_2.register_to_metastore(&config_2).await?;
 

@@ -36,6 +36,7 @@ pub use crate::config::Config;
 pub use crate::config::FileConfig;
 pub use crate::config::HistoryConfig;
 pub use crate::config::HistoryTableConfig;
+pub use crate::config::LogFormat;
 pub use crate::config::OTLPConfig;
 pub use crate::config::OTLPEndpointConfig;
 pub use crate::config::OTLPProtocol;

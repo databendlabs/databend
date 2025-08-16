@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_system::LogType;
 use databend_common_storages_system::QueryLogElement;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
 use serde_json;
@@ -229,7 +228,7 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: DATABEND_COMMIT_VERSION.to_string(),
+            server_version: ctx.get_version().commit_detail.to_string(),
             query_tag,
             session_settings,
             extra: "".to_string(),
@@ -411,7 +410,7 @@ impl InterpreterQueryLog {
             exception_code,
             exception_text,
             stack_trace,
-            server_version: DATABEND_COMMIT_VERSION.to_string(),
+            server_version: ctx.get_version().commit_detail.to_string(),
             query_tag,
             session_settings,
             extra: "".to_string(),

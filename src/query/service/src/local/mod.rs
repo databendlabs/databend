@@ -20,6 +20,7 @@ pub(crate) mod helper;
 use std::io::stdin;
 use std::io::IsTerminal;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
@@ -30,6 +31,7 @@ use crate::GlobalServices;
 
 pub async fn query_local(
     mut conf: InnerConfig,
+    version: BuildInfoRef,
     query_sql: &str,
     output_format: &str,
 ) -> Result<()> {
@@ -42,7 +44,7 @@ pub async fn query_local(
         conf.query.warehouse_id = conf.query.cluster_id.clone();
     }
 
-    GlobalServices::init(&conf, false).await?;
+    GlobalServices::init(&conf, version, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
     // Cluster register.
@@ -52,7 +54,7 @@ pub async fn query_local(
 
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && query_sql.is_empty();
-    let mut executor = executor::SessionExecutor::try_new(is_repl, output_format).await?;
+    let mut executor = executor::SessionExecutor::try_new(is_repl, version, output_format).await?;
 
     let query_sql = query_sql.replace("$STDIN", "'fs:///dev/fd/0'");
     executor.handle(&query_sql).await;

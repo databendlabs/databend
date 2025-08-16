@@ -29,6 +29,7 @@ use opentelemetry_otlp::Compression;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_otlp::WithTonicConfig;
 
+use crate::config::LogFormat;
 use crate::config::OTLPProtocol;
 use crate::filter::ThreadTrackerFilter;
 use crate::loggers::new_rolling_file_appender;
@@ -228,13 +229,10 @@ pub fn init_logging(
             dispatch
                 .filter(env_filter(&cfg.file.level))
                 .filter(ThreadTrackerFilter)
-                .append(match cfg.file.format.as_str() {
-                    "text" => normal_log_file.with_layout(TextLayout::<false>),
-                    "json" => normal_log_file.with_layout(JsonLayout::<false>),
-                    "identical" => normal_log_file.with_layout(IdenticalLayout),
-                    _ => {
-                        unimplemented!("file logging format {} is not supported", &cfg.file.format)
-                    }
+                .append(match cfg.file.format {
+                    LogFormat::Text => normal_log_file.with_layout(TextLayout::<false>),
+                    LogFormat::Json => normal_log_file.with_layout(JsonLayout::<false>),
+                    LogFormat::Identical => normal_log_file.with_layout(IdenticalLayout),
                 })
         });
     }
@@ -242,19 +240,14 @@ pub fn init_logging(
     // console logger
     if cfg.stderr.on {
         logger = logger.dispatch(|dispatch| {
+            let stderr = logforth::append::Stderr::default();
             dispatch
                 .filter(env_filter(&cfg.stderr.level))
                 .filter(ThreadTrackerFilter)
-                .append(match cfg.stderr.format.as_str() {
-                    "text" => logforth::append::Stderr::default().with_layout(TextLayout::<false>),
-                    "json" => logforth::append::Stderr::default().with_layout(JsonLayout::<false>),
-                    "identical" => logforth::append::Stderr::default().with_layout(IdenticalLayout),
-                    _ => {
-                        unimplemented!(
-                            "stderr logging format {} is not supported",
-                            &cfg.stderr.format
-                        )
-                    }
+                .append(match cfg.stderr.format {
+                    LogFormat::Text => stderr.with_layout(TextLayout::<false>),
+                    LogFormat::Json => stderr.with_layout(JsonLayout::<false>),
+                    LogFormat::Identical => stderr.with_layout(IdenticalLayout),
                 })
         });
     }

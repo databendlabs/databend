@@ -27,6 +27,7 @@ use databend_common_exception::ResultExt;
 use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
 use databend_common_tracing::SignalListener;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_query::enterprise_services::EnterpriseServices;
 use entry::MainError;
@@ -75,7 +76,7 @@ pub async fn main_entrypoint() -> Result<(), MainError> {
 
     let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
     init_services(&conf, true).await.with_context(make_error)?;
-    EnterpriseServices::init(conf.clone())
+    EnterpriseServices::init(conf.clone(), &BUILD_INFO)
         .await
         .with_context(make_error)?;
     start_services(&conf).await.with_context(make_error)

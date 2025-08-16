@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
+use databend_common_version::BUILD_INFO;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -112,7 +113,7 @@ async fn test_set_setting() -> Result<()> {
 }
 
 async fn new_setting_api() -> Result<(Arc<MetaStore>, SettingMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
     let test_api = Arc::new(test_api);
 
     let mgr = SettingMgr::create(
