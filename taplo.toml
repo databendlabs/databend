@@ -42,3 +42,20 @@ formatting = { reorder_keys = true }
 schema = { path = ".config/workspace-schema.json" }
 include = ["src/**/Cargo.toml", "tests/**/Cargo.toml"]
 exclude = ["src/**/fuzz/Cargo.toml", "src/bendpy/Cargo.toml"]
+
+# The compilation artefact of databend-common-version cannot be cached, so to avoid unnecessary compilations,
+# you should avoid introducing databend-common-version in the underlying crate.
+#
+# try GlobalConfig::version()
+# also see: `cargo check -v 2>&1 1>/dev/null | grep Dirty`
+[[rule]]
+schema = { path = ".config/version-schema.json" }
+include = ["src/**/Cargo.toml"]
+exclude = [
+    "src/bendpy/Cargo.toml",
+    "src/bendsave/Cargo.toml",
+    "src/binaries/Cargo.toml",
+    "src/meta/binaries/Cargo.toml",
+    "src/query/ee/Cargo.toml",
+    "src/query/service/Cargo.toml",
+]
