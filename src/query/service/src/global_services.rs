@@ -132,7 +132,7 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
-        AuthMgr::init(config)?;
+        AuthMgr::init(config, version)?;
 
         // Init user manager.
         // Builtin users and udfs are created here.
