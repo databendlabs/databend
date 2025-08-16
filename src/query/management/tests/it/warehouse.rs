@@ -1568,12 +1568,7 @@ async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
             .await
             .unwrap(),
     ));
-    let cluster_manager = WarehouseMgr::create(
-        test_api.clone(),
-        "test-tenant-id",
-        lift,
-        version.semantic.to_string(),
-    )?;
+    let cluster_manager = WarehouseMgr::create(test_api.clone(), "test-tenant-id", lift, version)?;
     Ok((test_api, cluster_manager))
 }
 

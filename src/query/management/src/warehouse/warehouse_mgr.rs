@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
@@ -75,7 +76,7 @@ pub struct WarehouseMgr {
     node_key_prefix: String,
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
-    version: String,
+    version: BuildInfoRef,
 }
 
 impl WarehouseMgr {
@@ -83,7 +84,7 @@ impl WarehouseMgr {
         metastore: MetaStore,
         tenant: &str,
         lift_time: Duration,
-        version: String,
+        version: BuildInfoRef,
     ) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -2177,7 +2178,7 @@ impl WarehouseApi for WarehouseMgr {
             .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == self.version)
+            .filter(|x| x.binary_version == self.version.commit_detail)
             .collect::<Vec<_>>())
     }
 
@@ -2201,7 +2202,7 @@ impl WarehouseApi for WarehouseMgr {
             .list_warehouse_nodes(node.warehouse_id.clone())
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == self.version)
+            .filter(|x| x.binary_version == self.version.commit_detail)
             .collect::<Vec<_>>())
     }
 

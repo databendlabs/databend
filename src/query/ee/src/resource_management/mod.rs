@@ -67,7 +67,7 @@ pub async fn init_resources_management(cfg: &InnerConfig, version: BuildInfoRef)
                                 metastore,
                                 tenant_id.tenant_name(),
                                 lift_time,
-                                version.commit_detail.clone(),
+                                version,
                             )?;
                             SystemResourcesManagement::create(Arc::new(warehouse_manager))
                         }
