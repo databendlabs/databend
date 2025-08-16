@@ -459,7 +459,7 @@ async fn test_optimizer() -> Result<()> {
     let subdir = std::env::var("TEST_SUBDIR").ok();
 
     let suite = TestSuite::new(base_path.clone(), subdir);
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
 
     let cases = suite.load_cases()?;
     if cases.is_empty() {

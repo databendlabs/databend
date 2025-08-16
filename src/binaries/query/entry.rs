@@ -75,8 +75,7 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
                 .init_inner_config(false)
                 .await
                 .with_context(make_error)?;
-            let version = &BUILD_INFO;
-            local::query_local(conf, version, query, output_format)
+            local::query_local(conf, &BUILD_INFO, query, output_format)
                 .await
                 .with_context(make_error)?
         }

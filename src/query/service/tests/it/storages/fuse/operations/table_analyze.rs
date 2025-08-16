@@ -43,7 +43,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // setup
@@ -101,7 +101,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_update_analyze_statistics() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture.create_default_database().await?;
@@ -190,7 +190,7 @@ async fn check_column_ndv_statistics(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // setup

@@ -52,8 +52,7 @@ async fn test_array_cache_of_nested_column_iusse_14502() -> Result<()> {
     config.query.warehouse_id = String::from("test-warehouse-id");
     // memory cache is not enabled by default, let's enable it
     config.cache.table_data_deserialized_data_bytes = 1024 * 1024 * 10;
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
 
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();

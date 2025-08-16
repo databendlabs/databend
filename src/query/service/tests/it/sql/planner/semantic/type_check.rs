@@ -32,7 +32,7 @@ async fn test_query_overflow() -> Result<()> {
     query.push_str(condition);
     query.push_str(");");
 
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     fixture

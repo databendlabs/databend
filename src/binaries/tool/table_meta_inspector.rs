@@ -29,6 +29,7 @@ use databend_common_storage::init_operator;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_query::GlobalServices;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -88,12 +89,7 @@ async fn parse_input_data(config: &InspectorConfig) -> Result<Vec<u8>> {
                     builder = builder.collect(from_file(Toml, config_file));
                     let read_config = builder.build()?;
                     let inner_config: InnerConfig = read_config.clone().try_into()?;
-                    GlobalServices::init(
-                        &inner_config,
-                        &databend_common_version::BUILD_INFO,
-                        false,
-                    )
-                    .await?;
+                    GlobalServices::init(&inner_config, &BUILD_INFO, false).await?;
                     let storage_config: StorageConfig = read_config.storage.try_into()?;
                     init_operator(&storage_config.params)?
                 }

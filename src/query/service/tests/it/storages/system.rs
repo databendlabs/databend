@@ -108,7 +108,7 @@ async fn run_table_tests(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_build_options_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table =
@@ -128,7 +128,7 @@ async fn test_build_options_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_columns_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let mut mint = Mint::new("tests/it/storages/testdata");
@@ -141,7 +141,7 @@ async fn test_columns_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clusters_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = ClustersTable::create(1);
@@ -161,8 +161,7 @@ async fn test_clusters_table() -> Result<()> {
 async fn test_configs_table_basic() -> Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
 
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(8)?;
@@ -197,8 +196,7 @@ async fn test_configs_table_redact() -> Result<()> {
         secret_access_key: "secret_access_key".to_string(),
         ..Default::default()
     });
-    let fixture =
-        TestFixture::setup_with_config(&conf, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&conf).await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(8)?;
 
@@ -219,7 +217,7 @@ async fn test_configs_table_redact() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_contributors_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = ContributorsTable::create(1, DATABEND_COMMIT_AUTHORS);
@@ -237,7 +235,7 @@ async fn test_contributors_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_credits_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = CreditsTable::create(
@@ -263,7 +261,7 @@ async fn test_catalogs_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
 
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = CatalogsTable::create(1);
@@ -276,8 +274,7 @@ async fn test_catalogs_table() -> Result<()> {
 async fn test_databases_table() -> Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = DatabasesTableWithoutHistory::create(1, "default");
@@ -293,8 +290,7 @@ async fn test_databases_table() -> Result<()> {
 async fn test_databases_history_table() -> Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = DatabasesTableWithHistory::create(1, "default");
@@ -310,7 +306,7 @@ async fn test_databases_history_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_engines_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = EnginesTable::create(1);
@@ -323,7 +319,7 @@ async fn test_engines_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_functions_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = FunctionsTable::create(1);
@@ -341,7 +337,7 @@ async fn test_functions_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_metrics_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     let table = MetricsTable::create(1);
@@ -379,7 +375,7 @@ async fn test_metrics_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_roles_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
 
@@ -434,7 +430,7 @@ async fn test_roles_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_users_table() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
 
@@ -487,8 +483,7 @@ async fn test_caches_table() -> Result<()> {
 
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
     let ctx = fixture.new_query_ctx_with_cluster(cluster_desc).await?;
 

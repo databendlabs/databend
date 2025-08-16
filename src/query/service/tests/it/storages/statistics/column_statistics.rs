@@ -114,7 +114,7 @@ fn test_column_statistic() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accurate_columns_rages() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // table engines that do not support accurate columns ranges should return None

@@ -55,11 +55,7 @@ fn test_simple_cluster() -> Result<()> {
                     .expect("Failed to create runtime");
 
                 let inner_async = async move {
-                    let fixture = TestFixture::setup_with_config(
-                        &conf_clone,
-                        &databend_common_version::BUILD_INFO,
-                    )
-                    .await?;
+                    let fixture = TestFixture::setup_with_config(&conf_clone).await?;
 
                     let mut srv = FlightService::create(conf_clone.clone())?;
                     srv.start(conf_clone.query.flight_api_address.parse()?)

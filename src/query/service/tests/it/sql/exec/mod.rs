@@ -39,7 +39,7 @@ pub fn test_format_field_name() {
 
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_consistency() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
     let ctx = fixture.new_query_ctx().await?;

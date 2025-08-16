@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::BuildInfoRef;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license::LicenseInfo;
@@ -73,8 +72,8 @@ impl Default for EESetup {
 
 #[async_trait::async_trait]
 impl Setup for EESetup {
-    async fn setup(&self) -> Result<(InnerConfig, BuildInfoRef)> {
+    async fn setup(&self) -> Result<InnerConfig> {
         TestFixture::setup(&self.config, self.pk.clone()).await?;
-        Ok((self.config.clone(), &databend_common_version::BUILD_INFO))
+        Ok(self.config.clone())
     }
 }

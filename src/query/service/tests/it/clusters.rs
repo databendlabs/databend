@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_cluster_discovery() -> Result<()> {
-    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let _guard = TestFixture::setup().await?;
 
     let config = ConfigBuilder::create().build();
 
@@ -43,8 +43,7 @@ async fn test_empty_cluster_discovery() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
     let config = ConfigBuilder::create().build();
-    let _fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let discover_cluster = ClusterDiscovery::instance().discover(&config).await?;
 
@@ -58,7 +57,7 @@ async fn test_single_cluster_discovery() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_remove_invalid_nodes() -> Result<()> {
-    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let _guard = TestFixture::setup().await?;
 
     let config_1 = ConfigBuilder::create()
         .query_flight_address("invalid_address_1")
@@ -93,7 +92,7 @@ async fn test_remove_invalid_nodes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_lost_local_cluster_discovery() -> Result<()> {
-    let _guard = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let _guard = TestFixture::setup().await?;
 
     let mut config_1 = ConfigBuilder::create()
         .query_flight_address("10.0.0.1")

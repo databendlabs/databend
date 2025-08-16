@@ -20,7 +20,7 @@ use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Settings.
@@ -49,8 +49,7 @@ async fn test_session_setting_override() -> Result<()> {
         .max_storage_io_requests(1000)
         .parquet_fast_read_bytes(1000000)
         .build();
-    let fixture =
-        TestFixture::setup_with_config(&config, &databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let session = fixture.new_session_with_type(SessionType::Dummy).await?;
 
     // Settings.

@@ -158,7 +158,7 @@ use xorf::BinaryFuse16;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
 
     let db = fixture.default_db_name();
@@ -217,7 +217,7 @@ async fn test_fuse_occ_retry() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_last_snapshot_hint() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
@@ -264,7 +264,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
 
     impl Case {
         async fn run(&self) -> Result<()> {
-            let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+            let fixture = TestFixture::setup().await?;
             fixture.create_default_database().await?;
             fixture.create_default_table().await?;
 

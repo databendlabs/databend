@@ -107,7 +107,7 @@ async fn join_build_state(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_generate_runtime_filter() -> Result<()> {
-    let fixture = TestFixture::setup(&databend_common_version::BUILD_INFO).await?;
+    let fixture = TestFixture::setup().await?;
     // Create table
     let _ = execute_sql(
         fixture.new_query_ctx().await?,
