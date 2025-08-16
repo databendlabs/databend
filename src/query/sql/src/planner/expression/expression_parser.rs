@@ -137,7 +137,7 @@ fn parse_ast_exprs(
         .iter()
         .map(|ast| {
             let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+            let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
             Ok(expr)
         })
         .collect::<Result<_>>()?;
@@ -155,10 +155,11 @@ pub fn parse_to_filters(
     let exprs: Vec<RemoteExpr<String>> = exprs
         .iter()
         .map(|expr| {
-            expr.project_column_ref(|index| schema.field(*index).name().to_string())
-                .as_remote_expr()
+            Ok(expr
+                .project_column_ref(|index| Ok(schema.field(*index).name().to_string()))?
+                .as_remote_expr())
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
     if exprs.len() == 1 {
         let filter = exprs[0].clone();
@@ -234,7 +235,7 @@ pub fn parse_computed_expr(
     }
     let ast = asts.remove(0);
     let (scalar, _) = *type_checker.resolve(&ast)?;
-    let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+    let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
     Ok(expr)
 }
 
@@ -377,7 +378,7 @@ pub fn parse_cluster_keys(
             let (scalar, _) = *type_checker.resolve(ast)?;
             let expr = scalar
                 .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.column_name).unwrap());
+                .project_column_ref(|col| schema.index_of(&col.column_name))?;
             Ok(expr)
         })
         .collect::<Result<_>>()?;
@@ -463,7 +464,7 @@ pub fn analyze_cluster_keys(
             )));
         }
 
-        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        let expr = scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?;
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is not deterministic",

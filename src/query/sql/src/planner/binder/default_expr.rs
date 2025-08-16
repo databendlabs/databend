@@ -178,7 +178,9 @@ impl DefaultExprBinder {
         let data_field: DataField = field.into();
         let mut scalar_expr = self.parse_and_bind(&data_field)?;
         self.rewriter.visit(&mut scalar_expr)?;
-        let expr = scalar_expr.as_expr()?.project_column_ref(|col| col.index);
+        let expr = scalar_expr
+            .as_expr()?
+            .project_column_ref(|col| Ok(col.index))?;
         let result = self.evaluator().run(&expr)?;
         match result {
             databend_common_expression::Value::Scalar(s) => Ok(s),
@@ -200,9 +202,9 @@ impl DefaultExprBinder {
         schema: &DataSchema,
     ) -> Result<databend_common_expression::Expr> {
         let scalar_expr = self.parse_and_bind(field)?;
-        Ok(scalar_expr
+        scalar_expr
             .as_expr()?
-            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap()))
+            .project_column_ref(|col| schema.index_of(&col.index.to_string()))
     }
 
     pub fn prepare_default_values(
@@ -221,9 +223,9 @@ impl DefaultExprBinder {
                 };
                 RemoteDefaultExpr::Sequence(name)
             } else {
-                let expr = scalar_expr.as_expr()?.project_column_ref(|col| {
-                    data_schema.index_of(&col.index.to_string()).unwrap()
-                });
+                let expr = scalar_expr
+                    .as_expr()?
+                    .project_column_ref(|col| data_schema.index_of(&col.index.to_string()))?;
                 RemoteDefaultExpr::RemoteExpr(expr.as_remote_expr())
             };
             values.push(expr);

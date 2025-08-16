@@ -158,7 +158,7 @@ impl BindContext {
             }
             let expr = scalar
                 .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
+                .project_column_ref(|col| schema.index_of(&col.index.to_string()))?;
             map_exprs.push(expr);
         }
 

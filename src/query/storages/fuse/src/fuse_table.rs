@@ -459,8 +459,11 @@ impl FuseTable {
         let cluster_keys = exprs
             .iter()
             .map(|k| {
-                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
-                    .as_remote_expr()
+                k.project_column_ref(|index| {
+                    Ok(table_meta.schema().field(*index).name().to_string())
+                })
+                .unwrap()
+                .as_remote_expr()
             })
             .collect();
         cluster_keys

@@ -2255,9 +2255,7 @@ impl<'a> TypeChecker<'a> {
                 let lambda_schema = DataSchema::new(lambda_fields);
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
-                    .project_column_ref(|index| {
-                        lambda_schema.index_of(&index.to_string()).unwrap()
-                    });
+                    .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());

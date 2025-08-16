@@ -305,7 +305,7 @@ impl PhysicalPlanBuilder {
                     left_condition
                         .as_raw_expr()
                         .type_check(&*self.metadata.read())?
-                        .project_column_ref(|col| col.column_name.clone()),
+                        .project_column_ref(|col| Ok(col.column_name.clone()))?,
                     scan_id,
                     table_index,
                 )));
@@ -400,10 +400,10 @@ impl PhysicalPlanBuilder {
             // Type check expressions
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
-                .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
+                .project_column_ref(|index| build_schema.index_of(&index.to_string()))?;
             let left_expr = left_condition
                 .type_check(probe_schema.as_ref())?
-                .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()))?;
 
             // Prepare runtime filter expression
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
@@ -754,9 +754,7 @@ impl PhysicalPlanBuilder {
             .map(|scalar| {
                 let expr = scalar
                     .type_check(merged_schema.as_ref())?
-                    .project_column_ref(|index| {
-                        merged_schema.index_of(&index.to_string()).unwrap()
-                    });
+                    .project_column_ref(|index| merged_schema.index_of(&index.to_string()))?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok(expr.as_remote_expr())
             })

@@ -71,7 +71,8 @@ impl FuseTable {
         let schema = block_reader.schema().as_ref().clone();
         let filter_expr = Arc::new(filter.map(|v| {
             v.as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap())
+                .project_column_ref(|name| schema.index_of(name))
+                .unwrap()
         }));
 
         let num_column_indices = self.schema_with_stream().fields().len();

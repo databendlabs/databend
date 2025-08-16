@@ -344,7 +344,7 @@ pub(crate) fn scalar_expr_to_remote_expr(
 ) -> Result<RemoteExpr> {
     let expr = expr
         .as_expr()?
-        .project_column_ref(|col| block_schema.index_of(&col.index.to_string()).unwrap());
+        .project_column_ref(|col| block_schema.index_of(&col.index.to_string()))?;
     Ok(expr.as_remote_expr())
 }
 
@@ -425,9 +425,10 @@ impl InsertIntoBranches {
     fn build_predicates(&self, source_schema: &DataSchema) -> Result<Vec<Option<RemoteExpr>>> {
         let mut predicates = vec![];
         let prepare_filter = |expr: ScalarExpr| {
-            let expr = cast_expr_to_non_null_boolean(expr.as_expr()?.project_column_ref(|col| {
-                source_schema.index_of(&col.index.to_string()).unwrap()
-            }))?;
+            let expr = cast_expr_to_non_null_boolean(
+                expr.as_expr()?
+                    .project_column_ref(|col| source_schema.index_of(&col.index.to_string()))?,
+            )?;
             Ok::<RemoteExpr, ErrorCode>(expr.as_remote_expr())
         };
         for opt_scalar_expr in self.conditions.iter() {

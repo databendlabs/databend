@@ -657,7 +657,7 @@ pub fn bind_constant_scan(
             };
             let expr = scalar
                 .as_expr()?
-                .project_column_ref(|col| value_schema.index_of(&col.index.to_string()).unwrap());
+                .project_column_ref(|col| value_schema.index_of(&col.index.to_string()))?;
             let result = evaluator.run(&expr)?;
 
             match result.as_scalar() {

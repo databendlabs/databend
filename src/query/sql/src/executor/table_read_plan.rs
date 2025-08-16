@@ -239,7 +239,10 @@ impl ToReadDataSourcePlan for dyn Table {
                                     start.elapsed()
                                 ));
                                 let scalar = type_checker.resolve(&ast_expr)?;
-                                let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
+                                let expr = scalar
+                                    .0
+                                    .as_expr()?
+                                    .project_column_ref(|col| Ok(col.index))?;
                                 mask_policy_map.insert(i, expr.as_remote_expr());
                             } else {
                                 info!(

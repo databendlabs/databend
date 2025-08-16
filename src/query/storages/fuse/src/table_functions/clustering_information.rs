@@ -174,10 +174,10 @@ impl<'a> ClusteringInformationImpl<'a> {
                     .iter()
                     .map(|k| {
                         k.project_column_ref(|index| {
-                            self.table.schema().field(*index).name().to_string()
+                            Ok(self.table.schema().field(*index).name().to_string())
                         })
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>>>()?;
                 if a.is_some() && a.unwrap() == &cluster_key {
                     default_cluster_key_id = self.table.cluster_key_meta.clone().map(|v| v.0);
                 }

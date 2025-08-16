@@ -414,11 +414,12 @@ impl PhysicalPlanBuilder {
                                     // so it's not in mutation_input_schema for now. But it's must be added
                                     // to the tail, so let do it like below.
                                     if *name == PREDICATE_COLUMN_INDEX.to_string() {
-                                        output_schema.num_fields()
+                                        Ok(output_schema.num_fields())
                                     } else {
-                                        output_schema.index_of(name).unwrap()
+                                        output_schema.index_of(name)
                                     }
                                 })
+                                .unwrap()
                                 .as_remote_expr(),
                         )
                     })
@@ -526,7 +527,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<RemoteExpr> {
         let scalar_expr = scalar_expr
             .type_check(schema.as_ref())?
-            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+            .project_column_ref(|index| schema.index_of(&index.to_string()))?;
         let (filer, _) = ConstantFolder::fold(
             &scalar_expr,
             &self.ctx.get_function_context().unwrap(),
@@ -562,7 +563,7 @@ pub fn build_block_id_shuffle_exchange(
 
     let row_id_expr = row_id_column
         .type_check(mutation_input_schema.as_ref())?
-        .project_column_ref(|index| mutation_input_schema.index_of(&index.to_string()).unwrap());
+        .project_column_ref(|index| mutation_input_schema.index_of(&index.to_string()))?;
 
     let block_id_shuffle_key = check_function(
         None,
@@ -734,11 +735,11 @@ pub fn generate_update_list(
             };
             let expr = scalar.as_expr()?.project_column_ref(|col| {
                 if use_column_name_index.is_none() {
-                    col.column_name.clone()
+                    Ok(col.column_name.clone())
                 } else {
-                    col.index.to_string()
+                    Ok(col.index.to_string())
                 }
-            });
+            })?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
@@ -817,7 +818,7 @@ pub fn mutation_update_expr(
             });
             let expr = scalar
                 .type_check(input_schema.as_ref())?
-                .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
+                .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
@@ -864,10 +865,8 @@ pub fn generate_stored_computed_list(
                             break;
                         }
                     }
-                    input_schema
-                        .index_of(&column_index.unwrap().to_string())
-                        .unwrap()
-                });
+                    input_schema.index_of(&column_index.unwrap().to_string())
+                })?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
                 remote_exprs.push((i, expr.as_remote_expr()));

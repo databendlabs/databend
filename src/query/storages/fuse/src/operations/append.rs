@@ -213,7 +213,7 @@ impl FuseTable {
         for remote_expr in &cluster_keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+                .project_column_ref(|name| input_schema.index_of(name))?;
             let index = match &expr {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {

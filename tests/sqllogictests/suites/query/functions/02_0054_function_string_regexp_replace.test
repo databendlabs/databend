@@ -69,6 +69,11 @@ select REGEXP_REPLACE('http://databend.com/reg', '^https?://(?:www\.)?([^/]+)/.*
 databend.com
 
 query T
+select REGEXP_REPLACE('ID-123-ABC', '^(?<M>ID-)\d+(?<N>-.+)$', '${M}XXX$N');
+----
+ID-XXX-ABC
+
+query T
 select REGEXP_REPLACE('abc-123-abc',  '^([a-z]+)\-([1-9]+)\-[a-z]+', '$2+$1');
 ----
 123+abc

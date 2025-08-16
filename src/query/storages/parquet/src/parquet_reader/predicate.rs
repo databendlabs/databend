@@ -125,10 +125,10 @@ pub fn build_predicate(
         .as_expr(&BUILTIN_FUNCTIONS)
         .project_column_ref(
             |name| match partition_columns.iter().position(|x| x == name) {
-                Some(i) => i + schema.fields.len(),
-                None => schema.index_of(name).unwrap(),
+                Some(i) => Ok(i + schema.fields.len()),
+                None => schema.index_of(name),
             },
-        );
+        )?;
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
