@@ -48,17 +48,20 @@ fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
     cookie
 }
 
-// migrating from cookie to custom header:
-// request:
-//  try read in order 1. custom header 2. cookie
-// response:
-//  always custom header
-//  cookie only if enabled
+#[derive(Clone, Eq, PartialEq)]
+pub enum ClientSessionType {
+    // currently use in drivers
+    Cookie,
+    // to be used when cookie is inconvenient
+    CustomHeader,
+    // for now used only for worksheet
+    IDOnly,
+}
+
 #[derive(Clone)]
 pub struct ClientSession {
     pub header: ClientSessionHeader,
-
-    pub use_cookie: bool,
+    pub typ: ClientSessionType,
     pub is_new_session: bool,
     pub refreshed: bool,
 }
@@ -90,7 +93,25 @@ impl ClientSession {
         }
     }
 
-    fn new_session(use_cookie: bool) -> Self {
+    pub fn try_decode_for_worksheet(req: &Request) -> Option<Self> {
+        if let Some(v) = req.headers().get(HEADER_SESSION_ID) {
+            let id = v.to_str().unwrap().to_string().trim().to_owned();
+            if !id.is_empty() {
+                return Some(ClientSession {
+                    header: ClientSessionHeader {
+                        id,
+                        last_refresh_time: SystemTime::now(),
+                    },
+                    typ: ClientSessionType::Cookie,
+                    is_new_session: false,
+                    refreshed: false,
+                });
+            }
+        }
+        None
+    }
+
+    fn new_session(typ: ClientSessionType) -> Self {
         let id = Uuid::now_v7().to_string();
         info!("[HTTP-SESSION] Created new session with ID: {}", id);
         ClientSession {
@@ -98,16 +119,16 @@ impl ClientSession {
                 id,
                 last_refresh_time: SystemTime::now(),
             },
-            use_cookie,
+            typ,
             is_new_session: true,
             refreshed: false,
         }
     }
 
-    fn old_session(use_cookie: bool, header: ClientSessionHeader) -> Self {
+    fn old_session(typ: ClientSessionType, header: ClientSessionHeader) -> Self {
         ClientSession {
             header,
-            use_cookie,
+            typ,
             is_new_session: false,
             refreshed: false,
         }
@@ -119,14 +140,16 @@ impl ClientSession {
     ) -> Result<Option<ClientSession>, String> {
         if caps.session_header {
             if let Some(v) = headers.get(HEADER_SESSION) {
-                caps.session_header = true;
                 let v = v.to_str().unwrap().to_string().trim().to_owned();
                 if !v.is_empty() {
                     let header = decode_json_header(HEADER_SESSION, &v)?;
-                    return Ok(Some(Self::old_session(false, header)));
+                    return Ok(Some(Self::old_session(
+                        ClientSessionType::CustomHeader,
+                        header,
+                    )));
                 };
             }
-            Ok(Some(Self::new_session(false)))
+            Ok(Some(Self::new_session(ClientSessionType::CustomHeader)))
         } else {
             Ok(None)
         }
@@ -159,9 +182,9 @@ impl ClientSession {
                     id,
                     last_refresh_time: last_access_time,
                 };
-                Self::old_session(true, header)
+                Self::old_session(ClientSessionType::Cookie, header)
             } else {
-                let s = Self::new_session(true);
+                let s = Self::new_session(ClientSessionType::Cookie);
                 cookie.add(make_cookie(COOKIE_SESSION_ID, &s.header.id));
                 cookie.add(make_cookie(
                     COOKIE_LAST_REFRESH_TIME,
@@ -180,13 +203,13 @@ impl ClientSession {
         tenant: Tenant,
         user_name: &str,
         cookie: &CookieJar,
-        is_worksheet: bool,
     ) -> databend_common_exception::Result<()> {
         let client_session_mgr = ClientSessionManager::instance();
         match self.header.last_refresh_time.elapsed() {
             Ok(elapsed) => {
-                // worksheet
-                if is_worksheet || elapsed > client_session_mgr.min_refresh_interval {
+                if ClientSessionType::IDOnly == self.typ
+                    || elapsed > client_session_mgr.min_refresh_interval
+                {
                     if client_session_mgr.refresh_in_memory_states(&self.header.id, user_name) {
                         client_session_mgr
                             .refresh_session_handle(tenant, user_name.to_string(), &self.header.id)
@@ -198,7 +221,7 @@ impl ClientSession {
                         );
                     }
                     self.refreshed = true;
-                    if self.use_cookie {
+                    if ClientSessionType::Cookie == self.typ {
                         cookie.add(make_cookie(
                             COOKIE_LAST_REFRESH_TIME,
                             unix_ts().as_secs().to_string().as_str(),
@@ -218,13 +241,15 @@ impl ClientSession {
 
     pub fn on_response(&self, resp: &mut Response) {
         let mut header = self.header.clone();
-        if self.refreshed {
-            header.last_refresh_time = SystemTime::now();
-        }
         resp.headers_mut()
             .insert(HEADER_SESSION_ID, header.id.parse().unwrap());
-        resp.headers_mut()
-            .insert(HEADER_SESSION, header.encode().parse().unwrap());
+        if ClientSessionType::CustomHeader == self.typ {
+            if self.refreshed {
+                header.last_refresh_time = SystemTime::now();
+            }
+            resp.headers_mut()
+                .insert(HEADER_SESSION, header.encode().parse().unwrap());
+        }
     }
 }
 

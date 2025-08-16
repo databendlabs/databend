@@ -415,7 +415,11 @@ impl<E> HTTPSessionEndpoint<E> {
             .await?;
         login_history.user_name = user_name.clone();
 
-        let mut client_session = ClientSession::try_decode(req, &mut client_caps)?;
+        let mut client_session = if is_worksheet {
+            ClientSession::try_decode_for_worksheet(req)
+        } else {
+            ClientSession::try_decode(req, &mut client_caps)?
+        };
         if client_session.is_none() && !matches!(self.endpoint_kind, EndpointKind::PollQuery) {
             info!(
                 "[HTTP-SESSION] got request without session, url={}, headers={:?}",
@@ -444,13 +448,8 @@ impl<E> HTTPSessionEndpoint<E> {
                 //     log every request, which can be distinguished by `session_id = ''`
                 login_history.disable_write = true;
             }
-            s.try_refresh_state(
-                session.get_current_tenant(),
-                &user_name,
-                req.cookie(),
-                is_worksheet,
-            )
-            .await?;
+            s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
+                .await?;
         }
 
         let session = session_manager.register_session(session)?;
