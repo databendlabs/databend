@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::ErrorKind;
@@ -20,7 +21,7 @@ use std::sync::Arc;
 
 use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::RwLock;
-use databend_common_base::base::tokio::sync::RwLockWriteGuard;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
@@ -57,6 +58,8 @@ use raft_log::api::raft_log_writer::RaftLogWriter;
 
 use crate::metrics::raft_metrics;
 use crate::metrics::SnapshotBuilding;
+use crate::store::lock_guards::ReadGuard;
+use crate::store::lock_guards::WriteGuard;
 
 /// This is the inner store that implements the raft log storage API.
 pub struct RaftStoreInner {
@@ -179,9 +182,41 @@ impl RaftStoreInner {
         Ok(sm)
     }
 
-    /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, SMV003> {
-        self.state_machine.write().await
+    pub async fn get_state_machine_read(&self, for_what: impl ToString) -> ReadGuard<'_, SMV003> {
+        let for_what = for_what.to_string();
+
+        let g = self
+            .state_machine
+            .read()
+            .with_timing(|_output, total, busy| {
+                info!(
+                    "StateMachineLock-Read-Acquire: total: {:?}, busy: {:?}; {}",
+                    total, busy, &for_what
+                );
+            })
+            .await;
+
+        ReadGuard::new(for_what, g)
+    }
+
+    pub async fn get_state_machine_write(
+        &self,
+        for_what: impl fmt::Display,
+    ) -> WriteGuard<'_, SMV003> {
+        let for_what = for_what.to_string();
+
+        let g = self
+            .state_machine
+            .write()
+            .with_timing(|_output, total, busy| {
+                info!(
+                    "StateMachineLock-Write-Acquire: total: {:?}, busy: {:?}; {}",
+                    total, busy, &for_what
+                );
+            })
+            .await;
+
+        WriteGuard::new(for_what, g)
     }
 
     #[fastrace::trace]
@@ -195,7 +230,9 @@ impl RaftStoreInner {
         let permit = self.new_compactor_acquirer().await.acquire().await;
 
         let mut compactor = {
-            let mut w = self.state_machine.write().await;
+            let mut w = self
+                .get_state_machine_write("do_build_snapshot-new-compactor")
+                .await;
             w.freeze_writable();
             w.new_compactor(permit)
         };
@@ -272,7 +309,9 @@ impl RaftStoreInner {
             snapshot_stat :% = db.stat(); "do_build_snapshot complete");
 
         {
-            let mut sm = self.state_machine.write().await;
+            let mut sm = self
+                .get_state_machine_write("do_build_snapshot-replace-compacted")
+                .await;
             sm.levels_mut()
                 .replace_with_compacted(compactor, db.clone());
         }
@@ -291,7 +330,9 @@ impl RaftStoreInner {
     ///
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
     pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
-        let sm = self.state_machine.read().await;
+        let sm = self
+            .get_state_machine_read("try_get_snapshot_key_count")
+            .await;
         let db = sm.levels().persisted()?;
         Some(db.stat().key_num)
     }
@@ -304,7 +345,9 @@ impl RaftStoreInner {
     ///
     /// Returns an empty map if no snapshot exists.
     pub(crate) async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
-        let sm = self.state_machine.read().await;
+        let sm = self
+            .get_state_machine_read("get_snapshot_key_space_stat")
+            .await;
         let Some(db) = sm.levels().persisted() else {
             return Default::default();
         };
@@ -313,7 +356,7 @@ impl RaftStoreInner {
 
     /// Get the statistics of the snapshot database.
     pub(crate) async fn get_snapshot_db_stat(&self) -> DBStat {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("get_snapshot_db_stat").await;
         let Some(db) = sm.levels().persisted() else {
             return Default::default();
         };
@@ -323,7 +366,7 @@ impl RaftStoreInner {
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[fastrace::trace]
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
-        let mut sm = self.state_machine.write().await;
+        let mut sm = self.get_state_machine_write("do_install_snapshot").await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
             MetaStorageError(
                 AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
@@ -356,7 +399,9 @@ impl RaftStoreInner {
         let permit = self.new_compactor_acquirer().await.acquire().await;
 
         let compactor = {
-            let sm_read = self.state_machine.read().await;
+            let sm_read = self
+                .get_state_machine_read("new-compactor-for-export")
+                .await;
             sm_read.new_compactor(permit)
         };
 
@@ -436,7 +481,7 @@ impl RaftStoreInner {
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("get_node").await;
         let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
@@ -446,7 +491,7 @@ impl RaftStoreInner {
         &self,
         list_ids: impl Fn(&Membership) -> Vec<NodeId>,
     ) -> Vec<Node> {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("get-nodes").await;
         let membership = sm.sys_data_ref().last_membership_ref().membership();
 
         debug!("in-statemachine membership: {:?}", membership);
@@ -484,7 +529,7 @@ impl RaftStoreInner {
     }
 
     async fn new_compactor_acquirer(&self) -> CompactorAcquirer {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("new_compactor_acquirer").await;
         sm.new_compactor_acquirer()
     }
 }

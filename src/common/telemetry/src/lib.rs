@@ -12,25 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(duration_millis_float)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(dead_code)]
-#![recursion_limit = "256"]
+pub mod simple;
 
-pub mod count;
-mod metrics;
-
-pub type VecLabels = Vec<(&'static str, String)>;
-
-pub use crate::metrics::auth;
-pub use crate::metrics::cache;
-pub use crate::metrics::cluster;
-pub use crate::metrics::external_server;
-/// Metrics.
-pub use crate::metrics::http;
-pub use crate::metrics::interpreter;
-pub use crate::metrics::lock;
-pub use crate::metrics::mysql;
-pub use crate::metrics::session;
-pub use crate::metrics::storage;
-pub use crate::metrics::system;
+pub use simple::report_node_telemetry;

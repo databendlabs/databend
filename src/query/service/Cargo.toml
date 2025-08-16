@@ -97,6 +97,7 @@ databend-common-storages-stage = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
 databend-common-storages-view = { workspace = true }
+databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }

@@ -63,6 +63,8 @@ jobs:
         timeout-minutes: 60
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
+          DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
+          DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
@@ -115,7 +117,7 @@ jobs:
         timeout-minutes: 60
 
   test_metactl:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -128,7 +130,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_meta_query:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -141,7 +143,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_fuse:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -154,7 +156,7 @@ jobs:
         timeout-minutes: 20
 
   test_compat_meta_meta:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -167,7 +169,7 @@ jobs:
         timeout-minutes: 20
 
   test_logs:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -201,7 +203,7 @@ jobs:
         timeout-minutes: 20
 
   test_meta_cluster:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -214,7 +216,7 @@ jobs:
         timeout-minutes: 10
 
   test_stateless_standalone:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -227,7 +229,7 @@ jobs:
         timeout-minutes: 18
 
   test_stateless_cluster:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -244,7 +246,7 @@ jobs:
         timeout-minutes: 18
 
   test_stateful_standalone:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -262,7 +264,7 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_cluster:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -285,7 +287,7 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -298,7 +300,7 @@ jobs:
         timeout-minutes: 60
 
   test_stateful_iceberg_catalogs:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -316,7 +318,7 @@ jobs:
           name: test-stateful-iceberg-catalogs-standalone
 
   test_stateful_hive_standalone:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -348,7 +350,7 @@ jobs:
   #       continue-on-error: true
 
   test_ee_standalone:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -397,7 +399,7 @@ jobs:
   #          name: test-stateful-standalone-fake-time-linux
 
   test_ee_management_mode:
-    needs: [build, check]
+    needs: [ build, check ]
     runs-on:
       - self-hosted
       - X64
@@ -420,7 +422,7 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic:
-    needs: [build, check]
+    needs: [ build, check ]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:

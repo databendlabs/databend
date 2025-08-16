@@ -55,6 +55,9 @@ use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
 use databend_common_metrics::cluster::*;
 use databend_common_settings::Settings;
+use databend_common_telemetry::report_node_telemetry;
+use databend_common_version::DATABEND_TELEMETRY_API_KEY;
+use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -534,7 +537,13 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn unregister_to_metastore(self: &Arc<Self>, signal: &mut SignalStream) {
+    pub async fn unregister_to_metastore(
+        self: &Arc<Self>,
+        signal: &mut SignalStream,
+        cfg: &InnerConfig,
+    ) {
+        self.report_telemetry_data(cfg, None).await;
+
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
@@ -645,10 +654,14 @@ impl ClusterDiscovery {
         self.drop_invalid_nodes(&node_info).await?;
 
         let online_nodes = self.warehouse_manager.list_online_nodes().await?;
-        self.check_license_key(online_nodes).await?;
+        self.check_license_key(online_nodes.clone()).await?;
 
-        match self.warehouse_manager.start_node(node_info).await {
-            Ok(seq_node) => self.start_heartbeat(seq_node).await,
+        match self.warehouse_manager.start_node(node_info.clone()).await {
+            Ok(seq_node) => {
+                self.start_heartbeat(seq_node).await?;
+                self.report_telemetry_data(cfg, Some(online_nodes)).await;
+                Ok(())
+            }
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
@@ -685,6 +698,149 @@ impl ClusterDiscovery {
         let settings = Settings::create(Tenant::new_literal(tenant));
         settings.load_changes().await?;
         Ok(settings.get_enterprise_license(self.version))
+    }
+
+    async fn report_telemetry_data(&self, cfg: &InnerConfig, online_nodes: Option<Vec<NodeInfo>>) {
+        let start_time = std::time::Instant::now();
+
+        let license_result = self
+            .get_license_key(&self.tenant_id)
+            .await
+            .ok()
+            .filter(|key| !key.is_empty())
+            .and_then(|key| LicenseManagerSwitch::instance().parse_license(&key).ok());
+
+        if let Some(ref claims) = license_result {
+            let license_type = claims.custom.r#type.as_deref().unwrap_or("").to_lowercase();
+            if license_type != "trial" && !cfg.telemetry.enabled {
+                return;
+            }
+        }
+
+        let license_info = match license_result {
+            Some(claims) => {
+                let expires_at = claims.expires_at.map(|d| d.as_secs()).unwrap_or(0);
+                serde_json::json!({
+                    "has_license": true,
+                    "expires_at": expires_at,
+                    "license_info": claims.custom
+                })
+            }
+            None => serde_json::json!({
+                "has_license": false,
+                "license_info": null
+            }),
+        };
+
+        // Collect system information
+        let mut system = sysinfo::System::new();
+        system.refresh_memory();
+        system.refresh_cpu_all();
+
+        let event_type = if online_nodes.is_none() {
+            "node_shutdown"
+        } else {
+            "node_startup"
+        };
+
+        let payload = serde_json::json!({
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            "event_type": event_type,
+            "cluster": {
+                "cluster_id": self.cluster_id,
+                "tenant_name": self.tenant_id
+            },
+            "node": {
+                "node_id": self.local_id,
+                "version": self.version.commit_detail.as_str()
+            },
+            "system": {
+                "os_name": sysinfo::System::name().unwrap_or_else(|| "unknown".to_string()),
+                "os_version": sysinfo::System::os_version().unwrap_or_else(|| "unknown".to_string()),
+                "kernel_version": sysinfo::System::kernel_version().unwrap_or_else(|| "unknown".to_string()),
+                "arch": sysinfo::System::cpu_arch(),
+                "cpu_cores": system.cpus().len(),
+                "total_memory": system.total_memory(),
+                "available_memory": system.available_memory(),
+                "used_memory": system.used_memory(),
+                "uptime_seconds": sysinfo::System::uptime()
+            },
+            "cache_strategy": {
+                "enable_table_meta_cache": cfg.cache.enable_table_meta_cache,
+                "table_meta_snapshot_count": cfg.cache.table_meta_snapshot_count,
+                "table_meta_segment_bytes": cfg.cache.table_meta_segment_bytes,
+                "block_meta_count": cfg.cache.block_meta_count,
+                "segment_block_metas_count": cfg.cache.segment_block_metas_count,
+                "table_meta_statistic_count": cfg.cache.table_meta_statistic_count,
+                "segment_statistics_count": cfg.cache.segment_statistics_count,
+                "enable_table_index_bloom": cfg.cache.enable_table_index_bloom,
+                "table_bloom_index_meta_count": cfg.cache.table_bloom_index_meta_count,
+                "table_bloom_index_filter_count": cfg.cache.table_bloom_index_filter_count,
+                "table_bloom_index_filter_size": cfg.cache.table_bloom_index_filter_size,
+                "table_prune_partitions_count": cfg.cache.table_prune_partitions_count,
+                "inverted_index_meta_count": cfg.cache.inverted_index_meta_count,
+                "inverted_index_filter_size": cfg.cache.inverted_index_filter_size,
+                "vector_index_meta_count": cfg.cache.vector_index_meta_count,
+                "vector_index_filter_size": cfg.cache.vector_index_filter_size,
+                "data_cache_in_memory_bytes": cfg.cache.data_cache_in_memory_bytes,
+                "table_data_cache_population_queue_size": cfg.cache.table_data_cache_population_queue_size,
+                "table_data_deserialized_data_bytes": cfg.cache.table_data_deserialized_data_bytes,
+                "disk_cache_max_bytes": cfg.cache.disk_cache_config.max_bytes,
+                "disk_cache_sync_data": cfg.cache.disk_cache_config.sync_data
+            },
+            "memory_management": {
+                "max_server_memory_usage": cfg.query.max_server_memory_usage,
+                "max_memory_limit_enabled": cfg.query.max_memory_limit_enabled,
+                "spill_enabled": cfg.spill.global_bytes_limit > 0,
+                "reserved_disk_ratio": cfg.spill.reserved_disk_ratio
+            },
+            "query_execution": {
+                "max_running_queries": cfg.query.max_running_queries,
+                "global_statement_queue": cfg.query.global_statement_queue,
+            },
+            "storage_engine": {
+                "table_engine_memory_enabled": cfg.query.table_engine_memory_enabled,
+                "storage_type": cfg.storage.params.to_string(),
+                "storage_allow_insecure": cfg.storage.allow_insecure
+            },
+            "meta_config": {
+                "meta_embedded": cfg.meta.embedded_dir.is_empty(),
+                "meta_client_timeout": cfg.meta.client_timeout_in_second,
+                "rpc_client_timeout_secs": cfg.query.rpc_client_timeout_secs,
+            },
+            "license": license_info,
+            "cluster_nodes": {
+                "count": online_nodes.as_ref().map(|nodes| nodes.len()).unwrap_or(0),
+                "nodes": online_nodes.as_ref().map(|nodes|
+                    nodes.iter().map(|node| serde_json::json!({
+                        "id": node.id,
+                        "cpu_nums": node.cpu_nums,
+                        "version": node.version,
+                        "binary_version": node.binary_version,
+                        "cluster_id": node.cluster_id,
+                        "warehouse_id": node.warehouse_id
+                    })).collect::<Vec<_>>()
+                ).unwrap_or_default()
+            },
+            "observability": {
+                "collection_duration_ms": start_time.elapsed().as_millis() as u64,
+                "report_timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                "schema_version": "1.0"
+            }
+        });
+
+        let _ = report_node_telemetry(
+            payload,
+            DATABEND_TELEMETRY_ENDPOINT,
+            DATABEND_TELEMETRY_API_KEY,
+        )
+        .await;
     }
 }
 

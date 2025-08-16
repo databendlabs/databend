@@ -186,7 +186,7 @@ impl MetaNodeBuilder {
             move |change| h.send_change(change)
         };
 
-        sto.get_state_machine()
+        sto.get_state_machine_write("set_on_change_applied-hook")
             .await
             .set_on_change_applied(Box::new(on_change_applied));
 
@@ -797,7 +797,10 @@ impl MetaNode {
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
-            let sm = self.raft_store.get_state_machine().await;
+            let sm = self
+                .raft_store
+                .get_state_machine_write("is_in_cluster-get-membership")
+                .await;
             sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
@@ -907,7 +910,7 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-node").await;
         let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
@@ -916,7 +919,7 @@ impl MetaNode {
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-nodes").await;
         let nodes = sm
             .sys_data_ref()
             .nodes_ref()
@@ -1004,7 +1007,7 @@ impl MetaNode {
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-last-seq").await;
         sm.sys_data_ref().curr_seq()
     }
 
@@ -1013,7 +1016,10 @@ impl MetaNode {
         // Maybe stale get: from local state machine
 
         let nodes = {
-            let sm = self.raft_store.state_machine.read().await;
+            let sm = self
+                .raft_store
+                .get_state_machine_read("get-grpc-advertise-addrs")
+                .await;
             sm.sys_data_ref()
                 .nodes_ref()
                 .values()
