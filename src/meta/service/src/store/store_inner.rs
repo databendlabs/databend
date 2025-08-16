@@ -190,7 +190,7 @@ impl RaftStoreInner {
             .read()
             .with_timing(|_output, total, busy| {
                 info!(
-                    "StateMachineLock-Read-Acquire-Elapsed: total: {:?}, busy: {:?}; {}",
+                    "StateMachineLock-Read-Acquire: total: {:?}, busy: {:?}; {}",
                     total, busy, &for_what
                 );
             })
@@ -210,7 +210,7 @@ impl RaftStoreInner {
             .write()
             .with_timing(|_output, total, busy| {
                 info!(
-                    "StateMachineLock-Write-Acquire-Elapsed: total: {:?}, busy: {:?}; {}",
+                    "StateMachineLock-Write-Acquire: total: {:?}, busy: {:?}; {}",
                     total, busy, &for_what
                 );
             })

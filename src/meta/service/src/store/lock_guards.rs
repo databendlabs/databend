@@ -58,8 +58,8 @@ where T: fmt::Display
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "StateMachineLock-Write-Guard({}): {}",
-            self.purpose, self.inner
+            "StateMachineLock-Write-Guard: {} {}",
+            self.inner, self.purpose,
         )
     }
 }
@@ -68,8 +68,8 @@ impl<T: ?Sized> Drop for WriteGuard<'_, T> {
     fn drop(&mut self) {
         let elapsed = self.acquired.elapsed();
         info!(
-            "StateMachineLock-Write-Guard({}) released after {:?}",
-            self.purpose, elapsed
+            "StateMachineLock-Write-Release: total: {:?}; {}",
+            elapsed, self.purpose,
         );
     }
 }
@@ -105,8 +105,8 @@ where T: fmt::Display
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "StateMachineLock-Read-Guard({}): {}",
-            self.purpose, self.inner
+            "StateMachineLock-Read-Guard: {} {}",
+            self.inner, self.purpose
         )
     }
 }
@@ -115,8 +115,8 @@ impl<T: ?Sized> Drop for ReadGuard<'_, T> {
     fn drop(&mut self) {
         let elapsed = self.acquired.elapsed();
         info!(
-            "StateMachineLock-Read-Guard({}) released after {:?}",
-            self.purpose, elapsed
+            "StateMachineLock-Read-Release: total: {:?}; {}",
+            elapsed, self.purpose,
         );
     }
 }
