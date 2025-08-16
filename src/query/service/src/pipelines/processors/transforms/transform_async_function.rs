@@ -25,12 +25,12 @@ use databend_common_expression::FromData;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
 use databend_common_users::Object;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::AsyncFunctionDesc;
 use crate::sql::plans::AsyncFunctionArgument;
 
 // Structure to manage sequence numbers in batches

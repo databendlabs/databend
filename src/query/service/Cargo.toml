@@ -119,6 +119,7 @@ databend-storages-common-session = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
+dyn-clone = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }

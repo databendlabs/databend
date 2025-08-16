@@ -38,7 +38,7 @@ use parking_lot::RwLock;
 
 use crate::binder::expr_values::ExprValuesRewriter;
 use crate::binder::wrap_cast;
-use crate::executor::physical_plans::AsyncFunctionDesc;
+use crate::binder::AsyncFunctionDesc;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;

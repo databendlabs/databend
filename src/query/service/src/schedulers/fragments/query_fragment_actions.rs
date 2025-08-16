@@ -26,6 +26,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -33,20 +36,19 @@ use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
 
 // Query plan fragment with executor name
 #[derive(Debug)]
 pub struct QueryFragmentAction {
-    pub physical_plan: PhysicalPlan,
     pub executor: String,
+    pub physical_plan: PhysicalPlan,
 }
 
 impl QueryFragmentAction {
     pub fn create(executor: String, physical_plan: PhysicalPlan) -> QueryFragmentAction {
         QueryFragmentAction {
-            physical_plan,
             executor,
+            physical_plan,
         }
     }
 }
@@ -138,7 +140,7 @@ impl QueryFragmentsActions {
             }
 
             let plan = &fragment_actions.fragment_actions[0].physical_plan;
-            if !matches!(plan, PhysicalPlan::ExchangeSink(_)) {
+            if !ExchangeSink::check_physical_plan(plan) {
                 fragment_ids.push(fragment_actions.fragment_id);
             }
         }
@@ -271,8 +273,8 @@ impl QueryFragmentsActions {
             for fragment_action in &fragment_actions.fragment_actions {
                 let query_fragment = QueryFragment::create(
                     fragment_actions.fragment_id,
-                    fragment_action.physical_plan.clone(),
                     fragment_actions.data_exchange.clone(),
+                    fragment_action.physical_plan.clone(),
                 );
 
                 match fragments_packets.entry(fragment_action.executor.clone()) {

@@ -12,44 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder_add_stream_column;
 mod builder_aggregate;
 mod builder_append_table;
-mod builder_async_function;
-mod builder_broadcast;
-mod builder_column_mutation;
-mod builder_commit;
-mod builder_compact;
-mod builder_copy_into_location;
-mod builder_copy_into_table;
-mod builder_cte_consumer;
-mod builder_distributed_insert_select;
-mod builder_exchange;
+
 mod builder_fill_missing_columns;
-mod builder_filter;
-mod builder_hilbert_partition;
-mod builder_insert_multi_table;
 mod builder_join;
-mod builder_limit;
-mod builder_materialized_cte;
+
+mod builder_copy_into_table;
 mod builder_mutation;
-mod builder_mutation_manipulate;
-mod builder_mutation_organize;
-mod builder_mutation_source;
-mod builder_mutation_split;
 mod builder_on_finished;
 mod builder_project;
-mod builder_recluster;
-mod builder_recursive_cte;
 mod builder_replace_into;
-mod builder_row_fetch;
-mod builder_scalar;
-mod builder_scan;
-mod builder_sequence;
 mod builder_sort;
-mod builder_udf;
-mod builder_union_all;
-mod builder_window;
 mod merge_into_join_optimizations;
 mod transform_builder;
 

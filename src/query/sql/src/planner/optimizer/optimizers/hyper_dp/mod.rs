@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod dphyp;
-mod dynamic_sample;
 mod join_node;
 mod join_relation;
 mod query_graph;

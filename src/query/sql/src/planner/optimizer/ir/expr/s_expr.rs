@@ -46,7 +46,7 @@ use crate::IndexType;
 )]
 pub struct SExpr {
     pub plan: Arc<RelOperator>,
-    pub(crate) children: Vec<Arc<SExpr>>,
+    pub children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 
@@ -212,7 +212,7 @@ impl SExpr {
     }
 
     #[recursive::recursive]
-    pub(crate) fn support_lazy_materialize(&self) -> bool {
+    pub fn support_lazy_materialize(&self) -> bool {
         self.plan.support_lazy_materialize()
             && self
                 .children

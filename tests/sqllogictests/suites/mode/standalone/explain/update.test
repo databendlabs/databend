@@ -22,38 +22,39 @@ explain update t1 set a = a + 1 where a in (select a from t2);
 CommitSink
 └── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
-    ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
-    └── RowFetch
-        ├── output columns: [t1.a (#0), t1._row_id (#4), t1.b (#1)]
-        ├── columns to fetch: [b]
-        └── HashJoin
-            ├── output columns: [t1.a (#0), t1._row_id (#4)]
-            ├── join type: LEFT SEMI
-            ├── build keys: [subquery_2 (#2)]
-            ├── probe keys: [t1.a (#0)]
-            ├── keys is null equal: [false]
-            ├── filters: []
-            ├── estimated rows: 2.00
-            ├── TableScan(Build)
-            │   ├── table: default.default.t2
-            │   ├── output columns: [a (#2)]
-            │   ├── read rows: 2
-            │   ├── read size: < 1 KiB
-            │   ├── partitions total: 1
-            │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 2.00
-            └── TableScan(Probe)
-                ├── table: default.default.t1
-                ├── output columns: [a (#0), _row_id (#4)]
-                ├── read rows: 4
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 4.00
+    └── MutationManipulate
+        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
+        └── RowFetch
+            ├── output columns: [t1.a (#0), t1._row_id (#4), t1.b (#1)]
+            ├── columns to fetch: [b]
+            └── HashJoin
+                ├── output columns: [t1.a (#0), t1._row_id (#4)]
+                ├── join type: LEFT SEMI
+                ├── build keys: [subquery_2 (#2)]
+                ├── probe keys: [t1.a (#0)]
+                ├── keys is null equal: [false]
+                ├── filters: []
+                ├── estimated rows: 2.00
+                ├── TableScan(Build)
+                │   ├── table: default.default.t2
+                │   ├── output columns: [a (#2)]
+                │   ├── read rows: 2
+                │   ├── read size: < 1 KiB
+                │   ├── partitions total: 1
+                │   ├── partitions scanned: 1
+                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │   ├── push downs: [filters: [], limit: NONE]
+                │   └── estimated rows: 2.00
+                └── TableScan(Probe)
+                    ├── table: default.default.t1
+                    ├── output columns: [a (#0), _row_id (#4)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
 
 
 query T
@@ -91,39 +92,40 @@ explain update t1 set a = a + 1 where a in (select a from t2) and b > 2;
 CommitSink
 └── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
-    ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
-    └── HashJoin
-        ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#4)]
-        ├── join type: LEFT SEMI
-        ├── build keys: [subquery_2 (#2)]
-        ├── probe keys: [t1.a (#0)]
-        ├── keys is null equal: [false]
-        ├── filters: []
-        ├── estimated rows: 2.00
-        ├── TableScan(Build)
-        │   ├── table: default.default.t2
-        │   ├── output columns: [a (#2)]
-        │   ├── read rows: 2
-        │   ├── read size: < 1 KiB
-        │   ├── partitions total: 1
-        │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        │   ├── push downs: [filters: [], limit: NONE]
-        │   └── estimated rows: 2.00
-        └── Filter(Probe)
+    └── MutationManipulate
+        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
+        └── HashJoin
             ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#4)]
-            ├── filters: [is_true(t1.b (#1) > 2)]
-            ├── estimated rows: 3.00
-            └── TableScan
-                ├── table: default.default.t1
-                ├── output columns: [a (#0), b (#1), _row_id (#4)]
-                ├── read rows: 4
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
-                └── estimated rows: 4.00
+            ├── join type: LEFT SEMI
+            ├── build keys: [subquery_2 (#2)]
+            ├── probe keys: [t1.a (#0)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── estimated rows: 2.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t2
+            │   ├── output columns: [a (#2)]
+            │   ├── read rows: 2
+            │   ├── read size: < 1 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 2.00
+            └── Filter(Probe)
+                ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#4)]
+                ├── filters: [is_true(t1.b (#1) > 2)]
+                ├── estimated rows: 3.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── output columns: [a (#0), b (#1), _row_id (#4)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
+                    └── estimated rows: 4.00
 
 query T
 explain analyze partial update t1 set a = a + 1 where a in (select a from t2) and b > 2;
@@ -190,43 +192,44 @@ explain UPDATE t1 c SET p_id = p.p_id, m_p_id = p.m_p_id, lkp_id = p.lkp_id, l_p
 CommitSink
 └── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
-    ├── matched update: [condition: None, update set p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.p_id (#11), c.p_id (#3)),m_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.m_p_id (#12), c.m_p_id (#4)),lkp_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.lkp_id (#13), c.lkp_id (#5)),l_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.l_p_id (#14), c.l_p_id (#6)),l_m_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.l_m_p_id (#15), c.l_m_p_id (#7))]
-    └── RowFetch
-        ├── output columns: [c.id (#0), c.c_code (#1), c.me_id (#2), c._row_id (#16), p.p_id (#11), p.m_p_id (#12), p.lkp_id (#13), p.l_p_id (#14), p.l_m_p_id (#15), p.id (#8), p.c_code (#9), p.me_id (#10), c.p_id (#3), c.m_p_id (#4), c.lkp_id (#5), c.l_p_id (#6), c.l_m_p_id (#7)]
-        ├── columns to fetch: [p_id, m_p_id, lkp_id, l_p_id, l_m_p_id]
-        └── HashJoin
-            ├── output columns: [c.id (#0), c.c_code (#1), c.me_id (#2), c._row_id (#16), p.p_id (#11), p.m_p_id (#12), p.lkp_id (#13), p.l_p_id (#14), p.l_m_p_id (#15), p.id (#8), p.c_code (#9), p.me_id (#10)]
-            ├── join type: INNER
-            ├── build keys: [p.c_code (#9), p.id (#8), p.me_id (#10)]
-            ├── probe keys: [c.c_code (#1), c.id (#0), c.me_id (#2)]
-            ├── keys is null equal: [false, false, false]
-            ├── filters: []
-            ├── build join filters:
-            │   ├── filter id:0, build key:p.c_code (#9), probe key:c.c_code (#1), filter type:inlist,min_max
-            │   ├── filter id:1, build key:p.id (#8), probe key:c.id (#0), filter type:inlist,min_max
-            │   └── filter id:2, build key:p.me_id (#10), probe key:c.me_id (#2), filter type:inlist,min_max
-            ├── estimated rows: 3.20
-            ├── TableScan(Build)
-            │   ├── table: default.default.t2
-            │   ├── output columns: [id (#8), c_code (#9), me_id (#10), p_id (#11), m_p_id (#12), lkp_id (#13), l_p_id (#14), l_m_p_id (#15)]
-            │   ├── read rows: 4
-            │   ├── read size: < 1 KiB
-            │   ├── partitions total: 1
-            │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 4.00
-            └── TableScan(Probe)
-                ├── table: default.default.t1
-                ├── output columns: [id (#0), c_code (#1), me_id (#2), _row_id (#16)]
-                ├── read rows: 4
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                ├── push downs: [filters: [], limit: NONE]
-                ├── apply join filters: [#0, #1, #2]
-                └── estimated rows: 4.00
+    └── MutationManipulate
+        ├── matched update: [condition: None, update set p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.p_id (#11), c.p_id (#3)),m_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.m_p_id (#12), c.m_p_id (#4)),lkp_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.lkp_id (#13), c.lkp_id (#5)),l_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.l_p_id (#14), c.l_p_id (#6)),l_m_p_id = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), p.l_m_p_id (#15), c.l_m_p_id (#7))]
+        └── RowFetch
+            ├── output columns: [c.id (#0), c.c_code (#1), c.me_id (#2), c._row_id (#16), p.p_id (#11), p.m_p_id (#12), p.lkp_id (#13), p.l_p_id (#14), p.l_m_p_id (#15), p.id (#8), p.c_code (#9), p.me_id (#10), c.p_id (#3), c.m_p_id (#4), c.lkp_id (#5), c.l_p_id (#6), c.l_m_p_id (#7)]
+            ├── columns to fetch: [p_id, m_p_id, lkp_id, l_p_id, l_m_p_id]
+            └── HashJoin
+                ├── output columns: [c.id (#0), c.c_code (#1), c.me_id (#2), c._row_id (#16), p.p_id (#11), p.m_p_id (#12), p.lkp_id (#13), p.l_p_id (#14), p.l_m_p_id (#15), p.id (#8), p.c_code (#9), p.me_id (#10)]
+                ├── join type: INNER
+                ├── build keys: [p.c_code (#9), p.id (#8), p.me_id (#10)]
+                ├── probe keys: [c.c_code (#1), c.id (#0), c.me_id (#2)]
+                ├── keys is null equal: [false, false, false]
+                ├── filters: []
+                ├── build join filters:
+                │   ├── filter id:0, build key:p.c_code (#9), probe key:c.c_code (#1), filter type:inlist,min_max
+                │   ├── filter id:1, build key:p.id (#8), probe key:c.id (#0), filter type:inlist,min_max
+                │   └── filter id:2, build key:p.me_id (#10), probe key:c.me_id (#2), filter type:inlist,min_max
+                ├── estimated rows: 3.20
+                ├── TableScan(Build)
+                │   ├── table: default.default.t2
+                │   ├── output columns: [id (#8), c_code (#9), me_id (#10), p_id (#11), m_p_id (#12), lkp_id (#13), l_p_id (#14), l_m_p_id (#15)]
+                │   ├── read rows: 4
+                │   ├── read size: < 1 KiB
+                │   ├── partitions total: 1
+                │   ├── partitions scanned: 1
+                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │   ├── push downs: [filters: [], limit: NONE]
+                │   └── estimated rows: 4.00
+                └── TableScan(Probe)
+                    ├── table: default.default.t1
+                    ├── output columns: [id (#0), c_code (#1), me_id (#2), _row_id (#16)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── apply join filters: [#0, #1, #2]
+                    └── estimated rows: 4.00
 
 statement ok
 drop table if exists t1;

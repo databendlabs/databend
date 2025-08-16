@@ -32,8 +32,8 @@ use crate::ColumnSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecursiveCteScan {
-    pub(crate) fields: Vec<DataField>,
-    pub(crate) table_name: String,
+    pub fields: Vec<DataField>,
+    pub table_name: String,
 }
 
 impl RecursiveCteScan {
