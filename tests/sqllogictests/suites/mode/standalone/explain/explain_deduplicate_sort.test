@@ -11,7 +11,7 @@ Sort(Single)
 ├── sort keys: [deptno ASC NULLS LAST, job ASC NULLS LAST, job DESC NULLS LAST, sal ASC NULLS FIRST, sal ASC NULLS LAST]
 ├── estimated rows: 0.00
 └── TableScan
-    ├── table: default.db.emp
+    ├── table: default.default.emp
     ├── output columns: [deptno (#0), job (#1), sal (#2)]
     ├── read rows: 0
     ├── read size: 0

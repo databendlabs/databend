@@ -58,7 +58,7 @@ explain select * from (select * from numbers(10) t order by t.number desc) order
 ----
 Sort(Single)
 ├── output columns: [t.number (#0)]
-├── sort keys: [number DESC NULLS LAST, number DESC NULLS LAST]
+├── sort keys: [number DESC NULLS LAST]
 ├── estimated rows: 10.00
 └── Sort(Single)
     ├── output columns: [t.number (#0)]
