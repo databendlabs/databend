@@ -69,7 +69,7 @@ impl IPhysicalPlan for ExchangeSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(ExchangeSource {
+        PhysicalPlan::new(ExchangeSource {
             meta: self.meta.clone(),
             schema: self.schema.clone(),
             source_fragment_id: self.source_fragment_id,

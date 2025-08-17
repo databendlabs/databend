@@ -61,7 +61,7 @@ impl IPhysicalPlan for MutationSplit {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(MutationSplit {
+        PhysicalPlan::new(MutationSplit {
             meta: self.meta.clone(),
             input,
             split_index: self.split_index,

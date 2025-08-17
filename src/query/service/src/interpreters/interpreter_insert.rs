@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use crate::physical_plans::PhysicalPlan;
+
 use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
@@ -46,7 +48,6 @@ use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::PipelineBuildResult;
@@ -200,7 +201,7 @@ impl Interpreter for InsertInterpreter {
                     {
                         // insert can be dispatched to different nodes if table support_distributed_insert
                         let input = exchange.input.clone();
-                        exchange.derive(vec![Box::new(DistributedInsertSelect {
+                        exchange.derive(vec![PhysicalPlan::new(DistributedInsertSelect {
                             input,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
@@ -212,7 +213,7 @@ impl Interpreter for InsertInterpreter {
                         })])
                     } else {
                         // insert should wait until all nodes finished
-                        Box::new(DistributedInsertSelect {
+                        PhysicalPlan::new(DistributedInsertSelect {
                             // TODO: we reuse the id of other plan here,
                             // which is not correct. We should generate a new id for insert.
                             input: select_plan,

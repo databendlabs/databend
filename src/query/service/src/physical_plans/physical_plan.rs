@@ -16,7 +16,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -242,18 +243,6 @@ impl<T: PhysicalPlanVisitor> VisitorCast for T {
     }
 }
 
-pub trait PhysicalPlanDynExt {
-    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan;
-
-    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
-
-    fn format(
-        &self,
-        metadata: &Metadata,
-        profs: HashMap<u32, PlanProfile>,
-    ) -> Result<FormatTreeNode<String>>;
-}
-
 pub trait PhysicalPlanCast {
     fn check_physical_plan(plan: &PhysicalPlan) -> bool;
 
@@ -282,60 +271,17 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
     }
 }
 
-impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
-    #[recursive::recursive]
-    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
-        let mut children = vec![];
-        for child in self.children() {
-            children.push(child.derive_with(handle));
-        }
-
-        match handle.derive(self, children) {
-            Ok(v) => v,
-            Err(children) => self.derive(children),
-        }
-    }
-
-    #[recursive::recursive]
-    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
-        for child in self.children() {
-            child.visit(visitor)?;
-        }
-
-        visitor.visit(self)
-    }
-
-    fn format(
-        &self,
-        metadata: &Metadata,
-        profs: HashMap<u32, PlanProfile>,
-    ) -> Result<FormatTreeNode<String>> {
-        let mut context = FormatContext {
-            profs,
-            metadata,
-            scan_id_to_runtime_filters: HashMap::new(),
-        };
-
-        self.formatter()?.format(&mut context)
-    }
-}
-
-impl Clone for Box<dyn IPhysicalPlan + 'static> {
-    #[recursive::recursive]
-    fn clone(&self) -> Self {
-        dyn_clone::clone_box(&**self)
-    }
-}
-
 pub struct PhysicalPlan {
     inner: Box<dyn IPhysicalPlan + 'static>,
 }
+
+dyn_clone::clone_trait_object!(IPhysicalPlan);
 
 impl Clone for PhysicalPlan {
     #[recursive::recursive]
     fn clone(&self) -> Self {
         PhysicalPlan {
-            inner: dyn_clone::clone_box(&**self.inner),
+            inner: self.inner.clone(),
         }
     }
 }
@@ -361,6 +307,19 @@ impl DerefMut for PhysicalPlan {
     }
 }
 
+impl serde::Serialize for PhysicalPlan {
+    #[recursive::recursive]
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.inner.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PhysicalPlan {
+    #[recursive::recursive]
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        Ok(PhysicalPlan { inner: Box::<dyn IPhysicalPlan + 'static>::deserialize(deserializer)? })
+    }
+}
 
 impl PhysicalPlan {
     pub fn new<T: IPhysicalPlan + 'static>(inner: T) -> PhysicalPlan {

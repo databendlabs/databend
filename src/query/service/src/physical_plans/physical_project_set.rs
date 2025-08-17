@@ -109,7 +109,7 @@ impl IPhysicalPlan for ProjectSet {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ProjectSet {
+        PhysicalPlan::new(ProjectSet {
             meta: self.meta.clone(),
             projections: self.projections.clone(),
             input,
@@ -178,7 +178,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        Ok(Box::new(ProjectSet {
+        Ok(PhysicalPlan::new(ProjectSet {
             input,
             meta: PhysicalPlanMeta::new("Unnest"),
             srf_exprs,

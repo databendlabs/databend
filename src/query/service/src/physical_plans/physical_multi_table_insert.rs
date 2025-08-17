@@ -87,7 +87,7 @@ impl IPhysicalPlan for Duplicate {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Duplicate {
+        PhysicalPlan::new(Duplicate {
             meta: self.meta.clone(),
             input,
             n: self.n,
@@ -140,7 +140,7 @@ impl IPhysicalPlan for Shuffle {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Shuffle {
+        PhysicalPlan::new(Shuffle {
             meta: self.meta.clone(),
             input,
             strategy: self.strategy.clone(),
@@ -219,7 +219,7 @@ impl IPhysicalPlan for ChunkFilter {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkFilter {
+        PhysicalPlan::new(ChunkFilter {
             meta: self.meta.clone(),
             input,
             predicates: self.predicates.clone(),
@@ -284,7 +284,7 @@ impl IPhysicalPlan for ChunkEvalScalar {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkEvalScalar {
+        PhysicalPlan::new(ChunkEvalScalar {
             meta: self.meta.clone(),
             input,
             eval_scalars: self.eval_scalars.clone(),
@@ -360,7 +360,7 @@ impl IPhysicalPlan for ChunkCastSchema {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkCastSchema {
+        PhysicalPlan::new(ChunkCastSchema {
             meta: self.meta.clone(),
             input,
             cast_schemas: self.cast_schemas.clone(),
@@ -433,7 +433,7 @@ impl IPhysicalPlan for ChunkFillAndReorder {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkFillAndReorder {
+        PhysicalPlan::new(ChunkFillAndReorder {
             meta: self.meta.clone(),
             input,
             fill_and_reorders: self.fill_and_reorders.clone(),
@@ -506,7 +506,7 @@ impl IPhysicalPlan for ChunkAppendData {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkAppendData {
+        PhysicalPlan::new(ChunkAppendData {
             meta: self.meta.clone(),
             input,
             target_tables: self.target_tables.clone(),
@@ -669,7 +669,7 @@ impl IPhysicalPlan for ChunkMerge {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkMerge {
+        PhysicalPlan::new(ChunkMerge {
             meta: self.meta.clone(),
             input,
             group_ids: self.group_ids.clone(),
@@ -733,7 +733,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ChunkCommitInsert {
+        PhysicalPlan::new(ChunkCommitInsert {
             meta: self.meta.clone(),
             input,
             update_stream_meta: self.update_stream_meta.clone(),

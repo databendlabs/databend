@@ -49,7 +49,7 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(ReplaceAsyncSourcer {
+        PhysicalPlan::new(ReplaceAsyncSourcer {
             meta: self.meta.clone(),
             schema: self.schema.clone(),
             source: self.source.clone(),

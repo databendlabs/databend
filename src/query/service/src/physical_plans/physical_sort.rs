@@ -196,7 +196,7 @@ impl IPhysicalPlan for Sort {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Sort {
+        PhysicalPlan::new(Sort {
             meta: self.meta.clone(),
             input,
             order_by: self.order_by.clone(),
@@ -406,7 +406,7 @@ impl PhysicalPlanBuilder {
 
             let input_plan = self.build(s_expr.unary_child(), required).await?;
 
-            return Ok(Box::new(WindowPartition {
+            return Ok(PhysicalPlan::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: input_plan,
                 partition_by: window_partition.clone(),
@@ -428,7 +428,7 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         let Some(after_exchange) = sort.after_exchange else {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
-            return Ok(Box::new(Sort {
+            return Ok(PhysicalPlan::new(Sort {
                 input: input_plan,
                 order_by,
                 limit: sort.limit,
@@ -444,7 +444,7 @@ impl PhysicalPlanBuilder {
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return if !after_exchange {
-                Ok(Box::new(Sort {
+                Ok(PhysicalPlan::new(Sort {
                     input: input_plan,
                     order_by,
                     limit: sort.limit,
@@ -455,7 +455,7 @@ impl PhysicalPlanBuilder {
                     meta: PhysicalPlanMeta::new("Sort"),
                 }))
             } else {
-                Ok(Box::new(Sort {
+                Ok(PhysicalPlan::new(Sort {
                     input: input_plan,
                     order_by,
                     limit: sort.limit,
@@ -470,7 +470,7 @@ impl PhysicalPlanBuilder {
 
         if after_exchange {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
-            return Ok(Box::new(Sort {
+            return Ok(PhysicalPlan::new(Sort {
                 input: input_plan,
                 order_by,
                 limit: sort.limit,
@@ -483,7 +483,7 @@ impl PhysicalPlanBuilder {
         }
 
         let input_plan = self.build(s_expr.unary_child(), required).await?;
-        let sample = Box::new(Sort {
+        let sample = PhysicalPlan::new(Sort {
             input: input_plan,
             order_by: order_by.clone(),
             limit: sort.limit,
@@ -493,7 +493,7 @@ impl PhysicalPlanBuilder {
             stat_info: Some(stat_info.clone()),
             meta: PhysicalPlanMeta::new("Sort"),
         });
-        let exchange = Box::new(Exchange {
+        let exchange = PhysicalPlan::new(Exchange {
             input: sample,
             kind: FragmentKind::Normal,
             keys: vec![],
@@ -502,7 +502,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("Exchange"),
         });
 
-        Ok(Box::new(Sort {
+        Ok(PhysicalPlan::new(Sort {
             input: exchange,
             order_by,
             limit: sort.limit,

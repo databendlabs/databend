@@ -74,7 +74,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(DistributedInsertSelect {
+        PhysicalPlan::new(DistributedInsertSelect {
             meta: self.meta.clone(),
             input,
             table_info: self.table_info.clone(),

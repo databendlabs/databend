@@ -86,7 +86,7 @@ impl IPhysicalPlan for WindowPartition {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(WindowPartition {
+        PhysicalPlan::new(WindowPartition {
             meta: self.meta.clone(),
             input,
             partition_by: self.partition_by.clone(),

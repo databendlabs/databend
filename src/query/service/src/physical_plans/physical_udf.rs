@@ -105,7 +105,7 @@ impl IPhysicalPlan for Udf {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Udf {
+        PhysicalPlan::new(Udf {
             meta: self.meta.clone(),
             input,
             udf_funcs: self.udf_funcs.clone(),
@@ -233,7 +233,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Box::new(Udf {
+        Ok(PhysicalPlan::new(Udf {
             input,
             udf_funcs,
             script_udf: udf_plan.script_udf,

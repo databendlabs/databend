@@ -101,7 +101,7 @@ impl IPhysicalPlan for MutationSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(MutationSource {
+        PhysicalPlan::new(MutationSource {
             meta: self.meta.clone(),
             table_index: self.table_index,
             table_info: self.table_info.clone(),
@@ -262,7 +262,7 @@ impl PhysicalPlanBuilder {
 
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
-        Ok(Box::new(MutationSource {
+        Ok(PhysicalPlan::new(MutationSource {
             table_index: mutation_source.table_index,
             output_schema,
             table_info: mutation_info.table_info.clone(),

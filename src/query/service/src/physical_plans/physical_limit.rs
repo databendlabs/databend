@@ -98,7 +98,7 @@ impl IPhysicalPlan for Limit {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Limit {
+        PhysicalPlan::new(Limit {
             meta: self.meta.clone(),
             input,
             limit: self.limit,
@@ -151,7 +151,7 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         let input_plan = self.build(s_expr.child(0)?, required).await?;
         if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {
-            return Ok(Box::new(Limit {
+            return Ok(PhysicalPlan::new(Limit {
                 input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
@@ -172,7 +172,7 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
 
         if !input_schema.has_field(&row_id_col_index.to_string()) {
-            return Ok(Box::new(Limit {
+            return Ok(PhysicalPlan::new(Limit {
                 input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
@@ -195,7 +195,7 @@ impl PhysicalPlanBuilder {
 
         if limit.before_exchange || lazy_columns.is_empty() {
             // If there is no lazy column, we don't need to build a `RowFetch` plan.
-            return Ok(Box::new(Limit {
+            return Ok(PhysicalPlan::new(Limit {
                 input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
@@ -231,9 +231,9 @@ impl PhysicalPlanBuilder {
             true,
         );
 
-        Ok(Box::new(RowFetch {
+        Ok(PhysicalPlan::new(RowFetch {
             meta: PhysicalPlanMeta::new("RowFetch"),
-            input: Box::new(Limit {
+            input: PhysicalPlan::new(Limit {
                 meta: PhysicalPlanMeta::new("Limit"),
                 input: input_plan,
                 limit: limit.limit,

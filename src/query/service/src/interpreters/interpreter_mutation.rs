@@ -49,7 +49,6 @@ use crate::physical_plans::create_push_down_filters;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;

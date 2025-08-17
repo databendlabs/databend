@@ -117,7 +117,7 @@ impl IPhysicalPlan for AggregateExpand {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(AggregateExpand {
+        PhysicalPlan::new(AggregateExpand {
             meta: self.meta.clone(),
             input: children.remove(0),
             group_bys: self.group_bys.clone(),

@@ -131,7 +131,7 @@ impl IPhysicalPlan for AggregateFinal {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(AggregateFinal {
+        PhysicalPlan::new(AggregateFinal {
             input: children.remove(0),
             meta: self.meta.clone(),
             group_by: self.group_by.clone(),
@@ -396,7 +396,7 @@ impl PhysicalPlanBuilder {
                 {
                     let kind = exchange.kind.clone();
                     let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
-                        let expand = Box::new(AggregateExpand {
+                        let expand = PhysicalPlan::new(AggregateExpand {
                             grouping_sets,
                             input: exchange.input.clone(),
                             group_bys: group_items.clone(),
@@ -404,7 +404,7 @@ impl PhysicalPlanBuilder {
                             meta: PhysicalPlanMeta::new("AggregateExpand"),
                         });
 
-                        Box::new(AggregatePartial {
+                        AggregatePartial {
                             input: expand,
                             agg_funcs,
                             enable_experimental_aggregate_hashtable,
@@ -413,9 +413,9 @@ impl PhysicalPlanBuilder {
                             stat_info: Some(stat_info),
                             rank_limit: None,
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        })
+                        }
                     } else {
-                        Box::new(AggregatePartial {
+                        AggregatePartial {
                             input: exchange.input.clone(),
                             agg_funcs,
                             rank_limit,
@@ -424,7 +424,7 @@ impl PhysicalPlanBuilder {
                             group_by: group_items,
                             stat_info: Some(stat_info),
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        })
+                        }
                     };
 
                     let keys = {
@@ -441,13 +441,13 @@ impl PhysicalPlanBuilder {
                             .collect()
                     };
 
-                    Box::new(Exchange {
+                    PhysicalPlan::new(Exchange {
                         keys,
                         kind,
                         ignore_exchange: false,
                         allow_adjust_parallelism: true,
                         meta: PhysicalPlanMeta::new("Exchange"),
-                        input: aggregate_partial,
+                        input: PhysicalPlan::new(aggregate_partial),
                     })
                 } else if let Some(grouping_sets) = agg.grouping_sets {
                     let expand = AggregateExpand {
@@ -458,18 +458,18 @@ impl PhysicalPlanBuilder {
                         meta: PhysicalPlanMeta::new("AggregateExpand"),
                     };
 
-                    Box::new(AggregatePartial {
+                    PhysicalPlan::new(AggregatePartial {
                         agg_funcs,
                         group_by_display,
                         enable_experimental_aggregate_hashtable,
                         rank_limit: None,
                         group_by: group_items,
-                        input: Box::new(expand),
+                        input: PhysicalPlan::new(expand),
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
                     })
                 } else {
-                    Box::new(AggregatePartial {
+                    PhysicalPlan::new(AggregatePartial {
                         input,
                         agg_funcs,
                         enable_experimental_aggregate_hashtable,
@@ -623,7 +623,7 @@ impl PhysicalPlanBuilder {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
 
-                    Box::new(AggregateFinal {
+                    PhysicalPlan::new(AggregateFinal {
                         input,
                         agg_funcs,
                         group_by_display,
@@ -651,7 +651,7 @@ impl PhysicalPlanBuilder {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
 
-                    Box::new(AggregateFinal {
+                    PhysicalPlan::new(AggregateFinal {
                         input,
                         agg_funcs,
                         group_by_display,

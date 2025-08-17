@@ -192,7 +192,7 @@ impl IPhysicalPlan for TableScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(TableScan {
+        PhysicalPlan::new(TableScan {
             meta: self.meta.clone(),
             scan_id: self.scan_id,
             name_mapping: self.name_mapping.clone(),
@@ -273,7 +273,7 @@ impl TableScan {
             DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
         };
 
-        Box::new(TableScan {
+        PhysicalPlan::new(TableScan {
             meta: PhysicalPlanMeta::new(name),
             source,
             scan_id,

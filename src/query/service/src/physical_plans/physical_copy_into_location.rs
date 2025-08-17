@@ -80,7 +80,7 @@ impl IPhysicalPlan for CopyIntoLocation {
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
-        Box::new(CopyIntoLocation {
+        PhysicalPlan::new(CopyIntoLocation {
             input: children.remove(0),
             meta: self.meta.clone(),
             project_columns: self.project_columns.clone(),

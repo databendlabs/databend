@@ -276,7 +276,7 @@ impl ReplaceInterpreter {
         }
 
         if is_distributed {
-            root = Box::new(Exchange {
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Expansive,
                 keys: vec![],
@@ -285,7 +285,7 @@ impl ReplaceInterpreter {
                 meta: PhysicalPlanMeta::new("Exchange"),
             });
         } else if is_exchange && !is_stage_source {
-            root = Box::new(Exchange {
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
@@ -314,7 +314,7 @@ impl ReplaceInterpreter {
             vec![]
         };
 
-        root = Box::new(ReplaceDeduplicate {
+        root = PhysicalPlan::new(ReplaceDeduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
             bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
@@ -328,7 +328,7 @@ impl ReplaceInterpreter {
             meta: PhysicalPlanMeta::new("ReplaceDeduplicate"),
         });
 
-        root = Box::new(ReplaceInto {
+        root = PhysicalPlan::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
@@ -347,7 +347,7 @@ impl ReplaceInterpreter {
         });
 
         if is_distributed {
-            root = Box::new(Exchange {
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
@@ -357,7 +357,7 @@ impl ReplaceInterpreter {
             });
         }
 
-        root = Box::new(CommitSink {
+        root = PhysicalPlan::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
@@ -444,7 +444,7 @@ impl ReplaceInterpreter {
         schema: DataSchemaRef,
         source: &InsertValue,
     ) -> Result<PhysicalPlan> {
-        Ok(Box::new(ReplaceAsyncSourcer {
+        Ok(PhysicalPlan::new(ReplaceAsyncSourcer {
             schema,
             source: source.clone(),
             meta: PhysicalPlanMeta::new("ReplaceAsyncSourcer"),

@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 
 use databend_common_sql::MetadataRef;
 
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;

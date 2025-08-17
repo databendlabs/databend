@@ -141,7 +141,7 @@ impl IPhysicalPlan for Mutation {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Mutation {
+        PhysicalPlan::new(Mutation {
             meta: self.meta.clone(),
             input,
             table_info: self.table_info.clone(),
@@ -314,7 +314,7 @@ impl PhysicalPlanBuilder {
 
         if *truncate_table {
             // Do truncate.
-            plan = Box::new(CommitSink {
+            plan = PhysicalPlan::new(CommitSink {
                 input: plan,
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
@@ -381,7 +381,7 @@ impl PhysicalPlanBuilder {
                     (None, None, MutationKind::Delete)
                 };
 
-            plan = Box::new(ColumnMutation {
+            plan = PhysicalPlan::new(ColumnMutation {
                 input: plan,
                 meta: PhysicalPlanMeta::new("ColumnMutation"),
                 table_info: mutation_build_info.table_info.clone(),
@@ -396,7 +396,7 @@ impl PhysicalPlanBuilder {
             });
 
             if *distributed {
-                plan = Box::new(Exchange {
+                plan = PhysicalPlan::new(Exchange {
                     input: plan,
                     kind: FragmentKind::Merge,
                     keys: vec![],
@@ -406,7 +406,7 @@ impl PhysicalPlanBuilder {
                 });
             }
 
-            plan = Box::new(CommitSink {
+            plan = PhysicalPlan::new(CommitSink {
                 input: plan,
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
@@ -449,7 +449,7 @@ impl PhysicalPlanBuilder {
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
         if matches!(strategy, MutationStrategy::MixedMatched) {
-            plan = Box::new(MutationSplit {
+            plan = PhysicalPlan::new(MutationSplit {
                 input: plan,
                 split_index: row_id_offset,
                 meta: PhysicalPlanMeta::new("MutationSplit"),
@@ -582,7 +582,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        plan = Box::new(MutationManipulate {
+        plan = PhysicalPlan::new(MutationManipulate {
             input: plan,
             table_info: table_info.clone(),
             unmatched: unmatched.clone(),
@@ -596,7 +596,7 @@ impl PhysicalPlanBuilder {
             target_table_index: *target_table_index,
         });
 
-        plan = Box::new(MutationOrganize {
+        plan = PhysicalPlan::new(MutationOrganize {
             input: plan,
             strategy: strategy.clone(),
             meta: PhysicalPlanMeta::new("MutationOrganize"),
@@ -610,7 +610,7 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
-        plan = Box::new(Mutation {
+        plan = PhysicalPlan::new(Mutation {
             input: plan,
             table_info: table_info.clone(),
             unmatched,
@@ -625,7 +625,7 @@ impl PhysicalPlanBuilder {
         });
 
         if *distributed {
-            plan = Box::new(Exchange {
+            plan = PhysicalPlan::new(Exchange {
                 input: plan,
                 kind: FragmentKind::Merge,
                 keys: vec![],
@@ -641,7 +641,7 @@ impl PhysicalPlanBuilder {
         };
 
         // build mutation_aggregate
-        let mut physical_plan = Box::new(CommitSink {
+        let mut physical_plan = PhysicalPlan::new(CommitSink {
             input: plan,
             snapshot: mutation_build_info.table_snapshot,
             table_info: table_info.clone(),
@@ -734,7 +734,7 @@ pub fn build_block_id_shuffle_exchange(
         &BUILTIN_FUNCTIONS,
     )?;
 
-    Ok(Box::new(Exchange {
+    Ok(PhysicalPlan::new(Exchange {
         input: plan,
         kind: FragmentKind::Normal,
         meta: PhysicalPlanMeta::new("Exchange"),
@@ -793,7 +793,7 @@ fn build_mutation_row_fetch(
         true,
     );
 
-    Box::new(RowFetch {
+    PhysicalPlan::new(RowFetch {
         input: plan,
         source: Box::new(source),
         row_id_col_offset: row_id_offset,

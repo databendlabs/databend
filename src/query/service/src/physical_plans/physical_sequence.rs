@@ -70,7 +70,7 @@ impl IPhysicalPlan for Sequence {
         assert_eq!(children.len(), 2);
         let right = children.pop().unwrap();
         let left = children.pop().unwrap();
-        Box::new(Sequence {
+        PhysicalPlan::new(Sequence {
             plan_id: self.plan_id,
             stat_info: self.stat_info.clone(),
             left,

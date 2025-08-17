@@ -86,7 +86,7 @@ impl IPhysicalPlan for ReplaceDeduplicate {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ReplaceDeduplicate {
+        PhysicalPlan::new(ReplaceDeduplicate {
             meta: self.meta.clone(),
             input,
             on_conflicts: self.on_conflicts.clone(),

@@ -81,7 +81,7 @@ impl IPhysicalPlan for Recluster {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(Recluster {
+        PhysicalPlan::new(Recluster {
             meta: self.meta.clone(),
             tasks: self.tasks.clone(),
             table_info: self.table_info.clone(),
@@ -293,7 +293,7 @@ impl IPhysicalPlan for HilbertPartition {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(HilbertPartition {
+        PhysicalPlan::new(HilbertPartition {
             meta: self.meta.clone(),
             input,
             table_info: self.table_info.clone(),

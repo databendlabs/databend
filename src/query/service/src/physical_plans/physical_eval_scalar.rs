@@ -145,7 +145,7 @@ impl IPhysicalPlan for EvalScalar {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(EvalScalar {
+        PhysicalPlan::new(EvalScalar {
             meta: self.meta.clone(),
             projections: self.projections.clone(),
             input,
@@ -272,7 +272,7 @@ impl PhysicalPlanBuilder {
                 projections.insert(index + input_column_nums);
             }
         }
-        Ok(Box::new(EvalScalar {
+        Ok(PhysicalPlan::new(EvalScalar {
             input,
             exprs,
             projections,

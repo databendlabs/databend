@@ -63,7 +63,7 @@ impl IPhysicalPlan for CacheScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(CacheScan {
+        PhysicalPlan::new(CacheScan {
             meta: self.meta.clone(),
             cache_source: self.cache_source.clone(),
             output_schema: self.output_schema.clone(),
@@ -118,7 +118,7 @@ impl PhysicalPlanBuilder {
             )
         };
         // 2. Build physical plan.
-        Ok(Box::new(CacheScan {
+        Ok(PhysicalPlan::new(CacheScan {
             cache_source,
             meta: PhysicalPlanMeta::new("CacheScan"),
             output_schema: DataSchemaRefExt::create(fields),

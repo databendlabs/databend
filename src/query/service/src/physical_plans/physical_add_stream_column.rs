@@ -84,7 +84,7 @@ impl IPhysicalPlan for AddStreamColumn {
         assert_eq!(children.len(), 1);
         let input = children.remove(0);
 
-        Box::new(AddStreamColumn {
+        PhysicalPlan::new(AddStreamColumn {
             input,
             meta: self.meta.clone(),
             exprs: self.exprs.clone(),
@@ -237,7 +237,7 @@ impl AddStreamColumn {
         // ORIGIN_BLOCK_ROW_NUM, ORIGIN_BLOCK_ID.
         let stream_columns = vec![stream_columns[2].clone(), stream_columns[1].clone()];
 
-        Ok(Box::new(AddStreamColumn {
+        Ok(PhysicalPlan::new(AddStreamColumn {
             input,
             exprs,
             projections,

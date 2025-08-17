@@ -74,7 +74,7 @@ impl IPhysicalPlan for ExpressionScan {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(ExpressionScan {
+        PhysicalPlan::new(ExpressionScan {
             meta: self.meta.clone(),
             values: self.values.clone(),
             input,
@@ -139,7 +139,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Box::new(ExpressionScan {
+        Ok(PhysicalPlan::new(ExpressionScan {
             values,
             input,
             output_schema: scan.schema.clone(),

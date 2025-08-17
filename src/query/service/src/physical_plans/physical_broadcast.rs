@@ -50,7 +50,7 @@ impl IPhysicalPlan for BroadcastSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(BroadcastSource {
+        PhysicalPlan::new(BroadcastSource {
             meta: self.meta.clone(),
             broadcast_id: self.broadcast_id,
         })
@@ -107,7 +107,7 @@ impl IPhysicalPlan for BroadcastSink {
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
-        Box::new(BroadcastSink {
+        PhysicalPlan::new(BroadcastSink {
             meta: self.meta.clone(),
             broadcast_id: self.broadcast_id,
             input: children.pop().unwrap(),
@@ -128,12 +128,12 @@ impl IPhysicalPlan for BroadcastSink {
 }
 
 pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
-    let broadcast_source: PhysicalPlan = Box::new(BroadcastSource {
+    let broadcast_source: PhysicalPlan = PhysicalPlan::new(BroadcastSource {
         meta: PhysicalPlanMeta::new("BroadcastSource"),
         broadcast_id,
     });
 
-    let exchange = Box::new(Exchange {
+    let exchange = PhysicalPlan::new(Exchange {
         input: broadcast_source,
         kind: FragmentKind::Expansive,
         keys: vec![],
@@ -142,7 +142,7 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
         meta: PhysicalPlanMeta::new("Exchange"),
     });
 
-    Ok(Box::new(BroadcastSink {
+    Ok(PhysicalPlan::new(BroadcastSink {
         broadcast_id,
         input: exchange,
         meta: PhysicalPlanMeta::new("BroadcastSink"),

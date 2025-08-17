@@ -86,7 +86,7 @@ impl IPhysicalPlan for CommitSink {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(CommitSink {
+        PhysicalPlan::new(CommitSink {
             input: children.remove(0),
             meta: self.meta.clone(),
             snapshot: self.snapshot.clone(),

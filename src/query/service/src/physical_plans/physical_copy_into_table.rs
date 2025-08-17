@@ -92,7 +92,7 @@ impl IPhysicalPlan for CopyIntoTable {
             CopyIntoTableSource::Query(_) => {
                 assert_eq!(children.len(), 1);
                 let input = children.pop().unwrap();
-                Box::new(CopyIntoTable {
+                PhysicalPlan::new(CopyIntoTable {
                     meta: self.meta.clone(),
                     required_values_schema: self.required_values_schema.clone(),
                     values_consts: self.values_consts.clone(),
@@ -110,7 +110,7 @@ impl IPhysicalPlan for CopyIntoTable {
             CopyIntoTableSource::Stage(_) => {
                 assert_eq!(children.len(), 1);
                 let input = children.pop().unwrap();
-                Box::new(CopyIntoTable {
+                PhysicalPlan::new(CopyIntoTable {
                     meta: self.meta.clone(),
                     required_values_schema: self.required_values_schema.clone(),
                     values_consts: self.values_consts.clone(),

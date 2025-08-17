@@ -37,7 +37,6 @@ use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
 use crate::physical_plans::ReplaceDeduplicate;
@@ -234,7 +233,7 @@ impl PlanFragment {
             unreachable!("logic error");
         };
 
-        let plan: PhysicalPlan = Box::new(plan.clone());
+        let plan: PhysicalPlan = PhysicalPlan::new(plan.clone());
         let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
@@ -617,7 +616,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 unreachable!("Cannot create data source plan");
             };
 
-            return Ok(Box::new(TableScan {
+            return Ok(PhysicalPlan::new(TableScan {
                 source: Box::new(source),
                 ..table_scan.clone()
             }));
@@ -633,7 +632,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 unreachable!("Cannot convert Table to Vec<Column>")
             };
 
-            return Ok(Box::new(ConstantTableScan {
+            return Ok(PhysicalPlan::new(ConstantTableScan {
                 values: const_table_columns.columns,
                 num_rows: const_table_columns.num_rows,
                 ..table_scan.clone()
@@ -668,7 +667,7 @@ impl DeriveHandle for ReclusterDeriveHandle {
             return Err(children);
         };
 
-        Ok(Box::new(Recluster {
+        Ok(PhysicalPlan::new(Recluster {
             tasks: self.tasks.clone(),
             ..recluster.clone()
         }))
@@ -699,7 +698,7 @@ impl DeriveHandle for MutationSourceDeriveHandle {
             return Err(children);
         };
 
-        Ok(Box::new(MutationSource {
+        Ok(PhysicalPlan::new(MutationSource {
             partitions: self.partitions.clone(),
             ..mutation_source.clone()
         }))
@@ -730,7 +729,7 @@ impl DeriveHandle for CompactSourceDeriveHandle {
             return Err(children);
         };
 
-        Ok(Box::new(CompactSource {
+        Ok(PhysicalPlan::new(CompactSource {
             parts: self.partitions.clone(),
             ..compact_source.clone()
         }))
@@ -770,7 +769,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         if let Some(replace_into) = ReplaceInto::from_physical_plan(v) {
             assert_eq!(children.len(), 1);
-            return Ok(Box::new(ReplaceInto {
+            return Ok(PhysicalPlan::new(ReplaceInto {
                 input: children.remove(0),
                 need_insert: self.need_insert,
                 segments: self.partitions.clone(),
@@ -779,7 +778,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
             }));
         } else if let Some(replace_deduplicate) = ReplaceDeduplicate::from_physical_plan(v) {
             assert_eq!(children.len(), 1);
-            return Ok(Box::new(ReplaceDeduplicate {
+            return Ok(PhysicalPlan::new(ReplaceDeduplicate {
                 input: children.remove(0),
                 need_insert: self.need_insert,
                 table_is_empty: self.partitions.is_empty(),

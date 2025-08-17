@@ -81,7 +81,7 @@ impl IPhysicalPlan for Exchange {
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
-        Box::new(Exchange {
+        PhysicalPlan::new(Exchange {
             meta: self.meta.clone(),
             input: children.pop().unwrap(),
             kind: self.kind.clone(),
@@ -131,7 +131,7 @@ impl PhysicalPlanBuilder {
                 FragmentKind::Merge
             }
         };
-        Ok(Box::new(Exchange {
+        Ok(PhysicalPlan::new(Exchange {
             input,
             kind,
             keys,

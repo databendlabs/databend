@@ -218,7 +218,7 @@ impl IPhysicalPlan for HashJoin {
         let probe_child = children.remove(0);
         let build_child = children.remove(0);
 
-        Box::new(HashJoin {
+        PhysicalPlan::new(HashJoin {
             build: build_child,
             probe: probe_child,
 
@@ -1069,7 +1069,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        Ok(Box::new(HashJoin {
+        Ok(PhysicalPlan::new(HashJoin {
             projections,
             build_projections,
             probe_projections,

@@ -55,7 +55,7 @@ impl IPhysicalPlan for RecursiveCteScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(RecursiveCteScan {
+        PhysicalPlan::new(RecursiveCteScan {
             meta: self.meta.clone(),
             output_schema: self.output_schema.clone(),
             table_name: self.table_name.clone(),
@@ -85,7 +85,7 @@ impl PhysicalPlanBuilder {
         recursive_cte_scan: &databend_common_sql::plans::RecursiveCteScan,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        Ok(Box::new(RecursiveCteScan {
+        Ok(PhysicalPlan::new(RecursiveCteScan {
             meta: PhysicalPlanMeta::new("RecursiveCteScan"),
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
             table_name: recursive_cte_scan.table_name.clone(),

@@ -36,7 +36,6 @@ use crate::physical_plans::MaterializedCTE;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
@@ -250,7 +249,7 @@ impl DeriveHandle for FragmentDeriveHandle {
             let plan_id = v.get_id();
             let source_fragment_id = self.ctx.get_fragment_id();
 
-            let plan: PhysicalPlan = Box::new(ExchangeSink {
+            let plan: PhysicalPlan = PhysicalPlan::new(ExchangeSink {
                 input,
                 schema: input_schema.clone(),
                 kind: exchange.kind.clone(),
@@ -286,7 +285,7 @@ impl DeriveHandle for FragmentDeriveHandle {
 
             self.fragments.insert(source_fragment_id, source_fragment);
 
-            return Ok(Box::new(ExchangeSource {
+            return Ok(PhysicalPlan::new(ExchangeSource {
                 schema: input_schema,
                 query_id: self.query_id.clone(),
 

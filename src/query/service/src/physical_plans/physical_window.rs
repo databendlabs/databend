@@ -145,7 +145,7 @@ impl IPhysicalPlan for Window {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(Window {
+        PhysicalPlan::new(Window {
             meta: self.meta.clone(),
             index: self.index,
             input,
@@ -541,7 +541,7 @@ impl PhysicalPlanBuilder {
             WindowFuncType::CumeDist => WindowFunction::CumeDist,
         };
 
-        Ok(Box::new(Window {
+        Ok(PhysicalPlan::new(Window {
             input,
             index: w.index,
             func,

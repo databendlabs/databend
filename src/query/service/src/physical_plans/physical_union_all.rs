@@ -98,7 +98,7 @@ impl IPhysicalPlan for UnionAll {
         assert_eq!(children.len(), 2);
         let right = children.pop().unwrap();
         let left = children.pop().unwrap();
-        Box::new(UnionAll {
+        PhysicalPlan::new(UnionAll {
             meta: self.meta.clone(),
             left,
             right,
@@ -282,7 +282,7 @@ impl PhysicalPlanBuilder {
             fields.push(DataField::new(&index.to_string(), data_type));
         }
 
-        Ok(Box::new(UnionAll {
+        Ok(PhysicalPlan::new(UnionAll {
             meta: PhysicalPlanMeta::new("UnionAll"),
             left: left_plan,
             right: right_plan,

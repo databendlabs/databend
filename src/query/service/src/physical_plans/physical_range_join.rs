@@ -128,7 +128,7 @@ impl IPhysicalPlan for RangeJoin {
         let right_child = children.pop().unwrap();
         let left_child = children.pop().unwrap();
 
-        Box::new(RangeJoin {
+        PhysicalPlan::new(RangeJoin {
             meta: self.meta.clone(),
             left: left_child,
             right: right_child,
@@ -245,7 +245,7 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        Ok(Box::new(RangeJoin {
+        Ok(PhysicalPlan::new(RangeJoin {
             left: left_side,
             right: right_side,
             meta: PhysicalPlanMeta::new("RangeJoin"),

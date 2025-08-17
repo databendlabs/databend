@@ -99,7 +99,7 @@ impl IPhysicalPlan for AsyncFunction {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(AsyncFunction {
+        PhysicalPlan::new(AsyncFunction {
             meta: self.meta.clone(),
             input: children.remove(0),
             async_func_descs: self.async_func_descs.clone(),
@@ -193,7 +193,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Box::new(AsyncFunction {
+        Ok(PhysicalPlan::new(AsyncFunction {
             input,
             meta: PhysicalPlanMeta::new("AsyncFunction"),
             async_func_descs,

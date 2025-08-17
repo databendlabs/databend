@@ -62,7 +62,7 @@ impl IPhysicalPlan for ConstantTableScan {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(ConstantTableScan {
+        PhysicalPlan::new(ConstantTableScan {
             meta: self.meta.clone(),
             values: self.values.clone(),
             num_rows: self.num_rows,
@@ -117,7 +117,7 @@ impl PhysicalPlanBuilder {
                 schema,
                 ..
             } = scan.prune_columns(used);
-            return Ok(Box::new(ConstantTableScan {
+            return Ok(PhysicalPlan::new(ConstantTableScan {
                 values,
                 num_rows,
                 output_schema: schema,
@@ -125,7 +125,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        Ok(Box::new(ConstantTableScan {
+        Ok(PhysicalPlan::new(ConstantTableScan {
             values: scan.values.clone(),
             num_rows: scan.num_rows,
             output_schema: scan.schema.clone(),

@@ -74,7 +74,7 @@ impl IPhysicalPlan for CompactSource {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(CompactSource {
+        PhysicalPlan::new(CompactSource {
             meta: self.meta.clone(),
             parts: self.parts.clone(),
             table_info: self.table_info.clone(),
@@ -255,7 +255,7 @@ impl PhysicalPlanBuilder {
             .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let mut root: PhysicalPlan = Box::new(CompactSource {
+        let mut root: PhysicalPlan = PhysicalPlan::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
@@ -266,7 +266,7 @@ impl PhysicalPlanBuilder {
         let is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
         if is_distributed {
-            root = Box::new(Exchange {
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
@@ -276,7 +276,7 @@ impl PhysicalPlanBuilder {
             });
         }
 
-        root = Box::new(CommitSink {
+        root = PhysicalPlan::new(CommitSink {
             input: root,
             table_info,
             snapshot: Some(snapshot),

@@ -63,7 +63,7 @@ impl IPhysicalPlan for MaterializeCTERef {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
-        Box::new(MaterializeCTERef {
+        PhysicalPlan::new(MaterializeCTERef {
             plan_id: self.plan_id,
             stat_info: self.stat_info.clone(),
             cte_name: self.cte_name.clone(),
@@ -100,7 +100,7 @@ impl PhysicalPlanBuilder {
             fields.push(DataField::new(&index.to_string(), column.data_type()));
         }
         let cte_schema = DataSchemaRefExt::create(fields);
-        Ok(Box::new(MaterializeCTERef {
+        Ok(PhysicalPlan::new(MaterializeCTERef {
             plan_id: 0,
             stat_info: Some(stat_info),
             cte_name: cte_consumer.cte_name.clone(),

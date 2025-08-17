@@ -175,56 +175,56 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        root = Box::new(Duplicate {
+        root = PhysicalPlan::new(Duplicate {
             input: root,
             n: branches.len(),
             meta: PhysicalPlanMeta::new("Duplicate"),
         });
 
         let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = Box::new(Shuffle {
+        root = PhysicalPlan::new(Shuffle {
             input: root,
             strategy: shuffle_strategy,
             meta: PhysicalPlanMeta::new("Shuffle"),
         });
 
-        root = Box::new(ChunkFilter {
+        root = PhysicalPlan::new(ChunkFilter {
             predicates,
             input: root,
             meta: PhysicalPlanMeta::new("ChunkFilter"),
         });
 
-        root = Box::new(ChunkEvalScalar {
+        root = PhysicalPlan::new(ChunkEvalScalar {
             eval_scalars,
             input: root,
             meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
         });
 
-        root = Box::new(ChunkCastSchema {
+        root = PhysicalPlan::new(ChunkCastSchema {
             cast_schemas,
             input: root,
             meta: PhysicalPlanMeta::new("ChunkCastSchema"),
         });
 
-        root = Box::new(ChunkFillAndReorder {
+        root = PhysicalPlan::new(ChunkFillAndReorder {
             fill_and_reorders,
             input: root,
             meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
         });
 
-        root = Box::new(ChunkAppendData {
+        root = PhysicalPlan::new(ChunkAppendData {
             input: root,
             target_tables: serializable_tables.clone(),
             meta: PhysicalPlanMeta::new("ChunkAppendData"),
         });
 
-        root = Box::new(ChunkMerge {
+        root = PhysicalPlan::new(ChunkMerge {
             group_ids,
             input: root,
             meta: PhysicalPlanMeta::new("ChunkMerge"),
         });
 
-        root = Box::new(ChunkCommitInsert {
+        root = PhysicalPlan::new(ChunkCommitInsert {
             update_stream_meta,
 
             input: root,

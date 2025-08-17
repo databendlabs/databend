@@ -154,7 +154,7 @@ impl IPhysicalPlan for AggregatePartial {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(AggregatePartial {
+        PhysicalPlan::new(AggregatePartial {
             input: children.remove(0),
             meta: self.meta.clone(),
             group_by: self.group_by.clone(),

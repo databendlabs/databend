@@ -50,7 +50,6 @@ use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
-use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::RecursiveCteScan;
 use crate::physical_plans::UnionAll;

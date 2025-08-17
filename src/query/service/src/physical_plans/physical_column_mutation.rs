@@ -84,7 +84,7 @@ impl IPhysicalPlan for ColumnMutation {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
 
-        Box::new(ColumnMutation {
+        PhysicalPlan::new(ColumnMutation {
             input: children.remove(0),
             meta: self.meta.clone(),
             table_info: self.table_info.clone(),
