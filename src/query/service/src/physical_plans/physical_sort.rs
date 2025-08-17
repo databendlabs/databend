@@ -108,6 +108,7 @@ impl IPhysicalPlan for Sort {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         match self.step {

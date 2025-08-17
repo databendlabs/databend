@@ -37,6 +37,7 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = vec![];
 
@@ -58,6 +59,7 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         match &self.inner.source {
             CopyIntoTableSource::Query(input) => {
@@ -71,6 +73,7 @@ impl<'a> PhysicalFormat for CopyIntoTableFormatter<'a> {
         }
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         match &self.inner.source {
             CopyIntoTableSource::Query(input) => {

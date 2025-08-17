@@ -58,6 +58,7 @@ impl IPhysicalPlan for AggregateExpand {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut output_fields = input_schema.fields().clone();

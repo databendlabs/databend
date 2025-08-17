@@ -39,6 +39,7 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
@@ -70,10 +71,12 @@ impl<'a> PhysicalFormat for ExchangeFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

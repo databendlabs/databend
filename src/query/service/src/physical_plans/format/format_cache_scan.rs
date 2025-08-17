@@ -38,6 +38,7 @@ impl<'a> PhysicalFormat for CacheScanFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = Vec::with_capacity(2);
         children.push(FormatTreeNode::new(format!(

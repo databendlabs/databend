@@ -52,6 +52,7 @@ impl IPhysicalPlan for CacheScan {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }

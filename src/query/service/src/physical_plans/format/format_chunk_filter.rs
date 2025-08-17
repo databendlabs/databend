@@ -37,6 +37,7 @@ impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.predicates.iter().all(|x| x.is_none()) {
             let input_formatter = self.inner.input.formatter()?;
@@ -65,10 +66,12 @@ impl<'a> PhysicalFormat for ChunkFilterFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

@@ -85,6 +85,7 @@ impl IPhysicalPlan for Window {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);

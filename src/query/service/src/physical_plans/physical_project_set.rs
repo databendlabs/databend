@@ -63,6 +63,7 @@ impl IPhysicalPlan for ProjectSet {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());

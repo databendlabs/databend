@@ -39,6 +39,7 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![FormatTreeNode::new(format!(
             "output columns: [{}]",
@@ -64,6 +65,7 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
         Ok(FormatTreeNode::with_children(root, node_children))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let left_child = self.inner.left.formatter()?.format_join(ctx)?;
         let right_child = self.inner.right.formatter()?.format_join(ctx)?;
@@ -79,6 +81,7 @@ impl<'a> PhysicalFormat for UnionAllFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let left_child = self.inner.left.formatter()?.partial_format(ctx)?;
         let right_child = self.inner.right.formatter()?.partial_format(ctx)?;

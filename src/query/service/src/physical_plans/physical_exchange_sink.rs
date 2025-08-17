@@ -58,6 +58,7 @@ impl IPhysicalPlan for ExchangeSink {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }

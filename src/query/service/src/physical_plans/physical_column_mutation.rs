@@ -64,6 +64,7 @@ impl IPhysicalPlan for ColumnMutation {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }

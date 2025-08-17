@@ -41,6 +41,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table = ctx.metadata.table(self.inner.table_index);
         let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
@@ -80,6 +81,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         Ok(FormatTreeNode::with_children(self.inner.get_name(), vec![]))
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let table = ctx.metadata.table(self.inner.table_index).clone();
         let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());

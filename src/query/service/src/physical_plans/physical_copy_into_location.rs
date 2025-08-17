@@ -56,6 +56,7 @@ impl IPhysicalPlan for CopyIntoLocation {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![
             DataField::new("rows_unloaded", DataType::Number(NumberDataType::UInt64)),

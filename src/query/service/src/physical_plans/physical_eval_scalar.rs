@@ -78,6 +78,7 @@ impl IPhysicalPlan for EvalScalar {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         if self.exprs.is_empty() {
             return self.input.output_schema();

@@ -67,6 +67,7 @@ impl IPhysicalPlan for RowFetch {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.input.output_schema()?.fields().clone();
         fields.extend_from_slice(&self.fetched_fields);

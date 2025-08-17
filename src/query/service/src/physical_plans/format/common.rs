@@ -222,6 +222,7 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
         self.meta
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut children = vec![];
         for child in self.children.iter() {
@@ -234,6 +235,7 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.children.len() == 1 {
             return self.children[0].format_join(ctx);
@@ -250,6 +252,7 @@ impl<'a> PhysicalFormat for SimplePhysicalFormat<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.children.len() == 1 {
             return self.children[0].partial_format(ctx);

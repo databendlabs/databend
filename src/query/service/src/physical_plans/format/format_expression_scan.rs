@@ -39,6 +39,7 @@ impl<'a> PhysicalFormat for ExpressionScanFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let mut node_children = Vec::with_capacity(self.inner.values.len() + 1);
         let output_schema = self.inner.output_schema()?;
@@ -64,10 +65,12 @@ impl<'a> PhysicalFormat for ExpressionScanFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.format_join(ctx)
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         self.inner.input.formatter()?.partial_format(ctx)
     }

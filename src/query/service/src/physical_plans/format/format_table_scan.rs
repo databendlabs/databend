@@ -43,6 +43,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         self.inner.get_meta()
     }
 
+    #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
             return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
@@ -174,6 +175,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         ))
     }
 
+    #[recursive::recursive]
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
             return Ok(FormatTreeNode::with_children(
@@ -211,6 +213,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         }
     }
 
+    #[recursive::recursive]
     fn partial_format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         if self.inner.table_index == Some(DUMMY_TABLE_INDEX) {
             return Ok(FormatTreeNode::new("DummyTableScan".to_string()));

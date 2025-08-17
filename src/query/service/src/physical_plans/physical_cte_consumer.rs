@@ -56,6 +56,7 @@ impl IPhysicalPlan for MaterializeCTERef {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.cte_schema.clone())
     }

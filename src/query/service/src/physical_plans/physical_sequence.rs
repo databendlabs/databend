@@ -53,6 +53,7 @@ impl IPhysicalPlan for Sequence {
         &mut self.meta
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         self.right.output_schema()
     }

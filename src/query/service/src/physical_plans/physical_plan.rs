@@ -85,7 +85,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     /// Adjust the plan_id of the physical plan.
     /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn adjust_plan_id(&mut self, next_id: &mut u32) {
         self.get_meta_mut().plan_id = *next_id;
         *next_id += 1;
@@ -95,6 +95,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         }
     }
 
+    #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         match self.children().next() {
             None => Ok(DataSchemaRef::default()),
@@ -110,6 +111,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         Box::new(std::iter::empty())
     }
 
+    #[recursive::recursive]
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         let mut children = vec![];
         for child in self.children() {
@@ -120,11 +122,12 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     /// Used to find data source info in a non-aggregation and single-table query plan.
+    #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         None
     }
 
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
         for child in self.children() {
             if let Some(plan) = child.try_find_mutation_source() {
@@ -135,26 +138,26 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         None
     }
 
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         for child in self.children() {
             child.get_all_data_source(sources);
         }
     }
 
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         for child in self.children_mut() {
             child.set_pruning_stats(stats)
         }
     }
 
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn is_distributed_plan(&self) -> bool {
         self.children().any(|child| child.is_distributed_plan())
     }
 
-    // #[recursive::recursive]
+    #[recursive::recursive]
     fn is_warehouse_distributed_plan(&self) -> bool {
         self.children()
             .any(|child| child.is_warehouse_distributed_plan())
@@ -174,6 +177,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan;
 
+    #[recursive::recursive]
     fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let is_exchange_sink = self.as_any().downcast_ref::<ExchangeSink>().is_some();
         builder.is_exchange_stack.push(is_exchange_sink);
@@ -273,6 +277,7 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
 }
 
 impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
+    #[recursive::recursive]
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
         let mut children = vec![];
         for child in self.children() {
@@ -285,6 +290,7 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         }
     }
 
+    #[recursive::recursive]
     fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
         for child in self.children() {
             child.visit(visitor)?;
@@ -308,6 +314,11 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
     }
 }
 
-dyn_clone::clone_trait_object!(IPhysicalPlan);
+impl Clone for Box<dyn IPhysicalPlan + 'static> {
+    #[recursive::recursive]
+    fn clone(&self) -> Self {
+        dyn_clone::clone_box(&**self)
+    }
+}
 
 pub type PhysicalPlan = Box<dyn IPhysicalPlan>;
