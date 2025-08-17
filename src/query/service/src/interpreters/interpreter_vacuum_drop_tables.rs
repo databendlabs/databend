@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 

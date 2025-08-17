@@ -43,7 +43,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
-use databend_common_storages_memory::MemoryTable;
+use databend_common_storages_basic::MemoryTable;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::CreateTableInterpreter;

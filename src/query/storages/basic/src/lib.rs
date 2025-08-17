@@ -13,8 +13,35 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
+// Memory storage
 mod memory_part;
 mod memory_table;
 
+// Null storage
+pub mod null;
+
+// Random storage
+pub mod random;
+
+// Result cache storage
+pub mod result_cache;
+
+// View storage
+pub mod view;
+
+// Memory storage exports
 pub use memory_table::MemoryTable;
+// Null storage exports
+pub use null::NullTable;
+// Random storage exports
+pub use random::{RandomPartInfo, RandomTable};
+// Result cache storage exports
+pub use result_cache::{
+    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
+    ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
+};
+// View storage exports
+pub use view::view_table;

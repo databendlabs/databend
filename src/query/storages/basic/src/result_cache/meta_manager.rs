@@ -24,7 +24,7 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 
-use crate::common::ResultCacheValue;
+use crate::result_cache::common::ResultCacheValue;
 
 pub struct ResultCacheMetaManager {
     ttl: u64,
