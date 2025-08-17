@@ -21,8 +21,8 @@ use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;

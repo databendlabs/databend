@@ -23,8 +23,8 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
-use databend_common_storages_view::view_table::QUERY;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_storages_basic::view_table::QUERY;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
