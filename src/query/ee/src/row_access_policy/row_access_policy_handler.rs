@@ -23,11 +23,13 @@ use databend_common_meta_app::row_access_policy::row_access_policy_name_ident::R
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::DropRowAccessPolicyReq;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandler;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandlerWrapper;
 
@@ -64,13 +66,13 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<(u64, RowAccessPolicyMeta)> {
+    ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
         let name_ident = RowAccessPolicyNameIdent::new(tenant, name);
         let res = meta_api
             .get_row_access(&name_ident)
             .await?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get row policy")))?;
-        Ok((res.0.seq, res.1.data))
+        Ok(res)
     }
 }
 

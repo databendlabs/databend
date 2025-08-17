@@ -2517,7 +2517,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn_req
                 .condition
                 .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
-
             match &req.action {
                 SetTableRowAccessPolicyAction::Set(new_mask_name) => {
                     if table_meta.row_access_policy.is_some() {
@@ -2528,7 +2527,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                     new_table_meta.row_access_policy = Some(new_mask_name.to_string());
                     txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy Some */
                         txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
                     ];
                 }
@@ -2546,7 +2545,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     }
                     new_table_meta.row_access_policy = None;
                     txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy None */
                         txn_op_del(&ident), // table drop row access policy, del policy_tb_id
                     ];
                 }

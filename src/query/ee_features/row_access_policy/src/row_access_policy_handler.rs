@@ -31,15 +31,16 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
-use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident::Resource;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::DropRowAccessPolicyReq;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RowAccessPolicyHandler: Sync + Send {
@@ -48,10 +49,7 @@ pub trait RowAccessPolicyHandler: Sync + Send {
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
     ) -> std::result::Result<
-        std::result::Result<
-            CreateRowAccessPolicyReply,
-            ExistError<row_access_policy_name_ident::Resource>,
-        >,
+        std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
         MetaTxnError,
     >;
 
@@ -66,7 +64,7 @@ pub trait RowAccessPolicyHandler: Sync + Send {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<(u64, RowAccessPolicyMeta)>;
+    ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>;
 }
 
 pub struct RowAccessPolicyHandlerWrapper {
@@ -102,7 +100,7 @@ impl RowAccessPolicyHandlerWrapper {
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
-    ) -> Result<(u64, RowAccessPolicyMeta)> {
+    ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
         self.handler.get_row_access(meta_api, tenant, name).await
     }
 }

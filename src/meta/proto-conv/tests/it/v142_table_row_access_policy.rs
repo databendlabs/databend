@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::ComputedExpr;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::TableIndexType;
 use fastrace::func_name;
-use maplit::btreemap;
 use maplit::btreeset;
 
 use crate::common;
@@ -30,78 +27,32 @@ use crate::common;
 #[test]
 fn test_decode_v142_table_meta() -> anyhow::Result<()> {
     let table_meta_v142 = vec![
-        10, 236, 1, 10, 55, 10, 8, 110, 117, 108, 108, 97, 98, 108, 101, 18, 5, 97, 32, 43, 32, 51,
-        26, 29, 178, 2, 19, 154, 2, 9, 42, 0, 160, 6, 142, 1, 168, 6, 24, 160, 6, 142, 1, 168, 6,
-        24, 160, 6, 142, 1, 168, 6, 24, 160, 6, 142, 1, 168, 6, 24, 10, 29, 10, 6, 115, 116, 114,
-        105, 110, 103, 26, 10, 146, 2, 0, 160, 6, 142, 1, 168, 6, 24, 32, 1, 160, 6, 142, 1, 168,
-        6, 24, 10, 65, 10, 14, 118, 105, 114, 116, 117, 97, 108, 95, 115, 116, 114, 105, 110, 103,
-        26, 10, 146, 2, 0, 160, 6, 142, 1, 168, 6, 24, 32, 2, 42, 26, 10, 17, 116, 111, 95, 98, 97,
-        115, 101, 54, 52, 40, 115, 116, 114, 105, 110, 103, 41, 160, 6, 142, 1, 168, 6, 24, 160, 6,
-        142, 1, 168, 6, 24, 10, 62, 10, 13, 115, 116, 111, 114, 101, 100, 95, 115, 116, 114, 105,
-        110, 103, 26, 10, 146, 2, 0, 160, 6, 142, 1, 168, 6, 24, 32, 3, 42, 24, 18, 15, 114, 101,
-        118, 101, 114, 115, 101, 40, 115, 116, 114, 105, 110, 103, 41, 160, 6, 142, 1, 168, 6, 24,
-        160, 6, 142, 1, 168, 6, 24, 18, 6, 10, 1, 97, 18, 1, 98, 24, 4, 160, 6, 142, 1, 168, 6, 24,
-        42, 10, 10, 3, 120, 121, 122, 18, 3, 102, 111, 111, 50, 2, 52, 52, 58, 10, 10, 3, 97, 98,
-        99, 18, 3, 100, 101, 102, 64, 0, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41, 162, 1,
-        23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84,
-        67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48,
-        32, 85, 84, 67, 178, 1, 13, 116, 97, 98, 108, 101, 95, 99, 111, 109, 109, 101, 110, 116,
-        186, 1, 7, 160, 6, 142, 1, 168, 6, 24, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
-        1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
-        1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1,
-        1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 226, 1,
-        1, 1, 234, 1, 6, 10, 1, 97, 18, 1, 98, 250, 1, 83, 10, 4, 105, 100, 120, 49, 18, 75, 10, 4,
-        105, 100, 120, 49, 18, 2, 1, 2, 24, 1, 34, 32, 102, 49, 48, 98, 50, 51, 48, 49, 53, 51,
-        101, 49, 52, 102, 50, 99, 56, 52, 54, 48, 51, 57, 53, 56, 100, 55, 102, 56, 54, 52, 102,
-        56, 42, 20, 10, 9, 116, 111, 107, 101, 110, 105, 122, 101, 114, 18, 7, 99, 104, 105, 110,
-        101, 115, 101, 160, 6, 142, 1, 168, 6, 24, 138, 2, 2, 112, 49, 160, 6, 142, 1, 168, 6, 24,
+        10, 7, 160, 6, 142, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+        56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
+        49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 142,
+        1, 168, 6, 24, 226, 1, 1, 1, 138, 2, 2, 112, 49, 160, 6, 142, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
-        schema: Arc::new(ce::TableSchema::new_from(
-            vec![
-                ce::TableField::new(
-                    "nullable",
-                    ce::TableDataType::Nullable(Box::new(ce::TableDataType::Number(
-                        NumberDataType::Int8,
-                    ))),
-                )
-                .with_default_expr(Some("a + 3".to_string())),
-                ce::TableField::new("string", ce::TableDataType::String),
-                ce::TableField::new("virtual_string", ce::TableDataType::String)
-                    .with_computed_expr(Some(ComputedExpr::Virtual(
-                        "to_base64(string)".to_string(),
-                    ))),
-                ce::TableField::new("stored_string", ce::TableDataType::String)
-                    .with_computed_expr(Some(ComputedExpr::Stored("reverse(string)".to_string()))),
-            ],
-            btreemap! {s("a") => s("b")},
-        )),
-        engine: "44".to_string(),
+        schema: Arc::new(ce::TableSchema::default()),
+        engine: s(""),
         storage_params: None,
-        part_prefix: "".to_string(),
-        engine_options: btreemap! {s("abc") => s("def")},
-        options: btreemap! {s("xyz") => s("foo")},
-        cluster_key: Some("(a + 2, b)".to_string()),
+        part_prefix: s(""),
+        engine_options: BTreeMap::default(),
+        options: BTreeMap::default(),
+        cluster_key: None,
         cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
-        comment: s("table_comment"),
-        field_comments: vec!["c".to_string(); 21],
+        comment: s(""),
+        field_comments: vec![],
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
-        column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        column_mask_policy: None,
         row_access_policy: Some("p1".to_string()),
-        indexes: btreemap! {s("idx1") => mt::TableIndex {
-            index_type: TableIndexType::Inverted,
-            name: "idx1".to_string(),
-            column_ids: vec![1, 2],
-            sync_creation: true,
-            version: "f10b230153e14f2c84603958d7f864f8".to_string(),
-            options: btreemap! {s("tokenizer") => s("chinese")},
-        }},
+        indexes: BTreeMap::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v142.as_slice(), 142, want())?;
