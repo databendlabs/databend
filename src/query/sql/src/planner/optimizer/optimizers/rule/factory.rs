@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::optimizers::rule::RuleCommuteJoin;
 use crate::optimizer::optimizers::rule::RuleCommuteJoinBaseTable;
+use crate::optimizer::optimizers::rule::RuleDeduplicateSort;
 use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleEliminateEvalScalar;
 use crate::optimizer::optimizers::rule::RuleEliminateFilter;
@@ -114,6 +115,7 @@ impl RuleFactory {
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
+            RuleID::DeduplicateSort => Ok(Box::new(RuleDeduplicateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
             RuleID::MergeFilterIntoMutation => {
                 Ok(Box::new(RuleMergeFilterIntoMutation::new(metadata)))

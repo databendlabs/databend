@@ -1,0 +1,41 @@
+-- Test for RuleDeduplicateSort optimization
+-- This test verifies that duplicate sort items are removed from ORDER BY clause
+
+statement ok
+CREATE TABLE emp (deptno INT, job STRING, sal INT);
+
+statement ok
+INSERT INTO emp VALUES 
+(10, 'MANAGER', 5000),
+(10, 'CLERK', 3000),
+(20, 'MANAGER', 6000),
+(20, 'ANALYST', 4000);
+
+-- Test: Comprehensive duplicate sort field scenarios
+-- This query tests multiple cases:
+-- 1. Simple duplicates: deptno, deptno -> should become just deptno
+-- 2. Different directions: job ASC, job DESC -> should keep both
+-- 3. Different null handling: sal NULLS FIRST, sal NULLS LAST -> should keep both
+-- 4. Mixed duplicates: deptno appears again -> should deduplicate
+query T
+EXPLAIN SELECT deptno AS d, job, sal 
+FROM emp 
+ORDER BY deptno, d, job ASC, job DESC, sal NULLS FIRST, sal NULLS LAST, deptno;
+----
+Sort(Single)
+├── output columns: [emp.deptno (#0), emp.job (#1), emp.sal (#2)]
+├── sort keys: [deptno ASC NULLS LAST, job ASC NULLS LAST, job DESC NULLS LAST, sal ASC NULLS FIRST, sal ASC NULLS LAST]
+├── estimated rows: 4.00
+└── TableScan
+    ├── table: default.db.emp
+    ├── output columns: [deptno (#0), job (#1), sal (#2)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+DROP TABLE emp;

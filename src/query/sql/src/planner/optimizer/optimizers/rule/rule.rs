@@ -27,6 +27,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
     vec![
         RuleID::EliminateSort,
+        RuleID::DeduplicateSort,
         RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
         // Filter
@@ -113,6 +114,7 @@ pub enum RuleID {
     EliminateEvalScalar,
     EliminateFilter,
     EliminateSort,
+    DeduplicateSort,
     MergeEvalScalar,
     MergeFilter,
     GroupingSetsToUnion,
@@ -158,6 +160,7 @@ impl Display for RuleID {
             RuleID::EliminateEvalScalar => write!(f, "EliminateEvalScalar"),
             RuleID::EliminateFilter => write!(f, "EliminateFilter"),
             RuleID::EliminateSort => write!(f, "EliminateSort"),
+            RuleID::DeduplicateSort => write!(f, "DeduplicateSort"),
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
