@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use crate::physical_plans::PhysicalPlan;
-
 use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
@@ -46,6 +44,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;

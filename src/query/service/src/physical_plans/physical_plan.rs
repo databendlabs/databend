@@ -31,9 +31,7 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
-use serde::Deserialize;
 use serde::Deserializer;
-use serde::Serialize;
 use serde::Serializer;
 
 use crate::physical_plans::format::FormatContext;
@@ -317,7 +315,9 @@ impl serde::Serialize for PhysicalPlan {
 impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     #[recursive::recursive]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        Ok(PhysicalPlan { inner: Box::<dyn IPhysicalPlan + 'static>::deserialize(deserializer)? })
+        Ok(PhysicalPlan {
+            inner: Box::<dyn IPhysicalPlan + 'static>::deserialize(deserializer)?,
+        })
     }
 }
 
