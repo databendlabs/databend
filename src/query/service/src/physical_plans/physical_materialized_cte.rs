@@ -78,7 +78,7 @@ impl IPhysicalPlan for MaterializedCTE {
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert_eq!(children.len(), 1);
         let input = children.pop().unwrap();
-        Box::new(MaterializedCTE {
+        PhysicalPlan::new(MaterializedCTE {
             plan_id: self.plan_id,
             stat_info: self.stat_info.clone(),
             input,
@@ -131,7 +131,7 @@ impl PhysicalPlanBuilder {
                 .clone(),
         };
         let input = self.build(s_expr.child(0)?, required).await?;
-        Ok(Box::new(MaterializedCTE {
+        Ok(PhysicalPlan::new(MaterializedCTE {
             plan_id: 0,
             stat_info: Some(stat_info),
             input,

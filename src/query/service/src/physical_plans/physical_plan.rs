@@ -15,6 +15,8 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -28,6 +30,10 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -321,4 +327,81 @@ impl Clone for Box<dyn IPhysicalPlan + 'static> {
     }
 }
 
-pub type PhysicalPlan = Box<dyn IPhysicalPlan>;
+pub struct PhysicalPlan {
+    inner: Box<dyn IPhysicalPlan + 'static>,
+}
+
+impl Clone for PhysicalPlan {
+    #[recursive::recursive]
+    fn clone(&self) -> Self {
+        PhysicalPlan {
+            inner: dyn_clone::clone_box(&**self.inner),
+        }
+    }
+}
+
+impl Debug for PhysicalPlan {
+    #[recursive::recursive]
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl Deref for PhysicalPlan {
+    type Target = dyn IPhysicalPlan;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl DerefMut for PhysicalPlan {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.deref_mut()
+    }
+}
+
+
+impl PhysicalPlan {
+    pub fn new<T: IPhysicalPlan + 'static>(inner: T) -> PhysicalPlan {
+        PhysicalPlan {
+            inner: Box::new(inner),
+        }
+    }
+
+    #[recursive::recursive]
+    pub fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
+        let mut children = vec![];
+        for child in self.children() {
+            children.push(child.derive_with(handle));
+        }
+
+        match handle.derive(self, children) {
+            Ok(v) => v,
+            Err(children) => self.derive(children),
+        }
+    }
+
+    #[recursive::recursive]
+    pub fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
+        for child in self.children() {
+            child.visit(visitor)?;
+        }
+
+        visitor.visit(self)
+    }
+
+    pub fn format(
+        &self,
+        metadata: &Metadata,
+        profs: HashMap<u32, PlanProfile>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut context = FormatContext {
+            profs,
+            metadata,
+            scan_id_to_runtime_filters: HashMap::new(),
+        };
+
+        self.formatter()?.format(&mut context)
+    }
+}

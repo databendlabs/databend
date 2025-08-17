@@ -110,7 +110,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let left_side = self.build(s_expr.child(0)?, Default::default()).await?;
         let right_side = self.build(s_expr.child(1)?, required).await?;
-        Ok(Box::new(Sequence {
+        Ok(PhysicalPlan::new(Sequence {
             plan_id: 0,
             stat_info: Some(stat_info),
             left: left_side,

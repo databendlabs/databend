@@ -447,7 +447,7 @@ impl ReclusterTableInterpreter {
 
             // Add exchange operator for data distribution,
             // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
-            plan = Box::new(Exchange {
+            plan = PhysicalPlan::new(Exchange {
                 input: plan,
                 kind: FragmentKind::Normal,
                 keys: vec![expr],
@@ -463,7 +463,7 @@ impl ReclusterTableInterpreter {
 
         // Create the Hilbert partition physical plan,
         // collecting data into partitions and persist them
-        plan = Box::new(HilbertPartition {
+        plan = PhysicalPlan::new(HilbertPartition {
             rows_per_block,
             table_meta_timestamps,
 
@@ -513,7 +513,7 @@ impl ReclusterTableInterpreter {
                 removed_segment_indexes,
                 removed_segment_summary,
             } => {
-                let root = Box::new(Recluster {
+                let root = PhysicalPlan::new(Recluster {
                     tasks,
                     table_meta_timestamps,
 
@@ -537,7 +537,7 @@ impl ReclusterTableInterpreter {
             }
             ReclusterParts::Compact(parts) => {
                 let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let root = Box::new(CompactSource {
+                let root = PhysicalPlan::new(CompactSource {
                     parts,
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
@@ -711,7 +711,7 @@ impl ReclusterTableInterpreter {
         table_meta_timestamps: TableMetaTimestamps,
     ) -> PhysicalPlan {
         if is_distributed {
-            input = Box::new(Exchange {
+            input = PhysicalPlan::new(Exchange {
                 input,
                 kind: FragmentKind::Merge,
                 keys: vec![],
@@ -727,7 +727,7 @@ impl ReclusterTableInterpreter {
             kind = MutationKind::Recluster
         }
 
-        Box::new(CommitSink {
+        PhysicalPlan::new(CommitSink {
             input,
             table_info,
             snapshot: Some(snapshot),

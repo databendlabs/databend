@@ -134,7 +134,7 @@ impl CopyIntoTableInterpreter {
             }
 
             (
-                CopyIntoTableSource::Stage(Box::new(TableScan {
+                CopyIntoTableSource::Stage(PhysicalPlan::new(TableScan {
                     scan_id: 0,
                     name_mapping,
                     stat_info: None,
@@ -147,7 +147,7 @@ impl CopyIntoTableInterpreter {
             )
         };
 
-        let mut root: PhysicalPlan = Box::new(CopyIntoTable {
+        let mut root = PhysicalPlan::new(CopyIntoTable {
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
@@ -163,7 +163,7 @@ impl CopyIntoTableInterpreter {
         });
 
         if plan.enable_distributed {
-            root = Box::new(Exchange {
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),

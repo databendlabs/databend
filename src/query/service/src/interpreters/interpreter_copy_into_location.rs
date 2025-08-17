@@ -90,7 +90,7 @@ impl CopyIntoLocationInterpreter {
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
 
-        let mut physical_plan: PhysicalPlan = Box::new(CopyIntoLocation {
+        let mut physical_plan = PhysicalPlan::new(CopyIntoLocation {
             input: query_physical_plan,
             project_columns: query_interpreter.get_result_columns(),
             input_data_schema: query_result_schema,
