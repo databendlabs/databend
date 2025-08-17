@@ -328,3 +328,55 @@ impl<C> Clone for ErrorCode<C> {
         .set_stacks(self.stacks().to_vec())
     }
 }
+
+/// Common error code groups for use with ErrorCodeResultExt
+pub mod error_code_groups {
+    use super::ErrorCode;
+
+    /// All "unknown resource" errors that typically mean "not found"
+    pub const UNKNOWN_RESOURCE: &[u16] = &[
+        ErrorCode::UNKNOWN_DATABASE,
+        ErrorCode::UNKNOWN_TABLE,
+        ErrorCode::UNKNOWN_CATALOG,
+        ErrorCode::UNKNOWN_VIEW,
+        ErrorCode::UNKNOWN_COLUMN,
+        ErrorCode::UNKNOWN_SEQUENCE,
+    ];
+}
+
+/// Extension trait for Result<T, ErrorCode> to handle common error patterns
+pub trait ErrorCodeResultExt<T> {
+    /// Converts any of the specified error codes to None, other errors propagate, success becomes Some(T)
+    fn or_error_codes(self, codes: &[u16]) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_DATABASE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_database(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_TABLE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_table(self) -> Result<Option<T>>;
+
+    /// Converts common "not found" errors to None (database, table, sequence, etc.)
+    fn or_unknown_resource(self) -> Result<Option<T>>;
+}
+
+impl<T> ErrorCodeResultExt<T> for Result<T> {
+    fn or_error_codes(self, codes: &[u16]) -> Result<Option<T>> {
+        match self {
+            Ok(value) => Ok(Some(value)),
+            Err(e) if codes.iter().any(|c| *c == e.code()) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn or_unknown_database(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_DATABASE])
+    }
+
+    fn or_unknown_table(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_TABLE])
+    }
+
+    fn or_unknown_resource(self) -> Result<Option<T>> {
+        self.or_error_codes(error_code_groups::UNKNOWN_RESOURCE)
+    }
+}
