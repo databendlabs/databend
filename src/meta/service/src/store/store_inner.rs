@@ -188,10 +188,10 @@ impl RaftStoreInner {
         let g = self
             .state_machine
             .read()
-            .with_timing(|_output, total, busy| {
+            .with_timing(|_output, total, _busy| {
                 info!(
-                    "StateMachineLock-Read-Acquire-Elapsed: total: {:?}, busy: {:?}; {}",
-                    total, busy, &for_what
+                    "StateMachineLock-Read-Acquire: total: {:?}; {}",
+                    total, &for_what
                 );
             })
             .await;
@@ -208,10 +208,10 @@ impl RaftStoreInner {
         let g = self
             .state_machine
             .write()
-            .with_timing(|_output, total, busy| {
+            .with_timing(|_output, total, _busy| {
                 info!(
-                    "StateMachineLock-Write-Acquire-Elapsed: total: {:?}, busy: {:?}; {}",
-                    total, busy, &for_what
+                    "StateMachineLock-Write-Acquire: total: {:?}; {}",
+                    total, &for_what
                 );
             })
             .await;
@@ -313,8 +313,21 @@ impl RaftStoreInner {
                 .get_state_machine_write("do_build_snapshot-replace-compacted")
                 .await;
             sm.levels_mut()
-                .replace_with_compacted(compactor, db.clone());
+                .replace_with_compacted(&mut compactor, db.clone());
+            info!("do_build_snapshot-replace_with_compacted returned");
         }
+
+        // Consume and drop compactor, dropping it may involve blocking IO
+        databend_common_base::runtime::spawn_blocking(move || {
+            let drop_start = std::time::Instant::now();
+            drop(compactor);
+            info!(
+                "do_build_snapshot-compactor-drop completed in {:?}",
+                drop_start.elapsed()
+            );
+        })
+        .await
+        .expect("compactor drop task should not panic");
 
         // Clean old snapshot
         ss_store.new_loader().clean_old_snapshots().await?;

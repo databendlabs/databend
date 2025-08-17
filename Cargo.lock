@@ -13235,9 +13235,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "068a45a83c2ce7d6bdad6ba83719ff08ba9818d210b613af13647ea33ab7d23c"
+checksum = "9659467da3a686edc86248421dcebabf2971fbba3ad4679e1da2d63c57f8d5dc"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
