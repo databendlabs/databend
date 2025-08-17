@@ -68,7 +68,6 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }
-tokio = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 
