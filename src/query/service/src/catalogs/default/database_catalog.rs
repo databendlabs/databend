@@ -24,6 +24,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
@@ -116,6 +117,9 @@ use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::default::SessionCatalog;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
+
+use super::super::merge_option_iterators;
+
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)
@@ -176,36 +180,34 @@ impl Catalog for DatabaseCatalog {
 
     #[async_backtrace::framed]
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
-        let r = self.immutable_catalog.get_database(tenant, db_name).await;
-        match r {
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog.get_database(tenant, db_name).await
-                } else {
-                    Err(e)
-                }
-            }
-            Ok(db) => Ok(db),
+        let res = self
+            .immutable_catalog
+            .get_database(tenant, db_name)
+            .await
+            .or_unknown_database()?;
+        if let Some(db) = res {
+            return Ok(db);
         }
+        self.mutable_catalog.get_database(tenant, db_name).await
     }
 
     #[async_backtrace::framed]
     async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self
+        let mut results = self
             .immutable_catalog
             .list_databases_history(tenant)
             .await?;
-        let mut other = self.mutable_catalog.list_databases_history(tenant).await?;
-        dbs.append(&mut other);
-        Ok(dbs)
+        let mut other_results = self.mutable_catalog.list_databases_history(tenant).await?;
+        results.append(&mut other_results);
+        Ok(results)
     }
 
     #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
-        let mut other = self.mutable_catalog.list_databases(tenant).await?;
-        dbs.append(&mut other);
-        Ok(dbs)
+        let mut results = self.immutable_catalog.list_databases(tenant).await?;
+        let mut other_results = self.mutable_catalog.list_databases(tenant).await?;
+        results.append(&mut other_results);
+        Ok(results)
     }
 
     #[async_backtrace::framed]
@@ -261,17 +263,14 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res = self.immutable_catalog.get_table_by_info(table_info);
-        match res {
-            Ok(t) => Ok(t),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    self.mutable_catalog.get_table_by_info(table_info)
-                } else {
-                    Err(e)
-                }
-            }
+        let res = self
+            .immutable_catalog
+            .get_table_by_info(table_info)
+            .or_unknown_table()?;
+        if let Some(table) = res {
+            return Ok(table);
         }
+        self.mutable_catalog.get_table_by_info(table_info)
     }
 
     #[async_backtrace::framed]
@@ -292,28 +291,16 @@ impl Catalog for DatabaseCatalog {
         table_ids: &[MetaId],
         get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        let sys_table_names = self
+        let sys_results = self
             .immutable_catalog
             .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
             .await?;
-        let mut_table_names = self
+        let mut_results = self
             .mutable_catalog
             .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
             .await?;
 
-        let mut table_names = Vec::with_capacity(table_ids.len());
-        for (mut_table_name, sys_table_name) in
-            mut_table_names.into_iter().zip(sys_table_names.into_iter())
-        {
-            if mut_table_name.is_some() {
-                table_names.push(mut_table_name);
-            } else if sys_table_name.is_some() {
-                table_names.push(sys_table_name);
-            } else {
-                table_names.push(None);
-            }
-        }
-        Ok(table_names)
+        Ok(merge_option_iterators(mut_results, sys_results))
     }
 
     #[async_backtrace::framed]
@@ -375,26 +362,16 @@ impl Catalog for DatabaseCatalog {
         tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
-        let sys_db_names = self
+        let sys_results = self
             .immutable_catalog
             .mget_database_names_by_ids(tenant, db_ids)
             .await?;
-        let mut_db_names = self
+        let mut_results = self
             .mutable_catalog
             .mget_database_names_by_ids(tenant, db_ids)
             .await?;
 
-        let mut db_names = Vec::with_capacity(db_ids.len());
-        for (mut_db_name, sys_db_name) in mut_db_names.into_iter().zip(sys_db_names.into_iter()) {
-            if mut_db_name.is_some() {
-                db_names.push(mut_db_name);
-            } else if sys_db_name.is_some() {
-                db_names.push(sys_db_name);
-            } else {
-                db_names.push(None);
-            }
-        }
-        Ok(db_names)
+        Ok(merge_option_iterators(mut_results, sys_results))
     }
 
     #[async_backtrace::framed]
@@ -407,19 +384,14 @@ impl Catalog for DatabaseCatalog {
         let res = self
             .immutable_catalog
             .get_table(tenant, db_name, table_name)
-            .await;
-        match res {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog
-                        .get_table(tenant, db_name, table_name)
-                        .await
-                } else {
-                    Err(e)
-                }
-            }
+            .await
+            .or_unknown_database()?;
+        if let Some(table) = res {
+            return Ok(table);
         }
+        self.mutable_catalog
+            .get_table(tenant, db_name, table_name)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -432,34 +404,27 @@ impl Catalog for DatabaseCatalog {
         let res = self
             .immutable_catalog
             .get_table_history(tenant, db_name, table_name)
-            .await;
-        match res {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog
-                        .get_table_history(tenant, db_name, table_name)
-                        .await
-                } else {
-                    Err(e)
-                }
-            }
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            return Ok(tables);
         }
+        self.mutable_catalog
+            .get_table_history(tenant, db_name, table_name)
+            .await
     }
 
     #[async_backtrace::framed]
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let r = self.immutable_catalog.list_tables(tenant, db_name).await;
-        match r {
-            Ok(x) => Ok(x),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog.list_tables(tenant, db_name).await
-                } else {
-                    Err(e)
-                }
-            }
+        let res = self
+            .immutable_catalog
+            .list_tables(tenant, db_name)
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            return Ok(tables);
         }
+        self.mutable_catalog.list_tables(tenant, db_name).await
     }
 
     #[async_backtrace::framed]
@@ -481,22 +446,17 @@ impl Catalog for DatabaseCatalog {
         tenant: &Tenant,
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        let r = self
+        let res = self
             .immutable_catalog
             .list_tables_history(tenant, db_name)
-            .await;
-        match r {
-            Ok(x) => Ok(x),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    self.mutable_catalog
-                        .list_tables_history(tenant, db_name)
-                        .await
-                } else {
-                    Err(e)
-                }
-            }
+            .await
+            .or_unknown_database()?;
+        if let Some(tables) = res {
+            return Ok(tables);
         }
+        self.mutable_catalog
+            .list_tables_history(tenant, db_name)
+            .await
     }
 
     #[async_backtrace::framed]
