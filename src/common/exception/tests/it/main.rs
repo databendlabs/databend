@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod error_code_result_ext;
 mod exception;
 mod exception_flight;
 mod prelude;
