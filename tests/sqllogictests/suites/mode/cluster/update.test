@@ -29,7 +29,7 @@ Fragment 0:
   DataExchange: Merge
     ExchangeSink
     ├── output columns: []
-    ├── destination fragment: [1]
+    ├── destination fragment: [2]
     └── MutationSource(Update)
         ├── table: default.db1.t1
         ├── output columns: [a (#0), b (#1), _predicate (#2)]
@@ -40,7 +40,7 @@ Fragment 0:
         └── partitions scanned: 1
 (empty)
 (empty)
-Fragment 1:
+Fragment 2:
     CommitSink
     └── ExchangeSource
         ├── output columns: []
@@ -56,6 +56,6 @@ SELECT * FROM t1 ORDER BY b
 query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
-Fragment 0:
+Fragment 1:
     EmptyResultScan
 (empty)

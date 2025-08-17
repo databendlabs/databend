@@ -60,6 +60,24 @@ EXAMPLES:
 EOF
 }
 
+# Format file size
+format_size() {
+	local size="$1"
+	if [[ "$size" =~ ^[0-9]+$ ]]; then
+		if (( size >= 1073741824 )); then
+			echo "$(( size / 1073741824 )).$(( (size % 1073741824) / 107374182 ))GB"
+		elif (( size >= 1048576 )); then
+			echo "$(( size / 1048576 )).$(( (size % 1048576) / 104857 ))MB"
+		elif (( size >= 1024 )); then
+			echo "$(( size / 1024 )).$(( (size % 1024) / 102 ))KB"
+		else
+			echo "${size}B"
+		fi
+	else
+		echo "$size"
+	fi
+}
+
 # Interactive file selector
 interactive_file_selector() {
 	local stage="$1"
@@ -67,25 +85,55 @@ interactive_file_selector() {
 
 	echo "Fetching file list from stage @${stage}..."
 
-	# Get file list
-	local file_list
-	file_list=$(bendsql --dsn "${dsn}" --query="list @${stage};" 2>/dev/null | awk '{print $1}' | grep -E '\.(tar\.gz|tgz)$' | sort)
+	# Get raw output from list command
+	local raw_output
+	raw_output=$(bendsql --dsn "${dsn}" --query="list @${stage};" 2>/dev/null)
 
-	if [[ -z "$file_list" ]]; then
-		log_error "No .tar.gz files found in stage @${stage}"
+	if [[ -z "$raw_output" ]]; then
+		log_error "Failed to get file list from stage @${stage}"
 		return 1
 	fi
 
-	# Convert to array
+	# Parse files and sizes
 	local files=()
+	local sizes=()
+	local file_list=""
+
+	# Process each line to extract filename and size
 	while IFS= read -r line; do
-		[[ -n "$line" ]] && files+=("$line")
-	done <<<"$file_list"
+		# Skip empty lines and headers
+		[[ -z "$line" ]] && continue
+		[[ "$line" =~ ^[[:space:]]*name ]] && continue
+		[[ "$line" =~ ^[[:space:]]*-+ ]] && continue
+		
+		# Extract filename (first field) and size (second field)
+		local filename=$(echo "$line" | awk '{print $1}')
+		local size=$(echo "$line" | awk '{print $2}')
+		
+		# Only include tar.gz files
+		if [[ "$filename" =~ \.(tar\.gz|tgz)$ ]]; then
+			files+=("$filename")
+			sizes+=("$(format_size "$size")")
+		fi
+	done <<< "$raw_output"
 
 	if [[ ${#files[@]} -eq 0 ]]; then
 		log_error "No .tar.gz files found in stage @${stage}"
 		return 1
 	fi
+
+	# Sort files (and corresponding sizes)
+	local sorted_files=()
+	local sorted_sizes=()
+	local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2 | cut -d: -f1))
+	
+	for i in "${indices[@]}"; do
+		sorted_files+=("${files[$i]}")
+		sorted_sizes+=("${sizes[$i]}")
+	done
+	
+	files=("${sorted_files[@]}")
+	sizes=("${sorted_sizes[@]}")
 
 	# Default to last file
 	local selected=$((${#files[@]} - 1))
@@ -96,6 +144,15 @@ interactive_file_selector() {
 	echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
 	echo ""
 
+	# Calculate max filename length for alignment
+	local max_name_len=0
+	for filename in "${files[@]}"; do
+		if [[ ${#filename} -gt $max_name_len ]]; then
+			max_name_len=${#filename}
+		fi
+	done
+	max_name_len=$((max_name_len + 2))
+
 	# Display function
 	display_files() {
 		# Clear screen and move to top
@@ -103,17 +160,20 @@ interactive_file_selector() {
 		echo "Stage: @${stage} ($total files)"
 		echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
 		echo ""
+		printf "%-${max_name_len}s %s\n" "Filename" "Size"
+		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len-1)) '' | tr ' ' '-')" "----"
 
 		for i in "${!files[@]}"; do
+			local display_line="$(printf "%-${max_name_len}s %s" "${files[$i]}" "${sizes[$i]}")"
 			if [[ $i -eq $selected ]]; then
-				echo -e "\033[7m> ${files[$i]}\033[0m" # Highlighted
+				echo -e "\033[7m> $display_line\033[0m" # Highlighted
 			else
-				echo "  ${files[$i]}"
+				echo "  $display_line"
 			fi
 		done
 
 		echo ""
-		echo "Selected: ${files[$selected]}"
+		echo "Selected: ${files[$selected]} (${sizes[$selected]})"
 	}
 
 	# Initial display
@@ -148,7 +208,7 @@ interactive_file_selector() {
 			;;
 		'') # Enter
 			echo ""
-			echo "Selected: ${files[$selected]}"
+			echo "Selected: ${files[$selected]} (${sizes[$selected]})"
 			SELECTED_FILE="${files[$selected]}"
 			return 0
 			;;

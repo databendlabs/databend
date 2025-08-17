@@ -39,6 +39,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_sql::binder::AsyncFunctionDesc;
 use jiff::tz::TimeZone;
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
@@ -49,7 +50,6 @@ use redis::RedisConnectionInfo;
 use sqlx::MySqlPool;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
-use crate::sql::executor::physical_plans::AsyncFunctionDesc;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::DictGetFunctionArgument;
 use crate::sql::plans::DictionarySource;

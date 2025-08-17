@@ -36,7 +36,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
@@ -45,6 +44,7 @@ use tempfile::TempDir;
 
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
+use crate::physical_plans::UdfFunctionDesc;
 
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
@@ -604,9 +604,10 @@ mod venv {
 
     use databend_common_cache::LruCache;
     use databend_common_cache::MemSized;
-    use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
     use parking_lot::RwLock;
     use tempfile::TempDir;
+
+    use crate::physical_plans::UdfFunctionDesc;
 
     pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
         if deps.is_empty() {

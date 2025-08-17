@@ -22,9 +22,9 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_basic::view_table::ViewTable;
+use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_system::generate_catalog_meta;
-use databend_common_storages_view::view_table::ViewTable;
-use databend_common_storages_view::view_table::QUERY;
 
 pub struct KeyColumnUsageTable {}
 

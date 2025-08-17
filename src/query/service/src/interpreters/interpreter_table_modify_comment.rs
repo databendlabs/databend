@@ -19,8 +19,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::plans::ModifyTableCommentPlan;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;

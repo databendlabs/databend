@@ -23,8 +23,8 @@ use databend_common_sql::binder::parse_storage_params_from_uri;
 use databend_common_sql::plans::ModifyTableConnectionPlan;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
 use log::debug;
 
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;

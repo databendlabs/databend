@@ -20,11 +20,11 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SourceSchemaIndex;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::binder::AsyncFunctionDesc;
 
 use crate::pipelines::processors::transforms::transform_async_function::SequenceCounters;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::AsyncFunctionDesc;
 use crate::sql::plans::AsyncFunctionArgument;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.

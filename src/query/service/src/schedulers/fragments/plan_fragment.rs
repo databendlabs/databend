@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -24,27 +25,29 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_settings::ReplaceIntoShuffleStrategy;
-use databend_common_sql::executor::physical_plans::CompactSource;
-use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::MutationSource;
-use databend_common_sql::executor::physical_plans::Recluster;
-use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 
+use crate::physical_plans::CompactSource;
+use crate::physical_plans::ConstantTableScan;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::Recluster;
+use crate::physical_plans::ReplaceDeduplicate;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::TableScan;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentAction;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sessions::QueryContext;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanReplacer;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,9 +87,9 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         actions: &mut QueryFragmentsActions,
     ) -> Result<()> {
-        for input in self.source_fragments.iter() {
-            input.get_actions(ctx.clone(), actions)?;
-        }
+        // for input in self.source_fragments.iter() {
+        //     input.get_actions(ctx.clone(), actions)?;
+        // }
 
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
@@ -211,13 +214,11 @@ impl PlanFragment {
         }
 
         for (executor, sources) in executor_partitions {
-            let mut plan = self.plan.clone();
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
-            let mut replace_read_source = ReplaceReadSource { sources };
-            plan = replace_read_source.replace(&plan)?;
+            let mut handle = ReadSourceDeriveHandle::create(sources);
+            let plan = self.plan.derive_with(&mut handle);
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+            fragment_actions.add_action(QueryFragmentAction::create(executor.clone(), plan));
         }
 
         Ok(())
@@ -228,12 +229,11 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let plan = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
+        let Some(plan) = ExchangeSink::from_physical_plan(&self.plan) else {
+            unreachable!("logic error");
         };
 
-        let plan = PhysicalPlan::ExchangeSink(plan.clone());
+        let plan: PhysicalPlan = PhysicalPlan::new(plan.clone());
         let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
@@ -242,11 +242,8 @@ impl PlanFragment {
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.into_iter() {
-            let mut plan = self.plan.clone();
-
-            let mut replace_mutation_source = ReplaceMutationSource { partitions: parts };
-            plan = replace_mutation_source.replace(&plan)?;
-
+            let mut handle = MutationSourceDeriveHandle::create(parts);
+            let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
@@ -258,15 +255,44 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let plan = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let plan = match plan.input.as_ref() {
-            PhysicalPlan::ReplaceInto(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let partitions = &plan.segments;
+        struct PartitionsCollector {
+            partitions: Vec<(usize, Location)>,
+        }
+
+        impl PartitionsCollector {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(PartitionsCollector { partitions: vec![] })
+            }
+
+            pub fn take(&mut self) -> Vec<(usize, Location)> {
+                std::mem::take(&mut self.partitions)
+            }
+        }
+
+        impl PhysicalPlanVisitor for PartitionsCollector {
+            fn as_any(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+                if let Some(v) = ReplaceInto::from_physical_plan(plan) {
+                    assert!(self.partitions.is_empty());
+                    self.partitions = v.segments.clone();
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = PartitionsCollector::create();
+        self.plan.visit(&mut visitor)?;
+
+        let mut partitions = vec![];
+
+        if let Some(v) = visitor.as_any().downcast_mut::<PartitionsCollector>() {
+            partitions = v.take();
+        }
+
         let executors = Fragmenter::get_executors(ctx.clone());
         let local_id = ctx.get_cluster().local_id.clone();
         match ctx.get_settings().get_replace_into_shuffle_strategy()? {
@@ -276,13 +302,8 @@ impl PlanFragment {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
 
-                    let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: parts,
-                        slot: None,
-                        need_insert,
-                    };
-                    plan = replace_replace_into.replace(&plan)?;
-
+                    let mut handle = ReplaceDeriveHandle::create(parts, None, need_insert);
+                    plan = plan.derive_with(&mut handle);
                     fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
@@ -291,17 +312,17 @@ impl PlanFragment {
                 // assign all the segment locations to each one of the executors,
                 // but for each segment, one executor only need to take part of the blocks
                 for (executor_idx, executor) in executors.into_iter().enumerate() {
-                    let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
-                    let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: partitions.clone(),
-                        slot: Some(BlockSlotDescription {
+                    let mut handle = ReplaceDeriveHandle::create(
+                        partitions.clone(),
+                        Some(BlockSlotDescription {
                             num_slots,
                             slot: executor_idx as u32,
                         }),
                         need_insert,
-                    };
-                    plan = replace_replace_into.replace(&plan)?;
+                    );
+
+                    let plan = self.plan.derive_with(&mut handle);
 
                     fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
@@ -315,26 +336,50 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let exchange_sink = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let compact_block = match exchange_sink.input.as_ref() {
-            PhysicalPlan::CompactSource(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
+        struct SourceCollector {
+            partitions: Option<Partitions>,
+        }
 
-        let partitions: &Partitions = &compact_block.parts;
+        impl SourceCollector {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(SourceCollector { partitions: None })
+            }
+
+            pub fn take(&mut self) -> Partitions {
+                self.partitions.take().unwrap()
+            }
+        }
+
+        impl PhysicalPlanVisitor for SourceCollector {
+            fn as_any(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+                if let Some(v) = CompactSource::from_physical_plan(plan) {
+                    assert!(self.partitions.is_none());
+                    self.partitions = Some(v.parts.clone());
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = SourceCollector::create();
+        self.plan.visit(&mut visitor)?;
+
+        let partitions = visitor
+            .as_any()
+            .downcast_mut::<SourceCollector>()
+            .unwrap()
+            .take();
         let executors = Fragmenter::get_executors_nodes(ctx);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.into_iter() {
-            let mut plan = self.plan.clone();
-
-            let mut replace_compact_source = ReplaceCompactBlock { partitions: parts };
-            plan = replace_compact_source.replace(&plan)?;
-
+            let mut handle = CompactSourceDeriveHandle::create(parts);
+            let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
@@ -346,16 +391,46 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let exchange_sink = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
-        let recluster = match exchange_sink.input.as_ref() {
-            PhysicalPlan::Recluster(plan) => plan,
-            _ => unreachable!("logic error"),
-        };
+        struct TasksCollector {
+            tasks: Vec<ReclusterTask>,
+        }
 
-        let tasks = recluster.tasks.clone();
+        impl TasksCollector {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(TasksCollector { tasks: Vec::new() })
+            }
+
+            pub fn take(&mut self) -> Vec<ReclusterTask> {
+                std::mem::take(&mut self.tasks)
+            }
+        }
+
+        impl PhysicalPlanVisitor for TasksCollector {
+            fn as_any(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+                if let Some(recluster) = Recluster::from_physical_plan(plan) {
+                    if !self.tasks.is_empty() {
+                        unreachable!("logic error, expect only one recluster");
+                    }
+
+                    self.tasks = recluster.tasks.clone()
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = TasksCollector::create();
+        self.plan.visit(&mut visitor)?;
+
+        let mut tasks = vec![];
+        if let Some(visitor) = visitor.as_any().downcast_mut::<TasksCollector>() {
+            tasks = visitor.take();
+        }
+
         let executors = Fragmenter::get_executors(ctx);
         if tasks.len() > executors.len() {
             return Err(ErrorCode::Internal(format!(
@@ -367,9 +442,8 @@ impl PlanFragment {
 
         let task_reshuffle = Self::reshuffle(executors, tasks)?;
         for (executor, tasks) in task_reshuffle.into_iter() {
-            let mut plan = self.plan.clone();
-            let mut replace_recluster = ReplaceRecluster { tasks };
-            plan = replace_recluster.replace(&plan)?;
+            let mut handle = ReclusterDeriveHandle::create(tasks);
+            let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
@@ -423,30 +497,53 @@ impl PlanFragment {
             ));
         }
 
-        let mut data_sources = HashMap::new();
+        struct DataSourceVisitor {
+            data_sources: HashMap<u32, DataSource>,
+        }
 
-        let mut collect_data_source = |plan: &PhysicalPlan| {
-            if let PhysicalPlan::TableScan(scan) = plan {
-                data_sources.insert(scan.plan_id, DataSource::Table(*scan.source.clone()));
-            } else if let PhysicalPlan::ConstantTableScan(scan) = plan {
-                data_sources.insert(
-                    scan.plan_id,
-                    DataSource::ConstTable(ConstTableColumn {
-                        columns: scan.values.clone(),
-                        num_rows: scan.num_rows,
-                    }),
-                );
+        impl DataSourceVisitor {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(DataSourceVisitor {
+                    data_sources: HashMap::new(),
+                })
             }
-        };
 
-        PhysicalPlan::traverse(
-            &self.plan,
-            &mut |_| true,
-            &mut collect_data_source,
-            &mut |_| {},
-        );
+            pub fn take(&mut self) -> HashMap<u32, DataSource> {
+                std::mem::take(&mut self.data_sources)
+            }
+        }
 
-        Ok(data_sources)
+        impl PhysicalPlanVisitor for DataSourceVisitor {
+            fn as_any(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+                if let Some(scan) = TableScan::from_physical_plan(plan) {
+                    self.data_sources
+                        .insert(plan.get_id(), DataSource::Table(*scan.source.clone()));
+                } else if let Some(scan) = ConstantTableScan::from_physical_plan(plan) {
+                    self.data_sources.insert(
+                        plan.get_id(),
+                        DataSource::ConstTable(ConstTableColumn {
+                            columns: scan.values.clone(),
+                            num_rows: scan.num_rows,
+                        }),
+                    );
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut visitor = DataSourceVisitor::create();
+        self.plan.visit(&mut visitor)?;
+
+        let data_sources = visitor
+            .as_any()
+            .downcast_mut::<DataSourceVisitor>()
+            .unwrap();
+        Ok(data_sources.take())
     }
 }
 
@@ -487,137 +584,208 @@ impl TryFrom<DataSource> for ConstTableColumn {
     }
 }
 
-struct ReplaceReadSource {
+struct ReadSourceDeriveHandle {
     sources: HashMap<u32, DataSource>,
 }
 
-impl PhysicalPlanReplacer for ReplaceReadSource {
-    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
-        let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "Cannot find data source for table scan plan {}",
-                plan.plan_id
-            ))
-        })?;
+impl ReadSourceDeriveHandle {
+    pub fn create(sources: HashMap<u32, DataSource>) -> Box<dyn DeriveHandle> {
+        Box::new(ReadSourceDeriveHandle { sources })
+    }
+}
 
-        let source = DataSourcePlan::try_from(source)?;
-
-        Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: plan.plan_id,
-            scan_id: plan.scan_id,
-            source: Box::new(source),
-            name_mapping: plan.name_mapping.clone(),
-            table_index: plan.table_index,
-            stat_info: plan.stat_info.clone(),
-            internal_column: plan.internal_column.clone(),
-        }))
+impl DeriveHandle for ReadSourceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
-    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
-        let source = self.sources.remove(&plan.plan_id).ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "Cannot find data source for constant table scan plan {}",
-                plan.plan_id
-            ))
-        })?;
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        if let Some(table_scan) = TableScan::from_physical_plan(v) {
+            let Some(source) = self.sources.remove(&table_scan.get_id()) else {
+                unreachable!(
+                    "Cannot find data source for table scan plan {}",
+                    table_scan.get_id()
+                )
+            };
 
-        let const_table_columns = ConstTableColumn::try_from(source)?;
+            let Ok(source) = DataSourcePlan::try_from(source) else {
+                unreachable!("Cannot create data source plan");
+            };
 
-        Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-            plan_id: plan.plan_id,
-            values: const_table_columns.columns,
-            num_rows: const_table_columns.num_rows,
-            output_schema: plan.output_schema.clone(),
-        }))
-    }
+            return Ok(PhysicalPlan::new(TableScan {
+                source: Box::new(source),
+                ..table_scan.clone()
+            }));
+        } else if let Some(table_scan) = ConstantTableScan::from_physical_plan(v) {
+            let Some(source) = self.sources.remove(&table_scan.get_id()) else {
+                unreachable!(
+                    "Cannot find data source for constant table scan plan {}",
+                    table_scan.get_id()
+                )
+            };
 
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        match &plan.source {
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let input = self.replace(query_physical_plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-            CopyIntoTableSource::Stage(v) => {
-                let input = self.replace(v)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Stage(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
+            let Ok(const_table_columns) = ConstTableColumn::try_from(source) else {
+                unreachable!("Cannot convert Table to Vec<Column>")
+            };
+
+            return Ok(PhysicalPlan::new(ConstantTableScan {
+                values: const_table_columns.columns,
+                num_rows: const_table_columns.num_rows,
+                ..table_scan.clone()
+            }));
         }
+
+        Err(children)
     }
 }
 
-struct ReplaceRecluster {
-    pub tasks: Vec<ReclusterTask>,
+struct ReclusterDeriveHandle {
+    tasks: Vec<ReclusterTask>,
 }
 
-impl PhysicalPlanReplacer for ReplaceRecluster {
-    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::Recluster(Box::new(Recluster {
+impl ReclusterDeriveHandle {
+    pub fn create(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
+        Box::new(ReclusterDeriveHandle { tasks })
+    }
+}
+
+impl DeriveHandle for ReclusterDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        let Some(recluster) = Recluster::from_physical_plan(v) else {
+            return Err(children);
+        };
+
+        Ok(PhysicalPlan::new(Recluster {
             tasks: self.tasks.clone(),
-            ..plan.clone()
-        })))
-    }
-}
-
-struct ReplaceMutationSource {
-    pub partitions: Partitions,
-}
-
-impl PhysicalPlanReplacer for ReplaceMutationSource {
-    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::MutationSource(MutationSource {
-            partitions: self.partitions.clone(),
-            ..plan.clone()
+            ..recluster.clone()
         }))
     }
 }
 
-struct ReplaceCompactBlock {
-    pub partitions: Partitions,
+struct MutationSourceDeriveHandle {
+    partitions: Partitions,
 }
 
-impl PhysicalPlanReplacer for ReplaceCompactBlock {
-    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactSource(Box::new(CompactSource {
-            parts: self.partitions.clone(),
-            ..plan.clone()
-        })))
+impl MutationSourceDeriveHandle {
+    pub fn create(partitions: Partitions) -> Box<dyn DeriveHandle> {
+        Box::new(MutationSourceDeriveHandle { partitions })
     }
 }
 
-struct ReplaceReplaceInto {
+impl DeriveHandle for MutationSourceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        let Some(mutation_source) = MutationSource::from_physical_plan(v) else {
+            return Err(children);
+        };
+
+        Ok(PhysicalPlan::new(MutationSource {
+            partitions: self.partitions.clone(),
+            ..mutation_source.clone()
+        }))
+    }
+}
+
+struct CompactSourceDeriveHandle {
+    pub partitions: Partitions,
+}
+
+impl CompactSourceDeriveHandle {
+    pub fn create(partitions: Partitions) -> Box<dyn DeriveHandle> {
+        Box::new(CompactSourceDeriveHandle { partitions })
+    }
+}
+
+impl DeriveHandle for CompactSourceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        let Some(compact_source) = CompactSource::from_physical_plan(v) else {
+            return Err(children);
+        };
+
+        Ok(PhysicalPlan::new(CompactSource {
+            parts: self.partitions.clone(),
+            ..compact_source.clone()
+        }))
+    }
+}
+
+struct ReplaceDeriveHandle {
     pub partitions: Vec<(usize, Location)>,
     // for standalone mode, slot is None
     pub slot: Option<BlockSlotDescription>,
     pub need_insert: bool,
 }
 
-impl PhysicalPlanReplacer for ReplaceReplaceInto {
-    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
-            input: Box::new(input),
-            need_insert: self.need_insert,
-            segments: self.partitions.clone(),
-            block_slots: self.slot.clone(),
-            ..plan.clone()
-        })))
+impl ReplaceDeriveHandle {
+    pub fn create(
+        partitions: Vec<(usize, Location)>,
+        slot: Option<BlockSlotDescription>,
+        need_insert: bool,
+    ) -> Box<dyn DeriveHandle> {
+        Box::new(ReplaceDeriveHandle {
+            partitions,
+            slot,
+            need_insert,
+        })
+    }
+}
+
+impl DeriveHandle for ReplaceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
-    fn replace_deduplicate(&mut self, plan: &ReplaceDeduplicate) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceDeduplicate(Box::new(
-            ReplaceDeduplicate {
-                input: Box::new(input),
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        mut children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        if let Some(replace_into) = ReplaceInto::from_physical_plan(v) {
+            assert_eq!(children.len(), 1);
+            return Ok(PhysicalPlan::new(ReplaceInto {
+                input: children.remove(0),
+                need_insert: self.need_insert,
+                segments: self.partitions.clone(),
+                block_slots: self.slot.clone(),
+                ..replace_into.clone()
+            }));
+        } else if let Some(replace_deduplicate) = ReplaceDeduplicate::from_physical_plan(v) {
+            assert_eq!(children.len(), 1);
+            return Ok(PhysicalPlan::new(ReplaceDeduplicate {
+                input: children.remove(0),
                 need_insert: self.need_insert,
                 table_is_empty: self.partitions.is_empty(),
-                ..plan.clone()
-            },
-        )))
+                ..replace_deduplicate.clone()
+            }));
+        }
+
+        Err(children)
     }
 }

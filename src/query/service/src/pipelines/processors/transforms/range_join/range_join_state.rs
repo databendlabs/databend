@@ -30,13 +30,13 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ScalarRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::physical_plans::RangeJoin;
-use databend_common_sql::executor::physical_plans::RangeJoinCondition;
-use databend_common_sql::executor::physical_plans::RangeJoinType;
 use databend_common_sql::plans::JoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
+use crate::physical_plans::RangeJoin;
+use crate::physical_plans::RangeJoinCondition;
+use crate::physical_plans::RangeJoinType;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::pipelines::processors::transforms::wrap_true_validity;

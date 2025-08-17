@@ -12,22 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_visitor;
 pub mod physical_plans;
 mod util;
 
 pub mod table_read_plan;
 
-pub use format::format_partial_tree;
-pub use physical_plan::PhysicalPlan;
-pub use physical_plan_builder::MutationBuildInfo;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use physical_plans::build_broadcast_plans;
-pub use physical_plans::PhysicalRuntimeFilter;
-pub use physical_plans::PhysicalRuntimeFilters;
 pub use util::*;
