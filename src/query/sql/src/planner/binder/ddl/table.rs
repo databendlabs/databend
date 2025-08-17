@@ -41,6 +41,7 @@ use databend_common_ast::ast::RenameTableStmt;
 use databend_common_ast::ast::ShowCreateTableStmt;
 use databend_common_ast::ast::ShowDropTablesStmt;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowStatisticsStmt;
 use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
@@ -304,6 +305,34 @@ impl Binder {
             table,
             schema,
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_statistics(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowStatisticsStmt,
+    ) -> Result<Plan> {
+        let ShowStatisticsStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let query = format!(
+            "SELECT * FROM fuse_statistic('{}', '{}', '{}')",
+            catalog, database, table
+        );
+        debug!("show statistics rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(
+            bind_context,
+            query.as_str(),
+            RewriteKind::ShowStatistics(catalog, database, table),
+        )
+        .await
     }
 
     #[async_backtrace::framed]

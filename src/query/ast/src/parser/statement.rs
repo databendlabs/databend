@@ -954,6 +954,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_statistics = map(
+        rule! {
+            SHOW ~ STATISTICS ~ FROM ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::ShowStatistics(ShowStatisticsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_tables_status = map(
         rule! {
             SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
@@ -2654,7 +2667,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
             | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
-            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
+            | #show_statistics: "`SHOW STATISTICS FROM [<database>.]<table>`"
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
@@ -2687,6 +2700,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
+            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
