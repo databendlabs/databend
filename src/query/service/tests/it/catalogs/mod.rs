@@ -14,3 +14,4 @@
 
 mod database_catalog;
 mod immutable_catalogs;
+mod test_error_handling;
