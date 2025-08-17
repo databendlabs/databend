@@ -1,22 +1,6 @@
--- Test for RuleDeduplicateSort optimization
--- This test verifies that duplicate sort items are removed from ORDER BY clause
-
 statement ok
 CREATE TABLE emp (deptno INT, job STRING, sal INT);
 
-statement ok
-INSERT INTO emp VALUES 
-(10, 'MANAGER', 5000),
-(10, 'CLERK', 3000),
-(20, 'MANAGER', 6000),
-(20, 'ANALYST', 4000);
-
--- Test: Comprehensive duplicate sort field scenarios
--- This query tests multiple cases:
--- 1. Simple duplicates: deptno, deptno -> should become just deptno
--- 2. Different directions: job ASC, job DESC -> should keep both
--- 3. Different null handling: sal NULLS FIRST, sal NULLS LAST -> should keep both
--- 4. Mixed duplicates: deptno appears again -> should deduplicate
 query T
 EXPLAIN SELECT deptno AS d, job, sal 
 FROM emp 
