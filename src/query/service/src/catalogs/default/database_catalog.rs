@@ -112,7 +112,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use log::info;
 
-use super::super::merge_option_iterators;
+use super::super::merge_options;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::default::SessionCatalog;
@@ -299,7 +299,7 @@ impl Catalog for DatabaseCatalog {
             .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
             .await?;
 
-        Ok(merge_option_iterators(mut_results, sys_results))
+        Ok(merge_options(mut_results, sys_results))
     }
 
     #[async_backtrace::framed]
@@ -370,7 +370,7 @@ impl Catalog for DatabaseCatalog {
             .mget_database_names_by_ids(tenant, db_ids)
             .await?;
 
-        Ok(merge_option_iterators(mut_results, sys_results))
+        Ok(merge_options(mut_results, sys_results))
     }
 
     #[async_backtrace::framed]

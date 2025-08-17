@@ -363,7 +363,7 @@ impl<T> ErrorCodeResultExt<T> for Result<T> {
     fn or_error_codes(self, codes: &[u16]) -> Result<Option<T>> {
         match self {
             Ok(value) => Ok(Some(value)),
-            Err(e) if codes.contains(&e.code()) => Ok(None),
+            Err(e) if codes.iter().any(|c| *c == e.code()) => Ok(None),
             Err(e) => Err(e),
         }
     }
