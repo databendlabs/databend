@@ -19,14 +19,21 @@ use databend_common_exception::ErrorCode;
 pub enum TableError {
     // NOTE: do not expose tenant in a for-user error message.
     #[error("Alter table with error {context}")]
-    AlterErr { tenant: String, context: String },
+    AlterTableError { tenant: String, context: String },
+    #[error("Unknown table id {table_id}, {context}")]
+    UnknownTableId {
+        tenant: String,
+        table_id: u64,
+        context: String,
+    },
 }
 
 impl From<TableError> for ErrorCode {
     fn from(value: TableError) -> Self {
         let s = value.to_string();
         match value {
-            TableError::AlterErr { .. } => ErrorCode::AlterTableError(s),
+            TableError::AlterTableError { .. } => ErrorCode::AlterTableError(s),
+            TableError::UnknownTableId { .. } => ErrorCode::UnknownTableId(s),
         }
     }
 }

@@ -213,7 +213,7 @@ use ConditionResult::Eq;
 use crate::assert_table_exist;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
-use crate::error::TableError;
+use crate::errors::TableError;
 use crate::fetch_id;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
@@ -2476,12 +2476,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    //#[logcall::logcall]
-    //#[fastrace::trace]
+    #[logcall::logcall]
+    #[fastrace::trace]
     async fn set_table_row_access_policy(
         &self,
         req: SetTableRowAccessPolicyReq,
-    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, KVAppError> {
+    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, MetaTxnError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         let tbid = TableId {
             table_id: req.table_id,
@@ -2496,9 +2496,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(ident :% =(&tbid); "set_table_row_access_policy");
 
             let Some(seq_meta) = seq_meta else {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "set_table_row_access_policy"),
-                )));
+                return Ok(Err(TableError::UnknownTableId {
+                    tenant: req.tenant.tenant_name().to_string(),
+                    table_id: req.table_id,
+                    context: "set_table_row_access_policy".to_string(),
+                }));
             };
 
             // upsert row access policy
@@ -2519,10 +2521,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             match &req.action {
                 SetTableRowAccessPolicyAction::Set(new_mask_name) => {
                     if table_meta.row_access_policy.is_some() {
-                        return Ok(Err(TableError::AlterErr {
+                        return Ok(Err(TableError::AlterTableError {
                             tenant: req.tenant.tenant_name().to_string(),
-                            context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.
-                            ".to_string(),
+                            context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.".to_string(),
                         }));
                     }
                     new_table_meta.row_access_policy = Some(new_mask_name.to_string());
@@ -2535,7 +2536,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     // drop row access policy and table does not have row access policy
                     if let Some(policy) = &table_meta.row_access_policy {
                         if policy != old_policy {
-                            return Ok(Err(TableError::AlterErr {
+                            return Ok(Err(TableError::AlterTableError {
                                 tenant: req.tenant.tenant_name().to_string(),
                                 context: format!("Unknown row access policy {} on table", policy),
                             }));
@@ -2544,7 +2545,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         return Ok(Ok(SetTableRowAccessPolicyReply {}));
                     }
                     new_table_meta.row_access_policy = None;
-                    txn_req.if_then.push(txn_op_del(&ident));
                     txn_req.if_then = vec![
                         txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta */
                         txn_op_del(&ident), // table drop row access policy, del policy_tb_id

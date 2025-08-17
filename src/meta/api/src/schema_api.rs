@@ -102,7 +102,7 @@ use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 
-use crate::error::TableError;
+use crate::errors::TableError;
 use crate::kv_app_error::KVAppError;
 use crate::meta_txn_error::MetaTxnError;
 
@@ -290,7 +290,7 @@ pub trait SchemaApi: Send + Sync {
     async fn set_table_row_access_policy(
         &self,
         req: SetTableRowAccessPolicyReq,
-    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, KVAppError>;
+    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, MetaTxnError>;
 
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<(), KVAppError>;
 

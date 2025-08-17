@@ -72,7 +72,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
 
         if table.is_temp() {
             return Err(ErrorCode::StorageOther(format!(
-                "Table {} is temporary table, setting row access policy policy not allowed",
+                "Table {} is temporary table, setting row access policy not allowed",
                 table.name()
             )));
         }
