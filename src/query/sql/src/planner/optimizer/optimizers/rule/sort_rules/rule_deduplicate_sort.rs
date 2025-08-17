@@ -58,21 +58,21 @@ impl Rule for RuleDeduplicateSort {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
-        
+
         if sort.items.len() <= 1 {
             return Ok(());
         }
-        
+
         // Deduplicate sort items while preserving order
         let mut deduplicated_items = Vec::with_capacity(sort.items.len());
         let mut seen = std::collections::HashSet::with_capacity(sort.items.len());
-        
+
         for item in &sort.items {
             if seen.insert(item.clone()) {
                 deduplicated_items.push(item.clone());
             }
         }
-        
+
         // Only apply transformation if we actually removed duplicates
         if deduplicated_items.len() == sort.items.len() {
             return Ok(());
@@ -85,11 +85,11 @@ impl Rule for RuleDeduplicateSort {
             pre_projection: sort.pre_projection,
             window_partition: sort.window_partition,
         };
-        
+
         let mut result = s_expr.replace_plan(std::sync::Arc::new(new_sort.into()));
         result.set_applied_rule(&self.id);
         state.add_result(result);
-        
+
         Ok(())
     }
 
