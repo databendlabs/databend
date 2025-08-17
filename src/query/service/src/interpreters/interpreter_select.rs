@@ -33,7 +33,6 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::parse_result_scan_args;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::MetadataRef;
@@ -46,11 +45,14 @@ use log::info;
 
 use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::BindContext;
 
@@ -125,7 +127,7 @@ impl SelectInterpreter {
         &self,
         mut physical_plan: PhysicalPlan,
     ) -> Result<PipelineBuildResult> {
-        if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
+        if let Some(exchange) = Exchange::from_mut_physical_plan(&mut physical_plan) {
             if exchange.kind == FragmentKind::Merge && self.ignore_result {
                 exchange.ignore_exchange = self.ignore_result;
             }
@@ -286,9 +288,13 @@ impl Interpreter for SelectInterpreter {
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
-        let query_plan = physical_plan
-            .format(self.metadata.clone(), Default::default())?
-            .format_pretty()?;
+
+        let query_plan = {
+            let metadata = self.metadata.read();
+            physical_plan
+                .format(&metadata, Default::default())?
+                .format_pretty()?
+        };
 
         info!("[SELECT-INTERP] Query physical plan:\n{}", query_plan);
 

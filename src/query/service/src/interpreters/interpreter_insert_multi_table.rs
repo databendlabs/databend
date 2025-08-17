@@ -27,20 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::physical_plans::CastSchema;
-use databend_common_sql::executor::physical_plans::ChunkAppendData;
-use databend_common_sql::executor::physical_plans::ChunkCastSchema;
-use databend_common_sql::executor::physical_plans::ChunkCommitInsert;
-use databend_common_sql::executor::physical_plans::ChunkEvalScalar;
-use databend_common_sql::executor::physical_plans::ChunkFillAndReorder;
-use databend_common_sql::executor::physical_plans::ChunkMerge;
-use databend_common_sql::executor::physical_plans::FillAndReorder;
-use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::SerializableTable;
-use databend_common_sql::executor::physical_plans::ShuffleStrategy;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Else;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
@@ -54,14 +41,28 @@ use super::HookOperator;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::physical_plans::CastSchema;
+use crate::physical_plans::ChunkAppendData;
+use crate::physical_plans::ChunkCastSchema;
+use crate::physical_plans::ChunkCommitInsert;
+use crate::physical_plans::ChunkEvalScalar;
+use crate::physical_plans::ChunkFillAndReorder;
+use crate::physical_plans::ChunkFilter;
+use crate::physical_plans::ChunkMerge;
+use crate::physical_plans::Duplicate;
+use crate::physical_plans::FillAndReorder;
+use crate::physical_plans::MultiInsertEvalScalar;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::SerializableTable;
+use crate::physical_plans::Shuffle;
+use crate::physical_plans::ShuffleStrategy;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
-use crate::sql::executor::physical_plans::ChunkFilter;
-use crate::sql::executor::physical_plans::Duplicate;
-use crate::sql::executor::physical_plans::Shuffle;
 use crate::storages::Table;
 use crate::stream::DataBlockStream;
 pub struct InsertMultiTableInterpreter {
@@ -174,63 +175,65 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        root = PhysicalPlan::Duplicate(Box::new(Duplicate {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(Duplicate {
+            input: root,
             n: branches.len(),
-        }));
+            meta: PhysicalPlanMeta::new("Duplicate"),
+        });
 
         let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = PhysicalPlan::Shuffle(Box::new(Shuffle {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(Shuffle {
+            input: root,
             strategy: shuffle_strategy,
-        }));
+            meta: PhysicalPlanMeta::new("Shuffle"),
+        });
 
-        root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkFilter {
             predicates,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFilter"),
+        });
 
-        root = PhysicalPlan::ChunkEvalScalar(Box::new(ChunkEvalScalar {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkEvalScalar {
             eval_scalars,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
+        });
 
-        root = PhysicalPlan::ChunkCastSchema(Box::new(ChunkCastSchema {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkCastSchema {
             cast_schemas,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
+        });
 
-        root = PhysicalPlan::ChunkFillAndReorder(Box::new(ChunkFillAndReorder {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkFillAndReorder {
             fill_and_reorders,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
+        });
 
-        root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkAppendData {
+            input: root,
             target_tables: serializable_tables.clone(),
-        }));
+            meta: PhysicalPlanMeta::new("ChunkAppendData"),
+        });
 
-        root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkMerge {
             group_ids,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkMerge"),
+        });
 
-        root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
-            plan_id: 0,
-            input: Box::new(root),
+        root = PhysicalPlan::new(ChunkCommitInsert {
             update_stream_meta,
+
+            input: root,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
-        }));
+            meta: PhysicalPlanMeta::new("Commit"),
+        });
+
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
         Ok(root)

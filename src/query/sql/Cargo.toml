@@ -61,7 +61,6 @@ num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 prqlc = { workspace = true }
-rand = { workspace = true }
 recursive = { workspace = true }
 regex = { workspace = true }
 roaring = { workspace = true }
