@@ -23,12 +23,12 @@ use crate::plans::RelOp;
 use crate::plans::Sort;
 
 /// Rule to remove duplicate sort items in ORDER BY clause.
-/// 
+///
 /// For example, transforms:
 /// ORDER BY x ASC NULLS LAST, x ASC NULLS LAST
 /// into:
 /// ORDER BY x ASC NULLS LAST
-/// 
+///
 /// This optimization is valid because duplicate sort fields don't contribute
 /// additional ordering and only add unnecessary computational overhead.
 pub struct RuleDeduplicateSort {
