@@ -40,6 +40,9 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -58,6 +61,7 @@ use opendal::Operator;
 use super::decorate_snapshot;
 use super::new_serialize_segment_processor;
 use super::TableMutationAggregator;
+use crate::io::MetaReaders;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -499,5 +503,61 @@ impl FuseTable {
     // check if there are any fuse table legacy options
     fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    }
+
+    pub async fn write_snapshot_stats(
+        &self,
+        snapshot: &TableSnapshot,
+        prev_stats_loc: Option<String>,
+        hll: &BlockHLL,
+        insert_rows: u64,
+    ) -> Result<Option<TableSnapshotStatistics>> {
+        if snapshot.table_statistics_location == prev_stats_loc || hll.is_empty() {
+            return Ok(None);
+        }
+        assert!(insert_rows > 0);
+
+        let mut new_stats = TableSnapshotStatistics::empty_with_id(snapshot.snapshot_id);
+        new_stats.hll = hll.clone();
+        let new_row_count = if let Some(prev) = prev_stats_loc {
+            let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+            let ver = TableMetaLocationGenerator::table_statistics_version(&prev);
+            let load_params = LoadParams {
+                location: prev,
+                len_hint: None,
+                ver,
+                put_cache: true,
+            };
+            let prev_stats = reader.read(&load_params).await?;
+            new_stats.histograms = prev_stats.histograms.clone();
+            merge_column_hll_mut(&mut new_stats.hll, &prev_stats.hll);
+            if prev_stats.row_count == 0 {
+                let location = self
+                    .meta_location_generator()
+                    .snapshot_location_from_uuid(&prev_stats.snapshot_id, TableSnapshot::VERSION)?;
+                let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+                let prev_snapshot =
+                    FuseTable::read_table_snapshot_with_reader(reader, Some(location), ver)
+                        .await
+                        .ok()
+                        .flatten();
+                prev_snapshot.map_or(snapshot.summary.row_count * 4 / 5, |v| {
+                    v.summary.row_count + insert_rows
+                })
+            } else {
+                prev_stats.row_count + insert_rows
+            }
+        } else {
+            insert_rows
+        };
+        new_stats.row_count = new_row_count;
+
+        new_stats
+            .write_meta(
+                self.get_operator_ref(),
+                &snapshot.table_statistics_location.clone().unwrap(),
+            )
+            .await?;
+        Ok(Some(new_stats))
     }
 }

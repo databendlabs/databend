@@ -178,6 +178,18 @@ impl TransformSerializeBlock {
             &table.table_info.meta.indexes,
             source_schema.clone(),
         );
+        let serialize_hll = if matches!(
+            kind,
+            MutationKind::Insert
+                | MutationKind::Replace
+                | MutationKind::Update
+                | MutationKind::MergeInto
+        ) {
+            // Merge blocks hll when insert, replace, update or merge into.
+            false
+        } else {
+            true
+        };
 
         let block_builder = BlockBuilder {
             ctx,
@@ -192,6 +204,7 @@ impl TransformSerializeBlock {
             virtual_column_builder,
             vector_index_builder,
             table_meta_timestamps,
+            serialize_hll,
         };
         Ok(TransformSerializeBlock {
             state: State::Consume,

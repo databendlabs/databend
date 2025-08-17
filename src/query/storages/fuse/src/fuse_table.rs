@@ -375,7 +375,7 @@ impl FuseTable {
         Self::read_table_snapshot_with_reader(reader, loc, ver).await
     }
 
-    async fn read_table_snapshot_with_reader(
+    pub async fn read_table_snapshot_with_reader(
         reader: TableSnapshotReader,
         snapshot_location: Option<String>,
         ver: u64,

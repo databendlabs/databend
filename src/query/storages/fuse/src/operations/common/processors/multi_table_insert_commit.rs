@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -90,6 +91,12 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
         let mut update_temp_tables = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
+        let mut hlls = HashMap::with_capacity(self.commit_metas.len());
+        let insert_rows = {
+            let stats = self.ctx.get_multi_table_insert_status();
+            let status = stats.lock();
+            status.insert_rows.clone()
+        };
         for (table_id, commit_meta) in std::mem::take(&mut self.commit_metas).into_iter() {
             // generate snapshot
             let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
@@ -109,12 +116,15 @@ impl AsyncSink for CommitMultiTableInsert {
                         &snapshot_generator,
                         self.ctx.txn_mgr(),
                         *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
+                        &commit_meta.hll,
+                        *insert_rows.get(&table_id).unwrap(),
                     )
                     .await?,
                     table.get_table_info().clone(),
                 ));
             }
             snapshot_generators.insert(table_id, snapshot_generator);
+            hlls.insert(table_id, commit_meta.hll);
         }
 
         let mut backoff = set_backoff(None, None, None);
@@ -197,6 +207,8 @@ impl AsyncSink for CommitMultiTableInsert {
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
                                     *self.table_meta_timestampss.get(&tid).unwrap(),
+                                    hlls.get(&tid).unwrap(),
+                                    *insert_rows.get(&tid).unwrap(),
                                 )
                                 .await?;
                                 break;
@@ -252,6 +264,8 @@ async fn build_update_table_meta_req(
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
     table_meta_timestamps: TableMetaTimestamps,
+    hll: &BlockHLL,
+    insert_rows: u64,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
@@ -265,6 +279,7 @@ async fn build_update_table_meta_req(
         table_meta_timestamps,
         table.name(),
     )?;
+    let prev_stats_loc = snapshot.table_statistics_location.clone();
 
     // write snapshot
     let dal = fuse_table.get_operator();
@@ -272,6 +287,11 @@ async fn build_update_table_meta_req(
     let location = location_generator
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     dal.write(&location, snapshot.to_bytes()?).await?;
+
+    // write table snapshot stats.
+    let _ = fuse_table
+        .write_snapshot_stats(&snapshot, prev_stats_loc, hll, insert_rows)
+        .await?;
 
     // build new table meta
     let new_table_meta =

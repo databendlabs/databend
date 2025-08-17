@@ -122,6 +122,7 @@ impl FuseTable {
             // todo
             virtual_column_builder: None,
             table_meta_timestamps,
+            serialize_hll: true,
         };
         let aggregator = MatchedAggregator::create(
             ctx,

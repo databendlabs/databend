@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -40,6 +41,10 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CachedObject;
+use databend_storages_common_cache::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -74,6 +79,7 @@ enum State {
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
+        prev_stats: Option<String>,
     },
     Abort(ErrorCode),
     Finish,
@@ -99,6 +105,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     new_segment_locs: Vec<Location>,
     new_virtual_schema: Option<VirtualDataSchema>,
+    insert_hll: BlockHLL,
+    insert_rows: u64,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
 
@@ -158,6 +166,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
             input,
             new_segment_locs: vec![],
             new_virtual_schema: None,
+            insert_hll: HashMap::new(),
+            insert_rows: 0,
             start_time: Instant::now(),
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
@@ -240,6 +250,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_segment_locs = meta.new_segment_locs;
 
         self.new_virtual_schema = meta.virtual_schema;
+
+        if !meta.hll.is_empty() {
+            let binding = self.ctx.get_mutation_status();
+            let status = binding.read();
+            self.insert_rows = status.insert_rows + status.update_rows;
+            self.insert_hll = meta.hll;
+        }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
@@ -387,11 +404,21 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.table_meta_timestamps,
                     table_info.name.as_str(),
                 ) {
-                    Ok(snapshot) => {
+                    Ok(mut snapshot) => {
+                        let prev_stats = snapshot.table_statistics_location.clone();
+                        if !self.insert_hll.is_empty() {
+                            let table_statistics_location =
+                                self.location_gen.snapshot_statistics_location_from_uuid(
+                                    &snapshot.snapshot_id,
+                                    TableSnapshotStatistics::VERSION,
+                                )?;
+                            snapshot.table_statistics_location = Some(table_statistics_location);
+                        }
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
+                            prev_stats,
                         };
                     }
                     Err(e) => {
@@ -472,15 +499,20 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 data,
                 snapshot,
                 table_info,
+                prev_stats,
             } => {
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
 
                 self.dal.write(&location, data).await?;
+                let new_stats_loc = snapshot.table_statistics_location.clone();
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
+                let new_stats = fuse_table
+                    .write_snapshot_stats(&snapshot, prev_stats, &self.insert_hll, self.insert_rows)
+                    .await?;
                 match fuse_table
                     .update_table_meta(
                         self.ctx.as_ref(),
@@ -497,6 +529,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .await
                 {
                     Ok(_) => {
+                        if let Some(new_stats) = new_stats {
+                            TableSnapshotStatistics::cache()
+                                .insert(new_stats_loc.unwrap(), new_stats);
+                        }
+
                         if self.need_truncate() {
                             // Truncate table operation should be executed in the context of ddl,
                             // which implies auto commit mode.

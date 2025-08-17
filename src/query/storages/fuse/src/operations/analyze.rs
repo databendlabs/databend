@@ -97,7 +97,6 @@ enum AnalyzeStep {
 }
 
 impl FuseTable {
-    #[allow(clippy::too_many_arguments)]
     pub fn do_analyze(
         &self,
         ctx: Arc<dyn TableContext>,

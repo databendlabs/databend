@@ -66,6 +66,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
@@ -430,7 +431,7 @@ impl AsyncTransform for NgramIndexTransform {
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
-            column_hlls: column_hlls.clone(),
+            column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
         };
 
         let entry = MutationLogEntry::ReplacedBlock {

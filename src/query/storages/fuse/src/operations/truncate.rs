@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -66,6 +67,7 @@ impl FuseTable {
                     new_segment_locs: vec![],
                     table_id: self.get_id(),
                     virtual_schema: None,
+                    hll: HashMap::new(),
                 };
                 let block = DataBlock::empty_with_meta(Box::new(meta));
                 OneBlockSource::create(output, block)
