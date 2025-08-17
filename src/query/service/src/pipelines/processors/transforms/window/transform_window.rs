@@ -38,13 +38,13 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
+use crate::physical_plans::LagLeadDefault;
 
 #[derive(Debug, Clone)]
 pub struct WindowSortDesc {

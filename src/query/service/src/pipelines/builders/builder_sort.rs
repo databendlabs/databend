@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::assert_matches::debug_assert_matches;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -31,158 +30,17 @@ use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::Sort;
-use databend_common_sql::executor::physical_plans::SortStep;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
-use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
-
-impl PipelineBuilder {
-    pub(crate) fn build_sort(&mut self, sort: &Sort) -> Result<()> {
-        let output_schema = sort.output_schema()?;
-        let sort_desc = sort
-            .order_by
-            .iter()
-            .map(|desc| {
-                let offset = output_schema.index_of(&desc.order_by.to_string())?;
-                Ok(SortColumnDescription {
-                    offset,
-                    asc: desc.asc,
-                    nulls_first: desc.nulls_first,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let sort_desc = sort_desc.into();
-
-        if sort.step != SortStep::Shuffled {
-            self.build_pipeline(&sort.input)?;
-        }
-
-        if let Some(proj) = &sort.pre_projection {
-            debug_assert_matches!(
-                sort.step,
-                SortStep::Single | SortStep::Partial | SortStep::Sample
-            );
-
-            let input_schema = sort.input.output_schema()?;
-            // Do projection to reduce useless data copying during sorting.
-            let projection = proj
-                .iter()
-                .map(|i| input_schema.index_of(&i.to_string()).unwrap())
-                .collect::<Vec<_>>();
-
-            self.main_pipeline.add_transformer(|| {
-                CompoundBlockOperator::new(
-                    vec![BlockOperator::Project {
-                        projection: projection.clone(),
-                    }],
-                    self.func_ctx.clone(),
-                    input_schema.num_fields(),
-                )
-            });
-        }
-
-        let builder = SortPipelineBuilder::create(
-            self.ctx.clone(),
-            output_schema,
-            sort_desc,
-            sort.broadcast_id,
-        )?
-        .with_limit(sort.limit);
-
-        let max_threads = self.settings.get_max_threads()? as usize;
-        match sort.step {
-            SortStep::Single => {
-                // Build for single node mode.
-                // We build the full sort pipeline for it.
-                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-                    self.main_pipeline.try_resize(max_threads)?;
-                }
-                builder
-                    .remove_order_col_at_last()
-                    .build_full_sort_pipeline(&mut self.main_pipeline)
-            }
-
-            SortStep::Partial => {
-                // Build for each cluster node.
-                // We build the full sort pipeline for it.
-                // Don't remove the order column at last.
-                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-                    self.main_pipeline.try_resize(max_threads)?;
-                }
-                builder.build_full_sort_pipeline(&mut self.main_pipeline)
-            }
-            SortStep::Final => {
-                // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-                if max_threads == 1 && self.main_pipeline.output_len() > 1 {
-                    self.main_pipeline.try_resize(1)?;
-                    return builder
-                        .remove_order_col_at_last()
-                        .build_merge_sort_pipeline(&mut self.main_pipeline, true);
-                }
-
-                // Build for the coordinator node.
-                // We only build a `MultiSortMergeTransform`,
-                // as the data is already sorted in each cluster node.
-                // The input number of the transform is equal to the number of cluster nodes.
-                builder
-                    .remove_order_col_at_last()
-                    .build_multi_merge(&mut self.main_pipeline)
-            }
-
-            SortStep::Sample => {
-                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-                    self.main_pipeline.try_resize(max_threads)?;
-                }
-                builder.build_sample(&mut self.main_pipeline)?;
-                self.exchange_injector = TransformSortBuilder::exchange_injector();
-                Ok(())
-            }
-            SortStep::Shuffled => {
-                if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
-                    let exchange = TransformSortBuilder::exchange_injector();
-                    let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
-                    self.build_pipeline(&sort.input)?;
-                    self.exchange_injector = old_inject;
-                } else {
-                    self.build_pipeline(&sort.input)?;
-                }
-
-                if self.main_pipeline.output_len() == 1 {
-                    return Ok(());
-                }
-                if max_threads == 1 {
-                    // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-                    unimplemented!();
-                }
-                builder
-                    .remove_order_col_at_last()
-                    .build_bounded_merge_sort(&mut self.main_pipeline)
-            }
-            SortStep::Route => {
-                if self.main_pipeline.output_len() == 1 {
-                    self.main_pipeline
-                        .add_transformer(TransformSortBuilder::build_dummy_route);
-                    Ok(())
-                } else {
-                    TransformSortBuilder::add_route(&mut self.main_pipeline)
-                }
-            }
-        }
-    }
-}
 
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -299,7 +157,7 @@ impl SortPipelineBuilder {
         })
     }
 
-    fn build_merge_sort_pipeline(
+    pub fn build_merge_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
         order_col_generated: bool,
@@ -342,7 +200,7 @@ impl SortPipelineBuilder {
         }
     }
 
-    fn build_sample(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_sample(self, pipeline: &mut Pipeline) -> Result<()> {
         let settings = self.ctx.get_settings();
         let max_block_size = settings.get_max_block_size()? as usize;
 
@@ -409,7 +267,7 @@ impl SortPipelineBuilder {
         Ok(())
     }
 
-    fn build_bounded_merge_sort(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_bounded_merge_sort(self, pipeline: &mut Pipeline) -> Result<()> {
         let builder = TransformSortBuilder::new(
             self.output_schema.clone(),
             self.sort_desc.clone(),
