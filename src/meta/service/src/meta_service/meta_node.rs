@@ -529,7 +529,7 @@ impl MetaNode {
 
             let metrics_str = crate::metrics::meta_metrics_to_prometheus_string();
             let parsed_metrics = Self::parse_metrics_to_json(&metrics_str);
-            info!("metrics: {}", parsed_metrics.to_string());
+            info!("metrics: {}", parsed_metrics);
 
             let elapsed = loop_start.elapsed();
             if elapsed < RATE_LIMIT_INTERVAL {
@@ -802,7 +802,7 @@ impl MetaNode {
             return None;
         }
 
-        let mut percentiles = vec![None; 4];
+        let mut percentiles = [None; 4];
         let thresholds = [(0.5, 0), (0.9, 1), (0.99, 2), (0.999, 3)];
 
         // Find the first bucket where cumulative count >= threshold
@@ -1787,7 +1787,7 @@ metasrv_raft_storage_snapshot_written_entries_total 80114031
 
         let result = MetaNode::parse_metrics_to_json(metrics_input);
 
-        println!("{}", result.to_string());
+        println!("{}", result);
 
         // Verify expected categories are present
         assert!(result.get("meta_network").is_some());
@@ -1859,7 +1859,7 @@ metasrv_raft_network_append_sent_seconds_count{to="2"} 6
 
         let result = MetaNode::parse_metrics_to_json(metrics_input);
 
-        println!("{}", result.to_string());
+        println!("{}", result);
 
         // Verify expected categories are present
         assert!(result.get("raft_network").is_some());
