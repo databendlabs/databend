@@ -282,6 +282,8 @@ impl Executor {
                     query_id = guard.query_id, reason:? = reason;
                     "[HTTP-QUERY] Query state transitioning from Starting to Stopped"
                 );
+
+                s.ctx.get_abort_notify().notify_waiters();
                 if let Err(e) = &reason {
                     InterpreterQueryLog::log_finish(
                         &s.ctx,

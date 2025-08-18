@@ -23,6 +23,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::WatchNotify;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -1025,6 +1026,10 @@ impl TableContext for CtxDelegation {
 
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.ctx.get_abort_notify()
     }
 }
 

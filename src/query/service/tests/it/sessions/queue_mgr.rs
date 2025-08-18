@@ -18,6 +18,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,10 +32,41 @@ use databend_query::sessions::QueueManager;
 use databend_query::test_kits::TestFixture;
 use log::error;
 
-#[derive(Debug)]
 struct TestData<const PASSED: bool = false> {
     lock_id: String,
     acquire_id: String,
+    abort_notify: Arc<WatchNotify>,
+    test_timeout: Duration,
+}
+
+impl<const PASSED: bool> std::fmt::Debug for TestData<PASSED> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TestData")
+            .field("lock_id", &self.lock_id)
+            .field("acquire_id", &self.acquire_id)
+            .field("test_timeout", &self.test_timeout)
+            .finish()
+    }
+}
+
+impl<const PASSED: bool> TestData<PASSED> {
+    fn new(lock_id: String, acquire_id: String) -> Self {
+        Self {
+            lock_id,
+            acquire_id,
+            abort_notify: Arc::new(WatchNotify::new()),
+            test_timeout: Duration::from_secs(1000),
+        }
+    }
+
+    fn with_timeout(lock_id: String, acquire_id: String, timeout: Duration) -> Self {
+        Self {
+            lock_id,
+            acquire_id,
+            abort_notify: Arc::new(WatchNotify::new()),
+            test_timeout: timeout,
+        }
+    }
 }
 
 impl<const PASSED: bool> QueueData for TestData<PASSED> {
@@ -57,11 +89,15 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
     }
 
     fn timeout(&self) -> Duration {
-        Duration::from_secs(1000)
+        self.test_timeout
     }
 
     fn need_acquire_to_queue(&self) -> bool {
         !PASSED
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.abort_notify.clone()
     }
 }
 
@@ -88,10 +124,10 @@ async fn test_passed_acquire() -> Result<()> {
                 databend_common_base::runtime::spawn(async move {
                     barrier.wait().await;
                     let _guard = queue
-                        .acquire(TestData::<true> {
-                            lock_id: String::from("test_passed_acquire"),
-                            acquire_id: format!("TestData{}", index),
-                        })
+                        .acquire(TestData::<true>::new(
+                            String::from("test_passed_acquire"),
+                            format!("TestData{}", index),
+                        ))
                         .await?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     Result::<()>::Ok(())
@@ -139,10 +175,10 @@ async fn test_serial_acquire() -> Result<()> {
                     tokio::time::sleep(Duration::from_millis(500 * index as u64)).await;
 
                     let _guard = queue
-                        .acquire(TestData {
-                            lock_id: String::from("test_serial_acquire"),
-                            acquire_id: format!("TestData{}", index),
-                        })
+                        .acquire(TestData::new(
+                            String::from("test_serial_acquire"),
+                            format!("TestData{}", index),
+                        ))
                         .await?;
 
                     tokio::time::sleep(Duration::from_millis(1_000)).await;
@@ -199,10 +235,10 @@ async fn test_concurrent_acquire() -> Result<()> {
                     tokio::time::sleep(Duration::from_millis(300 * index as u64)).await;
 
                     let _guard = queue
-                        .acquire(TestData {
-                            lock_id: String::from("test_concurrent_acquire"),
-                            acquire_id: format!("TestData{}", index),
-                        })
+                        .acquire(TestData::new(
+                            String::from("test_concurrent_acquire"),
+                            format!("TestData{}", index),
+                        ))
                         .await?;
 
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -266,10 +302,10 @@ async fn test_list_acquire() -> Result<()> {
                     tokio::time::sleep(Duration::from_millis(800 * index as u64)).await;
 
                     let _guard = queue
-                        .acquire(TestData {
-                            lock_id: String::from("test_list_acquire"),
-                            acquire_id: format!("TestData{}", index),
-                        })
+                        .acquire(TestData::new(
+                            String::from("test_list_acquire"),
+                            format!("TestData{}", index),
+                        ))
                         .await?;
 
                     tokio::time::sleep(Duration::from_secs(15)).await;
@@ -431,6 +467,179 @@ async fn test_heavy_actions() -> Result<()> {
         }
         assert_eq!(query.add_to_queue, query_entry.need_acquire_to_queue());
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_immediate_abort".to_string(),
+        "test_acquire_1".to_string(),
+    );
+    let test_data2 = TestData::new(
+        "test_immediate_abort".to_string(),
+        "test_acquire_2".to_string(),
+    );
+
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    test_data2.abort_notify.notify_waiters();
+
+    let result = queue.acquire(test_data2).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_abort_during_wait".to_string(),
+        "test_acquire_1".to_string(),
+    );
+    let test_data2 = TestData::new(
+        "test_abort_during_wait".to_string(),
+        "test_acquire_2".to_string(),
+    );
+
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    let abort_notify = test_data2.abort_notify.clone();
+    let queue_clone = queue.clone();
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data2).await });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    abort_notify.notify_waiters();
+
+    let result = acquire_handle.await.unwrap();
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_race_condition() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data = TestData::new(
+        "test_race_condition".to_string(),
+        "test_acquire_1".to_string(),
+    );
+
+    let abort_notify = test_data.abort_notify.clone();
+    let queue_clone = queue.clone();
+
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data).await });
+
+    let abort_handle = databend_common_base::runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        abort_notify.notify_waiters();
+    });
+
+    let (acquire_result, _) = tokio::join!(acquire_handle, abort_handle);
+    let result = acquire_result.unwrap();
+
+    match result {
+        Ok(_guard) => {
+            assert_eq!(queue.length(), 0);
+        }
+        Err(err) => {
+            assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_multiple_waiters".to_string(),
+        "test_acquire_1".to_string(),
+    );
+    let test_data2 = TestData::new(
+        "test_multiple_waiters".to_string(),
+        "test_acquire_2".to_string(),
+    );
+    let test_data3 = TestData::new(
+        "test_multiple_waiters".to_string(),
+        "test_acquire_3".to_string(),
+    );
+
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    let abort_notify2 = test_data2.abort_notify.clone();
+    let abort_notify3 = test_data3.abort_notify.clone();
+    let queue_clone2 = queue.clone();
+    let queue_clone3 = queue.clone();
+
+    let acquire_handle2 =
+        databend_common_base::runtime::spawn(async move { queue_clone2.acquire(test_data2).await });
+
+    let acquire_handle3 =
+        databend_common_base::runtime::spawn(async move { queue_clone3.acquire(test_data3).await });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    abort_notify2.notify_waiters();
+
+    let result2 = acquire_handle2.await.unwrap();
+    assert!(result2.is_err());
+    assert_eq!(result2.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    abort_notify3.notify_waiters();
+
+    let result3 = acquire_handle3.await.unwrap();
+    assert!(result3.is_err());
+    assert_eq!(result3.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_timeout_vs_abort".to_string(),
+        "test_acquire_1".to_string(),
+    );
+    let test_data2 = TestData::with_timeout(
+        "test_timeout_vs_abort".to_string(),
+        "test_acquire_2".to_string(),
+        Duration::from_millis(200),
+    );
+
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    let abort_notify = test_data2.abort_notify.clone();
+    let queue_clone = queue.clone();
+
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data2).await });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    abort_notify.notify_waiters();
+
+    let result = acquire_handle.await.unwrap();
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
 
     Ok(())
 }
