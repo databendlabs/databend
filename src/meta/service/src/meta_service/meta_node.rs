@@ -431,96 +431,11 @@ impl MetaNode {
     }
 
     /// Spawn a monitor to watch raft state changes and report metrics changes.
-    pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
+    pub async fn subscribe_metrics(mn: Arc<Self>, metrics_rx: watch::Receiver<RaftMetrics>) {
         info!("Start a task subscribing raft metrics and forward to metrics API");
-        let meta_node = mn.clone();
 
-        let fut = async move {
-            const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
-            let mut last_leader: Option<u64> = None;
+        let fut = Self::report_metrics_loop(mn.clone(), metrics_rx);
 
-            loop {
-                let loop_start = Instant::now();
-
-                let changed = metrics_rx.changed().await;
-
-                if let Err(changed_err) = changed {
-                    // Shutting down.
-                    info!(
-                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
-                        changed_err
-                    );
-                    break;
-                }
-
-                let mm = metrics_rx.borrow().clone();
-
-                // Report metrics about server state and role.
-                server_metrics::set_node_is_health(
-                    mm.state == ServerState::Follower || mm.state == ServerState::Leader,
-                );
-                if mm.current_leader.is_some() && mm.current_leader != last_leader {
-                    server_metrics::incr_leader_change();
-                }
-                server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
-                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.raft_store.id));
-
-                // metrics about raft log and state machine.
-                server_metrics::set_current_term(mm.current_term);
-                server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
-                server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                server_metrics::set_last_seq(meta_node.get_last_seq().await);
-
-                {
-                    let st = meta_node.get_raft_log_stat().await;
-                    server_metrics::set_raft_log_stat(st);
-                }
-
-                // metrics about server storage
-                server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
-                server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
-                {
-                    let stat = meta_node.get_snapshot_key_space_stat().await;
-
-                    server_metrics::set_snapshot_primary_index_count(
-                        stat.get("kv--").copied().unwrap_or_default(),
-                    );
-
-                    server_metrics::set_snapshot_expire_index_count(
-                        stat.get("exp-").copied().unwrap_or_default(),
-                    )
-                }
-
-                {
-                    let db_stat = meta_node.get_snapshot_db_stat().await;
-                    let snapshot = server_metrics::snapshot();
-                    snapshot.block_count.set(db_stat.block_num as i64);
-                    snapshot.data_size.set(db_stat.data_size as i64);
-                    snapshot.index_size.set(db_stat.index_size as i64);
-                    snapshot.avg_block_size.set(db_stat.avg_block_size as i64);
-                    snapshot
-                        .avg_keys_per_block
-                        .set(db_stat.avg_keys_per_block as i64);
-                    snapshot.read_block.set(db_stat.read_block as i64);
-                    snapshot
-                        .read_block_from_cache
-                        .set(db_stat.read_block_from_cache as i64);
-                    snapshot
-                        .read_block_from_disk
-                        .set(db_stat.read_block_from_disk as i64);
-                }
-
-                last_leader = mm.current_leader;
-
-                let elapsed = loop_start.elapsed();
-                if elapsed < RATE_LIMIT_INTERVAL {
-                    let sleep_duration = RATE_LIMIT_INTERVAL - elapsed;
-                    sleep(sleep_duration).await;
-                }
-            }
-
-            Ok::<(), AnyError>(())
-        };
         let h = databend_common_base::runtime::spawn(
             fut.in_span(Span::enter_with_local_parent("watch-metrics")),
         );
@@ -529,6 +444,94 @@ impl MetaNode {
             let mut jh = mn.join_handles.lock().await;
             jh.push(h);
         }
+    }
+
+    /// Report metrics changes periodically.
+    async fn report_metrics_loop(meta_node: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) -> Result<(), AnyError> {
+        const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
+        let mut last_leader: Option<u64> = None;
+
+        loop {
+            let loop_start = Instant::now();
+
+            let changed = metrics_rx.changed().await;
+
+            if let Err(changed_err) = changed {
+                // Shutting down.
+                info!(
+                    "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                    changed_err
+                );
+                break;
+            }
+
+            let mm = metrics_rx.borrow().clone();
+
+            // Report metrics about server state and role.
+            server_metrics::set_node_is_health(
+                mm.state == ServerState::Follower || mm.state == ServerState::Leader,
+            );
+            if mm.current_leader.is_some() && mm.current_leader != last_leader {
+                server_metrics::incr_leader_change();
+            }
+            server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
+            server_metrics::set_is_leader(mm.current_leader == Some(meta_node.raft_store.id));
+
+            // metrics about raft log and state machine.
+            server_metrics::set_current_term(mm.current_term);
+            server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
+            server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
+            server_metrics::set_last_seq(meta_node.get_last_seq().await);
+
+            {
+                let st = meta_node.get_raft_log_stat().await;
+                server_metrics::set_raft_log_stat(st);
+            }
+
+            // metrics about server storage
+            server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
+            server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
+            {
+                let stat = meta_node.get_snapshot_key_space_stat().await;
+
+                server_metrics::set_snapshot_primary_index_count(
+                    stat.get("kv--").copied().unwrap_or_default(),
+                );
+
+                server_metrics::set_snapshot_expire_index_count(
+                    stat.get("exp-").copied().unwrap_or_default(),
+                )
+            }
+
+            {
+                let db_stat = meta_node.get_snapshot_db_stat().await;
+                let snapshot = server_metrics::snapshot();
+                snapshot.block_count.set(db_stat.block_num as i64);
+                snapshot.data_size.set(db_stat.data_size as i64);
+                snapshot.index_size.set(db_stat.index_size as i64);
+                snapshot.avg_block_size.set(db_stat.avg_block_size as i64);
+                snapshot
+                    .avg_keys_per_block
+                    .set(db_stat.avg_keys_per_block as i64);
+                snapshot.read_block.set(db_stat.read_block as i64);
+                snapshot
+                    .read_block_from_cache
+                    .set(db_stat.read_block_from_cache as i64);
+                snapshot
+                    .read_block_from_disk
+                    .set(db_stat.read_block_from_disk as i64);
+            }
+
+            last_leader = mm.current_leader;
+
+            let elapsed = loop_start.elapsed();
+            if elapsed < RATE_LIMIT_INTERVAL {
+                let sleep_duration = RATE_LIMIT_INTERVAL - elapsed;
+                sleep(sleep_duration).await;
+            }
+        }
+
+        Ok(())
     }
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
