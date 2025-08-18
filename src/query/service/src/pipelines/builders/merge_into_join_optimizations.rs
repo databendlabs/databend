@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_fuse::operations::need_reserve_block_info;
 
+use crate::physical_plans::HashJoin;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (bool, bool) {
         // for merge into target table as build side.
-        match &*join.build {
-            PhysicalPlan::TableScan(scan) => match scan.table_index {
+        if let Some(scan) = TableScan::from_physical_plan(&join.build) {
+            return match scan.table_index {
                 None | Some(databend_common_sql::DUMMY_TABLE_INDEX) => (false, false),
                 Some(table_index) => match need_reserve_block_info(self.ctx.clone(), table_index) {
                     // due to issue https://github.com/datafuselabs/databend/issues/15643,
@@ -32,8 +33,9 @@ impl PipelineBuilder {
                     (true, is_distributed) => (false, is_distributed),
                     _ => (false, false),
                 },
-            },
-            _ => (false, false),
+            };
         }
+
+        (false, false)
     }
 }

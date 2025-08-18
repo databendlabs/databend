@@ -19,8 +19,6 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BindContext;
@@ -37,6 +35,8 @@ use databend_storages_common_index::RangeIndex;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;

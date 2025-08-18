@@ -31,11 +31,10 @@ use databend_common_expression::DataBlock;
 use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
-use databend_common_version::BUILD_INFO;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
 
+use crate::physical_plans::UdfFunctionDesc;
 use crate::sessions::QueryContext;
 
 pub struct TransformUdfServer {
@@ -77,7 +76,7 @@ impl TransformUdfServer {
                 server_addr,
                 connect_timeout,
                 request_timeout,
-                &BUILD_INFO.udf_client_user_agent(),
+                &ctx.get_version().udf_client_user_agent(),
             )?;
             endpoints.insert(server_addr.clone(), endpoint);
         }

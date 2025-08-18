@@ -38,16 +38,8 @@ use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::bind_table;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::executor::physical_plans::CommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::CompactSource;
-use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::Recluster;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
@@ -57,7 +49,6 @@ use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::IdentifierNormalizer;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
-use databend_common_sql::QueryExecutor;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
@@ -73,6 +64,16 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::physical_plans::CommitSink;
+use crate::physical_plans::CommitType;
+use crate::physical_plans::CompactSource;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::HilbertPartition;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::Recluster;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -328,11 +329,11 @@ impl ReclusterTableInterpreter {
         // Adjust number of partitions according to the block size thresholds
         if total_partitions < block_thresholds.block_per_segment
             && block_thresholds.check_perfect_segment(
-                block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
-                total_rows,
-                total_bytes,
-                total_compressed,
-            )
+            block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
+            total_rows,
+            total_bytes,
+            total_compressed,
+        )
         {
             total_partitions = block_thresholds.block_per_segment;
         }
@@ -417,18 +418,15 @@ impl ReclusterTableInterpreter {
 
         metadata.write().replace_all_tables(tbl.clone());
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-        let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
+        let mut plan = builder.build(&s_expr, bind_context.column_set()).await?;
 
         // Check if the plan already has an exchange operator
         let mut is_exchange = false;
-        if let PhysicalPlan::Exchange(Exchange {
-            input,
-            kind: FragmentKind::Merge,
-            ..
-        }) = plan.as_ref()
-        {
-            is_exchange = true;
-            plan = input.clone();
+        if let Some(exchange) = Exchange::from_physical_plan(&plan) {
+            if exchange.kind == FragmentKind::Merge {
+                is_exchange = true;
+                plan = exchange.input.clone();
+            }
         }
 
         // Determine if we need distributed execution
@@ -449,14 +447,14 @@ impl ReclusterTableInterpreter {
 
             // Add exchange operator for data distribution,
             // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
-            plan = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+            plan = PhysicalPlan::new(Exchange {
                 input: plan,
                 kind: FragmentKind::Normal,
                 keys: vec![expr],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            }));
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
         }
 
         let table_meta_timestamps = self
@@ -465,14 +463,15 @@ impl ReclusterTableInterpreter {
 
         // Create the Hilbert partition physical plan,
         // collecting data into partitions and persist them
-        let plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
-            plan_id: 0,
+        plan = PhysicalPlan::new(HilbertPartition {
+            rows_per_block,
+            table_meta_timestamps,
+
             input: plan,
             table_info: table_info.clone(),
             num_partitions: total_partitions,
-            table_meta_timestamps,
-            rows_per_block,
-        }));
+            meta: PhysicalPlanMeta::new("HilbertPartition"),
+        });
 
         // Finally, commit the newly clustered table
         Ok(Some(Self::add_commit_sink(
@@ -514,12 +513,13 @@ impl ReclusterTableInterpreter {
                 removed_segment_indexes,
                 removed_segment_summary,
             } => {
-                let root = PhysicalPlan::Recluster(Box::new(Recluster {
+                let root = PhysicalPlan::new(Recluster {
                     tasks,
-                    table_info: table_info.clone(),
-                    plan_id: u32::MAX,
                     table_meta_timestamps,
-                }));
+
+                    table_info: table_info.clone(),
+                    meta: PhysicalPlanMeta::new("Recluster"),
+                });
 
                 Self::add_commit_sink(
                     root,
@@ -537,13 +537,13 @@ impl ReclusterTableInterpreter {
             }
             ReclusterParts::Compact(parts) => {
                 let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+                let root = PhysicalPlan::new(CompactSource {
                     parts,
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
-                    plan_id: u32::MAX,
                     table_meta_timestamps,
-                }));
+                    meta: PhysicalPlanMeta::new("CompactSource"),
+                });
 
                 Self::add_commit_sink(
                     root,
@@ -702,7 +702,7 @@ impl ReclusterTableInterpreter {
     }
 
     fn add_commit_sink(
-        input: PhysicalPlan,
+        mut input: PhysicalPlan,
         is_distributed: bool,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
@@ -710,35 +710,34 @@ impl ReclusterTableInterpreter {
         recluster_info: Option<ReclusterInfoSideCar>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> PhysicalPlan {
-        let plan = if is_distributed {
-            PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(input),
+        if is_distributed {
+            input = PhysicalPlan::new(Exchange {
+                input,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            })
-        } else {
-            input
-        };
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
+        }
 
-        let kind = if recluster_info.is_some() {
-            MutationKind::Recluster
-        } else {
-            MutationKind::Compact
-        };
-        PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(plan),
+        let mut kind = MutationKind::Compact;
+
+        if recluster_info.is_some() {
+            kind = MutationKind::Recluster
+        }
+
+        PhysicalPlan::new(CommitSink {
+            input,
             table_info,
             snapshot: Some(snapshot),
             commit_type: CommitType::Mutation { kind, merge_meta },
             update_stream_meta: vec![],
             deduplicated_label: None,
             table_meta_timestamps,
-            plan_id: u32::MAX,
             recluster_info,
-        }))
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        })
     }
 }
 

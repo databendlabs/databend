@@ -71,7 +71,13 @@ impl FlightActions {
             Box::new(move |request| {
                 let mut deserializer = serde_json::Deserializer::from_slice(request);
                 deserializer.disable_recursion_limit();
-                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+
+                let deserializer = serde_stacker::Deserializer {
+                    de: &mut deserializer,
+                    red_zone: recursive::get_minimum_stack_size(),
+                    stack_size: recursive::get_stack_allocation_size(),
+                };
+
                 let request = Req::deserialize(deserializer).map_err(|cause| {
                     ErrorCode::BadArguments(format!(
                         "Cannot parse request for {}, cause: {:?}",
@@ -95,7 +101,12 @@ impl FlightActions {
                         Ok(v) => {
                             let mut out = Vec::with_capacity(512);
                             let mut serializer = serde_json::Serializer::new(&mut out);
-                            let serializer = serde_stacker::Serializer::new(&mut serializer);
+                            let serializer = serde_stacker::Serializer {
+                                ser: &mut serializer,
+                                red_zone: recursive::get_minimum_stack_size(),
+                                stack_size: recursive::get_stack_allocation_size(),
+                            };
+
                             v.serialize(serializer).map_err(|cause| {
                                 ErrorCode::BadBytes(format!(
                                     "Cannot serialize response for {}, cause: {:?}",

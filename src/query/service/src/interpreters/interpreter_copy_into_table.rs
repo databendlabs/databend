@@ -26,14 +26,9 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stage::StageTable;
@@ -46,6 +41,12 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::physical_plans::CopyIntoTable;
+use crate::physical_plans::CopyIntoTableSource;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -113,7 +114,7 @@ impl CopyIntoTableInterpreter {
 
             let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
-            let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
+            let query_physical_plan = query_interpreter.build_physical_plan().await?;
 
             let result_columns = query_interpreter.get_result_columns();
             (
@@ -133,21 +134,20 @@ impl CopyIntoTableInterpreter {
             }
 
             (
-                CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
-                    plan_id: 0,
+                CopyIntoTableSource::Stage(PhysicalPlan::new(TableScan {
                     scan_id: 0,
                     name_mapping,
                     stat_info: None,
                     table_index: None,
                     internal_column: None,
                     source: Box::new(data_source_plan),
-                }))),
+                    meta: PhysicalPlanMeta::new("TableScan"),
+                })),
                 None,
             )
         };
 
-        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            plan_id: 0,
+        let mut root = PhysicalPlan::new(CopyIntoTable {
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
@@ -159,16 +159,17 @@ impl CopyIntoTableInterpreter {
             source,
             is_transform: plan.is_transform,
             table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("CopyIntoTable"),
+        });
 
         if plan.enable_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
+            root = PhysicalPlan::new(Exchange {
+                input: root,
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
+                meta: PhysicalPlanMeta::new("Exchange"),
             });
         }
 

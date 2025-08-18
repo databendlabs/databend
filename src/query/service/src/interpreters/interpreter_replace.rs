@@ -26,17 +26,9 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::executor::physical_plans::CommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
-use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
@@ -60,6 +52,16 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::physical_plans::CommitSink;
+use crate::physical_plans::CommitType;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::ReplaceAsyncSourcer;
+use crate::physical_plans::ReplaceDeduplicate;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::ReplaceSelectCtx;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -134,7 +136,7 @@ impl ReplaceInterpreter {
     async fn build_physical_plan(
         &self,
     ) -> Result<(
-        Box<PhysicalPlan>,
+        PhysicalPlan,
         Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     )> {
         let plan = &self.plan;
@@ -266,34 +268,31 @@ impl ReplaceInterpreter {
         let mut is_exchange = false;
         let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
 
-        if let PhysicalPlan::Exchange(Exchange {
-            input,
-            kind: FragmentKind::Merge,
-            ..
-        }) = root.as_ref()
-        {
-            is_exchange = true;
-            root = input.clone();
+        if let Some(exchange) = Exchange::from_physical_plan(&root) {
+            if exchange.kind == FragmentKind::Merge {
+                is_exchange = true;
+                root = exchange.input.clone();
+            }
         }
 
         if is_distributed {
-            root = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Expansive,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            }));
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
         } else if is_exchange && !is_stage_source {
-            root = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            }));
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
         }
 
         let max_num_pruning_columns = self
@@ -315,23 +314,21 @@ impl ReplaceInterpreter {
             vec![]
         };
 
-        root = Box::new(PhysicalPlan::ReplaceDeduplicate(Box::new(
-            ReplaceDeduplicate {
-                input: root,
-                on_conflicts: on_conflicts.clone(),
-                bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
-                table_is_empty,
-                table_info: table_info.clone(),
-                select_ctx,
-                target_schema: plan.schema.clone(),
-                table_level_range_index,
-                need_insert: true,
-                delete_when,
-                plan_id: u32::MAX,
-            },
-        )));
+        root = PhysicalPlan::new(ReplaceDeduplicate {
+            input: root,
+            on_conflicts: on_conflicts.clone(),
+            bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
+            table_is_empty,
+            table_info: table_info.clone(),
+            select_ctx,
+            target_schema: plan.schema.clone(),
+            table_level_range_index,
+            need_insert: true,
+            delete_when,
+            meta: PhysicalPlanMeta::new("ReplaceDeduplicate"),
+        });
 
-        root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
+        root = PhysicalPlan::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
@@ -345,22 +342,22 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
-            plan_id: u32::MAX,
             table_meta_timestamps,
-        })));
+            meta: PhysicalPlanMeta::new("ReplaceInto"),
+        });
 
         if is_distributed {
-            root = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+            root = PhysicalPlan::new(Exchange {
                 input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            }));
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
         }
 
-        root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
+        root = PhysicalPlan::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
@@ -370,10 +367,11 @@ impl ReplaceInterpreter {
             },
             update_stream_meta: update_stream_meta.clone(),
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-            plan_id: u32::MAX,
             table_meta_timestamps,
             recluster_info: None,
-        })));
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        });
+
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
     }
@@ -427,7 +425,7 @@ impl ReplaceInterpreter {
                         copy_plan.stage_table_info.copy_into_table_options.clone(),
                     ));
                     Ok(ReplaceSourceCtx {
-                        root: Box::new(physical_plan),
+                        root: physical_plan,
                         select_ctx: None,
                         update_stream_meta: vec![],
                         bind_context: None,
@@ -445,14 +443,12 @@ impl ReplaceInterpreter {
         &self,
         schema: DataSchemaRef,
         source: &InsertValue,
-    ) -> Result<Box<PhysicalPlan>> {
-        Ok(Box::new(PhysicalPlan::ReplaceAsyncSourcer(
-            ReplaceAsyncSourcer {
-                schema,
-                plan_id: u32::MAX,
-                source: source.clone(),
-            },
-        )))
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::new(ReplaceAsyncSourcer {
+            schema,
+            source: source.clone(),
+            meta: PhysicalPlanMeta::new("ReplaceAsyncSourcer"),
+        }))
     }
 
     #[async_backtrace::framed]
@@ -483,10 +479,7 @@ impl ReplaceInterpreter {
             false,
         )?;
 
-        let physical_plan = select_interpreter
-            .build_physical_plan()
-            .await
-            .map(Box::new)?;
+        let physical_plan = select_interpreter.build_physical_plan().await?;
         let select_ctx = ReplaceSelectCtx {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
@@ -501,7 +494,7 @@ impl ReplaceInterpreter {
 }
 
 struct ReplaceSourceCtx {
-    root: Box<PhysicalPlan>,
+    root: PhysicalPlan,
     select_ctx: Option<ReplaceSelectCtx>,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     bind_context: Option<BindContext>,

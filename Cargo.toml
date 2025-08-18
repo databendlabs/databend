@@ -65,16 +65,12 @@ members = [
     "src/query/storages/hive/hive",
     "src/query/storages/iceberg",
     "src/query/storages/information_schema",
-    "src/query/storages/memory",
-    "src/query/storages/null",
+    "src/query/storages/basic",
     "src/query/storages/orc",
-    "src/query/storages/random",
     "src/query/storages/stage",
     "src/query/storages/stream",
     "src/query/storages/system",
-    "src/query/storages/view",
     "src/query/storages/parquet",
-    "src/query/storages/result_cache",
     "src/query/users",
     "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
@@ -171,22 +167,18 @@ databend-common-settings = { path = "src/query/settings" }
 databend-common-sql = { path = "src/query/sql" }
 databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
 databend-common-storage = { path = "src/common/storage" }
+databend-common-storages-basic = { path = "src/query/storages/basic" }
 databend-common-storages-delta = { path = "src/query/storages/delta" }
 databend-common-storages-factory = { path = "src/query/storages/factory" }
 databend-common-storages-fuse = { path = "src/query/storages/fuse" }
 databend-common-storages-hive = { path = "src/query/storages/hive/hive" }
 databend-common-storages-iceberg = { path = "src/query/storages/iceberg" }
 databend-common-storages-information-schema = { path = "src/query/storages/information_schema" }
-databend-common-storages-memory = { path = "src/query/storages/memory" }
-databend-common-storages-null = { path = "src/query/storages/null" }
 databend-common-storages-orc = { path = "src/query/storages/orc" }
 databend-common-storages-parquet = { path = "src/query/storages/parquet" }
-databend-common-storages-random = { path = "src/query/storages/random" }
-databend-common-storages-result-cache = { path = "src/query/storages/result_cache" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
-databend-common-storages-view = { path = "src/query/storages/view" }
 databend-common-telemetry = { path = "src/common/telemetry" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }

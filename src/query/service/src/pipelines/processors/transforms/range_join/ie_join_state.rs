@@ -39,8 +39,8 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::sort_merge;
-use databend_common_sql::executor::physical_plans::RangeJoin;
 
+use crate::physical_plans::RangeJoin;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
