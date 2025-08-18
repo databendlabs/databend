@@ -394,7 +394,7 @@ async fn query_page_handler(
             query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(reason) = query.check_removed() {
                 log::info!(
-                    "[HTTP-QUERY] /query/{}/page/{} has error, query is removed, reason: {}",
+                    "[HTTP-QUERY] /query/{}/page/{} - query is removed (reason: {})",
                     query_id,
                     page_no,
                     reason
@@ -404,7 +404,7 @@ async fn query_page_handler(
                 query.update_expire_time(true).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
                     log::info!(
-                        "[HTTP-QUERY] /query/{}/page/{} has error, get response page, reason: {}",
+                        "[HTTP-QUERY] /query/{}/page/{} - get response page error (reason: {})",
                         query_id,
                         page_no,
                         err.message()
