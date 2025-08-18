@@ -129,7 +129,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
             println!("    Tracing: {}", conf.log.tracing);
         }
         if conf.log.history.on {
-            println!("    Storage: {}", conf.log.history);
+            println!("    Storage: {}", conf.log.history.on);
         }
         let r = &conf.raft_config;
         println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
