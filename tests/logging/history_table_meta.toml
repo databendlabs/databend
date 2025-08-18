@@ -1,11 +1,10 @@
-[log.history]
+[log.storage]
 on = true
-storage_on = true
 
-[log.history.storage]
+[log.storage.params]
 type = "s3"
 
-[log.history.storage.s3]
+[log.storage.params.s3]
 bucket = "testbucket"
 root = "admin"
 endpoint_url = "http://127.0.0.1:9900"
