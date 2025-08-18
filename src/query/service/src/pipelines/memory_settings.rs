@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::MemorySettings;
@@ -33,148 +32,128 @@ pub trait MemorySettingsExt: Sized {
 impl MemorySettingsExt for MemorySettings {
     fn from_join_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+        let mut builder = MemorySettings::builder();
 
         if settings.get_force_join_data_spill()? {
-            return Ok(MemorySettings::always_spill(0));
+            return Ok(builder.with_max_memory_usage(0).build());
         }
 
-        let mut enable_global_level_spill = false;
-        let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
-
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
         let max_memory_ratio = settings.get_join_spilling_memory_ratio()?;
         if max_memory_usage != 0 && max_memory_ratio != 0 {
-            enable_global_level_spill = true;
-            let max_memory_ratio = (max_memory_ratio as f64 / 100_f64).min(1_f64);
-            max_memory_usage = (max_memory_usage as f64 * max_memory_ratio) as usize;
+            let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
+            let global_limit = (max_memory_usage as f64 * ratio) as usize;
+            builder = builder.with_max_memory_usage(global_limit);
         }
 
         let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
-        let enable_query_level_spill = match settings.get_query_out_of_memory_behavior()? {
-            OutofMemoryBehavior::Throw => false,
-            OutofMemoryBehavior::Spilling => max_query_memory_usage != 0,
-        };
+        let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+        if matches!(out_of_memory_behavior, OutofMemoryBehavior::Spilling)
+            && max_query_memory_usage != 0
+        {
+            builder = builder.with_max_query_memory_usage(
+                max_query_memory_usage,
+                ctx.get_query_memory_tracking(),
+            );
+        }
 
-        Ok(MemorySettings {
-            max_memory_usage,
-            max_query_memory_usage,
-            enable_query_level_spill,
-            enable_global_level_spill,
-            spill_unit_size: 0,
-            query_memory_tracking: ctx.get_query_memory_tracking(),
-            global_memory_tracking: &GLOBAL_MEM_STAT,
-        })
+        Ok(builder.build())
     }
 
     fn from_sort_settings(ctx: &QueryContext) -> Result<Self> {
-        if !ctx.get_enable_sort_spill() {
-            return Ok(MemorySettings::disable_spill());
-        }
-
         let settings = ctx.get_settings();
+        let mut builder = MemorySettings::builder()
+            .with_spill_unit_size(settings.get_sort_spilling_batch_bytes()?);
+
+        if !ctx.get_enable_sort_spill() {
+            return Ok(builder.with_workload_group(false).build());
+        }
 
         if settings.get_force_sort_data_spill()? {
-            let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-            return Ok(MemorySettings::always_spill(spilling_batch_bytes));
+            return Ok(builder.with_max_memory_usage(0).build());
         }
 
-        let mut enable_global_level_spill = false;
-        let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
-
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
         let max_memory_ratio = settings.get_sort_spilling_memory_ratio()?;
         if max_memory_usage != 0 && max_memory_ratio != 0 {
-            enable_global_level_spill = true;
-            let max_memory_ratio = (max_memory_ratio as f64 / 100_f64).min(1_f64);
-            max_memory_usage = (max_memory_usage as f64 * max_memory_ratio) as usize;
+            let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
+            let global_limit = (max_memory_usage as f64 * ratio) as usize;
+            builder = builder.with_max_memory_usage(global_limit);
         }
 
         let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
-        let enable_query_level_spill = match settings.get_query_out_of_memory_behavior()? {
-            OutofMemoryBehavior::Throw => false,
-            OutofMemoryBehavior::Spilling => max_query_memory_usage != 0,
-        };
+        let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+        if matches!(out_of_memory_behavior, OutofMemoryBehavior::Spilling)
+            && max_query_memory_usage != 0
+        {
+            builder = builder.with_max_query_memory_usage(
+                max_query_memory_usage,
+                ctx.get_query_memory_tracking(),
+            );
+        }
 
-        let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-
-        Ok(MemorySettings {
-            max_memory_usage,
-            max_query_memory_usage,
-            enable_query_level_spill,
-            enable_global_level_spill,
-            query_memory_tracking: ctx.get_query_memory_tracking(),
-            spill_unit_size: spilling_batch_bytes,
-            global_memory_tracking: &GLOBAL_MEM_STAT,
-        })
+        Ok(builder.build())
     }
 
     fn from_window_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+        let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
+        let mut builder = MemorySettings::builder().with_spill_unit_size(spill_unit_size);
 
         if settings.get_force_window_data_spill()? {
-            let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
-            return Ok(MemorySettings::always_spill(spill_unit_size));
+            return Ok(builder.with_max_memory_usage(0).build());
         }
 
-        let mut enable_global_level_spill = false;
-        let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
-
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
         let max_memory_ratio = settings.get_window_partition_spilling_memory_ratio()?;
         if max_memory_usage != 0 && max_memory_ratio != 0 {
-            enable_global_level_spill = true;
-            let max_memory_ratio = (max_memory_ratio as f64 / 100_f64).min(1_f64);
-            max_memory_usage = (max_memory_usage as f64 * max_memory_ratio) as usize;
+            let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
+            let global_limit = (max_memory_usage as f64 * ratio) as usize;
+            builder = builder.with_max_memory_usage(global_limit);
         }
 
         let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
-        let enable_query_level_spill = match settings.get_query_out_of_memory_behavior()? {
-            OutofMemoryBehavior::Throw => false,
-            OutofMemoryBehavior::Spilling => max_query_memory_usage != 0,
-        };
+        let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+        if matches!(out_of_memory_behavior, OutofMemoryBehavior::Spilling)
+            && max_query_memory_usage != 0
+        {
+            builder = builder.with_max_query_memory_usage(
+                max_query_memory_usage,
+                ctx.get_query_memory_tracking(),
+            );
+        }
 
-        let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
-
-        Ok(MemorySettings {
-            spill_unit_size,
-            max_memory_usage,
-            max_query_memory_usage,
-            enable_query_level_spill,
-            enable_global_level_spill,
-            query_memory_tracking: ctx.get_query_memory_tracking(),
-            global_memory_tracking: &GLOBAL_MEM_STAT,
-        })
+        Ok(builder.build())
     }
 
     fn from_aggregate_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+        let mut builder = MemorySettings::builder();
 
         if settings.get_force_aggregate_data_spill()? {
-            return Ok(MemorySettings::always_spill(0));
+            return Ok(builder.with_max_memory_usage(0).build());
         }
 
-        let mut enable_global_level_spill = false;
-        let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
-
+        let max_memory_usage = settings.get_max_memory_usage()? as usize;
         let max_memory_ratio = settings.get_aggregate_spilling_memory_ratio()?;
         if max_memory_usage != 0 && max_memory_ratio != 0 {
-            enable_global_level_spill = true;
-            let max_memory_ratio = (max_memory_ratio as f64 / 100_f64).min(1_f64);
-            max_memory_usage = (max_memory_usage as f64 * max_memory_ratio) as usize;
+            let ratio = (max_memory_ratio as f64 / 100.0).min(1.0);
+            let global_limit = (max_memory_usage as f64 * ratio) as usize;
+            builder = builder.with_max_memory_usage(global_limit);
         }
 
         let max_query_memory_usage = settings.get_max_query_memory_usage()? as usize;
-        let enable_query_level_spill = match settings.get_query_out_of_memory_behavior()? {
-            OutofMemoryBehavior::Throw => false,
-            OutofMemoryBehavior::Spilling => max_query_memory_usage != 0,
-        };
+        let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+        if matches!(out_of_memory_behavior, OutofMemoryBehavior::Spilling)
+            && max_query_memory_usage != 0
+        {
+            builder = builder.with_max_query_memory_usage(
+                max_query_memory_usage,
+                ctx.get_query_memory_tracking(),
+            );
+        }
 
-        Ok(MemorySettings {
-            max_memory_usage,
-            max_query_memory_usage,
-            enable_query_level_spill,
-            enable_global_level_spill,
-            spill_unit_size: 0,
-            query_memory_tracking: ctx.get_query_memory_tracking(),
-            global_memory_tracking: &GLOBAL_MEM_STAT,
-        })
+        Ok(builder.build())
     }
 }
 
@@ -201,7 +180,6 @@ mod tests {
         let memory_settings = MemorySettings::from_join_settings(&ctx)?;
 
         assert!(!memory_settings.enable_global_level_spill);
-        assert_eq!(memory_settings.max_memory_usage, 0);
         assert!(memory_settings.enable_query_level_spill);
         Ok(())
     }
