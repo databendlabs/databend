@@ -54,7 +54,9 @@ pub const PRECISION_SEC: u8 = 0;
 /// If timestamp is invalid convert to TIMESTAMP_MIN.
 #[inline]
 pub fn clamp_timestamp(micros: &mut i64) {
-    *micros = (*micros).clamp(TIMESTAMP_MIN, TIMESTAMP_MAX);
+    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
+        *micros = TIMESTAMP_MIN;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
