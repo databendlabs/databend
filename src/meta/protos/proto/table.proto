@@ -126,6 +126,8 @@ message TableMeta {
   map<string, TableIndex> indexes = 31;
   // The schema of virtual columns.
   VirtualDataSchema virtual_schema = 32;
+
+  optional string row_access_policy = 33;
 }
 
 message TableIndex {

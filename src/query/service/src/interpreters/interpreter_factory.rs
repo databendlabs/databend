@@ -86,6 +86,7 @@ use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpre
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
 use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
@@ -409,6 +410,15 @@ impl InterpreterFactory {
                 ctx,
                 *exists_table.clone(),
             )?)),
+            Plan::AddTableRowAccessPolicy(p) => Ok(Arc::new(
+                AddTableRowAccessPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropTableRowAccessPolicy(p) => Ok(Arc::new(
+                DropTableRowAccessPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
+                DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
+            )),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(

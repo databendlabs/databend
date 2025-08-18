@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod rule_deduplicate_sort;
-mod rule_eliminate_sort;
+// The identifier of a database by name. Names can be changed.
+// There is no guarantee that two get-database request by name will return the
+// same instance.
 
-pub use rule_deduplicate_sort::RuleDeduplicateSort;
-pub use rule_eliminate_sort::RuleEliminateSort;
+syntax = "proto3";
+
+package databend_proto;
+
+message RowAccessPolicyTableId {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+}

@@ -437,6 +437,16 @@ pub enum AlterTableAction {
     ModifyColumn {
         action: ModifyColumnAction,
     },
+    // (column name id, policy name)
+    AddRowAccessPolicy {
+        columns: Vec<Identifier>,
+        policy: Identifier,
+    },
+    // policy name
+    DropRowAccessPolicy {
+        policy: Identifier,
+    },
+    DropAllRowAccessPolicies,
     DropColumn {
         column: Identifier,
     },
@@ -538,6 +548,17 @@ impl Display for AlterTableAction {
                 write!(f, "CONNECTION=(")?;
                 write_space_separated_string_map(f, new_connection)?;
                 write!(f, ")")?;
+            }
+            AlterTableAction::AddRowAccessPolicy { columns, policy } => {
+                write!(f, "ADD ROW ACCESS POLICY {} ON (", policy)?;
+                write_comma_separated_list(f, columns)?;
+                write!(f, ")")?
+            }
+            AlterTableAction::DropRowAccessPolicy { policy } => {
+                write!(f, "DROP ROW ACCESS POLICY {}", policy)?
+            }
+            AlterTableAction::DropAllRowAccessPolicies => {
+                write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
         };
         Ok(())

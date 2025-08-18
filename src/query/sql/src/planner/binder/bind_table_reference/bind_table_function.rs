@@ -25,18 +25,25 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDTF;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
+use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
+use itertools::Itertools;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
@@ -45,11 +52,15 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::BindContext;
+use crate::Planner;
 use crate::ScalarExpr;
 
 impl Binder {
@@ -64,6 +75,41 @@ impl Binder {
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter))]
+        struct UDTFArgVisitor<'a> {
+            udtf: &'a UDTF,
+            table_args: &'a TableArgs,
+        }
+
+        impl UDTFArgVisitor<'_> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                if let Expr::ColumnRef { span, column } = expr {
+                    if column.database.is_some() || column.table.is_some() {
+                        return;
+                    }
+                    assert_eq!(self.udtf.arg_types.len(), self.table_args.positioned.len());
+                    let Some((pos, (_, ty))) = self
+                        .udtf
+                        .arg_types
+                        .iter()
+                        .find_position(|(name, _)| name == column.column.name())
+                    else {
+                        return;
+                    };
+                    *expr = Expr::Cast {
+                        span: *span,
+                        expr: Box::new(Expr::Literal {
+                            span: *span,
+                            value: Literal::String(self.table_args.positioned[pos].to_string()),
+                        }),
+                        target_type: convert_to_type_name(ty),
+                        pg_style: false,
+                    }
+                }
+            }
+        }
+
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
         if BUILTIN_FUNCTIONS
@@ -128,6 +174,115 @@ impl Binder {
             &[],
         );
         let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
+
+        let tenant = self.ctx.get_tenant();
+        let udtf_result = databend_common_base::runtime::block_on(async {
+            if let Some(UDFDefinition::UDTF(udtf)) = UserApiProvider::instance()
+                .get_udf(&tenant, &func_name.name)
+                .await?
+                .map(|udf| udf.definition)
+            {
+                let mut stmt = Planner::new(self.ctx.clone())
+                    .parse_sql(&udtf.sql)?
+                    .statement;
+
+                if udtf.arg_types.len() != table_args.positioned.len() {
+                    return Err(ErrorCode::UDFSchemaMismatch(format!(
+                        "UDTF '{}' argument types length {} does not match input arguments length {}",
+                        func_name,
+                        udtf.arg_types.len(),
+                        table_args.positioned.len()
+                    )));
+                }
+                let mut visitor = UDTFArgVisitor {
+                    udtf: &udtf,
+                    table_args: &table_args,
+                };
+                stmt.drive_mut(&mut visitor);
+
+                let binder = Binder::new(
+                    self.ctx.clone(),
+                    CatalogManager::instance(),
+                    self.name_resolution_ctx.clone(),
+                    self.metadata.clone(),
+                )
+                .with_subquery_executor(self.subquery_executor.clone());
+                let plan = binder.bind(&stmt).await?;
+
+                let Plan::Query {
+                    s_expr,
+                    mut bind_context,
+                    ..
+                } = plan
+                else {
+                    return Err(ErrorCode::UDFRuntimeError(
+                        "Query in UDTF returned no result set",
+                    ));
+                };
+                let mut output_bindings = Vec::with_capacity(bind_context.columns.len());
+                let mut output_items = Vec::with_capacity(bind_context.columns.len());
+
+                if udtf.return_types.len() != bind_context.columns.len() {
+                    return Err(ErrorCode::UDFSchemaMismatch(format!(
+                        "UDTF '{}' return types length {} does not match output columns length {}",
+                        func_name,
+                        udtf.return_types.len(),
+                        bind_context.columns.len()
+                    )));
+                }
+
+                for ((return_name, return_type), output_binding) in udtf
+                    .return_types
+                    .into_iter()
+                    .zip(bind_context.columns.iter())
+                {
+                    let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: output_binding.clone(),
+                    });
+                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
+                        span: None,
+                        is_try: false,
+                        argument: Box::new(input_expr),
+                        target_type: Box::new(return_type.clone()),
+                    });
+                    let index = self.metadata.write().add_derived_column(
+                        return_name.clone(),
+                        return_type.clone(),
+                        Some(cast_expr.clone()),
+                    );
+                    let output_binding = ColumnBindingBuilder::new(
+                        return_name,
+                        index,
+                        Box::new(return_type),
+                        Visibility::Visible,
+                    )
+                    .build();
+
+                    output_items.push(ScalarItem {
+                        scalar: cast_expr,
+                        index: output_binding.index,
+                    });
+                    output_bindings.push(output_binding);
+                }
+                bind_context.columns = output_bindings;
+                let s_expr = SExpr::create_unary(
+                    Arc::new(
+                        EvalScalar {
+                            items: output_items,
+                        }
+                        .into(),
+                    ),
+                    s_expr,
+                );
+
+                return Ok(Some((s_expr, *bind_context)));
+            }
+            Ok(None)
+        });
+        if let Some(result) = udtf_result? {
+            return Ok(result);
+        }
 
         if func_name.name.eq_ignore_ascii_case("result_scan") {
             self.bind_result_scan(bind_context, span, alias, &table_args)

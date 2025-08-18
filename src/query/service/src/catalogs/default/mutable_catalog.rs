@@ -98,6 +98,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -736,6 +738,17 @@ impl Catalog for MutableCatalog {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         Ok(self.ctx.meta.set_table_column_mask_policy(req).await?)
+    }
+
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        self.ctx
+            .meta
+            .set_table_row_access_policy(req)
+            .await?
+            .map_err(Into::into)
     }
 
     #[async_backtrace::framed]

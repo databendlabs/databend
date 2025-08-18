@@ -148,6 +148,7 @@ fn test_decode_v33_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: None,
+        row_access_policy: None,
         indexes: btreemap! {},
     };
 

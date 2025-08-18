@@ -20,6 +20,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_meta_app::principal as mt;
 use databend_common_protos::pb;
+use databend_common_protos::pb::UdtfArg;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -275,6 +276,87 @@ impl FromToProto for mt::UDAFScript {
     }
 }
 
+impl FromToProto for mt::UDTF {
+    type PB = pb::Udtf;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = Vec::new();
+        for arg_ty in p.arg_types {
+            let ty_pb = arg_ty.ty.ok_or_else(|| {
+                Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
+
+            arg_types.push((arg_ty.name, (&ty).into()));
+        }
+
+        let mut return_types = Vec::new();
+        for return_ty in p.return_types {
+            let ty_pb = return_ty.ty.ok_or_else(|| {
+                Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
+
+            return_types.push((return_ty.name, (&ty).into()));
+        }
+
+        Ok(Self {
+            arg_types,
+            return_types,
+            sql: p.sql,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for (arg_name, arg_type) in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            arg_types.push(UdtfArg {
+                name: arg_name.clone(),
+                ty: Some(arg_type),
+            });
+        }
+
+        let mut return_types = Vec::with_capacity(self.return_types.len());
+        for (return_name, return_type) in self.return_types.iter() {
+            let return_type = infer_schema_type(return_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            return_types.push(UdtfArg {
+                name: return_name.clone(),
+                ty: Some(return_type),
+            });
+        }
+
+        Ok(pb::Udtf {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            arg_types,
+            return_types,
+            sql: self.sql.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::UserDefinedFunction {
     type PB = pb::UserDefinedFunction;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -294,6 +376,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::UdafScript(udaf_script)) => {
                 mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
+            }
+            Some(pb::user_defined_function::Definition::Udtf(udtf)) => {
+                mt::UDFDefinition::UDTF(mt::UDTF::from_pb(udtf)?)
             }
             None => {
                 return Err(Incompatible::new(
@@ -326,6 +411,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDAFScript(udaf_script) => {
                 pb::user_defined_function::Definition::UdafScript(udaf_script.to_pb()?)
+            }
+            mt::UDFDefinition::UDTF(udtf) => {
+                pb::user_defined_function::Definition::Udtf(udtf.to_pb()?)
             }
         };
 

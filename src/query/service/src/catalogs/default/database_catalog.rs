@@ -89,6 +89,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -610,6 +612,14 @@ impl Catalog for DatabaseCatalog {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         self.mutable_catalog.set_table_column_mask_policy(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        self.mutable_catalog.set_table_row_access_policy(req).await
     }
 
     // Table index

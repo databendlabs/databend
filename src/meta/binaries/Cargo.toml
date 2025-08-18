@@ -35,6 +35,7 @@ databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-meta = { workspace = true }
@@ -48,6 +49,7 @@ fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 mlua = { workspace = true }
+num_cpus = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
