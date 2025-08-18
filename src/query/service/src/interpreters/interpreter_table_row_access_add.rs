@@ -130,7 +130,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            policy_id: policy_id.seq,
+            policy_id: *policy_id.data,
             action: SetTableRowAccessPolicyAction::Set(policy_name),
         };
 

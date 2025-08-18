@@ -3490,8 +3490,11 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        let s = mt.create_row_access(req).await.unwrap().unwrap();
-        let policy1_id = s.id;
+        let _ = mt.create_row_access(req).await.unwrap().unwrap();
+
+        let name = RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string());
+        let res = mt.get_row_access(&name).await.unwrap().unwrap();
+        let policy1_id = res.0.data;
 
         let req = CreateRowAccessPolicyReq {
             can_replace: false,
@@ -3525,7 +3528,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id,
                 action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
             };
             let _ = mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3542,7 +3545,7 @@ impl SchemaApiTestSuite {
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
                 table_id: table_id_1,
             };
             let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
@@ -3569,7 +3572,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id,
                 action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
             };
             let _ = mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3585,7 +3588,7 @@ impl SchemaApiTestSuite {
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
                 table_id: table_id_2,
             };
             let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
@@ -3600,7 +3603,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id: table_id_1,
                 action: SetTableRowAccessPolicyAction::Unset(policy1.to_string()),
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
             };
             let _ = mt.set_table_row_access_policy(req).await??;
 
@@ -3618,7 +3621,7 @@ impl SchemaApiTestSuite {
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
-                policy_id: policy1_id,
+                policy_id: *policy1_id,
                 table_id: table_id_1,
             };
             let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
