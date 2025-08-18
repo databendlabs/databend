@@ -24,7 +24,6 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
-use log::error;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;
@@ -55,10 +54,7 @@ pub const PRECISION_SEC: u8 = 0;
 /// If timestamp is invalid convert to TIMESTAMP_MIN.
 #[inline]
 pub fn clamp_timestamp(micros: &mut i64) {
-    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
-        error!("timestamp {micros} is out of range");
-        *micros = TIMESTAMP_MIN;
-    }
+    *micros = (*micros).clamp(TIMESTAMP_MIN, TIMESTAMP_MAX);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
