@@ -436,9 +436,12 @@ impl MetaNode {
         let meta_node = mn.clone();
 
         let fut = async move {
+            const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
             let mut last_leader: Option<u64> = None;
 
             loop {
+                let loop_start = Instant::now();
+
                 let changed = metrics_rx.changed().await;
 
                 if let Err(changed_err) = changed {
@@ -508,6 +511,12 @@ impl MetaNode {
                 }
 
                 last_leader = mm.current_leader;
+
+                let elapsed = loop_start.elapsed();
+                if elapsed < RATE_LIMIT_INTERVAL {
+                    let sleep_duration = RATE_LIMIT_INTERVAL - elapsed;
+                    sleep(sleep_duration).await;
+                }
             }
 
             Ok::<(), AnyError>(())
