@@ -898,6 +898,7 @@ impl Default for HistoryLogConfig {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<InnerLogHistoryConfig> for HistoryLogConfig {
     fn into(self) -> InnerLogHistoryConfig {
         let storage_params: Option<InnerStorageConfig> = if self.log_history_external_storage_on {
