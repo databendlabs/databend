@@ -324,26 +324,31 @@ impl FuseTable {
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
-        match snapshot {
-            Some(snapshot) => {
-                if let Some(loc) = &snapshot.table_statistics_location {
-                    let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+        if let Some(snapshot) = snapshot {
+            if let Some((location, ver)) = snapshot
+                .summary
+                .additional_stats_meta
+                .as_ref()
+                .and_then(|v| v.location.clone())
+                .or_else(|| {
+                    snapshot.table_statistics_location.as_ref().map(|v| {
+                        let ver = TableMetaLocationGenerator::table_statistics_version(v);
+                        (v.clone(), ver)
+                    })
+                })
+            {
+                let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+                let load_params = LoadParams {
+                    location,
+                    len_hint: None,
+                    ver,
+                    put_cache: true,
+                };
 
-                    let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                    let load_params = LoadParams {
-                        location: loc.clone(),
-                        len_hint: None,
-                        ver,
-                        put_cache: true,
-                    };
-
-                    Ok(Some(reader.read(&load_params).await?))
-                } else {
-                    Ok(None)
-                }
+                return Ok(Some(reader.read(&load_params).await?));
             }
-            None => Ok(None),
         }
+        Ok(None)
     }
 
     #[fastrace::trace]

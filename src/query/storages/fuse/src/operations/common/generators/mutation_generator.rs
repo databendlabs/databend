@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
@@ -64,6 +65,7 @@ impl SnapshotGenerator for MutationGenerator {
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
         _table_name: &str,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<TableSnapshot> {
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
@@ -95,7 +97,7 @@ impl SnapshotGenerator for MutationGenerator {
                         schema,
                         new_summary,
                         new_segments,
-                        previous.table_statistics_location(),
+                        additional_stats_meta,
                         table_meta_timestamps,
                     )?;
 

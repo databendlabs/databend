@@ -41,9 +41,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -72,6 +70,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
         cluster_key_id: Option<u32>,
         table_info: TableInfo,
     },
@@ -79,7 +78,6 @@ enum State {
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
-        prev_stats: Option<String>,
     },
     Abort(ErrorCode),
     Finish,
@@ -362,6 +360,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
+                additional_stats_meta,
                 cluster_key_id,
                 table_info,
             } => {
@@ -403,22 +402,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_info.ident.table_id,
                     self.table_meta_timestamps,
                     table_info.name.as_str(),
+                    additional_stats_meta,
                 ) {
-                    Ok(mut snapshot) => {
-                        let prev_stats = snapshot.table_statistics_location.clone();
-                        if !self.insert_hll.is_empty() {
-                            let table_statistics_location =
-                                self.location_gen.snapshot_statistics_location_from_uuid(
-                                    &snapshot.snapshot_id,
-                                    TableSnapshotStatistics::VERSION,
-                                )?;
-                            snapshot.table_statistics_location = Some(table_statistics_location);
-                        }
+                    Ok(snapshot) => {
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
-                            prev_stats,
                         };
                     }
                     Err(e) => {
@@ -487,9 +477,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.snapshot_gen
                         .fill_default_values(schema, &previous)
                         .await?;
-
+                    let additional_stats_meta = fuse_table
+                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                        .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
+                        additional_stats_meta,
                         cluster_key_id: fuse_table.cluster_key_id(),
                         table_info,
                     };
@@ -499,20 +492,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 data,
                 snapshot,
                 table_info,
-                prev_stats,
             } => {
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
 
                 self.dal.write(&location, data).await?;
-                let new_stats_loc = snapshot.table_statistics_location.clone();
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                let new_stats = fuse_table
-                    .write_snapshot_stats(&snapshot, prev_stats, &self.insert_hll, self.insert_rows)
-                    .await?;
                 match fuse_table
                     .update_table_meta(
                         self.ctx.as_ref(),
@@ -529,11 +517,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .await
                 {
                     Ok(_) => {
-                        if let Some(new_stats) = new_stats {
-                            TableSnapshotStatistics::cache()
-                                .insert(new_stats_loc.unwrap(), new_stats);
-                        }
-
                         if self.need_truncate() {
                             // Truncate table operation should be executed in the context of ddl,
                             // which implies auto commit mode.
@@ -647,8 +630,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
+                let additional_stats_meta = fuse_table
+                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                    .await?;
                 self.state = State::GenerateSnapshot {
                     previous,
+                    additional_stats_meta,
                     cluster_key_id: fuse_table.cluster_key_id(),
                     table_info: fuse_table.table_info.clone(),
                 };

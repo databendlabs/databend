@@ -275,9 +275,10 @@ impl SnapshotsIO {
             }
             segments.insert(segment_location.clone());
         }
+        let table_stats_loc = snapshot.table_statistics_location();
         let table_statistics_location =
-            if snapshot.table_statistics_location != root_snapshot.table_statistics_location {
-                snapshot.table_statistics_location.clone()
+            if table_stats_loc != root_snapshot.table_statistics_location {
+                table_stats_loc
             } else {
                 None
             };

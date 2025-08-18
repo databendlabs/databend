@@ -34,6 +34,7 @@ use crate::meta::monotonically_increased_timestamp;
 use crate::meta::uuid_from_date_time;
 use crate::meta::v2;
 use crate::meta::v3;
+use crate::meta::AdditionalStatsMeta;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -99,9 +100,9 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
-        summary: Statistics,
+        mut summary: Statistics,
         segments: Vec<Location>,
-        table_statistics_location: Option<String>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let TableMetaTimestamps {
@@ -139,6 +140,7 @@ impl TableSnapshot {
             return Err(ErrorCode::TransactionTimeout(err_msg));
         }
 
+        summary.additional_stats_meta = additional_stats_meta;
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -149,7 +151,7 @@ impl TableSnapshot {
             summary,
             segments,
             cluster_key_meta: None,
-            table_statistics_location,
+            table_statistics_location: None,
         })
     }
 
@@ -172,6 +174,7 @@ impl TableSnapshot {
         previous: Arc<TableSnapshot>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self> {
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::try_new(
@@ -180,7 +183,7 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
-            previous.table_statistics_location.clone(),
+            additional_stats_meta,
             table_meta_timestamps,
         )
     }
@@ -246,6 +249,16 @@ impl TableSnapshot {
     #[inline]
     pub fn encoding() -> MetaEncoding {
         MetaEncoding::MessagePack
+    }
+
+    #[inline]
+    pub fn table_statistics_location(&self) -> Option<String> {
+        self.table_statistics_location.clone().or_else(|| {
+            self.summary
+                .additional_stats_meta
+                .as_ref()
+                .and_then(|v| v.location.as_ref().map(|v| v.0.clone()))
+        })
     }
 }
 

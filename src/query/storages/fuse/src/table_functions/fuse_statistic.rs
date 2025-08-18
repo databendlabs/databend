@@ -32,6 +32,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
@@ -146,11 +147,19 @@ impl<'a> FuseStatisticImpl<'a> {
         summary: &Statistics,
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
     ) -> Result<DataBlock> {
-        let row_count = table_statistics.as_ref().map(|v| v.row_count).unwrap_or(0);
+        let additional_stats_meta = summary.additional_stats_meta.as_ref();
+        let row_count = additional_stats_meta
+            .map(|v| v.size)
+            .or_else(|| table_statistics.as_ref().map(|v| v.row_count))
+            .unwrap_or(0);
         let actual_row_count = summary.row_count;
-        let column_distinct_values = table_statistics
-            .as_ref()
-            .map(|v| v.column_distinct_values());
+        let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {
+            Some(v) if !v.is_empty() => decode_column_hll(v)?
+                .map(|v| v.iter().map(|hll| (*hll.0, hll.1.count() as u64)).collect()),
+            _ => table_statistics
+                .as_ref()
+                .map(|v| v.column_distinct_values()),
+        };
         let histograms = table_statistics.as_ref().map(|v| &v.histograms);
 
         let mut col_names = vec![];

@@ -264,11 +264,14 @@ async fn build_update_table_meta_req(
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
     table_meta_timestamps: TableMetaTimestamps,
-    hll: &BlockHLL,
+    insert_hll: &BlockHLL,
     insert_rows: u64,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
+    let additional_stats_meta = fuse_table
+        .generate_table_stats(&previous, insert_hll, insert_rows)
+        .await?;
     let snapshot = snapshot_generator.generate_new_snapshot(
         table.schema().as_ref().clone(),
         fuse_table.cluster_key_id(),
@@ -278,8 +281,8 @@ async fn build_update_table_meta_req(
         table.get_id(),
         table_meta_timestamps,
         table.name(),
+        additional_stats_meta,
     )?;
-    let prev_stats_loc = snapshot.table_statistics_location.clone();
 
     // write snapshot
     let dal = fuse_table.get_operator();
@@ -287,11 +290,6 @@ async fn build_update_table_meta_req(
     let location = location_generator
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     dal.write(&location, snapshot.to_bytes()?).await?;
-
-    // write table snapshot stats.
-    let _ = fuse_table
-        .write_snapshot_stats(&snapshot, prev_stats_loc, hll, insert_rows)
-        .await?;
 
     // build new table meta
     let new_table_meta =

@@ -25,6 +25,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_sql::DefaultExprBinder;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -121,6 +122,7 @@ impl SnapshotGenerator for AppendGenerator {
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
         table_name: &str,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -129,13 +131,10 @@ impl SnapshotGenerator for AppendGenerator {
                 expected_schema, schema
             )));
         }
-        let mut table_statistics_location = None;
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
         if let Some(snapshot) = previous {
-            table_statistics_location = snapshot.table_statistics_location.clone();
-
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
 
@@ -226,7 +225,7 @@ impl SnapshotGenerator for AppendGenerator {
             schema,
             new_summary,
             new_segments,
-            table_statistics_location,
+            additional_stats_meta,
             table_meta_timestamps,
         )
     }

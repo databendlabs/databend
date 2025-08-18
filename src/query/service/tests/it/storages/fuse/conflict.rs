@@ -69,6 +69,7 @@ fn test_unresolvable_delete_conflict() {
         0,
         TestFixture::default_table_meta_timestamps(),
         "test",
+        None,
     );
     assert!(result.is_err());
 }
@@ -190,6 +191,7 @@ fn test_resolvable_delete_conflict() {
         0,
         TestFixture::default_table_meta_timestamps(),
         "test",
+        None,
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -334,6 +336,7 @@ fn test_resolvable_replace_conflict() {
         0,
         TestFixture::default_table_meta_timestamps(),
         "test",
+        None,
     );
     let snapshot = result.unwrap();
     let expected = vec![

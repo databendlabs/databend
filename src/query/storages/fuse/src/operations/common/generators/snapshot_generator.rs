@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -48,6 +49,7 @@ pub trait SnapshotGenerator {
         table_id: u64,
         table_meta_timestamps: TableMetaTimestamps,
         table_name: &str,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<TableSnapshot> {
         let mut snapshot = self.do_generate_new_snapshot(
             schema,
@@ -56,6 +58,7 @@ pub trait SnapshotGenerator {
             prev_table_seq,
             table_meta_timestamps,
             table_name,
+            additional_stats_meta,
         )?;
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_id)?;
         Ok(snapshot)
@@ -69,6 +72,7 @@ pub trait SnapshotGenerator {
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
         table_name: &str,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<TableSnapshot>;
 }
 

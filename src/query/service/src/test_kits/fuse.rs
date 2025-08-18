@@ -70,10 +70,13 @@ pub async fn generate_snapshot_with_segments(
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
+    let additional_stats_meta =
+        FuseTable::generate_table_stats_from_prev(current_snapshot.as_ref());
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
         TestFixture::default_table_meta_timestamps(),
+        additional_stats_meta,
     )?;
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
@@ -296,6 +299,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Arc::new(snapshot_1.clone()),
         None,
         TestFixture::default_table_meta_timestamps(),
+        FuseTable::generate_table_stats_from_prev(&snapshot_1),
     )?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);

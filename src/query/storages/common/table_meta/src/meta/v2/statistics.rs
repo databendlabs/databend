@@ -71,9 +71,10 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct AdditionalStatsMeta {
-    /// The size of the stats data in bytes.
+    /// For segment: the size of the stats data in bytes.
+    /// For snapshot: the count of the stats rows.
     pub size: u64,
     /// The file location of the stats data.
     pub location: Option<Location>,

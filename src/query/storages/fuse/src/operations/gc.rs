@@ -340,7 +340,7 @@ impl FuseTable {
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
-            table_statistics_location: root_snapshot.table_statistics_location.clone(),
+            table_statistics_location: root_snapshot.table_statistics_location(),
         });
         Ok(Some(RootSnapshotInfo {
             snapshot_location,

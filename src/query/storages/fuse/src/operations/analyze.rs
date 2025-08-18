@@ -212,18 +212,31 @@ impl SinkAnalyzeState {
         self.ndv_states.retain(|k, _| column_ids.contains(k));
 
         // 3. Generate new table statistics
-        let table_statistics = TableSnapshotStatistics::new(
-            self.ndv_states.clone(),
-            self.histograms.clone(),
-            self.snapshot_id,
-            snapshot.summary.row_count,
-        );
-        let table_statistics_location = table
-            .meta_location_generator
-            .snapshot_statistics_location_from_uuid(
-                &table_statistics.snapshot_id,
+        let mut additional_stats_meta = AdditionalStatsMeta {
+            size: snapshot.summary.row_count,
+            location: None,
+            hll: Some(encode_column_hll(&self.ndv_states)?),
+        };
+        let table_statistics = if !self.histograms.is_empty() {
+            let table_statistics = TableSnapshotStatistics::new(
+                self.ndv_states.clone(),
+                self.histograms.clone(),
+                self.snapshot_id,
+                snapshot.summary.row_count,
+            );
+            additional_stats_meta.location = Some((
+                table
+                    .meta_location_generator
+                    .snapshot_statistics_location_from_uuid(
+                        &table_statistics.snapshot_id,
+                        table_statistics.format_version(),
+                    )?,
                 table_statistics.format_version(),
-            )?;
+            ));
+            Some(table_statistics)
+        } else {
+            None
+        };
 
         let (col_stats, cluster_stats) =
             regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
@@ -233,17 +246,18 @@ impl SinkAnalyzeState {
             Some(table.get_table_info().ident.seq),
             self.ctx
                 .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
+            FuseTable::generate_table_stats_from_prev(snapshot.as_ref()),
         )?;
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
-        new_snapshot.table_statistics_location = Some(table_statistics_location);
+        new_snapshot.summary.additional_stats_meta = Some(additional_stats_meta);
         table
             .commit_to_meta_server(
                 self.ctx.as_ref(),
                 &table.table_info,
                 &table.meta_location_generator,
                 new_snapshot,
-                Some(table_statistics),
+                table_statistics,
                 &None,
                 &table.operator,
             )
