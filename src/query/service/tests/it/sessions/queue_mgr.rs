@@ -475,7 +475,7 @@ async fn test_heavy_actions() -> Result<()> {
 async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
-    
+
     let test_data1 = TestData::new(
         "test_immediate_abort".to_string(),
         "test_acquire_1".to_string(),
@@ -484,15 +484,15 @@ async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
         "test_immediate_abort".to_string(),
         "test_acquire_2".to_string(),
     );
-    
+
     let _guard1 = queue.acquire(test_data1).await?;
-    
+
     test_data2.abort_notify.notify_waiters();
-    
+
     let result = queue.acquire(test_data2).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
-    
+
     Ok(())
 }
 
@@ -500,7 +500,7 @@ async fn test_watch_abort_notify_immediate_abort() -> Result<()> {
 async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
-    
+
     let test_data1 = TestData::new(
         "test_abort_during_wait".to_string(),
         "test_acquire_1".to_string(),
@@ -509,22 +509,21 @@ async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
         "test_abort_during_wait".to_string(),
         "test_acquire_2".to_string(),
     );
-    
+
     let _guard1 = queue.acquire(test_data1).await?;
-    
+
     let abort_notify = test_data2.abort_notify.clone();
     let queue_clone = queue.clone();
-    let acquire_handle = databend_common_base::runtime::spawn(async move {
-        queue_clone.acquire(test_data2).await
-    });
-    
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data2).await });
+
     tokio::time::sleep(Duration::from_millis(100)).await;
     abort_notify.notify_waiters();
-    
+
     let result = acquire_handle.await.unwrap();
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
-    
+
     Ok(())
 }
 
@@ -532,27 +531,26 @@ async fn test_watch_abort_notify_abort_during_wait() -> Result<()> {
 async fn test_watch_abort_notify_race_condition() -> Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
-    
+
     let test_data = TestData::new(
         "test_race_condition".to_string(),
         "test_acquire_1".to_string(),
     );
-    
+
     let abort_notify = test_data.abort_notify.clone();
     let queue_clone = queue.clone();
-    
-    let acquire_handle = databend_common_base::runtime::spawn(async move {
-        queue_clone.acquire(test_data).await
-    });
-    
+
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data).await });
+
     let abort_handle = databend_common_base::runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(10)).await;
         abort_notify.notify_waiters();
     });
-    
+
     let (acquire_result, _) = tokio::join!(acquire_handle, abort_handle);
     let result = acquire_result.unwrap();
-    
+
     match result {
         Ok(_guard) => {
             assert_eq!(queue.length(), 0);
@@ -561,7 +559,7 @@ async fn test_watch_abort_notify_race_condition() -> Result<()> {
             assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
         }
     }
-    
+
     Ok(())
 }
 
@@ -569,7 +567,7 @@ async fn test_watch_abort_notify_race_condition() -> Result<()> {
 async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
-    
+
     let test_data1 = TestData::new(
         "test_multiple_waiters".to_string(),
         "test_acquire_1".to_string(),
@@ -582,36 +580,34 @@ async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
         "test_multiple_waiters".to_string(),
         "test_acquire_3".to_string(),
     );
-    
+
     let _guard1 = queue.acquire(test_data1).await?;
-    
+
     let abort_notify2 = test_data2.abort_notify.clone();
     let abort_notify3 = test_data3.abort_notify.clone();
     let queue_clone2 = queue.clone();
     let queue_clone3 = queue.clone();
-    
-    let acquire_handle2 = databend_common_base::runtime::spawn(async move {
-        queue_clone2.acquire(test_data2).await
-    });
-    
-    let acquire_handle3 = databend_common_base::runtime::spawn(async move {
-        queue_clone3.acquire(test_data3).await
-    });
-    
+
+    let acquire_handle2 =
+        databend_common_base::runtime::spawn(async move { queue_clone2.acquire(test_data2).await });
+
+    let acquire_handle3 =
+        databend_common_base::runtime::spawn(async move { queue_clone3.acquire(test_data3).await });
+
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     abort_notify2.notify_waiters();
-    
+
     let result2 = acquire_handle2.await.unwrap();
     assert!(result2.is_err());
     assert_eq!(result2.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
-    
+
     abort_notify3.notify_waiters();
-    
+
     let result3 = acquire_handle3.await.unwrap();
     assert!(result3.is_err());
     assert_eq!(result3.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
-    
+
     Ok(())
 }
 
@@ -619,7 +615,7 @@ async fn test_watch_abort_notify_multiple_waiters() -> Result<()> {
 async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
-    
+
     let test_data1 = TestData::new(
         "test_timeout_vs_abort".to_string(),
         "test_acquire_1".to_string(),
@@ -629,23 +625,22 @@ async fn test_watch_abort_notify_timeout_vs_abort() -> Result<()> {
         "test_acquire_2".to_string(),
         Duration::from_millis(200),
     );
-    
+
     let _guard1 = queue.acquire(test_data1).await?;
-    
+
     let abort_notify = test_data2.abort_notify.clone();
     let queue_clone = queue.clone();
-    
-    let acquire_handle = databend_common_base::runtime::spawn(async move {
-        queue_clone.acquire(test_data2).await
-    });
-    
+
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data2).await });
+
     tokio::time::sleep(Duration::from_millis(100)).await;
     abort_notify.notify_waiters();
-    
+
     let result = acquire_handle.await.unwrap();
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
-    
+
     Ok(())
 }
 
