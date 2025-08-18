@@ -66,3 +66,60 @@ select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parqu
 ----
 id INT 0 0
 t TUPLE(A INT32, B STRING) 0 1
+
+# CSV
+statement ok
+create or replace file format head_csv_format type = 'CSV' field_delimiter = ',' skip_header = 1;
+
+query TTBI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'CSV');
+----
+column_1 VARCHAR 1 0
+column_2 VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+statement error
+select * from infer_schema(location => '@data/csv/ragged.csv', file_format => 'head_csv_format');
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 0
+value VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+# NDJSON
+query TTBI
+select * from infer_schema(location => '@data/ndjson/numbers.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/ragged.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+comment VARCHAR 1 2
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1

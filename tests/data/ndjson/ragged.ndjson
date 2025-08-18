@@ -1,0 +1,4 @@
+{"id": 1, "value": 10, "comment": "ok"}
+{"id": 2, "value": 20}
+{"id": 3, "value": 30, "comment": "missing one field"}
+{"id": 4}

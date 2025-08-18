@@ -231,8 +231,10 @@ arrow = { version = "55" }
 arrow-array = { version = "55" }
 arrow-buffer = { version = "55" }
 arrow-cast = { version = "55", features = ["prettyprint"] }
+arrow-csv = { version = "55" }
 arrow-data = { version = "55" }
 arrow-flight = { version = "55", features = ["flight-sql-experimental", "tls"] }
+arrow-json = { version = "55" }
 arrow-ipc = { version = "55", features = ["lz4", "zstd"] }
 arrow-ord = { version = "55" }
 arrow-schema = { version = "55", features = ["serde"] }
