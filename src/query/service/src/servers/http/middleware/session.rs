@@ -560,6 +560,11 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     Ok(poem_resp)
 }
 
+fn get_request_info(mut req: Request) -> String {
+    req.headers_mut().remove(AUTHORIZATION);
+    format!("{req:?}")
+}
+
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     type Output = Response;
 
@@ -593,8 +598,10 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         );
                         forward_request(req, node).await
                     } else {
-                        let msg =
-                            format!("session lost due to server restart or shutdown: node '{sticky_node_id}' not found in cluster",);
+                        let msg = format!(
+                            "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
+                            get_request_info(req)
+                        );
                         warn!("[HTTP-SESSION] {}", msg);
                         Err(Error::from(HttpErrorCode::bad_request(
                             ErrorCode::BadArguments(msg),
@@ -627,7 +634,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                             .into());
                         }
                         Ok(None) => {
-                            let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
+                            let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`. request = {}.", warehouse, get_request_info(req));
                             warn!("[HTTP-SESSION] {}", msg);
                             return Err(Error::from(HttpErrorCode::bad_request(
                                 ErrorCode::UnknownWarehouse(msg),
