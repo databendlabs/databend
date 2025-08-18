@@ -44,10 +44,14 @@ impl SortSpillParams {
         max_block_rows: usize,
     ) -> Self {
         // We use the first memory calculation to estimate the batch size and the number of merge.
-        let block = usize::max(
-            (bytes.0).div_ceil(spill_unit_size.0) as _,
-            rows.div_ceil(max_block_rows),
-        );
+        let block = if spill_unit_size.0 > 0 {
+            usize::max(
+                bytes.0.div_ceil(spill_unit_size.0),
+                rows.div_ceil(max_block_rows),
+            )
+        } else {
+            rows.div_ceil(max_block_rows)
+        };
         let batch_rows = (rows / block).max(1);
 
         /// The memory will be doubled during merging.
