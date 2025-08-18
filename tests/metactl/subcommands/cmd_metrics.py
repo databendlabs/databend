@@ -43,9 +43,9 @@ def verify_metrics_format(result):
             found_metrics.append(metric)
             print(f"✓ Found expected metric: {metric}")
 
-    assert (
-        len(found_metrics) > 0
-    ), f"Should find at least some expected metrics. Found: {found_metrics}"
+    assert len(found_metrics) > 0, (
+        f"Should find at least some expected metrics. Found: {found_metrics}"
+    )
 
     # Verify at least some lines match prometheus format (metric_name value)
     prometheus_pattern = r"^[a-zA-Z_:][a-zA-Z0-9_:]* \d+(\.\d+)?$"

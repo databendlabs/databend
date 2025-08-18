@@ -75,7 +75,7 @@ pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
     pub size: u64,
     /// The file location of the stats data.
-    pub location: Location,
+    pub location: Option<Location>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]

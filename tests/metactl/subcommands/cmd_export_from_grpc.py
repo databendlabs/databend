@@ -71,9 +71,9 @@ def test_export_from_grpc():
 
     # Compare with expected output by converting all to JSON
     print(f"Got {len(lines)} lines, expected {len(want)} lines")
-    assert len(lines) == len(
-        want
-    ), f"Line count mismatch: got {len(lines)}, expected {len(want)}"
+    assert len(lines) == len(want), (
+        f"Line count mismatch: got {len(lines)}, expected {len(want)}"
+    )
 
     def normalize_json(obj):
         """Remove dynamic fields like time_ms from JSON object for comparison"""
@@ -100,9 +100,9 @@ def test_export_from_grpc():
 
         want_json = normalize_json(want_json)
 
-        assert (
-            actual_json == want_json
-        ), f"Line {i} JSON mismatch:\nActual: {actual_json}\nExpected: {want_json}"
+        assert actual_json == want_json, (
+            f"Line {i} JSON mismatch:\nActual: {actual_json}\nExpected: {want_json}"
+        )
 
     print(f"✓ All {len(lines)} JSON lines match expected output")
 

@@ -94,9 +94,9 @@ def test_watch_subcommand():
         # Verify all initial keys appear in INIT events (order doesn't matter for INIT)
         for key, value in initial_keys:
             init_found = any(key in line and value in line for line in init_lines)
-            assert (
-                init_found
-            ), f"Initial key {key} with value {value} should appear in INIT events"
+            assert init_found, (
+                f"Initial key {key} with value {value} should appear in INIT events"
+            )
 
         # Verify CHANGE events appear in exact order with correct keys
         # Expected sequence: new_keys[0], new_keys[1], then update to db_port
@@ -108,19 +108,19 @@ def test_watch_subcommand():
 
         print(f"CHANGE lines: {change_lines}")
 
-        assert len(change_lines) == len(
-            expected_changes
-        ), f"Expected {len(expected_changes)} CHANGE events, got {len(change_lines)}"
+        assert len(change_lines) == len(expected_changes), (
+            f"Expected {len(expected_changes)} CHANGE events, got {len(change_lines)}"
+        )
 
         # Verify each CHANGE event matches the expected sequence
         for i, (expected_key, expected_value) in enumerate(expected_changes):
             change_line = change_lines[i]
-            assert (
-                expected_key in change_line
-            ), f"CHANGE event {i}: expected key '{expected_key}' not found in line: {change_line}"
-            assert (
-                expected_value in change_line
-            ), f"CHANGE event {i}: expected value '{expected_value}' not found in line: {change_line}"
+            assert expected_key in change_line, (
+                f"CHANGE event {i}: expected key '{expected_key}' not found in line: {change_line}"
+            )
+            assert expected_value in change_line, (
+                f"CHANGE event {i}: expected value '{expected_value}' not found in line: {change_line}"
+            )
             print(f"✓ CHANGE event {i}: {expected_key} -> {expected_value} verified")
 
         print(
