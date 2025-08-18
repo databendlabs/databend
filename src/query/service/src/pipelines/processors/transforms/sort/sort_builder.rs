@@ -83,7 +83,7 @@ impl TransformSortBuilder {
             output_order_col: false,
             enable_loser_tree: false,
             limit: None,
-            memory_settings: MemorySettings::disable_spill(),
+            memory_settings: MemorySettings::builder().build(),
         }
     }
 

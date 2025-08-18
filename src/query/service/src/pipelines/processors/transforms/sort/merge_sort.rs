@@ -105,6 +105,7 @@ where
         order_col_generated: bool,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
+        assert!(max_block_size > 0);
         let sort_row_offset = schema.fields().len() - 1;
         let row_converter = C::create(&sort_desc, schema.clone())?;
         let (name, inner, limit) = match limit {
