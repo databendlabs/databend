@@ -23,6 +23,7 @@ async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }
 databend-common-meta-api = { workspace = true }
@@ -33,6 +34,7 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 deepsize = { workspace = true }
