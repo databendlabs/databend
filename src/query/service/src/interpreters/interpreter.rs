@@ -309,7 +309,6 @@ async fn plan_sql(
         let plan = planner.plan_stmt(&extras.statement, false).await?;
         let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
-        let plan = planner.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras, guard))
     }
 }
