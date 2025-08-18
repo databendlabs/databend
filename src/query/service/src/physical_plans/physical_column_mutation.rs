@@ -146,7 +146,7 @@ impl IPhysicalPlan for ColumnMutation {
                                             index
                                         ))
                                     })
-                                    .map(|x| *x)
+                                    .copied()
                             })?;
                     let schema_index = field_id_to_schema_index.get(id).unwrap();
                     schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
