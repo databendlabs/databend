@@ -17,12 +17,14 @@ use std::env;
 use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
+use databend_common_config::StorageConfig;
 use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
 use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
-use databend_common_tracing::HistoryConfig;
+use databend_common_tracing::HistoryConfig as InnerLogHistoryConfig;
 use databend_common_tracing::OTLPConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
@@ -422,6 +424,7 @@ impl Into<Config> for ConfigViaEnv {
                 stderr_level: self.metasrv_log_stderr_level,
                 stderr_format: self.metasrv_log_stderr_format,
             },
+            history: HistoryLogConfig::default(),
         };
 
         Config {
@@ -671,6 +674,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub stderr: StderrLogConfig,
+
+    #[clap(flatten)]
+    pub history: HistoryLogConfig,
 }
 
 impl Default for LogConfig {
@@ -690,7 +696,7 @@ impl Into<InnerLogConfig> for LogConfig {
             profile: ProfileLogConfig::default(),
             structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
-            history: HistoryConfig::default(),
+            history: self.history.into(),
         }
     }
 }
@@ -700,6 +706,7 @@ impl From<InnerLogConfig> for LogConfig {
         Self {
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            history: inner.history.into(),
         }
     }
 }
@@ -822,6 +829,111 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
             stderr_on: inner.on,
             stderr_level: inner.level,
             stderr_format: inner.format,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct HistoryLogConfig {
+    #[clap(
+        long = "log-history-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub log_history_on: bool,
+
+    /// Specifies the interval in seconds for how often the history log is flushed
+    #[clap(
+        long = "log-history-interval",
+        value_name = "VALUE",
+        default_value = "2"
+    )]
+    #[serde(rename = "interval")]
+    pub log_history_interval: usize,
+
+    /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    ///
+    /// Note:
+    /// The default value uses an uuid to avoid conflicts with existing stages
+    #[clap(
+        long = "log-history-stage-name",
+        value_name = "VALUE",
+        default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
+    )]
+    #[serde(rename = "stage_name")]
+    pub log_history_stage_name: String,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-history-level",
+        value_name = "VALUE",
+        default_value = "INFO"
+    )]
+    #[serde(rename = "level")]
+    pub log_history_level: String,
+
+    /// Specifies whether enable external storage
+    /// If set to false (default), the default storage parameters from `[storage]` will be used.
+    #[clap(skip)]
+    #[serde(rename = "storage_on", default)]
+    pub log_history_external_storage_on: bool,
+
+    /// Specifies the external storage parameters for the history log
+    /// This is used to configure how the history log data is stored.
+    #[clap(skip)]
+    #[serde(rename = "storage")]
+    pub log_history_storage_params: StorageConfig,
+}
+
+impl Default for HistoryLogConfig {
+    fn default() -> Self {
+        HistoryLogConfig {
+            log_history_on: false,
+            log_history_interval: 2,
+            log_history_stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
+            log_history_level: "INFO".to_string(),
+            log_history_external_storage_on: false,
+            log_history_storage_params: Default::default(),
+        }
+    }
+}
+
+impl Into<InnerLogHistoryConfig> for HistoryLogConfig {
+    fn into(self) -> InnerLogHistoryConfig {
+        let storage_params: Option<InnerStorageConfig> = if self.log_history_external_storage_on {
+            Some(
+                self.log_history_storage_params
+                    .try_into()
+                    .unwrap_or_default(),
+            )
+        } else {
+            None
+        };
+        InnerLogHistoryConfig {
+            on: self.log_history_on,
+            interval: self.log_history_interval,
+            stage_name: self.log_history_stage_name,
+            level: self.log_history_level,
+            storage_params: storage_params.map(|cfg| cfg.params),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<InnerLogHistoryConfig> for HistoryLogConfig {
+    fn from(value: InnerLogHistoryConfig) -> Self {
+        let inner_storage_config: Option<InnerStorageConfig> =
+            value.storage_params.map(|params| InnerStorageConfig {
+                params,
+                ..Default::default()
+            });
+        Self {
+            log_history_on: value.on,
+            log_history_interval: value.interval,
+            log_history_stage_name: value.stage_name,
+            log_history_level: value.level,
+            log_history_external_storage_on: inner_storage_config.is_some(),
+            log_history_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
     }
 }

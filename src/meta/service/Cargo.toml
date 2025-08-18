@@ -35,6 +35,8 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-storage = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }

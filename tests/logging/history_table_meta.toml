@@ -1,0 +1,9 @@
+[log.history]
+on = true
+storage_on = true
+
+[log.history.storage]
+type = "fs"
+
+[log.history.storage.fs]
+data_path = "./.databend/stateless_test_data"
