@@ -51,11 +51,15 @@ pub struct UDFScript {
     pub immutable: Option<bool>,
 }
 
+/// User Defined Table Function (UDTF)
+///
+/// # Fields
+/// - `arg_types`: arg name with data type
+/// - `return_types`: return column name with data type
+/// - `sql`: SQL implementing the UDTF
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDTF {
-    // arg name with data type
     pub arg_types: Vec<(String, DataType)>,
-    // return column name with data type
     pub return_types: Vec<(String, DataType)>,
     pub sql: String,
 }

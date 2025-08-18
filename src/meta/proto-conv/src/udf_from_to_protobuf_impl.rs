@@ -289,18 +289,20 @@ impl FromToProto for mt::UDTF {
 
         let mut arg_types = Vec::new();
         for arg_ty in p.arg_types {
-            let ty = TableDataType::from_pb(arg_ty.ty.ok_or_else(|| {
+            let ty_pb = arg_ty.ty.ok_or_else(|| {
                 Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
-            })?)?;
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
 
             arg_types.push((arg_ty.name, (&ty).into()));
         }
 
         let mut return_types = Vec::new();
         for return_ty in p.return_types {
-            let ty = TableDataType::from_pb(return_ty.ty.ok_or_else(|| {
+            let ty_pb = return_ty.ty.ok_or_else(|| {
                 Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
-            })?)?;
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
 
             return_types.push((return_ty.name, (&ty).into()));
         }
