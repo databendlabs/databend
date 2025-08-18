@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
@@ -137,8 +138,16 @@ impl IPhysicalPlan for ColumnMutation {
                         remote_expr
                             .as_expr(&BUILTIN_FUNCTIONS)
                             .project_column_ref(|index| {
-                                *schema_offset_to_new_offset.get(index).unwrap_or(index)
-                            });
+                                schema_offset_to_new_offset
+                                    .get(index)
+                                    .ok_or_else(|| {
+                                        ErrorCode::BadArguments(format!(
+                                            "Unable to get field named \"{}\"",
+                                            index
+                                        ))
+                                    })
+                                    .copied()
+                            })?;
                     let schema_index = field_id_to_schema_index.get(id).unwrap();
                     schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
                     field_id_to_schema_index

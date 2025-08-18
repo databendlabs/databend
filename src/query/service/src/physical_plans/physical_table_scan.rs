@@ -596,9 +596,9 @@ impl PhysicalPlanBuilder {
                 let predicates = predicates
                     .iter()
                     .map(|p| {
-                        Ok(p.as_raw_expr()
+                        p.as_raw_expr()
                             .type_check(&metadata)?
-                            .project_column_ref(|col| col.column_name.clone()))
+                            .project_column_ref(|col| Ok(col.column_name.clone()))
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -677,7 +677,7 @@ impl PhysicalPlanBuilder {
                     predicate
                         .as_raw_expr()
                         .type_check(&metadata)?
-                        .project_column_ref(|col| col.column_name.clone()),
+                        .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
@@ -877,12 +877,11 @@ impl PhysicalPlanBuilder {
         });
         let filter = predicate
             .map(|pred| -> Result<_> {
-                Ok(
-                    cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
-                        output_schema.index_of(&col.index.to_string()).unwrap()
-                    }))?
-                    .as_remote_expr(),
-                )
+                Ok(cast_expr_to_non_null_boolean(
+                    pred.as_expr()?
+                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?,
+                )?
+                .as_remote_expr())
             })
             .transpose()?;
         let selection = agg
@@ -895,9 +894,7 @@ impl PhysicalPlanBuilder {
                 Ok((
                     sel.scalar
                         .as_expr()?
-                        .project_column_ref(|col| {
-                            output_schema.index_of(&col.index.to_string()).unwrap()
-                        })
+                        .project_column_ref(|col| output_schema.index_of(&col.index.to_string()))?
                         .as_remote_expr(),
                     offset,
                 ))

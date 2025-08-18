@@ -249,7 +249,9 @@ fn test_find_leveled_eq_filters() {
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let expr = type_check::rewrite_function_to_cast(expr);
-        let expr = expr.project_column_ref(|i| cols[*i].0.to_string());
+        let expr = expr
+            .project_column_ref(|i| Ok(cols[*i].0.to_string()))
+            .unwrap();
 
         let func_ctx = FunctionContext::default();
         let scalars = FilterHelpers::find_leveled_eq_filters(

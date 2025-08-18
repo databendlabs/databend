@@ -244,7 +244,7 @@ impl PhysicalPlanBuilder {
                 let expr = item
                     .scalar
                     .type_check(input_schema.as_ref())?
-                    .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
+                    .project_column_ref(|index| input_schema.index_of(&index.to_string()))?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok((expr.as_remote_expr(), item.index))
             })

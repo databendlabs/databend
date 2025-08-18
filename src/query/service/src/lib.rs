@@ -51,7 +51,6 @@ pub mod clusters;
 pub mod databases;
 pub mod history_tables;
 pub mod interpreters;
-pub mod local;
 pub mod locks;
 pub mod pipelines;
 pub mod schedulers;

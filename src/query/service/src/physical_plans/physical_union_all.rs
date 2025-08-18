@@ -269,7 +269,7 @@ impl PhysicalPlanBuilder {
             let data_type = if let Some(scalar_expr) = &union_all.left_outputs[offset].1 {
                 let expr = scalar_expr
                     .type_check(left_schema.as_ref())?
-                    .project_column_ref(|idx| left_schema.index_of(&idx.to_string()).unwrap());
+                    .project_column_ref(|idx| left_schema.index_of(&idx.to_string()))?;
                 expr.data_type().clone()
             } else {
                 let col_index = union_all.left_outputs[offset].0;
@@ -307,7 +307,7 @@ fn process_outputs(
         if let Some(scalar_expr) = &output.1 {
             let expr = scalar_expr
                 .type_check(schema)?
-                .project_column_ref(|idx| schema.index_of(&idx.to_string()).unwrap());
+                .project_column_ref(|idx| schema.index_of(&idx.to_string()))?;
             results.push((output.0, Some(expr.as_remote_expr())));
         } else {
             results.push((output.0, None));
