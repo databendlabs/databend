@@ -78,7 +78,9 @@ message UDTF {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // arg name with data type
   repeated UDTFArg arg_types = 1;
+  // return column name with data type
   repeated UDTFArg return_types = 2;
   string sql = 3;
 }
