@@ -2,6 +2,20 @@
 
 set -e
 
+echo "*************************************"
+echo "* Setting STORAGE_TYPE to S3.       *"
+echo "*                                   *"
+echo "* Please make sure that S3 backend  *"
+echo "* is ready, and configured properly.*"
+echo "*************************************"
+export STORAGE_TYPE=s3
+export STORAGE_S3_BUCKET=testbucket
+export STORAGE_S3_ROOT=admin
+export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
+export STORAGE_S3_ACCESS_KEY_ID=minioadmin
+export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
+export STORAGE_ALLOW_INSECURE=true
+
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../" || exit
@@ -18,8 +32,15 @@ echo "Starting Databend Query cluster with 2 nodes enable history tables"
 for node in 1 2; do
     CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
 
-    echo "Appending history table config to node-${node}"
+    echo "Appending history table config to query node-${node}"
     cat ./tests/logging/history_table.toml >> "$CONFIG_FILE"
+done
+
+for node in 1 2 3; do
+    CONFIG_FILE="./scripts/ci/deploy/config/databend-meta-node-${node}.toml"
+
+    echo "Appending history table config to meta node-${node}"
+    cat ./tests/logging/history_table_meta.toml >> "$CONFIG_FILE"
 done
 
 # Start meta cluster (3 nodes - needed for HA)
@@ -65,6 +86,17 @@ echo "Running test queries to test inner history tables"
 ./tests/logging/check_logs_table.sh
 
 response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
+
+meta_count_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Databend Meta version%'\"}")
+
+meta_count_response_data=$(echo "$meta_count_response" | jq -r '.data')
+if [[ "$meta_count_response_data" != *"3"* ]]; then
+    echo "ERROR: meta node logs is empty"
+    echo "meta_count_response_data: $meta_count_response_data"
+    exit 1
+else
+    echo "✓ meta node logs are collected as expected"
+fi
 
 # **Internal -> External**: should reset
 

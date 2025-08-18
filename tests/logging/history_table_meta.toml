@@ -3,7 +3,11 @@ on = true
 storage_on = true
 
 [log.history.storage]
-type = "fs"
+type = "s3"
 
-[log.history.storage.fs]
-data_path = "./.databend/stateless_test_data"
+[log.history.storage.s3]
+bucket = "testbucket"
+root = "admin"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
