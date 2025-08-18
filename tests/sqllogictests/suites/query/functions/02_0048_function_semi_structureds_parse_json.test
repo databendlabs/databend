@@ -84,6 +84,26 @@ select parse_json('[1,2, ,4]'), parse_json('[,2]'), parse_json('[1,]')
 ----
 [1,2,null,4] [null,2] [1,null]
 
+query TTTTT
+select parse_json('  '), parse_json('NULL'), parse_json('True'), parse_json('nan'), parse_json('+infinity')
+----
+null null true null null
+
+query TTT
+select parse_json('0x123'), parse_json('0XABCDEF'), parse_json('0XABC.DEF')
+----
+291 11259375 2748.870849609375
+
+query TT
+select parse_json('\'abc\''), parse_json('\'测试\'')
+----
+"abc" "测试"
+
+query TT
+select parse_json('{key:"val"}'), parse_json('{_中文_$key123:"val"}')
+----
+{"key":"val"} {"_中文_$key123":"val"}
+
 statement error 1006
 select parse_json('[1,')
 
@@ -241,4 +261,5 @@ select to_variant(a), to_variant(b), to_variant(c) from t3
 
 statement ok
 DROP DATABASE db1
+
 
