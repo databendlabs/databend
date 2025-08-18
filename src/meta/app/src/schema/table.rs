@@ -295,6 +295,8 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    // One table only has an unique row access policy
+    pub row_access_policy: Option<String>,
     pub indexes: BTreeMap<String, TableIndex>,
 }
 
@@ -487,6 +489,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            row_access_policy: None,
             indexes: BTreeMap::new(),
         }
     }
@@ -906,6 +909,25 @@ pub struct SetTableColumnMaskPolicyReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetTableRowAccessPolicyAction {
+    // new policy name
+    Set(String),
+    // old policy name
+    Unset(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetTableRowAccessPolicyReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub policy_id: u64,
+    pub action: SetTableRowAccessPolicyAction,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetTableRowAccessPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {}

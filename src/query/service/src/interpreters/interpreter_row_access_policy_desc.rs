@@ -63,7 +63,7 @@ impl Interpreter for DescRowAccessPolicyInterpreter {
             .await;
 
         let policy = match policy {
-            Ok(policy) => policy,
+            Ok((_, policy)) => policy.data,
             Err(err) => {
                 warn!("DescRowAccessPolicyInterpreter err: {}", err);
                 if err.code() != ErrorCode::UNKNOWN_ROW_ACCESS_POLICY {
