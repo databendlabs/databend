@@ -866,6 +866,7 @@ async fn write_segment(
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
             location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+            hll: None,
         };
         dal.write(&segment_stats_location, stats).await?;
         new_summary.additional_stats_meta = Some(additional_stats_meta);

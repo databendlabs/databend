@@ -131,6 +131,7 @@ pub async fn generate_segments_v2(
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
             location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            hll: None,
         };
         dal.write(&stats_location, stats).await?;
         summary.additional_stats_meta = Some(additional_stats_meta);
@@ -173,6 +174,7 @@ pub async fn generate_segments(
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
             location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            hll: None,
         };
         dal.write(&stats_location, stats).await?;
         summary.additional_stats_meta = Some(additional_stats_meta);

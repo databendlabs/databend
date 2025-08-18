@@ -286,6 +286,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                             segment_stats_location.clone(),
                             SegmentStatistics::VERSION,
                         )),
+                        hll: None,
                     });
                     stats = Some((segment_stats_location, stats_data, stats_summary));
                 }

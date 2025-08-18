@@ -397,6 +397,7 @@ impl<'a> SegmentCompactor<'a> {
             let additional_stats_meta = AdditionalStatsMeta {
                 size: stats_data.len() as u64,
                 location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+                hll: None,
             };
             self.operator
                 .write(&segment_stats_location, stats_data)

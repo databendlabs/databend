@@ -729,6 +729,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let additional_stats_meta = AdditionalStatsMeta {
                     size: data.len() as u64,
                     location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+                    hll: None,
                 };
                 self.dal.write(&segment_stats_location, data).await?;
                 origin_summary.additional_stats_meta = Some(additional_stats_meta);

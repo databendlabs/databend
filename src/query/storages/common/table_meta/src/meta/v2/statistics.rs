@@ -29,6 +29,7 @@ use serde::de::Error;
 use crate::meta::supported_stat_type;
 use crate::meta::v0;
 use crate::meta::Location;
+use crate::meta::RawBlockHLL;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -76,6 +77,8 @@ pub struct AdditionalStatsMeta {
     pub size: u64,
     /// The file location of the stats data.
     pub location: Option<Location>,
+    /// An optional HyperLogLog data structure.
+    pub hll: Option<RawBlockHLL>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
