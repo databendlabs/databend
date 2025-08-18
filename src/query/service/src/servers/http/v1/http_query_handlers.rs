@@ -393,10 +393,22 @@ async fn query_page_handler(
 
             query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(reason) = query.check_removed() {
+                log::info!(
+                    "[HTTP-QUERY] /query/{}/page/{} has error, query is removed, reason: {}",
+                    query_id,
+                    page_no,
+                    reason
+                );
                 Err(query_id_removed(&query_id, reason))
             } else {
                 query.update_expire_time(true).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    log::info!(
+                        "[HTTP-QUERY] /query/{}/page/{} has error, get response page, reason: {}",
+                        query_id,
+                        page_no,
+                        err.message()
+                    );
                     poem::Error::from_string(
                         format!("[HTTP-QUERY] {}", err.message()),
                         StatusCode::NOT_FOUND,
