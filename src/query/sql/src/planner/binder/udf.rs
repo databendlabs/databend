@@ -32,6 +32,7 @@ use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::UDTF;
 use databend_common_version::UDF_CLIENT_USER_AGENT;
 
 use crate::normalize_identifier;
@@ -199,6 +200,40 @@ impl Binder {
                     name,
                     description,
                     definition,
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDTFSql {
+                arg_types,
+                return_types,
+                sql,
+            } => {
+                let arg_types = arg_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                let return_types = return_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition: PlanUDFDefinition::UDTF(UDTF {
+                        arg_types,
+                        return_types,
+                        sql: sql.to_string(),
+                    }),
                     created_on: Utc::now(),
                 })
             }
