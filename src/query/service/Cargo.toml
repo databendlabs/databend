@@ -25,8 +25,8 @@ arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-csv = { workspace = true }
 arrow-flight = { workspace = true }
-arrow-json = { workspace = true }
 arrow-ipc = { workspace = true }
+arrow-json = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 arrow-udf-runtime = { workspace = true }
