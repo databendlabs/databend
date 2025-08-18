@@ -30,6 +30,7 @@ use std::time::SystemTime;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
@@ -54,6 +55,7 @@ use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
+use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -82,6 +84,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn enter_wait_pending(&self) {}
 
     fn exit_wait_pending(&self, _wait_time: Duration) {}
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify>;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -174,6 +178,20 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
+        let abort_notify = data.get_abort_notify();
+
+        let watch_abort_notify = Box::pin(async move { abort_notify.notified().await });
+
+        let acquire = Box::pin(self.acquire_inner(data));
+        match futures::future::select(acquire, watch_abort_notify).await {
+            Either::Left((left, _)) => left,
+            Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
+                "[QUERY-QUEUE] recv query abort notify.",
+            )),
+        }
+    }
+
+    async fn acquire_inner(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if !data.need_acquire_to_queue() {
             info!("[QUERY-QUEUE] Non-heavy queries skip the query queue and execute directly.");
             return Ok(AcquireQueueGuard::create(vec![]));
@@ -490,6 +508,7 @@ pub struct QueryEntry {
     pub timeout: Duration,
     pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
+    pub abort_watch_notify: Arc<WatchNotify>,
 }
 
 impl QueryEntry {
@@ -511,6 +530,7 @@ impl QueryEntry {
                 timeout => Duration::from_secs(timeout),
             },
             lock_ttl: Duration::from_secs(settings.get_statement_queue_ttl_in_seconds()?),
+            abort_watch_notify: ctx.get_abort_notify(),
         })
     }
 
@@ -667,6 +687,10 @@ impl QueueData for QueryEntry {
             .as_str(),
         );
         self.ctx.set_query_queued_duration(wait_time)
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.abort_watch_notify.clone()
     }
 }
 

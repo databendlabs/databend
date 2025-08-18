@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -199,6 +200,7 @@ pub trait TableContext: Send + Sync {
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<(), ContextError>;
+    fn get_abort_notify(&self) -> Arc<WatchNotify>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
