@@ -203,7 +203,22 @@ impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTa
         }
 
         self.finished = true;
-        Ok(Some(self.inner.get_full_data(self.context.clone())?))
+        let block = self.inner.get_full_data(self.context.clone())?;
+        #[cfg(debug_assertions)]
+        {
+            let schema = self.inner.get_table_info().schema();
+            for (field, column) in schema.fields.iter().zip(block.columns().iter()) {
+                assert_eq!(
+                    column.data_type(),
+                    field.data_type().into(),
+                    "table_schema: {:?}, block_schema: {:?}",
+                    schema,
+                    block.infer_schema()
+                );
+            }
+        }
+
+        Ok(Some(block))
     }
 }
 
