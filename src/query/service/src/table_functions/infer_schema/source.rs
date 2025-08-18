@@ -13,8 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::Arc;
 
+use arrow_csv::reader::Format;
+use arrow_json::reader::infer_json_schema;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table_context::TableContext;
@@ -26,7 +30,8 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -37,24 +42,25 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::Object;
+use opendal::Operator;
 use opendal::Scheme;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-pub(crate) struct ParquetInferSchemaSource {
+pub(crate) struct InferSchemaSource {
     is_finished: bool,
     ctx: Arc<dyn TableContext>,
     args_parsed: InferSchemaArgsParsed,
 }
 
-impl ParquetInferSchemaSource {
+impl InferSchemaSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         args_parsed: InferSchemaArgsParsed,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ParquetInferSchemaSource {
+        AsyncSourcer::create(ctx.clone(), output, InferSchemaSource {
             is_finished: false,
             ctx,
             args_parsed,
@@ -63,7 +69,7 @@ impl ParquetInferSchemaSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for ParquetInferSchemaSource {
+impl AsyncSource for InferSchemaSource {
     const NAME: &'static str = INFER_SCHEMA;
 
     #[async_backtrace::framed]
@@ -127,13 +133,34 @@ impl AsyncSource for ParquetInferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        let schema = match (first_file.as_ref(), file_format_params.get_type()) {
+        let schema = match (first_file.as_ref(), file_format_params) {
             (None, _) => return Ok(None),
-            (Some(first_file), StageFileFormatType::Parquet) => {
+            (Some(first_file), FileFormatParams::Parquet(_)) => {
                 let arrow_schema = read_parquet_schema_async_rs(
                     &operator,
                     &first_file.path,
                     Some(first_file.size),
+                )
+                .await?;
+                TableSchema::try_from(&arrow_schema)?
+            }
+            (Some(first_file), FileFormatParams::Csv(params)) => {
+                let arrow_schema = read_csv_metadata_async(
+                    &first_file.path,
+                    &operator,
+                    Some(first_file.size),
+                    self.args_parsed.max_records,
+                    &params,
+                )
+                .await?;
+                TableSchema::try_from(&arrow_schema)?
+            }
+            (Some(first_file), FileFormatParams::NdJson(_)) => {
+                let arrow_schema = read_json_metadata_async(
+                    &first_file.path,
+                    &operator,
+                    Some(first_file.size),
+                    self.args_parsed.max_records,
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
@@ -167,4 +194,53 @@ impl AsyncSource for ParquetInferSchemaSource {
         ]);
         Ok(Some(block))
     }
+}
+
+pub async fn read_csv_metadata_async(
+    path: &str,
+    operator: &Operator,
+    file_size: Option<u64>,
+    max_records: Option<usize>,
+    params: &CsvFileFormatParams,
+) -> Result<ArrowSchema> {
+    let file_size = match file_size {
+        None => operator.stat(path).await?.content_length(),
+        Some(n) => n,
+    };
+    let escape = if params.escape.is_empty() {
+        None
+    } else {
+        Some(params.escape.as_bytes()[0])
+    };
+
+    // TODO: It would be better if it could be read in the form of Read trait
+    let buf = operator.read_with(path).range(..file_size).await?.to_vec();
+    let mut format = Format::default()
+        .with_delimiter(params.field_delimiter.as_bytes()[0])
+        .with_quote(params.quote.as_bytes()[0])
+        .with_header(params.headers != 0);
+
+    if let Some(escape) = escape {
+        format = format.with_escape(escape);
+    }
+    let (schema, _) = format.infer_schema(Cursor::new(&buf), max_records)?;
+
+    Ok(schema)
+}
+
+pub async fn read_json_metadata_async(
+    path: &str,
+    operator: &Operator,
+    file_size: Option<u64>,
+    max_records: Option<usize>,
+) -> Result<ArrowSchema> {
+    let file_size = match file_size {
+        None => operator.stat(path).await?.content_length(),
+        Some(n) => n,
+    };
+    // TODO: It would be better if it could be read in the form of Read trait
+    let buf = operator.read_with(path).range(..file_size).await?.to_vec();
+    let (schema, _) = infer_json_schema(Cursor::new(&buf), max_records)?;
+
+    Ok(schema)
 }

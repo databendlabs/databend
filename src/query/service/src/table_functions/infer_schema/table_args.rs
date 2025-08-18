@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_args::i64_value;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,6 +25,7 @@ pub(crate) struct InferSchemaArgsParsed {
     pub(crate) connection_name: Option<String>,
     pub(crate) file_format: Option<String>,
     pub(crate) files_info: StageFilesInfo,
+    pub(crate) max_records: Option<usize>,
 }
 
 impl InferSchemaArgsParsed {
@@ -38,6 +40,7 @@ impl InferSchemaArgsParsed {
             files: None,
             pattern: None,
         };
+        let mut max_records = None;
 
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
@@ -52,6 +55,9 @@ impl InferSchemaArgsParsed {
                 }
                 "file_format" => {
                     file_format = Some(string_value(v)?);
+                }
+                "max_records_pre_file" => {
+                    max_records = Some(i64_value(v)? as usize);
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
@@ -70,6 +76,7 @@ impl InferSchemaArgsParsed {
             connection_name,
             file_format,
             files_info,
+            max_records,
         })
     }
 }

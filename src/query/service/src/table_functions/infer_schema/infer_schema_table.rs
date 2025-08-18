@@ -32,7 +32,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 
-use super::parquet::ParquetInferSchemaSource;
+use super::source::InferSchemaSource;
 use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 use crate::table_functions::TableFunction;
@@ -114,9 +114,7 @@ impl Table for InferSchemaTable {
         _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| {
-                ParquetInferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone())
-            },
+            |output| InferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone()),
             1,
         )?;
         Ok(())

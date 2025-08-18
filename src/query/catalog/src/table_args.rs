@@ -119,6 +119,12 @@ pub fn bool_value(value: &Scalar) -> Result<bool> {
     }
 }
 
+pub fn i64_value(value: &Scalar) -> Result<i64> {
+    value.get_i64().ok_or_else(|| {
+        ErrorCode::BadArguments(format!("invalid value {value} expect to be i64 literal."))
+    })
+}
+
 pub fn string_literal(val: &str) -> Scalar {
     Scalar::String(val.to_string())
 }

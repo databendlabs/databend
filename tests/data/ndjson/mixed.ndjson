@@ -1,0 +1,3 @@
+{"id": 1, "name": "Alice", "score": 88.5, "active": true}
+{"id": 2, "name": "Bob", "score": 92.0, "active": false}
+{"id": 3, "name": "Charlie", "score": null, "active": true}
