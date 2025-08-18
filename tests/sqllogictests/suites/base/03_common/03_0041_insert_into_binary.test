@@ -11,10 +11,10 @@ statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int, v binary) Engine = Fuse
 
 statement ok
-INSERT INTO t1 (id, v) VALUES(1, to_binary('aaa')),(2, from_hex('616161')),(3, from_base64('YWFh'))
+INSERT INTO t1 (id, v) VALUES(1, to_binary('aaa')),(2, from_hex('616161')),(3, from_base64('YWFh')),(4, to_binary('aaa', 'utf-8')),(5, to_binary('616161', 'hex')),(6, to_binary('YWFh', 'base64'))
 
 statement ok
-INSERT INTO t1 (id, v) VALUES(4, 'aaa')
+INSERT INTO t1 (id, v) VALUES(7, 'aaa')
 
 query IT
 SELECT id, v FROM t1 order by id
@@ -23,6 +23,9 @@ SELECT id, v FROM t1 order by id
 2 616161
 3 616161
 4 616161
+5 616161
+6 616161
+7 616161
 
 statement ok
 ALTER TABLE t1 MODIFY COLUMN v string
@@ -34,6 +37,9 @@ SELECT id, v FROM t1 order by id
 2 aaa
 3 aaa
 4 aaa
+5 aaa
+6 aaa
+7 aaa
 
 statement ok
 ALTER TABLE t1 MODIFY COLUMN v binary
@@ -45,6 +51,9 @@ SELECT id, v FROM t1 order by id
 2 616161
 3 616161
 4 616161
+5 616161
+6 616161
+7 616161
 
 statement ok
 create table t2(a int, b binary NOT NULL DEFAULT 'abc', c double default 'inf', e float default 'nan' );

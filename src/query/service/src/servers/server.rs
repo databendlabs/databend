@@ -23,6 +23,7 @@ use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_base::runtime::drop_guard;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use futures::stream::Abortable;
 use futures::StreamExt;
@@ -71,8 +72,9 @@ impl ShutdownHandle {
     #[async_backtrace::framed]
     pub async fn shutdown(&mut self, mut signal: SignalStream, timeout: Option<Duration>) {
         self.shutdown_services(true).await;
+        let config = GlobalConfig::instance();
         ClusterDiscovery::instance()
-            .unregister_to_metastore(&mut signal)
+            .unregister_to_metastore(&mut signal, &config)
             .await;
         self.sessions.graceful_shutdown(signal, timeout).await;
         self.shutdown_services(false).await;

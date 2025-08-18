@@ -201,7 +201,7 @@ async fn init_new_cluster(
     let mut sto = RaftStore::open(&raft_config).await?;
 
     let last_applied = {
-        let sm2 = sto.get_state_machine().await;
+        let sm2 = sto.get_state_machine_write("get-last-applied").await;
         *sm2.sys_data_ref().last_applied_ref()
     };
 
@@ -213,7 +213,9 @@ async fn init_new_cluster(
 
     // Update snapshot: Replace nodes set and membership config.
     {
-        let mut sm2 = sto.get_state_machine().await;
+        let mut sm2 = sto
+            .get_state_machine_write("init_new_cluster-get-last-membership")
+            .await;
 
         *sm2.sys_data_mut().nodes_mut() = nodes.clone();
 

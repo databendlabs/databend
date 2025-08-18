@@ -48,6 +48,7 @@ use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::HistoryConfig as InnerHistoryConfig;
 use databend_common_tracing::HistoryTableConfig as InnerHistoryTableConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+// TelemetryConfig moved here to avoid circular dependency
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
@@ -62,6 +63,43 @@ use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
+
+/// Telemetry configuration for node information reporting
+///
+/// Note: The `enabled` flag only works with Enterprise Edition license.
+/// Without EE license, telemetry is always enabled.
+/// With EE license, users can set `enabled=false` to disable telemetry reporting.
+/// The endpoint is fixed and not configurable by users.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Args)]
+#[serde(default)]
+pub struct TelemetryConfig {
+    /// Enable/disable telemetry reporting (only works with EE license)
+    #[clap(
+        long = "telemetry-enabled",
+        value_name = "BOOL",
+        default_value = "true"
+    )]
+    #[serde(default = "default_telemetry_enabled")]
+    pub enabled: bool,
+}
+
+fn default_telemetry_enabled() -> bool {
+    true
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_telemetry_enabled(),
+        }
+    }
+}
+
+impl TelemetryConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -127,6 +165,10 @@ pub struct Config {
     // spill Config
     #[clap(flatten)]
     pub spill: SpillConfig,
+
+    // telemetry Config
+    #[clap(flatten)]
+    pub telemetry: TelemetryConfig,
 
     /// external catalog config.
     ///
@@ -1736,7 +1778,7 @@ pub struct QueryConfig {
     pub jwt_key_file: String,
 
     /// Interval in seconds to refresh jwks
-    #[clap(long, value_name = "VALUE", default_value = "600")]
+    #[clap(long, value_name = "VALUE", default_value = "86400")]
     pub jwks_refresh_interval: u64,
 
     /// Timeout in seconds to refresh jwks
@@ -3538,6 +3580,7 @@ mod cache_config_converters {
                     .collect(),
                 cache: inner.cache.into(),
                 spill: inner.spill.into(),
+                telemetry: inner.telemetry,
             }
         }
     }
@@ -3555,6 +3598,7 @@ mod cache_config_converters {
                 catalog,
                 cache,
                 spill,
+                telemetry,
                 catalogs: input_catalogs,
                 ..
             } = self;
@@ -3584,6 +3628,7 @@ mod cache_config_converters {
                 catalogs,
                 cache: cache.try_into()?,
                 spill,
+                telemetry,
             })
         }
     }

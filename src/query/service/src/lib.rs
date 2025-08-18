@@ -37,6 +37,7 @@
 #![feature(variant_count)]
 #![feature(duration_constructors)]
 #![feature(get_mut_unchecked)]
+#![feature(box_into_inner)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![feature(debug_closure_helpers)]
@@ -62,6 +63,8 @@ pub mod test_kits;
 
 mod global_services;
 pub mod task;
+
+pub mod physical_plans;
 
 pub use databend_common_sql as sql;
 pub use databend_common_storages_factory as storages;

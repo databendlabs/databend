@@ -28,6 +28,17 @@ select to_string('a')
 ----
 a
 
+statement error
+select to_string(UNHEX('C328'));
+
+statement ok
+set enable_binary_to_utf8_lossy = 1;
+
+query T
+select to_string(UNHEX('C328'));
+----
+�(
+
 query I
 select try_cast(3 as int);
 ----

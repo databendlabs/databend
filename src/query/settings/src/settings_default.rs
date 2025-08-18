@@ -1424,6 +1424,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_binary_to_utf8_lossy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable binary-to-UTF8 lossy conversion, default is 0, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

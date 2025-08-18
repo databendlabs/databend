@@ -30,8 +30,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_storages_result_cache::gen_result_cache_prefix;
-use databend_common_storages_result_cache::ResultCacheMetaManager;
+use databend_common_storages_basic::gen_result_cache_prefix;
+use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 

@@ -110,13 +110,13 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
+use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
-use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -1009,6 +1009,7 @@ impl TableContext for QueryContext {
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
         let random_function_seed = settings.get_random_function_seed()?;
+        let enable_binary_to_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
 
         Ok(FunctionContext {
             now,
@@ -1023,6 +1024,7 @@ impl TableContext for QueryContext {
             random_function_seed,
             week_start,
             date_format_style,
+            enable_binary_to_utf8_lossy,
         })
     }
 

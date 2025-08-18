@@ -25,7 +25,7 @@ def test_lua_grpc_client():
     grpc_addr = setup_test_environment()
 
     # Create a Lua script that uses the gRPC client
-    lua_script = f'''
+    lua_script = f"""
 local client = metactl.new_grpc_client("{grpc_addr}")
 
 -- Test upsert operation
@@ -51,7 +51,7 @@ if get_null_err then
 else
     print("Get null result:", metactl.to_string(get_null))
 end
-'''
+"""
 
     # Run metactl lua with gRPC client script
     result = subprocess.run(
@@ -71,9 +71,9 @@ Get null result:\tNULL"""
     print("expect:", expected_output)
 
     # Check if entire output matches expected value
-    assert output == expected_output, (
-        f"Expected:\n{expected_output}\n\nActual:\n{output}"
-    )
+    assert (
+        output == expected_output
+    ), f"Expected:\n{expected_output}\n\nActual:\n{output}"
 
     print("✓ Lua gRPC client test passed")
 

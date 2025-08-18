@@ -258,7 +258,7 @@ Fragment 2:
   DataExchange: Merge
     ExchangeSink
     ├── output columns: [t1.number (#2), sum(number) (#1)]
-    ├── destination fragment: [3]
+    ├── destination fragment: [4]
     └── HashJoin
         ├── output columns: [t1.number (#2), sum(number) (#1)]
         ├── join type: INNER
@@ -281,7 +281,7 @@ Fragment 2:
             └── estimated rows: 2.00
 (empty)
 (empty)
-Fragment 3:
+Fragment 4:
     ExchangeSource
     ├── output columns: [t1.number (#2), sum(number) (#1)]
     └── source fragment: [2]

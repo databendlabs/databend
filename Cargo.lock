@@ -4163,8 +4163,7 @@ dependencies = [
  "databend-common-pipeline-transforms",
  "databend-common-settings",
  "databend-common-storage",
- "databend-common-storages-result-cache",
- "databend-common-storages-view",
+ "databend-common-storages-basic",
  "databend-common-users",
  "databend-common-version",
  "databend-enterprise-data-mask-feature",
@@ -4186,7 +4185,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "pretty_assertions",
  "prqlc",
- "rand 0.8.5",
  "recursive",
  "regex",
  "roaring",
@@ -4237,6 +4235,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-storages-basic"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-app",
+ "databend-common-meta-kvapi",
+ "databend-common-meta-store",
+ "databend-common-meta-types",
+ "databend-common-pipeline-core",
+ "databend-common-pipeline-sinks",
+ "databend-common-pipeline-sources",
+ "databend-common-storage",
+ "databend-common-storages-parquet",
+ "databend-storages-common-blocks",
+ "databend-storages-common-table-meta",
+ "opendal",
+ "parking_lot 0.12.3",
+ "parquet",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "typetag",
+ "uuid",
+]
+
+[[package]]
 name = "databend-common-storages-delta"
 version = "0.1.0"
 dependencies = [
@@ -4274,14 +4305,11 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-common-storages-basic",
  "databend-common-storages-delta",
  "databend-common-storages-fuse",
  "databend-common-storages-iceberg",
- "databend-common-storages-memory",
- "databend-common-storages-null",
- "databend-common-storages-random",
  "databend-common-storages-stream",
- "databend-common-storages-view",
  "databend-storages-common-index",
 ]
 
@@ -4441,46 +4469,8 @@ dependencies = [
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-meta-app",
+ "databend-common-storages-basic",
  "databend-common-storages-system",
- "databend-common-storages-view",
-]
-
-[[package]]
-name = "databend-common-storages-memory"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "databend-common-pipeline-core",
- "databend-common-pipeline-sinks",
- "databend-common-pipeline-sources",
- "databend-common-storage",
- "databend-storages-common-blocks",
- "databend-storages-common-table-meta",
- "parking_lot 0.12.3",
- "serde",
- "typetag",
-]
-
-[[package]]
-name = "databend-common-storages-null"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "databend-common-pipeline-core",
- "databend-common-pipeline-sinks",
- "databend-common-pipeline-sources",
- "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4552,52 +4542,6 @@ dependencies = [
  "serde",
  "thrift",
  "typetag",
-]
-
-[[package]]
-name = "databend-common-storages-random"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "databend-common-pipeline-core",
- "databend-common-pipeline-sources",
- "databend-storages-common-table-meta",
- "serde",
- "typetag",
-]
-
-[[package]]
-name = "databend-common-storages-result-cache"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "async-backtrace",
- "async-trait",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "databend-common-meta-kvapi",
- "databend-common-meta-store",
- "databend-common-meta-types",
- "databend-common-pipeline-core",
- "databend-common-pipeline-sinks",
- "databend-common-storage",
- "databend-common-storages-parquet",
- "databend-storages-common-blocks",
- "databend-storages-common-table-meta",
- "opendal",
- "parquet",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -4690,11 +4634,9 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-storages-basic",
  "databend-common-storages-fuse",
- "databend-common-storages-null",
- "databend-common-storages-result-cache",
  "databend-common-storages-stream",
- "databend-common-storages-view",
  "databend-common-users",
  "databend-storages-common-cache",
  "databend-storages-common-table-meta",
@@ -4716,13 +4658,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-storages-view"
+name = "databend-common-telemetry"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
+ "reqwest",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -4778,6 +4719,8 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-common-metrics",
+ "databend-common-version",
  "enumflags2",
  "itertools 0.13.0",
  "jwt-simple",
@@ -5281,21 +5224,19 @@ dependencies = [
  "databend-common-settings",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-storages-basic",
  "databend-common-storages-delta",
  "databend-common-storages-factory",
  "databend-common-storages-fuse",
  "databend-common-storages-hive",
  "databend-common-storages-iceberg",
  "databend-common-storages-information-schema",
- "databend-common-storages-memory",
- "databend-common-storages-null",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
- "databend-common-storages-result-cache",
  "databend-common-storages-stage",
  "databend-common-storages-stream",
  "databend-common-storages-system",
- "databend-common-storages-view",
+ "databend-common-telemetry",
  "databend-common-tracing",
  "databend-common-users",
  "databend-common-version",
@@ -5317,6 +5258,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "derive-visitor",
+ "dyn-clone",
  "enum-as-inner",
  "ethnum",
  "fastrace",
@@ -13143,9 +13085,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "068a45a83c2ce7d6bdad6ba83719ff08ba9818d210b613af13647ea33ab7d23c"
+checksum = "9659467da3a686edc86248421dcebabf2971fbba3ad4679e1da2d63c57f8d5dc"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",

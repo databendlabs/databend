@@ -23,7 +23,7 @@ use databend_common_expression::SortCompare;
 use databend_common_pipeline_core::processors::Exchange;
 
 use super::WindowPartitionMeta;
-use crate::sql::executor::physical_plans::WindowPartitionTopNFunc;
+use crate::physical_plans::WindowPartitionTopNFunc;
 
 pub struct WindowPartitionTopNExchange {
     partition_indices: Box<[usize]>,
