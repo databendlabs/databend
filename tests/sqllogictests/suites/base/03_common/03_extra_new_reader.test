@@ -5,7 +5,7 @@ statement ok
 use test_new_reader;
 
 statement ok
-SET use_parquet2= 1;
+SET use_experimental_parquet_reader = 1;
 
 
 statement ok
