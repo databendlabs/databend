@@ -19,6 +19,7 @@ use parquet2::schema::types::PhysicalType;
 
 use crate::column::common::ParquetColumnIterator;
 use crate::column::common::ParquetColumnType;
+use crate::column::common::DictionarySupport;
 use crate::reader::decompressor::Decompressor;
 
 #[derive(Clone, Copy)]
@@ -39,6 +40,70 @@ impl ParquetColumnType for i64 {
 
     fn create_column(data: Vec<Self>, _metadata: &Self::Metadata) -> Column {
         Column::Number(i64::upcast_column(Buffer::from(data)))
+    }
+}
+
+impl DictionarySupport for i64 {
+    fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
+        if entry.len() != 8 {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                format!("Invalid i64 dictionary entry length: expected 8, got {}", entry.len())
+            ));
+        }
+        
+        // Parquet stores integers in little-endian format
+        let bytes: [u8; 8] = entry.try_into().map_err(|_| {
+            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to i64".to_string())
+        })?;
+        
+        Ok(i64::from_le_bytes(bytes))
+    }
+    
+    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> databend_common_exception::Result<Vec<Self>> {
+        let mut result = Vec::with_capacity(indices.len());
+        for &index in indices {
+            let dict_idx = index as usize;
+            if dict_idx >= dictionary.len() {
+                return Err(databend_common_exception::ErrorCode::Internal(format!(
+                    "Dictionary index out of bounds: {} >= {}", 
+                    dict_idx, dictionary.len()
+                )));
+            }
+            result.push(dictionary[dict_idx]);
+        }
+        Ok(result)
+    }
+}
+
+impl DictionarySupport for i32 {
+    fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
+        if entry.len() != 4 {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                format!("Invalid i32 dictionary entry length: expected 4, got {}", entry.len())
+            ));
+        }
+        
+        // Parquet stores integers in little-endian format
+        let bytes: [u8; 4] = entry.try_into().map_err(|_| {
+            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to i32".to_string())
+        })?;
+        
+        Ok(i32::from_le_bytes(bytes))
+    }
+    
+    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> databend_common_exception::Result<Vec<Self>> {
+        let mut result = Vec::with_capacity(indices.len());
+        for &index in indices {
+            let dict_idx = index as usize;
+            if dict_idx >= dictionary.len() {
+                return Err(databend_common_exception::ErrorCode::Internal(format!(
+                    "Dictionary index out of bounds: {} >= {}", 
+                    dict_idx, dictionary.len()
+                )));
+            }
+            result.push(dictionary[dict_idx]);
+        }
+        Ok(result)
     }
 }
 

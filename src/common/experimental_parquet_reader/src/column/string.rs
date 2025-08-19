@@ -229,6 +229,7 @@ impl<'a> StringIter<'a> {
         // Clone dictionary to avoid borrowing issues
         if let Some(dict) = self.dictionary.clone() {
             // Check if we can use the optimized small string fast path
+            // TODO cache this
             if self.can_use_small_string_fast_path(&dict) {
                 return self.process_small_string_fast_path(
                     &dict,
@@ -254,6 +255,7 @@ impl<'a> StringIter<'a> {
 
     /// Check if dictionary qualifies for small string fast path optimization.
     fn can_use_small_string_fast_path(&self, dict: &[Vec<u8>]) -> bool {
+        // TODO 12 is rather small?
         dict.len() <= 16 && dict.iter().all(|s| s.len() <= 12)
     }
 

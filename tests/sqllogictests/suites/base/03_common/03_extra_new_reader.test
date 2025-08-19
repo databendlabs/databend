@@ -72,6 +72,9 @@ statement ok
 create table lr like lineitem engine = random;
 
 statement ok
+set enable_fuse_parquet_dictionary_encoding = 1;
+
+statement ok
 insert into lineitem select * from lr limit 1000;
 
 statement ok
