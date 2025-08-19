@@ -12,46 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::LazyLock;
-
 use feature_set::FeatureSet;
 use semver::Version;
-
-pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
-    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
-    let git_sha = databend_common_version::VERGEN_GIT_SHA;
-    let rustc_semver = databend_common_version::VERGEN_RUSTC_SEMVER;
-    let timestamp = databend_common_version::VERGEN_BUILD_TIMESTAMP;
-
-    // simd is enabled by default now
-    match (build_semver, git_sha, rustc_semver, timestamp) {
-        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-        }
-        _ => String::new(),
-    }
-});
-
-pub static METASRV_GIT_SEMVER: LazyLock<String> =
-    LazyLock::new(|| match databend_common_version::DATABEND_GIT_SEMVER {
-        Some(v) => v.to_string(),
-        None => "unknown".to_string(),
-    });
-
-pub static METASRV_GIT_SHA: LazyLock<String> =
-    LazyLock::new(|| match databend_common_version::VERGEN_GIT_SHA {
-        Some(sha) => sha.to_string(),
-        None => "unknown".to_string(),
-    });
-
-pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let build_semver = databend_common_version::DATABEND_GIT_SEMVER;
-    let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
-
-    let semver = semver.strip_prefix('v').unwrap_or(semver);
-
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
-});
 
 /// Oldest compatible nightly meta-client version
 ///
@@ -117,6 +79,8 @@ pub(crate) mod raft {
             del_provide(("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
             del_provide(("install_snapshot", 2), "2024-07-02", (1,  2, 552)),
             add_provide(("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
+            del_provide(("install_snapshot", 1), "2025-07-02", (1,  2, 769)),
+            add_provide(("vote",             1), "2025-07-20", (1,  0,   0)), // TODO: fix the version
         ];
 
         /// The client features that raft server depends on.

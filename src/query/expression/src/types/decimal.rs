@@ -53,11 +53,13 @@ use super::compute_view::Compute;
 use super::compute_view::ComputeView;
 use super::AccessType;
 use super::AnyType;
+use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
 use crate::types::DataType;
+use crate::types::F64;
 use crate::utils::arrow::buffer_into_mut;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
@@ -71,11 +73,67 @@ use crate::Value;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoreScalarDecimal<T: Decimal>(PhantomData<T>);
+
 pub type Decimal64Type = DecimalType<i64>;
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
 pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
+pub type DecimalScalarType<T> = SimpleValueType<CoreScalarDecimal<T>>;
+
+impl<Num: Decimal> AccessType for CoreDecimal<Num> {
+    type Scalar = Num;
+    type ScalarRef<'a> = Num;
+    type Column = Buffer<Num>;
+    type Domain = SimpleDomain<Num>;
+    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, Num>>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+        Num::try_downcast_scalar(scalar.as_decimal()?)
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        Num::try_downcast_domain(domain.as_decimal()?)
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        Num::try_downcast_column(col).map(|(col, _)| col)
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.get(index).copied()
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        *col.get_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().sliced(range.start, range.end - range.start)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter().copied()
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
 
 impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     type Scalar = Num;
@@ -149,6 +207,153 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 }
 
+impl<Num: Decimal> AccessType for CoreScalarDecimal<Num> {
+    type Scalar = (Num, DecimalSize);
+    type ScalarRef<'a> = (Num, DecimalSize);
+    type Column = Buffer<(Num, DecimalSize)>;
+    type Domain = SimpleDomain<(Num, DecimalSize)>;
+    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, (Num, DecimalSize)>>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+        let scalar = scalar.as_decimal()?;
+        Num::try_downcast_scalar(scalar).map(|v| (v, scalar.size()))
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        let size = domain.as_decimal()?.decimal_size();
+        let domain = Num::try_downcast_domain(domain.as_decimal()?)?;
+        Some(SimpleDomain {
+            min: (domain.min, size),
+            max: (domain.max, size),
+        })
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        Num::try_downcast_column(col).map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.get(index).copied()
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        *col.get_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().sliced(range.start, range.end - range.start)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter().copied()
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
+impl<Num: Decimal> SimpleType for CoreScalarDecimal<Num> {
+    type Scalar = (Num, DecimalSize);
+    type Domain = SimpleDomain<(Num, DecimalSize)>;
+
+    fn downcast_scalar(scalar: &ScalarRef) -> Option<Self::Scalar> {
+        let scalar = scalar.as_decimal()?;
+        Num::try_downcast_scalar(scalar).map(|v| (v, scalar.size()))
+    }
+
+    fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
+        Num::try_downcast_column(col).map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+    }
+
+    fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        let size = domain.as_decimal()?.decimal_size();
+        let domain = Num::try_downcast_domain(domain.as_decimal()?)?;
+        Some(SimpleDomain {
+            min: (domain.min, size),
+            max: (domain.max, size),
+        })
+    }
+
+    // It's not allowed to call downcast_builder temporarily
+    fn downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
+        None
+    }
+
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
+        let size = builder.as_decimal()?.decimal_size();
+        let b = Num::try_downcast_owned_builder(builder);
+        b.map(|v| v.into_iter().map(|v| (v, size)).collect())
+    }
+
+    fn upcast_column_builder(
+        builder: Vec<Self::Scalar>,
+        data_type: &DataType,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Decimal(Num::upcast_builder(
+            builder.into_iter().map(|(v, _)| v).collect(),
+            *data_type.as_decimal().unwrap(),
+        )))
+    }
+
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_scalar(scalar.0, size)
+    }
+
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        let col = col.into_iter().map(|(v, _)| v).collect();
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_column(col, size)
+    }
+
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let domain = SimpleDomain {
+            min: domain.min.0,
+            max: domain.max.0,
+        };
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_domain(domain, size)
+    }
+
+    #[inline(always)]
+    fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {
+        lhs.cmp(rhs)
+    }
+
+    #[inline(always)]
+    fn greater_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left <= right
+    }
+}
+
 impl<Num: Decimal> DecimalType<Num> {
     pub fn full_domain(size: &DecimalSize) -> SimpleDomain<Num> {
         SimpleDomain {
@@ -176,6 +381,12 @@ pub enum DecimalScalar {
 }
 
 impl DecimalScalar {
+    pub fn to_float32(&self) -> f32 {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(v, size) => v.to_float32(size.scale),
+        })
+    }
+
     pub fn to_float64(&self) -> f64 {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(v, size) => v.to_float64(size.scale),
@@ -191,6 +402,12 @@ impl DecimalScalar {
     pub fn size(&self) -> DecimalSize {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
+
+    pub fn scale(&self) -> u8 {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, size) => size.scale,
         })
     }
 
@@ -243,6 +460,8 @@ impl DecimalDomain {
     Copy,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Serialize,
     Deserialize,
@@ -252,6 +471,15 @@ impl DecimalDomain {
 pub struct DecimalSize {
     precision: u8,
     scale: u8,
+}
+
+impl Default for DecimalSize {
+    fn default() -> Self {
+        DecimalSize {
+            precision: 15,
+            scale: 2,
+        }
+    }
 }
 
 impl DecimalSize {
@@ -267,9 +495,10 @@ impl DecimalSize {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.precision < 1 || self.precision > MAX_DECIMAL256_PRECISION {
+        if self.precision < 1 || self.precision > i256::MAX_PRECISION {
             return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {MAX_DECIMAL256_PRECISION}",
+                "Decimal precision must be between 1 and {}",
+                i256::MAX_PRECISION
             )));
         }
 
@@ -300,25 +529,15 @@ impl DecimalSize {
     }
 
     pub fn can_carried_by_64(&self) -> bool {
-        self.precision <= MAX_DECIMAL64_PRECISION
+        self.precision <= i64::MAX_PRECISION
     }
 
     pub fn can_carried_by_128(&self) -> bool {
-        self.precision <= MAX_DECIMAL128_PRECISION
+        self.precision <= i128::MAX_PRECISION
     }
 
     pub fn data_kind(&self) -> DecimalDataKind {
         (*self).into()
-    }
-
-    pub fn best_type(&self) -> DecimalDataType {
-        if self.can_carried_by_64() {
-            DecimalDataType::Decimal64(*self)
-        } else if self.can_carried_by_128() {
-            DecimalDataType::Decimal128(*self)
-        } else {
-            DecimalDataType::Decimal256(*self)
-        }
     }
 }
 
@@ -385,6 +604,7 @@ pub trait Decimal:
         }
     }
 
+    const MAX_PRECISION: u8;
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
@@ -465,7 +685,7 @@ impl Decimal for i64 {
     }
 
     fn e(n: u8) -> Self {
-        const L: usize = MAX_DECIMAL64_PRECISION as usize + 1;
+        const L: usize = i64::MAX_PRECISION as usize + 1;
         const TAB: [i64; L] = {
             const fn gen() -> [i64; L] {
                 let mut arr = [0; L];
@@ -562,9 +782,10 @@ impl Decimal for i64 {
         Self::e(precision) - 1
     }
 
+    const MAX_PRECISION: u8 = 18;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: 18,
+            precision: Self::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -724,7 +945,7 @@ impl Decimal for i128 {
     }
 
     fn e(n: u8) -> Self {
-        const L: usize = MAX_DECIMAL128_PRECISION as usize + 1;
+        const L: usize = i128::MAX_PRECISION as usize + 1;
         const TAB: [i128; L] = {
             const fn gen() -> [i128; L] {
                 let mut arr = [0; L];
@@ -857,9 +1078,10 @@ impl Decimal for i128 {
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
+    const MAX_PRECISION: u8 = 38;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
+            precision: Self::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -1051,7 +1273,7 @@ impl Decimal for i256 {
     fn e(n: u8) -> Self {
         match n {
             0 => i256::ONE,
-            1..=MAX_DECIMAL256_PRECISION => {
+            1..=i256::MAX_PRECISION => {
                 MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE
             }
             _ => i256::from(10).pow(n as u32),
@@ -1133,7 +1355,7 @@ impl Decimal for i256 {
             }
         };
 
-        if mul_scale >= MAX_DECIMAL256_PRECISION as _ {
+        if mul_scale >= i256::MAX_PRECISION as _ {
             return fallback();
         }
 
@@ -1157,9 +1379,10 @@ impl Decimal for i256 {
         MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
+    const MAX_PRECISION: u8 = 76;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
+            precision: i256::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -1312,10 +1535,6 @@ impl Decimal for i256 {
     }
 }
 
-pub const MAX_DECIMAL64_PRECISION: u8 = 18;
-pub const MAX_DECIMAL128_PRECISION: u8 = 38;
-pub const MAX_DECIMAL256_PRECISION: u8 = 76;
-
 #[derive(
     Debug,
     Clone,
@@ -1393,9 +1612,9 @@ impl DecimalDataType {
 
     pub fn max_precision(&self) -> u8 {
         match self {
-            DecimalDataType::Decimal64(_) => MAX_DECIMAL64_PRECISION,
-            DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
-            DecimalDataType::Decimal256(_) => MAX_DECIMAL256_PRECISION,
+            DecimalDataType::Decimal64(_) => i64::MAX_PRECISION,
+            DecimalDataType::Decimal128(_) => i128::MAX_PRECISION,
+            DecimalDataType::Decimal256(_) => i256::MAX_PRECISION,
         }
     }
 
@@ -1436,11 +1655,13 @@ pub enum DecimalDataKind {
 
 impl From<DecimalSize> for DecimalDataKind {
     fn from(size: DecimalSize) -> Self {
-        if size.can_carried_by_128() {
-            DecimalDataKind::Decimal128
-        } else {
-            DecimalDataKind::Decimal256
+        if size.can_carried_by_64() {
+            return DecimalDataKind::Decimal64;
         }
+        if size.can_carried_by_128() {
+            return DecimalDataKind::Decimal128;
+        }
+        DecimalDataKind::Decimal256
     }
 }
 
@@ -1571,7 +1792,7 @@ impl DecimalColumn {
                     precision: *p,
                     scale: *s as u8,
                 };
-                Ok(Self::Decimal128(buffer.into(), decimal_size))
+                Ok(Self::Decimal128(buffer.into(), decimal_size).strict_decimal())
             }
             arrow_schema::DataType::Decimal256(p, s) => {
                 let decimal_size = DecimalSize {
@@ -1598,40 +1819,32 @@ impl DecimalColumn {
         }
     }
 
-    pub fn strict_decimal_data_type(self) -> Self {
-        match &self {
-            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
-                    let builder = Decimal64As128Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
-                }
-                DecimalDataKind::Decimal256 => {
-                    let builder = Decimal64As256Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
-                }
-            },
-            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => self,
-                DecimalDataKind::Decimal256 => {
-                    let builder = Decimal128As256Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
-                }
-            },
-            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
-                    let builder = Decimal256As128Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
-                }
-                DecimalDataKind::Decimal256 => self,
-            },
+    pub fn strict_decimal(self) -> Self {
+        if self.is_strict_decimal() {
+            return self;
         }
+
+        with_decimal_type!(|FROM| match self {
+            DecimalColumn::FROM(buffer, size) => {
+                with_decimal_type!(|TO| match size.data_kind() {
+                    DecimalDataKind::TO => {
+                        let builder = DecimalView::iter_column(&buffer).collect::<Vec<_>>();
+                        DecimalColumn::TO(DecimalType::build_column(builder), size)
+                    }
+                })
+            }
+        })
     }
 
-    pub fn is_strict_decimal_data_type(&self) -> bool {
+    pub fn is_strict_decimal(&self) -> bool {
+        self.data_kind() == self.size().data_kind()
+    }
+
+    pub fn data_kind(&self) -> DecimalDataKind {
         match self {
-            DecimalColumn::Decimal128(_, size) if size.can_carried_by_128() => true,
-            DecimalColumn::Decimal256(_, size) if !size.can_carried_by_128() => true,
-            _ => false,
+            DecimalColumn::Decimal64(_, _) => DecimalDataKind::Decimal64,
+            DecimalColumn::Decimal128(_, _) => DecimalDataKind::Decimal128,
+            DecimalColumn::Decimal256(_, _) => DecimalDataKind::Decimal256,
         }
     }
 }
@@ -2815,6 +3028,10 @@ impl Ord for i256 {
     }
 }
 
+pub type DecimalView<F, T> = ComputeView<DecimalConvert<F, T>, CoreDecimal<F>, CoreDecimal<T>>;
+pub type DecimalF64View<F> =
+    ComputeView<DecimalConvert<F, F64>, CoreScalarDecimal<F>, NumberType<F64>>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
 
@@ -2824,7 +3041,9 @@ where
     T: Decimal,
 {
     #[inline]
-    fn compute(value: &F) -> T {
+    fn compute<'a>(
+        value: <CoreDecimal<F> as AccessType>::ScalarRef<'a>,
+    ) -> <CoreDecimal<T> as AccessType>::ScalarRef<'a> {
         value.as_decimal::<T>()
     }
 
@@ -2836,10 +3055,34 @@ where
     }
 }
 
+impl<F> Compute<CoreScalarDecimal<F>, NumberType<F64>> for DecimalConvert<F, F64>
+where F: Decimal
+{
+    #[inline]
+    fn compute<'a>(
+        value: <CoreScalarDecimal<F> as AccessType>::ScalarRef<'a>,
+    ) -> <NumberType<F64> as AccessType>::ScalarRef<'a> {
+        value.0.to_float64(value.1.scale()).into()
+    }
+
+    fn compute_domain(domain: &SimpleDomain<(F, DecimalSize)>) -> SimpleDomain<F64> {
+        let min = domain.min.0.to_float64(domain.min.1.scale());
+        let max = domain.max.0.to_float64(domain.max.1.scale());
+
+        SimpleDomain {
+            min: min.into(),
+            max: max.into(),
+        }
+    }
+}
+
+pub type Decimal64AsF64Type = DecimalF64View<i64>;
+pub type Decimal128AsF64Type = DecimalF64View<i128>;
+pub type Decimal256AsF64Type = DecimalF64View<i256>;
+
 macro_rules! decimal_convert_type {
     ($from:ty, $to:ty, $alias:ident, $compat:ident) => {
-        pub type $alias =
-            ComputeView<DecimalConvert<$from, $to>, CoreDecimal<$from>, CoreDecimal<$to>>;
+        pub type $alias = DecimalView<$from, $to>;
         pub type $compat = DecimalConvert<$from, $to>;
     };
 }

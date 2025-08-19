@@ -48,6 +48,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storages_stage::StageTable;
+use databend_common_users::Object;
 use futures_util::stream::Chunks;
 use futures_util::StreamExt;
 
@@ -187,7 +188,10 @@ impl ListStagesSource {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
-            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User

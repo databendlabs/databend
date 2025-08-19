@@ -1488,7 +1488,7 @@ evaluation (internal):
 
 ast            : i32 > 1.0
 raw expr       : gt(i32::Int32, 1.0)
-checked expr   : gt<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(i32 AS Decimal(10, 0)), 1.0_d128(2,1))
+checked expr   : gt<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(i32 AS Decimal(10, 0)), 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1509,7 +1509,7 @@ evaluation (internal):
 
 ast            : i32 = 1.0
 raw expr       : eq(i32::Int32, 1.0)
-checked expr   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(i32 AS Decimal(10, 0)), 1.0_d128(2,1))
+checked expr   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(i32 AS Decimal(10, 0)), 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1530,7 +1530,7 @@ evaluation (internal):
 
 ast            : 1.0 > i32
 raw expr       : gt(1.0, i32::Int32)
-checked expr   : gt<Decimal(2, 1), Decimal(10, 0)>(1.0_d128(2,1), CAST<Int32>(i32 AS Decimal(10, 0)))
+checked expr   : gt<Decimal(2, 1), Decimal(10, 0)>(1.0_d64(2,1), CAST<Int32>(i32 AS Decimal(10, 0)))
 optimized expr : true
 evaluation:
 +--------+---------+---------+
@@ -1551,7 +1551,7 @@ evaluation (internal):
 
 ast            : 1.0 = i32
 raw expr       : eq(1.0, i32::Int32)
-checked expr   : eq<Decimal(2, 1), Decimal(10, 0)>(1.0_d128(2,1), CAST<Int32>(i32 AS Decimal(10, 0)))
+checked expr   : eq<Decimal(2, 1), Decimal(10, 0)>(1.0_d64(2,1), CAST<Int32>(i32 AS Decimal(10, 0)))
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1845,7 +1845,7 @@ evaluation (internal):
 
 ast            : i64 > 1.0
 raw expr       : gt(i64::Int64, 1.0)
-checked expr   : gt<Decimal(19, 0), Decimal(2, 1)>(CAST<Int64>(i64 AS Decimal(19, 0)), 1.0_d128(2,1))
+checked expr   : gt<Decimal(19, 0), Decimal(2, 1)>(CAST<Int64>(i64 AS Decimal(19, 0)), 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1866,7 +1866,7 @@ evaluation (internal):
 
 ast            : i64 = 1.0
 raw expr       : eq(i64::Int64, 1.0)
-checked expr   : eq<Decimal(19, 0), Decimal(2, 1)>(CAST<Int64>(i64 AS Decimal(19, 0)), 1.0_d128(2,1))
+checked expr   : eq<Decimal(19, 0), Decimal(2, 1)>(CAST<Int64>(i64 AS Decimal(19, 0)), 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1887,7 +1887,7 @@ evaluation (internal):
 
 ast            : 1.0 > i64
 raw expr       : gt(1.0, i64::Int64)
-checked expr   : gt<Decimal(2, 1), Decimal(19, 0)>(1.0_d128(2,1), CAST<Int64>(i64 AS Decimal(19, 0)))
+checked expr   : gt<Decimal(2, 1), Decimal(19, 0)>(1.0_d64(2,1), CAST<Int64>(i64 AS Decimal(19, 0)))
 optimized expr : true
 evaluation:
 +--------+---------+---------+
@@ -1908,7 +1908,7 @@ evaluation (internal):
 
 ast            : 1.0 = i64
 raw expr       : eq(1.0, i64::Int64)
-checked expr   : eq<Decimal(2, 1), Decimal(19, 0)>(1.0_d128(2,1), CAST<Int64>(i64 AS Decimal(19, 0)))
+checked expr   : eq<Decimal(2, 1), Decimal(19, 0)>(1.0_d64(2,1), CAST<Int64>(i64 AS Decimal(19, 0)))
 optimized expr : false
 evaluation:
 +--------+---------+---------+

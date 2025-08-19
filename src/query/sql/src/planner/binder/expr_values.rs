@@ -18,15 +18,13 @@ use databend_common_ast::ast::Expr as AExpr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
+use databend_common_users::Object;
 
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
@@ -68,8 +66,22 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
         if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
             let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_default_catalog()?;
+            let visibility_checker = if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                let ctx = self.ctx.clone();
+                Some(databend_common_base::runtime::block_on(async move {
+                    ctx.get_visibility_checker(false, Object::Sequence).await
+                })?)
+            } else {
+                None
+            };
             let value = databend_common_base::runtime::block_on(async move {
-                async_func.generate(tenant.clone(), catalog.clone()).await
+                async_func
+                    .generate(tenant.clone(), catalog.clone(), visibility_checker)
+                    .await
             })?;
 
             *expr = ScalarExpr::ConstantExpr(ConstantExpr {
@@ -146,7 +158,7 @@ impl BindContext {
             }
             let expr = scalar
                 .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
+                .project_column_ref(|col| schema.index_of(&col.index.to_string()))?;
             map_exprs.push(expr);
         }
 
@@ -155,13 +167,8 @@ impl BindContext {
             projections: None,
         }];
 
-        let one_row_chunk = DataBlock::new(
-            vec![BlockEntry::new(
-                DataType::Number(NumberDataType::UInt8),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
-            )],
-            1,
-        );
+        let one_row_chunk =
+            DataBlock::new(vec![BlockEntry::new_const_column_arg::<UInt8Type>(1, 1)], 1);
         let func_ctx = ctx.get_function_context()?;
         let mut expression_transform = CompoundBlockOperator {
             operators,
@@ -172,7 +179,7 @@ impl BindContext {
             .columns()
             .iter()
             .skip(1)
-            .map(|col| unsafe { col.value.index_unchecked(0).to_owned() })
+            .map(|col| unsafe { col.index_unchecked(0).to_owned() })
             .collect();
         Ok(scalars)
     }

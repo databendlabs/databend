@@ -71,7 +71,8 @@ impl FuseTable {
         let schema = block_reader.schema().as_ref().clone();
         let filter_expr = Arc::new(filter.map(|v| {
             v.as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap())
+                .project_column_ref(|name| schema.index_of(name))
+                .unwrap()
         }));
 
         let num_column_indices = self.schema_with_stream().fields().len();
@@ -190,7 +191,7 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-            Self::create_ngram_index_args(&self.table_info.meta)?,
+            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?,
             None,
         )?;
 

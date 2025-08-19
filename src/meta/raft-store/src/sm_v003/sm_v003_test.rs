@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
+use databend_common_meta_types::CmdContext;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
+use seq_marked::SeqMarked;
+use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::StateMachineApi;
 
-use crate::leveled_store::map_api::AsMap;
-use crate::marked::Marked;
 use crate::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine_api::StateMachineApi;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 #[tokio::test]
@@ -137,26 +137,6 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn test_update_expire_index() -> anyhow::Result<()> {
-    let mut sm = SMV003::default();
-
-    sm.update_expire_cursor(1);
-    assert_eq!(sm.get_expire_cursor(), ExpireKey::new(1, 0));
-
-    sm.update_expire_cursor(2);
-    assert_eq!(sm.get_expire_cursor(), ExpireKey::new(2, 0));
-
-    sm.update_expire_cursor(1);
-    assert_eq!(
-        sm.get_expire_cursor(),
-        ExpireKey::new(2, 0),
-        "expire cursor can not go back"
-    );
-
-    Ok(())
-}
-
 /// The subscript is internal_seq:
 ///
 ///    | kv             | expire
@@ -194,26 +174,16 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
     assert_eq!(got, vec![
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
-        (
-            ExpireKey::new(15_000, 4),
-            Marked::new_with_meta(4, s("a"), None)
-        ),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())
@@ -221,7 +191,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_list_expire_index() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
+    let sm = build_sm_with_expire().await?;
 
     let curr_time_ms = 5000;
     let got = sm
@@ -251,8 +221,6 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
         (ExpireKey::new(20000, 3), s("c")),
     ]);
 
-    sm.update_expire_cursor(15000);
-
     let curr_time_ms = 20_001;
     let got = sm
         .list_expire_index(curr_time_ms)
@@ -260,6 +228,7 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
         .try_collect::<Vec<_>>()
         .await?;
     assert_eq!(got, vec![
+        (ExpireKey::new(5000, 2), s("b")),
         (ExpireKey::new(15000, 4), s("a")),
         (ExpireKey::new(20000, 3), s("c")),
     ]);
@@ -270,9 +239,8 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
 async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
 
-    sm.update_expire_cursor(15_000);
-
     let mut a = sm.new_applier();
+    a.cmd_ctx = CmdContext::from_millis(15_000);
 
     // Inserting an expired entry will delete it.
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(10))
@@ -290,7 +258,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
         .await?
         .try_collect::<Vec<_>>()
         .await?;
-    assert!(got.is_empty());
+    assert_eq!(got, vec![(ExpireKey::new(5_000, 2), s("b")),]);
 
     let got = sm
         .list_expire_index(20_001)
@@ -299,12 +267,12 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
+        (ExpireKey::new(5_000, 2), s("b")),
         (ExpireKey::new(20_000, 3), s("c")),
     ]);
 
     // Check expire store
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?
@@ -312,16 +280,10 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
-        (ExpireKey::new(15_000, 4), Marked::new_tombstone(5),),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_tombstone(5),),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())

@@ -15,16 +15,19 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
+use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
+use crate::io::read::read_segment_stats_in_parallel;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -51,6 +54,7 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl SegmentCompactMutator {
@@ -60,6 +64,7 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -68,6 +73,7 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            table_meta_timestamps,
         })
     }
 
@@ -110,6 +116,7 @@ impl SegmentCompactMutator {
             &fuse_segment_io,
             &self.data_accessor,
             &self.location_generator,
+            self.table_meta_timestamps,
         );
 
         self.compaction = compactor
@@ -124,7 +131,7 @@ impl SegmentCompactMutator {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
+    pub async fn try_commit(&self, table: &FuseTable) -> Result<()> {
         if !self.has_compaction() {
             // defensive checking
             return Ok(());
@@ -132,14 +139,14 @@ impl SegmentCompactMutator {
 
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        fuse_table
+        table
             .commit_mutation(
                 &self.ctx,
                 self.compact_params.base_snapshot.clone(),
                 &self.compaction.segments_locations,
                 statistics,
+                self.table_meta_timestamps,
                 None,
             )
             .await
@@ -172,6 +179,7 @@ pub struct SegmentCompactor<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<'a> SegmentCompactor<'a> {
@@ -182,6 +190,7 @@ impl<'a> SegmentCompactor<'a> {
         segment_reader: &'a SegmentsIO,
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         Self {
             threshold,
@@ -193,6 +202,7 @@ impl<'a> SegmentCompactor<'a> {
             operator,
             location_generator,
             compacted_state: Default::default(),
+            table_meta_timestamps,
         }
     }
 
@@ -342,6 +352,8 @@ impl<'a> SegmentCompactor<'a> {
         // 2.1 merge fragmented segments into new segment, and update the statistics
         let mut blocks = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
+        let mut stats_locations = Vec::with_capacity(fragments.len());
+        let mut hlls_has_none = false;
 
         self.compacted_state.num_fragments_compacted += fragments.len();
         for (segment, _location) in fragments {
@@ -351,13 +363,46 @@ impl<'a> SegmentCompactor<'a> {
                 self.default_cluster_key_id,
             );
             blocks.append(&mut segment.blocks.clone());
+            if let Some(meta) = segment.summary.additional_stats_meta {
+                stats_locations.push(meta.location);
+            } else {
+                hlls_has_none = true;
+            }
         }
 
-        // 2.2 write down new segment
-        let new_segment = SegmentInfo::new(blocks, new_statistics);
         let location = self
             .location_generator
-            .gen_segment_info_location(Default::default(), false);
+            .gen_segment_info_location(self.table_meta_timestamps, false);
+        // 2.2 merge hlls into new.
+        let mut block_hlls = Vec::with_capacity(blocks.len());
+        if !hlls_has_none {
+            let max_threads = (self.chunk_size / 4).max(10);
+            let segment_stats = read_segment_stats_in_parallel(
+                self.operator.clone(),
+                &stats_locations,
+                max_threads,
+            )
+            .await?;
+            for stats in segment_stats {
+                block_hlls.append(&mut stats.block_hlls.clone());
+            }
+            let stats_data = SegmentStatistics::new(block_hlls).to_bytes()?;
+            let segment_stats_location =
+                TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+                    location.as_str(),
+                );
+            let additional_stats_meta = AdditionalStatsMeta {
+                size: stats_data.len() as u64,
+                location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+            };
+            self.operator
+                .write(&segment_stats_location, stats_data)
+                .await?;
+            new_statistics.additional_stats_meta = Some(additional_stats_meta);
+        }
+
+        // 2.3 write down new segment
+        let new_segment = SegmentInfo::new(blocks, new_statistics);
         new_segment
             .write_meta_through_cache(self.operator, &location)
             .await?;

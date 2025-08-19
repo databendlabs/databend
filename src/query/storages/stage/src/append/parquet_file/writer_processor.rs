@@ -30,7 +30,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_version::DATABEND_SEMVER;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
@@ -53,6 +52,7 @@ pub struct ParquetFileWriter {
     schema: TableSchemaRef,
     arrow_schema: Arc<Schema>,
     compression: Compression,
+    create_by: String,
 
     input_data: VecDeque<DataBlock>,
 
@@ -77,28 +77,13 @@ pub struct ParquetFileWriter {
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
 // this is number of rows, not size
 const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
-const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
 
 fn create_writer(
     arrow_schema: Arc<Schema>,
     targe_file_size: Option<usize>,
     compression: Compression,
+    create_by: String,
 ) -> Result<ArrowWriter<Vec<u8>>> {
-    // example:  1.2.333-nightly
-    // tags may contain other items like `1.2.680-p2`, we will fill it with `1.2.680-p2.....`
-    let mut create_by = format!(
-        "Databend {}.{}.{}-{:.<7}",
-        DATABEND_SEMVER.major,
-        DATABEND_SEMVER.minor,
-        DATABEND_SEMVER.patch,
-        DATABEND_SEMVER.pre.as_str()
-    );
-
-    if create_by.len() != CREATE_BY_LEN {
-        create_by = format!("{:.<24}", create_by);
-        create_by.truncate(24);
-    }
-
     let props = WriterProperties::builder()
         .set_writer_version(WriterVersion::PARQUET_2_0)
         .set_compression(compression)
@@ -126,6 +111,7 @@ impl ParquetFileWriter {
         query_id: String,
         group_id: usize,
         targe_file_size: Option<usize>,
+        create_by: String,
     ) -> Result<ProcessorPtr> {
         let unload_output = UnloadOutput::create(info.options.detailed_output);
 
@@ -141,7 +127,12 @@ impl ParquetFileWriter {
                 )))
             }
         };
-        let writer = create_writer(arrow_schema.clone(), targe_file_size, compression)?;
+        let writer = create_writer(
+            arrow_schema.clone(),
+            targe_file_size,
+            compression,
+            create_by.clone(),
+        )?;
 
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {
             input,
@@ -150,6 +141,7 @@ impl ParquetFileWriter {
             info,
             arrow_schema,
             compression,
+            create_by,
             unload_output,
             unload_output_blocks: None,
             writer,
@@ -169,6 +161,7 @@ impl ParquetFileWriter {
             self.arrow_schema.clone(),
             self.targe_file_size,
             self.compression,
+            self.create_by.clone(),
         )?;
         self.row_counts = 0;
         self.input_bytes = 0;

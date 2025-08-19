@@ -14,6 +14,7 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
 use databend_query::test_kits::*;
@@ -25,13 +26,14 @@ async fn test_empty_cluster_discovery() -> Result<()> {
 
     let config = ConfigBuilder::create().build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config).await?;
-    let cluster_discovery = ClusterDiscovery::try_create(&config, metastore.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config, &BUILD_INFO).await?;
+    let cluster_discovery =
+        ClusterDiscovery::try_create(&config, &BUILD_INFO, metastore.clone()).await?;
 
     let discover_cluster = cluster_discovery.discover(&config).await?;
 
     let discover_cluster_nodes = discover_cluster.get_nodes();
-    assert_eq!(discover_cluster_nodes.len(), 0);
+    assert_eq!(discover_cluster_nodes.len(), 1);
     assert!(discover_cluster.is_empty());
     assert!(!discover_cluster.unassign);
 
@@ -64,9 +66,11 @@ async fn test_remove_invalid_nodes() -> Result<()> {
         .query_flight_address("invalid_address_2")
         .build();
 
-    let metastore = ClusterDiscovery::create_meta_client(&config_1).await?;
-    let cluster_discovery_1 = ClusterDiscovery::try_create(&config_1, metastore.clone()).await?;
-    let cluster_discovery_2 = ClusterDiscovery::try_create(&config_2, metastore.clone()).await?;
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
+    let cluster_discovery_1 =
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
+    let cluster_discovery_2 =
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
 
     cluster_discovery_1.register_to_metastore(&config_1).await?;
     cluster_discovery_2.register_to_metastore(&config_2).await?;
@@ -82,6 +86,40 @@ async fn test_remove_invalid_nodes() -> Result<()> {
     assert_eq!(discover_cluster_nodes_2.len(), 1);
     assert!(discover_cluster_2.is_empty());
     assert!(discover_cluster_2.is_local(&discover_cluster_nodes_2[0]));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lost_local_cluster_discovery() -> Result<()> {
+    let _guard = TestFixture::setup().await?;
+
+    let mut config_1 = ConfigBuilder::create()
+        .query_flight_address("10.0.0.1")
+        .build();
+    let mut config_2 = ConfigBuilder::create()
+        .query_flight_address("10.0.0.2")
+        .build();
+
+    config_1.query.check_connection_before_schedule = false;
+    config_2.query.check_connection_before_schedule = false;
+
+    let metastore = ClusterDiscovery::create_meta_client(&config_1, &BUILD_INFO).await?;
+    let cluster_discovery_1 =
+        ClusterDiscovery::try_create(&config_1, &BUILD_INFO, metastore.clone()).await?;
+    let cluster_discovery_2 =
+        ClusterDiscovery::try_create(&config_2, &BUILD_INFO, metastore.clone()).await?;
+
+    cluster_discovery_2.register_to_metastore(&config_2).await?;
+
+    let cluster_1 = cluster_discovery_1.discover(&config_1).await?;
+    assert_eq!(cluster_1.get_nodes().len(), 2);
+    assert_eq!(cluster_1.is_local(&cluster_1.nodes[0]), false);
+    assert_eq!(cluster_1.is_local(&cluster_1.nodes[1]), true);
+
+    let cluster_2 = cluster_discovery_2.discover(&config_2).await?;
+    assert_eq!(cluster_2.get_nodes().len(), 1);
+    assert_eq!(cluster_2.is_local(&cluster_2.nodes[0]), true);
 
     Ok(())
 }

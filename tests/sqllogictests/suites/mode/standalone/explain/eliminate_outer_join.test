@@ -20,7 +20,6 @@ HashJoin
 ├── probe keys: [t.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
@@ -53,7 +52,6 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
@@ -86,7 +84,6 @@ HashJoin
 ├── probe keys: [t.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.eliminate_outer_join.t
@@ -205,7 +202,6 @@ HashJoin
 ├── probe keys: [t.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
@@ -246,7 +242,6 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: [t.a (#0)]
@@ -593,7 +588,6 @@ Filter
     ├── probe keys: [t.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.eliminate_outer_join.t
@@ -677,7 +671,6 @@ Filter
     ├── probe keys: [t.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.eliminate_outer_join.t

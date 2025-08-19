@@ -17,6 +17,7 @@ databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-meta = { workspace = true }
@@ -25,6 +26,9 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
+
+[dev-dependencies]
+databend-common-version = { workspace = true }
 
 [lints]
 workspace = true

@@ -27,15 +27,11 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
 use crate::types::AccessType;
 use crate::types::DataType;
-use crate::types::Decimal128As256Type;
-use crate::types::Decimal128As64Type;
-use crate::types::Decimal256As128Type;
-use crate::types::Decimal256As64Type;
-use crate::types::Decimal64As128Type;
-use crate::types::Decimal64As256Type;
 use crate::types::DecimalDataKind;
+use crate::types::DecimalView;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
@@ -253,47 +249,18 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
                 }
             })
         }
-        Column::Decimal(col) => match col {
-            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 => {
-                    fixed::encode(out, buffer, validity, asc, nulls_first)
+        Column::Decimal(col) => {
+            with_decimal_mapped_type!(|F| match col {
+                DecimalColumn::F(buffer, size) => {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
+                        DecimalDataKind::T => {
+                            let iter = DecimalView::<F, T>::iter_column(&buffer);
+                            fixed::encode(out, iter, validity, asc, nulls_first)
+                        }
+                    });
                 }
-                DecimalDataKind::Decimal128 => {
-                    let iter = Decimal64As128Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-                DecimalDataKind::Decimal256 => {
-                    let iter = Decimal64As256Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-            },
-            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 => {
-                    let iter = Decimal128As64Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-                DecimalDataKind::Decimal128 => {
-                    fixed::encode(out, buffer, validity, asc, nulls_first)
-                }
-                DecimalDataKind::Decimal256 => {
-                    let iter = Decimal128As256Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-            },
-            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 => {
-                    let iter = Decimal256As64Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-                DecimalDataKind::Decimal128 => {
-                    let iter = Decimal256As128Type::iter_column(&buffer);
-                    fixed::encode(out, iter, validity, asc, nulls_first)
-                }
-                DecimalDataKind::Decimal256 => {
-                    fixed::encode(out, buffer, validity, asc, nulls_first)
-                }
-            },
-        },
+            });
+        }
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Interval(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),

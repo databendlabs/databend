@@ -8,6 +8,9 @@ statement ok
 set max_threads = 1;
 
 statement ok
+set enable_shuffle_sort = 0;
+
+statement ok
 create table t1(a int not null, b int not null) as select number as a, number+1 as b from numbers(100);
 
 statement ok
@@ -180,7 +183,7 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
     ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
     ├── estimated rows: 1.00
@@ -206,14 +209,14 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 10.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [c (#4), d (#5), e (#6)]
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
     ├── estimated rows: 100.00
     └── Exchange
         ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 100.00
@@ -311,14 +314,14 @@ Limit
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 10.00
     └── Exchange
         ├── output columns: [numbers.number (#0), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [numbers.number (#0), #_order_col]
             ├── sort keys: [number ASC NULLS LAST]
             ├── estimated rows: 10.00
@@ -354,7 +357,6 @@ AggregateFinal
             ├── probe keys: [x.a (#2)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 50.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
@@ -446,61 +448,114 @@ Exchange
         ├── apply join filters: [#0]
         └── estimated rows: 3.00
 
-query T
-EXPLAIN SELECT a.cluster_node, b.query_node FROM (SELECT name as cluster_node FROM system.clusters) AS a LEFT JOIN (SELECT DISTINCT node_id as query_node FROM system.query_log) AS b ON a.cluster_node = b.query_node
-----
-Exchange
-├── output columns: [clusters.name (#0), query_node (#65)]
-├── exchange type: Merge
-└── HashJoin
-    ├── output columns: [clusters.name (#0), query_node (#65)]
-    ├── join type: LEFT OUTER
-    ├── build keys: [b.query_node (#65)]
-    ├── probe keys: [CAST(a.cluster_node (#0) AS String NULL)]
-    ├── keys is null equal: [false]
-    ├── filters: []
-    ├── build join filters:
-    ├── estimated rows: 0.00
-    ├── Exchange(Build)
-    │   ├── output columns: [query_node (#65)]
-    │   ├── exchange type: Broadcast
-    │   └── EvalScalar
-    │       ├── output columns: [query_node (#65)]
-    │       ├── expressions: [CAST(b.query_node (#10) AS String NULL)]
-    │       ├── estimated rows: 0.00
-    │       └── AggregateFinal
-    │           ├── output columns: [query_log.node_id (#10)]
-    │           ├── group by: [node_id]
-    │           ├── aggregate functions: []
-    │           ├── estimated rows: 0.00
-    │           └── Exchange
-    │               ├── output columns: [query_log.node_id (#10)]
-    │               ├── exchange type: Hash(0)
-    │               └── AggregatePartial
-    │                   ├── group by: [node_id]
-    │                   ├── aggregate functions: []
-    │                   ├── estimated rows: 0.00
-    │                   └── TableScan
-    │                       ├── table: default.system.query_log
-    │                       ├── output columns: [node_id (#10)]
-    │                       ├── read rows: 0
-    │                       ├── read size: 0
-    │                       ├── partitions total: 0
-    │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [], limit: NONE]
-    │                       └── estimated rows: 0.00
-    └── TableScan(Probe)
-        ├── table: default.system.clusters
-        ├── output columns: [name (#0)]
-        ├── read rows: 0
-        ├── read size: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 0.00
-
 statement ok
 drop table t1;
 
 statement ok
 unset inlist_to_join_threshold;
+
+
+statement ok
+CREATE OR REPLACE TABLE a00c (
+  a0d VARCHAR NULL,
+  a0e VARCHAR NULL,
+  a0f VARCHAR NULL,
+  a0g VARCHAR NULL,
+  a0h VARCHAR NULL,
+  a0i VARCHAR NULL,
+  a0j VARCHAR NULL,
+  a0k VARCHAR NULL,
+  a0l VARCHAR NULL,
+  a0m VARCHAR NULL,
+  a0n VARCHAR NULL,
+  a0o VARCHAR NULL,
+  a0p VARCHAR NULL,
+  a0q VARCHAR NULL,
+  a0r VARCHAR NULL,
+  a0s VARCHAR NULL,
+  a0t VARCHAR NULL,
+  a0u VARCHAR NULL,
+  a0v VARCHAR NULL,
+  a0w VARCHAR NULL,
+  a0x VARCHAR NULL,
+  a0y VARCHAR NULL,
+  a0z VARCHAR NULL,
+  a1a VARCHAR NULL
+) ENGINE=FUSE;
+
+query T
+explain  SELECT /*+ SET_VAR(enforce_shuffle_join=1) SET_VAR(disable_join_reorder=1) */ t1.a0f, t2.cjny FROM (SELECT a0f, min(to_yyyymm(a0t)) AS cjny FROM a00c WHERE a0w = '汇缴' GROUP BY a0f) AS t2 RIGHT OUTER JOIN (SELECT a0f FROM a00c QUALIFY row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) = 1) AS t1 ON t1.a0f = t2.a0f;
+----
+Exchange
+├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
+    ├── join type: RIGHT OUTER
+    ├── build keys: [t1.a0f (#28)]
+    ├── probe keys: [t2.a0f (#2)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters(distributed):
+    │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
+    ├── estimated rows: 0.00
+    ├── Filter(Build)
+    │   ├── output columns: [a00c.a0f (#28)]
+    │   ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50) = 1]
+    │   ├── estimated rows: 0.00
+    │   └── Window
+    │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
+    │       ├── aggregate function: [row_number]
+    │       ├── partition by: [a0f]
+    │       ├── order by: [a0t]
+    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │       └── WindowPartition
+    │           ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │           ├── hash keys: [a0f]
+    │           ├── top: 1
+    │           ├── estimated rows: 0.00
+    │           └── Exchange
+    │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │               ├── exchange type: Hash(a00c.a0f (#28))
+    │               └── TableScan
+    │                   ├── table: default.default.a00c
+    │                   ├── output columns: [a0f (#28), a0t (#42)]
+    │                   ├── read rows: 0
+    │                   ├── read size: 0
+    │                   ├── partitions total: 0
+    │                   ├── partitions scanned: 0
+    │                   ├── push downs: [filters: [], limit: NONE]
+    │                   └── estimated rows: 0.00
+    └── Exchange(Probe)
+        ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+        ├── exchange type: Hash(t2.a0f (#2))
+        └── AggregateFinal
+            ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+            ├── group by: [a0f]
+            ├── aggregate functions: [min(min_arg_0)]
+            ├── estimated rows: 0.00
+            └── Exchange
+                ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+                ├── exchange type: Hash(0)
+                └── AggregatePartial
+                    ├── group by: [a0f]
+                    ├── aggregate functions: [min(min_arg_0)]
+                    ├── estimated rows: 0.00
+                    └── EvalScalar
+                        ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
+                        ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]
+                        ├── estimated rows: 0.00
+                        └── Filter
+                            ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
+                            ├── filters: [is_true(a00c.a0w (#19) = '汇缴')]
+                            ├── estimated rows: 0.00
+                            └── TableScan
+                                ├── table: default.default.a00c
+                                ├── output columns: [a0f (#2), a0t (#16), a0w (#19)]
+                                ├── read rows: 0
+                                ├── read size: 0
+                                ├── partitions total: 0
+                                ├── partitions scanned: 0
+                                ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
+                                ├── apply join filters: [#0]
+                                └── estimated rows: 0.00

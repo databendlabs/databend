@@ -22,16 +22,17 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_sql::executor::physical_plans::CommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_query::physical_plans::CommitSink;
+use databend_query::physical_plans::CommitType;
+use databend_query::physical_plans::CompactSource;
+use databend_query::physical_plans::PhysicalPlan;
+use databend_query::physical_plans::PhysicalPlanMeta;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::schedulers::build_query_pipeline_without_render_result_set;
@@ -124,17 +125,18 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(table.as_ref(), Some(snapshot.clone()))?;
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+        let root = PhysicalPlan::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
-            plan_id: u32::MAX,
+            meta: PhysicalPlanMeta::new("CompactSource"),
             table_meta_timestamps,
-        }));
+        });
 
-        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(root),
+        let physical_plan: PhysicalPlan = PhysicalPlan::new(CommitSink {
+            input: root,
             table_info,
+            table_meta_timestamps,
             snapshot: Some(snapshot),
             commit_type: CommitType::Mutation {
                 kind: MutationKind::Compact,
@@ -142,10 +144,9 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             },
             update_stream_meta: vec![],
             deduplicated_label: None,
-            plan_id: u32::MAX,
             recluster_info: None,
-            table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        });
 
         let build_res =
             build_query_pipeline_without_render_result_set(&ctx, &physical_plan).await?;
@@ -231,7 +232,7 @@ async fn test_safety() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            Default::default(),
+            TestFixture::default_table_meta_timestamps(),
         )?;
 
         let limit: usize = rand.gen_range(1..15);
@@ -285,8 +286,8 @@ pub async fn verify_compact_tasks(
                 compact_segment_indices.insert(extra.segment_index);
                 compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                 actual_blocks_number += extra.unchanged_blocks.len();
-                for b in &extra.unchanged_blocks {
-                    actual_block_ids.insert(b.1.location.clone());
+                for (_, b) in &extra.unchanged_blocks {
+                    actual_block_ids.insert(b.0.location.clone());
                 }
             }
             CompactBlockPartInfo::CompactTaskInfo(task) => {

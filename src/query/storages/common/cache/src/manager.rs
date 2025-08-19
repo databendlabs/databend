@@ -42,15 +42,28 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::caches::VectorIndexFileCache;
+use crate::caches::VectorIndexMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
 use crate::CacheAccessor;
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
+use crate::SegmentStatisticsCache;
 use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
+
+// Minimum threshold for table data disk cache size (in bytes).
+// Any configuration value less than this threshold will be ignored,
+// and table data disk cache will not be enabled.
+// This threshold exists to accommodate the current cloud platform logic:
+// When attempting to disable table data cache in compute node configurations, setting the disk
+// cache size to zero prevents the physical volume from being loaded, so this threshold provides
+// a better approach.
+// Eventually, we should refactor the compute node configurations instead, to make those options more sensible.
+const TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD: usize = 1024;
 
 #[derive(Default)]
 struct CacheSlot<T> {
@@ -88,12 +101,15 @@ pub enum CacheClearanceLevel {
 pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
+    segment_statistics_cache: CacheSlot<SegmentStatisticsCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
     column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
+    vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
+    vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
@@ -154,6 +170,11 @@ impl CacheManager {
             ) * 5
         };
 
+        info!(
+            "[CacheManager] On-disk cache population queue size: {}",
+            on_disk_cache_queue_size
+        );
+
         // setup table data cache
         let column_data_cache = {
             match config.data_cache_storage {
@@ -208,9 +229,12 @@ impl CacheManager {
                 column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_file_cache: CacheSlot::new(None),
+                vector_index_meta_cache: CacheSlot::new(None),
+                vector_index_file_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
+                segment_statistics_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
@@ -225,6 +249,10 @@ impl CacheManager {
             );
             let table_statistic_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_TABLE_STATISTICS,
+                config.table_meta_statistic_count as usize,
+            );
+            let segment_statistics_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_SEGMENT_STATISTICS,
                 config.table_meta_statistic_count as usize,
             );
             let compact_segment_info_cache = Self::new_bytes_cache_slot(
@@ -287,6 +315,25 @@ impl CacheManager {
                 MEMORY_CACHE_INVERTED_INDEX_FILE,
                 inverted_index_file_size,
             );
+
+            let vector_index_meta_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA,
+                config.vector_index_meta_count as usize,
+            );
+
+            // setup in-memory vector index filter cache
+            let vector_index_file_size = if config.vector_index_filter_memory_ratio != 0 {
+                (*max_server_memory_usage as usize)
+                    * config.vector_index_filter_memory_ratio as usize
+                    / 100
+            } else {
+                config.vector_index_filter_size as usize
+            };
+            let vector_index_file_cache = Self::new_bytes_cache_slot(
+                MEMORY_CACHE_VECTOR_INDEX_FILE,
+                vector_index_file_size,
+            );
+
             let prune_partitions_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PRUNE_PARTITIONS,
                 config.table_prune_partitions_count as usize,
@@ -320,8 +367,11 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
+                vector_index_meta_cache,
+                vector_index_file_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
+                segment_statistics_cache,
                 in_memory_table_data_cache,
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
@@ -400,6 +450,14 @@ impl CacheManager {
             }
             MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA => {
                 let cache = &self.inverted_index_meta_cache;
+                Self::set_items_capacity(cache, new_capacity, name);
+            }
+            MEMORY_CACHE_VECTOR_INDEX_FILE => {
+                let cache = &self.vector_index_file_cache;
+                Self::set_bytes_capacity(cache, new_capacity, name);
+            }
+            MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA => {
+                let cache = &self.vector_index_meta_cache;
                 Self::set_items_capacity(cache, new_capacity, name);
             }
             HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA
@@ -547,6 +605,10 @@ impl CacheManager {
         self.table_statistic_cache.get()
     }
 
+    pub fn get_segment_statistics_cache(&self) -> Option<SegmentStatisticsCache> {
+        self.segment_statistics_cache.get()
+    }
+
     pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
         self.compact_segment_info_cache.get()
     }
@@ -576,6 +638,14 @@ impl CacheManager {
 
     pub fn get_inverted_index_file_cache(&self) -> Option<InvertedIndexFileCache> {
         self.inverted_index_file_cache.get()
+    }
+
+    pub fn get_vector_index_meta_cache(&self) -> Option<VectorIndexMetaCache> {
+        self.vector_index_meta_cache.get()
+    }
+
+    pub fn get_vector_index_file_cache(&self) -> Option<VectorIndexFileCache> {
+        self.vector_index_file_cache.get()
     }
 
     pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
@@ -648,7 +718,10 @@ impl CacheManager {
         sync_data: bool,
         ee_mode: bool,
     ) -> Result<Option<DiskCacheAccessor>> {
-        if disk_cache_bytes_size == 0 || !ee_mode {
+        if disk_cache_bytes_size <= TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD || !ee_mode {
+            info!(
+                "[CacheManager] On-disk cache {cache_name} disabled, size {disk_cache_bytes_size}, threshold {TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD}, ee mode {ee_mode}"
+            );
             Ok(None)
         } else {
             let cache_holder = DiskCacheBuilder::try_build_disk_cache(
@@ -718,6 +791,8 @@ const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
 const MEMORY_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file";
 const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
     "memory_cache_inverted_index_file_meta_data";
+const MEMORY_CACHE_VECTOR_INDEX_FILE: &str = "memory_cache_vector_index_file";
+const MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "memory_cache_vector_index_file_meta_data";
 
 const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_COLUMN_DATA: &str = "cache_column_data";
@@ -729,6 +804,7 @@ const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_inde
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_oriented_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
+const MEMORY_CACHE_SEGMENT_STATISTICS: &str = "memory_cache_segment_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
@@ -967,6 +1043,8 @@ mod tests {
             bloom_filter_index_size: 0,
             inverted_index_size: None,
             ngram_filter_index_size: None,
+            vector_index_location: None,
+            vector_index_size: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
             create_on: None,
@@ -1100,6 +1178,72 @@ mod tests {
                 .unwrap()
                 .items_capacity(),
             20
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_size_threshold() -> Result<()> {
+        use tempfile::TempDir;
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Test parameters
+        let cache_name = "test_threshold_cache".to_string();
+        let population_queue_size = 5;
+        let ee_mode = true; // Always use EE mode for this test
+        let sync_data = false;
+        let key_reload_policy = DiskCacheKeyReloadPolicy::Fuzzy;
+
+        // Case 1: Size below threshold (should disable cache)
+        let below_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD - 1;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            below_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size is below threshold"
+        );
+
+        // Case 2: Size exactly at threshold (should disable cache)
+        let at_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            at_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size equals threshold"
+        );
+
+        // Case 3: Size above threshold (should enable cache)
+        let above_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD + 1024;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            above_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_some(),
+            "Disk cache should be enabled when size is above threshold"
         );
 
         Ok(())

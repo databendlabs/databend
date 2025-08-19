@@ -59,6 +59,7 @@ pub fn add_building_env_vars() {
     add_env_version();
     add_env_license();
     add_license_public_key();
+    add_env_telemetry();
 }
 
 pub fn set_env_config() {
@@ -73,6 +74,7 @@ pub fn set_env_config() {
 }
 
 pub fn add_env_version() {
+    println!("cargo:rerun-if-env-changed=DATABEND_RELEASE_VERSION");
     let version = discover_version().expect(VERSION_ERROR_MESSAGE);
     println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", version);
 }
@@ -90,14 +92,29 @@ fn discover_version() -> Result<String> {
 }
 
 pub fn add_env_license() {
+    println!("cargo:rerun-if-env-changed=DATABEND_ENTERPRISE_LICENSE_EMBEDDED");
     let v = env::var("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").unwrap_or_default();
     println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_EMBEDDED={v}");
 }
 
 pub fn add_license_public_key() {
+    println!("cargo:rerun-if-env-changed=DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY");
     let v = env::var("DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY").unwrap_or_default();
     let v = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, v.as_bytes());
     println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY={v}");
+}
+
+pub fn add_env_telemetry() {
+    println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_ENDPOINT");
+    let endpoint = env::var("DATABEND_TELEMETRY_ENDPOINT")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "https://telemetry.databend.com/v1/report".to_string());
+    println!("cargo:rustc-env=DATABEND_TELEMETRY_ENDPOINT={endpoint}");
+
+    println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_API_KEY");
+    let api_key = env::var("DATABEND_TELEMETRY_API_KEY").unwrap_or_default();
+    println!("cargo:rustc-env=DATABEND_TELEMETRY_API_KEY={api_key}");
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {

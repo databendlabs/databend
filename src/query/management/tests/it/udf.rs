@@ -27,8 +27,9 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
+use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> Result<()> {
@@ -218,6 +219,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "This is a description",
+        None,
     )
 }
 
@@ -231,11 +233,12 @@ fn create_test_udf_script() -> UserDefinedFunction {
         DataType::Number(NumberDataType::Int64),
         "3.12.0",
         "This is a description",
+        None,
     )
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaStore>, UdfMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
     let test_api = Arc::new(test_api);
 
     let mgr = UdfMgr::create(test_api.clone(), &Tenant::new_literal("admin"));

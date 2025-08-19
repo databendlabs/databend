@@ -18,7 +18,6 @@ use std::time::Duration;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,13 +26,13 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_GIT_SHA;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
-use databend_query::local;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
@@ -44,34 +43,21 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
+use databend_query::task::TaskService;
 use databend_query::GlobalServices;
 use log::info;
 
+use super::cmd::Cmd;
+use super::cmd::Commands;
+
 pub struct MainError;
 
-pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
-    let make_error = || "failed to run cmd";
-
-    match &conf.subcommand {
+pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
+    match &cmd.subcommand {
         None => return Ok(false),
         Some(Commands::Ver) => {
             println!("version: {}", *DATABEND_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
-        }
-        Some(Commands::Local {
-            query,
-            output_format,
-            config,
-        }) => {
-            let mut conf = conf.clone();
-            if !config.is_empty() {
-                let c =
-                    databend_common_config::Config::load_with_config_file(config.as_str()).unwrap();
-                conf = c.try_into().unwrap();
-            }
-            local::query_local(conf, query, output_format)
-                .await
-                .with_context(make_error)?
         }
     }
 
@@ -102,7 +88,7 @@ pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), Main
         .with_context(make_error);
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf, ee_mode)
+    GlobalServices::init(conf, &BUILD_INFO, ee_mode)
         .await
         .with_context(make_error)
 }
@@ -144,8 +130,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .await
             .with_context(make_error)?;
         info!(
-            "Databend query has been registered:{:?} to metasrv:{:?}.",
-            conf.query.cluster_id, conf.meta.endpoints
+            "Databend query has been registered:{:?}/{:?} to metasrv:{:?}.",
+            conf.query.warehouse_id, conf.query.cluster_id, conf.meta.endpoints
         );
     }
 
@@ -227,11 +213,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Metric API service.
     {
-        set_system_version(
-            "query",
-            DATABEND_GIT_SEMVER.unwrap_or("unknown"),
-            DATABEND_GIT_SHA.as_str(),
-        );
+        set_system_version("query", DATABEND_GIT_SEMVER, DATABEND_GIT_SHA.as_str());
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv
@@ -260,7 +242,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             "{}:{}",
             conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
         );
-        let mut srv = FlightSQLServer::create(conf.clone()).with_context(make_error)?;
+        let mut srv =
+            FlightSQLServer::create(conf.clone(), &BUILD_INFO).with_context(make_error)?;
         let listening = srv
             .start(address.parse().with_context(make_error)?)
             .await
@@ -291,9 +274,19 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.log.structlog.on {
         println!("    structlog: {}", conf.log.structlog);
     }
-    if conf.log.history.on && !conf.log.history.log_only {
-        GlobalHistoryLog::instance().initialized();
+    if conf.log.history.on {
+        if let Err(e) = GlobalHistoryLog::instance()
+            .initialized(conf.log.history.log_only)
+            .await
+        {
+            if e.code() == ErrorCode::INVALID_CONFIG {
+                Err(e).with_context(make_error)?;
+            }
+        }
         println!("    system history tables: {}", conf.log.history);
+    }
+    if conf.task.on {
+        TaskService::instance().initialized();
     }
 
     println!();
@@ -380,29 +373,24 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         "    connect via: mysql -u${{USER}} -p${{PASSWORD}} -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
-    println!("Clickhouse(http)");
-    println!(
-        "    listened at {}:{}",
-        conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
-    );
-    println!(
-        "    usage: {}",
-        HttpHandlerKind::Clickhouse.usage(
-            format!(
-                "{}:{}",
-                conf.query.clickhouse_http_handler_host, conf.query.clickhouse_http_handler_port
-            )
-            .parse()
-            .with_context(make_error)?
-        )
-    );
-    println!("Databend HTTP");
+    println!("Databend");
     println!(
         "    listened at {}:{}",
         conf.query.http_handler_host, conf.query.http_handler_port
     );
+
     println!(
-        "    usage: {}",
+        "    usage with args: bendsql -u ${{USER}} -p ${{PASSWORD}} -h {} -P {}",
+        conf.query.http_handler_host, conf.query.http_handler_port
+    );
+
+    println!(
+        "    usage with dsn: bendsql --dsn \"databend://${{USER}}:${{PASSWORD}}@{}:{}?sslmode=disable\"",
+        conf.query.http_handler_host, conf.query.http_handler_port
+    );
+
+    println!(
+        "    http: {}",
         HttpHandlerKind::Query.usage(
             format!(
                 "{}:{}",
@@ -412,6 +400,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .with_context(make_error)?
         )
     );
+
     for (idx, (k, v)) in env::vars()
         .filter(|(k, _)| k.starts_with("_DATABEND"))
         .enumerate()

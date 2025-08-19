@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub const HEADER_SESSION: &str = "X-DATABEND-SESSION";
+pub const HEADER_SESSION_ID: &str = "X-DATABEND-SESSION-ID";
 pub const HEADER_TENANT: &str = "X-DATABEND-TENANT";
 pub const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 pub const HEADER_USER: &str = "X-DATABEND-USER";
+pub const HEADER_SQL: &str = "X-DATABEND-SQL";
 
 pub const HEADER_FUNCTION: &str = "X-DATABEND-FUNCTION";
 pub const HEADER_FUNCTION_HANDLER: &str = "X-DATABEND-FUNCTION-HANDLER";
@@ -30,3 +33,5 @@ pub const HEADER_WAREHOUSE: &str = "X-DATABEND-WAREHOUSE";
 
 pub const HEADER_SIGNATURE: &str = "X-DATABEND-SIGNATURE";
 pub const HEADER_AUTH_METHOD: &str = "X-DATABEND-AUTH-METHOD";
+pub const HEADER_CLIENT_CAPABILITIES: &str = "X-DATABEND-CLIENT-CAPS";
+pub const HEADER_QUERY_CONTEXT: &str = "X-DATABEND-QUERY-CONTEXT";

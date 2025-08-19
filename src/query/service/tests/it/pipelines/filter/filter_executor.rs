@@ -73,8 +73,8 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
             let columns_1 = block_1.columns();
             let columns_2 = block_2.columns();
             for idx in 0..columns_1.len() {
-                assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-                assert_eq!(columns_1[idx].value, columns_2[idx].value);
+                assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+                assert_eq!(columns_1[idx].value(), columns_2[idx].value());
             }
         }
     }

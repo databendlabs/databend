@@ -2,7 +2,6 @@
 
 A distributed cache implementation based on meta-service, providing reliable resource management and data synchronization across distributed systems.
 
-
 ## Features
 
 - **Automatic Synchronization**: Background watcher task keeps local cache in sync with meta-service
@@ -10,7 +9,11 @@ A distributed cache implementation based on meta-service, providing reliable res
 - **Event-based Updates**: Real-time updates through meta-service watch API
 - **Safe Reconnection**: Automatic recovery from connection failures with state consistency
 
+
 ## Key Components
+
+See https://github.com/databendlabs/sub-cache/ for details about Usage, Internal types and Concurrency Control.
+
 
 ### Cache Structure
 
@@ -22,17 +25,9 @@ A distributed cache implementation based on meta-service, providing reliable res
 
 - `<prefix>`: User-defined string to identify a cache instance
 
-### Main Types
-
-- `Cache`: The main entry point for cache operations
-  - Provides safe access to cached data
-- `CacheData`: Internal data structure holding the cached values
-- `EventWatcher`: Background task that watches for changes in meta-service
-  - Handles synchronization with meta-service
-
 ## Usage
 
-```rust
+```rust,ignore
 let client = MetaGrpcClient::try_create(/*..*/);
 let cache = Cache::new(
         client,
@@ -53,32 +48,14 @@ let value = cache.try_get("key").await?;
 let entries = cache.try_list_dir("prefix").await?;
 ```
 
-## Concurrency Control
-
-The cache employs a two-level concurrency control mechanism:
-
-1. **Internal Lock (Mutex)**: Protects concurrent access between user operations and the background cache updater. This lock is held briefly during each operation.
-
-2. **External Lock (Method Design)**: Public methods require `&mut self` even for read-only operations. This prevents concurrent access to the cache instance from multiple call sites. External synchronization should be implemented by the caller if needed.
-
-This design intentionally separates concerns:
-- The internal lock handles short-term, fine-grained synchronization with the updater
-- The external lock requirement (`&mut self`) enables longer-duration access patterns without blocking the background updater unnecessarily
-
-Note that despite requiring `&mut self`, all operations are logically read-only with respect to the cache's public API.
-
 ## Initialization Process
 
-When a `Cache` is created, it goes through the following steps:
+1. Creates instance with prefix and context
+2. Spawns background watcher task; Establishes watch stream to meta-service
+3. Fetches initial data; Waits for full initialization
+4. Maintains continuous sync
 
-1. Creates a new instance with specified prefix and context
-2. Spawns a background task to watch for key-value changes
-3. Establishes a watch stream to meta-service
-4. Fetches and processes initial data
-5. Waits for the cache to be fully initialized before returning
-6. Maintains continuous synchronization
-
-The initialization is complete only when the cache has received a full copy of the data from meta-service, ensuring users see a consistent view of the data.
+Initialization completes when cache receives full data copy from meta-service, ensuring consistent view.
 
 ## Error Handling
 

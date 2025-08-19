@@ -40,6 +40,8 @@ pub enum CompressAlgorithm {
     ///
     /// Similar to [`CompressAlgorithm::Deflate`] and [`CompressAlgorithm::Gzip`]
     Zlib,
+    /// [Zip](https://pkware.cachefly.net/webdocs/APPNOTE/APPNOTE-6.3.10.TXT) compress format.
+    Zip,
     /// [Zstd](https://github.com/facebook/zstd) compression algorithm
     Zstd,
 }
@@ -56,6 +58,7 @@ impl CompressAlgorithm {
             CompressAlgorithm::Xz => "xz",
             CompressAlgorithm::Zlib => "zl",
             CompressAlgorithm::Zstd => "zstd",
+            CompressAlgorithm::Zip => "zip",
         }
     }
 
@@ -72,6 +75,7 @@ impl CompressAlgorithm {
             "xz" => Some(CompressAlgorithm::Xz),
             "zl" => Some(CompressAlgorithm::Zlib),
             "zstd" | "zst" => Some(CompressAlgorithm::Zstd),
+            "zip" => Some(CompressAlgorithm::Zip),
             _ => None,
         }
     }

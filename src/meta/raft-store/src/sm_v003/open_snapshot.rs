@@ -14,14 +14,14 @@
 
 use openraft::SnapshotId;
 
-use crate::config::RaftConfig;
-
 /// A trait for opening a snapshot.
 pub trait OpenSnapshot {
+    /// Open a snapshot at `<storage_path>/<rel_path>`
     fn open_snapshot(
-        path: impl ToString,
+        storage_path: impl ToString,
+        rel_path: impl ToString,
         snapshot_id: SnapshotId,
-        raft_config: &RaftConfig,
+        config: rotbl::v001::Config,
     ) -> Result<Self, std::io::Error>
     where
         Self: Sized;

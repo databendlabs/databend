@@ -28,9 +28,9 @@ use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::decimal::DecimalSize;
-use crate::types::decimal::MAX_DECIMAL128_PRECISION;
-use crate::types::decimal::MAX_DECIMAL256_PRECISION;
+use crate::types::i256;
 use crate::types::DataType;
+use crate::types::Decimal;
 use crate::types::Number;
 use crate::visit_expr;
 use crate::AutoCastRules;
@@ -213,6 +213,40 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
     }
 }
 
+pub fn check_string<Index: ColumnIndex>(
+    span: Span,
+    func_ctx: &FunctionContext,
+    expr: &Expr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<String> {
+    let origin_ty = expr.data_type();
+    let (expr, _) = if origin_ty != &DataType::String {
+        ConstantFolder::fold(
+            &Expr::Cast(Cast {
+                span,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type: DataType::String,
+            }),
+            func_ctx,
+            fn_registry,
+        )
+    } else {
+        ConstantFolder::fold(expr, func_ctx, fn_registry)
+    };
+
+    match expr {
+        Expr::Constant(Constant {
+            scalar: Scalar::String(string),
+            ..
+        }) => Ok(string.clone()),
+        _ => Err(
+            ErrorCode::from_string_no_backtrace("expected string literal".to_string())
+                .set_span(span),
+        ),
+    }
+}
+
 pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,
@@ -282,7 +316,7 @@ pub fn check_function<Index: ColumnIndex>(
 
     // Do not check grouping
     if name == "grouping" {
-        debug_assert!(candidates.len() == 1);
+        debug_assert!(!candidates.is_empty());
         let (id, function) = candidates.into_iter().next().unwrap();
         let return_type = function.signature.return_type.clone();
         return Ok(Expr::FunctionCall(FunctionCall {
@@ -604,7 +638,14 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         {
             true
         }
-
+        (DataType::Array(fields_src_ty), DataType::Vector(_))
+            if matches!(
+                fields_src_ty.remove_nullable(),
+                DataType::Number(_) | DataType::Decimal(_)
+            ) =>
+        {
+            true
+        }
         (DataType::Nullable(box inner_src_ty), DataType::Nullable(box inner_dest_ty))
         | (DataType::Nullable(box inner_src_ty), inner_dest_ty)
         | (inner_src_ty, DataType::Nullable(box inner_dest_ty))
@@ -661,7 +702,7 @@ pub fn can_auto_cast_to(
         (DataType::Decimal(x), DataType::Decimal(y)) => {
             x.scale() <= y.scale()
                 && (x.leading_digits() <= y.leading_digits()
-                    || y.precision() == MAX_DECIMAL256_PRECISION)
+                    || y.precision() == i256::MAX_PRECISION)
         }
         (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
             let properties = n.get_decimal_properties().unwrap();
@@ -718,7 +759,7 @@ pub fn common_super_type(
             if num_ty.is_float() {
                 Some(DataType::Number(num_ty))
             } else {
-                let precision = MAX_DECIMAL128_PRECISION;
+                let precision = i128::MAX_PRECISION;
                 let scale = 5;
                 Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
             }
@@ -728,13 +769,12 @@ pub fn common_super_type(
         (DataType::Decimal(a), DataType::Decimal(b)) => {
             let scale = a.scale().max(b.scale());
             let precision = scale + a.leading_digits().max(b.leading_digits());
-            let precision = if a.precision() <= MAX_DECIMAL128_PRECISION
-                && b.precision() <= MAX_DECIMAL128_PRECISION
-            {
-                precision.min(MAX_DECIMAL128_PRECISION)
-            } else {
-                precision.min(MAX_DECIMAL256_PRECISION)
-            };
+            let precision =
+                if a.precision() <= i128::MAX_PRECISION && b.precision() <= i128::MAX_PRECISION {
+                    precision.min(i128::MAX_PRECISION)
+                } else {
+                    precision.min(i256::MAX_PRECISION)
+                };
 
             Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
         }
@@ -748,7 +788,7 @@ pub fn common_super_type(
             let precision = a.leading_digits().max(b.leading_digits()) + scale;
 
             Some(DataType::Decimal(
-                DecimalSize::new(precision.min(MAX_DECIMAL256_PRECISION), scale).ok()?,
+                DecimalSize::new(precision.min(i256::MAX_PRECISION), scale).ok()?,
             ))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))

@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use databend_common_ast::ast::OnErrorMode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_storage::FileParseError;
+use databend_common_storage::FileParseErrorAtLine;
 use databend_common_storage::FileStatus;
 
 pub struct ErrorHandler {
@@ -29,11 +29,10 @@ pub struct ErrorHandler {
 impl ErrorHandler {
     pub fn on_error(
         &self,
-        e: FileParseError,
+        e: FileParseErrorAtLine,
         columns: Option<(&mut [ColumnBuilder], usize)>,
         file_status: &mut FileStatus,
         file_path: &str,
-        line: usize,
     ) -> Result<()> {
         if let Some((columns, num_rows)) = columns {
             columns.iter_mut().for_each(|c| {
@@ -48,19 +47,20 @@ impl ErrorHandler {
 
         match &self.on_error_mode {
             OnErrorMode::Continue => {
-                file_status.add_error(e, line);
+                let line = e.line;
+                file_status.add_error(e.error, line);
                 Ok(())
             }
             OnErrorMode::AbortNum(abort_num) => {
                 if *abort_num <= 1
                     || self.on_error_count.fetch_add(1, Ordering::Relaxed) >= *abort_num - 1
                 {
-                    Err(e.to_error_code(&self.on_error_mode, file_path, line))
+                    Err(e.to_error_code(&self.on_error_mode, file_path))
                 } else {
                     Ok(())
                 }
             }
-            _ => Err(e.to_error_code(&self.on_error_mode, file_path, line)),
+            _ => Err(e.to_error_code(&self.on_error_mode, file_path)),
         }
     }
 }

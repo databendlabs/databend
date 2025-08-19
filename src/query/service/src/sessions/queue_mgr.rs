@@ -30,6 +30,7 @@ use std::time::SystemTime;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
@@ -54,6 +55,7 @@ use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
+use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -82,6 +84,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn enter_wait_pending(&self) {}
 
     fn exit_wait_pending(&self, _wait_time: Duration) {}
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify>;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -102,7 +106,10 @@ pub struct QueueManager<Data: QueueData> {
 impl<Data: QueueData> QueueManager<Data> {
     pub async fn init(permits: usize, conf: &InnerConfig) -> Result<()> {
         let metastore = {
-            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let provider = Arc::new(MetaStoreProvider::new(
+                conf.meta
+                    .to_meta_grpc_client_conf(&databend_common_version::BUILD_INFO),
+            ));
 
             provider.create_meta_store().await.map_err(|e| {
                 ErrorCode::MetaServiceError(format!(
@@ -174,56 +181,73 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
-        if data.need_acquire_to_queue() {
-            info!(
-                "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
-                self.length()
-            );
+        let abort_notify = data.get_abort_notify();
 
-            let start_time = SystemTime::now();
-            let instant = Instant::now();
-            let mut timeout = data.timeout();
-            let mut guards = vec![];
+        let watch_abort_notify = Box::pin(async move { abort_notify.notified().await });
 
-            let data = Arc::new(data);
-            if let Some(workload_group) = ThreadTracker::workload_group() {
-                if let Some(QuotaValue::Number(permits)) =
-                    workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
-                {
-                    let mut workload_group_timeout = timeout;
+        let acquire = Box::pin(self.acquire_inner(data));
+        match futures::future::select(acquire, watch_abort_notify).await {
+            Either::Left((left, _)) => left,
+            Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
+                "[QUERY-QUEUE] recv query abort notify.",
+            )),
+        }
+    }
 
-                    if let Some(QuotaValue::Duration(queue_timeout)) = workload_group
-                        .meta
-                        .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
-                    {
-                        workload_group_timeout =
-                            std::cmp::min(queue_timeout, workload_group_timeout);
-                    }
-
-                    let workload_queue_guard = self
-                        .acquire_workload_queue(
-                            data.clone(),
-                            workload_group.queue_key.clone(),
-                            permits as u64,
-                            workload_group_timeout,
-                        )
-                        .await?;
-
-                    info!("[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}", instant.elapsed());
-                    timeout -= instant.elapsed();
-                    guards.push(workload_queue_guard);
-                }
-            }
-
-            guards.push(self.acquire_warehouse_queue(data, timeout).await?);
-
-            inc_session_running_acquired_queries();
-            record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
-
-            return Ok(AcquireQueueGuard::create(guards));
+    async fn acquire_inner(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
+        if !data.need_acquire_to_queue() {
+            info!("[QUERY-QUEUE] Non-heavy queries skip the query queue and execute directly.");
+            return Ok(AcquireQueueGuard::create(vec![]));
         }
 
-        Ok(AcquireQueueGuard::create(vec![]))
+        info!(
+            "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
+            self.length()
+        );
+
+        let start_time = SystemTime::now();
+        let instant = Instant::now();
+        let mut timeout = data.timeout();
+        let mut guards = vec![];
+
+        let data = Arc::new(data);
+        if let Some(workload_group) = ThreadTracker::workload_group() {
+            if let Some(QuotaValue::Number(permits)) =
+                workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
+            {
+                let mut workload_group_timeout = timeout;
+
+                if let Some(QuotaValue::Duration(queue_timeout)) = workload_group
+                    .meta
+                    .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
+                {
+                    workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
+                }
+
+                let workload_queue_guard = self
+                    .acquire_workload_queue(
+                        data.clone(),
+                        workload_group.queue_key.clone(),
+                        permits as u64,
+                        workload_group_timeout,
+                    )
+                    .await?;
+
+                info!(
+                    "[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}",
+                    instant.elapsed()
+                );
+                timeout -= instant.elapsed();
+                guards.push(workload_queue_guard);
+            }
+        }
+
+        guards.push(self.acquire_warehouse_queue(data, timeout).await?);
+
+        inc_session_running_acquired_queries();
+        record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
+
+        Ok(AcquireQueueGuard::create(guards))
     }
 
     async fn acquire_workload_queue(
@@ -487,6 +511,7 @@ pub struct QueryEntry {
     pub timeout: Duration,
     pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
+    pub abort_watch_notify: Arc<WatchNotify>,
 }
 
 impl QueryEntry {
@@ -508,6 +533,7 @@ impl QueryEntry {
                 timeout => Duration::from_secs(timeout),
             },
             lock_ttl: Duration::from_secs(settings.get_statement_queue_ttl_in_seconds()?),
+            abort_watch_notify: ctx.get_abort_notify(),
         })
     }
 
@@ -579,6 +605,9 @@ impl QueryEntry {
             | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
             | Plan::TruncateTable(_) => {
+                return true;
+            }
+            Plan::CreateTable(v) if v.as_select.is_some() => {
                 return true;
             }
             Plan::DropTable(v) if v.all => {
@@ -661,6 +690,10 @@ impl QueueData for QueryEntry {
             .as_str(),
         );
         self.ctx.set_query_queued_duration(wait_time)
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.abort_watch_notify.clone()
     }
 }
 

@@ -38,18 +38,15 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
@@ -61,6 +58,10 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::DistributedInsertSelect;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -237,6 +238,7 @@ impl ModifyTableColumnInterpreter {
                         }
                     }
                 }
+
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
@@ -454,6 +456,49 @@ impl ModifyTableColumnInterpreter {
         .await
     }
 
+    // Set column comment.
+    async fn do_set_comment(
+        &self,
+        table: Arc<dyn Table>,
+        field_and_comments: &[(TableField, String)],
+    ) -> Result<PipelineBuildResult> {
+        let schema = table.schema().as_ref().clone();
+        let table_info = table.get_table_info();
+
+        let catalog_name = table_info.catalog();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+
+        let mut table_info = table.get_table_info().clone();
+        table_info.meta.fill_field_comments();
+        let mut modify_comment = false;
+        for (field, comment) in field_and_comments {
+            if let Some((i, _)) = schema.column_with_name(&field.name) {
+                if table_info.meta.field_comments[i] != *comment {
+                    table_info.meta.field_comments[i] = comment.to_string();
+                    modify_comment = true;
+                }
+            } else {
+                return Err(ErrorCode::UnknownColumn(format!(
+                    "Cannot find column {}",
+                    field.name
+                )));
+            }
+        }
+
+        if modify_comment {
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                &table_info,
+                table_info.meta.clone(),
+                catalog,
+            )
+            .await?;
+        }
+
+        Ok(PipelineBuildResult::create())
+    }
+
     // unset data mask policy to a column is a ee feature.
     async fn do_unset_data_mask_policy(
         &self,
@@ -596,6 +641,9 @@ impl Interpreter for ModifyTableColumnInterpreter {
             ModifyColumnAction::SetDataType(field_and_comment) => {
                 self.do_set_data_type(table, field_and_comment).await?
             }
+            ModifyColumnAction::Comment(field_and_comment) => {
+                self.do_set_comment(table, field_and_comment).await?
+            }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 self.do_convert_stored_computed_column(
                     catalog,
@@ -680,16 +728,19 @@ pub(crate) async fn build_select_insert_plan(
     let new_table = FuseTable::try_create(table_info)?;
 
     // 4. build DistributedInsertSelect plan
-    let insert_plan = PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-        plan_id: select_plan.get_id(),
-        input: Box::new(select_plan),
+    let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
+        input: select_plan,
         table_info: new_table.get_table_info().clone(),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
         table_meta_timestamps,
-    }));
+        meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
+    });
+
+    let mut index = 0;
+    insert_plan.adjust_plan_id(&mut index);
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
     // 5. commit new meta schema and snapshots

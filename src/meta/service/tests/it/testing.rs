@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::Once;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_tracing::closure_name;
@@ -66,4 +68,18 @@ fn setup_test() {
 
 fn shutdown_test() {
     fastrace::flush();
+}
+
+pub fn since_epoch_sec() -> u64 {
+    since_epoch().as_secs()
+}
+
+pub fn since_epoch_millis() -> u64 {
+    since_epoch().as_millis() as u64
+}
+
+pub fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
 }

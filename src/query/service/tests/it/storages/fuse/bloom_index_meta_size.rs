@@ -141,7 +141,8 @@ async fn test_random_location_memory_size() -> databend_common_exception::Result
 
     let mut locations: HashSet<Location, _> = HashSet::new();
     for _ in 0..num_segments {
-        let segment_path = location_gen.gen_segment_info_location(Default::default(), false);
+        let segment_path = location_gen
+            .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
         let segment_location = (segment_path, SegmentInfo::VERSION);
         locations.insert(segment_location);
     }
@@ -322,7 +323,8 @@ fn build_test_segment_info(
 
     let location_gen = TableMetaLocationGenerator::new("/root/12345/67890".to_owned());
 
-    let (block_location, block_uuid) = location_gen.gen_block_location(Default::default());
+    let (block_location, block_uuid) =
+        location_gen.gen_block_location(TestFixture::default_table_meta_timestamps());
     let block_meta = BlockMeta {
         row_count: 0,
         block_size: 0,
@@ -335,6 +337,8 @@ fn build_test_segment_info(
         bloom_filter_index_size: 0,
         inverted_index_size: None,
         ngram_filter_index_size: None,
+        vector_index_size: None,
+        vector_index_location: None,
         virtual_block_meta: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
@@ -351,9 +355,15 @@ fn build_test_segment_info(
         uncompressed_byte_size: 0,
         compressed_byte_size: 0,
         index_size: 0,
+        bloom_index_size: None,
+        ngram_index_size: None,
+        inverted_index_size: None,
+        vector_index_size: None,
+        virtual_column_size: None,
         col_stats: col_stats.clone(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     Ok(SegmentInfo::new(block_metas, statistics))
@@ -387,8 +397,13 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
-    let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
-    let (_block_meta, thrift_file_meta) = block_writer
+    let block_writer = BlockWriter::new(
+        &operator,
+        &loc_generator,
+        TestFixture::default_table_meta_timestamps(),
+        true,
+    );
+    let (_block_meta, thrift_file_meta, _) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;
 

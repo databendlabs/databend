@@ -37,8 +37,8 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_settings::Settings;
 use databend_common_sql::Planner;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use futures_util::StreamExt;
@@ -119,7 +119,7 @@ impl ReportIssueInterpreter {
             ));
         };
 
-        let Ok(plan) = planner.plan_stmt(&extras.statement).await else {
+        let Ok(plan) = planner.plan_stmt(&extras.statement, false).await else {
             // TODO: Generate a bug report for the planner stage.
             return Err(ErrorCode::Unimplemented(
                 "Bug Report: Plan statement Export Not Supported",

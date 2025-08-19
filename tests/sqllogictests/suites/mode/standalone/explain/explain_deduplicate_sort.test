@@ -1,0 +1,24 @@
+statement ok
+CREATE TABLE emp (deptno INT, job STRING, sal INT);
+
+query T
+EXPLAIN SELECT deptno AS d, job, sal 
+FROM emp 
+ORDER BY deptno, d, job ASC, job DESC, sal NULLS FIRST, sal NULLS LAST, deptno;
+----
+Sort(Single)
+├── output columns: [emp.deptno (#0), emp.job (#1), emp.sal (#2)]
+├── sort keys: [deptno ASC NULLS LAST, job ASC NULLS LAST, job DESC NULLS LAST, sal ASC NULLS FIRST, sal ASC NULLS LAST]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.emp
+    ├── output columns: [deptno (#0), job (#1), sal (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 0.00
+
+statement ok
+DROP TABLE emp;

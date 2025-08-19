@@ -24,6 +24,7 @@ use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnSta
 /// A column statistics provider for fuse table.
 #[derive(Default)]
 pub struct FuseTableColumnStatisticsProvider {
+    row_count: u64,
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     histograms: HashMap<ColumnId, Histogram>,
 }
@@ -35,12 +36,14 @@ impl FuseTableColumnStatisticsProvider {
         column_distinct_values: Option<HashMap<ColumnId, u64>>,
         row_count: u64,
     ) -> Self {
+        let distinct_map = column_distinct_values.as_ref();
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = column_distinct_values.as_ref().map_or(row_count, |map| {
-                    map.get(&column_id).map_or(row_count, |v| *v)
-                });
+                let ndv = distinct_map
+                    .and_then(|map| map.get(&column_id).cloned())
+                    .or(stat.distinct_of_values)
+                    .unwrap_or(row_count);
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
                     max: Datum::from_scalar(stat.max),
@@ -53,6 +56,7 @@ impl FuseTableColumnStatisticsProvider {
         Self {
             column_stats,
             histograms,
+            row_count,
         }
     }
 }
@@ -63,7 +67,7 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     }
 
     fn num_rows(&self) -> Option<u64> {
-        None
+        Some(self.row_count)
     }
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -32,6 +33,8 @@ use log::error;
 use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
+use crate::interpreters::util::check_system_history;
+use crate::interpreters::util::check_system_history_stage;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -58,6 +61,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Database(_, db_name) => {
                 let catalog_name = catalog_name.unwrap();
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, db_name)?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -72,6 +76,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Table(_, db_name, table_name) => {
                 let catalog_name = catalog_name.unwrap();
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, db_name)?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -88,23 +93,44 @@ impl GrantPrivilegeInterpreter {
                     table_id,
                 })
             }
-            GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-                table_id: *table_id,
-            }),
-            GrantObject::DatabaseById(_, db_id) => Ok(OwnershipObject::Database {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-            }),
-            GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
-                name: name.to_string(),
-            }),
+            GrantObject::TableById(_, db_id, table_id) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, &catalog.get_db_name_by_id(*db_id).await?)?;
+                Ok(OwnershipObject::Table {
+                    catalog_name,
+                    db_id: *db_id,
+                    table_id: *table_id,
+                })
+            },
+            GrantObject::DatabaseById(_, db_id) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, &catalog.get_db_name_by_id(*db_id).await?)?;
+                Ok(OwnershipObject::Database {
+                    catalog_name,
+                    db_id: *db_id,
+                })
+            },
+            GrantObject::Stage(name) => {
+                let config = GlobalConfig::instance();
+                let sensitive_system_stage = config.log.history.stage_name.clone();
+                check_system_history_stage(name, &sensitive_system_stage)?;
+                Ok(OwnershipObject::Stage {
+                    name: name.to_string(),
+                })
+            },
             GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
                 name: name.to_string(),
             }),
             GrantObject::Warehouse(id) => Ok(OwnershipObject::Warehouse {
                 id: id.to_string(),
+            }),
+            GrantObject::Connection(name) => Ok(OwnershipObject::Connection {
+                name: name.to_string(),
+            }),
+            GrantObject::Sequence(name) => Ok(OwnershipObject::Sequence {
+                name: name.to_string(),
             }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
@@ -247,7 +273,7 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(databend_common_exception::ErrorCode::IllegalGrant(
+        return Err(ErrorCode::IllegalGrant(
             "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
         ));
     }

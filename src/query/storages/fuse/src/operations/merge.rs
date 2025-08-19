@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -28,6 +29,7 @@ use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
 use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
+use crate::io::VectorIndexBuilder;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -92,8 +94,19 @@ impl FuseTable {
         let bloom_columns_map = self
             .bloom_index_cols()
             .bloom_index_fields(new_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(&self.table_info.meta)?;
+        let ndv_columns_map = self
+            .approx_distinct_cols()
+            .distinct_column_fields(new_schema.clone(), RangeIndex::supported_table_type)?;
+        let ngram_args = FuseTable::create_ngram_index_args(
+            &self.table_info.meta,
+            &self.table_info.meta.schema,
+        )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let vector_index_builder = VectorIndexBuilder::try_create(
+            ctx.clone(),
+            &self.table_info.meta.indexes,
+            new_schema.clone(),
+        );
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
@@ -102,8 +115,10 @@ impl FuseTable {
             write_settings: self.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            ndv_columns_map,
             ngram_args,
             inverted_index_builders,
+            vector_index_builder,
             // todo
             virtual_column_builder: None,
             table_meta_timestamps,

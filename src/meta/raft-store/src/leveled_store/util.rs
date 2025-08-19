@@ -51,7 +51,7 @@ pub(crate) fn rotbl_choose_greater(
 }
 
 fn seq_marked_max(a: SeqMarked, b: SeqMarked) -> SeqMarked {
-    if a.seq() > b.seq() {
+    if a.internal_seq() > b.internal_seq() {
         a
     } else {
         b

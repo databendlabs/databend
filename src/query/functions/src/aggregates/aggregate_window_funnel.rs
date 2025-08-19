@@ -25,8 +25,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -34,28 +34,30 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::assert_unary_params;
+use super::assert_variadic_arguments;
+use super::borsh_partial_deserialize;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_params;
-use crate::aggregates::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateWindowFunnelState<T> {
@@ -64,14 +66,7 @@ struct AggregateWindowFunnelState<T> {
 }
 
 impl<T> AggregateWindowFunnelState<T>
-where T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Send
-        + Sync
+where T: Ord + Sub<Output = T> + AsPrimitive<u64> + BorshSerialize + BorshDeserialize + Clone + Send
 {
     pub fn new() -> Self {
         Self {
@@ -157,12 +152,12 @@ pub struct AggregateWindowFunnelFunction<T> {
     _arguments: Vec<DataType>,
     event_size: usize,
     window: u64,
-    t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -193,29 +188,27 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let mut dcolumns = Vec::with_capacity(self.event_size);
+        let mut d_columns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
+            let dcolumn = columns[i + 1].downcast::<BooleanType>().unwrap();
 
-            dcolumns.push(dcolumn);
+            d_columns.push(dcolumn);
         }
 
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let t_view = columns[0].downcast::<T>().unwrap();
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
 
         match validity {
             Some(bitmap) => {
-                for ((row, timestamp), valid) in
-                    T::iter_column(&tcolumn).enumerate().zip(bitmap.iter())
-                {
+                for ((row, timestamp), valid) in t_view.iter().enumerate().zip(bitmap.iter()) {
                     if valid {
                         let timestamp = T::to_owned_scalar(timestamp);
-                        for (i, filter) in dcolumns.iter().enumerate() {
-                            if filter.get_bit(row) {
+                        for (i, filter) in d_columns.iter().enumerate() {
+                            if filter.index(row).unwrap() {
                                 state.add(timestamp, (i + 1) as u8);
                             }
                         }
@@ -223,10 +216,10 @@ where
                 }
             }
             None => {
-                for (row, timestamp) in T::iter_column(&tcolumn).enumerate() {
+                for (row, timestamp) in t_view.iter().enumerate() {
                     let timestamp = T::to_owned_scalar(timestamp);
-                    for (i, filter) in dcolumns.iter().enumerate() {
-                        if filter.get_bit(row) {
+                    for (i, filter) in d_columns.iter().enumerate() {
+                        if filter.index(row).unwrap() {
                             state.add(timestamp, (i + 1) as u8);
                         }
                     }
@@ -241,22 +234,22 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let mut dcolumns = Vec::with_capacity(self.event_size);
+        let mut d_columns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
-            dcolumns.push(dcolumn);
+            let dcolumn = columns[i + 1].downcast::<BooleanType>().unwrap();
+            d_columns.push(dcolumn);
         }
 
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let t_column = columns[0].downcast::<T>().unwrap();
 
-        for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
+        for ((row, timestamp), place) in t_column.iter().enumerate().zip(places.iter()) {
             let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
-            for (i, filter) in dcolumns.iter().enumerate() {
-                if filter.get_bit(row) {
+            for (i, filter) in d_columns.iter().enumerate() {
+                if filter.index(row).unwrap() {
                     state.add(timestamp, (i + 1) as u8);
                 }
             }
@@ -264,30 +257,67 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
-        let timestamp = unsafe { T::index_column_unchecked(&tcolumn, row) };
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let t_column = columns[0].downcast::<T>().unwrap();
+        let timestamp = unsafe { t_column.index_unchecked(row) };
         let timestamp = T::to_owned_scalar(timestamp);
 
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
-            if dcolumn.get_bit(row) {
+            let dcolumn = columns[i + 1].downcast::<BooleanType>().unwrap();
+            if dcolumn.index(row).unwrap() {
                 state.add(timestamp, (i + 1) as u8);
             }
         }
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        borsh_serialize_state(writer, state)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let mut rhs: AggregateWindowFunnelState<T::Scalar> = borsh_deserialize_state(reader)?;
-        state.merge(&mut rhs);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        }
         Ok(())
     }
 
@@ -298,7 +328,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let mut builder = UInt8Type::downcast_builder(builder);
         let result = self.get_event_level(place);
         builder.push(result);
@@ -334,7 +369,7 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -356,7 +391,7 @@ where
             _arguments: arguments,
             event_size,
             window,
-            t: PhantomData,
+            _t: PhantomData,
         }))
     }
 

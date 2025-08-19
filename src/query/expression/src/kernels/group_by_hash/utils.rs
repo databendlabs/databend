@@ -24,20 +24,20 @@ use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_vector_number_type;
 use crate::Column;
-use crate::InputColumns;
+use crate::ProjectedBlock;
 
 /// The serialize_size is equal to the number of bytes required by serialization.
 pub fn serialize_group_columns(
-    columns: InputColumns,
+    columns: ProjectedBlock,
     num_rows: usize,
     serialize_size: usize,
 ) -> BinaryColumn {
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
     for i in 0..num_rows {
-        for col in columns.iter() {
+        for entry in columns.iter() {
             unsafe {
-                serialize_column_binary(col, i, &mut builder.data);
+                serialize_column_binary(&entry.to_column(), i, &mut builder.data);
             }
         }
         builder.commit_row();

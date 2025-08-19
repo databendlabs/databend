@@ -20,6 +20,7 @@ use databend_storages_common_table_meta::meta::trim_object_prefix;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
@@ -38,6 +39,8 @@ use crate::index::InvertedIndexFile;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
+use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
+use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -52,6 +55,8 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 
 static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V3(PhantomData);
+static SNAPSHOT_STATISTICS_V4: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V4(PhantomData);
 
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
@@ -63,6 +68,8 @@ pub struct TableMetaLocationGenerator {
     snapshot_location_prefix: String,
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
+    vector_index_location_prefix: String,
+    segment_statistics_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
@@ -75,6 +82,9 @@ impl TableMetaLocationGenerator {
         let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
         let inverted_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
+        let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
+        let segment_statistics_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -83,6 +93,8 @@ impl TableMetaLocationGenerator {
             snapshot_location_prefix,
             agg_index_location_prefix,
             inverted_index_location_prefix,
+            vector_index_location_prefix,
+            segment_statistics_location_prefix,
         }
     }
 
@@ -98,12 +110,20 @@ impl TableMetaLocationGenerator {
         &self.bloom_index_location_prefix
     }
 
+    pub fn block_vector_index_prefix(&self) -> &str {
+        &self.vector_index_location_prefix
+    }
+
     pub fn segment_location_prefix(&self) -> &str {
         &self.segment_info_location_prefix
     }
 
     pub fn snapshot_location_prefix(&self) -> &str {
         &self.snapshot_location_prefix
+    }
+
+    pub fn segment_statistics_location_prefix(&self) -> &str {
+        &self.segment_statistics_location_prefix
     }
 
     pub fn gen_block_location(
@@ -128,6 +148,19 @@ impl TableMetaLocationGenerator {
                 "{}{}_v{}.parquet",
                 self.block_bloom_index_prefix(),
                 block_id.as_simple(),
+                BlockFilter::VERSION,
+            ),
+            BlockFilter::VERSION,
+        )
+    }
+
+    pub fn block_vector_index_location(&self) -> Location {
+        let uuid = Uuid::now_v7();
+        (
+            format!(
+                "{}{}_v{}.parquet",
+                self.block_vector_index_prefix(),
+                uuid.as_simple(),
                 BlockFilter::VERSION,
             ),
             BlockFilter::VERSION,
@@ -194,19 +227,30 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn table_statistics_version(table_statistics_location: impl AsRef<str>) -> u64 {
-        if table_statistics_location
-            .as_ref()
-            .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
-        {
-            SNAPSHOT_STATISTICS_V0.version()
-        } else if table_statistics_location
-            .as_ref()
-            .ends_with(SNAPSHOT_STATISTICS_V2.suffix().as_str())
-        {
-            SNAPSHOT_STATISTICS_V2.version()
-        } else {
-            SNAPSHOT_STATISTICS_V3.version()
-        }
+        let version_map = [
+            (
+                SNAPSHOT_STATISTICS_V0.suffix(),
+                SNAPSHOT_STATISTICS_V0.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V2.suffix(),
+                SNAPSHOT_STATISTICS_V2.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V3.suffix(),
+                SNAPSHOT_STATISTICS_V3.version(),
+            ),
+            (
+                SNAPSHOT_STATISTICS_V4.suffix(),
+                SNAPSHOT_STATISTICS_V4.version(),
+            ),
+        ];
+
+        version_map
+            .iter()
+            .find(|(suffix, _)| table_statistics_location.as_ref().ends_with(suffix))
+            .map(|(_, version)| *version)
+            .unwrap_or(SNAPSHOT_STATISTICS_V4.version())
     }
 
     pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
@@ -275,6 +319,21 @@ impl TableMetaLocationGenerator {
             BlockFilter::VERSION,
         )
     }
+
+    pub fn gen_segment_stats_location_from_segment_location(loc: &str) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let segment_name = trim_object_prefix(splits[len - 1]);
+        let id: String = segment_name.chars().take(32).collect();
+        format!(
+            "{}/{}/{}_v{}.mpk",
+            prefix,
+            FUSE_TBL_SEGMENT_STATISTICS_PREFIX,
+            id,
+            SegmentStatistics::VERSION,
+        )
+    }
 }
 
 trait SnapshotLocationCreator {
@@ -329,6 +388,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
             TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
             TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
+            TableSnapshotStatisticsVersion::V4(_) => "_ts_v4.json".to_string(),
         }
     }
 }

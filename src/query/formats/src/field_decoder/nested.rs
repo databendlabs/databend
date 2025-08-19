@@ -53,7 +53,7 @@ use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::Interval;
-use jsonb::parse_value;
+use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 
 use crate::binary::decode_binary;
@@ -306,9 +306,8 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        match parse_value(&buf) {
-            Ok(value) => {
-                value.write_to_vec(&mut column.data);
+        match parse_owned_jsonb_with_buf(&buf, &mut column.data) {
+            Ok(_) => {
                 column.commit_row();
             }
             Err(e) => {
@@ -449,19 +448,14 @@ impl NestedValues {
         reader.must_ignore_byte(b'[')?;
         let dimension = column.dimension();
         let mut values = Vec::with_capacity(dimension);
-        for _ in 0..dimension {
+        for idx in 0..dimension {
             let _ = reader.ignore_white_spaces_or_comments();
-            reader.must_ignore_byte(b',')?;
-            let _ = reader.ignore_white_spaces_or_comments();
-            let res: Result<f32> = reader.read_float_text();
-            match res {
-                Ok(v) => {
-                    values.push(v.into());
-                }
-                Err(err) => {
-                    return Err(err);
-                }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
             }
+            let _ = reader.ignore_white_spaces_or_comments();
+            let v: f32 = reader.read_float_text()?;
+            values.push(v.into());
         }
         reader.must_ignore_byte(b']')?;
         column.push(&VectorScalarRef::Float32(&values));

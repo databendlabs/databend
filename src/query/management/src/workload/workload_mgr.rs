@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -205,7 +204,7 @@ impl WorkloadApi for WorkloadMgr {
         for _index in 0..5 {
             let workload = self.get_seq_by_name(&name).await?;
             let seq = workload.seq;
-            let mut workload = workload.into_value().unwrap();
+            let mut workload = workload.data;
 
             for (key, value) in &quotas {
                 workload.quotas.insert(key.clone(), value.clone());
@@ -234,7 +233,7 @@ impl WorkloadApi for WorkloadMgr {
         for _index in 0..5 {
             let workload = self.get_seq_by_name(&name).await?;
             let seq = workload.seq;
-            let mut workload = workload.into_value().unwrap();
+            let mut workload = workload.data;
 
             for quota_name in &quotas {
                 if workload.quotas.remove(quota_name).is_none() {
@@ -267,7 +266,7 @@ impl WorkloadApi for WorkloadMgr {
     async fn get_all(&self) -> Result<Vec<WorkloadGroup>> {
         let list_reply = self
             .metastore
-            .prefix_list_kv(&format!("{}/", self.workload_key_prefix))
+            .list_kv_collect(&format!("{}/", self.workload_key_prefix))
             .await?;
 
         let mut workload_groups = Vec::with_capacity(list_reply.len());
@@ -287,11 +286,11 @@ impl WorkloadApi for WorkloadMgr {
             )));
         };
 
-        Ok(seq.into_value().unwrap())
+        Ok(seq.data)
     }
 
     async fn get_by_name(&self, name: &str) -> Result<WorkloadGroup> {
         let seq_value = self.get_seq_by_name(name).await?;
-        Ok(seq_value.into_value().unwrap())
+        Ok(seq_value.data)
     }
 }

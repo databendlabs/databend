@@ -137,7 +137,7 @@ impl StageApi for StageMgr {
             };
 
             // list all stage file keys, and delete them
-            let file_keys = self.kv_api.prefix_list_kv(&file_key_prefix).await?;
+            let file_keys = self.kv_api.list_kv_collect(&file_key_prefix).await?;
             let mut dels: Vec<TxnOp> = file_keys
                 .iter()
                 .map(|(key, _)| TxnOp::delete(key))

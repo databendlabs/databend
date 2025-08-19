@@ -24,6 +24,7 @@ use databend_common_expression::Scalar;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseInfo;
+use databend_common_users::Object;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::Interpreter;
@@ -63,7 +64,10 @@ impl Interpreter for ShowWarehousesInterpreter {
         let mut warehouses_status =
             ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
 
-        let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+        let visibility_checker = self
+            .ctx
+            .get_visibility_checker(false, Object::Warehouse)
+            .await?;
         for warehouse in warehouses {
             match warehouse {
                 WarehouseInfo::SelfManaged(name) => {

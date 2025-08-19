@@ -20,7 +20,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -51,7 +51,7 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
 // Get row hash by HashMethod
 pub fn hash_by_method<T>(
     method: &HashMethodKind,
-    columns: InputColumns,
+    columns: ProjectedBlock,
     num_rows: usize,
     hashes: &mut T,
 ) -> Result<()>

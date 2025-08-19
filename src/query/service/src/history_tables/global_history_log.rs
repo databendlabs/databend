@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -24,24 +25,21 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_client::ClientHandle;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
+use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
+use databend_common_tracing::get_all_history_table_names;
 use databend_common_tracing::init_history_tables;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
@@ -49,39 +47,50 @@ use futures_util::future::join_all;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
+use log::warn;
+use opendal::raw::normalize_root;
+use parking_lot::Mutex;
 use rand::random;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use crate::clusters::ClusterDiscovery;
 use crate::history_tables::alter_table::get_alter_table_sql;
+use crate::history_tables::alter_table::get_log_table;
+use crate::history_tables::alter_table::should_reset;
+use crate::history_tables::external::get_external_storage_connection;
+use crate::history_tables::external::ExternalStorageConnection;
+use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 
 pub struct GlobalHistoryLog {
-    meta_client: Arc<ClientHandle>,
+    meta_handle: HistoryMetaHandle,
     interval: u64,
     tenant_id: String,
-    node_id: String,
-    cluster_id: String,
     stage_name: String,
     initialized: AtomicBool,
     retention_interval: usize,
     tables: Vec<Arc<HistoryTable>>,
+    connection: Option<ExternalStorageConnection>,
+    current_params: Mutex<Option<StorageParams>>,
+    version: BuildInfoRef,
     _runtime: Arc<Runtime>,
 }
 
 impl GlobalHistoryLog {
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        setup_operator().await?;
-        if cfg.log.history.log_only {
-            info!(
-                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
-            );
-            return Ok(());
-        }
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
+    pub async fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        let connection = if let Some(params) = &cfg.log.history.storage_params {
+            let connection = get_external_storage_connection(params);
+            Some(connection)
+        } else {
+            None
+        };
+        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf(version))
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(
             2,
@@ -89,18 +98,25 @@ impl GlobalHistoryLog {
         )?);
 
         let instance = Arc::new(Self {
-            meta_client,
+            meta_handle,
             interval: cfg.log.history.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
-            node_id: cfg.query.node_id.clone(),
-            cluster_id: cfg.query.cluster_id.clone(),
             stage_name,
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
             tables: init_history_tables(&cfg.log.history)?,
+            connection,
+            current_params: Mutex::new(None),
+            version,
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         runtime.spawn(async move {
             if let Err(e) = GlobalHistoryLog::instance().work().await {
                 error!("System history tables exit with {}", e);
@@ -117,8 +133,16 @@ impl GlobalHistoryLog {
     ///
     /// GlobalHistoryLog rely on other services, so we need to wait
     /// for all services to be initialized before starting the work.
-    pub fn initialized(&self) {
+    pub async fn initialized(&self, log_only: bool) -> Result<()> {
+        let _ = should_reset(self.create_context().await?, &self.connection).await?;
         self.initialized.store(true, Ordering::SeqCst);
+        // if log_only is true, this node will not have reset operation,
+        // so we can set up operator here.
+        if log_only {
+            self.update_operator(true).await?;
+            return Ok(());
+        }
+        Ok(())
     }
 
     pub async fn work(&self) -> Result<()> {
@@ -131,6 +155,7 @@ impl GlobalHistoryLog {
             }
         }
         self.prepare().await?;
+        self.update_operator(true).await?;
         info!("[HISTORY-TABLES] System history prepared successfully");
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
@@ -141,36 +166,46 @@ impl GlobalHistoryLog {
             let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
-                let mut consecutive_error = 0;
+                let mut persistent_error_cnt = 0;
+                let mut temp_error_cnt = 0;
                 loop {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
-                                consecutive_error = 0;
-                                let _ = log
-                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                    .await;
+                                persistent_error_cnt = 0;
+                                temp_error_cnt = 0;
                             }
+                            sleep(sleep_time).await;
                         }
                         Err(e) => {
-                            let _ = log
-                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                .await;
-                            error!(
-                                "[HISTORY-TABLES] {} log transform failed due to {}, retry {}",
-                                table_clone.name, e, consecutive_error
-                            );
-                            consecutive_error += 1;
-                            if consecutive_error > 3 {
-                                error!(
-                                    "[HISTORY-TABLES] {} log transform failed too many times, exit",
-                                    table_clone.name
+                            if is_temp_error(&e) {
+                                // If the error is temporary, we will retry with exponential backoff
+                                // The max backoff time is 10 minutes
+                                let backoff_second =
+                                    min(2u64.saturating_pow(temp_error_cnt), 10 * 60);
+                                temp_error_cnt += 1;
+                                warn!(
+                                    "[HISTORY-TABLES] {} log transform failed with temporary error {}, count {}, next retry in {} seconds",
+                                    table_clone.name, e, temp_error_cnt, backoff_second
                                 );
-                                break;
+                                sleep(Duration::from_secs(backoff_second)).await;
+                            } else {
+                                error!(
+                                    "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
+                                    table_clone.name, e, persistent_error_cnt
+                                );
+                                persistent_error_cnt += 1;
+                                if persistent_error_cnt > 3 {
+                                    error!(
+                                        "[HISTORY-TABLES] {} log transform failed too many times, giving up",
+                                        table_clone.name
+                                    );
+                                    return;
+                                }
+                                sleep(sleep_time).await;
                             }
                         }
                     }
-                    sleep(sleep_time).await;
                 }
             });
             handles.push(handle);
@@ -183,23 +218,11 @@ impl GlobalHistoryLog {
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
                 loop {
-                    match log.clean(&table_clone, &meta_key).await {
-                        Ok(acquired_lock) => {
-                            if acquired_lock {
-                                let _ = log
-                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                    .await;
-                            }
-                        }
-                        Err(e) => {
-                            let _ = log
-                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                .await;
-                            error!(
-                                "[HISTORY-TABLES] {} log clean failed {}",
-                                table_clone.name, e
-                            );
-                        }
+                    if let Err(e) = log.clean(&table_clone, &meta_key).await {
+                        error!(
+                            "[HISTORY-TABLES] {} log clean failed {}",
+                            table_clone.name, e
+                        );
                     }
                     sleep(sleep_time).await;
                 }
@@ -208,61 +231,6 @@ impl GlobalHistoryLog {
         }
         join_all(handles).await;
 
-        Ok(())
-    }
-
-    /// Acquires a permit from a distributed semaphore with timestamp-based rate limiting.
-    ///
-    /// This function attempts to acquire a permit from a distributed semaphore identified by `meta_key`.
-    /// It also implements a rate limiting mechanism based on the last execution timestamp.g
-    pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        // prevent log table from logging its own logs
-        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            self.meta_client.clone(),
-            meta_key,
-            1,
-            self.node_id.clone(),
-            Duration::from_secs(3),
-        ))
-        .await
-        .map_err(|_e| "acquire semaphore failed from GlobalHistoryLog")?;
-        if interval == 0 {
-            return Ok(Some(acquired_guard));
-        }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await?
-        {
-            Some(v) => {
-                let last: u64 = serde_json::from_slice(&v.data)?;
-                chrono::Utc::now().timestamp_millis() as u64
-                    - Duration::from_secs(interval).as_millis() as u64
-                    > last
-            }
-            None => true,
-        } {
-            Ok(Some(acquired_guard))
-        } else {
-            drop(acquired_guard);
-            Ok(None)
-        }
-    }
-
-    /// Updating the last execution timestamp in the metadata.
-    pub async fn finish_hook(&self, meta_key: &str) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                format!("{}/last_timestamp", meta_key),
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
-                None,
-            ))
-            .await?;
         Ok(())
     }
 
@@ -291,16 +259,40 @@ impl GlobalHistoryLog {
 
     /// Create the stage, database and table if not exists
     pub async fn prepare(&self) -> Result<()> {
-        let stage_name = self.stage_name.clone();
-        let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
+        let transform_keys = self
+            .tables
+            .iter()
+            .map(|t| format!("{}/history_log_transform/{}/lock", self.tenant_id, t.name))
+            .collect::<Vec<_>>();
+        let prepare_key = format!("{}/history_log_prepare/lock", self.tenant_id);
+        let _guard: Vec<Permit> = self
+            .meta_handle
+            .acquire_all(&prepare_key, &transform_keys)
+            .await?;
+
+        if should_reset(self.create_context().await?, &self.connection).await? {
+            self.reset().await?;
+        }
+
+        let create_stage = if let Some(connection) = &self.connection {
+            connection.to_create_stage_sql(&self.stage_name)
+        } else {
+            format!("CREATE STAGE IF NOT EXISTS {}", &self.stage_name)
+        };
         self.execute_sql(&create_stage).await?;
+
         let create_db = "CREATE DATABASE IF NOT EXISTS system_history";
         self.execute_sql(create_db).await?;
+
         for table in self.tables.iter() {
-            let create_table = &table.create;
-            self.execute_sql(create_table).await?;
+            let mut create_table = table.create.clone();
+            if let Some(connection) = &self.connection {
+                create_table = connection.to_create_table_sql(&create_table, &table.name)
+            };
+            self.execute_sql(&create_table).await?;
+
             let get_alter_sql =
-                get_alter_table_sql(self.create_context().await?, create_table, &table.name)
+                get_alter_table_sql(self.create_context().await?, &create_table, &table.name)
                     .await?;
             for alter_sql in get_alter_sql {
                 info!("[HISTORY-TABLES] executing alter table: {}", alter_sql);
@@ -310,13 +302,38 @@ impl GlobalHistoryLog {
         Ok(())
     }
 
+    pub async fn reset(&self) -> Result<()> {
+        info!("[HISTORY-TABLES] Resetting system history tables");
+        let drop_stage = format!("DROP STAGE IF EXISTS {}", self.stage_name);
+        self.execute_sql(&drop_stage).await?;
+
+        // drop all pre-defined history tables to keep the system_history's tables consistency
+        let drop_tables = get_all_history_table_names()
+            .iter()
+            .map(|name| format!("DROP TABLE IF EXISTS system_history.{}", name))
+            .collect::<Vec<_>>();
+        for sql in drop_tables {
+            self.execute_sql(&sql).await?;
+        }
+        Ok(())
+    }
+
     pub async fn transform(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
         let may_permit = self
-            .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
+            .meta_handle
+            .acquire_with_guard(&format!("{}/{}/lock", meta_key, table.name), self.interval)
             .await?;
+
+        // stage operator need to update when the params changed
+        // this will happen when another node has updated the configuration
+        if table.name == "log_history" {
+            self.update_operator(false).await?;
+        }
+
         if let Some(_guard) = may_permit {
             let mut batch_number_end = 0;
             let batch_number_begin = self
+                .meta_handle
                 .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
                 .await?
                 .unwrap_or(0);
@@ -324,6 +341,7 @@ impl GlobalHistoryLog {
                 table.assemble_log_history_transform(&self.stage_name, batch_number_begin)
             } else {
                 batch_number_end = self
+                    .meta_handle
                     .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, "log_history"))
                     .await?
                     .unwrap_or(0);
@@ -334,17 +352,19 @@ impl GlobalHistoryLog {
             };
             self.execute_sql(&sql).await?;
             if table.name == "log_history" {
-                self.set_u64_to_meta(
-                    &format!("{}/{}/batch_number", meta_key, table.name),
-                    batch_number_begin + 1,
-                )
-                .await?;
+                self.meta_handle
+                    .set_u64_to_meta(
+                        &format!("{}/{}/batch_number", meta_key, table.name),
+                        batch_number_begin + 1,
+                    )
+                    .await?;
             } else {
-                self.set_u64_to_meta(
-                    &format!("{}/{}/batch_number", meta_key, table.name),
-                    batch_number_end,
-                )
-                .await?;
+                self.meta_handle
+                    .set_u64_to_meta(
+                        &format!("{}/{}/batch_number", meta_key, table.name),
+                        batch_number_end,
+                    )
+                    .await?;
             }
             drop(_guard);
             return Ok(true);
@@ -352,9 +372,30 @@ impl GlobalHistoryLog {
         Ok(false)
     }
 
+    pub async fn update_operator(&self, force: bool) -> Result<()> {
+        let log_history_table = get_log_table(self.create_context().await?).await?;
+        if let Some(t) = log_history_table {
+            let params_from_meta = t.get_table_info().meta.storage_params.clone();
+            {
+                let mut params = self.current_params.lock();
+                if params.as_ref() != params_from_meta.as_ref() || force {
+                    info!(
+                            "[HISTORY-TABLES] log_history table storage params changed, update log operator"
+                        );
+                    *params = params_from_meta.clone();
+                } else {
+                    return Ok(());
+                }
+            }
+            setup_operator(&params_from_meta).await?;
+        }
+        Ok(())
+    }
+
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
         let may_permit = self
-            .acquire(
+            .meta_handle
+            .acquire_with_guard(
                 &format!("{}/{}/lock", meta_key, table.name),
                 Duration::from_hours(self.retention_interval as u64).as_secs(),
             )
@@ -362,8 +403,7 @@ impl GlobalHistoryLog {
         if let Some(_guard) = may_permit {
             let sql = &table.delete;
             self.execute_sql(sql).await?;
-            let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-            let context = session.create_query_context().await?;
+            let context = self.create_context().await?;
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()
@@ -381,43 +421,55 @@ impl GlobalHistoryLog {
         Ok(false)
     }
 
-    pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
-        match self.meta_client.get_kv(meta_key).await? {
-            Some(v) => {
-                let num: u64 = serde_json::from_slice(&v.data)?;
-                Ok(Some(num))
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_u64_to_meta(&self, meta_key: &str, value: u64) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                meta_key,
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&value)?),
-                None,
-            ))
-            .await?;
-        Ok(())
-    }
-
     pub async fn create_context(&self) -> Result<Arc<QueryContext>> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         // only need run the sql on the current node
-        session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: false,
-            local_id: self.node_id.clone(),
-            nodes: vec![],
-        }))
+        let cluster_discovery = ClusterDiscovery::instance();
+        let dummy_cluster = cluster_discovery
+            .single_node_cluster(&GlobalConfig::instance())
+            .await?;
+
+        let cluster_id = dummy_cluster.get_cluster_id()?;
+        let session = create_session(&self.tenant_id, &cluster_id).await?;
+        session.create_query_context_with_cluster(dummy_cluster, self.version)
     }
 }
 
 /// GlobalLogger initialization before the operator
 /// This is a workaround for the current architecture.
-pub async fn setup_operator() -> Result<()> {
-    let op = DataOperator::instance().operator();
+pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
+    // If it has specified storage_params, use it to initialize the operator.
+    // Otherwise, use the default operator from global DataOperator.
+    let op = match params {
+        None => DataOperator::instance().operator(),
+        Some(p) => {
+            let new_p = p.clone();
+            let new_p = new_p.map_root(|root| {
+                // replace `log_history` with empty string
+                let new_root = root.replace("log_history/", "");
+                normalize_root(new_root.as_str())
+            });
+            init_operator(&new_p)?
+        }
+    };
     GlobalLogger::instance().set_operator(op).await;
     Ok(())
+}
+
+/// Check if the error is a temporary error,
+/// We will use this to determine if we should retry the operation.
+fn is_temp_error(e: &ErrorCode) -> bool {
+    let code = e.code();
+    let message = e.message();
+    // Storage and I/O errors are considered temporary errors
+    let storage = code == ErrorCode::STORAGE_NOT_FOUND
+        || code == ErrorCode::STORAGE_PERMISSION_DENIED
+        || code == ErrorCode::STORAGE_UNAVAILABLE
+        || code == ErrorCode::STORAGE_UNSUPPORTED
+        || code == ErrorCode::STORAGE_INSECURE
+        || code == ErrorCode::INVALID_OPERATION
+        || code == ErrorCode::STORAGE_OTHER;
+    // If acquire semaphore failed, we consider it a temporary error
+    let meta = code == ErrorCode::INTERNAL && message.contains("acquire semaphore failed");
+    let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;
+    storage || transaction || meta
 }

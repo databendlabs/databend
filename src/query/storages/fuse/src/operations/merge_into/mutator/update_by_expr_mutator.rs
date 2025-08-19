@@ -97,7 +97,7 @@ impl UpdateByExprMutator {
         let mut data_block = data_block.clone();
         let (last_filter, origin_block) = if has_filter {
             let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
-            let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
+            let old_filter = filter_entry.value().try_downcast().unwrap();
             // pop filter
             data_block.pop_columns(1);
             // has pop old filter
@@ -115,12 +115,9 @@ impl UpdateByExprMutator {
                 data_block.num_rows(),
             )?;
 
-            predicates = res.try_downcast().unwrap();
+            data_block.add_value(res.clone(), DataType::Boolean);
 
-            data_block.add_column(BlockEntry::new(
-                DataType::Boolean,
-                Value::upcast(predicates.clone()),
-            ));
+            predicates = res.try_downcast().unwrap();
             let (last_filter, _) = get_or(
                 old_filter,
                 predicates,
@@ -131,11 +128,9 @@ impl UpdateByExprMutator {
             (last_filter, origin_block)
         } else {
             let origin_block = data_block.clone();
-            data_block.add_column(BlockEntry::new(
-                DataType::Boolean,
-                Value::upcast(predicates.clone()),
-            ));
-            (Value::upcast(predicates), origin_block)
+            let predicates = predicates.upcast();
+            data_block.add_value(predicates.clone(), DataType::Boolean);
+            (predicates, origin_block)
         };
 
         let exprs: Vec<Expr> = self
@@ -178,10 +173,9 @@ impl UpdateByExprMutator {
             }
         }
         // add filter
-        block_entries.push(BlockEntry {
-            data_type: DataType::Boolean,
-            value: last_filter,
-        });
+        block_entries.push(BlockEntry::new(last_filter, || {
+            (DataType::Boolean, data_block.num_rows())
+        }));
 
         Ok(DataBlock::new(block_entries, data_block.num_rows()))
     }

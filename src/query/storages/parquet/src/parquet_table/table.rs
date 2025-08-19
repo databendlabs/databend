@@ -39,6 +39,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
+use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -107,6 +108,7 @@ impl ParquetTable {
 
     #[async_backtrace::framed]
     pub async fn create(
+        ctx: &dyn TableContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         read_options: ParquetReadOptions,
@@ -114,17 +116,24 @@ impl ParquetTable {
         settings: Arc<Settings>,
         query_kind: QueryKind,
         case_sensitive: bool,
+        fmt: &ParquetFileFormatParams,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
-            Some(files) => files[0].path.clone(),
-            None => files_info.first_file(&operator).await?.path.clone(),
+            Some(files) => Some(files[0].clone()),
+            None => files_info.first_file(&operator).await?,
         };
+
+        let Some(first_file) = first_file else {
+            return ctx.get_zero_table().await;
+        };
+
+        let first_file = first_file.path;
 
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
-
-        let schema = arrow_to_table_schema(&arrow_schema, case_sensitive)?.into();
+        let schema =
+            arrow_to_table_schema(&arrow_schema, case_sensitive, fmt.use_logic_type)?.into();
         let table_info = create_parquet_table_info(schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 

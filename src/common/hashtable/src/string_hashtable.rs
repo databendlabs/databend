@@ -75,18 +75,22 @@ where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone + Default,
 {
+    /// returns true if the key is inserted
     #[inline(always)]
-    pub fn set_insert(&mut self, key: &K) -> Result<&mut MaybeUninit<()>, &mut ()> {
-        unsafe { self.insert_borrowing(key) }
+    pub fn set_insert(&mut self, key: &K) -> bool {
+        unsafe { self.insert_and_entry(key).is_ok() }
     }
 
     #[inline(always)]
     pub fn set_merge(&mut self, other: &Self) {
-        unsafe {
-            for _ in other.table_empty.iter() {
-                let _ = self.table_empty.insert();
-            }
-            self.table.set_merge(&other.table);
+        let iter = StringHashtableIter {
+            it_empty: Some(other.table_empty.iter()),
+            it: Some(other.table.iter()),
+            _phantom: PhantomData,
+        };
+
+        for d in iter {
+            let _ = self.set_insert(d.key());
         }
     }
 }
@@ -172,6 +176,97 @@ where
         match self.insert_and_entry_borrowing(key) {
             Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(e) => Err(&mut *e.get_mut_ptr()),
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry(
+        &mut self,
+        key: &K,
+    ) -> Result<StringHashtableEntryMutRef<'_, K, V>, StringHashtableEntryMutRef<'_, K, V>> {
+        let key = key.as_bytes();
+        match key.len() {
+            0 => self
+                .table_empty
+                .insert()
+                .map(|x| {
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+
+            _ => {
+                self.table.check_grow();
+                match self.table.insert(FallbackKey::new(key)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+
+                        self.key_size += key.len();
+                        Ok(StringHashtableEntryMutRef(
+                            StringHashtableEntryMutRefInner::Table(e),
+                        ))
+                    }
+                    Err(e) => Err(StringHashtableEntryMutRef(
+                        StringHashtableEntryMutRefInner::Table(e),
+                    )),
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &K,
+        hash: u64,
+    ) -> Result<StringHashtableEntryMutRef<'_, K, V>, StringHashtableEntryMutRef<'_, K, V>> {
+        let key = key.as_bytes();
+        match key.len() {
+            0 => self
+                .table_empty
+                .insert()
+                .map(|x| {
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
+                })
+                .map_err(|x| {
+                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
+                        x,
+                        PhantomData,
+                    ))
+                }),
+            _ => {
+                self.table.check_grow();
+                match self
+                    .table
+                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
+                {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, hash));
+
+                        self.key_size += key.len();
+                        Ok(StringHashtableEntryMutRef(
+                            StringHashtableEntryMutRefInner::Table(e),
+                        ))
+                    }
+                    Err(e) => Err(StringHashtableEntryMutRef(
+                        StringHashtableEntryMutRefInner::Table(e),
+                    )),
+                }
+            }
         }
     }
 
@@ -539,97 +634,6 @@ where A: Allocator + Clone + Default
         }
     }
 
-    #[inline(always)]
-    unsafe fn insert_and_entry(
-        &mut self,
-        key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let key = key.as_bytes();
-        match key.len() {
-            0 => self
-                .table_empty
-                .insert()
-                .map(|x| {
-                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-
-            _ => {
-                self.table.check_grow();
-                match self.table.insert(FallbackKey::new(key)) {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
-
-                        self.key_size += key.len();
-                        Ok(StringHashtableEntryMutRef(
-                            StringHashtableEntryMutRefInner::Table(e),
-                        ))
-                    }
-                    Err(e) => Err(StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::Table(e),
-                    )),
-                }
-            }
-        }
-    }
-
-    #[inline(always)]
-    unsafe fn insert_and_entry_with_hash(
-        &mut self,
-        key: &Self::Key,
-        hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let key = key.as_bytes();
-        match key.len() {
-            0 => self
-                .table_empty
-                .insert()
-                .map(|x| {
-                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
-                        x,
-                        PhantomData,
-                    ))
-                })
-                .map_err(|x| {
-                    StringHashtableEntryMutRef(StringHashtableEntryMutRefInner::TableEmpty(
-                        x,
-                        PhantomData,
-                    ))
-                }),
-            _ => {
-                self.table.check_grow();
-                match self
-                    .table
-                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
-                {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, hash));
-
-                        self.key_size += key.len();
-                        Ok(StringHashtableEntryMutRef(
-                            StringHashtableEntryMutRefInner::Table(e),
-                        ))
-                    }
-                    Err(e) => Err(StringHashtableEntryMutRef(
-                        StringHashtableEntryMutRefInner::Table(e),
-                    )),
-                }
-            }
-        }
-    }
-
     fn iter(&self) -> Self::Iterator<'_> {
         StringHashtableIter {
             it_empty: Some(self.table_empty.iter()),
@@ -642,5 +646,20 @@ where A: Allocator + Clone + Default
         self.table_empty.clear();
         self.table.clear();
         drop(std::mem::take(&mut self.arena));
+    }
+
+    unsafe fn insert_and_entry(
+        &mut self,
+        key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        self.insert_and_entry(key_ref)
+    }
+
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        self.insert_and_entry_with_hash(key_ref, hash)
     }
 }

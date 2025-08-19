@@ -35,10 +35,13 @@ test_policy 192.168.1.0/24 192.168.1.10 test comment
 statement ok
 ALTER NETWORK POLICY test_policy SET ALLOWED_IP_LIST=('192.168.10.0', '192.168.20.0') BLOCKED_IP_LIST=() COMMENT='new comment'
 
+statement ok
+COMMENT ON NETWORK POLICY test_policy IS  'new comment1'
+
 query TTTT
 DESC NETWORK POLICY test_policy
 ----
-test_policy 192.168.10.0,192.168.20.0 (empty) new comment
+test_policy 192.168.10.0,192.168.20.0 (empty) new comment1
 
 statement ok
 DROP USER IF EXISTS user1

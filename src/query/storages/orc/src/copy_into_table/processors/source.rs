@@ -30,11 +30,11 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
-use orc_rust::async_arrow_reader::StripeFactory;
 use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
 use crate::hashable_schema::HashableSchema;
+use crate::processors::source::ReadingFile;
 use crate::strip::StripeInMemory;
 use crate::utils::map_orc_error;
 
@@ -42,12 +42,7 @@ pub struct ORCSourceForCopy {
     table_ctx: Arc<dyn TableContext>,
     scan_progress: Arc<Progress>,
     op: Operator,
-    reader: Option<(
-        String,
-        Box<StripeFactory<OrcChunkReader>>,
-        HashableSchema,
-        usize,
-    )>,
+    reader: Option<ReadingFile>,
 }
 
 impl ORCSourceForCopy {
@@ -85,10 +80,16 @@ impl ORCSourceForCopy {
             .map_err(|e| map_orc_error(e, &path))?;
         let reader = builder.build_async();
         let (factory, schema) = reader.into_parts();
-        let factory = factory.expect("factory must has been created");
+        let stripe_factory = factory.expect("factory must has been created");
         let schema = HashableSchema::try_create(schema)?;
 
-        self.reader = Some((path, factory, schema, size));
+        self.reader = Some(ReadingFile {
+            path: path.to_string(),
+            stripe_factory,
+            size,
+            schema: Some(schema),
+            rows: 0,
+        });
         Ok(true)
     }
 }
@@ -105,8 +106,9 @@ impl AsyncSource for ORCSourceForCopy {
                 return Ok(None);
             }
             let start = Instant::now();
-            if let Some((path, factory, schema, size)) = mem::take(&mut self.reader) {
-                let (factory, stripe) = factory
+            if let Some(file) = mem::take(&mut self.reader) {
+                let (factory, stripe) = file
+                    .stripe_factory
                     .read_next_stripe()
                     .await
                     .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
@@ -118,24 +120,31 @@ impl AsyncSource for ORCSourceForCopy {
                     }
                     Some(stripe) => {
                         let used = start.elapsed().as_secs_f32();
+                        let rows = stripe.number_of_rows();
+
                         let bytes = stripe.stream_map().inner.values().map(|b| b.len()).sum();
-                        let progress_values = ProgressValues {
-                            rows: stripe.number_of_rows(),
-                            bytes,
-                        };
+                        let progress_values = ProgressValues { rows, bytes };
                         Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
                         log::info!(
-                            "read new stripe of {} rows and {bytes} bytes from {path}, use {} secs",
+                            "read new stripe of {} rows and {bytes} bytes from {}, use {} secs",
                             stripe.number_of_rows(),
+                            file.path,
                             used
                         );
                         self.scan_progress.incr(&progress_values);
 
-                        self.reader = Some((path.clone(), Box::new(factory), schema.clone(), size));
+                        self.reader = Some(ReadingFile {
+                            path: file.path.clone(),
+                            stripe_factory: Box::new(factory),
+                            size: file.size,
+                            schema: file.schema.clone(),
+                            rows: (rows as u64) + file.rows,
+                        });
                         let meta = Box::new(StripeInMemory {
-                            path,
+                            path: file.path.clone(),
                             stripe,
-                            schema: Some(schema),
+                            schema: file.schema,
+                            start_row: file.rows,
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }

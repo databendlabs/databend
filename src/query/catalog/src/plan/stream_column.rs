@@ -38,7 +38,6 @@ use databend_common_expression::Value;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
-use databend_common_expression::ROW_VERSION_COLUMN_ID;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 
 use crate::plan::PartInfo;
@@ -124,12 +123,7 @@ impl StreamColumnMeta {
 
 pub fn build_origin_block_row_num(num_rows: usize) -> BlockEntry {
     let row_ids = (0..num_rows as u64).collect();
-    let column = Value::Column(UInt64Type::from_data(row_ids));
-
-    BlockEntry::new(
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        column.wrap_nullable(None),
-    )
+    UInt64Type::from_data(row_ids).wrap_nullable(None).into()
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -137,7 +131,6 @@ pub enum StreamColumnType {
     OriginVersion,
     OriginBlockId,
     OriginRowNum,
-    RowVersion,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -173,7 +166,6 @@ impl StreamColumn {
             StreamColumnType::OriginRowNum => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
-            StreamColumnType::RowVersion => TableDataType::Number(NumberDataType::UInt64),
         }
     }
 
@@ -191,17 +183,20 @@ impl StreamColumn {
             StreamColumnType::OriginVersion => ORIGIN_VERSION_COLUMN_ID,
             StreamColumnType::OriginBlockId => ORIGIN_BLOCK_ID_COLUMN_ID,
             StreamColumnType::OriginRowNum => ORIGIN_BLOCK_ROW_NUM_COLUMN_ID,
-            StreamColumnType::RowVersion => ROW_VERSION_COLUMN_ID,
         }
     }
 
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
-            StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
-            StreamColumnType::OriginBlockId => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
-                meta.build_origin_block_id(),
-            ),
+            StreamColumnType::OriginVersion => unreachable!(),
+            StreamColumnType::OriginBlockId => {
+                BlockEntry::new(meta.build_origin_block_id(), || {
+                    (
+                        DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
+                        num_rows,
+                    )
+                })
+            }
             StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),
         }
     }

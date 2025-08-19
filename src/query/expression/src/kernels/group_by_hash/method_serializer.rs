@@ -19,9 +19,9 @@ use super::utils::serialize_group_columns;
 use crate::types::binary::BinaryColumnIter;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
+use crate::ProjectedBlock;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
@@ -35,11 +35,15 @@ impl HashMethod for HashMethodSerializer {
         "Serializer".to_string()
     }
 
-    fn build_keys_state(&self, group_columns: InputColumns, num_rows: usize) -> Result<KeysState> {
+    fn build_keys_state(
+        &self,
+        group_columns: ProjectedBlock,
+        num_rows: usize,
+    ) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
         let serialize_size = group_columns
             .iter()
-            .map(|column| column.serialize_size())
+            .map(|entry| entry.as_column().unwrap().serialize_size())
             .sum();
         Ok(KeysState::Column(Column::Binary(serialize_group_columns(
             group_columns,

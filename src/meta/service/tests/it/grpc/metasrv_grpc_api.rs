@@ -19,7 +19,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
 use log::info;

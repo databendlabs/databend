@@ -29,33 +29,36 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_arguments;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateAddrs;
-use crate::aggregates::assert_arguments;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::assert_variadic_params;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
     display_name: String,
-    _op: PhantomData<OP>,
-    _agg: PhantomData<AGG>,
+    _p: PhantomData<(OP, AGG)>,
 }
 
 impl<OP, AGG> AggregateBitmapFunction<OP, AGG>
@@ -66,8 +69,7 @@ where
     fn try_create(display_name: &str) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateBitmapFunction::<OP, AGG> {
             display_name: display_name.to_string(),
-            _op: PhantomData,
-            _agg: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -227,24 +229,23 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        entries: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
-        if column.is_empty() {
+        let view = entries[0].downcast::<BitmapType>().unwrap();
+        if view.len() == 0 {
             return Ok(());
         }
 
-        let column_iter = column.iter();
         let state = place.get::<BitmapAggState>();
 
         if let Some(validity) = validity {
-            if validity.null_count() == column.len() {
+            if validity.null_count() == view.len() {
                 return Ok(());
             }
 
-            for (data, valid) in column_iter.zip(validity.iter()) {
+            for (data, valid) in view.iter().zip(validity.iter()) {
                 if !valid {
                     continue;
                 }
@@ -252,7 +253,7 @@ where
                 state.add::<OP>(rb);
             }
         } else {
-            for data in column_iter {
+            for data in view.iter() {
                 let rb = deserialize_bitmap(data)?;
                 state.add::<OP>(rb);
             }
@@ -264,12 +265,12 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        entries: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
+        let view = entries[0].downcast::<BitmapType>().unwrap();
 
-        for (data, addr) in column.iter().zip(places.iter().cloned()) {
+        for (data, addr) in view.iter().zip(places.iter().cloned()) {
             let state = AggrState::new(addr, loc).get::<BitmapAggState>();
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
@@ -277,35 +278,71 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
+    fn accumulate_row(&self, place: AggrState, entries: ProjectedBlock, row: usize) -> Result<()> {
+        let view = entries[0].downcast::<BitmapType>().unwrap();
         let state = place.get::<BitmapAggState>();
-        if let Some(data) = BitmapType::index_column(&column, row) {
+        if let Some(data) = view.index(row) {
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<BitmapAggState>();
-        // flag indicate where bitmap is none
-        let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
-        writer.write_scalar(&flag)?;
-        if let Some(rb) = &state.rb {
-            rb.serialize_into(writer)?;
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+            // flag indicate where bitmap is none
+            let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
+            binary_builder.data.write_scalar(&flag)?;
+            if let Some(rb) = &state.rb {
+                rb.serialize_into(&mut binary_builder.data)?;
+            }
+            binary_builder.commit_row();
         }
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<BitmapAggState>();
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
 
-        let flag = reader[0];
-        reader.consume(1);
-        if flag == 1 {
-            let rb = deserialize_bitmap(reader)?;
-            state.add::<OP>(rb);
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<OP>(rb);
+                }
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<OP>(rb);
+                }
+            }
         }
         Ok(())
     }
@@ -320,7 +357,12 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         AGG::merge_result(place, builder)
     }
 
@@ -341,20 +383,18 @@ impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
 }
 
 struct AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     display_name: String,
     inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
     filter_values: Vec<T::Scalar>,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+    T: ValueType,
+    T::Scalar: Sync,
 {
     fn try_create(
         display_name: &str,
@@ -364,8 +404,7 @@ where
             display_name: display_name.to_string(),
             inner: AggregateBitmapFunction {
                 display_name: "".to_string(),
-                _op: PhantomData,
-                _agg: PhantomData,
+                _p: PhantomData,
             },
             filter_values,
             _t: PhantomData,
@@ -373,16 +412,16 @@ where
         Ok(Arc::new(func))
     }
 
-    fn get_filter_bitmap(&self, columns: InputColumns) -> Bitmap {
-        let filter_col = T::try_downcast_column(&columns[1]).unwrap();
+    fn get_filter_bitmap(&self, columns: ProjectedBlock) -> Bitmap {
+        let filter_col = columns[1].downcast::<T>().unwrap();
 
         let mut result = MutableBitmap::from_len_zeroed(columns[0].len());
 
         for filter_val in &self.filter_values {
             let filter_ref = T::to_scalar_ref(filter_val);
-            let mut col_bitmap = MutableBitmap::with_capacity(T::column_len(&filter_col));
+            let mut col_bitmap = MutableBitmap::with_capacity(filter_col.len());
 
-            T::iter_column(&filter_col).for_each(|val| {
+            filter_col.iter().for_each(|val| {
                 col_bitmap.push(val == filter_ref);
             });
             (&mut result).bitor_assign(&Bitmap::from(col_bitmap));
@@ -391,14 +430,13 @@ where
         Bitmap::from(result)
     }
 
-    fn filter_row(&self, columns: InputColumns, row: usize) -> Result<bool> {
-        let check_col = T::try_downcast_column(&columns[1]).unwrap();
-        let check_val_opt = T::index_column(&check_col, row);
+    fn filter_row(&self, columns: ProjectedBlock, row: usize) -> Result<bool> {
+        let check_col = columns[1].downcast::<T>().unwrap();
+        let check_val_opt = check_col.index(row);
 
         if let Some(check_val) = check_val_opt {
             for filter_val in &self.filter_values {
-                let filter_ref = T::to_scalar_ref(filter_val);
-                if filter_ref == check_val {
+                if T::to_scalar_ref(filter_val) == check_val {
                     return Ok(true);
                 }
             }
@@ -422,8 +460,8 @@ where
 
 impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+    T: ValueType,
+    T::Scalar: Sync,
 {
     fn name(&self) -> &str {
         "AggregateBitmapIntersectCountFunction"
@@ -444,7 +482,7 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -461,49 +499,67 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let predicate = self.get_filter_bitmap(columns);
-        let column = columns[0].filter(&predicate);
+        let entry = columns[0].to_column().filter(&predicate).into();
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();
         let row_size = predicate.len() - predicate.null_count();
 
-        let input = [column];
+        let input = [entry];
         self.inner
             .accumulate_keys(new_places_slice, loc, input.as_slice().into(), row_size)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         if self.filter_row(columns, row)? {
             return self.inner.accumulate_row(place, columns, row);
         }
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.inner.merge(place, reader)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.inner.batch_serialize(places, loc, builders)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.inner.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.inner.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        self.inner.merge_result(place, builder)
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.inner.merge_result(place, read_only, builder)
     }
 }
 
 impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
+where T: ValueType
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
@@ -512,10 +568,11 @@ where
 
 pub fn try_create_aggregate_bitmap_function<const OP_TYPE: u8, const AGG_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
     with_bitmap_op_mapped_type!(|OP| match OP_TYPE {
@@ -585,17 +642,19 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
-            )
-        }
-        DataType::Decimal(_) => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
-            )
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    AggregateBitmapIntersectCountFunction::<DecimalType<DECIMAL>>::try_create(
+                        display_name,
+                        extract_params::<DecimalType<DECIMAL>>(
+                            display_name,
+                            filter_column_type,
+                            params,
+                        )?,
+                    )
+                }
+            })
         }
         _ => {
             AggregateBitmapIntersectCountFunction::<AnyType>::try_create(
@@ -640,7 +699,7 @@ fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
 }
 
 pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -651,7 +710,7 @@ pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -662,7 +721,7 @@ pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -673,7 +732,7 @@ pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription
 }
 
 pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -684,7 +743,7 @@ pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -695,7 +754,7 @@ pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
 }
 
 pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -706,7 +765,7 @@ pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

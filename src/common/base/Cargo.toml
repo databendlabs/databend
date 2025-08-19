@@ -45,12 +45,13 @@ pin-project-lite = { workspace = true }
 pprof = { workspace = true }
 prometheus-client = { workspace = true }
 prometheus-parse = { workspace = true }
-rand = { workspace = true, features = ["serde1"] }
+rand = { workspace = true }
 regex = { workspace = true }
 replace_with = { workspace = true }
 reqwest = { workspace = true }
 reqwest-hickory-resolver = { workspace = true }
 rustix = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state = { workspace = true }
@@ -67,7 +68,6 @@ procfs = { workspace = true }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 quickcheck = { workspace = true }
-rand = { workspace = true }
 serde_test = { workspace = true }
 
 [lints]

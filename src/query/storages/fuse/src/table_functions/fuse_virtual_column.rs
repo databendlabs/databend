@@ -18,20 +18,19 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -121,7 +120,7 @@ impl FuseVirtualColumn {
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
-        let mut row_num = 0;
+        let mut num_rows = 0;
         let chunk_size =
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
 
@@ -162,9 +161,9 @@ impl FuseVirtualColumn {
                             block_offset.push(offset);
                             bytes_compressed.push(length);
 
-                            row_num += 1;
+                            num_rows += 1;
 
-                            if row_num >= limit {
+                            if num_rows >= limit {
                                 break 'FOR;
                             }
                         }
@@ -175,45 +174,18 @@ impl FuseVirtualColumn {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(snapshot_id))),
-                BlockEntry::new(
-                    DataType::Timestamp,
-                    Value::Scalar(Scalar::Timestamp(timestamp)),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(virtual_block_location.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(virtual_block_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(row_count)),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(column_name.build())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(column_type.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Column(UInt32Type::from_data(column_id)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(block_offset)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(bytes_compressed)),
-                ),
+                BlockEntry::new_const_column_arg::<StringType>(snapshot_id, num_rows),
+                BlockEntry::new_const_column_arg::<TimestampType>(timestamp, num_rows),
+                Column::String(virtual_block_location.build()).into(),
+                UInt64Type::from_data(virtual_block_size).into(),
+                UInt64Type::from_data(row_count).into(),
+                Column::String(column_name.build()).into(),
+                Column::String(column_type.build()).into(),
+                UInt32Type::from_data(column_id).into(),
+                UInt64Type::from_data(block_offset).into(),
+                UInt64Type::from_data(bytes_compressed).into(),
             ],
-            row_num,
+            num_rows,
         ))
     }
 }

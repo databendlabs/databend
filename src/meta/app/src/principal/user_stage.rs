@@ -108,6 +108,7 @@ pub enum StageFileCompression {
     Lzo,
     Snappy,
     Xz,
+    Zip,
     None,
 }
 
@@ -138,7 +139,8 @@ impl FromStr for StageFileCompression {
             "snappy" => Ok(StageFileCompression::Snappy),
             "xz" => Ok(StageFileCompression::Xz),
             "none" => Ok(StageFileCompression::None),
-            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | xz | none }"
+            "zip" => Ok(StageFileCompression::Zip),
+            _ => Err("Unknown file compression type, must one of { auto | gzip | bz2 | brotli | zstd | deflate | raw_deflate | lzo | snappy | xz | zip | none }"
                 .to_string()),
         }
     }
@@ -157,6 +159,7 @@ impl Display for StageFileCompression {
             StageFileCompression::Lzo => write!(f, "lzo"),
             StageFileCompression::Snappy => write!(f, "snappy"),
             StageFileCompression::Xz => write!(f, "xz"),
+            StageFileCompression::Zip => write!(f, "zip"),
             StageFileCompression::None => write!(f, "none"),
         }
     }

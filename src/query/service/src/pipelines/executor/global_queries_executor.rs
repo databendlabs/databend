@@ -27,7 +27,7 @@ impl GlobalQueriesExecutor {
     pub fn init() -> Result<()> {
         let num_cpus = num_cpus::get();
         GlobalInstance::set(QueriesPipelineExecutor::create(num_cpus)?);
-        Thread::spawn(|| {
+        Thread::named_spawn(Some("GlobalQueriesExecutor".to_string()), || {
             if let Err(e) = Self::instance().execute() {
                 info!("Executor finished with error: {:?}", e);
             }

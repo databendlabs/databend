@@ -56,6 +56,14 @@ pub enum OwnershipObject {
     Warehouse {
         id: String,
     },
+
+    Connection {
+        name: String,
+    },
+
+    Sequence {
+        name: String,
+    },
 }
 
 impl OwnershipObject {
@@ -84,7 +92,9 @@ impl fmt::Display for OwnershipObject {
             }
             OwnershipObject::UDF { name } => write!(f, "UDF {name}"),
             OwnershipObject::Stage { name } => write!(f, "STAGE {name}"),
-            OwnershipObject::Warehouse { id } => write!(f, "Warehouse {id}"),
+            OwnershipObject::Warehouse { id } => write!(f, "WAREHOUSE {id}"),
+            OwnershipObject::Connection { name } => write!(f, "CONNECTION {name}"),
+            OwnershipObject::Sequence { name } => write!(f, "SEQUENCE {name}"),
         }
     }
 }
@@ -125,6 +135,8 @@ impl KeyCodec for OwnershipObject {
             OwnershipObject::Stage { name } => b.push_raw("stage-by-name").push_str(name),
             OwnershipObject::UDF { name } => b.push_raw("udf-by-name").push_str(name),
             OwnershipObject::Warehouse { id } => b.push_raw("warehouse-by-id").push_str(id),
+            OwnershipObject::Connection { name } => b.push_raw("connection-by-name").push_str(name),
+            OwnershipObject::Sequence { name } => b.push_raw("sequence-by-name").push_str(name),
         }
     }
 
@@ -175,9 +187,17 @@ impl KeyCodec for OwnershipObject {
                 let id = p.next_str()?;
                 Ok(OwnershipObject::Warehouse { id })
             }
+            "connection-by-name" => {
+                let name = p.next_str()?;
+                Ok(OwnershipObject::Connection { name })
+            }
+            "sequence-by-name" => {
+                let name = p.next_str()?;
+                Ok(OwnershipObject::Sequence { name })
+            }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name"
                     .to_string(),
                 got: q.to_string(),
             }),

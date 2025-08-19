@@ -39,6 +39,7 @@ use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
+use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
@@ -60,6 +61,9 @@ use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -146,6 +150,9 @@ use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -178,8 +185,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::Change;
@@ -187,6 +192,8 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -200,11 +207,13 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use seq_marked::SeqValue;
 use ConditionResult::Eq;
 
 use crate::assert_table_exist;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
+use crate::errors::TableError;
 use crate::fetch_id;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
@@ -2104,6 +2113,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
+        // Generate a random transaction ID for idempotency
+        let txn_id = Uuid::new_v4().to_string();
+        self.update_multi_table_meta_with_txn_id(req, txn_id).await
+    }
+
+    /// This function is ONLY for testing purposes.
+    /// In production environment, use `update_multi_table_meta` instead.
+    ///
+    /// `retry_times` is used to simulate the retry of the transaction.
+    /// It is only for test.
+    async fn update_multi_table_meta_with_txn_id(
+        &self,
+        req: UpdateMultiTableMetaReq,
+        txn_id: String,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,
@@ -2188,9 +2212,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then
                 .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));
             txn.else_then.push(TxnOp {
-                request: Some(Request::Get(TxnGetRequest {
-                    key: tbid.to_string_key(),
-                })),
+                request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
 
             new_table_meta_map.insert(req.0.table_id, new_table_meta);
@@ -2206,6 +2228,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // So now, in case that `TableCopiedFileInfo` has expire time, remove `TableCopiedFileLockKey`
         // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
         // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
+
+        let insert_if_not_exists_table_ids = copied_files
+            .iter()
+            .filter(|(_, req)| req.insert_if_not_exists)
+            .map(|(table_id, _)| *table_id)
+            .collect::<Vec<_>>();
 
         for (table_id, req) in copied_files {
             let tbid = TableId { table_id };
@@ -2274,10 +2302,46 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
+
+        // Add transaction ID to the transaction with 5-minute expiration
+        let txn_id_key = format!("_txn_id/{}", txn_id);
+
+        // Add condition to check that transaction ID does not exist (empty)
+        txn.condition
+            .push(TxnCondition::eq_seq(txn_id_key.clone(), 0));
+
+        txn.if_then.push(TxnOp::put_with_ttl(
+            txn_id_key.clone(),
+            vec![],
+            Some(Duration::from_secs(300)),
+        ));
+
+        // Add get operation to check if transaction ID exists in else branch
+        // NOTE: Orders of operations matter, please keep this as the last operation of else branch
+        txn.else_then.push(TxnOp::get(txn_id_key.clone()));
+
         let (succ, responses) = send_txn(self, txn).await?;
+
         if succ {
             return Ok(Ok(UpdateTableMetaReply {}));
         }
+
+        // Check if transaction ID exists in else branch response (idempotency check)
+        //
+        // Please note that this is a best effort check: the "idempotency check" is only guaranteed
+        // roughly within 300 secs, please DO NOT use it for any safety properties.
+        if let Some(Response::Get(get_resp)) = responses.last().and_then(|r| r.response.as_ref()) {
+            // Defensive check, make sure the get(tx_id_key) is the last operation
+            assert_eq!(get_resp.key, txn_id_key, "Transaction ID key mismatch");
+            if get_resp.value.is_some() {
+                info!(
+                    "Transaction ID {} exists, the corresponding transaction has been executed successfully",
+                    txn_id_key
+                );
+                return Ok(Ok(UpdateTableMetaReply {}));
+            }
+        }
+
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
             let Some(Response::Get(get_resp)) = &resp.response else {
@@ -2302,10 +2366,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         if mismatched_tbs.is_empty() {
-            // if all table version does match, but tx failed, we don't know why, just return error
-            Err(KVAppError::AppError(AppError::from(
-                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-            )))
+            if !insert_if_not_exists_table_ids.is_empty() {
+                // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
+                Err(KVAppError::AppError(AppError::from(
+                    DuplicatedUpsertFiles::new(
+                        insert_if_not_exists_table_ids,
+                        "update_multi_table_meta",
+                    ),
+                )))
+            } else {
+                // if all table version does match, but tx failed, we don't know why, just return error
+                Err(KVAppError::AppError(AppError::from(
+                    MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+                )))
+            }
         } else {
             // up layer will retry
             Ok(Err(mismatched_tbs))
@@ -2398,6 +2472,95 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if succ {
                 return Ok(SetTableColumnMaskPolicyReply {});
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, MetaTxnError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        let tbid = TableId {
+            table_id: req.table_id,
+        };
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let seq_meta = self.get_pb(&tbid).await?;
+
+            debug!(ident :% =(&tbid); "set_table_row_access_policy");
+
+            let Some(seq_meta) = seq_meta else {
+                return Ok(Err(TableError::UnknownTableId {
+                    tenant: req.tenant.tenant_name().to_string(),
+                    table_id: req.table_id,
+                    context: "set_table_row_access_policy".to_string(),
+                }));
+            };
+
+            // upsert row access policy
+            let table_meta = seq_meta.data;
+            let mut new_table_meta = table_meta.clone();
+            let id = RowAccessPolicyIdTableId {
+                policy_id: req.policy_id,
+                table_id: req.table_id,
+            };
+            let ident = RowAccessPolicyTableIdIdent::new_generic(req.tenant.clone(), id);
+
+            let mut txn_req = TxnRequest::default();
+
+            txn_req
+                .condition
+                .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
+            match &req.action {
+                SetTableRowAccessPolicyAction::Set(new_mask_name) => {
+                    if table_meta.row_access_policy.is_some() {
+                        return Ok(Err(TableError::AlterTableError {
+                            tenant: req.tenant.tenant_name().to_string(),
+                            context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.".to_string(),
+                        }));
+                    }
+                    new_table_meta.row_access_policy = Some(new_mask_name.to_string());
+                    txn_req.if_then = vec![
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy Some */
+                        txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
+                    ];
+                }
+                SetTableRowAccessPolicyAction::Unset(old_policy) => {
+                    // drop row access policy and table does not have row access policy
+                    if let Some(policy) = &table_meta.row_access_policy {
+                        if policy != old_policy {
+                            return Ok(Err(TableError::AlterTableError {
+                                tenant: req.tenant.tenant_name().to_string(),
+                                context: format!("Unknown row access policy {} on table", policy),
+                            }));
+                        }
+                    } else {
+                        return Ok(Ok(SetTableRowAccessPolicyReply {}));
+                    }
+                    new_table_meta.row_access_policy = None;
+                    txn_req.if_then = vec![
+                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy None */
+                        txn_op_del(&ident), // table drop row access policy, del policy_tb_id
+                    ];
+                }
+            }
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                id :? =(&tbid),
+                succ = succ;
+                "set_table_row_access_policy"
+            );
+
+            if succ {
+                return Ok(Ok(SetTableRowAccessPolicyReply {}));
             }
         }
     }
@@ -3688,31 +3851,40 @@ async fn get_history_tables_for_gc(
     }
 
     let mut filter_tb_infos = vec![];
+    const BATCH_SIZE: usize = 1000;
 
-    let limited_args = &args[..std::cmp::min(limit, args.len())];
-    let table_id_idents = limited_args.iter().map(|(table_id, _)| table_id.clone());
+    // Process in batches to avoid performance issues
+    for chunk in args.chunks(BATCH_SIZE) {
+        // Get table metadata for current batch
+        let table_id_idents = chunk.iter().map(|(table_id, _)| table_id.clone());
+        let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
 
-    let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
+        // Filter by drop_time_range for current batch
+        for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
+            let Some(seq_meta) = seq_meta else {
+                error!(
+                    "batch_filter_table_info cannot find {:?} table_meta",
+                    table_id
+                );
+                continue;
+            };
 
-    for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(limited_args.iter()) {
-        let Some(seq_meta) = seq_meta else {
-            error!(
-                "batch_filter_table_info cannot find {:?} table_meta",
-                table_id
-            );
-            continue;
-        };
+            if !drop_time_range.contains(&seq_meta.data.drop_on) {
+                info!("table {:?} is not in drop_time_range", seq_meta.data);
+                continue;
+            }
 
-        if !drop_time_range.contains(&seq_meta.data.drop_on) {
-            info!("table {:?} is not in drop_time_range", seq_meta.data);
-            continue;
+            filter_tb_infos.push(TableNIV::new(
+                DBIdTableName::new(db_id, table_name.clone()),
+                table_id.clone(),
+                seq_meta,
+            ));
+
+            // Check if we have reached the limit
+            if filter_tb_infos.len() >= limit {
+                return Ok(filter_tb_infos);
+            }
         }
-
-        filter_tb_infos.push(TableNIV::new(
-            DBIdTableName::new(db_id, table_name.clone()),
-            table_id.clone(),
-            seq_meta,
-        ));
     }
 
     Ok(filter_tb_infos)

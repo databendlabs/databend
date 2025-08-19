@@ -22,7 +22,10 @@ CREATE TABLE fuse_compat_table (
         c_array VARIANT,
         c_object VARIANT,
         c_variant VARIANT,
-        c_array_str ARRAY(String)
+        c_array_str ARRAY(String),
+        c_decimal_64 DECIMAL(8, 4),
+        c_decimal_128 DECIMAL(28, 4),
+        c_decimal_256 DECIMAL(72, 4),
 ) Engine = Fuse;
 
 statement ok
@@ -43,7 +46,10 @@ INSERT INTO fuse_compat_table VALUES(
         parse_json('[1,2,3,["a","b","c"]]'),
         parse_json('{"a":1,"b":{"c":2}}'),
         parse_json('[1,{"a":1,"b":{"c":2}}]'),
-        ['item1', 'item2_looooooooooooooooooong_val', 'item3', 'item4']
+        ['item1', 'item2_looooooooooooooooooong_val', 'item3', 'item4'],
+        123.345,
+        123.3456,
+        123.456789,
 );
 
 statement ok

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod rule_deduplicate_sort;
 mod rule_eliminate_sort;
 
+pub use rule_deduplicate_sort::RuleDeduplicateSort;
 pub use rule_eliminate_sort::RuleEliminateSort;

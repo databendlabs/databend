@@ -18,7 +18,9 @@ use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use itertools::Itertools;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
@@ -38,14 +40,18 @@ pub enum UDFDefinition {
         handler: String,
         headers: BTreeMap<String, String>,
         language: String,
+        immutable: Option<bool>,
     },
     UDFScript {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
         code: String,
+        imports: Vec<String>,
+        packages: Vec<String>,
         handler: String,
         language: String,
         runtime_version: String,
+        immutable: Option<bool>,
     },
     UDAFServer {
         arg_types: Vec<TypeName>,
@@ -59,9 +65,16 @@ pub enum UDFDefinition {
         arg_types: Vec<TypeName>,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
+        imports: Vec<String>,
+        packages: Vec<String>,
         code: String,
         language: String,
         runtime_version: String,
+    },
+    UDTFSql {
+        arg_types: Vec<(Identifier, TypeName)>,
+        return_types: Vec<(Identifier, TypeName)>,
+        sql: String,
     },
 }
 
@@ -83,13 +96,19 @@ impl Display for UDFDefinition {
                 handler,
                 headers,
                 language,
+                immutable,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
-                write!(
-                    f,
-                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}'"
-                )?;
+                write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
+                write!(f, " HANDLER = '{handler}'")?;
                 if !headers.is_empty() {
                     write!(f, " HEADERS = (")?;
                     for (i, (key, value)) in headers.iter().enumerate() {
@@ -109,12 +128,32 @@ impl Display for UDFDefinition {
                 handler,
                 language,
                 runtime_version: _,
+                imports,
+                packages,
+                immutable,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
+                let imports = imports
+                    .iter()
+                    .map(|s| QuotedString(s, '\'').to_string())
+                    .join(",");
+                let packages = packages
+                    .iter()
+                    .map(|s| QuotedString(s, '\'').to_string())
+                    .join(",");
+                write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
                 write!(
                     f,
-                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}' AS $$\n{code}\n$$"
+                    " IMPORTS = ({}) PACKAGES = ({}) HANDLER = '{handler}' AS $$\n{code}\n$$",
+                    imports, packages
                 )?;
             }
             UDFDefinition::UDAFServer {
@@ -142,6 +181,23 @@ impl Display for UDFDefinition {
                 }
                 write!(f, " ADDRESS = '{address}'")?;
             }
+            UDFDefinition::UDTFSql {
+                arg_types,
+                return_types,
+                sql,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(
+                    f,
+                    arg_types.iter().map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+                write!(f, ") RETURNS TABLE (")?;
+                write_comma_separated_list(
+                    f,
+                    return_types.iter().map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+                write!(f, ") AS $$\n{sql}\n$$")?;
+            }
             UDFDefinition::UDAFScript {
                 arg_types,
                 state_fields: state_types,
@@ -149,14 +205,26 @@ impl Display for UDFDefinition {
                 code,
                 language,
                 runtime_version: _,
+                imports,
+                packages,
             } => {
+                let imports = imports
+                    .iter()
+                    .map(|s| QuotedString(s, '\'').to_string())
+                    .join(",");
+                let packages = packages
+                    .iter()
+                    .map(|s| QuotedString(s, '\'').to_string())
+                    .join(",");
+
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
                 write!(
                     f,
-                    " }} RETURNS {return_type} LANGUAGE {language} AS $$\n{code}\n$$"
+                    " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = ({}) PACKAGES = ({}) AS $$\n{code}\n$$",
+                    imports, packages
                 )?;
             }
         }

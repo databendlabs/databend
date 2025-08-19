@@ -25,6 +25,7 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::Span;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -42,6 +43,7 @@ use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
+use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -143,6 +145,8 @@ pub struct BindContext {
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
+    pub vector_index_map: Box<IndexMap<IndexType, VectorIndexInfo>>,
+
     /// Whether allow rewrite as virtual column and pushdown.
     pub allow_virtual_column: bool,
 
@@ -194,11 +198,15 @@ impl CteContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
-    pub materialized: bool,
     pub recursive: bool,
-    pub cte_idx: IndexType,
-    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
+    pub materialized_cte_info: Option<MaterializedCTEInfo>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MaterializedCTEInfo {
+    pub bound_s_expr: SExpr,
+    pub bound_context: BindContext,
 }
 
 impl BindContext {
@@ -217,6 +225,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -261,6 +270,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
             planning_agg_index: false,

@@ -451,7 +451,7 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
         MapInternal::<K, V>::to_scalar_ref(scalar)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Map(array) => KvPair::<K, V>::try_downcast_column(array),
             _ => None,

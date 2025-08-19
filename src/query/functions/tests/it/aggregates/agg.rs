@@ -15,15 +15,16 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_functions::aggregates::eval_aggr_for_test;
@@ -43,11 +44,12 @@ fn eval_aggr(
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, columns, rows, true, sort_descs)
+    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+    eval_aggr_for_test(name, params, &block_entries, rows, true, sort_descs)
 }
 
 #[test]
-fn test_agg() {
+fn test_aggr_funtions() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
@@ -75,7 +77,8 @@ fn test_agg() {
     test_agg_quantile_tdigest(file, eval_aggr);
     // FIXME
     test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
-        eval_aggr_for_test(name, params, columns, rows, false, vec![])
+        let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+        eval_aggr_for_test(name, params, &block_entries, rows, false, vec![])
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
@@ -87,6 +90,7 @@ fn test_agg() {
     test_agg_group_array_moving_avg(file, eval_aggr);
     test_agg_group_array_moving_sum(file, eval_aggr);
     test_agg_histogram(file, eval_aggr);
+    test_agg_json_agg(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
     test_agg_mode(file, eval_aggr);
@@ -94,7 +98,7 @@ fn test_agg() {
 }
 
 #[test]
-fn test_agg_group_by() {
+fn test_aggr_functions_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg_group_by.txt").unwrap();
 
@@ -129,6 +133,7 @@ fn test_agg_group_by() {
     test_agg_bitmap(file, simulate_two_groups_group_by);
     test_agg_group_array_moving_avg(file, eval_aggr);
     test_agg_group_array_moving_sum(file, eval_aggr);
+    test_agg_json_agg(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
     test_agg_mode(file, simulate_two_groups_group_by);
@@ -203,7 +208,7 @@ fn get_example() -> Vec<(&'static str, Column)> {
         ("bm", gen_bitmap_data()),
         (
             "dec",
-            Decimal128Type::from_opt_data_with_size(
+            Decimal64Type::from_opt_data_with_size(
                 vec![Some(110), Some(220), None, Some(330)],
                 Some(DecimalSize::new_unchecked(15, 2)),
             ),
@@ -1299,6 +1304,30 @@ fn test_agg_histogram(file: &mut impl Write, simulator: impl AggregationSimulato
     run_agg_ast(
         file,
         "histogram(a, 1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+}
+
+fn test_agg_json_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "json_agg(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "json_agg(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "json_agg(dec)",
         get_example().as_slice(),
         simulator,
         vec![],

@@ -55,7 +55,8 @@ impl NdJsonDecoder {
         if self.field_decoder.is_select {
             self.field_decoder
                 .read_field(&mut columns[0], &json)
-                .map_err(|e| FileParseError::InvalidNDJsonRow {
+                .map_err(|e| FileParseError::InvalidRow {
+                    format: "NDJSON".to_string(),
                     message: e.to_string(),
                 })?;
         } else {
@@ -169,11 +170,10 @@ impl RowDecoder for NdJsonDecoder {
             if !row.is_empty() {
                 if let Err(e) = self.read_row(row, columns, &null_if) {
                     self.load_context.error_handler.on_error(
-                        e,
+                        e.with_row(row_id),
                         Some((columns, state.num_rows)),
                         &mut state.file_status,
                         &batch.start_pos.path,
-                        row_id,
                     )?
                 } else {
                     state.add_row(row_id);
@@ -206,7 +206,10 @@ fn map_json_error(err: serde_json::Error, data: &[u8]) -> FileParseError {
     if err.column() < len {
         message = format!("{message}, next byte is '{}'", data[pos] as char)
     }
-    FileParseError::InvalidNDJsonRow { message }
+    FileParseError::InvalidRow {
+        format: "NDJSON".to_string(),
+        message,
+    }
 }
 
 #[cfg(test)]
@@ -218,7 +221,7 @@ mod test {
         serde_json::from_slice::<serde_json::Value>(data.as_bytes())
             .map_err(|e| {
                 let e = map_json_error(e, data.as_bytes());
-                if let FileParseError::InvalidNDJsonRow { message } = e {
+                if let FileParseError::InvalidRow { message, .. } = e {
                     message
                 } else {
                     unreachable!()

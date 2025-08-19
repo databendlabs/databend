@@ -13,28 +13,34 @@
 // limitations under the License.
 
 use std::io;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
 use log::info;
 use openraft::SnapshotId;
+use rotbl::storage::impls::fs::FsStorage;
 use rotbl::v001::Rotbl;
 
-use crate::config::RaftConfig;
 use crate::sm_v003::open_snapshot::OpenSnapshot;
 
 impl OpenSnapshot for DB {
     fn open_snapshot(
-        path: impl ToString,
+        storage_path: impl ToString,
+        rel_path: impl ToString,
         snapshot_id: SnapshotId,
-        raft_config: &RaftConfig,
+        config: rotbl::v001::Config,
     ) -> Result<Self, io::Error> {
-        let config = raft_config.to_rotbl_config();
-        let r = Rotbl::open(config, path.to_string())?;
+        let storage_path = storage_path.to_string();
+        let rel_path = rel_path.to_string();
 
-        info!("Opened snapshot at {}", path.to_string());
+        let storage = FsStorage::new(PathBuf::from(&storage_path));
 
-        let db = Self::new(path, snapshot_id, Arc::new(r))?;
+        let r = Rotbl::open(storage, config, &rel_path.to_string())?;
+
+        info!("Opened snapshot at {storage_path}/{rel_path}");
+
+        let db = Self::new(storage_path, rel_path, snapshot_id, Arc::new(r))?;
         Ok(db)
     }
 }

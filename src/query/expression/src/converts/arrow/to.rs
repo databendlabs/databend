@@ -26,6 +26,7 @@ use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::buffer_to_array_data;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::ARROW_EXT_TYPE_BITMAP;
@@ -113,12 +114,9 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            TableDataType::Decimal(DecimalDataType::Decimal64(size)) => {
-                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
-            }
-            TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
-            }
+            TableDataType::Decimal(
+                DecimalDataType::Decimal64(size) | DecimalDataType::Decimal128(size),
+            ) => ArrowDataType::Decimal128(size.precision(), size.scale() as i8),
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
                 ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
@@ -233,6 +231,14 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        if self.columns().len() != table_schema.num_fields() {
+            return Err(ErrorCode::Internal(format!(
+                "The number of columns in the data block does not match the number of fields in the table schema, block_columns: {}, table_schema_fields: {}",
+                self.columns().len(),
+                table_schema.num_fields()
+            )));
+        }
+
         if table_schema.num_fields() == 0 {
             return Ok(RecordBatch::try_new_with_options(
                 Arc::new(Schema::empty()),
@@ -243,15 +249,8 @@ impl DataBlock {
 
         let arrow_schema = Schema::from(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
-        for (entry, arrow_field) in self
-            .consume_convert_to_full()
-            .take_columns()
-            .into_iter()
-            .zip(arrow_schema.fields())
-        {
-            let column = entry.value.into_column().unwrap();
-            let column = column.maybe_gc();
-            let array = column.into_arrow_rs();
+        for (entry, arrow_field) in self.take_columns().into_iter().zip(arrow_schema.fields()) {
+            let array = entry.to_column().maybe_gc().into_arrow_rs();
 
             // Adjust struct array names
             arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
@@ -316,7 +315,7 @@ impl From<&Column> for ArrayData {
             Column::Boolean(col) => col.into(),
             Column::Number(c) => c.arrow_data(arrow_type),
             Column::Decimal(c) => {
-                let c = c.clone().strict_decimal_data_type();
+                let c = c.clone().strict_decimal();
                 let arrow_type = match c {
                     DecimalColumn::Decimal64(_, size) | DecimalColumn::Decimal128(_, size) => {
                         ArrowDataType::Decimal128(size.precision(), size.scale() as _)

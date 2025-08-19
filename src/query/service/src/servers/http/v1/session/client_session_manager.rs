@@ -41,9 +41,6 @@ use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::Instant;
 
-use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
-use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_MEMORY;
-use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_META;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
@@ -60,18 +57,12 @@ fn hash_token(token: &[u8]) -> String {
     hex::encode_upper(Sha256::digest(token))
 }
 
-enum QueryState {
-    InUse(String),
-    Idle(Instant),
-}
-
 struct SessionState {
-    pub query_state: QueryState,
+    pub last_refresh_time: Instant,
     pub temp_tbl_mgr: TempTblMgrRef,
 }
 
 pub struct ClientSessionManager {
-    pub session_token_ttl: Duration,
     /// cache of tokens to avoid request for MetaServer on each auth.
     ///
     /// store hash only for hit ratio with limited memory, feasible because:
@@ -87,7 +78,7 @@ pub struct ClientSessionManager {
     ///
     /// # Ops
     /// add:
-    /// - write temp table
+    /// - create temp table
     ///
     /// rm:
     ///  - all temp table deleted
@@ -95,9 +86,10 @@ pub struct ClientSessionManager {
     ///  - timeout
     ///
     /// refresh:
-    ///  - query start/stop
-    ///  - /session/refresh
+    ///  - auth (with min interval)
     session_state: Mutex<BTreeMap<String, SessionState>>,
+    pub max_idle_time: Duration,
+    pub min_refresh_interval: Duration,
 }
 
 impl ClientSessionManager {
@@ -109,12 +101,23 @@ impl ClientSessionManager {
         format!("{user_name}/{client_session_id}")
     }
 
+    fn refresh_token_ttl(&self) -> Duration {
+        self.max_idle_time
+    }
+
+    fn session_token_ttl(&self) -> Duration {
+        self.max_idle_time / 4
+    }
+
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let mgr = Arc::new(Self {
-            session_token_ttl: Duration::from_secs(cfg.query.http_session_timeout_secs),
             session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
             refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
+            max_idle_time: Duration::from_secs(cfg.query.http_session_timeout_secs),
+            min_refresh_interval: Duration::from_secs(
+                (cfg.query.http_session_timeout_secs / 10).min(300),
+            ),
             session_state: Default::default(),
         });
         GlobalInstance::set(mgr.clone());
@@ -126,23 +129,17 @@ impl ClientSessionManager {
     async fn check_timeout(self: Arc<Self>) {
         loop {
             let now = Instant::now();
-            let mut in_use = vec![];
-            let mut idle = vec![];
+            let mut remained = vec![];
             let mut expired = vec![];
             {
                 let guard = self.session_state.lock();
                 for (key, session_state) in &*guard {
-                    match session_state.query_state {
-                        QueryState::InUse(_) => {
-                            in_use.push(key.clone());
-                        }
-                        QueryState::Idle(t) => {
-                            if (now - t) > self.session_token_ttl {
-                                expired.push((key.clone(), session_state.temp_tbl_mgr.clone()));
-                            } else {
-                                idle.push(key.clone());
-                            }
-                        }
+                    if (now - session_state.last_refresh_time)
+                        > self.max_idle_time + self.min_refresh_interval
+                    {
+                        expired.push((key.clone(), session_state.temp_tbl_mgr.clone()));
+                    } else {
+                        remained.push(key.clone());
                     }
                 }
             };
@@ -152,15 +149,23 @@ impl ClientSessionManager {
                     guard.remove(id);
                 }
             }
+            let num_expired = expired.len();
             for (key, mgr) in expired {
                 drop_all_temp_tables_with_logging(&key, mgr, "idle").await;
             }
+            let elapsed = now.duration_since(Instant::now());
 
-            if !(in_use.is_empty() && idle.is_empty()) {
-                info!("[TEMP TABLE] sessions after cleanup, {} idle {} in use, idle sessions: {:?}, in use sessions: {:?}",
-                idle.len(), in_use.len(), idle, in_use);
+            if !(remained.is_empty() && num_expired == 0) {
+                info!(
+                    "[TEMP TABLE] cleanup {num_expired} sessions in {} millisecond, {} remained: {:?}",
+                    elapsed.as_millis(),
+                    remained.len(),
+                    remained
+                );
             }
-            tokio::time::sleep(self.session_token_ttl / 4).await;
+            if elapsed < self.max_idle_time / 4 {
+                tokio::time::sleep(self.max_idle_time / 4 - elapsed).await;
+            }
         }
     }
 
@@ -175,7 +180,7 @@ impl ClientSessionManager {
             .upsert_client_session_id(
                 client_session_id,
                 &user_name,
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + STATE_REFRESH_INTERVAL_META,
+                self.max_idle_time + self.min_refresh_interval + TTL_GRACE_PERIOD_META,
             )
             .await?;
         Ok(())
@@ -205,7 +210,7 @@ impl ClientSessionManager {
             &tenant_name,
             &user,
             &auth_role,
-            REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+            self.refresh_token_ttl() + TTL_GRACE_PERIOD_META,
         );
         let refresh_token = claim.encode(TokenType::Refresh);
         let refresh_token_hash = hash_token(refresh_token.as_bytes());
@@ -217,7 +222,7 @@ impl ClientSessionManager {
             .upsert_token(
                 &refresh_token_hash,
                 token_info.clone(),
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+                self.refresh_token_ttl() + TTL_GRACE_PERIOD_META,
                 false,
             )
             .await?;
@@ -231,7 +236,7 @@ impl ClientSessionManager {
             .insert(refresh_token_hash.clone(), None);
 
         // session token
-        claim.expire_at_in_secs = (now + self.session_token_ttl)
+        claim.expire_at_in_secs = (now + self.session_token_ttl())
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
@@ -247,7 +252,7 @@ impl ClientSessionManager {
             .upsert_token(
                 &session_token_hash,
                 token_info.clone(),
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+                self.session_token_ttl() + TTL_GRACE_PERIOD_META,
                 false,
             )
             .await?;
@@ -265,7 +270,7 @@ impl ClientSessionManager {
             .upsert_client_session_id(
                 &client_session_id,
                 &claim.user,
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META,
+                self.max_idle_time + self.min_refresh_interval + TTL_GRACE_PERIOD_META,
             )
             .await?;
 
@@ -367,85 +372,72 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
+    pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(key).and_modify(|e| {
-            e.query_state = QueryState::Idle(Instant::now());
-        });
-    }
-
-    pub fn on_query_start(
-        &self,
-        client_session_id: &str,
-        user_name: &str,
-        session: &Arc<Session>,
-        query_id: &str,
-    ) {
-        let key = Self::state_key(client_session_id, user_name);
-        let mut guard = self.session_state.lock();
-        guard.entry(key).and_modify(|e| {
-            if let QueryState::InUse(old_id) = &e.query_state {
-                warn!(
-                    "[TEMP TABLE] session = {client_session_id} last query {old_id} not finished."
-                )
-            }
-            e.query_state = QueryState::InUse(query_id.to_string());
-            session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
-        });
-    }
-    pub fn on_query_finish(
-        &self,
-        client_session_id: &str,
-        user_name: &str,
-        temp_tbl_mgr: TempTblMgrRef,
-        is_empty: bool,
-        just_changed: bool,
-    ) {
-        let key = Self::state_key(client_session_id, user_name);
-        if !is_empty || just_changed {
-            let mut guard = self.session_state.lock();
-            match guard.entry(key) {
-                Entry::Vacant(e) => {
-                    if !is_empty {
-                        e.insert(SessionState {
-                            query_state: QueryState::Idle(Instant::now()),
-                            temp_tbl_mgr,
-                        });
-                        info!("[TEMP-TABLE] session={client_session_id} added to ClientSessionManager");
-                    }
-                }
-                Entry::Occupied(mut e) => {
-                    if !is_empty {
-                        e.get_mut().query_state = QueryState::Idle(Instant::now())
-                    } else {
-                        e.remove();
-                        // all temp table dropped by user, data should have been removed when executing drop.
-                        info!("[TEMP-TABLE] session={client_session_id} removed from ClientSessionManager");
-                    }
-                }
+        if let Entry::Occupied(mut entry) = guard.entry(key) {
+            let now = Instant::now();
+            if now.duration_since(entry.get().last_refresh_time)
+                > ClientSessionManager::instance().min_refresh_interval
+            {
+                entry.get_mut().last_refresh_time = Instant::now();
+                return true;
             }
         }
+        false
     }
 
-    pub async fn refresh_state(
-        &self,
-        tenant: Tenant,
-        client_session_id: &str,
-        user_name: &str,
-        last_access_time: &SystemTime,
-    ) -> Result<()> {
-        let Ok(elapsed) = last_access_time.elapsed() else {
-            return Ok(());
+    pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
+        let key = Self::state_key(client_session_id, user_name);
+        let mut guard = self.session_state.lock();
+        guard.entry(key).and_modify(|e| {
+            if e.temp_tbl_mgr.lock().is_empty() {
+                warn!("[TEMP TABLE] session={client_session_id} empty temp_tbl_mgr in ClientSessionManager.");
+            } else {
+                info!("[TEMP TABLE] session={client_session_id} restore temp_tbl_mgr");
+                session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
+            }
+        });
+    }
+
+    pub fn add_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
+        let mut guard = self.session_state.lock();
+        let state = SessionState {
+            last_refresh_time: Instant::now(),
+            temp_tbl_mgr,
         };
-        if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
-            self.refresh_in_memory_states(client_session_id, user_name);
+        if guard.insert(prefix.clone(), state).is_none() {
+            info!("[TEMP TABLE] session={prefix} added to ClientSessionManager");
         }
-        if elapsed > STATE_REFRESH_INTERVAL_META {
-            self.refresh_session_handle(tenant, user_name.to_string(), client_session_id)
-                .await?
+    }
+
+    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: &TempTblMgrRef) {
+        let mut guard = self.session_state.lock();
+        let is_empty = { temp_tbl_mgr.lock().is_empty() };
+        if is_empty {
+            let removed_session_state = guard.remove(&prefix);
+            // Defensive check that drop session state contains no temp tables
+            if let Some(removed_session_state) = removed_session_state {
+                assert!({ removed_session_state.temp_tbl_mgr.lock().is_empty() });
+            }
+            // all temp table dropped by user, data should have been removed when executing drop.
+            info!("[TEMP TABLE] session={prefix} removed from ClientSessionManager");
         }
-        Ok(())
+    }
+
+    /// Get all temporary tables from all sessions
+    pub fn get_all_temp_tables(
+        &self,
+    ) -> Result<Vec<(String, databend_common_meta_app::schema::TableInfo)>> {
+        let mut all_temp_tables = Vec::new();
+        let session_states = self.session_state.lock();
+        for (session_key, session_state) in session_states.iter() {
+            let temp_tables = session_state.temp_tbl_mgr.lock().list_tables()?;
+            for table in temp_tables {
+                all_temp_tables.push((session_key.clone(), table));
+            }
+        }
+        Ok(all_temp_tables)
     }
 }
 
@@ -460,14 +452,14 @@ pub async fn drop_all_temp_tables_with_logging(
         Ok(_) => {
             let duration = start.elapsed().as_millis();
             info!(
-                "[TEMP-TABLE] session={} clean up completed in {}ms",
+                "[TEMP TABLE] session={} clean up completed in {}ms",
                 user_name_session_id, duration
             );
         }
         Err(e) => {
             let duration = start.elapsed().as_millis();
             error!(
-                "[TEMP-TABLE] session={} clean up failed after {}ms: error={:?}",
+                "[TEMP TABLE] session={} clean up failed after {}ms: error={:?}",
                 user_name_session_id, duration, e
             );
         }

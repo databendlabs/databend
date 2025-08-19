@@ -167,7 +167,7 @@ fn collect_small_file_parts(
     }
     if max_compressed_size == 0 {
         // there are no large files, so we choose a default value.
-        max_compressed_size = ((128usize << 20) as f64 / max_compression_ratio) as u64;
+        max_compressed_size = 128u64 << 20;
     }
     let mut num_small_files = small_files.len();
     stats.read_rows += num_small_files;
@@ -195,7 +195,7 @@ fn collect_small_file_parts(
                 .map(|(path, size, dedup_key)| ParquetFilePart {
                     file: path,
                     compressed_size: size,
-                    estimated_uncompressed_size: (size as f64 / max_compression_ratio) as u64,
+                    estimated_uncompressed_size: (size as f64 * max_compression_ratio) as u64,
                     dedup_key,
                     bucket_option: None,
                 })
@@ -284,18 +284,15 @@ pub(crate) fn collect_parts(
     );
 
     if !small_files.is_empty() {
-        let mut max_compression_ratio = compression_ratio;
         let mut max_compressed_size = 0u64;
         for part in partitions.partitions.iter() {
             let p = part.as_any().downcast_ref::<ParquetPart>().unwrap();
-            max_compression_ratio = max_compression_ratio
-                .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
             max_compressed_size = max_compressed_size.max(p.compressed_size());
         }
 
         collect_small_file_parts(
             small_files,
-            max_compression_ratio,
+            compression_ratio,
             max_compressed_size,
             &mut partitions,
             &mut stats,

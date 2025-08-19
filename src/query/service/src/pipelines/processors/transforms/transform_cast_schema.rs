@@ -110,7 +110,7 @@ pub fn cast_schema(
     exprs: &[Expr],
     func_ctx: &FunctionContext,
 ) -> Result<DataBlock> {
-    let mut columns = Vec::with_capacity(exprs.len());
+    let mut entries = Vec::with_capacity(exprs.len());
     let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
     for (i, (field, expr)) in to_schema.fields().iter().zip(exprs.iter()).enumerate() {
         let value = evaluator.run(expr).map_err(|err| {
@@ -123,8 +123,8 @@ pub fn cast_schema(
             );
             err.add_message(msg)
         })?;
-        let column = BlockEntry::new(field.data_type().clone(), value);
-        columns.push(column);
+        let entry = BlockEntry::new(value, || (field.data_type().clone(), data_block.num_rows()));
+        entries.push(entry);
     }
-    Ok(DataBlock::new(columns, data_block.num_rows()))
+    Ok(DataBlock::new(entries, data_block.num_rows()))
 }

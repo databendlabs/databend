@@ -39,7 +39,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
-xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
+xorf = { workspace = true }
 
 [dev-dependencies]
 goldenfile = { workspace = true }

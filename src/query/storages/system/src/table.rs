@@ -203,7 +203,22 @@ impl<TTable: 'static + SyncSystemTable> SyncSource for SystemTableSyncSource<TTa
         }
 
         self.finished = true;
-        Ok(Some(self.inner.get_full_data(self.context.clone())?))
+        let block = self.inner.get_full_data(self.context.clone())?;
+        #[cfg(debug_assertions)]
+        {
+            let schema = self.inner.get_table_info().schema();
+            for (field, column) in schema.fields.iter().zip(block.columns().iter()) {
+                assert_eq!(
+                    column.data_type(),
+                    field.data_type().into(),
+                    "table_schema: {:?}, block_schema: {:?}",
+                    schema,
+                    block.infer_schema()
+                );
+            }
+        }
+
+        Ok(Some(block))
     }
 }
 
@@ -368,11 +383,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         {
             use databend_common_expression::types::DataType;
             let table_info = self.inner.get_table_info();
-            let data_types: Vec<DataType> = block
-                .columns()
-                .iter()
-                .map(|v| v.data_type.clone())
-                .collect();
+            let data_types: Vec<DataType> = block.columns().iter().map(|v| v.data_type()).collect();
 
             let table_info_types: Vec<DataType> = table_info
                 .schema()

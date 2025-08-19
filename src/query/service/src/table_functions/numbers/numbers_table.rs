@@ -218,6 +218,11 @@ impl Table for NumbersTable {
             data_size: Some(self.total * 8),
             data_size_compressed: None,
             index_size: None,
+            bloom_index_size: None,
+            ngram_index_size: None,
+            inverted_index_size: None,
+            vector_index_size: None,
+            virtual_column_size: None,
             number_of_blocks: None,
             number_of_segments: None,
         }))

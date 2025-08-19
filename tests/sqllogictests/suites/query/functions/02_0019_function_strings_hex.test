@@ -18,3 +18,12 @@ select hex(null)
 ----
 NULL
 
+query T
+SELECT FROM_HEX(TO_HEX('abc'))::STRING
+----
+abc
+
+query T
+SELECT HEX_DECODE_STRING(TO_HEX('abc'))
+----
+abc

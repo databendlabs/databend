@@ -24,7 +24,7 @@ semver = { workspace = true }
 tonic-build = { workspace = true }
 
 [dev-dependencies]
-tower = { workspace = true, features = ["util"] }
+tower = { workspace = true }
 
 [lints]
 workspace = true

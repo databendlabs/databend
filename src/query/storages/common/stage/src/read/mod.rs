@@ -16,7 +16,9 @@ mod columnar;
 mod single_file_partition;
 
 mod cast;
+mod schema;
 
 pub use cast::load_can_auto_cast_to;
 pub use columnar::*;
+pub use schema::schema_date_time_to_int;
 pub use single_file_partition::SingleFilePartition;

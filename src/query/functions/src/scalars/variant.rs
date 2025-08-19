@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::string_to_date;
@@ -43,6 +44,7 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -74,14 +76,31 @@ use jiff::tz::TimeZone;
 use jiff::Unit;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::keypath::parse_key_paths;
-use jsonb::parse_value;
+use jsonb::parse_owned_jsonb;
+use jsonb::parse_owned_jsonb_with_buf;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("json_object_keys", &["object_keys"]);
     registry.register_aliases("to_string", &["json_to_string"]);
+    registry.register_aliases("array_construct", &["json_array"]);
+    registry.register_aliases("array_distinct", &["json_array_distinct"]);
+    registry.register_aliases("array_except", &["json_array_except"]);
+    registry.register_aliases("array_insert", &["json_array_insert"]);
+    registry.register_aliases("array_intersection", &["json_array_intersection"]);
+    registry.register_aliases("array_overlap", &["json_array_overlap"]);
+    registry.register_aliases("object_keys", &["json_object_keys"]);
+    registry.register_aliases("object_insert", &["json_object_insert"]);
+    registry.register_aliases("object_delete", &["json_object_delete"]);
+    registry.register_aliases("object_pick", &["json_object_pick"]);
+    registry.register_aliases("object_construct", &["json_object"]);
+    registry.register_aliases("try_object_construct", &["try_json_object"]);
+    registry.register_aliases("object_construct_keep_null", &["json_object_keep_null"]);
+    registry.register_aliases("try_object_construct_keep_null", &[
+        "try_json_object_keep_null",
+    ]);
+    registry.register_aliases("is_float", &["is_double", "is_real"]);
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
@@ -95,16 +114,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    if ctx.func_ctx.disable_variant_check {
-                        output.put_str("");
-                    } else {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
+            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data) {
+                if !ctx.func_ctx.disable_variant_check {
+                    ctx.set_error(output.len(), err.to_string());
                 }
             }
             output.commit_row();
@@ -121,16 +133,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
-                Ok(value) => {
-                    value.write_to_vec(&mut output.data);
-                }
-                Err(err) => {
-                    if ctx.func_ctx.disable_variant_check {
-                        output.put_str("");
-                    } else {
-                        ctx.set_error(output.len(), err.to_string());
-                    }
+            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data) {
+                if !ctx.func_ctx.disable_variant_check {
+                    ctx.set_error(output.len(), err.to_string());
                 }
             }
             output.commit_row();
@@ -149,10 +154,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
                     output.builder.commit_row();
                 }
                 Err(_) => output.push_null(),
@@ -170,10 +174,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
-                    value.write_to_vec(&mut output.builder.data);
                     output.builder.commit_row();
                 }
                 Err(_) => output.push_null(),
@@ -193,7 +196,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then check.
             let val = RawJsonb::new(s).to_string();
-            match parse_value(val.as_bytes()) {
+            match parse_owned_jsonb(val.as_bytes()) {
                 Ok(_) => output.push_null(),
                 Err(e) => output.push(&e.to_string()),
             }
@@ -210,7 +213,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_value(s.as_bytes()) {
+            match parse_owned_jsonb(s.as_bytes()) {
                 Ok(_) => output.push_null(),
                 Err(e) => output.push(&e.to_string()),
             }
@@ -219,30 +222,28 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<UInt32Type>, _, _>(
         "length",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, _| {
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_1_arg::<NullableType<VariantType>, NullableType<UInt32Type>>(|val, ctx| {
             val.and_then(|v| match RawJsonb::new(v).array_length() {
                 Ok(len) => len.map(|len| len as u32),
-                Err(_) => parse_value(v)
-                    .ok()
-                    .and_then(|v| v.array_length().map(|len| len as u32)),
+                Err(err) => {
+                    ctx.set_error(0, err.to_string());
+                    None
+                }
             })
         }),
     );
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "json_object_keys",
-        |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
+        "object_keys",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, ctx| {
             val.and_then(|v| match RawJsonb::new(v).object_keys() {
                 Ok(obj_keys) => obj_keys.map(|v| v.to_vec()),
-                Err(_) => parse_value(v).ok().and_then(|v| {
-                    v.object_keys().map(|obj_keys| {
-                        let mut buf = Vec::new();
-                        obj_keys.write_to_vec(&mut buf);
-                        buf
-                    })
-                }),
+                Err(err) => {
+                    ctx.set_error(0, err.to_string());
+                    None
+                }
             })
         }),
     );
@@ -297,7 +298,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -313,7 +314,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Ok(None) => {
                         output.push_null();
                     }
-                    Err(_) => {
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
                         output.push_null();
                     }
                 }
@@ -323,7 +325,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
         "get",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<VariantType>>(
             |val, idx, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -342,7 +344,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Ok(None) => {
                             output.push_null();
                         }
-                        Err(_) => {
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
                             output.push_null();
                         }
                     }
@@ -353,7 +356,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get_ignore_case",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<VariantType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -365,7 +368,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match RawJsonb::new(val).get_by_name(name, true) {
                     Ok(Some(v)) => output.push(v.as_ref()),
                     Ok(None) => output.push_null(),
-                    Err(_) => {
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
                         output.push_null();
                     }
                 }
@@ -375,7 +379,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, StringType, _, _>(
         "get_string",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
             |val, name, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -396,7 +400,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                             output.push(&json_str);
                         }
                     }
-                    _ => {
+                    Ok(None) => {
+                        output.push_null();
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
                         output.push_null();
                     }
                 }
@@ -406,7 +414,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<VariantType, Int64Type, StringType, _, _>(
         "get_string",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<StringType>>(
             |val, idx, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -430,7 +438,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 output.push(&json_str);
                             }
                         }
-                        _ => {
+                        Ok(None) => {
+                            output.push_null();
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
                             output.push_null();
                         }
                     }
@@ -607,44 +619,41 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match parse_value(s.as_bytes()) {
-                    Ok(val) => {
-                        let mut buf = Vec::new();
-                        val.write_to_vec(&mut buf);
-                        match parse_json_path(path.as_bytes()) {
-                            Ok(json_path) => {
-                                match RawJsonb::new(&buf).select_value_by_path(&json_path) {
-                                    Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                        Some(v) => {
-                                            let raw_jsonb = v.as_raw();
-                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
-                                                output.push(&s);
-                                            } else if raw_jsonb.is_null().unwrap_or_default() {
-                                                output.push_null();
-                                            } else {
-                                                let json_str = raw_jsonb.to_string();
-                                                output.push(&json_str);
-                                            }
-                                        }
-                                        None => {
+                match parse_owned_jsonb(s.as_bytes()) {
+                    Ok(owned_jsonb) => match parse_json_path(path.as_bytes()) {
+                        Ok(json_path) => {
+                            let raw_jsonb = owned_jsonb.as_raw();
+                            match raw_jsonb.select_value_by_path(&json_path) {
+                                Ok(owned_jsonb_opt) => match owned_jsonb_opt {
+                                    Some(v) => {
+                                        let raw_jsonb = v.as_raw();
+                                        if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                            output.push(&s);
+                                        } else if raw_jsonb.is_null().unwrap_or_default() {
                                             output.push_null();
+                                        } else {
+                                            let json_str = raw_jsonb.to_string();
+                                            output.push(&json_str);
                                         }
-                                    },
-                                    Err(err) => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!("Select json path text failed err: {}", err),
-                                        );
+                                    }
+                                    None => {
                                         output.push_null();
                                     }
+                                },
+                                Err(err) => {
+                                    ctx.set_error(
+                                        output.len(),
+                                        format!("Select json path text failed err: {}", err),
+                                    );
+                                    output.push_null();
                                 }
                             }
-                            Err(_) => {
-                                ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
-                                output.push_null();
-                            }
                         }
-                    }
+                        Err(_) => {
+                            ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
+                            output.push_null();
+                        }
+                    },
                     Err(err) => {
                         ctx.set_error(output.len(), err.to_string());
                         output.push_null();
@@ -656,7 +665,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "as_boolean",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BooleanType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -667,17 +676,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).as_bool() {
                 Ok(Some(res)) => output.push(res),
                 Ok(None) => output.push_null(),
-                Err(_) => match parse_value(v).ok().and_then(|v| v.as_bool()) {
-                    Some(res) => output.push(res),
-                    None => output.push_null(),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push_null();
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, Int64Type, _, _>(
         "as_integer",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Int64Type>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -688,17 +697,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).as_i64() {
                 Ok(Some(res)) => output.push(res),
                 Ok(None) => output.push_null(),
-                Err(_) => match parse_value(v).ok().and_then(|v| v.as_i64()) {
-                    Some(res) => output.push(res),
-                    None => output.push_null(),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push_null();
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, Float64Type, _, _>(
         "as_float",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<Float64Type>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -709,17 +718,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).as_f64() {
                 Ok(Some(res)) => output.push(res.into()),
                 Ok(None) => output.push_null(),
-                Err(_) => match parse_value(v).ok().and_then(|v| v.as_f64()) {
-                    Some(res) => output.push(res.into()),
-                    None => output.push_null(),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push_null();
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "as_string",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -730,13 +739,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).as_str() {
                 Ok(Some(res)) => output.push(&res),
                 Ok(None) => output.push_null(),
-                Err(_) => {
-                    if let Ok(val) = parse_value(v) {
-                        if let Some(res) = val.as_str() {
-                            output.push(res);
-                            return;
-                        }
-                    }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
                     output.push_null();
                 }
             }
@@ -745,7 +749,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_binary",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -755,14 +759,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_binary() {
                 Ok(res) => output.push(res),
-                Err(_) => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, BinaryType, _, _>(
         "as_binary",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<BinaryType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -772,14 +779,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).as_binary() {
                 Ok(Some(res)) => output.push(&res),
-                _ => output.push_null(),
+                Ok(None) => output.push_null(),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push_null();
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_date",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -789,14 +800,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_date() {
                 Ok(res) => output.push(res),
-                Err(_) => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
         "as_date",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -806,14 +820,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).as_date() {
                 Ok(Some(res)) => output.push(res.value),
-                _ => output.push_null(),
+                Ok(None) => output.push_null(),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push_null();
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_timestamp",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -823,14 +841,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_timestamp() {
                 Ok(res) => output.push(res),
-                Err(_) => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, TimestampType, _, _>(
         "as_timestamp",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
             |v, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -841,7 +862,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match RawJsonb::new(v).as_timestamp() {
                     Ok(Some(res)) => output.push(res.value),
-                    _ => output.push_null(),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push_null();
+                    }
                 }
             },
         ),
@@ -849,7 +874,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_interval",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -859,14 +884,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_interval() {
                 Ok(res) => output.push(res),
-                Err(_) => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_combine_nullable_1_arg::<VariantType, IntervalType, _, _>(
         "as_interval",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<IntervalType>>(
             |v, output, ctx| {
                 if let Some(validity) = &ctx.validity {
@@ -879,7 +907,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Ok(Some(res)) => {
                         output.push(months_days_micros::new(res.months, res.days, res.micros))
                     }
-                    _ => output.push_null(),
+                    Ok(None) => output.push_null(),
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push_null();
+                    }
                 }
             },
         ),
@@ -887,7 +919,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_array",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -898,15 +930,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).is_array() {
                 Ok(true) => output.push(v.as_bytes()),
                 Ok(false) => output.push_null(),
-                Err(_) => {
-                    if let Ok(val) = parse_value(v) {
-                        if val.is_array() {
-                            let mut buf = Vec::new();
-                            val.write_to_vec(&mut buf);
-                            output.push(&buf);
-                            return;
-                        }
-                    }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
                     output.push_null();
                 }
             }
@@ -915,7 +940,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
         "as_object",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -926,15 +951,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             match RawJsonb::new(v).is_object() {
                 Ok(true) => output.push(v.as_bytes()),
                 Ok(false) => output.push_null(),
-                Err(_) => {
-                    if let Ok(val) = parse_value(v) {
-                        if val.is_object() {
-                            let mut buf = Vec::new();
-                            val.write_to_vec(&mut buf);
-                            output.push(&buf);
-                            return;
-                        }
-                    }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
                     output.push_null();
                 }
             }
@@ -943,7 +961,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_null_value",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -953,17 +971,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_null() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_null()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_boolean",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -973,17 +991,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_boolean() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_boolean()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_integer",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -993,17 +1011,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_i64() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_i64()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_float",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -1013,17 +1031,41 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_f64() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_f64()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_decimal",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_number() {
+                Ok(Some(num)) => match num {
+                    jsonb::Number::Float64(_) => output.push(false),
+                    _ => output.push(true),
                 },
+                Ok(None) => output.push(false),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_string",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -1033,17 +1075,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_string() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_string()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_array",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -1053,17 +1095,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_array() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_array()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_object",
-        |_, _| FunctionDomain::Full,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -1073,10 +1115,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             match RawJsonb::new(v).is_object() {
                 Ok(res) => output.push(res),
-                Err(_) => match parse_value(v).ok().map(|v| v.is_object()) {
-                    Some(res) => output.push(res),
-                    None => output.push(false),
-                },
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(false);
+                }
             }
         }),
     );
@@ -1192,7 +1234,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if RawJsonb::new(val).is_null().unwrap_or_default() {
                     output.push_null();
                 } else {
-                    match cast_to_bool(val) {
+                    match RawJsonb::new(val).to_bool() {
                         Ok(value) => output.push(value),
                         Err(err) => {
                             ctx.set_error(output.len(), err.to_string());
@@ -1214,7 +1256,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match cast_to_bool(v) {
+            match RawJsonb::new(v).to_bool() {
                 Ok(res) => output.push(res),
                 Err(_) => output.push_null(),
             }
@@ -1373,11 +1415,20 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             type Native = <NUM_TYPE as Number>::Native;
                             let value: Option<Native> = if dest_type.is_float() {
-                                cast_to_f64(val).ok().and_then(num_traits::cast::cast)
+                                RawJsonb::new(val)
+                                    .to_f64()
+                                    .ok()
+                                    .and_then(num_traits::cast::cast)
                             } else if dest_type.is_signed() {
-                                cast_to_i64(val).ok().and_then(num_traits::cast::cast)
+                                RawJsonb::new(val)
+                                    .to_i64()
+                                    .ok()
+                                    .and_then(num_traits::cast::cast)
                             } else {
-                                cast_to_u64(val).ok().and_then(num_traits::cast::cast)
+                                RawJsonb::new(val)
+                                    .to_u64()
+                                    .ok()
+                                    .and_then(num_traits::cast::cast)
                             };
                             match value {
                                 Some(value) => output.push(value.into()),
@@ -1408,7 +1459,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                             }
                             if dest_type.is_float() {
-                                if let Ok(value) = cast_to_f64(v) {
+                                if let Ok(value) = RawJsonb::new(v).to_f64() {
                                     if let Some(new_value) = num_traits::cast::cast(value) {
                                         output.push(new_value);
                                     } else {
@@ -1418,7 +1469,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     output.push_null();
                                 }
                             } else if dest_type.is_signed() {
-                                if let Ok(value) = cast_to_i64(v) {
+                                if let Ok(value) = RawJsonb::new(v).to_i64() {
                                     if let Some(new_value) = num_traits::cast::cast(value) {
                                         output.push(new_value);
                                     } else {
@@ -1428,7 +1479,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     output.push_null();
                                 }
                             } else {
-                                if let Ok(value) = cast_to_u64(v) {
+                                if let Ok(value) = RawJsonb::new(v).to_u64() {
                                     if let Some(new_value) = num_traits::cast::cast(value) {
                                         output.push(new_value);
                                     } else {
@@ -1649,7 +1700,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_3_arg::<VariantType, Int32Type, VariantType, VariantType, _, _>(
-        "json_array_insert",
+        "array_insert",
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
             |val, pos, new_val, output, ctx| {
@@ -1674,7 +1725,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "json_array_distinct",
+        "array_distinct",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
@@ -1696,7 +1747,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
-        "json_array_intersection",
+        "array_intersection",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
@@ -1722,7 +1773,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
-        "json_array_except",
+        "array_except",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
@@ -1748,7 +1799,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "json_array_overlap",
+        "array_overlap",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
             |left, right, output, ctx| {
@@ -1765,12 +1816,551 @@ pub fn register(registry: &mut FunctionRegistry) {
                         output.push(res);
                     }
                     Err(err) => {
-                        output.push(false);
                         ctx.set_error(output.len(), err.to_string());
+                        output.push(false);
                     }
                 }
             },
         ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, GenericType<0>, BooleanType, _, _>(
+        "contains",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, BooleanType>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(vals_opt) => {
+                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                        for val in vals.iter() {
+                            if val.eq(&item_val) {
+                                output.push(true);
+                                return;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.push(false);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
+        "slice",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, Int64Type, VariantType>(
+            |val, start, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let vals = match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        let start = if start >= 0 {
+                            start as usize
+                        } else {
+                            let start = vals.len() as i64 + start;
+                            if start >= 0 {
+                                start as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let mut new_vals = vec![];
+                        for (i, val) in vals.into_iter().enumerate() {
+                            if i >= start {
+                                new_vals.push(val);
+                            }
+                        }
+                        new_vals
+                    }
+                    Ok(None) => {
+                        vec![]
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.commit_row();
+                        return;
+                    }
+                };
+                match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<VariantType, Int64Type, Int64Type, VariantType, _, _>(
+        "slice",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<VariantType, Int64Type, Int64Type, VariantType>(
+            |val, start, end, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let vals = match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        let start = if start >= 0 {
+                            start as usize
+                        } else {
+                            let start = vals.len() as i64 + start;
+                            if start >= 0 {
+                                start as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let end = if end >= 0 {
+                            end as usize
+                        } else {
+                            let end = vals.len() as i64 + end;
+                            if end >= 0 {
+                                end as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let mut new_vals = vec![];
+                        for (i, val) in vals.into_iter().enumerate() {
+                            if i >= start && i < end {
+                                new_vals.push(val);
+                            }
+                        }
+                        new_vals
+                    }
+                    Ok(None) => {
+                        vec![]
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.commit_row();
+                        return;
+                    }
+                };
+                match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_2_arg_core::<NullType, GenericType<0>, NullType, _, _>(
+        "array_indexof",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, GenericType<0>, UInt64Type, _, _>(
+        "array_indexof",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, NullableType<UInt64Type>>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        for (i, val) in vals.iter().enumerate() {
+                            if val.eq(&item_val) {
+                                output.push(i as u64);
+                                return;
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.push_null();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, GenericType<0>, VariantType, _, _>(
+        "array_remove",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, VariantType>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(vals_opt) => {
+                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                        let mut new_vals = vec![];
+                        for val in vals.into_iter() {
+                            if !val.eq(&item_val) {
+                                new_vals.push(val);
+                            }
+                        }
+                        match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                            Ok(owned_jsonb) => {
+                                output.put_slice(owned_jsonb.as_ref());
+                            }
+                            Err(err) => {
+                                ctx.set_error(output.len(), err.to_string());
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_remove_first",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let vals = vals_opt.unwrap_or_default();
+                    match OwnedJsonb::build_array(vals.iter().skip(1).map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_remove_last",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let mut vals = vals_opt.unwrap_or_default();
+                    let _ = vals.pop();
+                    match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_2_arg_core::<GenericType<0>, NullableType<VariantType>, VariantType, _, _>(
+        "array_prepend",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GenericType<0>, NullableType<VariantType>, VariantType>(
+            |item, arr, output, ctx| {
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                let new_vals = if let Some(arr) = arr {
+                    let array_val = RawJsonb::new(arr);
+                    match array_val.array_values() {
+                        Ok(vals_opt) => {
+                            let mut vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                            let mut new_vals = Vec::with_capacity(vals.len() + 1);
+                            new_vals.push(item_val);
+                            new_vals.append(&mut vals);
+                            new_vals
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                } else {
+                    vec![item_val]
+                };
+
+                match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_2_arg_core::<NullableType<VariantType>, GenericType<0>, VariantType, _, _>(
+        "array_append",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<NullableType<VariantType>, GenericType<0>, VariantType>(
+            |arr, item, output, ctx| {
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                let new_vals = if let Some(arr) = arr {
+                    let array_val = RawJsonb::new(arr);
+                    match array_val.array_values() {
+                        Ok(vals_opt) => {
+                            let mut new_vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                            new_vals.push(item_val);
+                            new_vals
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                } else {
+                    vec![item_val]
+                };
+
+                match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_compact",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut new_vals = Vec::new();
+                    for val in vals.into_iter() {
+                        let raw_val = val.as_raw();
+                        if matches!(raw_val.is_null(), Ok(true)) {
+                            continue;
+                        }
+                        new_vals.push(val);
+                    }
+                    match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    ctx.set_error(
+                        output.len(),
+                        "Input argument ARRAY_COMPACT is not an array".to_string(),
+                    );
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, UInt64Type, _, _>(
+        "array_unique",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, UInt64Type>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(0);
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut set = BTreeSet::new();
+                    for val in vals.into_iter() {
+                        set.insert(val);
+                    }
+                    output.push(set.len() as u64);
+                }
+                Ok(None) => {
+                    output.push(1);
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(0);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_flatten",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut new_vals = Vec::new();
+                    for val in vals.into_iter() {
+                        let raw_val = val.as_raw();
+                        match raw_val.array_values() {
+                            Ok(Some(inner_vals)) => {
+                                for inner_val in inner_vals.into_iter() {
+                                    new_vals.push(inner_val);
+                                }
+                            }
+                            Ok(None) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    "Input argument ARRAY_FLATTEN is not an array of arrays"
+                                        .to_string(),
+                                );
+                            }
+                            Err(err) => {
+                                ctx.set_error(output.len(), err.to_string());
+                            }
+                        }
+                    }
+                    match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    ctx.set_error(
+                        output.len(),
+                        "Input argument ARRAY_FLATTEN is not an array of arrays".to_string(),
+                    );
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_reverse",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let vals = vals_opt.unwrap_or(vec![val.to_owned()]);
+                    match OwnedJsonb::build_array(vals.iter().rev().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
     );
 
     let delete_by_keypath = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
@@ -1807,92 +2397,115 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match type_of(v) {
+            match RawJsonb::new(v).type_of() {
                 Ok(result) => output.put_str(result),
                 Err(err) => {
                     ctx.set_error(output.len(), err.to_string());
                 }
-            };
+            }
             output.commit_row();
         }),
     );
 
-    let json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    registry.register_passthrough_nullable_1_arg(
+        "typeof",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            match RawJsonb::new(v).type_of() {
+                Ok(result) => output.put_str(result),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    let object_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object".to_string(),
+                name: "object_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_fn),
+                eval: Box::new(object_construct_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_object", json_object);
+    registry.register_function_factory("object_construct", object_construct);
 
-    let try_json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let try_object_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let f = Function {
             signature: FunctionSignature {
-                name: "try_json_object".to_string(),
+                name: "try_object_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_fn),
+                eval: Box::new(object_construct_fn),
             },
         };
         Some(Arc::new(f.error_to_null()))
     }));
-    registry.register_function_factory("try_json_object", try_json_object);
+    registry.register_function_factory("try_object_construct", try_object_construct);
 
     let json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_keep_null".to_string(),
+                name: "object_construct_keep_null".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_keep_null_fn),
+                eval: Box::new(object_construct_keep_null_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_object_keep_null", json_object_keep_null);
+    registry.register_function_factory("object_construct_keep_null", json_object_keep_null);
 
-    let try_json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type| {
+    let try_object_construct_keep_null = FunctionFactory::Closure(Box::new(|_, args_type| {
         let f = Function {
             signature: FunctionSignature {
-                name: "try_json_object_keep_null".to_string(),
+                name: "try_object_construct_keep_null".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_keep_null_fn),
+                eval: Box::new(object_construct_keep_null_fn),
             },
         };
         Some(Arc::new(f.error_to_null()))
     }));
-    registry.register_function_factory("try_json_object_keep_null", try_json_object_keep_null);
+    registry.register_function_factory(
+        "try_object_construct_keep_null",
+        try_object_construct_keep_null,
+    );
 
-    let json_array = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let array_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_array".to_string(),
+                name: "array_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_array_fn),
+                eval: Box::new(array_construct_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_array", json_array);
+    registry.register_function_factory("array_construct", array_construct);
 
     registry.register_passthrough_nullable_2_arg(
         "json_contains_in_left",
@@ -2008,14 +2621,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    let json_object_insert = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_insert = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 3 && args_type.len() != 4 {
             return None;
         }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
             return None;
         }
         if args_type.len() == 4
@@ -2032,19 +2642,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_insert".to_string(),
+                name: "object_insert".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
+                eval: Box::new(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
             },
         }))
     }));
-    registry.register_function_factory("json_object_insert", json_object_insert);
+    registry.register_function_factory("object_insert", object_insert);
 
-    let json_object_pick = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_pick = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2064,21 +2674,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_pick".to_string(),
+                name: "object_pick".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    json_object_pick_or_delete_fn(args, ctx, true, is_nullable)
+                    object_pick_or_delete_fn(args, ctx, true, is_nullable)
                 }),
             },
         }))
     }));
-    registry.register_function_factory("json_object_pick", json_object_pick);
+    registry.register_function_factory("object_pick", object_pick);
 
-    let json_object_delete = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_delete = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2098,19 +2708,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_delete".to_string(),
+                name: "object_delete".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    json_object_pick_or_delete_fn(args, ctx, false, is_nullable)
+                    object_pick_or_delete_fn(args, ctx, false, is_nullable)
                 }),
             },
         }))
     }));
-    registry.register_function_factory("json_object_delete", json_object_delete);
+    registry.register_function_factory("object_delete", object_delete);
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
         "strip_null_value",
@@ -2126,7 +2736,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn array_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
     let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
@@ -2156,15 +2766,15 @@ fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTyp
     }
 }
 
-fn json_object_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    json_object_impl_fn(args, ctx, false)
+fn object_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    object_construct_impl_fn(args, ctx, false)
 }
 
-fn json_object_keep_null_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    json_object_impl_fn(args, ctx, true)
+fn object_construct_keep_null_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    object_construct_impl_fn(args, ctx, true)
 }
 
-fn json_object_impl_fn(
+fn object_construct_impl_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     keep_null: bool,
@@ -2538,7 +3148,7 @@ fn path_predicate_fn<'a>(
     }
 }
 
-fn json_object_insert_fn(
+fn object_insert_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_nullable: bool,
@@ -2576,12 +3186,6 @@ fn json_object_insert_fn(
             Value::Scalar(scalar) => scalar.as_ref(),
             Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
-        if new_key == ScalarRef::Null || new_val == ScalarRef::Null {
-            builder.put(value.as_ref());
-            builder.commit_row();
-            validity.push(true);
-            continue;
-        }
         let update_flag = if args.len() == 4 {
             let v = match &args[3] {
                 Value::Scalar(scalar) => scalar.as_ref(),
@@ -2594,18 +3198,30 @@ fn json_object_insert_fn(
         } else {
             false
         };
-        let new_key = new_key.as_string().unwrap();
+        if new_key == ScalarRef::Null || (!update_flag && new_val == ScalarRef::Null) {
+            builder.put(value.as_ref());
+            builder.commit_row();
+            validity.push(true);
+            continue;
+        }
+        let new_key_str = scalar_ref_to_string(&new_key);
         let res = match new_val {
+            ScalarRef::Null => {
+                // if update_flag is true and value is NULL, remove the key.
+                let mut delete_keys = BTreeSet::new();
+                delete_keys.insert(new_key_str.as_str());
+                value.object_delete(&delete_keys)
+            }
             ScalarRef::Variant(new_val) => {
                 let new_val = RawJsonb::new(new_val);
-                value.object_insert(new_key, &new_val, update_flag)
+                value.object_insert(&new_key_str, &new_val, update_flag)
             }
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
                 cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf, None);
                 let new_val = RawJsonb::new(new_val_buf.as_bytes());
-                value.object_insert(new_key, &new_val, update_flag)
+                value.object_insert(&new_key_str, &new_val, update_flag)
             }
         };
         match res {
@@ -2642,7 +3258,7 @@ fn json_object_insert_fn(
     }
 }
 
-fn json_object_pick_or_delete_fn(
+fn object_pick_or_delete_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_pick: bool,
@@ -2725,66 +3341,6 @@ fn json_object_pick_or_delete_fn(
     }
 }
 
-fn cast_to_bool(v: &[u8]) -> Result<bool, jsonb::Error> {
-    match RawJsonb::new(v).to_bool() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.to_bool();
-            }
-            Err(err)
-        }
-    }
-}
-
-fn cast_to_i64(v: &[u8]) -> Result<i64, jsonb::Error> {
-    match RawJsonb::new(v).to_i64() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.to_i64();
-            }
-            Err(err)
-        }
-    }
-}
-
-fn cast_to_u64(v: &[u8]) -> Result<u64, jsonb::Error> {
-    match RawJsonb::new(v).to_u64() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.to_u64();
-            }
-            Err(err)
-        }
-    }
-}
-
-fn cast_to_f64(v: &[u8]) -> Result<f64, jsonb::Error> {
-    match RawJsonb::new(v).to_f64() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.to_f64();
-            }
-            Err(err)
-        }
-    }
-}
-
 fn cast_to_date(val: &[u8], tz: &TimeZone) -> Result<Option<i32>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
@@ -2853,20 +3409,5 @@ fn cast_to_binary(val: &[u8]) -> Result<Option<Vec<u8>>, jsonb::Error> {
         JsonbValue::Binary(b) => Ok(Some(b.to_vec())),
         JsonbValue::String(s) => Ok(Some(s.to_string().as_bytes().to_vec())),
         _ => Err(jsonb::Error::InvalidJsonType),
-    }
-}
-
-fn type_of(v: &[u8]) -> Result<&'static str, jsonb::Error> {
-    match RawJsonb::new(v).type_of() {
-        Ok(val) => Ok(val),
-        Err(err) => {
-            if err.to_string() == "InvalidJsonb" {
-                let s = unsafe { std::str::from_utf8_unchecked(v) };
-                let owned_jsonb = s.parse::<OwnedJsonb>()?;
-                let raw_jsonb = owned_jsonb.as_raw();
-                return raw_jsonb.type_of();
-            }
-            Err(err)
-        }
     }
 }

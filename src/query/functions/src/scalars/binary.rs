@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
 
 use databend_common_expression::error_to_null;
@@ -35,8 +36,12 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_hex", &["hex"]);
-    registry.register_aliases("from_hex", &["unhex"]);
+    registry.register_aliases("to_hex", &["hex", "hex_encode"]);
+    registry.register_aliases("from_hex", &["unhex", "hex_decode_binary"]);
+    registry.register_aliases("try_from_hex", &["try_hex_decode_binary"]);
+    registry.register_aliases("to_base64", &["base64_encode"]);
+    registry.register_aliases("from_base64", &["base64_decode_binary"]);
+    registry.register_aliases("try_from_base64", &["try_base64_decode_binary"]);
 
     registry.register_passthrough_nullable_1_arg::<BinaryType, NumberType<u64>, _, _>(
         "length",
@@ -137,6 +142,32 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
+        "to_binary",
+        |_, _, _| FunctionDomain::Full,
+        |val, format, ctx| {
+            let Some(format) = format.as_scalar() else {
+                ctx.set_error(
+                    0,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
+                return Value::Scalar(Vec::new());
+            };
+            match format.to_ascii_lowercase().as_str() {
+                "hex" => eval_unhex(val, ctx),
+                "base64" => eval_from_base64(val, ctx),
+                "utf-8" => match val {
+                    Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
+                    Value::Column(col) => Value::Column(col.into()),
+                },
+                _ => {
+                    ctx.set_error(0, "The format option only supports hex, base64, and utf-8");
+                    Value::Scalar(Vec::new())
+                }
+            }
+        },
+    );
+
     registry.register_combine_nullable_1_arg::<StringType, BinaryType, _, _>(
         "try_to_binary",
         |_, _| FunctionDomain::Full,
@@ -145,6 +176,28 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
                 Value::Column(NullableColumn::new_unchecked(col.into(), validity))
+            }
+        },
+    );
+
+    registry.register_combine_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
+        "try_to_binary",
+        |_, _, _| FunctionDomain::Full,
+        |val, format, ctx| {
+            let Some(format) = format.as_scalar() else {
+                return Value::Scalar(None);
+            };
+            match format.to_ascii_lowercase().as_str() {
+                "hex" => error_to_null(eval_unhex)(val, ctx),
+                "base64" => error_to_null(eval_from_base64)(val, ctx),
+                "utf-8" => match val {
+                    Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
+                    Value::Column(col) => {
+                        let validity = Bitmap::new_constant(true, col.len());
+                        Value::Column(NullableColumn::new_unchecked(col.into(), validity))
+                    }
+                },
+                _ => Value::Scalar(None),
             }
         },
     );
@@ -209,11 +262,16 @@ fn eval_binary_to_string(val: Value<BinaryType>, ctx: &mut EvalContext) -> Value
     vectorize_binary_to_string(
         |col| col.total_bytes_len(),
         |val, output, ctx| {
-            if let Ok(val) = simdutf8::basic::from_utf8(val) {
-                output.put_str(val);
+            let val = if ctx.func_ctx.enable_binary_to_utf8_lossy {
+                String::from_utf8_lossy(val)
+            } else if let Ok(val) = simdutf8::basic::from_utf8(val) {
+                Cow::Borrowed(val)
             } else {
                 ctx.set_error(output.len(), "invalid utf8 sequence");
-            }
+                output.commit_row();
+                return;
+            };
+            output.put_str(&val);
             output.commit_row();
         },
     )(val, ctx)

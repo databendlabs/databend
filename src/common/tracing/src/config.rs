@@ -15,7 +15,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
+use databend_common_meta_app_storage::StorageParams;
 use itertools::Itertools;
 
 // use the uncommon usage of Pascal Case level name
@@ -44,14 +46,14 @@ impl Config {
                 on: true,
                 level: "WARN,databend=DEBUG,openraft=DEBUG".to_string(),
                 dir: "./.databend/logs".to_string(),
-                format: "text".to_string(),
+                format: LogFormat::Text,
                 limit: 48,
                 max_size: 4294967296,
             },
             stderr: StderrConfig {
                 on: true,
                 level: "WARN".to_string(),
-                format: "text".to_string(),
+                format: LogFormat::Text,
             },
             ..Default::default()
         }
@@ -63,7 +65,7 @@ pub struct FileConfig {
     pub on: bool,
     pub level: String,
     pub dir: String,
-    pub format: String,
+    pub format: LogFormat,
     pub limit: usize,
     pub max_size: usize,
 }
@@ -84,7 +86,7 @@ impl Default for FileConfig {
             on: true,
             level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             dir: "./.databend/logs".to_string(),
-            format: "json".to_string(),
+            format: LogFormat::Json,
             limit: 48,
             max_size: 4294967296,
         }
@@ -95,7 +97,7 @@ impl Default for FileConfig {
 pub struct StderrConfig {
     pub on: bool,
     pub level: String,
-    pub format: String,
+    pub format: LogFormat,
 }
 
 impl Display for StderrConfig {
@@ -113,7 +115,7 @@ impl Default for StderrConfig {
         Self {
             on: false,
             level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
-            format: "text".to_string(),
+            format: LogFormat::Text,
         }
     }
 }
@@ -248,6 +250,55 @@ impl Default for TracingConfig {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogFormat {
+    Text,
+    Json,
+    Identical,
+}
+
+impl Display for LogFormat {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            LogFormat::Text => write!(f, "text"),
+            LogFormat::Json => write!(f, "json"),
+            LogFormat::Identical => write!(f, "identical"),
+        }
+    }
+}
+
+impl serde::Serialize for LogFormat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        serializer.serialize_str(match self {
+            LogFormat::Text => "text",
+            LogFormat::Json => "json",
+            LogFormat::Identical => "identical",
+        })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for LogFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let format = String::deserialize(deserializer)?;
+        format.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl FromStr for LogFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "text" => Ok(LogFormat::Text),
+            "json" => Ok(LogFormat::Json),
+            "identical" => Ok(LogFormat::Identical),
+            _ => Err(format!("unknown log format: {}", s)),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OTLPProtocol {
     Http,
     Grpc,
@@ -346,19 +397,21 @@ pub struct HistoryConfig {
     pub level: String,
     pub retention_interval: usize,
     pub tables: Vec<HistoryTableConfig>,
+    pub storage_params: Option<StorageParams>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct HistoryTableConfig {
     pub table_name: String,
     pub retention: usize,
+    pub invisible: bool,
 }
 
 impl Display for HistoryConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}]",
+            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}], storage_params={}",
             self.on,
             self.log_only,
             self.interval,
@@ -368,7 +421,9 @@ impl Display for HistoryConfig {
             self.tables
                 .iter()
                 .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
-                .join(", ")
+                .join(", "),
+            self.storage_params.as_ref()
+                .map_or("None".to_string(), |p| p.to_string())
         )
     }
 }
@@ -381,10 +436,11 @@ impl Default for HistoryConfig {
             log_only: false,
             // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
-            level: "WARN".to_string(),
+            level: "INFO".to_string(),
             // Trigger the retention task every 24 hours
             retention_interval: 24,
             tables: vec![],
+            storage_params: None,
         }
     }
 }
@@ -394,6 +450,16 @@ impl Default for HistoryTableConfig {
         Self {
             table_name: "".to_string(),
             retention: 168,
+            invisible: false,
         }
+    }
+}
+
+impl HistoryConfig {
+    pub fn is_invisible(&self, table_name: &str) -> bool {
+        self.tables
+            .iter()
+            .find(|table| table.table_name.eq_ignore_ascii_case(table_name))
+            .is_some_and(|table| table.invisible)
     }
 }

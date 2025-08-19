@@ -25,11 +25,9 @@ use databend_common_expression::expr::*;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -43,7 +41,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_native::read::reader::NativeReader;
 use databend_common_native::stat::stat_simple;
@@ -277,35 +274,14 @@ impl<'a> FuseEncodingImpl<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(table_name.build())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(column_name.build())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(column_type.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-                    Value::Column(UInt32Type::from_opt_data(validity_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Column(UInt32Type::from_data(compressed_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Column(UInt32Type::from_data(uncompressed_size)),
-                ),
-                BlockEntry::new(DataType::String, Value::Column(Column::String(l1.build()))),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::String)),
-                    Value::Column(Column::Nullable(Box::new(l2.build().upcast()))),
-                ),
+                Column::String(table_name.build()).into(),
+                Column::String(column_name.build()).into(),
+                Column::String(column_type.build()).into(),
+                UInt32Type::from_opt_data(validity_size).into(),
+                UInt32Type::from_data(compressed_size).into(),
+                UInt32Type::from_data(uncompressed_size).into(),
+                Column::String(l1.build()).into(),
+                Column::Nullable(Box::new(l2.build().upcast())).into(),
             ],
             all_num_rows,
         ))

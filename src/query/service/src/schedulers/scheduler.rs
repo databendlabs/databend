@@ -17,12 +17,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::executor::build_broadcast_plans;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
+use crate::physical_plans::build_broadcast_plans;
+use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -31,7 +32,6 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
 use crate::sql::ColumnBinding;
 use crate::stream::PullingExecutorStream;
 
@@ -81,12 +81,8 @@ pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    let pipeline = PipelineBuilder::create(
-        ctx.get_function_context()?,
-        ctx.get_settings(),
-        ctx.clone(),
-        vec![],
-    );
+    let pipeline =
+        PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
     let mut build_res = pipeline.finalize(plan)?;
 
     let settings = ctx.get_settings();
@@ -106,8 +102,11 @@ pub async fn build_distributed_pipeline(
         .chain(std::iter::once(plan))
     {
         let fragmenter = Fragmenter::try_create(ctx.clone())?;
-        let root_fragment = fragmenter.build_fragment(plan)?;
-        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+        let fragments = fragmenter.build_fragment(plan)?;
+
+        for fragment in fragments {
+            fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+        }
     }
 
     let exchange_manager = ctx.get_exchange_manager();
@@ -138,9 +137,8 @@ impl ServiceQueryExecutor {
     }
 }
 
-#[async_trait]
-impl QueryExecutor for ServiceQueryExecutor {
-    async fn execute_query_with_physical_plan(
+impl ServiceQueryExecutor {
+    pub async fn execute_query_with_physical_plan(
         &self,
         plan: &PhysicalPlan,
     ) -> Result<Vec<DataBlock>> {
@@ -153,7 +151,10 @@ impl QueryExecutor for ServiceQueryExecutor {
             .try_collect::<Vec<DataBlock>>()
             .await
     }
+}
 
+#[async_trait]
+impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(query_sql).await?;

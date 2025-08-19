@@ -42,7 +42,6 @@ jobs:
       - Linux
       - 8c32g
       - aws
-      - spot
     strategy:
       matrix:
         include:
@@ -68,7 +67,6 @@ jobs:
       - Linux
       - 4c16g
       - aws
-      - spot
     steps:
       - uses: actions/checkout@v4
         with:

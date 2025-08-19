@@ -38,6 +38,7 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
@@ -46,6 +47,7 @@ use parking_lot::RwLock;
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -135,9 +137,7 @@ impl Session {
     }
 
     pub fn force_kill_session(&self) {
-        self.force_kill_query(ErrorCode::AbortedQuery(
-            "Aborted query, because the server is shutting down or the query was killed",
-        ));
+        self.force_kill_query(ErrorCode::aborting());
         self.kill(/* shutdown io stream */);
     }
 
@@ -151,18 +151,22 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     #[async_backtrace::framed]
-    pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
+    pub async fn create_query_context(
+        self: &Arc<Self>,
+        version: BuildInfoRef,
+    ) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        self.create_query_context_with_cluster(cluster)
+        self.create_query_context_with_cluster(cluster, version)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
-        let shared = QueryContextShared::try_create(session, cluster)?;
+        let shared = QueryContextShared::try_create(session, cluster, version)?;
 
         if let Some(mem_stat) = ThreadTracker::mem_stat() {
             let settings = self.get_settings();
@@ -371,9 +375,10 @@ impl Session {
     pub async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         self.privilege_mgr()
-            .get_visibility_checker(ignore_ownership)
+            .get_visibility_checker(ignore_ownership, object)
             .await
     }
 

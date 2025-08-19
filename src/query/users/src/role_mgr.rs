@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
@@ -121,24 +122,22 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         role_info: RoleInfo,
-        if_not_exists: bool,
-    ) -> Result<u64> {
-        if if_not_exists && self.exists_role(tenant, role_info.name.clone()).await? {
-            return Ok(0);
-        }
-
+        create_option: &CreateOption,
+    ) -> Result<()> {
+        let can_replace = matches!(create_option, CreateOption::CreateOrReplace);
         let client = self.role_api(tenant);
-        let add_role = client.add_role(role_info);
-        match add_role.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                if if_not_exists && e.code() == ErrorCode::ROLE_ALREADY_EXISTS {
-                    Ok(0)
-                } else {
-                    Err(e.add_message_back("(while add role)"))
-                }
+        let name = role_info.identity().to_string();
+        if let Err(_e) = client.add_role(role_info, can_replace).await? {
+            if matches!(create_option, CreateOption::CreateIfNotExists) {
+                return Ok(());
+            } else {
+                return Err(ErrorCode::RoleAlreadyExists(format!(
+                    "Role {} already exists",
+                    name
+                )));
             }
         }
+        return Ok(());
     }
 
     #[async_backtrace::framed]

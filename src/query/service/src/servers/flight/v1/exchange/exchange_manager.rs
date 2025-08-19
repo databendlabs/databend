@@ -25,7 +25,9 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightData;
 use async_channel::Receiver;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
@@ -35,7 +37,6 @@ use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_sql::executor::PhysicalPlan;
 use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
@@ -53,6 +54,7 @@ use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -113,6 +115,30 @@ impl DataExchangeManager {
         })
     }
 
+    pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut executors = Vec::new();
+        {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            for (query_id, query_coordinator) in queries_coordinator.iter() {
+                if let Some(info) = &query_coordinator.info {
+                    if let Some(executor) = info.query_executor.clone() {
+                        executors.push((query_id, executor));
+                    }
+                }
+            }
+        }
+        executors
+            .into_iter()
+            .map(|(query_id, executor)| {
+                (
+                    query_id.clone(),
+                    executor.get_inner().get_query_execution_stats(),
+                )
+            })
+            .collect()
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -146,6 +172,12 @@ impl DataExchangeManager {
                 source: String,
                 exchange: FlightExchange,
             },
+        }
+
+        if env.perf_flag {
+            if let Some(ctx) = ctx.as_ref() {
+                ctx.set_perf_flag(env.perf_flag)
+            }
         }
 
         let config = GlobalConfig::instance();
@@ -846,6 +878,12 @@ impl QueryCoordinator {
     pub fn execute_pipeline(&mut self) -> Result<()> {
         let info = self.info.as_mut().expect("Query info is None");
 
+        let perf_guard = if info.query_ctx.get_perf_flag() {
+            Some(QueryPerf::start(99)?)
+        } else {
+            None
+        };
+
         if !info.started.swap(true, Ordering::SeqCst) {
             if let Some(leak_worker) = info.remove_leak_query_worker.take() {
                 leak_worker.abort();
@@ -927,6 +965,7 @@ impl QueryCoordinator {
             ctx,
             request_server_exchange,
             executor.get_inner(),
+            perf_guard,
         );
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
@@ -934,7 +973,6 @@ impl QueryCoordinator {
         } else {
             Span::noop()
         };
-
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let error = executor.execute().err();
@@ -997,6 +1035,7 @@ impl FragmentCoordinator {
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
+                    allow_adjust_parallelism: true,
                 },
             ))),
             DataExchange::ShuffleDataExchange(exchange) => Ok(Some(
@@ -1009,6 +1048,7 @@ impl FragmentCoordinator {
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                 }),
             )),
         }
@@ -1032,7 +1072,6 @@ impl FragmentCoordinator {
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
-                vec![],
             );
 
             let res = pipeline_builder.finalize(&self.physical_plan)?;

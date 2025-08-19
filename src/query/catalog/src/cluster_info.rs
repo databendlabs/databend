@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -42,5 +44,25 @@ impl Cluster {
     /// defined in `databend-query`.
     pub fn is_empty(&self) -> bool {
         self.nodes.len() <= 1
+    }
+
+    pub fn get_cluster_id(&self) -> Result<String> {
+        for node in &self.nodes {
+            if node.id == self.local_id {
+                return Ok(node.cluster_id.clone());
+            }
+        }
+
+        Err(ErrorCode::Internal("Cannot found local node in cluster"))
+    }
+
+    pub fn get_warehouse_id(&self) -> Result<String> {
+        for node in &self.nodes {
+            if node.id == self.local_id {
+                return Ok(node.warehouse_id.clone());
+            }
+        }
+
+        Err(ErrorCode::Internal("Cannot found local node in cluster"))
     }
 }

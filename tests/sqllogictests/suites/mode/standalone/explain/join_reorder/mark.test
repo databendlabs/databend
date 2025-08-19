@@ -8,7 +8,6 @@ HashJoin
 ├── probe keys: [numbers.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -97,7 +96,6 @@ EvalScalar
     ├── probe keys: [c (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
     │   ├── output columns: [c (#8), if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
@@ -110,7 +108,6 @@ EvalScalar
     │       ├── probe keys: [c (#8)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
-    │       ├── build join filters:
     │       ├── estimated rows: 4.00
     │       ├── Filter(Build)
     │       │   ├── output columns: [t1.a (#2)]
@@ -133,7 +130,6 @@ EvalScalar
     │           ├── probe keys: []
     │           ├── keys is null equal: []
     │           ├── filters: []
-    │           ├── build join filters:
     │           ├── estimated rows: 4.00
     │           ├── DummyTableScan(Build)
     │           └── AggregateFinal(Probe)

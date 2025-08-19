@@ -26,19 +26,23 @@ pub type Features = BTreeMap<&'static str, VersionTuple>;
 pub mod features {
     use crate::FeatureSpec;
 
-    pub const KV_API:              FeatureSpec = ("kv_api",              (1, 2, 259));
-    pub const KV_READ_V1:          FeatureSpec = ("kv_read_v1",          (1, 2, 259));
-    pub const TRANSACTION:         FeatureSpec = ("transaction",         (1, 2, 259));
-    pub const EXPORT:              FeatureSpec = ("export",              (1, 2, 259));
+    pub const KV_API:               FeatureSpec = ("kv_api",               (1, 2, 259));
+    pub const KV_READ_V1:           FeatureSpec = ("kv_read_v1",           (1, 2, 259));
+    pub const TRANSACTION:          FeatureSpec = ("transaction",          (1, 2, 259));
+    pub const EXPORT:               FeatureSpec = ("export",               (1, 2, 259));
     // `export_v1` is not a required feature because the client fallback to `export` if `export_v1` is not available.
-    pub const EXPORT_V1:           FeatureSpec = ("export_v1",           (1, 2, 315));
-    pub const WATCH:               FeatureSpec = ("watch",               (1, 2, 259));
-    pub const WATCH_INITIAL_FLUSH: FeatureSpec = ("watch/initial_flush", (1, 2, 677));
+    pub const EXPORT_V1:            FeatureSpec = ("export_v1",            (1, 2, 315));
+    pub const WATCH:                FeatureSpec = ("watch",                (1, 2, 259));
+    pub const WATCH_INITIAL_FLUSH:  FeatureSpec = ("watch/initial_flush",  (1, 2, 677));
     /// WatchResponse contains a flag to indicate whether the event is initialization event or change event.
-    pub const WATCH_INIT_FLAG:     FeatureSpec = ("watch/init_flag",     (1, 2, 736));
-    pub const MEMBER_LIST:         FeatureSpec = ("member_list",         (1, 2, 259));
-    pub const GET_CLUSTER_STATUS:  FeatureSpec = ("get_cluster_status",  (1, 2, 259));
-    pub const GET_CLIENT_INFO:     FeatureSpec = ("get_client_info",     (1, 2, 259));
+    pub const WATCH_INIT_FLAG:      FeatureSpec = ("watch/init_flag",      (1, 2, 736));
+    pub const MEMBER_LIST:          FeatureSpec = ("member_list",          (1, 2, 259));
+    pub const GET_CLUSTER_STATUS:   FeatureSpec = ("get_cluster_status",   (1, 2, 259));
+    pub const GET_CLIENT_INFO:      FeatureSpec = ("get_client_info",      (1, 2, 259));
+    /// TxnPutResponse contains the `current` state of the key after the put operation.
+    pub const PUT_RESPONSE_CURRENT: FeatureSpec = ("put_response/current", (1, 2, 756));
+    /// Txn support a FetchAdd operation for json encoded u64 values.
+    pub const FETCH_ADD_U64:        FeatureSpec = ("fetch_add_u64",        (1, 2, 764));
 }
 
 /// All features that are ever defined and their least required server version.
@@ -56,6 +60,8 @@ pub fn all() -> &'static [FeatureSpec] {
         features::MEMBER_LIST,
         features::GET_CLUSTER_STATUS,
         features::GET_CLIENT_INFO,
+        features::PUT_RESPONSE_CURRENT,
+        features::FETCH_ADD_U64,
     ];
 
     REQUIRES

@@ -41,6 +41,7 @@ use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::DecimalSize;
 use crate::types::GeographyColumn;
@@ -124,10 +125,13 @@ impl TryFrom<&Field> for TableField {
                     TableDataType::String
                 }
                 ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
-                        *precision,
-                        *scale as _,
-                    )?))
+                    let size = DecimalSize::new(*precision, *scale as _)?;
+                    match size.data_kind() {
+                        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+                            TableDataType::Decimal(DecimalDataType::Decimal128(size))
+                        }
+                        _ => unreachable!(),
+                    }
                 }
                 ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
                     TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(
@@ -293,7 +297,7 @@ impl Column {
             DataType::String => Column::String(try_to_string_column(array)?),
             DataType::Decimal(_) => {
                 let col = DecimalColumn::try_from_arrow_data(array.to_data())?;
-                Column::Decimal(col.strict_decimal_data_type())
+                Column::Decimal(col.strict_decimal())
             }
             DataType::Timestamp => {
                 let array = arrow_cast::cast(

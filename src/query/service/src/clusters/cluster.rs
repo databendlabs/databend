@@ -28,6 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
@@ -43,15 +44,20 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseMgr;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_metrics::cluster::*;
-use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_settings::Settings;
+use databend_common_telemetry::report_node_telemetry;
+use databend_common_version::DATABEND_TELEMETRY_API_KEY;
+use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -71,6 +77,7 @@ use crate::servers::flight::FlightClient;
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
+    version: BuildInfoRef,
     heartbeat: Mutex<ClusterHeartbeat>,
     warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
@@ -83,7 +90,7 @@ pub struct ClusterDiscovery {
 #[async_trait::async_trait]
 pub trait ClusterHelper {
     fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
-    fn empty() -> Arc<Cluster>;
+    fn empty(node: NodeInfo) -> Arc<Cluster>;
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
@@ -111,12 +118,10 @@ impl ClusterHelper for Cluster {
         })
     }
 
-    fn empty() -> Arc<Cluster> {
-        Arc::new(Cluster {
-            unassign: false,
-            local_id: String::from(""),
-            nodes: Vec::new(),
-        })
+    fn empty(node: NodeInfo) -> Arc<Cluster> {
+        let node_info = Arc::new(node);
+        let local_id = node_info.id.clone();
+        Cluster::create(vec![node_info], local_id)
     }
 
     fn is_empty(&self) -> bool {
@@ -217,8 +222,8 @@ impl ClusterHelper for Cluster {
 
 impl ClusterDiscovery {
     #[async_backtrace::framed]
-    pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
-        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
+    pub async fn create_meta_client(cfg: &InnerConfig, version: BuildInfoRef) -> Result<MetaStore> {
+        let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(version));
         match meta_api_provider.create_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
@@ -229,9 +234,9 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        let metastore = ClusterDiscovery::create_meta_client(cfg).await?;
-        GlobalInstance::set(Self::try_create(cfg, metastore).await?);
+    pub async fn init(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
+        let metastore = Self::create_meta_client(cfg, version).await?;
+        GlobalInstance::set(Self::try_create(cfg, version, metastore).await?);
 
         Ok(())
     }
@@ -239,13 +244,15 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     pub async fn try_create(
         cfg: &InnerConfig,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
             local_secret: cfg.query.node_secret.clone(),
+            version,
             warehouse_manager: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -266,12 +273,14 @@ impl ClusterDiscovery {
 
     fn create_provider(
         cfg: &InnerConfig,
+        version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager = WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
+        let cluster_manager =
+            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
@@ -293,9 +302,14 @@ impl ClusterDiscovery {
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
             Ok(cluster_nodes) => {
+                let mut has_local_node = false;
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
-                    if node.id != self.local_id {
+                    if node.id == self.local_id {
+                        has_local_node = true;
+                    }
+
+                    if config.query.check_connection_before_schedule && node.id != self.local_id {
                         let start_at = Instant::now();
                         if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
@@ -312,6 +326,26 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()));
                 }
 
+                // When this node loses heartbeat with the meta node but receives an SQL request from the client, we should attempt to use this node.
+                if !has_local_node && !res.is_empty() {
+                    let mut local_node_info = NodeInfo::create(
+                        config.query.node_id.clone(),
+                        config.query.node_secret.clone(),
+                        format!(
+                            "{}:{}",
+                            config.query.http_handler_host, config.query.http_handler_port
+                        ),
+                        config.query.flight_api_address.clone(),
+                        config.query.discovery_address.clone(),
+                        String::new(),
+                        String::new(),
+                    );
+
+                    local_node_info.cluster_id = res[0].cluster_id.clone();
+                    local_node_info.warehouse_id = res[0].warehouse_id.clone();
+                    res.push(Arc::new(local_node_info));
+                }
+
                 metrics_gauge_discovered_nodes(
                     &self.local_id,
                     &self.cluster_id,
@@ -322,10 +356,22 @@ impl ClusterDiscovery {
 
                 // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
                 if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
-                    let mut cluster = Cluster::empty();
-                    let mut_cluster = Arc::get_mut(&mut cluster).unwrap();
-                    mut_cluster.local_id = self.local_id.clone();
-                    return Ok(cluster);
+                    let mut node_info = NodeInfo::create(
+                        config.query.node_id.clone(),
+                        config.query.node_secret.clone(),
+                        format!(
+                            "{}:{}",
+                            config.query.http_handler_host, config.query.http_handler_port
+                        ),
+                        config.query.flight_api_address.clone(),
+                        config.query.discovery_address.clone(),
+                        String::new(),
+                        String::new(),
+                    );
+
+                    node_info.cluster_id = config.query.cluster_id.clone();
+                    node_info.warehouse_id = config.query.warehouse_id.clone();
+                    return Ok(Cluster::empty(node_info));
                 }
 
                 Ok(Cluster::create(res, self.local_id.clone()))
@@ -356,12 +402,46 @@ impl ClusterDiscovery {
             true => self.warehouse_manager.discover(&config.query.node_id).await,
             false => {
                 self.warehouse_manager
-                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                    .list_warehouse_cluster_nodes(
+                        &config.query.warehouse_id,
+                        &config.query.cluster_id,
+                    )
                     .await
             }
         };
 
         self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    pub async fn single_node_cluster(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        match self
+            .warehouse_manager
+            .get_node_info(&config.query.node_id)
+            .await?
+        {
+            None => {
+                let mut node_info = NodeInfo::create(
+                    config.query.node_id.clone(),
+                    config.query.node_secret.clone(),
+                    format!(
+                        "{}:{}",
+                        config.query.http_handler_host, config.query.http_handler_port
+                    ),
+                    config.query.flight_api_address.clone(),
+                    config.query.discovery_address.clone(),
+                    String::new(),
+                    String::new(),
+                );
+
+                node_info.cluster_id = config.query.cluster_id.clone();
+                node_info.warehouse_id = config.query.warehouse_id.clone();
+                Ok(Cluster::empty(node_info))
+            }
+            Some(v) => Ok(Cluster::create(
+                vec![Arc::new(v)],
+                config.query.node_id.clone(),
+            )),
+        }
     }
 
     pub async fn find_node_by_warehouse(
@@ -457,7 +537,13 @@ impl ClusterDiscovery {
     }
 
     #[async_backtrace::framed]
-    pub async fn unregister_to_metastore(self: &Arc<Self>, signal: &mut SignalStream) {
+    pub async fn unregister_to_metastore(
+        self: &Arc<Self>,
+        signal: &mut SignalStream,
+        cfg: &InnerConfig,
+    ) {
+        self.report_telemetry_data(cfg, None).await;
+
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
@@ -490,7 +576,6 @@ impl ClusterDiscovery {
 
     #[async_backtrace::framed]
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &InnerConfig) -> Result<()> {
-        let cpus = cfg.query.num_cpus;
         let mut address = cfg.query.flight_api_address.clone();
         let mut http_address = format!(
             "{}:{}",
@@ -556,11 +641,10 @@ impl ClusterDiscovery {
         let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
-            cpus,
             http_address,
             address,
             discovery_address,
-            DATABEND_COMMIT_VERSION.to_string(),
+            self.version.commit_detail.clone(),
             cache_id,
         );
 
@@ -569,8 +653,15 @@ impl ClusterDiscovery {
 
         self.drop_invalid_nodes(&node_info).await?;
 
-        match self.warehouse_manager.start_node(node_info).await {
-            Ok(seq_node) => self.start_heartbeat(seq_node).await,
+        let online_nodes = self.warehouse_manager.list_online_nodes().await?;
+        self.check_license_key(online_nodes.clone()).await?;
+
+        match self.warehouse_manager.start_node(node_info.clone()).await {
+            Ok(seq_node) => {
+                self.start_heartbeat(seq_node).await?;
+                self.report_telemetry_data(cfg, Some(online_nodes)).await;
+                Ok(())
+            }
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
@@ -579,9 +670,177 @@ impl ClusterDiscovery {
     async fn start_heartbeat(self: &Arc<Self>, seq_node: SeqV<NodeInfo>) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
         let seq = seq_node.seq;
-        let node_info = seq_node.into_value().unwrap();
+        let node_info = seq_node.data;
         heartbeat.start(node_info, seq);
         Ok(())
+    }
+
+    async fn check_license_key(&self, nodes: Vec<NodeInfo>) -> Result<()> {
+        let license_key = self.get_license_key(&self.tenant_id).await?;
+
+        let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
+
+        info!("[Cluster] current resource status - online nodes: [{}], available CPU cores: [{}] for tenant [{}].",
+            nodes.len(),
+            total_cpu_nums,
+            self.tenant_id
+        );
+
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(license_key.clone(), Feature::MaxNodeQuota(nodes.len()))?;
+
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(license_key, Feature::MaxCpuQuota(total_cpu_nums as usize))
+    }
+
+    async fn get_license_key(&self, tenant: &str) -> Result<String> {
+        // We must get the license key from settings. It may be in the configuration file.
+        let settings = Settings::create(Tenant::new_literal(tenant));
+        settings.load_changes().await?;
+        Ok(settings.get_enterprise_license(self.version))
+    }
+
+    async fn report_telemetry_data(&self, cfg: &InnerConfig, online_nodes: Option<Vec<NodeInfo>>) {
+        let start_time = std::time::Instant::now();
+
+        let license_result = self
+            .get_license_key(&self.tenant_id)
+            .await
+            .ok()
+            .filter(|key| !key.is_empty())
+            .and_then(|key| LicenseManagerSwitch::instance().parse_license(&key).ok());
+
+        if let Some(ref claims) = license_result {
+            let license_type = claims.custom.r#type.as_deref().unwrap_or("").to_lowercase();
+            if license_type != "trial" && !cfg.telemetry.enabled {
+                return;
+            }
+        }
+
+        let license_info = match license_result {
+            Some(claims) => {
+                let expires_at = claims.expires_at.map(|d| d.as_secs()).unwrap_or(0);
+                serde_json::json!({
+                    "has_license": true,
+                    "expires_at": expires_at,
+                    "license_info": claims.custom
+                })
+            }
+            None => serde_json::json!({
+                "has_license": false,
+                "license_info": null
+            }),
+        };
+
+        // Collect system information
+        let mut system = sysinfo::System::new();
+        system.refresh_memory();
+        system.refresh_cpu_all();
+
+        let event_type = if online_nodes.is_none() {
+            "node_shutdown"
+        } else {
+            "node_startup"
+        };
+
+        let payload = serde_json::json!({
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            "event_type": event_type,
+            "cluster": {
+                "cluster_id": self.cluster_id,
+                "tenant_name": self.tenant_id
+            },
+            "node": {
+                "node_id": self.local_id,
+                "version": self.version.commit_detail.as_str()
+            },
+            "system": {
+                "os_name": sysinfo::System::name().unwrap_or_else(|| "unknown".to_string()),
+                "os_version": sysinfo::System::os_version().unwrap_or_else(|| "unknown".to_string()),
+                "kernel_version": sysinfo::System::kernel_version().unwrap_or_else(|| "unknown".to_string()),
+                "arch": sysinfo::System::cpu_arch(),
+                "cpu_cores": system.cpus().len(),
+                "total_memory": system.total_memory(),
+                "available_memory": system.available_memory(),
+                "used_memory": system.used_memory(),
+                "uptime_seconds": sysinfo::System::uptime()
+            },
+            "cache_strategy": {
+                "enable_table_meta_cache": cfg.cache.enable_table_meta_cache,
+                "table_meta_snapshot_count": cfg.cache.table_meta_snapshot_count,
+                "table_meta_segment_bytes": cfg.cache.table_meta_segment_bytes,
+                "block_meta_count": cfg.cache.block_meta_count,
+                "segment_block_metas_count": cfg.cache.segment_block_metas_count,
+                "table_meta_statistic_count": cfg.cache.table_meta_statistic_count,
+                "segment_statistics_count": cfg.cache.segment_statistics_count,
+                "enable_table_index_bloom": cfg.cache.enable_table_index_bloom,
+                "table_bloom_index_meta_count": cfg.cache.table_bloom_index_meta_count,
+                "table_bloom_index_filter_count": cfg.cache.table_bloom_index_filter_count,
+                "table_bloom_index_filter_size": cfg.cache.table_bloom_index_filter_size,
+                "table_prune_partitions_count": cfg.cache.table_prune_partitions_count,
+                "inverted_index_meta_count": cfg.cache.inverted_index_meta_count,
+                "inverted_index_filter_size": cfg.cache.inverted_index_filter_size,
+                "vector_index_meta_count": cfg.cache.vector_index_meta_count,
+                "vector_index_filter_size": cfg.cache.vector_index_filter_size,
+                "data_cache_in_memory_bytes": cfg.cache.data_cache_in_memory_bytes,
+                "table_data_cache_population_queue_size": cfg.cache.table_data_cache_population_queue_size,
+                "table_data_deserialized_data_bytes": cfg.cache.table_data_deserialized_data_bytes,
+                "disk_cache_max_bytes": cfg.cache.disk_cache_config.max_bytes,
+                "disk_cache_sync_data": cfg.cache.disk_cache_config.sync_data
+            },
+            "memory_management": {
+                "max_server_memory_usage": cfg.query.max_server_memory_usage,
+                "max_memory_limit_enabled": cfg.query.max_memory_limit_enabled,
+                "spill_enabled": cfg.spill.global_bytes_limit > 0,
+                "reserved_disk_ratio": cfg.spill.reserved_disk_ratio
+            },
+            "query_execution": {
+                "max_running_queries": cfg.query.max_running_queries,
+                "global_statement_queue": cfg.query.global_statement_queue,
+            },
+            "storage_engine": {
+                "table_engine_memory_enabled": cfg.query.table_engine_memory_enabled,
+                "storage_type": cfg.storage.params.to_string(),
+                "storage_allow_insecure": cfg.storage.allow_insecure
+            },
+            "meta_config": {
+                "meta_embedded": cfg.meta.embedded_dir.is_empty(),
+                "meta_client_timeout": cfg.meta.client_timeout_in_second,
+                "rpc_client_timeout_secs": cfg.query.rpc_client_timeout_secs,
+            },
+            "license": license_info,
+            "cluster_nodes": {
+                "count": online_nodes.as_ref().map(|nodes| nodes.len()).unwrap_or(0),
+                "nodes": online_nodes.as_ref().map(|nodes|
+                    nodes.iter().map(|node| serde_json::json!({
+                        "id": node.id,
+                        "cpu_nums": node.cpu_nums,
+                        "version": node.version,
+                        "binary_version": node.binary_version,
+                        "cluster_id": node.cluster_id,
+                        "warehouse_id": node.warehouse_id
+                    })).collect::<Vec<_>>()
+                ).unwrap_or_default()
+            },
+            "observability": {
+                "collection_duration_ms": start_time.elapsed().as_millis() as u64,
+                "report_timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                "schema_version": "1.0"
+            }
+        });
+
+        let _ = report_node_telemetry(
+            payload,
+            DATABEND_TELEMETRY_ENDPOINT,
+            DATABEND_TELEMETRY_API_KEY,
+        )
+        .await;
     }
 }
 

@@ -369,6 +369,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("ASOF", ignore(ascii_case))]
+    ASOF,
     #[token("AST", ignore(ascii_case))]
     AST,
     #[token("AT", ignore(ascii_case))]
@@ -499,6 +501,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATEADD", ignore(ascii_case))]
+    DATEADD,
     #[token("DATE_DIFF", ignore(ascii_case))]
     DATE_DIFF,
     #[token("DATEDIFF", ignore(ascii_case))]
@@ -717,6 +721,8 @@ pub enum TokenKind {
     IDENTIFIER,
     #[token("IF", ignore(ascii_case))]
     IF,
+    #[token("IMMUTABLE", ignore(ascii_case))]
+    IMMUTABLE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
@@ -797,7 +803,9 @@ pub enum TokenKind {
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
-    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    /// L1DISTANCE and L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<+>")]
+    L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
@@ -866,6 +874,8 @@ pub enum TokenKind {
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]
     NONE,
+    #[token("NOSCAN", ignore(ascii_case))]
+    NOSCAN,
     #[token("NOT", ignore(ascii_case))]
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
@@ -942,6 +952,8 @@ pub enum TokenKind {
     PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
+    #[token("PERF", ignore(ascii_case))]
+    PERF,
     #[token("PIPELINE", ignore(ascii_case))]
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
@@ -1126,6 +1138,10 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("ACCESS", ignore(ascii_case))]
+    ACCESS,
+    #[token("USE_LOGIC_TYPE", ignore(ascii_case))]
+    USE_LOGIC_TYPE,
     #[token("USE_RAW_PATH", ignore(ascii_case))]
     USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
@@ -1270,6 +1286,8 @@ pub enum TokenKind {
     VECTOR,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
+    #[token("VOLATILE", ignore(ascii_case))]
+    VOLATILE,
     #[token("GRAPHICAL", ignore(ascii_case))]
     GRAPHICAL,
     #[token("VIEW", ignore(ascii_case))]
@@ -1298,6 +1316,8 @@ pub enum TokenKind {
     XZ,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("ZIP", ignore(ascii_case))]
+    ZIP,
     #[token("ZSTD", ignore(ascii_case))]
     ZSTD,
     #[token("NULLIF", ignore(ascii_case))]
@@ -1342,6 +1362,10 @@ pub enum TokenKind {
     HEADERS,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("IMPORTS", ignore(ascii_case))]
+    IMPORTS,
+    #[token("PACKAGES", ignore(ascii_case))]
+    PACKAGES,
     #[token("STATE", ignore(ascii_case))]
     STATE,
     #[token("TASK", ignore(ascii_case))]
@@ -1515,6 +1539,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L1DISTANCE
                 | L2DISTANCE
                 | Placeholder
                 | QuestionOr
@@ -1678,6 +1703,7 @@ impl TokenKind {
             // | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::DATE_ADD
+            | TokenKind::DATEADD
             | TokenKind::DATE_DIFF
             | TokenKind::DATE_SUB
             | TokenKind::DATE_BETWEEN
@@ -1779,6 +1805,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::ASOF
             | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::ATTACH
@@ -1817,6 +1844,7 @@ impl TokenKind {
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
+            | TokenKind::ROW
             | TokenKind::POLICY
             | TokenKind::TASK
             | TokenKind::PIPE

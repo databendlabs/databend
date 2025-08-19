@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Typos Check
+name: Typos
 
 on:
   push:
@@ -26,26 +26,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-env:
-  RUST_BACKTRACE: 1
-
 jobs:
-  typos-check:
-    name: typos check
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      FORCE_COLOR: 1
     steps:
       - uses: actions/checkout@v4
-        with:
-          clean: "true"
-
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: typos-cli
-          args: --locked
-          cache-key: typos-check
-
-      - name: do typos check with typos-cli
-        run: typos
+      - name: Check spelling
+        env:
+          CLICOLOR: 1
+        uses: crate-ci/typos@v1.33.1

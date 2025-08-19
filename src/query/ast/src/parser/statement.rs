@@ -26,6 +26,7 @@ use nom_rule::rule;
 
 use super::sequence::sequence;
 use crate::ast::*;
+use crate::parser::comment::comment;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
@@ -59,7 +60,7 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED)? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -77,6 +78,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
+                    Some(TokenKind::PERF) => ExplainKind::Perf,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -430,6 +432,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 _ => unreachable!(),
             };
             Statement::SetSecondaryRoles { option }
+        },
+    );
+
+    let set_secondary_specify_roles = map(
+        rule! {
+            SET ~ SECONDARY ~ ROLES ~ #comma_separated_list1(role_name)
+        },
+        |(_, _, _, roles)| Statement::SetSecondaryRoles {
+            option: SecondaryRolesOption::SpecifyRole(roles),
         },
     );
 
@@ -1168,13 +1179,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3
+            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
         },
-        |(_, _, (catalog, database, table))| {
+        |(_, _, (catalog, database, table), no_scan)| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
                 catalog,
                 database,
                 table,
+                no_scan: no_scan.is_some(),
             })
         },
     );
@@ -1631,13 +1643,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowRoles { show_options },
     );
-    let create_role = map(
+    let create_role = map_res(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
         },
-        |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
-            if_not_exists: opt_if_not_exists.is_some(),
-            role_name,
+        |(_, opt_or_replace, _, opt_if_not_exists, role_name)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRole {
+                create_option,
+                role_name,
+            })
         },
     );
     let drop_role = map(
@@ -1749,6 +1765,52 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
                 definition,
+            })
+        },
+    );
+
+    // row policy
+    // CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+    // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
+    // [ COMMENT = '<string_literal>' ]
+    let create_row_access = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ #row_access_definition
+            ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, opt_or_replace, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateRowAccessPolicy(
+                CreateRowAccessPolicyStmt {
+                    create_option,
+                    name,
+                    description: opt_comment.map(|(_, _, description)| description),
+                    definition,
+                },
+            ))
+        },
+    );
+    let drop_row_access = map(
+        rule! {
+            DROP ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, _, _, opt_if_exists, name)| {
+            let stmt = DropRowAccessPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropRowAccessPolicy(stmt)
+        },
+    );
+    let describe_row_access = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ ROW ~ ACCESS ~ POLICY ~ ^#ident
+        },
+        |(_, _, _, _, name)| {
+            Statement::DescRowAccessPolicy(DescRowAccessPolicyStmt {
+                name: name.to_string(),
             })
         },
     );
@@ -1888,6 +1950,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Statement::Call(CallStmt {
                 name: name.to_string(),
                 args,
+            })
+        },
+    );
+
+    let vacuum_temporary_tables = map(
+        rule! {
+            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
+        },
+        |(_, _, _, opt_limit)| {
+            Statement::Call(CallStmt {
+                name: "fuse_vacuum_temporary_table".to_string(),
+                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
             })
         },
     );
@@ -2453,7 +2527,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let describe_procedure = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
+            ( DESC | DESCRIBE ) ~ ^PROCEDURE ~ #ident ~ #procedure_type_name
         },
         |(_, _, name, args)| {
             Statement::DescProcedure(DescProcedureStmt {
@@ -2573,6 +2647,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #set_secondary_specify_roles: "`SET SECONDARY ROLES [role_name,...]`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
@@ -2705,6 +2780,9 @@ AS
             | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
+            | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+            | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
+            | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
             | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
             | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
@@ -2712,6 +2790,8 @@ AS
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
             | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
+        rule!(#comment),
+        rule!(#vacuum_temporary_tables),
     ))(i)
 }
 
@@ -2962,22 +3042,14 @@ pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
     );
     map(
         rule! {
-           VALUES ~ #value? ~ #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause ~ ";"? ~ &EOI
         },
-        |(_, value, options, on_error_opt)| InsertSource::StreamingLoad {
-            format_options: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            value,
+        |(values, _, location, format_options, _, _)| InsertSource::LoadFile {
+            value: values.map(|(_, value)| value).unwrap_or_default(),
+            location,
+            format_options,
         },
     )(i)
-    // TODO: support query later
-    // let query = map(query, |query| InsertSource::Select {
-    //     query: Box::new(query),
-    // });
-    // rule!(
-    //     #file
-    //     | #query
-    // )(i)
 }
 
 // `INSERT INTO ... VALUES` statement will
@@ -3001,6 +3073,7 @@ pub fn insert_source_fast_values(i: Input) -> IResult<InsertSource> {
     );
 
     rule!(
+        #insert_source_file |
         #values
         | #query
     )(i)
@@ -3378,11 +3451,55 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let connection_privs = map(
+        rule! {
+            ACCESS ~ CONNECTION ~ ON ~ CONNECTION ~ #ident
+        },
+        |(_, _, _, _, c)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessConnection],
+            level: AccountMgrLevel::Connection(c.to_string()),
+        },
+    );
+
+    let connection_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ CONNECTION ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessConnection],
+            level: AccountMgrLevel::Connection(w.to_string()),
+        },
+    );
+
+    let seq_privs = map(
+        rule! {
+            ACCESS ~ SEQUENCE ~ ON ~ SEQUENCE ~ #ident
+        },
+        |(_, _, _, _, c)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessSequence],
+            level: AccountMgrLevel::Sequence(c.to_string()),
+        },
+    );
+
+    let seq_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ SEQUENCE ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessSequence],
+            level: AccountMgrLevel::Sequence(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
+        | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
+        | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
+        | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"
+        | #seq_privs: "ACCESS SEQUENCE ON CONNECTION <seq_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3391,31 +3508,74 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    let usage = value(UserPrivilegeType::Usage, rule! { USAGE });
+    let select = value(UserPrivilegeType::Select, rule! { SELECT });
+    let insert = value(UserPrivilegeType::Insert, rule! { INSERT });
+    let update = value(UserPrivilegeType::Update, rule! { UPDATE });
+    let delete = value(UserPrivilegeType::Delete, rule! { DELETE });
+    let alter = value(UserPrivilegeType::Alter, rule! { ALTER });
+    let super_priv = value(UserPrivilegeType::Super, rule! { SUPER });
+    let create_user = value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER });
+    let create_database = value(
+        UserPrivilegeType::CreateDatabase,
+        rule! { CREATE ~ DATABASE },
+    );
+    let create_warehouse = value(
+        UserPrivilegeType::CreateWarehouse,
+        rule! { CREATE ~ WAREHOUSE },
+    );
+    let create_connection = value(
+        UserPrivilegeType::CreateConnection,
+        rule! { CREATE ~ CONNECTION },
+    );
+    let access_sequence = value(
+        UserPrivilegeType::AccessConnection,
+        rule! { ACCESS ~ CONNECTION },
+    );
+    let create_sequence = value(
+        UserPrivilegeType::CreateSequence,
+        rule! { CREATE ~ SEQUENCE },
+    );
+    let access_connection = value(
+        UserPrivilegeType::AccessSequence,
+        rule! { ACCESS ~ SEQUENCE },
+    );
+    let drop_user = value(UserPrivilegeType::DropUser, rule! { DROP ~ USER });
+    let create_role = value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE });
+    let drop_role = value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE });
+    let grant = value(UserPrivilegeType::Grant, rule! { GRANT });
+    let create_stage = value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE });
+    let set = value(UserPrivilegeType::Set, rule! { SET });
+    let drop = value(UserPrivilegeType::Drop, rule! { DROP });
+    let create = value(UserPrivilegeType::Create, rule! { CREATE });
+
     alt((
-        value(UserPrivilegeType::Usage, rule! { USAGE }),
-        value(UserPrivilegeType::Select, rule! { SELECT }),
-        value(UserPrivilegeType::Insert, rule! { INSERT }),
-        value(UserPrivilegeType::Update, rule! { UPDATE }),
-        value(UserPrivilegeType::Delete, rule! { DELETE }),
-        value(UserPrivilegeType::Alter, rule! { ALTER }),
-        value(UserPrivilegeType::Super, rule! { SUPER }),
-        value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
-        value(
-            UserPrivilegeType::CreateDatabase,
-            rule! { CREATE ~ DATABASE },
+        rule!(
+            #usage
+            | #select
+            | #insert
+            | #update
+            | #delete
+            | #alter
+            | #super_priv
+            | #create_user
+            | #create_database
+            | #create_warehouse
         ),
-        value(
-            UserPrivilegeType::CreateWarehouse,
-            rule! { CREATE ~ WAREHOUSE },
+        rule!(
+            #create_connection
+            | #access_connection
+            | #access_sequence
+            | #create_sequence
+            | #drop_user
+            | #create_role
+            | #drop_role
+            | #grant
+            | #create_stage
+            | #set
+            | #drop
+            | #create
         ),
-        value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
-        value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
-        value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
-        value(UserPrivilegeType::Grant, rule! { GRANT }),
-        value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
-        value(UserPrivilegeType::Set, rule! { SET }),
-        value(UserPrivilegeType::Drop, rule! { DROP }),
-        value(UserPrivilegeType::Create, rule! { CREATE }),
     ))(i)
 }
 
@@ -3471,12 +3631,22 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::Warehouse(w.to_string())
     });
 
+    let connection = map(rule! { CONNECTION ~ #ident}, |(_, w)| {
+        GrantObjectName::Connection(w.to_string())
+    });
+
+    let seq = map(rule! { SEQUENCE ~ #ident}, |(_, w)| {
+        GrantObjectName::Sequence(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
+        | #connection : "CONNECTION <connection_name>"
+        | #seq : "SEQUENCE <seq_name>"
     )(i)
 }
 
@@ -3572,11 +3742,15 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Stage,
         Udf,
         Warehouse,
+        Connection,
+        Sequence,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
         value(Object::Warehouse, rule! { WAREHOUSE }),
+        value(Object::Connection, rule! { CONNECTION }),
+        value(Object::Sequence, rule! { SEQUENCE }),
     ));
 
     // Object object_name
@@ -3586,13 +3760,15 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
             Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
+            Object::Connection => AccountMgrLevel::Connection(object_name.to_string()),
+            Object::Sequence => AccountMgrLevel::Sequence(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
     )(i)
 }
 
@@ -3620,7 +3796,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> }"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> }"
         | #role_granted: "OF ROLE <role_name>"
     )(i)
 }
@@ -3777,6 +3953,23 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
+pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+    map_res(
+        rule! {
+            #ident
+            ~ #comment
+            : "`<column name> COMMENT '<comment>'`"
+        },
+        |(name, comment)| Ok(ColumnComment { name, comment }),
+    )(i)
+}
+
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     let set_mask_policy = map(
         rule! {
@@ -3814,11 +4007,25 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         },
     );
 
+    let modify_column_comment = map(
+        rule! {
+            #modify_column_comment ~ ("," ~ COLUMN? ~ #modify_column_comment)*
+        },
+        |(column_def, column_def_vec)| {
+            let mut column_defs = vec![column_def];
+            column_def_vec
+                .iter()
+                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
+            ModifyColumnAction::Comment(column_defs)
+        },
+    );
+
     rule!(
         #set_mask_policy
         | #unset_mask_policy
         | #convert_stored_computed_column
         | #modify_column_type
+        | #modify_column_comment
     )(i)
 }
 
@@ -3859,6 +4066,30 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             MODIFY ~ COLUMN? ~ #modify_column_action
         },
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
+    );
+
+    let add_row_access_policy = map(
+        rule! {
+            ADD ~ ROW ~ ACCESS ~ POLICY ~ #ident ~ ON ~ "(" ~ ^#comma_separated_list1(ident) ~ ^")"
+        },
+        |(_, _, _, _, policy, _, _, columns, _)| AlterTableAction::AddRowAccessPolicy {
+            columns,
+            policy,
+        },
+    );
+
+    let drop_row_access_policy = map(
+        rule! {
+            DROP ~ ROW ~ ACCESS ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, policy)| AlterTableAction::DropRowAccessPolicy { policy },
+    );
+
+    let drop_all_row_access_polices = map(
+        rule! {
+            DROP ~ ALL ~ ROW ~ ACCESS ~ POLICIES
+        },
+        |(_, _, _, _, _)| AlterTableAction::DropAllRowAccessPolicies,
     );
 
     let drop_column = map(
@@ -3949,6 +4180,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #unset_table_options
         | #refresh_cache
         | #modify_table_connection
+        | #drop_all_row_access_polices
+        | #drop_row_access_policy
+        | #add_row_access_policy
     )(i)
 }
 
@@ -4693,26 +4927,6 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
     )(i)
 }
 
-pub fn table_reference_only(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #dot_separated_idents_1_to_3
-        }),
-        |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )(i)
-}
-
 pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
@@ -4777,6 +4991,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ (#udf_immutable)?
+            ~ ( IMPORTS ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
+            ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
@@ -4789,6 +5006,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             return_type,
             _,
             language,
+            immutable,
+            imports,
+            packages,
             _,
             _,
             handler,
@@ -4800,11 +5020,18 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     arg_types,
                     return_type,
                     code: address_or_code.0,
+                    imports: imports
+                        .map(|(_, _, _, imports, _)| imports)
+                        .unwrap_or_default(),
+                    packages: packages
+                        .map(|(_, _, _, packages, _)| packages)
+                        .unwrap_or_default(),
                     handler,
                     language: language.to_string(),
                     // TODO inject runtime_version by user
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),
+                    immutable,
                 }
             } else {
                 UDFDefinition::UDFServer {
@@ -4816,8 +5043,22 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     headers: headers
                         .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
                         .unwrap_or_default(),
+                    immutable,
                 }
             }
+        },
+    );
+
+    let udtf = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            ~ RETURNS ~ TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            ~ AS ~ ^#code_string
+        },
+        |(_, arg_types, _, _, _, _, return_types, _, _, sql)| UDFDefinition::UDTFSql {
+            arg_types,
+            return_types,
+            sql,
         },
     );
 
@@ -4827,6 +5068,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ ( IMPORTS ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
+            ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
         },
@@ -4842,6 +5085,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             return_type,
             _,
             language,
+            imports,
+            packages,
             headers,
             address_or_code,
         )| {
@@ -4852,6 +5097,12 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                     code: address_or_code.0,
                     language: language.to_string(),
+                    imports: imports
+                        .map(|(_, _, _, imports, _)| imports)
+                        .unwrap_or_default(),
+                    packages: packages
+                        .map(|(_, _, _, packages, _)| packages)
+                        .unwrap_or_default(),
                     // TODO inject runtime_version by user
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),
@@ -4875,7 +5126,44 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
         | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udtf: "(<arg_type>, ...) RETURNS TABLE (<return_type>, ...) AS <sql> }"
+    )(i)
+}
 
+fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
+    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty))(i)
+}
+
+fn udf_immutable(i: Input) -> IResult<bool> {
+    alt((
+        value(false, rule! { VOLATILE }),
+        value(true, rule! { IMMUTABLE }),
+    ))(i)
+}
+
+pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
+    pub fn row_access_type(i: Input) -> IResult<RowAccessPolicyType> {
+        map(rule! { #ident ~ #type_name }, |(name, data_type)| {
+            RowAccessPolicyType {
+                name: name.to_string(),
+                data_type,
+            }
+        })(i)
+    }
+
+    let row_access_def = map(
+        rule! {
+            AS ~ "(" ~ #comma_separated_list1(row_access_type) ~ ")" ~ RETURNS ~ BOOLEAN
+            ~ "->" ~ #expr
+        },
+        |(_, _, parameters, _, _, _, _, definition)| RowAccessPolicyDefinition {
+            parameters,
+            definition: Box::new(definition),
+        },
+    );
+
+    rule!(
+        #row_access_def: "AS (<arg_name> <arg_type> [ , ... ]) RETURNS BOOLEAN -> <definition expr>"
     )(i)
 }
 

@@ -19,13 +19,12 @@ use arrow_schema::ArrowError;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::Value;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use databend_common_storage::OperatorRegistry;
@@ -137,16 +136,17 @@ impl ParquetWholeFileReader {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
-                let partition_block_entries = partition_fields.map(|arr| {
-                    arr.iter()
-                        .map(|(f, v)| {
-                            BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
-                        })
-                        .collect::<Vec<_>>()
-                });
+                let partition_block_scalars = partition_fields
+                    .map(|arr| {
+                        Arc::<[_]>::from_iter(
+                            arr.iter()
+                                .map(|(f, v)| (DataType::from(f.data_type()), v.clone())),
+                        )
+                    })
+                    .unwrap_or_default();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch, partition_block_entries.clone())
+                        .evaluate(&batch, partition_block_scalars.clone())
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
@@ -179,12 +179,11 @@ impl ParquetWholeFileReader {
 
     /// Read a [`DataBlock`] from bytes.
     pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<DataBlockIterator> {
-        let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
-            bytes,
-            ArrowReaderOptions::new(),
-        )?
-        .with_projection(self.projection.clone())
-        .with_batch_size(self.batch_size);
+        let mut builder =
+            ParquetRecordBatchReaderBuilder::try_new_with_options(bytes, ArrowReaderOptions::new())
+                .map_err(|e| format!("Invalid Parquet file '{path}': {e}"))?
+                .with_projection(self.projection.clone())
+                .with_batch_size(self.batch_size);
 
         // Prune row groups.
         let file_meta = builder.metadata().clone();
@@ -223,7 +222,7 @@ impl ParquetWholeFileReader {
                 let predicate = predicate.clone();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch, None)
+                        .evaluate(&batch, Default::default())
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(

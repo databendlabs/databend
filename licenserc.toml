@@ -9,9 +9,11 @@ excludes = [
     "tools",
     "benchmark",
     "src/common/compress/tests",
+    "src/meta/compat.py",
     # licensed under Elastic License 2.0
     "src/binaries/query/ee_main.rs",
     "src/meta/binaries/meta/ee_main.rs",
+    "src/meta/control/lua_util.lua",
     "src/meta/ee",
     "src/query/ee",
     "src/bendsave",
@@ -41,6 +43,7 @@ excludes = [
     "**/*.yapf",
     "**/*.test",
     "**/*.txt",
+    "**/*.html"
 ]
 
 [properties]

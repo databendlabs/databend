@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+bytesize = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

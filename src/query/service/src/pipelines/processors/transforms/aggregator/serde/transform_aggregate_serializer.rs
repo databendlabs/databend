@@ -121,26 +121,19 @@ impl Processor for TransformAggregateSerializer {
 impl TransformAggregateSerializer {
     fn transform_input_data(&mut self, mut data_block: DataBlock) -> Result<Event> {
         debug_assert!(data_block.is_empty());
-        if let Some(block_meta) = data_block.take_meta() {
-            if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
-                match block_meta {
-                    AggregateMeta::Spilled(_) => unreachable!(),
-                    AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                    AggregateMeta::AggregatePayload(p) => {
-                        self.input_data = Some(SerializeAggregateStream::create(
-                            &self.params,
-                            SerializePayload::AggregatePayload(p),
-                        ));
-                        return Ok(Event::Sync);
-                    }
-                }
-            }
-        }
 
-        unreachable!()
+        let Some(AggregateMeta::AggregatePayload(p)) = data_block
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            unreachable!()
+        };
+
+        self.input_data = Some(SerializeAggregateStream::create(
+            &self.params,
+            SerializePayload::AggregatePayload(p),
+        ));
+        Ok(Event::Sync)
     }
 }
 
@@ -218,41 +211,29 @@ impl SerializeAggregateStream {
             return Ok(None);
         }
 
-        match self.payload.as_ref().get_ref() {
-            SerializePayload::AggregatePayload(p) => {
-                let block = p.payload.aggregate_flush(&mut self.flush_state)?;
-
-                if block.is_none() {
-                    self.end_iter = true;
-                }
-
-                match block {
-                    Some(block) => {
-                        self.nums += 1;
-                        Ok(Some(block.add_meta(Some(
-                            AggregateSerdeMeta::create_agg_payload(
-                                p.bucket,
-                                p.max_partition_count,
-                                false,
-                            ),
-                        ))?))
-                    }
-                    None => {
-                        // always return at least one block
-                        if self.nums == 0 {
-                            self.nums += 1;
-                            let block = p.payload.empty_block(Some(1));
-                            Ok(Some(block.add_meta(Some(
-                                AggregateSerdeMeta::create_agg_payload(
-                                    p.bucket,
-                                    p.max_partition_count,
-                                    true,
-                                ),
-                            ))?))
-                        } else {
-                            Ok(None)
-                        }
-                    }
+        let SerializePayload::AggregatePayload(p) = self.payload.as_ref().get_ref();
+        match p.payload.aggregate_flush(&mut self.flush_state)? {
+            Some(block) => {
+                self.nums += 1;
+                Ok(Some(block.add_meta(Some(
+                    AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count, false),
+                ))?))
+            }
+            None => {
+                self.end_iter = true;
+                // always return at least one block
+                if self.nums == 0 {
+                    self.nums += 1;
+                    let block = p.payload.empty_block(1);
+                    Ok(Some(block.add_meta(Some(
+                        AggregateSerdeMeta::create_agg_payload(
+                            p.bucket,
+                            p.max_partition_count,
+                            true,
+                        ),
+                    ))?))
+                } else {
+                    Ok(None)
                 }
             }
         }

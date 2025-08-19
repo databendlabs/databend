@@ -771,6 +771,7 @@ impl Binder {
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
+
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
@@ -783,14 +784,16 @@ impl Binder {
             column: grouping_id_column.clone(),
         };
 
-        agg_info.group_items_map.insert(
-            bound_grouping_id_col.clone().into(),
-            agg_info.group_items.len(),
-        );
-        agg_info.group_items.push(ScalarItem {
-            index: grouping_id_column.index,
-            scalar: bound_grouping_id_col.into(),
-        });
+        if !self.ctx.get_settings().get_grouping_sets_to_union()? {
+            agg_info.group_items_map.insert(
+                bound_grouping_id_col.clone().into(),
+                agg_info.group_items.len(),
+            );
+            agg_info.group_items.push(ScalarItem {
+                index: grouping_id_column.index,
+                scalar: bound_grouping_id_col.into(),
+            });
+        }
 
         let grouping_sets_info = GroupingSetsInfo {
             grouping_id_column,

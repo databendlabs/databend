@@ -116,10 +116,10 @@ impl SchemaMatcher {
             | (TableDataType::Binary, Schema::Bytes | Schema::Fixed(_))
             | (TableDataType::Decimal(_), Schema::BigDecimal)
             | (TableDataType::Boolean, Schema::Boolean)
-            | (TableDataType::Date, Schema::Date)
+            | (TableDataType::Date | TableDataType::Number(NumberDataType::Int32), Schema::Date)
             | (TableDataType::Interval, Schema::Duration)
             | (
-                TableDataType::Timestamp,
+                TableDataType::Timestamp | TableDataType::Number(NumberDataType::Int64),
                 Schema::TimestampNanos
                 | Schema::TimestampMillis
                 | Schema::TimestampMicros

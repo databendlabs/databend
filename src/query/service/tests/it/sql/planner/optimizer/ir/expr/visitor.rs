@@ -233,6 +233,7 @@ fn test_replace_node() {
                         limit: Some(limit_value * 2),
                         offset: limit.offset,
                         before_exchange: limit.before_exchange,
+                        lazy_columns: limit.lazy_columns.clone(),
                     };
                     let replacement = SExpr::create_unary(
                         Arc::new(RelOperator::Limit(new_limit)),
@@ -350,6 +351,7 @@ async fn test_async_replace_node() {
                         limit: Some(limit_value * 2),
                         offset: limit.offset,
                         before_exchange: limit.before_exchange,
+                        lazy_columns: limit.lazy_columns.clone(),
                     };
                     let replacement = SExpr::create_unary(
                         Arc::new(RelOperator::Limit(new_limit)),

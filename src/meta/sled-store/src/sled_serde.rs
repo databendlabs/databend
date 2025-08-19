@@ -19,6 +19,7 @@ use byteorder::ByteOrder;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
+use state_machine_api::ExpireKey;
 
 use crate::SledBytesError;
 
@@ -78,5 +79,50 @@ impl SledOrderedSerde for String {
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
     where Self: Sized {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
+    }
+}
+
+impl SledOrderedSerde for ExpireKey {
+    fn ser(&self) -> Result<IVec, SledBytesError> {
+        let size = size_of_val(self);
+        let mut buf = vec![0; size];
+
+        BigEndian::write_u64(&mut buf, self.time_ms);
+        BigEndian::write_u64(&mut buf[size_of_val(&self.time_ms)..], self.seq);
+        Ok(buf.into())
+    }
+
+    fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let b = v.as_ref();
+
+        let time_ms = BigEndian::read_u64(b);
+        let seq = BigEndian::read_u64(&b[size_of_val(&time_ms)..]);
+
+        Ok(Self { time_ms, seq })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_expire_key_sled_ordered_serde() -> anyhow::Result<()> {
+        let k = ExpireKey::new(0x01020304, 0x04030201);
+        let enc = <ExpireKey as SledOrderedSerde>::ser(&k)?;
+        assert_eq!(
+            vec![
+                0u8, 0, 0, 0, 1, 2, 3, 4, //
+                0u8, 0, 0, 0, 4, 3, 2, 1,
+            ],
+            enc.as_ref()
+        );
+
+        let got_dec = <ExpireKey as SledOrderedSerde>::de(enc)?;
+        assert_eq!(k, got_dec);
+
+        Ok(())
     }
 }

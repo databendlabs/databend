@@ -19,6 +19,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalUniqName;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -29,7 +31,7 @@ use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F64;
 use databend_common_expression::Scalar;
-use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_meta_types::NodeInfo;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
@@ -45,6 +47,8 @@ use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
+use databend_query::clusters::ClusterHelper;
+use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use goldenfile::Mint;
@@ -66,7 +70,11 @@ struct TestSpec {
     #[serde(default)]
     statistics_file: Option<String>,
     #[serde(default)]
+    tables: HashMap<String, String>,
+    #[serde(default)]
     auto_statistics: bool,
+    #[serde(default)]
+    node_num: Option<u64>,
     good_plan: Option<String>,
 }
 
@@ -102,6 +110,8 @@ struct TestCase {
     auto_stats: bool,
     stem: String,
     subdir: Option<String>,
+    node_num: Option<u64>,
+    tables: HashMap<String, String>,
 }
 
 struct TestSuite {
@@ -173,24 +183,6 @@ impl TestSuite {
         }
     }
 
-    async fn setup_tables(&self, ctx: &Arc<QueryContext>) -> Result<()> {
-        for file in self.find_files("tables", &["sql"]) {
-            let sql = fs::read_to_string(&file)
-                .map_err(|e| ErrorCode::Internal(format!("Failed to read file: {}", e)))?;
-            for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
-                match execute_sql(ctx, statement).await {
-                    Ok(_) => {}
-                    Err(e) if e.code() == ErrorCode::TABLE_ALREADY_EXISTS => {
-                        // Ignore table already exists errors
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-        }
-        Ok(())
-    }
-
     fn load_cases(&self) -> Result<Vec<TestCase>> {
         let cases_dir = self.base_path.join("cases");
         self.find_files("cases", &["yaml", "yml"])
@@ -218,6 +210,8 @@ impl TestSuite {
         let name = spec.name.clone();
         let sql = spec.sql.clone();
         let auto_stats = spec.auto_statistics;
+        let node_num = spec.node_num;
+        let tables = self.resolve_tables(&spec)?;
         let (table_stats, column_stats) = self.resolve_stats(spec)?;
         let stem = path
             .file_stem()
@@ -235,12 +229,24 @@ impl TestSuite {
         Ok(TestCase {
             name: Box::leak(full_name.into_boxed_str()),
             sql: Box::leak(sql.into_boxed_str()),
+            tables,
             table_stats,
             column_stats,
             auto_stats,
             stem,
             subdir,
+            node_num,
         })
+    }
+
+    fn resolve_tables(&self, spec: &TestSpec) -> Result<HashMap<String, String>> {
+        let mut tables = HashMap::with_capacity(spec.tables.len());
+        for (table_name, file_ref) in &spec.tables {
+            let table_define_sql = self.load_table_file(file_ref)?;
+            tables.insert(table_name.clone(), table_define_sql);
+        }
+
+        Ok(tables)
     }
 
     fn resolve_stats(
@@ -253,6 +259,33 @@ impl TestSuite {
             spec.column_statistics.extend(stats.column_statistics);
         }
         Ok((spec.table_statistics, spec.column_statistics))
+    }
+
+    fn load_table_file(&self, file_ref: &str) -> Result<String> {
+        let stats_files = self.find_files("tables", &["sql"]);
+        let target_stem = Path::new(file_ref)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(file_ref);
+
+        stats_files
+            .iter()
+            .find(|path| {
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s == target_stem || s.ends_with(target_stem))
+                    .unwrap_or(false)
+            })
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Tables file not found: {}, in {:?}",
+                    file_ref, stats_files
+                ))
+            })
+            .and_then(|path| {
+                fs::read_to_string(path)
+                    .map_err(|e| ErrorCode::Internal(format!("Failed to read file: {}", e)))
+            })
     }
 
     fn load_stats_file(&self, file_ref: &str) -> Result<StatsFile> {
@@ -343,6 +376,11 @@ impl<'a> SExprVisitor for StatsApplier<'a> {
                     data_size: stats.data_size,
                     data_size_compressed: stats.data_size_compressed,
                     index_size: stats.index_size,
+                    bloom_index_size: None,
+                    ngram_index_size: None,
+                    inverted_index_size: None,
+                    vector_index_size: None,
+                    virtual_column_size: None,
                     number_of_blocks: stats.number_of_blocks,
                     number_of_segments: stats.number_of_segments,
                 };
@@ -405,12 +443,10 @@ async fn optimize_plan(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
         _ => Arc::new(parking_lot::RwLock::new(Metadata::default())),
     };
 
+    let settings = ctx.get_settings();
     let opt_ctx = OptimizerContext::new(ctx, metadata)
+        .with_settings(&settings)?
         .set_enable_distributed_optimization(true)
-        .set_enable_join_reorder(true)
-        .set_enable_dphyp(true)
-        .set_max_push_down_limit(10000)
-        .set_enable_trace(true)
         .clone();
 
     optimize(opt_ctx, plan).await
@@ -424,10 +460,6 @@ async fn test_optimizer() -> Result<()> {
 
     let suite = TestSuite::new(base_path.clone(), subdir);
     let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_enable_auto_materialize_cte(0)?;
-
-    suite.setup_tables(&ctx).await?;
 
     let cases = suite.load_cases()?;
     if cases.is_empty() {
@@ -438,14 +470,75 @@ async fn test_optimizer() -> Result<()> {
     let mut root_mint = Mint::new(&results_dir);
     let mut subdir_mints: HashMap<String, Mint> = HashMap::new();
 
+    let local_id = GlobalUniqName::unique();
+    let standalone_cluster = Cluster::create(vec![create_node(&local_id)], local_id);
+
     for case in cases {
         println!("\n========== Testing: {} ==========", case.name);
 
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.get_settings().set_enable_auto_materialize_cte(0)?;
+
+        ctx.set_cluster(standalone_cluster.clone());
+
+        if let Some(nodes) = case.node_num {
+            let mut nodes_info = Vec::with_capacity(nodes as usize);
+            for _ in 0..nodes - 1 {
+                nodes_info.push(create_node(&GlobalUniqName::unique()));
+            }
+
+            let local_id = GlobalUniqName::unique();
+            nodes_info.push(create_node(&local_id));
+            ctx.set_cluster(Cluster::create(nodes_info, local_id))
+        }
+
+        setup_tables(&ctx, &case).await?;
         run_test_case(&ctx, &case, &mut root_mint, &mut subdir_mints, &results_dir).await?;
 
+        clean_tables(&ctx, &case).await?;
+        ctx.set_cluster(standalone_cluster.clone());
         println!("✅ {} test passed!", case.name);
     }
 
+    Ok(())
+}
+
+fn create_node(local_id: &str) -> Arc<NodeInfo> {
+    let mut node_info = NodeInfo::create(
+        local_id.to_string(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+    );
+    node_info.cluster_id = "cluster_id".to_string();
+    node_info.warehouse_id = "warehouse_id".to_string();
+    Arc::new(node_info)
+}
+
+async fn setup_tables(ctx: &Arc<QueryContext>, case: &TestCase) -> Result<()> {
+    for sql in case.tables.values() {
+        for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
+            match execute_sql(ctx, statement).await {
+                Ok(_) => {}
+                Err(e) if e.code() == ErrorCode::TABLE_ALREADY_EXISTS => {
+                    // Ignore table already exists errors
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn clean_tables(ctx: &Arc<QueryContext>, case: &TestCase) -> Result<()> {
+    for table_name in case.tables.keys() {
+        execute_sql(ctx, &format!("DROP TABLE {}", table_name)).await?;
+    }
     Ok(())
 }
 
@@ -497,11 +590,12 @@ async fn run_test_case(
         let physical = builder.build(&s_expr, bind_context.column_set()).await?;
 
         write_result(mint, &format!("{}_physical.txt", case.stem), |f| {
+            let metadata = metadata.read();
             writeln!(
                 f,
                 "{}",
                 physical
-                    .format(metadata, Default::default())?
+                    .format(&metadata, Default::default())?
                     .format_pretty()?
             )
             .map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
@@ -513,6 +607,12 @@ async fn run_test_case(
 
 fn configure_optimizer(ctx: &Arc<QueryContext>, auto_stats: bool) -> Result<()> {
     let settings = ctx.get_settings();
+
+    settings.set_setting("enable_dphyp".to_string(), "1".to_string())?;
+    settings.set_setting("max_push_down_limit".to_string(), "10000".to_string())?;
+    settings.set_setting("enable_optimizer_trace".to_string(), "1".to_string())?;
+    settings.set_setting("enable_shuffle_sort".to_string(), "0".to_string())?;
+
     if auto_stats {
         settings.set_optimizer_skip_list("".to_string())
     } else {

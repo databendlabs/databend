@@ -54,8 +54,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::ROW_VERSION_COL_NAME;
-use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
@@ -70,6 +69,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -88,6 +88,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -142,6 +143,7 @@ pub struct FuseTable {
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
+    pub(crate) approx_distinct_cols: ApproxDistinctColumns,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -156,8 +158,8 @@ pub struct FuseTable {
 
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
-// default schema refreshing timeout is 5 seconds.
 impl FuseTable {
+    // TODO rename these creators
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
     }
@@ -235,6 +237,12 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
+        let approx_distinct_cols = table_info
+            .options()
+            .get(OPT_KEY_APPROX_DISTINCT_COLUMNS)
+            .and_then(|s| s.parse::<ApproxDistinctColumns>().ok())
+            .unwrap_or(ApproxDistinctColumns::All);
+
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
@@ -247,6 +255,7 @@ impl FuseTable {
             meta_location_generator,
             cluster_key_meta,
             bloom_index_cols,
+            approx_distinct_cols,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
@@ -450,8 +459,11 @@ impl FuseTable {
         let cluster_keys = exprs
             .iter()
             .map(|k| {
-                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
-                    .as_remote_expr()
+                k.project_column_ref(|index| {
+                    Ok(table_meta.schema().field(*index).name().to_string())
+                })
+                .unwrap()
+                .as_remote_expr()
             })
             .collect();
         cluster_keys
@@ -459,6 +471,10 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    pub fn approx_distinct_cols(&self) -> ApproxDistinctColumns {
+        self.approx_distinct_cols.clone()
     }
 
     // Check if table is attached.
@@ -491,7 +507,9 @@ impl FuseTable {
     ///   1. Number of snapshots to keep (from table option or setting)
     ///   2. Time-based retention period (if snapshot count is not specified)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        let policy =
+        let policy = if self.is_transient() {
+            RetentionPolicy::ByNumOfSnapshotsToKeep(1)
+        } else {
             // Try to get number of snapshots to keep
             if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
                 RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
@@ -499,7 +517,8 @@ impl FuseTable {
                 // Fall back to time-based retention policy
                 let duration = self.get_data_retention_period(ctx)?;
                 RetentionPolicy::ByTimePeriod(duration)
-            };
+            }
+        };
 
         Ok(policy)
     }
@@ -712,6 +731,7 @@ impl FuseTable {
                 table_info.meta.comment = comments.table_comment;
                 // TODO assert about field comments
                 table_info.meta.field_comments = comments.field_comments;
+                table_info.meta.indexes = hint.indexes;
             }
         }
 
@@ -743,6 +763,14 @@ impl FuseTable {
                 )
             })
     }
+
+    pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
+        Ok(ctx.get_settings().get_enable_block_stream_write()?
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && self
+                .cluster_type()
+                .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
+    }
 }
 
 #[async_trait::async_trait]
@@ -764,7 +792,11 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SEARCH_SCORE_COLUMN_ID
+        column_id >= VECTOR_SCORE_COLUMN_ID
+    }
+
+    fn supported_lazy_materialize(&self) -> bool {
+        !matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
     fn support_column_projection(&self) -> bool {
@@ -802,9 +834,6 @@ impl Table for FuseTable {
                     .unwrap(),
                 STREAM_COLUMN_FACTORY
                     .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
-                    .unwrap(),
-                STREAM_COLUMN_FACTORY
-                    .get_stream_column(ROW_VERSION_COL_NAME)
                     .unwrap(),
             ]
         } else {
@@ -941,6 +970,11 @@ impl Table for FuseTable {
                     data_size: Some(summary.uncompressed_byte_size),
                     data_size_compressed: Some(summary.compressed_byte_size),
                     index_size: Some(summary.index_size),
+                    bloom_index_size: summary.bloom_index_size,
+                    ngram_index_size: summary.ngram_index_size,
+                    inverted_index_size: summary.inverted_index_size,
+                    vector_index_size: summary.vector_index_size,
+                    virtual_column_size: summary.virtual_column_size,
                     number_of_blocks: Some(summary.block_count),
                     number_of_segments: Some(snapshot.segments.len() as u64),
                 }
@@ -952,6 +986,11 @@ impl Table for FuseTable {
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
+                    bloom_index_size: s.bloom_index_size,
+                    ngram_index_size: s.ngram_index_size,
+                    inverted_index_size: s.inverted_index_size,
+                    vector_index_size: s.vector_index_size,
+                    virtual_column_size: s.virtual_column_size,
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
                 }
@@ -1201,7 +1240,19 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Parquet)
+        if matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && matches!(self.table_type, FuseTableType::Standard)
+        {
+            // ignore persistent system tables {
+            if let Ok(database_name) = self.table_info.database_name() {
+                if database_name == "persistent_system" {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn result_can_be_cached(&self) -> bool {

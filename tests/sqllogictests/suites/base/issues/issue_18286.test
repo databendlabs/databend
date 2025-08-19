@@ -1,0 +1,18 @@
+# https://github.com/datafuselabs/databend/issues/18286
+
+statement ok
+create or replace database issue_18286;
+
+statement ok
+use issue_18286;
+
+statement ok
+create or replace table t( c DECIMAL(10, 2) not null);
+
+statement ok
+insert into t select number / 100 as c from numbers(100);
+
+query T
+select count(*) from t;
+----
+100

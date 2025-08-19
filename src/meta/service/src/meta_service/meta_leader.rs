@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio::sync::RwLockReadGuard;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::node::Node;
@@ -27,7 +27,6 @@ use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -91,18 +90,36 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
 
             ForwardRequestBody::GetKV(req) => {
-                let sm = self.get_state_machine().await;
+                let sm = self
+                    .sto
+                    .get_state_machine_read(format!(
+                        "MetaLeader::handle(ForwardRequestBody: {:?})",
+                        req
+                    ))
+                    .await;
                 let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
-                let sm = self.get_state_machine().await;
+                let sm = self
+                    .sto
+                    .get_state_machine_read(format!(
+                        "MetaLeader::handle(ForwardRequestBody: {:?})",
+                        req
+                    ))
+                    .await;
                 let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
-                let sm = self.get_state_machine().await;
-                let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
+                let sm = self
+                    .sto
+                    .get_state_machine_read(format!(
+                        "MetaLeader::handle(ForwardRequestBody: {:?})",
+                        req
+                    ))
+                    .await;
+                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -118,7 +135,10 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
         debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
 
-        let sm = self.get_state_machine().await;
+        let sm = self
+            .sto
+            .get_state_machine_read(format!("MetaLeader::handle(MetaGrpcReadReq: {:?})", req))
+            .await;
         let kv_api = sm.kv_api();
 
         match req.body {
@@ -191,16 +211,12 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::AddNode {
-                node_id,
-                node: Node::new(node_id, endpoint)
-                    .with_grpc_advertise_address(req.grpc_api_advertise_address),
-                overriding: false,
-            },
-        };
+        let ent = LogEntry::new(Cmd::AddNode {
+            node_id,
+            node: Node::new(node_id, endpoint)
+                .with_grpc_advertise_address(req.grpc_api_advertise_address),
+            overriding: false,
+        });
         self.write(ent).await?;
 
         self.raft
@@ -249,11 +265,7 @@ impl<'a> MetaLeader<'a> {
             .await?;
 
         // 2. Remove node info
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::RemoveNode { node_id },
-        };
+        let ent = LogEntry::new(Cmd::RemoveNode { node_id });
         self.write(ent).await?;
 
         Ok(())
@@ -268,7 +280,7 @@ impl<'a> MetaLeader<'a> {
         mut entry: LogEntry,
     ) -> Result<AppliedState, RaftError<ClientWriteError>> {
         // Add consistent clock time to log entry.
-        entry.time_ms = Some(SeqV::<()>::now_ms());
+        entry.time_ms = Some(since_epoch().as_millis() as u64);
 
         // report metrics
         let _guard = ProposalPending::guard();
@@ -297,7 +309,7 @@ impl<'a> MetaLeader<'a> {
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
-            let sm = self.get_state_machine().await;
+            let sm = self.sto.get_state_machine_read("can_leave").await;
             sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
@@ -313,8 +325,10 @@ impl<'a> MetaLeader<'a> {
 
         Ok(Ok(()))
     }
+}
 
-    async fn get_state_machine(&self) -> RwLockReadGuard<'_, SMV003> {
-        self.sto.state_machine.read().await
-    }
+fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
 }

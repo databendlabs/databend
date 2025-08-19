@@ -17,6 +17,8 @@ use std::io::Read;
 use databend_common_exception::Result;
 
 use crate::meta::load_json;
+use crate::meta::SegmentStatistics;
+use crate::meta::SegmentStatisticsVersion;
 use crate::meta::TableSnapshotStatistics;
 use crate::meta::TableSnapshotStatisticsVersion;
 
@@ -41,7 +43,23 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
                 let ts = load_json(reader, v)?;
                 TableSnapshotStatistics::from(ts)
             }
-            TableSnapshotStatisticsVersion::V3(v) => load_json(reader, v)?,
+            TableSnapshotStatisticsVersion::V3(v) => {
+                let ts = load_json(reader, v)?;
+                TableSnapshotStatistics::from(ts)
+            }
+            TableSnapshotStatisticsVersion::V4(v) => load_json(reader, v)?,
+        };
+        Ok(r)
+    }
+}
+
+impl VersionedReader<SegmentStatistics> for SegmentStatisticsVersion {
+    type TargetType = SegmentStatistics;
+
+    fn read<R>(&self, reader: R) -> Result<SegmentStatistics>
+    where R: Read + Unpin + Send {
+        let r = match self {
+            SegmentStatisticsVersion::V0(_) => SegmentStatistics::from_read(reader)?,
         };
         Ok(r)
     }

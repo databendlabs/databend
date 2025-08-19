@@ -22,7 +22,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::TableOptions;
-use databend_common_storages_null::NullTable;
+use databend_common_storages_basic::NullTable;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;

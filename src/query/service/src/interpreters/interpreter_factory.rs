@@ -73,6 +73,9 @@ use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseCl
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
 use crate::interpreters::interpreter_report_issue::ReportIssueInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
+use crate::interpreters::interpreter_row_access_policy_create::CreateRowAccessPolicyInterpreter;
+use crate::interpreters::interpreter_row_access_policy_desc::DescRowAccessPolicyInterpreter;
+use crate::interpreters::interpreter_row_access_policy_drop::DropRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_sequence_desc::DescSequenceInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_set_workload_group_quotas::SetWorkloadGroupQuotasInterpreter;
@@ -83,6 +86,7 @@ use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpre
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
 use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
@@ -247,8 +251,8 @@ impl InterpreterFactory {
             )?)),
             Plan::ExplainAnalyze {
                 graphical,
-                partial,
                 plan,
+                partial,
             } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
@@ -257,7 +261,10 @@ impl InterpreterFactory {
                 *partial,
                 *graphical,
             )?)),
-
+            Plan::ExplainPerf { sql } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
+                sql.clone(),
+                ctx,
+            )?)),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
                 ctx,
                 sql.clone(),
@@ -403,6 +410,15 @@ impl InterpreterFactory {
                 ctx,
                 *exists_table.clone(),
             )?)),
+            Plan::AddTableRowAccessPolicy(p) => Ok(Arc::new(
+                AddTableRowAccessPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropTableRowAccessPolicy(p) => Ok(Arc::new(
+                DropTableRowAccessPolicyInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
+                DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
+            )),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
@@ -562,6 +578,16 @@ impl InterpreterFactory {
                 ctx,
                 *drop_udf.clone(),
             )?)),
+
+            Plan::CreateRowAccessPolicy(create_row_access) => Ok(Arc::new(
+                CreateRowAccessPolicyInterpreter::try_create(ctx, *create_row_access.clone())?,
+            )),
+            Plan::DropRowAccessPolicy(drop_row_access) => Ok(Arc::new(
+                DropRowAccessPolicyInterpreter::try_create(ctx, *drop_row_access.clone())?,
+            )),
+            Plan::DescRowAccessPolicy(desc_row_access) => Ok(Arc::new(
+                DescRowAccessPolicyInterpreter::try_create(ctx, *desc_row_access.clone())?,
+            )),
 
             Plan::Presign(presign) => Ok(Arc::new(PresignInterpreter::try_create(
                 ctx,

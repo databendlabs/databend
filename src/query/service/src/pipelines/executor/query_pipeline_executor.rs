@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::Runtime;
@@ -33,7 +34,6 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
@@ -102,7 +102,7 @@ impl QueryPipelineExecutor {
         }
     }
 
-    #[fastrace::trace]
+    #[fastrace::trace(name = "QueryPipelineExecutor::from_pipelines")]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -192,6 +192,7 @@ impl QueryPipelineExecutor {
         }))
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::on_finished")]
     fn on_finished(&self, info: ExecutionInfo) -> Result<()> {
         let mut on_finished_chain = self.on_finished_chain.lock();
 
@@ -201,6 +202,7 @@ impl QueryPipelineExecutor {
         on_finished_chain.apply(info)
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::finish")]
     pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
         let cause =
             cause.map(|err| err.with_context("[PIPELINE-EXECUTOR] Pipeline executor finished"));
@@ -223,7 +225,7 @@ impl QueryPipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
-    #[fastrace::trace]
+    #[fastrace::trace(name = "QueryPipelineExecutor::execute")]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init(self.graph.clone())?;
 
@@ -266,6 +268,7 @@ impl QueryPipelineExecutor {
         Ok(())
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::init")]
     fn init(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
@@ -286,10 +289,8 @@ impl QueryPipelineExecutor {
                     }
                 }
 
-                info!(
-                    "[PIPELINE-EXECUTOR] Pipeline initialized successfully for query {}, elapsed: {:?}",
-                    self.settings.query_id,
-                    instant.elapsed()
+                info!(query_id = self.settings.query_id, elapsed:? = instant.elapsed();
+                    "[PIPELINE-EXECUTOR] Pipeline initialized successfully",
                 );
             }
 
@@ -358,7 +359,7 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(func_path!())
+            let span = Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
@@ -367,6 +368,12 @@ impl QueryPipelineExecutor {
 
                 // finish the pipeline executor when has error or panic
                 if let Err(cause) = try_result.flatten() {
+                    span.with_property(|| ("error", "true")).add_properties(|| {
+                        [
+                            ("error.type", cause.code().to_string()),
+                            ("error.message", cause.display_text()),
+                        ]
+                    });
                     this.finish(Some(cause));
                 }
 
@@ -434,7 +441,7 @@ impl QueryPipelineExecutor {
     }
 
     pub fn format_graph_nodes(&self) -> String {
-        self.graph.format_graph_nodes()
+        self.graph.format_graph_nodes(false)
     }
 
     pub fn fetch_plans_profile(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile> {
@@ -444,6 +451,10 @@ impl QueryPipelineExecutor {
                 .fetch_profiling(Some(self.settings.executor_node_id.clone())),
             false => self.graph.fetch_profiling(None),
         }
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        self.graph.get_query_execution_stats()
     }
 }
 

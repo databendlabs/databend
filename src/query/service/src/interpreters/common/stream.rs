@@ -70,7 +70,7 @@ pub async fn dml_build_update_stream_req(
                 .get(OPT_KEY_DATABASE_ID)
                 .ok_or_else(|| {
                     ErrorCode::Internal(format!(
-                        "Invalid fuse table, table option {} not found",
+                        "Invalid fuse table, table option {} not found when building update stream req",
                         OPT_KEY_DATABASE_ID
                     ))
                 })?;

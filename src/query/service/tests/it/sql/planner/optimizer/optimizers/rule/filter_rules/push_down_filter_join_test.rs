@@ -152,6 +152,9 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                     JoinType::RightMark => "RightMark",
                     JoinType::LeftSingle => "LeftSingle",
                     JoinType::RightSingle => "RightSingle",
+                    JoinType::Asof => "Asof",
+                    JoinType::LeftAsof => "LeftAsof",
+                    JoinType::RightAsof => "RightAsof",
                 };
 
                 let conditions: Vec<String> = join

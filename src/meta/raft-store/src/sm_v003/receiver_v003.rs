@@ -33,7 +33,9 @@ use crate::sm_v003::received::Received;
 pub struct ReceiverV003 {
     remote_addr: String,
 
-    temp_path: String,
+    storage_path: String,
+
+    temp_rel_path: String,
 
     temp_file: Option<BufWriter<File>>,
 
@@ -49,13 +51,19 @@ pub struct ReceiverV003 {
 
 impl ReceiverV003 {
     /// Create a new snapshot receiver with an empty snapshot.
-    pub(crate) fn new(remote_addr: impl ToString, temp_path: impl ToString, temp_f: File) -> Self {
+    pub(crate) fn new(
+        remote_addr: impl ToString,
+        storage_path: impl ToString,
+        temp_rel_path: impl ToString,
+        temp_f: File,
+    ) -> Self {
         let remote_addr = remote_addr.to_string();
-        info!("Begin receiving snapshot v2 stream from: {}", remote_addr);
+        info!("Begin receiving snapshot v003 stream from: {}", remote_addr);
 
         ReceiverV003 {
             remote_addr,
-            temp_path: temp_path.to_string(),
+            storage_path: storage_path.to_string(),
+            temp_rel_path: temp_rel_path.to_string(),
             temp_file: Some(BufWriter::with_capacity(64 * 1024 * 1024, temp_f)),
             on_recv: None,
             n_received: 0,
@@ -118,26 +126,25 @@ impl ReceiverV003 {
         chunk: SnapshotChunkRequestV003,
     ) -> Result<Option<Received>, io::Error> {
         let remote_addr = self.remote_addr.clone();
-        let temp_path = self.temp_path.clone();
 
         fn invalid_input<E>(e: E) -> io::Error
         where E: Into<Box<dyn std::error::Error + Send + Sync>> {
             io::Error::new(io::ErrorKind::InvalidInput, e)
         }
 
+        // 1. update stat
+        self.update_stat(&chunk);
+
         // Add context info to io::Error
         let ctx = |e: io::Error, context: &str| -> io::Error {
             io::Error::new(
                 e.kind(),
                 format!(
-                    "{} while:(ReceiverV003::receive(): {}; remote_addr: {}; temp_path: {})",
-                    e, context, remote_addr, temp_path
+                    "{} while:(ReceiverV003::receive(): {}; remote_addr: {}; temp_path: {}/{})",
+                    e, context, remote_addr, self.storage_path, self.temp_rel_path
                 ),
             )
         };
-
-        // 1. update stat
-        self.update_stat(&chunk);
 
         // 2. write chunk to local snapshot_data
         {
@@ -163,8 +170,8 @@ impl ReceiverV003 {
             };
 
             info!(
-                "snapshot from {} is completely received, format: {}, vote: {:?}, meta: {:?}, size: {}; path: {}",
-                self.remote_addr, format, vote, snapshot_meta, self.size_received, self.temp_path
+                "snapshot from {} is completely received, format: {}, vote: {:?}, meta: {:?}, size: {}; path: {}/{}",
+                self.remote_addr, format, vote, snapshot_meta, self.size_received, self.storage_path, self.temp_rel_path
             );
 
             if format != "rotbl::v001" {
@@ -198,7 +205,8 @@ impl ReceiverV003 {
                 format,
                 vote,
                 snapshot_meta,
-                temp_path: self.temp_path.clone(),
+                storage_path: self.storage_path.clone(),
+                temp_rel_path: self.temp_rel_path.clone(),
                 remote_addr: self.remote_addr.clone(),
                 n_received: self.n_received,
                 size_received: self.size_received,
@@ -214,15 +222,15 @@ impl ReceiverV003 {
         debug!(
             len = data_len,
             total_len = self.size_received;
-            "received {}-th snapshot chunk from {}; path: {}",
-            self.n_received, self.remote_addr, self.temp_path
+            "received {}-th snapshot chunk from {}; path: {}/{}",
+            self.n_received, self.remote_addr, self.storage_path, self.temp_rel_path
         );
 
         if self.n_received % 100 == 0 {
             info!(
                 total_len = self.size_received;
-                "received {}-th snapshot chunk from {}; path: {}",
-                self.n_received, self.remote_addr, self.temp_path
+                "received {}-th snapshot chunk from {}; path: {}/{}",
+                self.n_received, self.remote_addr, self.storage_path, self.temp_rel_path
             );
         }
 

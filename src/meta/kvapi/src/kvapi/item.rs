@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 
 use crate::kvapi::Key;
 

@@ -25,7 +25,7 @@ fn create_pipeline(
 ) -> Result<(Arc<QueryPipelineExecutor>, Receiver<Result<DataBlock>>)> {
     let mut pipeline = Pipeline::create();
 
-    let data_type = data[0][0].get_by_offset(0).data_type.clone();
+    let data_type = data[0][0].data_type(0);
     let source_pipe = create_source_pipe(ctx, data)?;
     pipeline.add_pipe(source_pipe);
 

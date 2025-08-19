@@ -200,7 +200,7 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [sales.customer_id (#2), customer_avg (#8), diff_from_overall_avg (#9)]
     ├── sort keys: [diff_from_overall_avg DESC NULLS LAST, customer_id ASC NULLS LAST]
     ├── estimated rows: 0.00

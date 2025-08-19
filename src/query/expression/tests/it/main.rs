@@ -32,7 +32,6 @@ mod display;
 mod fill_field_default_value;
 mod group_by;
 mod hilbert;
-mod input_columns;
 mod kernel;
 mod meta_scalar;
 mod row;

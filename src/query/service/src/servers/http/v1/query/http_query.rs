@@ -34,10 +34,11 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
+use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
+use fastrace::future::FutureExt;
 use http::StatusCode;
 use log::error;
 use log::info;
@@ -100,8 +101,14 @@ impl HttpQueryRequest {
             } else {
                 s.txn_state.clone()
             };
+            let need_sticky = match &s.internal {
+                Some(internal) => internal.has_temp_table,
+                None => false,
+            };
             HttpSessionConf {
                 txn_state,
+                need_sticky,
+                need_keep_alive: need_sticky,
                 ..s.clone()
             }
         });
@@ -207,15 +214,39 @@ pub struct ServerInfo {
     pub start_time: String,
 }
 
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t == T::default()
+}
+
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
-    variables: Vec<(String, String)>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub variables: Vec<(String, String)>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
     pub last_query_result_cache_key: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub has_temp_table: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_node_id: Option<String>,
+    /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default")]
+    pub last_query_ids: Vec<String>,
 }
 
 impl HttpSessionStateInternal {
-    fn new(variables: &HashMap<String, Scalar>, last_query_result_cache_key: String) -> Self {
+    fn new(
+        variables: &HashMap<String, Scalar>,
+        last_query_result_cache_key: String,
+        has_temp_table: bool,
+        last_node_id: Option<String>,
+        last_query_ids: Vec<String>,
+    ) -> Self {
         let variables = variables
             .iter()
             .map(|(k, v)| {
@@ -228,6 +259,9 @@ impl HttpSessionStateInternal {
         Self {
             variables,
             last_query_result_cache_key,
+            has_temp_table,
+            last_node_id,
+            last_query_ids,
         }
     }
 
@@ -273,6 +307,9 @@ where D: Deserializer<'de> {
     let json_string: Option<String> = Option::deserialize(deserializer)?;
     match json_string {
         Some(s) => {
+            if s.is_empty() {
+                return Ok(None);
+            }
             let complex_value = serde_json::from_str(&s).map_err(serde::de::Error::custom)?;
             Ok(Some(complex_value))
         }
@@ -290,9 +327,6 @@ pub struct HttpSessionConf {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
-    // todo: remove this later
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,12 +335,6 @@ pub struct HttpSessionConf {
     pub need_sticky: bool,
     #[serde(default)]
     pub need_keep_alive: bool,
-    // used to check if the session is still on the same server
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_server_info: Option<ServerInfo>,
-    /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
-    #[serde(default)]
-    pub last_query_ids: Vec<String>,
     /// hide state not useful to clients
     /// so client only need to know there is a String field `internal`,
     /// which need to carry with session/conn
@@ -327,6 +355,127 @@ impl HttpSessionConf {
         };
 
         settings.extend(values)
+    }
+
+    // Read the session variables in the request, and set them to the current session.
+    // the session variables includes:
+    // - the current catalog
+    // - the current database
+    // - the current role
+    // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
+    // - the session-level query cache.
+    pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
+        let query_id = &http_ctx.query_id;
+        let http_query_manager = HttpQueryManager::instance();
+        if let Some(catalog) = &self.catalog {
+            if !catalog.is_empty() {
+                session.set_current_catalog(catalog.clone());
+            }
+        }
+        if let Some(db) = &self.database {
+            if !db.is_empty() {
+                session.set_current_database(db.clone());
+            }
+        }
+        if let Some(role) = &self.role {
+            if !role.is_empty() {
+                session.set_current_role_checked(role).await?;
+            }
+        }
+        // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
+        session
+            .set_secondary_roles_checked(self.secondary_roles.clone())
+            .await?;
+        // TODO(liyz): pass secondary roles here
+        if let Some(conf_settings) = &self.settings {
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
+        if let Some(state) = &self.internal {
+            if !state.variables.is_empty() {
+                session.set_all_variables(state.get_variables()?)
+            }
+            if let Some(id) = state.last_query_ids.first() {
+                if let Some(last_query) = http_query_manager.queries.get(id) {
+                    let state = *last_query.state.lock();
+                    if !matches!(
+                        state,
+                        HttpQueryState::Removed(RemoveReason::Finished | RemoveReason::Canceled)
+                    ) {
+                        warn!(
+                            "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}",
+                            id, state
+                        );
+                    }
+                }
+                if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
+                    session.update_query_ids_results(
+                        id.to_owned(),
+                        state.last_query_result_cache_key.to_owned(),
+                    );
+                }
+            }
+            let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
+            if state.has_temp_table {
+                if let Some(id) = &state.last_node_id {
+                    if http_query_manager.server_info.id != *id {
+                        if http_ctx.fixed_coordinator_node {
+                            return Err(ErrorCode::SessionLost(
+                                "Temp table lost due to server restart.",
+                            ));
+                        } else {
+                            return Err(ErrorCode::SessionLost(format!(
+                                "Temp table lost due to server restart (at {}) or route error: node_id={} (expected {}); session_id={}, query_id={}, is_sticky_node={}",
+                                http_query_manager.server_info.start_time,
+                                http_query_manager.server_info.id, id, http_ctx.client_session_id.as_deref().unwrap_or("None"),
+                                query_id,
+                                http_ctx.is_sticky_node
+                            )));
+                        }
+                    }
+                } else {
+                    return Err(ErrorCode::InvalidSessionState(
+                        "contains temporary tables but missing last_server_info field".to_string(),
+                    ));
+                }
+                if !has_temp_table {
+                    match &http_ctx.client_session {
+                        None => {
+                            return Err(ErrorCode::InvalidSessionState(
+                                "contains temporary tables but missing session info".to_string(),
+                            ));
+                        }
+                        Some(s) => {
+                            return    Err(ErrorCode::SessionTimeout(format!(
+                                "temporary tables in session {} expired after idle for more than {} seconds, when starting query {}",
+                                s.header.id, ClientSessionManager::instance().max_idle_time.as_secs(), query_id,
+                            )));
+                        }
+                    }
+                }
+            } else if has_temp_table {
+                warn!("[TEMP-TABLE] Found unexpected Temp table.");
+            }
+        }
+        try_set_txn(
+            &http_ctx.query_id,
+            session,
+            &self.txn_state,
+            &self.internal.clone().unwrap_or_default(),
+            &http_query_manager,
+        )?;
+        Ok(())
     }
 }
 
@@ -361,8 +510,9 @@ pub struct HttpQueryResponseInternal {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ExpireState {
+pub enum HttpQueryState {
     Working,
+    WaitForFinal,
     ExpireAt(Instant),
     Removed(RemoveReason),
 }
@@ -376,15 +526,13 @@ pub enum ExpireResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
-    pub(crate) tenant: Tenant,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
-    pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
-    state: Arc<Mutex<Executor>>,
+    executor: Arc<Mutex<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    expire_state: Arc<Mutex<ExpireState>>,
+    state: Arc<Mutex<HttpQueryState>>,
     /// The timeout for the query result polling. In the normal case, the client driver
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
@@ -392,22 +540,22 @@ pub struct HttpQuery {
 
     pub(crate) is_txn_mgr_saved: AtomicBool,
 
-    pub(crate) has_temp_table_before_run: bool,
-    pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
-    pub(crate) is_session_handle_refreshed: AtomicBool,
+    pub(crate) temp_tbl_mgr: TempTblMgrRef,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
+    last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
 }
 
 fn try_set_txn(
     query_id: &str,
     session: &Arc<Session>,
-    session_conf: &HttpSessionConf,
+    txn_state: &Option<TxnState>,
+    internal_state: &HttpSessionStateInternal,
     http_query_manager: &Arc<HttpQueryManager>,
 ) -> Result<()> {
-    match &session_conf.txn_state {
+    match txn_state {
         Some(TxnState::Active) => {
-            http_query_manager.check_sticky_for_txn(&session_conf.last_server_info)?;
-            let last_query_id = session_conf.last_query_ids.first().ok_or_else(|| {
+            http_query_manager.check_sticky_for_txn(&internal_state.last_node_id)?;
+            let last_query_id = internal_state.last_query_ids.first().ok_or_else(|| {
                 ErrorCode::InvalidSessionState(
                     "[HTTP-QUERY] Invalid transaction state: transaction is active but last_query_ids is empty".to_string(),
                 )
@@ -434,125 +582,22 @@ fn try_set_txn(
 
 impl HttpQuery {
     #[async_backtrace::framed]
-    #[fastrace::trace]
+    #[fastrace::trace(name = "HttpQuery::try_create")]
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
     ) -> Result<HttpQuery> {
-        let http_query_manager = HttpQueryManager::instance();
-        let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
+        let (session, ctx) = http_ctx
+            .create_session(&req.session, SessionType::HTTPQuery)
+            .await?;
         let query_id = http_ctx.query_id.clone();
-        let session = http_ctx
-            .upgrade_session(SessionType::HTTPQuery)
-            .map_err(|err| {
-                ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
-            })?;
-        let session_id = session.get_id();
-
-        // Read the session variables in the request, and set them to the current session.
-        // the session variables includes:
-        // - the current catalog
-        // - the current database
-        // - the current role
-        // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
-        // - the session-level query cache.
-        if let Some(session_conf) = &req.session {
-            if let Some(catalog) = &session_conf.catalog {
-                session.set_current_catalog(catalog.clone());
-            }
-            if let Some(db) = &session_conf.database {
-                session.set_current_database(db.clone());
-            }
-            if let Some(role) = &session_conf.role {
-                session.set_current_role_checked(role).await?;
-            }
-
-            // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
-            session
-                .set_secondary_roles_checked(session_conf.secondary_roles.clone())
-                .await?;
-            // TODO(liyz): pass secondary roles here
-            if let Some(conf_settings) = &session_conf.settings {
-                let settings = session.get_settings();
-                for (k, v) in conf_settings {
-                    settings
-                        .set_setting(k.to_string(), v.to_string())
-                        .or_else(|e| {
-                            if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                                warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
-                                Ok(())
-                            } else {
-                                Err(e)
-                            }
-                        })?;
-                }
-            }
-            if let Some(state) = &session_conf.internal {
-                if !state.variables.is_empty() {
-                    session.set_all_variables(state.get_variables()?)
-                }
-                if let Some(id) = session_conf.last_query_ids.first() {
-                    if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
-                        session.update_query_ids_results(
-                            id.to_owned(),
-                            state.last_query_result_cache_key.to_owned(),
-                        );
-                    }
-                }
-            }
-
-            try_set_txn(
-                &http_ctx.query_id,
-                &session,
-                session_conf,
-                &http_query_manager,
-            )?;
-
-            if session_conf.need_sticky
-                && matches!(session_conf.txn_state, None | Some(TxnState::AutoCommit))
-            {
-                http_query_manager
-                    .check_sticky_for_temp_table(&session_conf.last_server_info)
-                    .map_err(|e| {
-                        let msg = format!(
-                            "[TEMP TABLE] invalid session, session_id={} query_id={}, error={e}, is_sticky_node={}",
-                           client_session_id, query_id, http_ctx.is_sticky_node,
-                        );
-                        error!("{}, session_state={:?}", msg, session_conf);
-                        ErrorCode::InvalidSessionState(msg)
-                    })?;
-            }
-        };
-
-        let settings = session.get_settings();
-        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let deduplicate_label = &http_ctx.deduplicate_label;
-        let user_agent = &http_ctx.user_agent;
-
-        session.set_client_host(http_ctx.client_host.clone());
-
-        let ctx = session.create_query_context().await?;
-
-        // Deduplicate label is used on the DML queries which may be retried by the client.
-        // It can be used to avoid the duplicated execution of the DML queries.
-        if let Some(label) = deduplicate_label {
-            unsafe {
-                ctx.get_settings().set_deduplicate_label(label.clone())?;
-            }
-        }
-        if let Some(ua) = user_agent {
-            ctx.set_ua(ua.clone());
-        }
-
-        // TODO: validate the query_id to be uuid format
-        ctx.update_init_query_id(query_id.clone());
-
+        let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let node_id = ctx.get_cluster().local_id.clone();
         let sql = &req.sql;
         info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
-        // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
+        // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
         // and the data in the stage attachment (which is mostly a s3 path) will be inserted into
         // the table.
         if let Some(attachment) = &req.stage_attachment {
@@ -569,7 +614,7 @@ impl HttpQuery {
 
         let (sender, block_receiver) = sized_spsc(req.pagination.max_rows_in_buffer);
 
-        let state = Arc::new(Mutex::new(Executor {
+        let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting {
                 ctx: ctx.clone(),
@@ -577,14 +622,9 @@ impl HttpQuery {
             }),
         }));
 
+        let settings = session.get_settings();
+        let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
-        let tenant = session.get_current_tenant();
-        let user_name = session.get_current_user()?.name;
-
-        if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session, &query_id);
-        };
-        let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
             req.pagination.max_rows_per_page,
@@ -594,24 +634,19 @@ impl HttpQuery {
 
         Ok(HttpQuery {
             id: query_id,
-            tenant,
-            user_name,
+            user_name: http_ctx.user_name.clone(),
             client_session_id: http_ctx.client_session_id.clone(),
-            session_id,
             node_id,
             request: req,
-            state,
+            executor,
             page_manager: data,
             result_timeout_secs,
 
-            expire_state: Arc::new(Mutex::new(ExpireState::Working)),
-
-            has_temp_table_before_run,
-
-            is_txn_mgr_saved: Default::default(),
-            has_temp_table_after_run: Default::default(),
-            is_session_handle_refreshed: Default::default(),
+            state: Arc::new(Mutex::new(HttpQueryState::Working)),
+            temp_tbl_mgr: session.temp_tbl_mgr().clone(),
             query_mem_stat: ctx.get_query_memory_tracking(),
+            is_txn_mgr_saved: Default::default(),
+            last_session_conf: Default::default(),
         })
     }
 
@@ -621,13 +656,22 @@ impl HttpQuery {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state();
         let session = self.get_response_session().await?;
+        let session = {
+            let mut last = self.last_session_conf.lock();
+            if Some(&session) == last.as_ref() {
+                None
+            } else {
+                *last = Some(session.clone());
+                Some(session)
+            }
+        };
 
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session: Some(session),
+            session,
             node_id: self.node_id.clone(),
-            session_id: self.session_id.clone(),
+            session_id: self.client_session_id.clone().unwrap_or_default(),
             result_timeout_secs: self.result_timeout_secs,
         })
     }
@@ -637,7 +681,7 @@ impl HttpQuery {
 
         Ok(HttpQueryResponseInternal {
             data: None,
-            session_id: self.session_id.clone(),
+            session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: self.node_id.clone(),
             state,
             session: None,
@@ -646,7 +690,7 @@ impl HttpQuery {
     }
 
     fn get_state(&self) -> ResponseState {
-        let state = self.state.lock();
+        let state = self.executor.lock();
         state.get_response_state()
     }
 
@@ -660,7 +704,7 @@ impl HttpQuery {
         // - query cache: last_query_id and result_scan
 
         let (session_state, is_stopped) = {
-            let executor = self.state.lock();
+            let executor = self.executor.lock();
 
             let session_state = executor.get_session_state();
             let is_stopped = matches!(executor.state, ExecuteState::Stopped(_));
@@ -680,95 +724,51 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        let internal = if !session_state.variables.is_empty()
-            || !session_state.last_query_result_cache_key.is_empty()
+        let has_temp_table = !self.temp_tbl_mgr.lock().is_empty();
+
+        let internal = HttpSessionStateInternal::new(
+            &session_state.variables,
+            session_state.last_query_result_cache_key,
+            has_temp_table,
+            Some(HttpQueryManager::instance().server_info.id.clone()),
+            if session_state.last_query_ids.is_empty() {
+                vec![self.id.clone()]
+            } else {
+                session_state.last_query_ids
+            },
+        );
+
+        if is_stopped
+            && txn_state == TxnState::Active
+            && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
+            && self
+                .is_txn_mgr_saved
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
         {
-            Some(HttpSessionStateInternal::new(
-                &session_state.variables,
-                session_state.last_query_result_cache_key,
-            ))
-        } else {
-            None
-        };
-
-        if is_stopped {
-            if let Some(cid) = &self.client_session_id {
-                let (has_temp_table_after_run, just_changed) = {
-                    let mut guard = self.has_temp_table_after_run.lock();
-                    match *guard {
-                        None => {
-                            let not_empty = !session_state.temp_tbl_mgr.lock().is_empty();
-                            *guard = Some(not_empty);
-                            ClientSessionManager::instance().on_query_finish(
-                                cid,
-                                &self.user_name,
-                                session_state.temp_tbl_mgr,
-                                !not_empty,
-                                not_empty != self.has_temp_table_before_run,
-                            );
-                            (not_empty, true)
-                        }
-                        Some(v) => (v, false),
-                    }
-                };
-
-                if !self.has_temp_table_before_run
-                    && has_temp_table_after_run
-                    && just_changed
-                    && self
-                        .is_session_handle_refreshed
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-                        .is_ok()
-                {
-                    ClientSessionManager::instance()
-                        .refresh_session_handle(
-                            self.tenant.clone(),
-                            self.user_name.to_string(),
-                            cid,
-                        )
-                        .await?;
-                }
-            }
-
-            if txn_state != TxnState::AutoCommit
-                && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
-                && self
-                    .is_txn_mgr_saved
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-                    .is_ok()
-            {
-                let timeout = session_state
-                    .settings
-                    .get_idle_transaction_timeout_secs()
-                    .unwrap();
-                HttpQueryManager::instance()
-                    .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
-                    .await;
-            }
+            let timeout = session_state
+                .settings
+                .get_idle_transaction_timeout_secs()
+                .unwrap();
+            HttpQueryManager::instance()
+                .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
+                .await;
         }
-        let has_temp_table =
-            (*self.has_temp_table_after_run.lock()).unwrap_or(self.has_temp_table_before_run);
 
-        let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
-        let need_keep_alive = need_sticky || has_temp_table;
+        let need_sticky = txn_state == TxnState::Active || has_temp_table;
+        let need_keep_alive = need_sticky;
 
         Ok(HttpSessionConf {
             catalog: Some(catalog),
             database: Some(database),
             role,
             secondary_roles,
-            keep_server_session_secs: None,
             settings: Some(settings),
             txn_state: Some(txn_state),
             need_sticky,
             need_keep_alive,
-            last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
-            last_query_ids: if session_state.last_query_ids.is_empty() {
-                vec![self.id.clone()]
-            } else {
-                session_state.last_query_ids
-            },
-            internal,
+
+            internal: Some(internal),
         })
     }
 
@@ -786,8 +786,9 @@ impl HttpQuery {
     }
 
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
+        let span = fastrace::Span::enter_with_local_parent("HttpQuery::start_query");
         let (block_sender, query_context) = {
-            let state = self.state.lock();
+            let state = self.executor.lock();
             let ExecuteState::Starting(state) = &state.state else {
                 return Err(ErrorCode::Internal(
                     "[HTTP-QUERY] Invalid query state: expected Starting state",
@@ -799,7 +800,7 @@ impl HttpQuery {
 
         let query_session = query_context.get_current_session();
 
-        let query_state = self.state.clone();
+        let query_state = self.executor.clone();
 
         let query_format_settings = {
             let page_manager = self.page_manager.lock().await;
@@ -833,14 +834,15 @@ impl HttpQuery {
                         warnings: query_context.pop_warnings(),
                     };
 
-                    info!(
+                    error!(
                         "[HTTP-QUERY] Query state changed to Stopped, failed to start: {:?}",
                         e
                     );
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
                     block_sender.close();
                 }
-            },
+            }
+            .in_span(span),
             None,
         )?;
 
@@ -852,7 +854,7 @@ impl HttpQuery {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(&self.state, Err(reason));
+        Executor::stop(&self.executor, Err(reason));
     }
 
     #[async_backtrace::framed]
@@ -870,23 +872,28 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-        let mut t = self.expire_state.lock();
-        *t = ExpireState::ExpireAt(deadline);
+        let mut t = self.state.lock();
+        *t = HttpQueryState::ExpireAt(deadline);
     }
 
     pub fn mark_removed(&self, remove_reason: RemoveReason) -> bool {
-        let mut t = self.expire_state.lock();
-        if !matches!(*t, ExpireState::Removed(_)) {
-            *t = ExpireState::Removed(remove_reason);
+        let mut t = self.state.lock();
+        if !matches!(*t, HttpQueryState::Removed(_)) {
+            *t = HttpQueryState::Removed(remove_reason);
             true
         } else {
             false
         }
     }
 
+    pub fn wait_for_final(&self) {
+        let mut t = self.state.lock();
+        *t = HttpQueryState::WaitForFinal;
+    }
+
     pub fn check_removed(&self) -> Option<RemoveReason> {
-        let t = self.expire_state.lock();
-        if let ExpireState::Removed(r) = *t {
+        let t = self.state.lock();
+        if let HttpQueryState::Removed(r) = *t {
             Some(r)
         } else {
             None
@@ -896,9 +903,9 @@ impl HttpQuery {
     // return Duration to sleep
     #[async_backtrace::framed]
     pub async fn check_expire(&self) -> ExpireResult {
-        let expire_state = self.expire_state.lock();
+        let expire_state = self.state.lock();
         match *expire_state {
-            ExpireState::ExpireAt(expire_at) => {
+            HttpQueryState::ExpireAt(expire_at) => {
                 let now = Instant::now();
                 if now >= expire_at {
                     ExpireResult::Expired
@@ -906,25 +913,23 @@ impl HttpQuery {
                     ExpireResult::Sleep(expire_at - now)
                 }
             }
-            ExpireState::Removed(_) => ExpireResult::Removed,
-            ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
-            }
+            HttpQueryState::Removed(_) => ExpireResult::Removed,
+            _ => ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs)),
         }
     }
 
     #[async_backtrace::framed]
     pub fn on_heartbeat(&self) -> bool {
-        let mut expire_state = self.expire_state.lock();
+        let mut expire_state = self.state.lock();
         match *expire_state {
-            ExpireState::ExpireAt(_) => {
+            HttpQueryState::ExpireAt(_) => {
                 let duration = Duration::from_secs(self.result_timeout_secs);
                 let deadline = Instant::now() + duration;
-                *expire_state = ExpireState::ExpireAt(deadline);
+                *expire_state = HttpQueryState::ExpireAt(deadline);
                 true
             }
-            ExpireState::Removed(_) => false,
-            ExpireState::Working => true,
+            HttpQueryState::Removed(_) => false,
+            HttpQueryState::Working | HttpQueryState::WaitForFinal => true,
         }
     }
 

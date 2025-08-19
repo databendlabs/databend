@@ -8,7 +8,6 @@ HashJoin
 ├── probe keys: [numbers.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers

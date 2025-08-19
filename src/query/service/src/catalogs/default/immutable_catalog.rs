@@ -76,6 +76,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -93,6 +95,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::table_id_ranges::SYS_DB_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_ID_BEGIN;
 
@@ -442,6 +445,16 @@ impl Catalog for ImmutableCatalog {
         )))
     }
 
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "set_table_row_access_policy not allowed for system database {:?}",
+            req
+        )))
+    }
+
     #[async_backtrace::framed]
     async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         Err(ErrorCode::Unimplemented(
@@ -519,7 +532,11 @@ impl Catalog for ImmutableCatalog {
         unimplemented!()
     }
 
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
     async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
@@ -529,6 +546,7 @@ impl Catalog for ImmutableCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

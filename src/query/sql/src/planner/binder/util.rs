@@ -48,31 +48,12 @@ impl Binder {
         cte_types: &mut Vec<DataType>,
     ) -> Result<()> {
         match expr.plan() {
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => {
-                self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
-                self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
-            }
-
-            RelOperator::ProjectSet(_)
-            | RelOperator::AsyncFunction(_)
-            | RelOperator::Udf(_)
-            | RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_) => {
-                self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
-            }
             RelOperator::RecursiveCteScan(plan) => {
                 cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
                     cte_types.extend(plan.fields.iter().map(|f| f.data_type().clone()));
                 }
             }
-
-            RelOperator::Exchange(_)
-            | RelOperator::Scan(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_) => {}
             // Each recursive step in a recursive query generates new rows, and these rows are used for the next recursion.
             // Each step depends on the results of the previous step, so it's essential to ensure that the result set is built incrementally.
             // These operators need to operate on the entire result set,
@@ -88,6 +69,12 @@ impl Binder {
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()
                 )));
+            }
+            _ => {
+                let arity = expr.plan().arity();
+                for i in 0..arity {
+                    self.count_r_cte_scan(expr.child(i)?, cte_scan_names, cte_types)?;
+                }
             }
         }
         Ok(())

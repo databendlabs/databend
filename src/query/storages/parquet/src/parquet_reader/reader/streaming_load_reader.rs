@@ -63,12 +63,17 @@ impl InmMemoryFile {
         case_sensitive: bool,
         func_ctx: Arc<FunctionContext>,
         data_schema: DataSchemaRef,
+        use_logic_type: bool,
     ) -> Result<DataBlockIterator> {
         let parquet_meta_data = ParquetMetaDataReader::new().parse_and_finish(&self.file_data)?;
         parquet_meta_data.file_metadata();
         let arrow_schema = infer_schema_with_extension(parquet_meta_data.file_metadata())?;
         let schema_descr = parquet_meta_data.file_metadata().schema_descr_ptr();
-        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema, case_sensitive)?);
+        let parquet_table_schema = Arc::new(arrow_to_table_schema(
+            &arrow_schema,
+            case_sensitive,
+            use_logic_type,
+        )?);
 
         let (mut output_projection, mut pushdown_columns) = project_columnar(
             &parquet_table_schema,

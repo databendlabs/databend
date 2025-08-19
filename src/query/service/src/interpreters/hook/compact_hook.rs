@@ -33,7 +33,6 @@ use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
-use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
@@ -66,7 +65,10 @@ pub async fn hook_compact(
 ) {
     let op_name = trace_ctx.operation_name.clone();
     if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, lock_opt).await {
-        info!("compact hook ({}) with error (ignored): {}", op_name, e);
+        info!(
+            "[COMPACT-HOOK] Operation {} failed with error (ignored): {}",
+            op_name, e
+        );
     }
 }
 
@@ -86,13 +88,13 @@ async fn do_hook_compact(
         if info.res.is_ok() {
             let op_name = &trace_ctx.operation_name;
             metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-            info!("execute {op_name} finished successfully. running table optimization job.");
+            info!("[COMPACT-HOOK] Operation {op_name} completed successfully, starting table optimization job.");
 
             let compact_start_at = Instant::now();
             let compaction_limits = match compact_target.mutation_kind {
                 MutationKind::Insert => {
                     let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
-                    info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
+                    info!("[COMPACT-HOOK] Table {} requires compaction of {} blocks", compact_target.table, compaction_num_block_hint);
                     if compaction_num_block_hint == 0 {
                         return Ok(());
                     }
@@ -120,9 +122,9 @@ async fn do_hook_compact(
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
             }) {
                 Ok(_) => {
-                    info!("execute {op_name} finished successfully. table optimization job finished.");
+                    info!("[COMPACT-HOOK] Operation {op_name} and table optimization job completed successfully.");
                 }
-                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e); }
+                Err(e) => { info!("[COMPACT-HOOK] Operation {op_name} completed but table optimization job failed: {:?}", e); }
             }
 
             // reset the progress value
@@ -162,6 +164,8 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
+    ctx.clear_table_meta_timestamps_cache();
+
     {
         // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
@@ -183,7 +187,6 @@ async fn compact_table(
             let query_ctx = ctx.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |_info: &ExecutionInfo| {
-                    hook_clear_m_cte_temp_table(&query_ctx)?;
                     hook_vacuum_temp_files(&query_ctx)?;
                     hook_disk_temp_dir(&query_ctx)?;
                     Ok(())

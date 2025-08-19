@@ -53,6 +53,7 @@ impl Plan {
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
+            Plan::ExplainPerf { .. } => Ok("ExplainPerf".to_string()),
 
             Plan::ReportIssue { .. } => Ok("ReportOptimize".to_string()),
 
@@ -101,6 +102,11 @@ impl Plan {
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
             Plan::ExistsTable(_) => Ok("ExistsTable".to_string()),
+            Plan::AddTableRowAccessPolicy(_) => Ok("AddTableRowAccessPolicy".to_string()),
+            Plan::DropTableRowAccessPolicy(_) => Ok("DropTableRowAccessPolicy".to_string()),
+            Plan::DropAllTableRowAccessPolicies(_) => {
+                Ok("DropAllTableRowAccessPolicies".to_string())
+            }
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),
@@ -180,6 +186,11 @@ impl Plan {
             Plan::CreateDatamaskPolicy(_) => Ok("CreateDatamaskPolicy".to_string()),
             Plan::DropDatamaskPolicy(_) => Ok("DropDatamaskPolicy".to_string()),
             Plan::DescDatamaskPolicy(_) => Ok("DescDatamaskPolicy".to_string()),
+
+            // row policy
+            Plan::CreateRowAccessPolicy(_) => Ok("CreateRowAccessPolicy".to_string()),
+            Plan::DropRowAccessPolicy(_) => Ok("DropRowAccessPolicy".to_string()),
+            Plan::DescRowAccessPolicy(_) => Ok("DescRowAccessPolicy".to_string()),
 
             // network policy
             Plan::CreateNetworkPolicy(_) => Ok("CreateNetworkPolicy".to_string()),

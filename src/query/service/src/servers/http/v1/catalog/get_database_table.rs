@@ -18,6 +18,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_users::Object;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
 use poem::error::Result as PoemResult;
@@ -58,7 +59,10 @@ async fn handle(
     table: String,
 ) -> Result<GetDatabaseTableResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let visibility_checker = ctx.session.get_visibility_checker(false).await?;
+    let visibility_checker = ctx
+        .session
+        .get_visibility_checker(false, Object::All)
+        .await?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
 

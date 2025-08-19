@@ -32,7 +32,7 @@ use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_version::UDF_CLIENT_USER_AGENT;
+use databend_common_meta_app::principal::UDTF;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -84,6 +84,7 @@ impl Binder {
                 handler,
                 headers,
                 language,
+                immutable,
             } => {
                 UDFValidator::is_udf_server_allowed(address.as_str())?;
 
@@ -110,16 +111,17 @@ impl Binder {
                     address,
                     connect_timeout,
                     request_timeout,
-                    UDF_CLIENT_USER_AGENT.as_str(),
+                    &self.ctx.get_version().udf_client_user_agent(),
                 )?;
 
-                let mut client = UDFFlightClient::connect(endpoint, connect_timeout, batch_rows)
-                    .await?
-                    .with_tenant(self.ctx.get_tenant().tenant_name())?
-                    .with_func_name(&name)?
-                    .with_handler_name(handler)?
-                    .with_query_id(&self.ctx.get_id())?
-                    .with_headers(headers.iter())?;
+                let mut client =
+                    UDFFlightClient::connect(handler, endpoint, connect_timeout, batch_rows)
+                        .await?
+                        .with_tenant(self.ctx.get_tenant().tenant_name())?
+                        .with_func_name(&name)?
+                        .with_handler_name(handler)?
+                        .with_query_id(&self.ctx.get_id())?
+                        .with_headers(headers.iter())?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
@@ -134,6 +136,7 @@ impl Binder {
                         handler: handler.clone(),
                         headers: headers.clone(),
                         language: language.clone(),
+                        immutable: *immutable,
                     }),
                     created_on: Utc::now(),
                 })
@@ -146,6 +149,9 @@ impl Binder {
                 handler,
                 language,
                 runtime_version,
+                imports,
+                packages,
+                immutable,
             } => {
                 UDFValidator::is_udf_script_allowed(&language.parse()?)?;
                 let definition = create_udf_definition_script(
@@ -153,9 +159,12 @@ impl Binder {
                     None,
                     return_type,
                     runtime_version,
+                    imports,
+                    packages,
                     handler,
                     language,
                     code,
+                    *immutable,
                 )?;
                 Ok(UserDefinedFunction {
                     name,
@@ -171,20 +180,59 @@ impl Binder {
                 code,
                 language,
                 runtime_version,
+                imports,
+                packages,
             } => {
                 let definition = create_udf_definition_script(
                     arg_types,
                     Some(state_fields),
                     return_type,
                     runtime_version,
+                    imports,
+                    packages,
                     "",
                     language,
                     code,
+                    None,
                 )?;
                 Ok(UserDefinedFunction {
                     name,
                     description,
                     definition,
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDTFSql {
+                arg_types,
+                return_types,
+                sql,
+            } => {
+                let arg_types = arg_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                let return_types = return_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition: PlanUDFDefinition::UDTF(UDTF {
+                        arg_types,
+                        return_types,
+                        sql: sql.to_string(),
+                    }),
                     created_on: Utc::now(),
                 })
             }
@@ -255,9 +303,12 @@ fn create_udf_definition_script(
     state_fields: Option<&[UDAFStateField]>,
     return_type: &TypeName,
     runtime_version: &str,
+    imports: &[String],
+    packages: &[String],
     handler: &str,
     language: &str,
     code: &str,
+    immutable: Option<bool>,
 ) -> Result<PlanUDFDefinition> {
     let Ok(language) = language.parse::<UDFLanguage>() else {
         return Err(ErrorCode::InvalidArgument(format!(
@@ -302,6 +353,8 @@ fn create_udf_definition_script(
             Ok(PlanUDFDefinition::UDAFScript(UDAFScript {
                 code: code.to_string(),
                 arg_types,
+                imports: imports.to_vec(),
+                packages: packages.to_vec(),
                 state_fields,
                 return_type,
                 language: language.to_string(),
@@ -312,9 +365,12 @@ fn create_udf_definition_script(
             code: code.to_string(),
             arg_types,
             return_type,
+            imports: imports.to_vec(),
+            packages: packages.to_vec(),
             handler: handler.to_string(),
             language: language.to_string(),
             runtime_version,
+            immutable,
         })),
     }
 }

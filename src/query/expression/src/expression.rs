@@ -32,6 +32,11 @@ use crate::values::Scalar;
 
 pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {
     fn unique_name<W: Write>(&self, f: &mut W) -> std::fmt::Result;
+    fn name(&self) -> String {
+        let mut buf = String::new();
+        let _ = self.unique_name(&mut buf);
+        buf
+    }
 }
 
 impl ColumnIndex for usize {
@@ -661,42 +666,43 @@ impl<Index: ColumnIndex> Expr<Index> {
         visitor.0
     }
 
+    #[recursive::recursive]
     pub fn project_column_ref<ToIndex: ColumnIndex>(
         &self,
-        f: impl Fn(&Index) -> ToIndex + Copy,
-    ) -> Expr<ToIndex> {
+        col_index_mapper: impl Fn(&Index) -> databend_common_exception::Result<ToIndex> + Copy,
+    ) -> databend_common_exception::Result<Expr<ToIndex>> {
         match self {
             Expr::Constant(Constant {
                 span,
                 scalar,
                 data_type,
-            }) => Expr::Constant(Constant {
+            }) => Ok(Expr::Constant(Constant {
                 span: *span,
                 scalar: scalar.clone(),
                 data_type: data_type.clone(),
-            }),
+            })),
             Expr::ColumnRef(ColumnRef {
                 span,
                 id,
                 data_type,
                 display_name,
-            }) => Expr::ColumnRef(ColumnRef {
+            }) => Ok(Expr::ColumnRef(ColumnRef {
                 span: *span,
-                id: f(id),
+                id: col_index_mapper(id)?,
                 data_type: data_type.clone(),
                 display_name: display_name.clone(),
-            }),
+            })),
             Expr::Cast(Cast {
                 span,
                 is_try,
                 expr,
                 dest_type,
-            }) => Expr::Cast(Cast {
+            }) => Ok(Expr::Cast(Cast {
                 span: *span,
                 is_try: *is_try,
-                expr: Box::new(expr.project_column_ref(f)),
+                expr: Box::new(expr.project_column_ref(col_index_mapper)?),
                 dest_type: dest_type.clone(),
-            }),
+            })),
             Expr::FunctionCall(FunctionCall {
                 span,
                 id,
@@ -704,14 +710,17 @@ impl<Index: ColumnIndex> Expr<Index> {
                 generics,
                 args,
                 return_type,
-            }) => Expr::FunctionCall(FunctionCall {
+            }) => Ok(Expr::FunctionCall(FunctionCall {
                 span: *span,
                 id: id.clone(),
                 function: function.clone(),
                 generics: generics.clone(),
-                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref(col_index_mapper))
+                    .collect::<Result<_, _>>()?,
                 return_type: return_type.clone(),
-            }),
+            })),
             Expr::LambdaFunctionCall(LambdaFunctionCall {
                 span,
                 name,
@@ -719,14 +728,17 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_expr,
                 lambda_display,
                 return_type,
-            }) => Expr::LambdaFunctionCall(LambdaFunctionCall {
+            }) => Ok(Expr::LambdaFunctionCall(LambdaFunctionCall {
                 span: *span,
                 name: name.clone(),
-                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+                args: args
+                    .iter()
+                    .map(|expr| expr.project_column_ref(col_index_mapper))
+                    .collect::<Result<_, _>>()?,
                 lambda_expr: lambda_expr.clone(),
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
-            }),
+            })),
         }
     }
 
@@ -757,6 +769,129 @@ impl<Index: ColumnIndex> Expr<Index> {
             Some(expr) => expr,
             None => self.clone(),
         }
+    }
+
+    pub fn visit_func(&self, func_name: &str, visitor: &mut impl FnMut(&FunctionCall<Index>)) {
+        struct Visitor<'a, Index: ColumnIndex, F: FnMut(&FunctionCall<Index>)> {
+            name: String,
+            visitor: &'a mut F,
+            _marker: std::marker::PhantomData<Index>,
+        }
+
+        impl<'a, Index: ColumnIndex, F> ExprVisitor<Index> for Visitor<'a, Index, F>
+        where F: FnMut(&FunctionCall<Index>)
+        {
+            fn enter_function_call(
+                &mut self,
+                call: &FunctionCall<Index>,
+            ) -> Result<Option<Expr<Index>>, Self::Error> {
+                if call.function.signature.name == self.name {
+                    (self.visitor)(call);
+                }
+                Self::visit_function_call(call, self)
+            }
+        }
+
+        visit_expr(self, &mut Visitor {
+            name: func_name.to_string(),
+            visitor,
+            _marker: std::marker::PhantomData,
+        })
+        .unwrap();
+    }
+
+    pub fn find_function_literals(
+        &self,
+        func_name: &str,
+        // column name, constant scalar, column is left
+        visitor: &mut impl FnMut(&Index, &Scalar, bool),
+    ) {
+        struct Visitor<'a, Index: ColumnIndex, F: FnMut(&Index, &Scalar, bool)> {
+            name: String,
+            visitor: &'a mut F,
+            _marker: std::marker::PhantomData<Index>,
+        }
+
+        impl<'a, Index: ColumnIndex, F> ExprVisitor<Index> for Visitor<'a, Index, F>
+        where F: FnMut(&Index, &Scalar, bool)
+        {
+            fn enter_function_call(
+                &mut self,
+                call: &FunctionCall<Index>,
+            ) -> Result<Option<Expr<Index>>, Self::Error> {
+                if call.function.signature.name == self.name {
+                    match call.args.as_slice() {
+                        [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })] =>
+                        {
+                            (self.visitor)(id, scalar, true);
+                        }
+                        [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
+                        {
+                            (self.visitor)(id, scalar, false);
+                        }
+                        _ => {}
+                    }
+                }
+                Self::visit_function_call(call, self)
+            }
+        }
+
+        visit_expr(self, &mut Visitor {
+            name: func_name.to_string(),
+            visitor,
+            _marker: std::marker::PhantomData,
+        })
+        .unwrap();
+    }
+
+    // replace function call with constant scalar
+    pub fn replace_function_literals(
+        &self,
+        func_name: &str,
+        visitor: &mut impl FnMut(&Index, &Scalar, &FunctionCall<Index>) -> Option<Expr<Index>>,
+    ) -> Expr<Index> {
+        struct Visitor<
+            'a,
+            Index: ColumnIndex,
+            F: FnMut(&Index, &Scalar, &FunctionCall<Index>) -> Option<Expr<Index>>,
+        > {
+            name: String,
+            visitor: &'a mut F,
+            _marker: std::marker::PhantomData<Index>,
+        }
+
+        impl<'a, Index: ColumnIndex, F> ExprVisitor<Index> for Visitor<'a, Index, F>
+        where F: FnMut(&Index, &Scalar, &FunctionCall<Index>) -> Option<Expr<Index>>
+        {
+            fn enter_function_call(
+                &mut self,
+                call: &FunctionCall<Index>,
+            ) -> Result<Option<Expr<Index>>, Self::Error> {
+                if call.function.signature.name == self.name {
+                    match call.args.as_slice() {
+                        [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })] =>
+                        {
+                            return Ok((self.visitor)(id, scalar, call));
+                        }
+                        [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
+                        {
+                            return Ok((self.visitor)(id, scalar, call));
+                        }
+                        _ => {}
+                    }
+                }
+                Self::visit_function_call(call, self)
+            }
+        }
+
+        let res = visit_expr(self, &mut Visitor {
+            name: func_name.to_string(),
+            visitor,
+            _marker: std::marker::PhantomData,
+        })
+        .unwrap();
+
+        res.unwrap_or_else(|| self.clone())
     }
 
     pub fn as_remote_expr(&self) -> RemoteExpr<Index> {

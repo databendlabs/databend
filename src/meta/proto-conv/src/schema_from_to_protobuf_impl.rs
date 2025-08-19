@@ -420,14 +420,12 @@ impl FromToProto for ex::types::DecimalDataType {
 
     fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
         let x = match self {
-            ex::types::DecimalDataType::Decimal64(x) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
+            ex::types::DecimalDataType::Decimal64(size)
+            | ex::types::DecimalDataType::Decimal128(size) => {
+                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(size)?)
             }
-            ex::types::DecimalDataType::Decimal128(x) => {
-                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
-            }
-            ex::types::DecimalDataType::Decimal256(x) => {
-                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(x)?)
+            ex::types::DecimalDataType::Decimal256(size) => {
+                pb::decimal::Decimal::Decimal256(ex::types::decimal::DecimalSize::to_pb(size)?)
             }
         };
         Ok(pb::Decimal {

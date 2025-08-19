@@ -1,41 +1,140 @@
 statement ok
-DROP DATABASE IF EXISTS db1
+create or replace database ee_vacuum_03_0018;
 
 statement ok
-CREATE DATABASE db1
+use ee_vacuum_03_0018;
 
 statement ok
-USE db1
+CREATE OR REPLACE TRANSIENT TABLE test_tbl(a int);
+
+####################################################################################
+# transient tables should ignore the data_retention_num_snapshots_to_keep settings #
+####################################################################################
 
 statement ok
-CREATE TRANSIENT TABLE IF NOT EXISTS t09_0016(a int)
+set data_retention_num_snapshots_to_keep = 20;
 
 statement ok
-INSERT INTO t09_0016 VALUES(1)
+INSERT INTO test_tbl VALUES(1)
 
 statement ok
-INSERT INTO t09_0016 VALUES(2)
+INSERT INTO test_tbl VALUES(2)
 
 statement ok
-INSERT INTO t09_0016 VALUES(3)
+INSERT INTO test_tbl VALUES(3)
 
 query I
-select * from t09_0016 order by a
+select * from test_tbl order by a
 ----
 1
 2
 3
 
 query B
-select count(*)=1 from fuse_snapshot('db1', 't09_0016')
+select count(*)=1 from fuse_snapshot('ee_vacuum_03_0018', 'test_tbl')
+----
+1
+
+###############################################################################
+#  test data_retention_time_in_days setting does not affect transient tables  #
+###############################################################################
+
+# reset data_retention_num_snapshots_to_keep to default value
+statement ok
+unset data_retention_num_snapshots_to_keep
+
+statement ok
+CREATE OR REPLACE TRANSIENT TABLE test_tbl(a int);
+
+# transient tables should ignore the data_retention_time_in_days settings
+statement ok
+set data_retention_time_in_days = 20;
+
+statement ok
+INSERT INTO test_tbl VALUES(1)
+
+statement ok
+INSERT INTO test_tbl VALUES(2)
+
+statement ok
+INSERT INTO test_tbl VALUES(3)
+
+query I
+select * from test_tbl order by a
+----
+1
+2
+3
+
+query B
+select count(*)=1 from fuse_snapshot('ee_vacuum_03_0018', 'test_tbl')
+----
+1
+
+######################################################################################
+#  test table option data_retention_period_in_hours does not affect transient tables  #
+######################################################################################
+
+# reset data_retention_time_in_days to default value
+statement ok
+unset data_retention_time_in_days;
+
+# transient tables should ignore the data_retention_period_in_hours table option
+statement ok
+CREATE OR REPLACE TRANSIENT TABLE test_tbl(a int) data_retention_period_in_hours = 1;
+
+statement ok
+unset data_retention_num_snapshots_to_keep;
+
+statement ok
+INSERT INTO test_tbl VALUES(1)
+
+statement ok
+INSERT INTO test_tbl VALUES(2)
+
+statement ok
+INSERT INTO test_tbl VALUES(3)
+
+query I
+select * from test_tbl order by a
+----
+1
+2
+3
+
+query B
+select count(*)=1 from fuse_snapshot('ee_vacuum_03_0018', 'test_tbl')
+----
+1
+
+######################################################################################
+#  test table option data_retention_num_snapshots_to_keep does not affect transient tables  #
+######################################################################################
+
+# transient tables should ignore the data_retention_num_snapshots_to_keep table option
+statement ok
+CREATE OR REPLACE TRANSIENT TABLE test_tbl(a int) data_retention_num_snapshots_to_keep = 100;
+
+statement ok
+INSERT INTO test_tbl VALUES(1)
+
+statement ok
+INSERT INTO test_tbl VALUES(2)
+
+statement ok
+INSERT INTO test_tbl VALUES(3)
+
+query I
+select * from test_tbl order by a
+----
+1
+2
+3
+
+query B
+select count(*)=1 from fuse_snapshot('ee_vacuum_03_0018', 'test_tbl')
 ----
 1
 
 
-
-statement ok
-DROP TABLE t09_0016
-
-statement ok
-DROP DATABASE db1
 

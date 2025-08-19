@@ -18,6 +18,7 @@ mod column_statistic;
 pub mod reducers;
 mod traverse;
 
+pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
 pub use accumulator::VirtualColumnAccumulator;
 pub use cluster_statistics::sort_by_cluster_stats;
@@ -26,7 +27,7 @@ pub use column_statistic::calc_column_distinct_of_values;
 pub use column_statistic::gen_columns_statistics;
 pub use column_statistic::scalar_min_max;
 pub use column_statistic::Trim;
-pub use column_statistic::STATS_REPLACEMENT_CHAR;
+pub use column_statistic::END_OF_UNICODE_RANGE;
 pub use column_statistic::STATS_STRING_PREFIX_LEN;
 pub use reducers::merge_statistics;
 pub use reducers::reduce_block_metas;

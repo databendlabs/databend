@@ -283,6 +283,10 @@ build_exceptions! {
     UnmatchMaskPolicyReturnType(1121),
     /// Empty share endpoint config
     EmptyShareEndpointConfig(1130),
+    /// Unknown row policy
+    UnknownRowAccessPolicy(1131),
+    /// Alter Table error
+    AlterTableError(1132),
 }
 
 // Sequence Errors [1124-1126, 3101]
@@ -389,6 +393,22 @@ build_exceptions! {
     UnsupportedDataType(2606),
     /// UDF data error
     UDFDataError(2607),
+}
+
+// Task Errors [2611-2614]
+build_exceptions! {
+    /// Unknown Task
+    UnknownTask(2611),
+    /// Task already exists
+    TaskAlreadyExists(2612),
+    /// Task timezone invalid
+    TaskTimezoneInvalid(2613),
+    /// Task cron invalid
+    TaskCronInvalid(2614),
+    /// Task schedule and after conflict
+    TaskScheduleAndAfterConflict(2615),
+    /// Task when condition not met
+    TaskWhenConditionNotMet(2616),
 }
 
 // Search and External Service Errors [1901-1903, 1910]
@@ -503,6 +523,8 @@ build_exceptions! {
     CommitTableMetaError(2322),
     /// Create as drop table without drop time
     CreateAsDropTableWithoutDropTime(2323),
+    /// Row Policy already exists
+    RowAccessPolicyAlreadyExists(2324),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]
@@ -658,7 +680,7 @@ build_exceptions! {
     UnknownWorkloadQuotas(3144),
 }
 
-// Transaction and Processing Errors [4001-4004, 4012, 4021]
+// Transaction and Processing Errors [4001-4004, 4012]
 build_exceptions! {
     /// Unresolvable conflict
     UnresolvableConflict(4001),
@@ -666,12 +688,8 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     /// Transaction timeout
     TransactionTimeout(4003),
-    /// Invalid session state
-    InvalidSessionState(4004),
     /// No need to compact
     NoNeedToCompact(4012),
-    /// Refresh table info failure
-    RefreshTableInfoFailure(4021),
 }
 
 // Service Status Errors [5002]
@@ -692,6 +710,16 @@ build_exceptions! {
     SessionTokenNotFound(5103),
     /// Refresh token not found
     RefreshTokenNotFound(5104),
+}
+
+// Client Session Errors [5110-5115]
+build_exceptions! {
+    /// Session Idle too long, only used for worksheet for now
+    SessionTimeout(5110),
+    /// Server side state lost, mainly because server restarted
+    SessionLost(5111),
+    /// Unexpected session state, maybe bug of client or server
+    InvalidSessionState(5112),
 }
 
 #[cfg(test)]

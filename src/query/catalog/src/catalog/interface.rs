@@ -83,6 +83,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -106,6 +108,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
@@ -471,6 +474,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply>;
 
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply>;
+
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()>;
 
     async fn drop_table_index(&self, req: DropTableIndexReq) -> Result<()>;
@@ -550,13 +558,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply>;
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply>;
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply>;
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
 
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;

@@ -245,16 +245,14 @@ pub fn cast_scalar_to_variant(
         },
         ScalarRef::Decimal(x) => match x {
             DecimalScalar::Decimal64(value, size) => {
-                let dec = jsonb::Decimal128 {
-                    precision: size.precision(),
+                let dec = jsonb::Decimal64 {
                     scale: size.scale(),
-                    value: value as i128,
+                    value,
                 };
-                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+                jsonb::Value::Number(jsonb::Number::Decimal64(dec))
             }
             DecimalScalar::Decimal128(value, size) => {
                 let dec = jsonb::Decimal128 {
-                    precision: size.precision(),
                     scale: size.scale(),
                     value,
                 };
@@ -262,7 +260,6 @@ pub fn cast_scalar_to_variant(
             }
             DecimalScalar::Decimal256(value, size) => {
                 let dec = jsonb::Decimal256 {
-                    precision: size.precision(),
                     scale: size.scale(),
                     value: value.0,
                 };
@@ -381,17 +378,15 @@ pub fn cast_scalar_to_variant(
         }
         ScalarRef::Geometry(bytes) => {
             let geom = Ewkb(bytes).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
-                .write_to_vec(buf);
+            jsonb::parse_owned_jsonb_with_buf(geom.as_bytes(), buf)
+                .expect("failed to parse geojson to json value");
             return;
         }
         ScalarRef::Geography(bytes) => {
             // todo: Implement direct conversion, omitting intermediate processes
             let geom = Ewkb(bytes.0).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
-                .write_to_vec(buf);
+            jsonb::parse_owned_jsonb_with_buf(geom.as_bytes(), buf)
+                .expect("failed to parse geojson to json value");
             return;
         }
         ScalarRef::Vector(scalar) => with_vector_number_type!(|NUM_TYPE| match scalar {

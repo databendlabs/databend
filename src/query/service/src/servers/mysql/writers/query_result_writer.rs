@@ -246,9 +246,9 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
                     let columns = block
                         .consume_convert_to_full()
-                        .columns()
-                        .iter()
-                        .map(|column| column.value.clone().into_column().unwrap())
+                        .take_columns()
+                        .into_iter()
+                        .map(|column| column.into_column().unwrap())
                         .collect::<Vec<_>>();
 
                     for row_index in 0..num_rows {

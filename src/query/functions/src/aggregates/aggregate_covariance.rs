@@ -23,30 +23,33 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::F64;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::aggregator_common::assert_binary_arguments;
+use super::aggregator_common::assert_params;
+use super::borsh_partial_deserialize;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregator_common::assert_binary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct AggregateCovarianceState {
@@ -136,9 +139,7 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 #[derive(Clone)]
 pub struct AggregateCovarianceFunction<T0, T1, R> {
     display_name: String,
-    _t0: PhantomData<T0>,
-    _t1: PhantomData<T1>,
-    _r: PhantomData<R>,
+    _p: PhantomData<(T0, T1, R)>,
 }
 
 impl<T0, T1, R> AggregateFunction for AggregateCovarianceFunction<T0, T1, R>
@@ -173,13 +174,13 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
         match validity {
             Some(bitmap) => {
@@ -206,11 +207,11 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
@@ -221,27 +222,61 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
-        let left_val = unsafe { left.get_unchecked(row) };
-        let right_val = unsafe { right.get_unchecked(row) };
+        let left_val = unsafe { left.index_unchecked(row) };
+        let right_val = unsafe { right.index_unchecked(row) };
 
         let state = place.get::<AggregateCovarianceState>();
         state.add(left_val.as_(), right_val.as_());
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateCovarianceState>();
-        borsh_serialize_state(writer, state)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        // If we had a fixed length array, which would be better, but for now, Borsh is already good enough
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateCovarianceState>();
-        let rhs: AggregateCovarianceState = borsh_deserialize_state(reader)?;
-        state.merge(&rhs);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateCovarianceState>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<AggregateCovarianceState>();
+                let rhs: AggregateCovarianceState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&rhs);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<AggregateCovarianceState>();
+                let rhs: AggregateCovarianceState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&rhs);
+            }
+        }
         Ok(())
     }
 
@@ -253,7 +288,12 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let mut builder = NumberType::<F64>::downcast_builder(builder);
         builder.push(R::apply(state).into());
@@ -279,19 +319,18 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            _t0: PhantomData,
-            _t1: PhantomData,
-            _r: PhantomData,
+            _p: PhantomData,
         }))
     }
 }
 
 pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, arguments.len())?;
 
     with_number_mapped_type!(|NUM_TYPE0| match &arguments[0] {

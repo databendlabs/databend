@@ -13,19 +13,27 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use databend_common_base::base::uuid::Uuid;
+use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
+use databend_common_storage::MetaHLL;
 
+use crate::meta::format::compress;
+use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::ColumnStatistics;
+use crate::meta::SegmentStatistics;
 
 pub type FormatVersion = u64;
 pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
-pub type ColumnDistinctHLL = simple_hll::HyperLogLog<10>;
+pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
+pub type RawBlockHLL = Vec<u8>;
 
 // Assigned to executors, describes that which blocks of given segment, an executor should take care of
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -49,4 +57,24 @@ pub fn supported_stat_type(data_type: &DataType) -> bool {
             | DataType::String
             | DataType::Decimal(_)
     )
+}
+
+pub fn encode_column_hll(hll: &BlockHLL) -> Result<RawBlockHLL> {
+    let encoding = SegmentStatistics::encoding();
+    let compression = SegmentStatistics::compression();
+
+    let data = encode(&encoding, hll)?;
+    let data_compress = compress(&compression, data)?;
+    Ok(data_compress)
+}
+
+pub fn decode_column_hll(data: &RawBlockHLL) -> Result<Option<BlockHLL>> {
+    if data.is_empty() {
+        return Ok(None);
+    }
+    let encoding = SegmentStatistics::encoding();
+    let compression = SegmentStatistics::compression();
+    let mut reader = Cursor::new(&data);
+    let res = read_and_deserialize(&mut reader, data.len() as u64, &encoding, &compression)?;
+    Ok(Some(res))
 }

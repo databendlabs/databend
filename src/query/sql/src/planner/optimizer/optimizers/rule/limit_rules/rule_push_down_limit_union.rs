@@ -72,6 +72,8 @@ impl Rule for RulePushDownLimitUnion {
                 .map(|origin_limit| cmp::max(origin_limit, limit_offset)),
             offset: 0,
             before_exchange: false,
+            // Still complete row fetch using the original limit.
+            lazy_columns: Default::default(),
         };
 
         // Push down new_limit to union children

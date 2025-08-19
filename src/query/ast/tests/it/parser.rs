@@ -89,6 +89,9 @@ fn test_statement() {
     let cases = &[
         r#"show databases"#,
         r#"show drop databases"#,
+        r#"SET SECONDARY ROLES ALL"#,
+        r#"SET SECONDARY ROLES NONE"#,
+        r#"SET SECONDARY ROLES role1, role2"#,
         r#"show drop databases like 'db%'"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
@@ -303,8 +306,15 @@ SELECT * from s;"#,
         r#"ALTER TABLE t DROP b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
+        r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1);"#,
+        r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1, col2, col3);"#,
+        r#"ALTER TABLE t drop row access policy p1;"#,
+        r#"ALTER TABLE t drop all row access policies;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, b float NOT NULL;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1 comment 'column a', COLUMN b float NOT NULL COMMENT 'column b';"#,
+        r#"ALTER TABLE t MODIFY COLUMN a comment 'column a', COLUMN b COMMENT 'column b';"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
@@ -322,8 +332,20 @@ SELECT * from s;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
+        r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
+        r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
+        r#"COMMENT ON network policy n1 IS 'test'"#,
+        r#"COMMENT ON password policy p1 IS 'test'"#,
         r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
+        r#"GRANT access connection, create connection ON *.*  TO 'test-grant';"#,
+        r#"GRANT access connection on connection c1  TO 'test-grant';"#,
+        r#"GRANT all on connection c1  TO 'test-grant';"#,
+        r#"GRANT OWNERSHIP on connection c1  TO role r1;"#,
+        r#"GRANT access sequence, create sequence ON *.*  TO 'test-grant';"#,
+        r#"GRANT access sequence on sequence s1  TO 'test-grant';"#,
+        r#"GRANT all on sequence s1  TO 'test-grant';"#,
+        r#"GRANT OWNERSHIP on sequence s1  TO role r1;"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO USER 'test-grant';"#,
@@ -593,6 +615,7 @@ SELECT * from s;"#,
         r#"REVOKE all ON warehouse a FROM role 'test-grant';"#,
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
+        r#"SHOW GRANTS ON CONNECTION c1;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
         r#"select $abc + 3"#,
         r#"select IDENTIFIER($abc)"#,
@@ -807,6 +830,7 @@ SELECT * from s;"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION binary_reverse_table () RETURNS TABLE (c1 int) AS $$ select * from binary_reverse $$;"#,
         r#"ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE file format my_orc type = orc"#,
@@ -828,6 +852,8 @@ SELECT * from s;"#,
             create or replace function addone(int)
             returns int
             language python
+            imports = ('@ss/abc')
+            packages = ('numpy', 'pandas')
             handler = 'addone_py'
             as '@data/abc/a.py';
         "#,
@@ -927,6 +953,21 @@ SELECT * from s;"#,
         r#"SHOW SEQUENCES LIKE '%seq%'"#,
         r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
         r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
+        // row policy
+        r#"create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+          case
+              when 'it_admin' = current_role() then true
+              else false
+          end"#,
+        r#"create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+            'sales_executive_role' = current_role()
+              or exists (
+                    select 1 from salesmanagerregions
+                      where sales_manager = current_role()
+                        and region = sales_region
+        )"#,
+        r#"DROP row access policy IF EXISTS r1"#,
+        r#"desc row access policy r1"#,
     ];
 
     for case in cases {
@@ -955,6 +996,7 @@ fn test_statement_error() {
 
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
+        r#"SET SECONDARY ROLES"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
@@ -1335,6 +1377,7 @@ fn test_expr() {
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
+        r#"json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert('{}'::variant, 'email_address', 'gokul', true), 'home_phone', 12345, true), 'mobile_phone', 345678, true), 'race_code', 'M', true), 'race_desc', 'm', true), 'marital_status_code', 'y', true), 'marital_status_desc', 'yu', true), 'prefix', 'hj', true), 'first_name', 'g', true), 'last_name', 'p', true), 'deceased_date', '2085-05-07', true), 'birth_date', '6789', true), 'middle_name', '89', true), 'middle_initial', '0789', true), 'gender_code', '56789', true), 'gender_desc', 'm', true)"#,
     ];
 
     for case in cases {

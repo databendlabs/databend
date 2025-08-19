@@ -144,17 +144,17 @@ impl BlockReader {
             )?
         } else {
             debug_assert!(chunk_arrays.len() == self.projected_schema.num_fields());
-            let cols = chunk_arrays
+            let entries = chunk_arrays
                 .into_iter()
                 .zip(self.data_schema().fields())
                 .map(|(arr, f)| {
                     let data_type = f.data_type();
                     Value::from_arrow_rs(arr, data_type)
-                        .map(|val| BlockEntry::new(data_type.clone(), val))
+                        .map(|val| BlockEntry::new(val, || (data_type.clone(), num_rows)))
                 })
                 .collect::<Result<Vec<_>>>()?;
 
-            DataBlock::new(cols, num_rows)
+            DataBlock::new(entries, num_rows)
         };
 
         // populate cache if necessary

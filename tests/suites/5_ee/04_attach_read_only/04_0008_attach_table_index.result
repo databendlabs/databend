@@ -1,0 +1,26 @@
+init table
+4
+check index
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases
+>>>> REFRESH NGRAM INDEX idx_text ON phrases;
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases
+>>>> DROP NGRAM INDEX idx_text ON phrases;
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases
+>>>> REFRESH INVERTED INDEX idx_inverted ON phrases;
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases
+>>>> DROP INVERTED INDEX idx_inverted ON phrases;
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases
+>>>> DROP VECTOR INDEX idx_vector ON phrases;
+idx_inverted	INVERTED	default	att_phrases
+idx_text	NGRAM	default	att_phrases
+idx_vector	VECTOR	default	att_phrases

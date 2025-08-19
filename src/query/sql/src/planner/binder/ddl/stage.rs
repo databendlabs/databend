@@ -23,6 +23,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
+use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::location::parse_storage_params_from_uri;
 use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
@@ -58,6 +59,12 @@ impl Binder {
             file_format_options,
             comments: _,
         } = stmt;
+
+        if stage_name.to_lowercase() == STAGE_PLACEHOLDER {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Can not create stage with name `{STAGE_PLACEHOLDER}`, which is reserved"
+            )));
+        }
 
         let mut stage_info = match location {
             None => {

@@ -23,7 +23,7 @@ use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::ProfileStatisticsName;
 use crate::runtime::ThreadTracker;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileLabel {
     pub name: String,
     pub value: Vec<String>,

@@ -65,7 +65,7 @@ impl ClusterStatisticsBuilder {
         for remote_expr in &cluster_keys {
             let expr = remote_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| input_schema.index_of(name).unwrap());
+                .project_column_ref(|name| input_schema.index_of(name))?;
             let index = match &expr {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
@@ -129,11 +129,11 @@ impl ClusterStatisticsState {
             .builder
             .cluster_key_index
             .iter()
-            .map(|&i| block.get_by_offset(i).to_column(num_rows))
+            .map(|&i| block.get_by_offset(i).to_column())
             .collect();
-        let tuple = Column::Tuple(cols);
-        let (min, _) = eval_aggr("min", vec![], &[tuple.clone()], num_rows, vec![])?;
-        let (max, _) = eval_aggr("max", vec![], &[tuple.clone()], num_rows, vec![])?;
+        let entries = [Column::Tuple(cols).into()];
+        let (min, _) = eval_aggr("min", vec![], &entries, num_rows, vec![])?;
+        let (max, _) = eval_aggr("max", vec![], &entries, num_rows, vec![])?;
         assert_eq!(min.len(), 1);
         assert_eq!(max.len(), 1);
         self.mins.push(min.index(0).unwrap().to_owned());

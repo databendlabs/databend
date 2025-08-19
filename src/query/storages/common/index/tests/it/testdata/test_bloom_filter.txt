@@ -266,8 +266,8 @@ result   : MustFalse
 +-----------+------+-------------------------+
 | 0         | Int8 | Column(Int8([0, 1, 2])) |
 +-----------+------+-------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d64(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int8>(x AS Decimal(5, 0)), 1.2_d64(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -277,7 +277,7 @@ result   : Uncertain
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 1])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(5, 0), Decimal(3, 2)>(CAST<Int8>(x AS Decimal(5, 0)), 2.00_d128(3,2))
+expr     : eq<Decimal(5, 0), Decimal(3, 2)>(CAST<Int8>(x AS Decimal(5, 0)), 2.00_d64(3,2))
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int8(SimpleDomain { min: 0, max: 1 }))}
 result   : MustFalse
@@ -288,8 +288,8 @@ result   : MustFalse
 +-----------+-------+--------------------------+
 | 0         | Int16 | Column(Int16([0, 1, 2])) |
 +-----------+-------+--------------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d64(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(CAST<Int16>(x AS Decimal(5, 0)), 1.2_d64(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -321,8 +321,8 @@ result   : MustFalse
 +-----------+------+----------------------+
 | 0         | Int8 | Column(Int8([0, 2])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(CAST<Int16>(CAST<Int8>(x AS Int16) AS Int32) AS Decimal(10, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(CAST<Int16>(CAST<Int8>(x AS Int16) AS Int32) AS Decimal(10, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(CAST<Int16>(CAST<Int8>(x AS Int16) AS Int32) AS Decimal(10, 0)), 1.2_d64(2,1))
+filter   : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(CAST<Int16>(CAST<Int8>(x AS Int16) AS Int32) AS Decimal(10, 0)), 1.2_d64(2,1))
 domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
 result   : Uncertain
 
@@ -391,8 +391,8 @@ result   : MustFalse
 +-----------+-------+-------------------------+
 | 0         | Int16 | Column(Int16([0, 300])) |
 +-----------+-------+-------------------------+
-expr     : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(CAST<Int16>(x AS Int8) AS Decimal(3, 0)), 1.2_d128(2,1))
-filter   : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(CAST<Int16>(x AS Int8) AS Decimal(3, 0)), 1.2_d128(2,1))
+expr     : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(CAST<Int16>(x AS Int8) AS Decimal(3, 0)), 1.2_d64(2,1))
+filter   : eq<Decimal(3, 0), Decimal(2, 1)>(CAST<Int8>(CAST<Int16>(x AS Int8) AS Decimal(3, 0)), 1.2_d64(2,1))
 domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 300 }))}
 result   : Uncertain
 

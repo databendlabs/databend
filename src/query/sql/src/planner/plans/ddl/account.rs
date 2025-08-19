@@ -88,7 +88,7 @@ impl DescUserPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRolePlan {
-    pub if_not_exists: bool,
+    pub create_option: CreateOption,
     pub role_name: String,
 }
 
@@ -120,6 +120,7 @@ pub struct SetRolePlan {
 pub enum SetSecondaryRolesPlan {
     All,
     None,
+    SpecifyRole(Vec<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

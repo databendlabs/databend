@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,6 +26,9 @@ pub const MEMORY_QUOTA_KEY: &str = "memory_quota";
 pub const QUERY_TIMEOUT_QUOTA_KEY: &str = "query_timeout";
 pub const MAX_CONCURRENCY_QUOTA_KEY: &str = "max_concurrency";
 pub const QUERY_QUEUED_TIMEOUT_QUOTA_KEY: &str = "query_queued_timeout";
+pub const MAX_MEMORY_USAGE_RATIO: &str = "max_memory_usage_ratio";
+
+pub const DEFAULT_MAX_MEMORY_USAGE_RATIO: usize = 25;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum QuotaValue {
@@ -56,20 +60,38 @@ impl WorkloadGroup {
     pub fn get_quota(&self, key: &'static str) -> Option<QuotaValue> {
         self.quotas.get(key).cloned()
     }
+
+    pub fn get_max_memory_usage_ratio(&self) -> usize {
+        let Some(QuotaValue::Percentage(v)) = self.quotas.get(MAX_MEMORY_USAGE_RATIO) else {
+            return DEFAULT_MAX_MEMORY_USAGE_RATIO;
+        };
+
+        if *v == 0 {
+            return DEFAULT_MAX_MEMORY_USAGE_RATIO;
+        }
+
+        std::cmp::min(*v, 100)
+    }
 }
 
 pub struct WorkloadGroupResource {
     pub meta: WorkloadGroup,
     pub queue_key: String,
     pub mem_stat: Arc<MemStat>,
+    pub max_memory_usage: Arc<AtomicUsize>,
     #[allow(clippy::type_complexity)]
-    pub destroy_fn: Option<Box<dyn FnOnce(&str) + Send + Sync + 'static>>,
+    pub destroy_fn: Option<Box<dyn FnOnce(&str, Option<usize>) + Send + Sync + 'static>>,
 }
 
 impl Drop for WorkloadGroupResource {
     fn drop(&mut self) {
         if let Some(destroy_fn) = self.destroy_fn.take() {
-            destroy_fn(&self.meta.id);
+            let mut mem_percentage = None;
+            if let Some(QuotaValue::Percentage(v)) = self.meta.quotas.get(MEMORY_QUOTA_KEY) {
+                mem_percentage = Some(*v);
+            }
+
+            destroy_fn(&self.meta.id, mem_percentage);
         }
     }
 }

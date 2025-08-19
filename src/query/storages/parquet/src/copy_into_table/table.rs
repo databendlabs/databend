@@ -163,6 +163,7 @@ impl ParquetTableForCopy {
                             stage_table_info.default_exprs.clone(),
                             &fmt.missing_field_as,
                             case_sensitive,
+                            fmt.use_logic_type,
                         )?);
                     }
                 }

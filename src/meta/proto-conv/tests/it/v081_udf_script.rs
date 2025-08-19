@@ -64,6 +64,7 @@ fn test_decode_v81_udf_python() -> anyhow::Result<()> {
                 DataType::Number(NumberDataType::Int32),
             ],
             return_type: DataType::Number(NumberDataType::Int64),
+            immutable: None,
         }),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
@@ -116,7 +117,10 @@ fn test_decode_udf_script() -> anyhow::Result<()> {
             language: "python".to_string(),
             arg_types: vec![DataType::Number(NumberDataType::Int32)],
             return_type: DataType::Number(NumberDataType::Float32),
+            imports: vec![],
+            packages: vec![],
             runtime_version: "3.12.2".to_string(),
+            immutable: None,
         }),
         created_on: DateTime::<Utc>::default(),
     };

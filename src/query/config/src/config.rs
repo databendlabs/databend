@@ -21,7 +21,6 @@ use std::fmt::Formatter;
 
 use clap::ArgAction;
 use clap::Args;
-use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::mask_string;
@@ -48,7 +47,9 @@ use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
 use databend_common_tracing::HistoryConfig as InnerHistoryConfig;
 use databend_common_tracing::HistoryTableConfig as InnerHistoryTableConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
+// TelemetryConfig moved here to avoid circular dependency
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
@@ -57,13 +58,49 @@ use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
+
+/// Telemetry configuration for node information reporting
+///
+/// Note: The `enabled` flag only works with Enterprise Edition license.
+/// Without EE license, telemetry is always enabled.
+/// With EE license, users can set `enabled=false` to disable telemetry reporting.
+/// The endpoint is fixed and not configurable by users.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Args)]
+#[serde(default)]
+pub struct TelemetryConfig {
+    /// Enable/disable telemetry reporting (only works with EE license)
+    #[clap(
+        long = "telemetry-enabled",
+        value_name = "BOOL",
+        default_value = "true"
+    )]
+    #[serde(default = "default_telemetry_enabled")]
+    pub enabled: bool,
+}
+
+fn default_telemetry_enabled() -> bool {
+    true
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_telemetry_enabled(),
+        }
+    }
+}
+
+impl TelemetryConfig {
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+}
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -72,6 +109,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::TaskConfig as InnerTaskConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -90,29 +128,18 @@ const CATALOG_HIVE: &str = "hive";
 /// It's forbidden to do any breaking changes on this struct.
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct Config {
-    /// Run a command and quit
-    #[command(subcommand)]
-    #[serde(skip)]
-    pub subcommand: Option<Commands>,
-
-    // To be compatible with the old version, we keep the `cmd` arg
-    // We should always use `databend-query ver` instead `databend-query --cmd ver` in latest version
-    #[clap(long)]
-    pub cmd: Option<String>,
-
-    #[clap(long, short = 'c', value_name = "VALUE", default_value_t)]
-    pub config_file: String,
-
     // Query engine config.
     #[clap(flatten)]
     pub query: QueryConfig,
 
     #[clap(flatten)]
     pub log: LogConfig,
+
+    #[clap(flatten)]
+    pub task: TaskConfig,
 
     // Meta Service config.
     #[clap(flatten)]
@@ -139,6 +166,10 @@ pub struct Config {
     // spill Config
     #[clap(flatten)]
     pub spill: SpillConfig,
+
+    // telemetry Config
+    #[clap(flatten)]
+    pub telemetry: TelemetryConfig,
 
     /// external catalog config.
     ///
@@ -184,32 +215,13 @@ impl Config {
     /// with_args is to control whether we need to load from args or not.
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
-    #[no_sanitize(address)]
-    pub fn load(with_args: bool) -> Result<Self> {
-        let mut arg_conf = Self::default();
-
-        if with_args {
-            arg_conf = Self::parse();
-        }
-
-        if arg_conf.cmd == Some("ver".to_string()) {
-            arg_conf.subcommand = Some(Commands::Ver);
-        }
-
-        if arg_conf.subcommand.is_some() {
-            return Ok(arg_conf);
-        }
-
+    pub fn merge(self, config_file: &str) -> Result<Self> {
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
         // Load from config file first.
         {
-            let final_config_file = if !arg_conf.config_file.is_empty() {
-                // TODO: remove this `allow(clippy::redundant_clone)`
-                // as soon as this issue is fixed:
-                // https://github.com/rust-lang/rust-clippy/issues/10940
-                #[allow(clippy::redundant_clone)]
-                arg_conf.config_file.clone()
+            let final_config_file = if !config_file.is_empty() {
+                config_file.to_string()
             } else if let Ok(path) = env::var("CONFIG_FILE") {
                 path
             } else {
@@ -228,9 +240,7 @@ impl Config {
         builder = builder.collect(from_env());
 
         // Finally, load from args.
-        if with_args {
-            builder = builder.collect(from_self(arg_conf));
-        }
+        builder = builder.collect(from_self(self));
 
         // Check obsoleted.
         let conf = builder.build()?;
@@ -667,7 +677,9 @@ pub struct HiveCatalogConfig {
         default_value_t
     )]
     pub address: String,
+
     /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     pub meta_store_address: Option<String>,
 
     #[clap(long = "hive-thrift-protocol", value_name = "VALUE", default_value_t)]
@@ -1612,6 +1624,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub cluster_id: String,
 
+    /// ID for construct the warehouse.
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub warehouse_id: String,
+
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub num_cpus: u64,
 
@@ -1674,7 +1690,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "3600")]
+    #[clap(long, value_name = "VALUE", default_value = "14400")]
     pub http_session_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
@@ -1763,7 +1779,7 @@ pub struct QueryConfig {
     pub jwt_key_file: String,
 
     /// Interval in seconds to refresh jwks
-    #[clap(long, value_name = "VALUE", default_value = "600")]
+    #[clap(long, value_name = "VALUE", default_value = "86400")]
     pub jwks_refresh_interval: u64,
 
     /// Timeout in seconds to refresh jwks
@@ -1811,39 +1827,39 @@ pub struct QueryConfig {
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_disk_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table Meta Cached enabled
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_meta_cache_enabled: Option<bool>,
 
     /// OBSOLETED: Max number of cached table block meta
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_block_meta_count: Option<u64>,
 
     /// OBSOLETED: Table memory cache size (mb)
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_memory_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table disk cache folder root
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_disk_cache_root: Option<String>,
 
     /// OBSOLETED: Max number of cached table snapshot
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_snapshot_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table snapshot statistics
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_statistic_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table segment
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_segment_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached bloom index meta objects
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_bloom_index_meta_count: Option<u64>,
 
     /// OBSOLETED:
@@ -1852,12 +1868,12 @@ pub struct QueryConfig {
     ///
     /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_bloom_index_filter_count: Option<u64>,
 
     /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
     /// Max bytes of cached bloom filter bytes.
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
 
     /// OBSOLETED: use settings['parquet_fast_read_bytes'] instead
@@ -1866,48 +1882,16 @@ pub struct QueryConfig {
     /// parquet_fast_read_bytes = 52428800
     /// will let databend read whole file for parquet file less than 50MB and read column by column
     /// if file size is greater than 50MB
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub parquet_fast_read_bytes: Option<u64>,
 
     /// OBSOLETED: use settings['max_storage_io_requests'] instead
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub max_storage_io_requests: Option<u64>,
 
     /// Disable some system load(For example system.configs) for cloud security.
     #[clap(long, value_name = "VALUE")]
     pub disable_system_table_load: bool,
-
-    /// chat base url.
-    #[clap(
-        long,
-        value_name = "VALUE",
-        default_value = "https://api.openai.com/v1/"
-    )]
-    pub openai_api_chat_base_url: String,
-
-    /// embedding base url.
-    #[clap(
-        long,
-        value_name = "VALUE",
-        default_value = "https://api.openai.com/v1/"
-    )]
-    pub openai_api_embedding_base_url: String,
-
-    // This will not show in system.configs, put it to mask.rs.
-    #[clap(long, value_name = "VALUE", default_value = "")]
-    pub openai_api_key: String,
-
-    // For azure openai.
-    #[clap(long, value_name = "VALUE", default_value = "")]
-    pub openai_api_version: String,
-
-    /// https://platform.openai.com/docs/models/embeddings
-    #[clap(long, value_name = "VALUE", default_value = "text-embedding-ada-002")]
-    pub openai_api_embedding_model: String,
-
-    /// https://platform.openai.com/docs/guides/chat
-    #[clap(long, value_name = "VALUE", default_value = "gpt-3.5-turbo")]
-    pub openai_api_completion_model: String,
 
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
@@ -1946,6 +1930,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     pub resources_management: Option<ResourcesManagementConfig>,
+
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_queries_executor: bool,
 }
 
 impl Default for QueryConfig {
@@ -1958,7 +1945,14 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerQueryConfig> {
+        let mut warehouse_id = self.warehouse_id;
+
+        if warehouse_id.is_empty() {
+            warehouse_id = self.cluster_id.clone();
+        }
+
         Ok(InnerQueryConfig {
+            warehouse_id,
             tenant_id: Tenant::new_or_err(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
@@ -2025,12 +2019,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
             disable_system_table_load: self.disable_system_table_load,
-            openai_api_chat_base_url: self.openai_api_chat_base_url,
-            openai_api_embedding_base_url: self.openai_api_embedding_base_url,
-            openai_api_key: self.openai_api_key,
-            openai_api_completion_model: self.openai_api_completion_model,
-            openai_api_embedding_model: self.openai_api_embedding_model,
-            openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             enable_udf_python_script: self.enable_udf_python_script,
             enable_udf_js_script: self.enable_udf_js_script,
@@ -2047,6 +2035,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             resources_management: self.resources_management,
+            enable_queries_executor: self.enable_queries_executor,
+            check_connection_before_schedule: true,
         })
     }
 }
@@ -2057,6 +2047,7 @@ impl From<InnerQueryConfig> for QueryConfig {
         Self {
             tenant_id: inner.tenant_id.tenant_name().to_string(),
             cluster_id: inner.cluster_id,
+            warehouse_id: inner.warehouse_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
@@ -2136,12 +2127,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_data_bytes: None,
             //
             disable_system_table_load: inner.disable_system_table_load,
-            openai_api_chat_base_url: inner.openai_api_chat_base_url,
-            openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
-            openai_api_key: inner.openai_api_key,
-            openai_api_version: inner.openai_api_version,
-            openai_api_completion_model: inner.openai_api_completion_model,
-            openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_python_script: inner.enable_udf_python_script,
             enable_udf_js_script: inner.enable_udf_js_script,
             enable_udf_wasm_script: inner.enable_udf_wasm_script,
@@ -2155,6 +2140,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
             resources_management: None,
+            enable_queries_executor: inner.enable_queries_executor,
         }
     }
 }
@@ -2338,6 +2324,34 @@ impl From<InnerLogConfig> for LogConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TaskConfig {
+    #[clap(
+        long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub private_task_on: bool,
+}
+
+impl TryInto<InnerTaskConfig> for TaskConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTaskConfig> {
+        Ok(InnerTaskConfig {
+            on: self.private_task_on,
+        })
+    }
+}
+
+impl From<InnerTaskConfig> for TaskConfig {
+    fn from(inner: InnerTaskConfig) -> Self {
+        TaskConfig {
+            private_task_on: inner.on,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
@@ -2402,11 +2416,15 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
                     .to_string(),
             ));
         }
+        let format = self
+            .file_format
+            .parse::<LogFormat>()
+            .map_err(ErrorCode::InvalidConfig)?;
         Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
-            format: self.file_format,
+            format,
             limit: self.file_limit,
             max_size: self.file_max_size,
         })
@@ -2419,7 +2437,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
-            file_format: inner.format,
+            file_format: inner.format.to_string(),
             file_limit: inner.limit,
             file_max_size: inner.max_size,
 
@@ -2466,10 +2484,14 @@ impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStderrLogConfig> {
+        let format = self
+            .stderr_format
+            .parse::<LogFormat>()
+            .map_err(ErrorCode::InvalidConfig)?;
         Ok(InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
-            format: self.stderr_format,
+            format,
         })
     }
 }
@@ -2479,7 +2501,7 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
-            stderr_format: inner.format,
+            stderr_format: inner.format.to_string(),
         }
     }
 }
@@ -2769,7 +2791,7 @@ pub struct HistoryLogConfig {
     #[clap(
         long = "log-history-level",
         value_name = "VALUE",
-        default_value = "WARN"
+        default_value = "INFO"
     )]
     #[serde(rename = "level")]
     pub log_history_level: String,
@@ -2788,6 +2810,18 @@ pub struct HistoryLogConfig {
     #[clap(skip)]
     #[serde(rename = "tables")]
     pub log_history_tables: Vec<HistoryLogTableConfig>,
+
+    /// Specifies whether enable external storage
+    /// If set to false (default), the default storage parameters from `[storage]` will be used.
+    #[clap(skip)]
+    #[serde(rename = "storage_on", default)]
+    pub log_history_external_storage_on: bool,
+
+    /// Specifies the external storage parameters for the history log
+    /// This is used to configure how the history log data is stored.
+    #[clap(skip)]
+    #[serde(rename = "storage")]
+    pub log_history_storage_params: StorageConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2799,6 +2833,10 @@ pub struct HistoryLogTableConfig {
     /// The retention period (in hours) for history logs.
     /// Data older than this period will be deleted during retention tasks.
     pub retention: usize,
+
+    /// Whether this history table is invisible for querying.
+    /// Default is false.
+    pub invisible: bool,
 }
 
 impl Default for HistoryLogConfig {
@@ -2820,6 +2858,7 @@ impl TryInto<InnerHistoryTableConfig> for HistoryLogTableConfig {
         Ok(InnerHistoryTableConfig {
             table_name: self.table_name,
             retention: self.retention,
+            invisible: self.invisible,
         })
     }
 }
@@ -2829,6 +2868,7 @@ impl From<InnerHistoryTableConfig> for HistoryLogTableConfig {
         Self {
             table_name: inner.table_name,
             retention: inner.retention,
+            invisible: inner.invisible,
         }
     }
 }
@@ -2837,6 +2877,11 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerHistoryConfig> {
+        let storage_params: Option<InnerStorageConfig> = if self.log_history_external_storage_on {
+            Some(self.log_history_storage_params.try_into()?)
+        } else {
+            None
+        };
         Ok(InnerHistoryConfig {
             on: self.log_history_on,
             log_only: self.log_history_log_only,
@@ -2849,12 +2894,18 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
                 .into_iter()
                 .map(|cfg| cfg.try_into())
                 .collect::<Result<Vec<_>>>()?,
+            storage_params: storage_params.map(|cfg| cfg.params),
         })
     }
 }
 
 impl From<InnerHistoryConfig> for HistoryLogConfig {
     fn from(inner: InnerHistoryConfig) -> Self {
+        let inner_storage_config: Option<InnerStorageConfig> =
+            inner.storage_params.map(|params| InnerStorageConfig {
+                params,
+                ..Default::default()
+            });
         Self {
             log_history_on: inner.on,
             log_history_log_only: inner.log_only,
@@ -2863,6 +2914,8 @@ impl From<InnerHistoryConfig> for HistoryLogConfig {
             log_history_level: inner.level,
             log_history_retention_interval: inner.retention_interval,
             log_history_tables: inner.tables.into_iter().map(Into::into).collect(),
+            log_history_external_storage_on: inner_storage_config.is_some(),
+            log_history_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
     }
 }
@@ -3123,6 +3176,11 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
+    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
+    #[serde(default = "bool_false")]
+    pub meta_service_ownership_cache: bool,
+
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
@@ -3168,6 +3226,14 @@ pub struct CacheConfig {
         default_value = "256"
     )]
     pub table_meta_statistic_count: u64,
+
+    /// Max number of cached segment statistic meta
+    #[clap(
+        long = "cache-segment-statistic-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_statistics_count: u64,
 
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     #[clap(
@@ -3249,6 +3315,30 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub inverted_index_filter_memory_ratio: u64,
+
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-meta-count",
+        value_name = "VALUE",
+        default_value = "30000"
+    )]
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-filter-size",
+        value_name = "VALUE",
+        default_value = "64424509440"
+    )]
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-vector-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub vector_index_filter_memory_ratio: u64,
 
     #[clap(
         long = "cache-table-prune-partitions-count",
@@ -3360,6 +3450,11 @@ fn bool_true() -> bool {
     true
 }
 
+#[inline]
+fn bool_false() -> bool {
+    false
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum CacheStorageTypeConfig {
@@ -3450,7 +3545,7 @@ pub struct SpillConfig {
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
 
-    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    // TODO: We need to fix StorageConfig so that it supports command line injections.
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 }
@@ -3480,11 +3575,9 @@ mod cache_config_converters {
     impl From<InnerConfig> for Config {
         fn from(inner: InnerConfig) -> Self {
             Self {
-                subcommand: inner.subcommand,
-                cmd: None,
-                config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
+                task: inner.task.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
@@ -3496,6 +3589,7 @@ mod cache_config_converters {
                     .collect(),
                 cache: inner.cache.into(),
                 spill: inner.spill.into(),
+                telemetry: inner.telemetry,
             }
         }
     }
@@ -3505,15 +3599,15 @@ mod cache_config_converters {
 
         fn try_into(self) -> Result<InnerConfig> {
             let Config {
-                subcommand,
-                config_file,
                 query,
                 log,
+                task,
                 meta,
                 storage,
                 catalog,
                 cache,
                 spill,
+                telemetry,
                 catalogs: input_catalogs,
                 ..
             } = self;
@@ -3535,15 +3629,15 @@ mod cache_config_converters {
             let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
 
             Ok(InnerConfig {
-                subcommand,
-                config_file,
                 query: query.try_into()?,
                 log: log.try_into()?,
+                task: task.try_into()?,
                 meta: meta.try_into()?,
                 storage: storage.try_into()?,
                 catalogs,
                 cache: cache.try_into()?,
                 spill,
+                telemetry,
             })
         }
     }
@@ -3553,12 +3647,14 @@ mod cache_config_converters {
 
         fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
             Ok(Self {
+                meta_service_ownership_cache: value.meta_service_ownership_cache,
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 block_meta_count: value.block_meta_count,
                 segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
@@ -3568,6 +3664,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -3587,10 +3686,12 @@ mod cache_config_converters {
     impl From<inner::CacheConfig> for CacheConfig {
         fn from(value: inner::CacheConfig) -> Self {
             Self {
+                meta_service_ownership_cache: value.meta_service_ownership_cache,
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
+                segment_statistics_count: value.segment_statistics_count,
                 block_meta_count: value.block_meta_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3603,6 +3704,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
@@ -3733,16 +3837,22 @@ mod test {
     use std::ffi::OsString;
 
     use clap::Parser;
-    use pretty_assertions::assert_eq;
 
-    use crate::Config;
-    use crate::InnerConfig;
+    use super::*;
+
+    #[derive(Parser)]
+    #[clap(name = "databend-query", about, author)]
+    pub struct Cmd {
+        #[clap(flatten)]
+        pub config: Config,
+    }
 
     /// It's required to make sure setting's default value is the same with clap.
     #[test]
     fn test_config_default() {
         let setting_default = InnerConfig::default();
-        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+        let config_default: InnerConfig = Cmd::parse_from(Vec::<OsString>::new())
+            .config
             .try_into()
             .expect("parse from args must succeed");
 
@@ -3750,5 +3860,20 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_env() {
+        unsafe {
+            std::env::set_var("LOG_TRACING_OTLP_ENDPOINT", "http://127.0.2.1:1111");
+            std::env::set_var("LOG_TRACING_CAPTURE_LOG_LEVEL", "DebuG");
+        }
+
+        let cfg = Config::load_with_config_file("").unwrap();
+        assert_eq!(
+            cfg.log.tracing.tracing_otlp.endpoint,
+            "http://127.0.2.1:1111"
+        );
+        assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
     }
 }

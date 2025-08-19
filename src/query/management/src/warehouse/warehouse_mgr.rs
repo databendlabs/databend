@@ -20,6 +20,7 @@ use std::time::Duration;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
@@ -42,7 +43,6 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
 
@@ -76,10 +76,16 @@ pub struct WarehouseMgr {
     node_key_prefix: String,
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
+    version: BuildInfoRef,
 }
 
 impl WarehouseMgr {
-    pub fn create(metastore: MetaStore, tenant: &str, lift_time: Duration) -> Result<Self> {
+    pub fn create(
+        metastore: MetaStore,
+        tenant: &str,
+        lift_time: Duration,
+        version: BuildInfoRef,
+    ) -> Result<Self> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while cluster mgr create)",
@@ -89,6 +95,7 @@ impl WarehouseMgr {
         Ok(WarehouseMgr {
             metastore,
             lift_time,
+            version,
             // Prefix for all online nodes of the tenant
             node_key_prefix: format!(
                 "{}/{}/online_nodes",
@@ -361,7 +368,7 @@ impl WarehouseMgr {
 
         let list_reply = self
             .metastore
-            .prefix_list_kv(&self.warehouse_info_key_prefix)
+            .list_kv_collect(&self.warehouse_info_key_prefix)
             .await?;
 
         let mut unhealthy_warehouses = HashMap::with_capacity(list_reply.len());
@@ -697,7 +704,7 @@ impl WarehouseMgr {
                 )));
             };
 
-            let values = self.metastore.prefix_list_kv(&nodes_prefix).await?;
+            let values = self.metastore.list_kv_collect(&nodes_prefix).await?;
 
             let mut after_txn = TxnRequest::default();
             let mut cluster_node_seq = Vec::with_capacity(values.len());
@@ -811,7 +818,10 @@ impl WarehouseMgr {
     }
 
     async fn unassigned_nodes(&self) -> Result<HashMap<Option<String>, Vec<(u64, NodeInfo)>>> {
-        let online_nodes = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+        let online_nodes = self
+            .metastore
+            .list_kv_collect(&self.node_key_prefix)
+            .await?;
         let mut unassigned_nodes = HashMap::with_capacity(online_nodes.len());
 
         for (_, seq_data) in online_nodes {
@@ -1210,7 +1220,10 @@ impl WarehouseApi for WarehouseMgr {
             }?;
 
             // get online nodes
-            let online_nodes = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+            let online_nodes = self
+                .metastore
+                .list_kv_collect(&self.node_key_prefix)
+                .await?;
 
             let mut unassign_online_nodes = Vec::with_capacity(online_nodes.len());
 
@@ -1365,7 +1378,7 @@ impl WarehouseApi for WarehouseMgr {
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
         let values = self
             .metastore
-            .prefix_list_kv(&self.warehouse_info_key_prefix)
+            .list_kv_collect(&self.warehouse_info_key_prefix)
             .await?;
 
         let mut warehouses = Vec::with_capacity(values.len());
@@ -1492,7 +1505,7 @@ impl WarehouseApi for WarehouseMgr {
             escape_for_key(&warehouse)?
         );
 
-        let values = self.metastore.prefix_list_kv(&nodes_prefix).await?;
+        let values = self.metastore.list_kv_collect(&nodes_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
@@ -2104,7 +2117,10 @@ impl WarehouseApi for WarehouseMgr {
             escape_for_key(cluster)?
         );
 
-        let values = self.metastore.prefix_list_kv(&cluster_nodes_prefix).await?;
+        let values = self
+            .metastore
+            .list_kv_collect(&cluster_nodes_prefix)
+            .await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
@@ -2126,7 +2142,10 @@ impl WarehouseApi for WarehouseMgr {
     }
 
     async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
-        let reply = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
+        let reply = self
+            .metastore
+            .list_kv_collect(&self.node_key_prefix)
+            .await?;
         let mut online_nodes = Vec::with_capacity(reply.len());
 
         for (_, seq_data) in reply {
@@ -2155,13 +2174,11 @@ impl WarehouseApi for WarehouseMgr {
             return Ok(vec![node]);
         }
 
-        let expect_version = DATABEND_COMMIT_VERSION.to_string();
-
         Ok(self
             .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == expect_version)
+            .filter(|x| x.binary_version == self.version.commit_detail)
             .collect::<Vec<_>>())
     }
 
@@ -2181,13 +2198,11 @@ impl WarehouseApi for WarehouseMgr {
             return Ok(vec![node]);
         }
 
-        let expect_version = DATABEND_COMMIT_VERSION.to_string();
-
         Ok(self
             .list_warehouse_nodes(node.warehouse_id.clone())
             .await?
             .into_iter()
-            .filter(|x| x.binary_version == expect_version)
+            .filter(|x| x.binary_version == self.version.commit_detail)
             .collect::<Vec<_>>())
     }
 

@@ -27,13 +27,10 @@ use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 
 impl DataBlock {
-    pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
+    pub fn choose_hash_method(block: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
         let hash_key_types = indices
             .iter()
-            .map(|&offset| {
-                let col = chunk.get_by_offset(offset);
-                Ok(col.data_type.clone())
-            })
+            .map(|&offset| Ok(block.data_type(offset)))
             .collect::<Result<Vec<_>>>();
 
         let hash_key_types = hash_key_types?;

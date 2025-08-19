@@ -37,6 +37,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIndexType;
@@ -50,7 +51,7 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
@@ -82,6 +83,7 @@ use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
+use crate::pruning::VectorIndexPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
@@ -94,6 +96,7 @@ use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
+use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
@@ -144,6 +147,7 @@ impl FuseTable {
                 };
                 let segment_len = segment_locs.len();
 
+                // snapshot.summary.block_count
                 let snapshot_loc = self
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -343,10 +347,12 @@ impl FuseTable {
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
+        let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
         info!(
-            "segment numbers" = segments_location.len();
-            "prune snapshot block start"
+            "[FUSE-PARTITIONS] prune snapshot block start, {} segment to be processed, at node {}",
+            num_segments_to_prune,
+            ctx.get_cluster().local_id,
         );
 
         let dal = self.operator.clone();
@@ -376,9 +382,11 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "prune snapshot block end, final block numbers:{}, cost:{:?}",
+            "[FUSE-PARTITIONS] prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
             block_metas.len(),
-            start.elapsed()
+            num_segments_to_prune,
+            start.elapsed(),
+            ctx.get_cluster().local_id,
         );
 
         let block_metas = block_metas
@@ -470,10 +478,31 @@ impl FuseTable {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
                 TopNPruneTransform::create(input, output, topn_pruner.clone())
+            })?;
+        }
+
+        if push_down
+            .as_ref()
+            .filter(|p| p.vector_index.is_some())
+            .is_some()
+        {
+            let pruning_ctx = pruner.pruning_ctx.clone();
+            let schema = pruner.table_schema.clone();
+            let push_down = push_down.as_ref().unwrap();
+            let filters = push_down.filters.clone();
+            let sort = push_down.order_by.clone();
+            let limit = push_down.limit;
+            let vector_index = push_down.vector_index.clone().unwrap();
+
+            let vector_index_pruner =
+                VectorIndexPruner::create(pruning_ctx, schema, vector_index, filters, sort, limit)?;
+            prune_pipeline.resize(1, false)?;
+            prune_pipeline.add_transform(move |input, output| {
+                VectorIndexPruneTransform::create(input, output, vector_index_pruner.clone())
             })?;
         }
 
@@ -634,7 +663,8 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         dal: Operator,
     ) -> Result<FusePruner> {
-        let ngram_args = Self::create_ngram_index_args(&self.table_info.meta)?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -686,7 +716,10 @@ impl FuseTable {
         Ok(pruner)
     }
 
-    pub fn create_ngram_index_args(table_meta: &TableMeta) -> Result<Vec<NgramArgs>> {
+    pub fn create_ngram_index_args(
+        table_meta: &TableMeta,
+        table_schema: &TableSchema,
+    ) -> Result<Vec<NgramArgs>> {
         let mut ngram_index_args = Vec::with_capacity(table_meta.indexes.len());
         for index in table_meta.indexes.values() {
             if !matches!(index.index_type, TableIndexType::Ngram) {
@@ -696,8 +729,7 @@ impl FuseTable {
                 continue;
             }
 
-            let Some((pos, field)) = table_meta
-                .schema
+            let Some((pos, field)) = table_schema
                 .fields()
                 .iter()
                 .find_position(|field| field.column_id() == index.column_ids[0])

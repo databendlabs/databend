@@ -34,6 +34,7 @@ pub mod number_class;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
+pub mod tuple;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
@@ -44,9 +45,8 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_ast::ast::TypeName;
+pub use databend_common_base::base::OrderedFloat;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -61,6 +61,7 @@ pub use self::bitmap::BitmapType;
 pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
 pub use self::boolean::MutableBitmap;
+pub use self::compute_view::StringConvert;
 pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
@@ -80,6 +81,7 @@ use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
+pub use self::tuple::*;
 pub use self::variant::VariantType;
 pub use self::vector::VectorColumn;
 pub use self::vector::VectorColumnBuilder;
@@ -90,25 +92,18 @@ pub use self::vector::VectorScalarRef;
 pub use self::vector::VectorType;
 use self::zero_size_type::*;
 use crate::property::Domain;
+use crate::types::date::DATE_MAX;
+use crate::types::date::DATE_MIN;
+use crate::types::timestamp::TIMESTAMP_MAX;
+use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::values::Column;
-pub use crate::values::Scalar;
+use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    EnumAsInner,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
     EmptyArray,
@@ -243,6 +238,63 @@ impl DataType {
         }
     }
 
+    pub fn infinity(&self) -> Result<Scalar, String> {
+        match &self {
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
+            DataType::Date => Ok(Scalar::Date(DATE_MAX)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+                OrderedFloat(f32::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => {
+                Ok(Scalar::Number(NumberScalar::Int32(i32::MAX)))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MAX)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MAX)))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+                OrderedFloat(f64::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MAX)))
+            }
+            _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
+        }
+    }
+    pub fn ninfinity(&self) -> Result<Scalar, String> {
+        match &self {
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
+            DataType::Date => Ok(Scalar::Date(DATE_MIN)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+                OrderedFloat(f32::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => {
+                Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MIN)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MIN)))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+                OrderedFloat(f64::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MIN)))
+            }
+            _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
+        }
+    }
+
     pub fn is_unsigned_numeric(&self) -> bool {
         match self {
             DataType::Number(ty) => ALL_UNSIGNED_INTEGER_TYPES.contains(ty),
@@ -289,25 +341,32 @@ impl DataType {
         }
     }
 
-    pub fn numeric_byte_size(&self) -> Result<usize, String> {
-        use NumberDataType::*;
+    pub fn numeric_byte_size(&self) -> Option<usize> {
         match self {
-            DataType::Number(number) => match number {
-                UInt8 | Int8 => Ok(1),
-                UInt16 | Int16 => Ok(2),
-                UInt32 | Int32 | Float32 => Ok(4),
-                UInt64 | Int64 | Float64 => Ok(8),
-            },
-            DataType::Date => Ok(4),
-            DataType::Timestamp => Ok(8),
-            DataType::Decimal(size) => {
-                let s = if size.can_carried_by_128() { 16 } else { 32 };
-                Ok(s)
+            DataType::Number(number) => {
+                use NumberDataType::*;
+                let n = match number {
+                    UInt8 | Int8 => 1,
+                    UInt16 | Int16 => 2,
+                    UInt32 | Int32 | Float32 => 4,
+                    UInt64 | Int64 | Float64 => 8,
+                };
+                Some(n)
             }
-            _ => Result::Err(format!(
-                "Function number_byte_size argument must be numeric types, but got {:?}",
-                self
-            )),
+            DataType::Date => Some(4),
+            DataType::Timestamp => Some(8),
+            DataType::Interval => None, // todo
+            DataType::Decimal(size) => {
+                let n = if size.can_carried_by_64() {
+                    8
+                } else if size.can_carried_by_128() {
+                    16
+                } else {
+                    32
+                };
+                Some(n)
+            }
+            _ => None,
         }
     }
 
@@ -422,7 +481,7 @@ pub fn convert_to_type_name(ty: &DataType) -> TypeName {
 
 /// [AccessType] defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
-    type Scalar: Debug + Clone + PartialEq;
+    type Scalar: Debug + Clone + PartialEq + Send + 'static;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
     type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;
@@ -517,6 +576,9 @@ pub trait ValueType: AccessType {
     fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column;
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_>;
+
+    // removed by #18102, but there may be a need for this somewhere
+    // fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,

@@ -25,12 +25,12 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::FutureExt;
 use log::info;
 use log::warn;
+use seq_marked::SeqValue;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -397,7 +397,7 @@ impl Acquirer {
                     // Extend the lease only if the entry still exists. If the entry has been removed,
                     // it means the semaphore has been released. Re-inserting it would cause confusion
                     // in the semaphore state and potentially lead to inconsistent behavior.
-                    info!(
+                    log::debug!(
                         "{}: About to extend semaphore permit lease: {} ttl: {:?}",
                         ctx, key_str, ttl
                     );

@@ -52,8 +52,9 @@ impl Interpreter for SetSecondaryRolesInterpreter {
 
         let session = self.ctx.get_current_session();
 
-        let secondary_roles = match self.plan {
+        let secondary_roles = match &self.plan {
             SetSecondaryRolesPlan::None => Some(vec![]),
+            SetSecondaryRolesPlan::SpecifyRole(roles) => Some(roles.clone()),
             SetSecondaryRolesPlan::All => None,
         };
         session.set_secondary_roles_checked(secondary_roles).await?;

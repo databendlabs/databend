@@ -93,8 +93,8 @@ impl Debug for DataBlock {
         for (i, entry) in self.columns().iter().enumerate() {
             table.add_row(vec![
                 i.to_string(),
-                entry.data_type.to_string(),
-                format!("{:?}", entry.value),
+                entry.data_type().to_string(),
+                format!("{:?}", entry.value()),
             ]);
         }
 
@@ -113,7 +113,7 @@ impl Display for DataBlock {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|entry| entry.value.index(index).unwrap().to_string())
+                .map(|entry| entry.index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);
@@ -320,6 +320,37 @@ impl Display for ScalarRef<'_> {
 impl Display for Scalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.as_ref())
+    }
+}
+
+// convert scalar value to string without quotes
+pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
+    match value {
+        ScalarRef::String(s) => s.to_string(),
+        ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(*t, &TimeZone::UTC)),
+        ScalarRef::Date(d) => format!("{}", date_to_string(*d as i64, &TimeZone::UTC)),
+        ScalarRef::Interval(interval) => format!("{}", interval_to_string(interval)),
+        ScalarRef::Bitmap(bits) => {
+            let rb = deserialize_bitmap(bits).unwrap();
+            format!("{}", rb.into_iter().join(","))
+        }
+        ScalarRef::Variant(s) => {
+            let raw_jsonb = RawJsonb::new(s);
+            raw_jsonb.to_string()
+        }
+        ScalarRef::Geometry(s) => {
+            let geom = ewkb_to_geo(&mut Ewkb(s))
+                .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+            format!("{}", geom)
+        }
+        ScalarRef::Geography(v) => {
+            let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+            format!("{}", geog)
+        }
+        _ => format!("{}", value),
     }
 }
 

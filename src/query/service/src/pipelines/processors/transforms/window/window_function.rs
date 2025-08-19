@@ -24,14 +24,15 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_sql::executor::physical_plans::LagLeadDefault;
-use databend_common_sql::executor::physical_plans::WindowFunction;
 use itertools::Itertools;
+
+use crate::physical_plans::LagLeadDefault;
+use crate::physical_plans::WindowFunction;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -64,12 +65,12 @@ impl WindowFuncAggImpl {
     }
 
     #[inline]
-    pub fn arg_columns<'a>(&'a self, data: &'a DataBlock) -> InputColumns {
-        InputColumns::new_block_proxy(&self.args, data)
+    pub fn arg_columns<'a>(&'a self, data: &'a DataBlock) -> ProjectedBlock {
+        ProjectedBlock::project(&self.args, data)
     }
 
     #[inline]
-    pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
+    pub fn accumulate_row(&self, args: ProjectedBlock, row: usize) -> Result<()> {
         self.agg
             .accumulate_row(AggrState::new(self.addr, &self.loc), args, row)
     }
@@ -77,7 +78,7 @@ impl WindowFuncAggImpl {
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
         self.agg
-            .merge_result(AggrState::new(self.addr, &self.loc), builder)
+            .merge_result(AggrState::new(self.addr, &self.loc), true, builder)
     }
 }
 

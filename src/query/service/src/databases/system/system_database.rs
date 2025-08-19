@@ -21,7 +21,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_storages_system::BacktraceTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
@@ -49,11 +49,12 @@ use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
+use databend_common_storages_system::PrivateTaskHistoryTable;
+use databend_common_storages_system::PrivateTasksTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
-use databend_common_storages_system::QueriesProfilingTable;
 use databend_common_storages_system::QueryCacheTable;
-use databend_common_storages_system::QueryLogTable;
+use databend_common_storages_system::QueryExecutionTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
@@ -63,13 +64,13 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
-use databend_common_storages_system::TemporaryTablesTable;
 use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
 use databend_common_storages_system::ViewsTableWithHistory;
 use databend_common_storages_system::ViewsTableWithoutHistory;
 use databend_common_storages_system::VirtualColumnsTable;
+use databend_common_storages_system::ZeroTable;
 use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
 use databend_common_version::DATABEND_COMMIT_AUTHORS;
 use databend_common_version::DATABEND_CREDITS_LICENSES;
@@ -79,6 +80,7 @@ use databend_common_version::VERGEN_CARGO_FEATURES;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
+use crate::table_functions::TemporaryTablesTable;
 
 #[derive(Clone)]
 pub struct SystemDatabase {
@@ -104,6 +106,7 @@ impl SystemDatabase {
     ) -> Self {
         let mut table_list = vec![
             OneTable::create(sys_db_meta.next_table_id()),
+            ZeroTable::create(sys_db_meta.next_table_id()),
             FunctionsTable::create(sys_db_meta.next_table_id()),
             ContributorsTable::create(sys_db_meta.next_table_id(), DATABEND_COMMIT_AUTHORS),
             CreditsTable::create(
@@ -155,24 +158,28 @@ impl SystemDatabase {
                 IndexesTable::create(sys_db_meta.next_table_id()),
                 BacktraceTable::create(sys_db_meta.next_table_id()),
                 TempFilesTable::create(sys_db_meta.next_table_id()),
-                TasksTable::create(sys_db_meta.next_table_id()),
-                TaskHistoryTable::create(sys_db_meta.next_table_id()),
-                QueriesProfilingTable::create(sys_db_meta.next_table_id()),
                 LocksTable::create(sys_db_meta.next_table_id(), ctl_name),
                 NotificationsTable::create(sys_db_meta.next_table_id()),
                 NotificationHistoryTable::create(sys_db_meta.next_table_id()),
                 ViewsTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 TemporaryTablesTable::create(sys_db_meta.next_table_id()),
                 DictionariesTable::create(sys_db_meta.next_table_id()),
-                Arc::new(QueryLogTable::create(
-                    sys_db_meta.next_table_id(),
-                    config.query.max_query_log_size,
-                )),
                 Arc::new(ClusteringHistoryTable::create(
                     sys_db_meta.next_table_id(),
                     config.query.max_query_log_size,
                 )),
+                QueryExecutionTable::create(
+                    sys_db_meta.next_table_id(),
+                    config.query.max_query_log_size,
+                ),
             ]);
+            if config.task.on {
+                table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));
+                table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
+            } else {
+                table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
+                table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
+            }
             disable_system_table_load = config.query.disable_system_table_load;
         } else {
             disable_system_table_load = false;

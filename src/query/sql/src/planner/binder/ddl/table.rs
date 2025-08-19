@@ -85,9 +85,10 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
-use databend_common_storages_view::view_table::QUERY;
-use databend_common_storages_view::view_table::VIEW_ENGINE;
+use databend_common_storages_basic::view_table::QUERY;
+use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -113,13 +114,16 @@ use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -742,6 +746,15 @@ impl Binder {
                     OPT_KEY_TABLE_COMPRESSION.to_owned(),
                     default_compression.to_owned(),
                 );
+            } else {
+                // validate the compression type
+                let _: TableCompression = options
+                    .get(OPT_KEY_TABLE_COMPRESSION)
+                    .ok_or_else(|| {
+                        ErrorCode::BadArguments("Table compression type is not specified")
+                    })?
+                    .as_str()
+                    .try_into()?;
             }
         } else if table_indexes.is_some() {
             return Err(ErrorCode::UnsupportedIndex(format!(
@@ -945,6 +958,7 @@ impl Binder {
             }
             AlterTableAction::ModifyTableComment { new_comment } => {
                 Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    if_exists: *if_exists,
                     new_comment: new_comment.to_string(),
                     catalog,
                     database,
@@ -1050,6 +1064,22 @@ impl Binder {
                         }
                         ModifyColumnActionInPlan::SetDataType(field_and_comment)
                     }
+                    ModifyColumnAction::Comment(column_comments) => {
+                        let mut field_and_comment = Vec::with_capacity(column_comments.len());
+                        let schema = self
+                            .ctx
+                            .get_table(&catalog, &database, &table)
+                            .await?
+                            .schema();
+
+                        for column_comment in column_comments {
+                            let column = self.normalize_object_identifier(&column_comment.name);
+                            let field = schema.field_with_name(&column)?.clone();
+                            let comment = column_comment.comment.to_string();
+                            field_and_comment.push((field, comment));
+                        }
+                        ModifyColumnActionInPlan::Comment(field_and_comment)
+                    }
                 };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
@@ -1140,6 +1170,66 @@ impl Binder {
                     database,
                     table,
                 })))
+            }
+            AlterTableAction::AddRowAccessPolicy { columns, policy } => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                let columns = columns
+                    .iter()
+                    .map(|c| self.normalize_identifier(c).name)
+                    .collect();
+                let policy = self.normalize_identifier(policy).name;
+                Ok(Plan::AddTableRowAccessPolicy(Box::new(
+                    AddTableRowAccessPolicyPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        columns,
+                        policy,
+                    },
+                )))
+            }
+            AlterTableAction::DropRowAccessPolicy { policy } => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                let policy = self.normalize_identifier(policy).name;
+                Ok(Plan::DropTableRowAccessPolicy(Box::new(
+                    DropTableRowAccessPolicyPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        policy,
+                    },
+                )))
+            }
+            AlterTableAction::DropAllRowAccessPolicies => {
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_row_access_policy()?
+                {
+                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                }
+                Ok(Plan::DropAllTableRowAccessPolicies(Box::new(
+                    DropAllTableRowAccessPoliciesPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                    },
+                )))
             }
         }
     }
@@ -1369,6 +1459,7 @@ impl Binder {
             catalog,
             database,
             table,
+            no_scan,
         } = stmt;
 
         let (catalog, database, table) =
@@ -1378,6 +1469,7 @@ impl Binder {
             catalog,
             database,
             table,
+            no_scan: *no_scan,
         })))
     }
 

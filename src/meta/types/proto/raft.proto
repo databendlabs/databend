@@ -35,3 +35,14 @@ message LogId {
   uint64 node_id = 2;
   uint64 index = 3;
 }
+
+message VoteRequest {
+  Vote vote = 1;
+  LogId last_log_id = 2;
+}
+
+message VoteResponse {
+  Vote vote = 1;
+  bool vote_granted = 2;
+  LogId last_log_id = 3;
+}

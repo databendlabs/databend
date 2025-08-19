@@ -25,12 +25,14 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Limit {
     pub before_exchange: bool,
     pub limit: Option<usize>,
     pub offset: usize,
+    pub lazy_columns: ColumnSet,
 }
 
 impl Limit {
@@ -53,6 +55,15 @@ impl Limit {
                 column_stats: Default::default(),
             },
         }))
+    }
+
+    pub fn without_lazy_columns(&self) -> Limit {
+        Limit {
+            before_exchange: self.before_exchange,
+            limit: self.limit,
+            offset: self.offset,
+            lazy_columns: Default::default(),
+        }
     }
 }
 

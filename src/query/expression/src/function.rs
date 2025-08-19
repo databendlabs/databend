@@ -161,13 +161,7 @@ pub struct FunctionContext {
     pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
-
-    pub openai_api_chat_base_url: String,
-    pub openai_api_embedding_base_url: String,
-    pub openai_api_key: String,
-    pub openai_api_version: String,
-    pub openai_api_embedding_model: String,
-    pub openai_api_completion_model: String,
+    pub enable_selector_executor: bool,
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
@@ -175,6 +169,7 @@ pub struct FunctionContext {
     pub random_function_seed: bool,
     pub week_start: u8,
     pub date_format_style: String,
+    pub enable_binary_to_utf8_lossy: bool,
 }
 
 impl Default for FunctionContext {
@@ -184,12 +179,7 @@ impl Default for FunctionContext {
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,
-            openai_api_chat_base_url: "".to_string(),
-            openai_api_embedding_base_url: "".to_string(),
-            openai_api_key: "".to_string(),
-            openai_api_version: "".to_string(),
-            openai_api_embedding_model: "".to_string(),
-            openai_api_completion_model: "".to_string(),
+            enable_selector_executor: true,
 
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
@@ -197,6 +187,7 @@ impl Default for FunctionContext {
             random_function_seed: false,
             week_start: 0,
             date_format_style: "oracle".to_string(),
+            enable_binary_to_utf8_lossy: false,
         }
     }
 }
@@ -321,8 +312,8 @@ impl Function {
         debug_assert!(!self.signature.return_type.is_nullable_or_null());
 
         let mut signature = self.signature;
-        let return_type = signature.return_type;
-        signature.return_type = return_type.wrap_nullable();
+        let return_type = signature.return_type.wrap_nullable();
+        signature.return_type = return_type.clone();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 

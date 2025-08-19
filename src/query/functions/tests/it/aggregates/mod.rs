@@ -68,10 +68,7 @@ pub fn run_agg_ast(
 
     let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
     let block = DataBlock::new(
-        columns
-            .iter()
-            .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-            .collect::<Vec<_>>(),
+        columns.iter().map(|(_, col)| col.clone().into()).collect(),
         num_rows,
     );
 
@@ -224,11 +221,12 @@ pub fn simulate_two_groups_group_by(
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, &loc, columns.into(), rows)?;
+    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+    func.accumulate_keys(&places, &loc, (&block_entries).into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(state1, &mut builder)?;
-    func.merge_result(state2, &mut builder)?;
+    func.merge_result(state1, false, &mut builder)?;
+    func.merge_result(state2, false, &mut builder)?;
 
     Ok((builder.build(), data_type))
 }

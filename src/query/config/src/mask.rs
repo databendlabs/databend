@@ -43,16 +43,15 @@ fn mask_sensitive_field(field: &str) -> String {
 impl Config {
     pub fn with_mask(self) -> Self {
         Config {
-            subcommand: self.subcommand,
-            cmd: self.cmd,
-            config_file: self.config_file,
             query: self.query.mask_display(),
             log: self.log,
+            task: self.task,
             meta: self.meta.mask_display(),
             storage: self.storage.mask_display(),
             catalog: self.catalog,
             cache: self.cache,
             spill: self.spill.mask_display(),
+            telemetry: self.telemetry,
             catalogs: self.catalogs,
         }
     }
@@ -67,9 +66,6 @@ impl QueryConfig {
             .databend_enterprise_license
             .as_ref()
             .map(|license| mask_sensitive_field(license));
-
-        // Mask OpenAI API key
-        masked_config.openai_api_key = mask_sensitive_field(&self.openai_api_key);
 
         masked_config
     }

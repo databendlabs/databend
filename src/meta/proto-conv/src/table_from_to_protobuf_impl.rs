@@ -237,6 +237,7 @@ impl FromToProto for mt::TableMeta {
             } else {
                 Some(p.column_mask_policy)
             },
+            row_access_policy: p.row_access_policy,
             indexes,
             virtual_schema,
         };
@@ -279,6 +280,7 @@ impl FromToProto for mt::TableMeta {
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
+            row_access_policy: self.row_access_policy.clone(),
             indexes,
             virtual_schema: self
                 .virtual_schema
@@ -305,6 +307,11 @@ impl FromToProto for mt::TableStatistics {
             index_data_bytes: p.index_data_bytes,
             number_of_segments: p.number_of_segments,
             number_of_blocks: p.number_of_blocks,
+            bloom_index_size: p.bloom_index_size,
+            ngram_index_size: p.ngram_index_size,
+            inverted_index_size: p.inverted_index_size,
+            vector_index_size: p.vector_index_size,
+            virtual_column_size: p.virtual_column_size,
         };
 
         Ok(v)
@@ -320,6 +327,11 @@ impl FromToProto for mt::TableStatistics {
             index_data_bytes: self.index_data_bytes,
             number_of_segments: self.number_of_segments,
             number_of_blocks: self.number_of_blocks,
+            bloom_index_size: self.bloom_index_size,
+            ngram_index_size: self.ngram_index_size,
+            inverted_index_size: self.inverted_index_size,
+            vector_index_size: self.vector_index_size,
+            virtual_column_size: self.virtual_column_size,
         };
         Ok(p)
     }

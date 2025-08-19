@@ -19,6 +19,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_client::required;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
@@ -29,7 +30,10 @@ use tokio_stream::StreamExt;
 use crate::args::ExportArgs;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
-pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::Error> {
+pub async fn export_from_running_node(
+    args: &ExportArgs,
+    version: BuildInfoRef,
+) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
     eprintln!("    From: online meta-service: {}", args.grpc_api_address);
@@ -38,7 +42,7 @@ pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::E
 
     let grpc_api_addr = get_available_socket_addr(args.grpc_api_address.as_str()).await?;
     let addr = grpc_api_addr.to_string();
-    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size).await?;
+    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size, version).await?;
     Ok(())
 }
 
@@ -66,9 +70,11 @@ pub async fn export_from_grpc(
     addr: &str,
     save: String,
     chunk_size: Option<u64>,
+    version: BuildInfoRef,
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::try_create_with_features(
         vec![addr.to_string()],
+        version,
         "root",
         "xxx",
         None,

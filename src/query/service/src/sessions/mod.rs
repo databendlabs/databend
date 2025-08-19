@@ -25,6 +25,7 @@ mod session_mgr_status;
 mod session_privilege_mgr;
 mod session_status;
 
+pub use databend_common_base::base::BuildInfoRef;
 pub use databend_common_catalog::table_context::TableContext;
 pub use query_affect::QueryAffect;
 pub use query_ctx::convert_query_log_timestamp;

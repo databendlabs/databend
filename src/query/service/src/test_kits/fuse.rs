@@ -30,15 +30,18 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::merge_statistics;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
+use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::testing::SegmentInfoV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV4;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -70,7 +73,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
@@ -107,10 +110,14 @@ pub async fn generate_segments_v2(
     let mut segs = vec![];
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas =
-            generate_blocks(fuse_table, blocks_per_segment, false, Default::default()).await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
-        let segment_info = SegmentInfoV2::new(block_metas, summary);
+        let (block_metas, stats) = generate_blocks(
+            fuse_table,
+            blocks_per_segment,
+            false,
+            TestFixture::default_table_meta_timestamps(),
+        )
+        .await?;
+        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let uuid = Uuid::new_v4();
         let location = format!(
             "{}/{}/{}_v{}.json",
@@ -119,6 +126,15 @@ pub async fn generate_segments_v2(
             uuid,
             SegmentInfoV2::VERSION,
         );
+        let stats_location =
+            TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
+        let additional_stats_meta = AdditionalStatsMeta {
+            size: stats.len() as u64,
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
+        };
+        dal.write(&stats_location, stats).await?;
+        summary.additional_stats_meta = Some(additional_stats_meta);
+        let segment_info = SegmentInfoV2::new(block_metas, summary);
         write_v2_to_storage(dal, &location, &segment_info).await?;
         segs.push(((location, SegmentInfoV2::VERSION), segment_info))
     }
@@ -136,15 +152,14 @@ pub async fn generate_segments(
     let location_generator = fuse_table.meta_location_generator();
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(
+        let (block_metas, stats) = generate_blocks(
             fuse_table,
             blocks_per_segment,
             is_greater_than_v5,
             table_meta_timestamps,
         )
         .await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
-        let segment_info = SegmentInfo::new(block_metas, summary);
+        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let location = if is_greater_than_v5 {
             location_generator.gen_segment_info_location(table_meta_timestamps, false)
         } else {
@@ -153,6 +168,15 @@ pub async fn generate_segments(
             );
             location_generator.gen_segment_info_location(table_meta_timestamps)
         };
+        let stats_location =
+            TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
+        let additional_stats_meta = AdditionalStatsMeta {
+            size: stats.len() as u64,
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
+        };
+        dal.write(&stats_location, stats).await?;
+        summary.additional_stats_meta = Some(additional_stats_meta);
+        let segment_info = SegmentInfo::new(block_metas, summary);
         segment_info.write_meta(dal, location.as_str()).await?;
         segs.push(((location, SegmentInfo::VERSION), segment_info))
     }
@@ -164,7 +188,7 @@ async fn generate_blocks(
     num_blocks: usize,
     is_greater_than_v5: bool,
     table_meta_timestamps: TableMetaTimestamps,
-) -> Result<Vec<Arc<BlockMeta>>> {
+) -> Result<(Vec<Arc<BlockMeta>>, Vec<u8>)> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
     let location_generator = fuse_table.meta_location_generator();
@@ -175,6 +199,7 @@ async fn generate_blocks(
         is_greater_than_v5,
     );
     let mut block_metas = vec![];
+    let mut hlls = vec![];
 
     // does not matter in this suite
     let rows_per_block = 2;
@@ -186,12 +211,14 @@ async fn generate_blocks(
     let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
     for block in blocks {
         let stats = gen_columns_statistics(&block, None, &schema)?;
-        let (block_meta, _index_meta) = block_writer
+        let (block_meta, _index_meta, hll) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
             .await?;
         block_metas.push(Arc::new(block_meta));
+        hlls.push(hll);
     }
-    Ok(block_metas)
+    let stats = SegmentStatistics::new(hlls).to_bytes()?;
+    Ok((block_metas, stats))
 }
 
 pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
@@ -233,7 +260,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         num_of_segments,
         blocks_per_segment,
         false,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .await?;
 
@@ -246,7 +273,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Statistics::default(),
         locations,
         None,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =
@@ -263,8 +290,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 =
-        TableSnapshot::try_from_previous(Arc::new(snapshot_1.clone()), None, Default::default())?;
+    let mut snapshot_2 = TableSnapshot::try_from_previous(
+        Arc::new(snapshot_1.clone()),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary =
@@ -298,8 +328,7 @@ pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> 
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
     let mut count: u64 = 0;
     for block in blocks {
-        let value = &block.get_by_offset(0).value;
-        let value = unsafe { value.index_unchecked(0) };
+        let value = unsafe { block.get_by_offset(0).index_unchecked(0) };
         if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
             count += v;
         }
@@ -425,7 +454,7 @@ pub async fn generate_snapshot_v4(
         number_of_segments,
         blocks_per_segment,
         false,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .await?;
 
@@ -436,7 +465,7 @@ pub async fn generate_snapshot_v4(
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
         None,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshotV4::VERSION)?;

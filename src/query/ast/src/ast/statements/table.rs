@@ -207,8 +207,8 @@ impl Display for CreateTableStmt {
         }
         match self.table_type {
             TableType::Normal => {}
-            TableType::Transient => write!(f, " TRANSIENT ")?,
-            TableType::Temporary => write!(f, " TEMPORARY ")?,
+            TableType::Transient => write!(f, " TRANSIENT")?,
+            TableType::Temporary => write!(f, " TEMPORARY")?,
         };
         write!(f, " TABLE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
@@ -437,6 +437,16 @@ pub enum AlterTableAction {
     ModifyColumn {
         action: ModifyColumnAction,
     },
+    // (column name id, policy name)
+    AddRowAccessPolicy {
+        columns: Vec<Identifier>,
+        policy: Identifier,
+    },
+    // policy name
+    DropRowAccessPolicy {
+        policy: Identifier,
+    },
+    DropAllRowAccessPolicies,
     DropColumn {
         column: Identifier,
     },
@@ -538,6 +548,17 @@ impl Display for AlterTableAction {
                 write!(f, "CONNECTION=(")?;
                 write_space_separated_string_map(f, new_connection)?;
                 write!(f, ")")?;
+            }
+            AlterTableAction::AddRowAccessPolicy { columns, policy } => {
+                write!(f, "ADD ROW ACCESS POLICY {} ON (", policy)?;
+                write_comma_separated_list(f, columns)?;
+                write!(f, ")")?
+            }
+            AlterTableAction::DropRowAccessPolicy { policy } => {
+                write!(f, "DROP ROW ACCESS POLICY {}", policy)?
+            }
+            AlterTableAction::DropAllRowAccessPolicies => {
+                write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
         };
         Ok(())
@@ -724,6 +745,7 @@ pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub no_scan: bool,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -736,6 +758,9 @@ impl Display for AnalyzeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+        if self.no_scan {
+            write!(f, " NOSCAN")?;
+        }
 
         Ok(())
     }
@@ -981,6 +1006,24 @@ impl Display for CreateDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ColumnComment {
+    pub name: Identifier,
+    pub comment: String,
+}
+
+impl Display for ColumnComment {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{} COMMENT {}",
+            self.name,
+            QuotedString(&self.comment, '\'')
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
     SetMaskingPolicy(Identifier, String),
@@ -990,6 +1033,8 @@ pub enum ModifyColumnAction {
     SetDataType(Vec<ColumnDefinition>),
     // column name id
     ConvertStoredComputedColumn(Identifier),
+    // (column name id, new comment)
+    Comment(Vec<ColumnComment>),
 }
 
 impl Display for ModifyColumnAction {
@@ -1007,6 +1052,7 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 write!(f, "{} DROP STORED", column)?
             }
+            ModifyColumnAction::Comment(columns) => write_comma_separated_list(f, columns)?,
         }
 
         Ok(())

@@ -44,7 +44,7 @@ pub struct SessionClaim {
 }
 
 pub fn unix_ts() -> Duration {
-    std::time::SystemTime::now()
+    SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("The system clock is not properly set")
 }

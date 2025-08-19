@@ -152,6 +152,14 @@ pub enum UserPrivilegeType {
     CreateDatabase,
     // Privilege to Create warehouse
     CreateWarehouse,
+    // Privilege to Access connection
+    AccessConnection,
+    // Privilege to Create connection
+    CreateConnection,
+    // Privilege to Access sequence
+    AccessSequence,
+    // Privilege to Create sequence
+    CreateSequence,
     // Discard Privilege Type
     Set,
 }
@@ -181,6 +189,10 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
             UserPrivilegeType::CreateWarehouse => "CREATE WAREHOUSE",
+            UserPrivilegeType::CreateConnection => "CREATE CONNECTION",
+            UserPrivilegeType::AccessConnection => "ACCESS CONNECTION",
+            UserPrivilegeType::CreateSequence => "CREATE SEQUENCE",
+            UserPrivilegeType::AccessSequence => "ACCESS SEQUENCE",
         })
     }
 }

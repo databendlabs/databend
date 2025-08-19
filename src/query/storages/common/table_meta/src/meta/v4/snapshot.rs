@@ -17,6 +17,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -106,22 +107,42 @@ impl TableSnapshot {
         let TableMetaTimestamps {
             segment_block_timestamp,
             snapshot_timestamp,
+            snapshot_timestamp_validation_context,
         } = table_meta_timestamps;
 
-        let snapshot_timestamp =
+        let snapshot_timestamp_adjusted =
             monotonically_increased_timestamp(snapshot_timestamp, &prev_snapshot.timestamp());
 
-        if segment_block_timestamp < snapshot_timestamp {
-            return Err(ErrorCode::TransactionTimeout(format!(
-                "Snapshot is generated too late, segment_block_timestamp: {:?}, snapshot_timestamp: {:?}",
-                segment_block_timestamp, snapshot_timestamp
-            )));
+        if segment_block_timestamp < snapshot_timestamp_adjusted {
+            let mut err_msg = format!(
+                "Unresolvable conflict: Transaction conflicts with commit at {:?}. Can only merge with commits before {:?}.",
+                snapshot_timestamp_adjusted, segment_block_timestamp
+            );
+
+            if let Some(ctx) = snapshot_timestamp_validation_context {
+                if ctx.is_transient {
+                    err_msg.push_str(
+                        &format!(" Transient table (ID: {}) detected. Concurrent mutations same transient table likely cause conflicts. Consider using regular tables.", ctx.table_id)
+                    );
+                } else {
+                    let delta = snapshot_timestamp - segment_block_timestamp;
+                    if delta < TimeDelta::hours(1) {
+                        // TODO give user a doc url, which describes this situation more clearly, such as increasing the value of setting 'max_execute_time_in_seconds' also work, and what the tradeoffs are.
+                        err_msg.push_str(&format!(
+                            " Conflict window too narrow ({:?}). Consider increasing the value of setting 'data_retention_time_in_days'.",
+                            delta
+                        ));
+                    }
+                }
+            }
+
+            return Err(ErrorCode::TransactionTimeout(err_msg));
         }
 
         Ok(Self {
             format_version: TableSnapshot::VERSION,
-            snapshot_id: uuid_from_date_time(snapshot_timestamp),
-            timestamp: Some(snapshot_timestamp),
+            snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
+            timestamp: Some(snapshot_timestamp_adjusted),
             prev_table_seq,
             prev_snapshot_id: prev_snapshot.snapshot_id(),
             schema,
@@ -133,6 +154,7 @@ impl TableSnapshot {
     }
 
     /// used in ut
+    #[cfg(test)]
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
         Self::try_new(
             prev_table_seq,
@@ -280,6 +302,11 @@ pub struct TableSnapshotLite {
     pub row_count: u64,
     pub block_count: u64,
     pub index_size: u64,
+    pub bloom_index_size: Option<u64>,
+    pub ngram_index_size: Option<u64>,
+    pub inverted_index_size: Option<u64>,
+    pub vector_index_size: Option<u64>,
+    pub virtual_column_size: Option<u64>,
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
     pub segment_count: u64,
@@ -295,6 +322,11 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             row_count: value.summary.row_count,
             block_count: value.summary.block_count,
             index_size: value.summary.index_size,
+            bloom_index_size: value.summary.bloom_index_size,
+            ngram_index_size: value.summary.ngram_index_size,
+            inverted_index_size: value.summary.inverted_index_size,
+            vector_index_size: value.summary.vector_index_size,
+            virtual_column_size: value.summary.virtual_column_size,
             uncompressed_byte_size: value.summary.uncompressed_byte_size,
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,

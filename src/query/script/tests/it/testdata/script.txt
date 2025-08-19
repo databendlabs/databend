@@ -207,8 +207,8 @@ Some(Var(UInt64(0)))
 ---------- Input ----------
 LET x RESULTSET := SELECT * FROM numbers(3);
 LET sum := 0;
-FOR row IN x DO
-    sum := sum + row.number;
+FOR r IN x DO
+    sum := sum + r.number;
 END FOR;
 RETURN sum;
 ---------- IR -------------
@@ -216,14 +216,14 @@ QUERY SELECT * FROM numbers(3), x(0)
 QUERY SELECT 0, __expr_result2(2)
 ITER __expr_result2(2), __expr_result_iter3(3)
 READ __expr_result_iter3(3), $0, sum(1)
-ITER x(0), row(6)
+ITER x(0), r(6)
 __LOOP4(4):
-JUMP_IF_ENDED row(6), __LOOP_END5(5)
-READ row(6), "number", __row.number7(7)
+JUMP_IF_ENDED r(6), __LOOP_END5(5)
+READ r(6), "number", __r.number7(7)
 QUERY SELECT :1 + :7, __expr_result8(8)
 ITER __expr_result8(8), __expr_result_iter9(9)
 READ __expr_result_iter9(9), $0, sum(1)
-NEXT row(6)
+NEXT r(6)
 GOTO __LOOP4(4)
 __LOOP_END5(5):
 QUERY SELECT :1, __expr_result11(11)
@@ -249,8 +249,8 @@ Some(Var(UInt64(3)))
 
 ---------- Input ----------
 LET sum := 0;
-FOR row IN SELECT * FROM numbers(3) DO
-    sum := sum + row.number;
+FOR r IN SELECT * FROM numbers(3) DO
+    sum := sum + r.number;
 END FOR;
 RETURN sum;
 ---------- IR -------------
@@ -258,14 +258,14 @@ QUERY SELECT 0, __expr_result1(1)
 ITER __expr_result1(1), __expr_result_iter2(2)
 READ __expr_result_iter2(2), $0, sum(0)
 QUERY SELECT * FROM numbers(3), __for_in_set3(3)
-ITER __for_in_set3(3), row(6)
+ITER __for_in_set3(3), r(6)
 __LOOP4(4):
-JUMP_IF_ENDED row(6), __LOOP_END5(5)
-READ row(6), "number", __row.number7(7)
+JUMP_IF_ENDED r(6), __LOOP_END5(5)
+READ r(6), "number", __r.number7(7)
 QUERY SELECT :0 + :7, __expr_result8(8)
 ITER __expr_result8(8), __expr_result_iter9(9)
 READ __expr_result_iter9(9), $0, sum(0)
-NEXT row(6)
+NEXT r(6)
 GOTO __LOOP4(4)
 __LOOP_END5(5):
 QUERY SELECT :0, __expr_result11(11)

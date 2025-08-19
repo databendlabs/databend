@@ -42,7 +42,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 
     // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
-    // to   : `type BlockStatistics = HashMap<ColumnId, ColumnStatistics>`
+    // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
     let len = col_to_stats_lit.len();
     col_to_stats_lit
         .iter()
@@ -56,6 +56,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
     let mut min_stats = Vec::with_capacity(stats.len());
     let mut max_stats = Vec::with_capacity(stats.len());
+    let mut ndvs = Vec::with_capacity(stats.len());
     let mut null_count = 0;
     let mut in_memory_size = 0;
 
@@ -63,7 +64,7 @@ pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> Col
         let col_stats = col_stats.borrow();
         min_stats.push(col_stats.min().clone());
         max_stats.push(col_stats.max().clone());
-
+        ndvs.push(col_stats.distinct_of_values);
         null_count += col_stats.null_count;
         in_memory_size += col_stats.in_memory_size;
     }
@@ -79,7 +80,10 @@ pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> Col
         .filter(|s| !s.is_null())
         .max_by(|x, y| x.cmp(y))
         .unwrap_or(Scalar::Null);
-    ColumnStatistics::new(min, max, null_count, in_memory_size, None)
+    let distinct_of_values = ndvs
+        .into_iter()
+        .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
+    ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -151,6 +155,7 @@ pub fn merge_statistics_mut(
     r: &Statistics,
     default_cluster_key_id: Option<u32>,
 ) {
+    l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
@@ -168,13 +173,27 @@ pub fn merge_statistics_mut(
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
+
+    let bloom_index_size =
+        l.bloom_index_size.unwrap_or_default() + r.bloom_index_size.unwrap_or_default();
+    let ngram_index_size =
+        l.ngram_index_size.unwrap_or_default() + r.ngram_index_size.unwrap_or_default();
+    let inverted_index_size =
+        l.inverted_index_size.unwrap_or_default() + r.inverted_index_size.unwrap_or_default();
+    let vector_index_size =
+        l.vector_index_size.unwrap_or_default() + r.vector_index_size.unwrap_or_default();
+    let virtual_column_size =
+        l.virtual_column_size.unwrap_or_default() + r.virtual_column_size.unwrap_or_default();
+
+    l.bloom_index_size = Option::from(bloom_index_size).filter(|&x| x > 0);
+    l.ngram_index_size = Option::from(ngram_index_size).filter(|&x| x > 0);
+    l.inverted_index_size = Option::from(inverted_index_size).filter(|&x| x > 0);
+    l.vector_index_size = Option::from(vector_index_size).filter(|&x| x > 0);
+    l.virtual_column_size = Option::from(virtual_column_size).filter(|&x| x > 0);
+
     let virtual_block_count =
         l.virtual_block_count.unwrap_or_default() + r.virtual_block_count.unwrap_or_default();
-    l.virtual_block_count = if virtual_block_count > 0 {
-        Some(virtual_block_count)
-    } else {
-        None
-    };
+    l.virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
 }
 
 // Deduct statistics, only be used for calculate snapshot summary.
@@ -198,15 +217,34 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
             // so we skip deduct the MinMax statistics here.
             col_stats.null_count -= r_col_stats.null_count;
             col_stats.in_memory_size -= r_col_stats.in_memory_size;
+            col_stats.distinct_of_values =
+                match (col_stats.distinct_of_values, r_col_stats.distinct_of_values) {
+                    (Some(l), Some(r)) => l.checked_sub(r),
+                    _ => None,
+                };
         }
     }
+
+    let bloom_index_size =
+        l.bloom_index_size.unwrap_or_default() - r.bloom_index_size.unwrap_or_default();
+    let ngram_index_size =
+        l.ngram_index_size.unwrap_or_default() - r.ngram_index_size.unwrap_or_default();
+    let inverted_index_size =
+        l.inverted_index_size.unwrap_or_default() - r.inverted_index_size.unwrap_or_default();
+    let vector_index_size =
+        l.vector_index_size.unwrap_or_default() - r.vector_index_size.unwrap_or_default();
+    let virtual_column_size =
+        l.virtual_column_size.unwrap_or_default() - r.virtual_column_size.unwrap_or_default();
+
+    l.bloom_index_size = Option::from(bloom_index_size).filter(|&x| x > 0);
+    l.ngram_index_size = Option::from(ngram_index_size).filter(|&x| x > 0);
+    l.inverted_index_size = Option::from(inverted_index_size).filter(|&x| x > 0);
+    l.vector_index_size = Option::from(vector_index_size).filter(|&x| x > 0);
+    l.virtual_column_size = Option::from(virtual_column_size).filter(|&x| x > 0);
+
     let virtual_block_count =
         l.virtual_block_count.unwrap_or_default() - r.virtual_block_count.unwrap_or_default();
-    l.virtual_block_count = if virtual_block_count > 0 {
-        Some(virtual_block_count)
-    } else {
-        None
-    };
+    l.virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
 }
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
@@ -219,6 +257,11 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let mut uncompressed_byte_size: u64 = 0;
     let mut compressed_byte_size: u64 = 0;
     let mut index_size: u64 = 0;
+    let mut bloom_index_size: u64 = 0;
+    let mut ngram_index_size: u64 = 0;
+    let mut inverted_index_size: u64 = 0;
+    let mut vector_index_size: u64 = 0;
+    let mut virtual_column_size: u64 = 0;
     let mut perfect_block_count: u64 = 0;
     let mut virtual_block_count: u64 = 0;
 
@@ -233,9 +276,23 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
-        index_size += b.inverted_index_size.unwrap_or_default();
+        bloom_index_size += b.bloom_filter_index_size;
+        if let Some(size) = b.ngram_filter_index_size {
+            // index_size don't need to add ngram_index_size,
+            // because ngram_index is part of bloom_index.
+            ngram_index_size += size;
+        }
+        if let Some(size) = b.inverted_index_size {
+            index_size += size;
+            inverted_index_size += size;
+        }
+        if let Some(size) = b.vector_index_size {
+            index_size += size;
+            vector_index_size += size;
+        }
         if let Some(virtual_block_meta) = &b.virtual_block_meta {
             index_size += virtual_block_meta.virtual_column_size;
+            virtual_column_size += virtual_block_meta.virtual_column_size;
             virtual_block_count += 1;
         }
         if thresholds.check_perfect_block(
@@ -252,11 +309,13 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
 
     let merged_col_stats = reduce_block_statistics(&col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, default_cluster_key_id);
-    let merged_virtual_block_count = if virtual_block_count > 0 {
-        Some(virtual_block_count)
-    } else {
-        None
-    };
+    let merged_virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
+
+    let bloom_index_size = Option::from(bloom_index_size).filter(|&x| x > 0);
+    let ngram_index_size = Option::from(ngram_index_size).filter(|&x| x > 0);
+    let inverted_index_size = Option::from(inverted_index_size).filter(|&x| x > 0);
+    let vector_index_size = Option::from(vector_index_size).filter(|&x| x > 0);
+    let virtual_column_size = Option::from(virtual_column_size).filter(|&x| x > 0);
 
     Statistics {
         row_count,
@@ -265,8 +324,14 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         uncompressed_byte_size,
         compressed_byte_size,
         index_size,
+        bloom_index_size,
+        ngram_index_size,
+        inverted_index_size,
+        vector_index_size,
+        virtual_column_size,
         col_stats: merged_col_stats,
         cluster_stats: merged_cluster_stats,
         virtual_block_count: merged_virtual_block_count,
+        additional_stats_meta: None,
     }
 }

@@ -37,6 +37,7 @@ use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
+use crate::meta::RawBlockHLL;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
@@ -170,6 +171,8 @@ pub struct BlockMeta {
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
     pub ngram_filter_index_size: Option<u64>,
+    pub vector_index_size: Option<u64>,
+    pub vector_index_location: Option<Location>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
@@ -192,6 +195,8 @@ impl BlockMeta {
         bloom_filter_index_size: u64,
         inverted_index_size: Option<u64>,
         ngram_filter_index_size: Option<u64>,
+        vector_index_size: Option<u64>,
+        vector_index_location: Option<Location>,
         virtual_block_meta: Option<VirtualBlockMeta>,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
@@ -208,6 +213,8 @@ impl BlockMeta {
             bloom_filter_index_size,
             inverted_index_size,
             ngram_filter_index_size,
+            vector_index_size,
+            vector_index_location,
             virtual_block_meta,
             compression,
             create_on,
@@ -237,6 +244,7 @@ impl BlockMeta {
 pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
     pub draft_virtual_block_meta: Option<DraftVirtualBlockMeta>,
+    pub column_hlls: Option<RawBlockHLL>,
 }
 
 #[typetag::serde(name = "extended_block_meta")]
@@ -368,6 +376,8 @@ impl BlockMeta {
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
+            vector_index_size: None,
+            vector_index_location: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -394,6 +404,8 @@ impl BlockMeta {
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
+            vector_index_size: None,
+            vector_index_location: None,
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

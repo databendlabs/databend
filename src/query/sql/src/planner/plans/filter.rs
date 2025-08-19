@@ -49,6 +49,10 @@ impl Operator for Filter {
         RelOp::Filter
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(self.predicates.iter())
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         let output_columns = input_prop.output_columns.clone();

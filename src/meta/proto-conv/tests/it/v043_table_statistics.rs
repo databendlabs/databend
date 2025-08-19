@@ -36,6 +36,11 @@ fn test_decode_v43_table_statistics() -> anyhow::Result<()> {
         data_bytes: 200,
         compressed_data_bytes: 15,
         index_data_bytes: 20,
+        bloom_index_size: None,
+        ngram_index_size: None,
+        inverted_index_size: None,
+        vector_index_size: None,
+        virtual_column_size: None,
         number_of_segments: Some(1),
         number_of_blocks: Some(2),
     };

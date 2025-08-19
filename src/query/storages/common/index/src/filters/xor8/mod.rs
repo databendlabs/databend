@@ -31,6 +31,7 @@ pub use crate::filters::bloom_filter::BloomFilter;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 
+#[derive(PartialEq)]
 pub enum FilterImpl {
     Xor(Xor8Filter),
     Ngram(BloomFilter),

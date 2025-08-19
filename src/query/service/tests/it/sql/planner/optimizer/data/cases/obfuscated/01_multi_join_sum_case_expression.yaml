@@ -6,3 +6,9 @@ sql: |
 
 # Reference to external statistics file
 statistics_file: obfuscated/01_multi_join_case_expression_stats.yaml
+
+tables:
+  a0c: obfuscated/01_a0c.sql
+  a1z: obfuscated/01_a1z.sql
+  a2x: obfuscated/01_a2x.sql
+  a5r: obfuscated/01_a5r.sql

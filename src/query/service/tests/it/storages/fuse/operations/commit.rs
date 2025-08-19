@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -21,6 +22,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::WatchNotify;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -105,6 +107,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -121,8 +125,8 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
@@ -137,6 +141,8 @@ use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
@@ -279,7 +285,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 Statistics::default(),
                 new_segments,
                 None,
-                Default::default(),
+                TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();
 
@@ -573,6 +579,9 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        todo!()
+    }
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
@@ -592,11 +601,16 @@ impl TableContext for CtxDelegation {
     async fn get_visibility_checker(
         &self,
         _ignore_ownership: bool,
+        _object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 
     fn get_fuse_version(&self) -> String {
+        todo!()
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
         todo!()
     }
 
@@ -869,13 +883,6 @@ impl TableContext for CtxDelegation {
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
     }
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
 
     fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
@@ -892,8 +899,8 @@ impl TableContext for CtxDelegation {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
 
-    fn clear_table_meta_timestamps_cache(&self) {
-        self.ctx.clear_table_meta_timestamps_cache();
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.ctx.get_abort_notify()
     }
 }
 
@@ -1060,6 +1067,13 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn set_table_row_access_policy(
+        &self,
+        _req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        todo!()
+    }
+
     #[async_backtrace::framed]
     async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
@@ -1134,7 +1148,11 @@ impl Catalog for FakedCatalog {
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
     async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
@@ -1143,6 +1161,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

@@ -226,7 +226,13 @@ c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
 
 statement ok
-alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
+alter table t modify c1 varchar comment 'c1-column';
+
+statement ok
+alter table t modify c2 int;
+
+statement ok
+comment on column t.c2 is 'test';
 
 query TTTTT
 select database,table,name,data_type,comment from system.columns where table='t' and database='default';
@@ -264,7 +270,7 @@ select name, comment from system.tables where name='t1' and database='default';
 t1 t1-comment
 
 statement ok
-alter table t1 comment='t1-new-comment';
+comment on table t1 is 't1-new-comment';
 
 query TT
 show create table t1;

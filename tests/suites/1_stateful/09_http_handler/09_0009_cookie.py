@@ -20,7 +20,7 @@ class GlobalCookieJar(RequestsCookieJar):
         super().set_cookie(cookie, *args, **kwargs)
 
 
-def do_query(session_client, query, session_state=None):
+def do_query(session_client, query, session_state=None, enable_cookie=True):
     url = f"http://127.0.0.1:8000/v1/query"
     query_payload = {
         "sql": query,
@@ -31,6 +31,8 @@ def do_query(session_client, query, session_state=None):
     headers = {
         "Content-Type": "application/json",
     }
+    if enable_cookie:
+        headers["X-DATABEND-CLIENT-CAPS"] = "session_cookie"
 
     response = session_client.post(url, headers=headers, json=query_payload, auth=auth)
     return response
@@ -39,7 +41,7 @@ def do_query(session_client, query, session_state=None):
 def test_simple():
     client = requests.session()
     client.cookies = GlobalCookieJar()
-    client.cookies.set("cookie_enabled", "true")
+    # client.cookies.set("cookie_enabled", "true")
 
     resp = do_query(client, "select 1")
     assert resp.status_code == 200, resp.text
@@ -47,7 +49,7 @@ def test_simple():
     # print(client.cookies)
     sid = client.cookies.get("session_id", path="/")
 
-    last_access_time1 = int(client.cookies.get("last_access_time"))
+    last_access_time1 = int(client.cookies.get("last_refresh_time"))
     # print(last_access_time1)
     assert time.time() - 10 < last_access_time1 <= time.time()
 
@@ -58,9 +60,9 @@ def test_simple():
     assert resp.json()["data"] == [["1"]], resp.text
     sid2 = client.cookies.get("session_id")
     # print(client.cookies)
-    last_access_time2 = int(client.cookies.get("last_access_time"))
+    last_access_time2 = int(client.cookies.get("last_refresh_time"))
     assert sid2 == sid
-    assert last_access_time1 < last_access_time2 <= time.time()
+    assert last_access_time1 == last_access_time2 <= time.time()
 
 
 def test_temp_table():
@@ -82,7 +84,7 @@ def test_temp_table():
 
     resp = do_query(client, "select * from t1", session_state)
     assert resp.status_code == 200, resp.text
-    assert resp.json()["data"] == [["3"], ["4"]]
+    assert resp.json()["data"] == [["3"], ["4"]], resp.json()
     session_state = resp.json()["session"]
     assert session_state["need_sticky"], resp.text
     assert session_state["need_keep_alive"]
@@ -96,7 +98,7 @@ def test_temp_table():
 
 def test_no_cookie_if_not_enabled():
     client = requests.session()
-    resp = do_query(client, "select 1")
+    resp = do_query(client, "select 1", enable_cookie=False)
     assert resp.status_code == 200, resp.text
     assert len(client.cookies.items()) == 0
 

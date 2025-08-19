@@ -111,8 +111,25 @@ where
                 float_to_decimal(F64::from(v), min, max, multiplier_f64, rounding_mode)
                     .map(|v| Some(v))
             }
+            JsonbNumber::Decimal64(d) => {
+                let from_size = DecimalSize::new_unchecked(i64::MAX_PRECISION, d.scale);
+                match dest_type {
+                    DecimalDataType::Decimal64(_) => {
+                        let x = d.value;
+                        let min = i64::min_for_precision(dest_size.precision());
+                        let max = i64::max_for_precision(dest_size.precision());
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
+                            .map(|v| Some(T::from_i128(v)))
+                    }
+                    DecimalDataType::Decimal128(_) | DecimalDataType::Decimal256(_) => {
+                        let x = T::from_i128(d.value);
+                        decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
+                            .map(|v| Some(v))
+                    }
+                }
+            }
             JsonbNumber::Decimal128(d) => {
-                let from_size = DecimalSize::new_unchecked(d.precision, d.scale);
+                let from_size = DecimalSize::new_unchecked(i128::MAX_PRECISION, d.scale);
                 match dest_type {
                     DecimalDataType::Decimal64(_) => {
                         let x = d.value;
@@ -129,7 +146,7 @@ where
                 }
             }
             JsonbNumber::Decimal256(d) => {
-                let from_size = DecimalSize::new_unchecked(d.precision, d.scale);
+                let from_size = DecimalSize::new_unchecked(i256::MAX_PRECISION, d.scale);
                 match dest_type {
                     DecimalDataType::Decimal64(_) | DecimalDataType::Decimal128(_) => {
                         let x = i256(d.value);

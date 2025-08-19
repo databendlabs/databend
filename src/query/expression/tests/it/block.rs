@@ -17,7 +17,6 @@ use databend_common_expression::block_debug::box_render;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
@@ -26,19 +25,17 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
-
-use crate::common::new_block;
 
 #[test]
 fn test_split_block() {
     let value = "abc";
     let n = 10;
-    let block = new_block(&[Column::String(
+    let block = DataBlock::new_from_columns(vec![Column::String(
         StringColumnBuilder::repeat(value, n).build(),
     )]);
     let sizes = block
@@ -53,7 +50,7 @@ fn test_split_block() {
 fn test_box_render_block() {
     let value = "abc";
     let n = 10;
-    let block = new_block(&[
+    let block = DataBlock::new_from_columns(vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         Column::String(StringColumnBuilder::repeat(value, n).build()),
     ]);
@@ -85,14 +82,11 @@ fn test_box_render_block() {
 fn test_block_entry_memory_size() {
     let scalar_u8 = Scalar::Number(NumberScalar::UInt8(1));
 
-    let entry = BlockEntry::new(
-        DataType::Number(NumberDataType::UInt8),
-        Value::<AnyType>::Scalar(scalar_u8),
-    );
+    let entry = BlockEntry::new_const_column(DataType::Number(NumberDataType::UInt8), scalar_u8, 1);
     assert_eq!(1, entry.memory_size());
 
     let scalar_str = Scalar::String("abc".to_string());
-    let entry = BlockEntry::new(DataType::String, Value::<AnyType>::Scalar(scalar_str));
+    let entry = BlockEntry::new_const_column(DataType::String, scalar_str, 1);
     assert_eq!(3, entry.memory_size());
 
     let col = StringType::from_data((0..10).map(|x| x.to_string()).collect::<Vec<_>>());

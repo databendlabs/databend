@@ -168,7 +168,16 @@ impl VacuumDropTablePlan {
                 ]))
             }
         } else {
-            Arc::new(DataSchema::empty())
+            Arc::new(DataSchema::new(vec![
+                DataField::new(
+                    "success_tables_count",
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+                DataField::new(
+                    "failed_tables_count",
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ]))
         }
     }
 }
@@ -205,6 +214,7 @@ pub struct AnalyzeTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub no_scan: bool,
 }
 
 impl AnalyzeTablePlan {
@@ -234,6 +244,7 @@ impl RenameTablePlan {
 /// Modify table comment.
 #[derive(Clone, Debug)]
 pub struct ModifyTableCommentPlan {
+    pub if_exists: bool,
     pub new_comment: String,
     pub catalog: String,
     pub database: String,
@@ -360,6 +371,8 @@ pub enum ModifyColumnAction {
     SetDataType(Vec<(TableField, String)>),
     // column name
     ConvertStoredComputedColumn(String),
+    // modify column table field, field comments
+    Comment(Vec<(TableField, String)>),
 }
 
 // Table modify column
@@ -522,4 +535,31 @@ impl RefreshTableCachePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct AddTableRowAccessPolicyPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTableRowAccessPolicyPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub policy: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DropAllTableRowAccessPoliciesPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
 }

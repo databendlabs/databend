@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -61,7 +62,7 @@ impl AsyncSystemTable for UserFunctionsTable {
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let user_functions = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false).await?;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
             let udfs = UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?;
             udfs.into_iter()
                 .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
@@ -112,6 +113,8 @@ pub struct UserFunctionArguments {
     parameters: Vec<String>,
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     states: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "std::option::Option::is_none")]
+    immutable: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -178,6 +181,7 @@ impl UserFunctionsTable {
                         server: None,
                         parameters: x.parameters.clone(),
                         states: BTreeMap::new(),
+                        immutable: None,
                     },
                     UDFDefinition::UDFServer(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -185,6 +189,7 @@ impl UserFunctionsTable {
                         server: Some(x.address.to_string()),
                         parameters: vec![],
                         states: BTreeMap::new(),
+                        immutable: x.immutable,
                     },
                     UDFDefinition::UDFScript(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -192,6 +197,7 @@ impl UserFunctionsTable {
                         server: None,
                         parameters: vec![],
                         states: BTreeMap::new(),
+                        immutable: x.immutable,
                     },
                     UDFDefinition::UDAFScript(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -203,6 +209,24 @@ impl UserFunctionsTable {
                             .iter()
                             .map(|f| (f.name().to_string(), f.data_type().to_string()))
                             .collect(),
+                        immutable: None,
+                    },
+                    UDFDefinition::UDTF(x) => UserFunctionArguments {
+                        arg_types: x
+                            .arg_types
+                            .iter()
+                            .map(|(name, ty)| format!("{name} {ty}"))
+                            .collect(),
+                        return_type: Some(
+                            x.return_types
+                                .iter()
+                                .map(|(name, ty)| format!("{name} {ty}"))
+                                .collect(),
+                        ),
+                        server: None,
+                        parameters: vec![],
+                        states: BTreeMap::new(),
+                        immutable: None,
                     },
                 },
             })

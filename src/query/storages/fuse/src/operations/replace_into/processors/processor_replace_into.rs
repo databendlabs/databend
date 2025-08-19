@@ -184,7 +184,7 @@ impl Processor for ReplaceIntoProcessor {
             let mut filter = None;
             let mut all_delete = false;
             if let Some((expr, delete_column)) = &self.delete_when {
-                let expr = expr.project_column_ref(|_| *delete_column);
+                let expr = expr.project_column_ref(|_| Ok(*delete_column))?;
                 let func_ctx = self.ctx.get_function_context()?;
                 let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
                 let predicates = evaluator

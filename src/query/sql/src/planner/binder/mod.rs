@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod async_function_desc;
 mod bind_context;
 mod bind_mutation;
 mod bind_query;
@@ -60,6 +61,7 @@ mod virtual_column;
 mod window;
 
 pub use aggregate::AggregateInfo;
+pub use async_function_desc::AsyncFunctionDesc;
 pub use bind_context::*;
 pub use bind_mutation::target_probe;
 pub use bind_mutation::MutationStrategy;
@@ -73,6 +75,7 @@ pub use column_binding::ColumnBindingBuilder;
 pub use column_binding::DummyColumnType;
 pub use copy_into_table::resolve_file_location;
 pub use copy_into_table::resolve_stage_location;
+pub use copy_into_table::resolve_stage_locations;
 pub use default_expr::DefaultExprBinder;
 pub use explain::ExplainConfig;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
@@ -82,4 +85,6 @@ pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
+pub use window::bind_window_function_info;
+pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;

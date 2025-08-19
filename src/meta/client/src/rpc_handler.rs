@@ -220,8 +220,8 @@ fn default_timing_threshold() -> Duration {
 }
 
 /// Creates a closure that logs timing information for RPC operations.
-fn create_timing_logger(msg: impl Display) -> impl Fn(Duration, Duration) {
-    move |total, busy| {
+fn create_timing_logger<T>(msg: impl Display) -> impl Fn(&T, Duration, Duration) {
+    move |_output, total, busy| {
         info!("{} spent: total: {:?}, busy: {:?}", msg, total, busy);
     }
 }

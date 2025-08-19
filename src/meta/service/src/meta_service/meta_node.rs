@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
@@ -27,6 +28,7 @@ use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::tokio::time::Instant;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::reply_to_api_result;
@@ -34,6 +36,7 @@ use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
+use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
@@ -51,6 +54,7 @@ use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::TypeConfig;
+use databend_common_meta_types::snapshot_db::DBStat;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -91,6 +95,8 @@ use crate::message::LeaveRequest;
 use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::meta_node_kv_api_impl::MetaKVApi;
+use crate::meta_service::meta_node_kv_api_impl::MetaKVApiOwned;
 use crate::meta_service::meta_node_status::MetaNodeStatus;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
@@ -100,7 +106,6 @@ use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
-use crate::version::METASRV_COMMIT_VERSION;
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
@@ -120,6 +125,7 @@ pub struct MetaNode {
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
     pub joined_tasks: AtomicI32,
+    pub version: BuildInfoRef,
 }
 
 impl Drop for MetaNode {
@@ -137,6 +143,7 @@ pub struct MetaNodeBuilder {
     raft_config: Option<Config>,
     sto: Option<RaftStore>,
     raft_service_endpoint: Option<Endpoint>,
+    version: Option<BuildInfoRef>,
 }
 
 impl MetaNodeBuilder {
@@ -155,6 +162,10 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
+        let version = self
+            .version
+            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("version is not set")))?;
+
         let net = NetworkFactory::new(sto.clone());
 
         let log_store = sto.clone();
@@ -170,9 +181,14 @@ impl MetaNodeBuilder {
         let handle = DispatcherHandle::new(handle, node_id);
         let handle = Arc::new(handle);
 
-        sto.get_state_machine()
+        let on_change_applied = {
+            let h = handle.clone();
+            move |change| h.send_change(change)
+        };
+
+        sto.get_state_machine_write("set_on_change_applied-hook")
             .await
-            .set_event_sender(Box::new(handle.clone()));
+            .set_on_change_applied(Box::new(on_change_applied));
 
         let meta_node = Arc::new(MetaNode {
             raft_store: sto.clone(),
@@ -182,6 +198,7 @@ impl MetaNodeBuilder {
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
             joined_tasks: AtomicI32::new(1),
+            version,
         });
 
         MetaNode::subscribe_metrics(meta_node.clone(), raft.metrics()).await;
@@ -219,6 +236,12 @@ impl MetaNodeBuilder {
         self.raft_service_endpoint = Some(endpoint);
         self
     }
+
+    #[must_use]
+    pub fn version(mut self, version: BuildInfoRef) -> Self {
+        self.version = Some(version);
+        self
+    }
 }
 
 impl MetaNode {
@@ -230,6 +253,7 @@ impl MetaNode {
             raft_config: Some(raft_config),
             sto: None,
             raft_service_endpoint: None,
+            version: None,
         }
     }
 
@@ -324,7 +348,10 @@ impl MetaNode {
 
     /// Open or create a meta node.
     #[fastrace::trace]
-    pub async fn open(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+    pub async fn open(
+        config: &RaftConfig,
+        version: BuildInfoRef,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
         let mut config = config.clone();
@@ -350,7 +377,8 @@ impl MetaNode {
         let builder = MetaNode::builder(&config)
             .sto(log_store.clone())
             .node_id(self_node_id)
-            .raft_service_endpoint(config.raft_api_listen_host_endpoint());
+            .raft_service_endpoint(config.raft_api_listen_host_endpoint())
+            .version(version);
         let mn = builder.build().await?;
 
         info!("MetaNode started: {:?}", config);
@@ -366,8 +394,9 @@ impl MetaNode {
     pub async fn open_boot(
         config: &RaftConfig,
         initialize_cluster: Option<Node>,
+        version: BuildInfoRef,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open(config).await?;
+        let mn = Self::open(config, version).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -421,57 +450,11 @@ impl MetaNode {
     }
 
     /// Spawn a monitor to watch raft state changes and report metrics changes.
-    pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
+    pub async fn subscribe_metrics(mn: Arc<Self>, metrics_rx: watch::Receiver<RaftMetrics>) {
         info!("Start a task subscribing raft metrics and forward to metrics API");
-        let meta_node = mn.clone();
 
-        let fut = async move {
-            let mut last_leader: Option<u64> = None;
+        let fut = Self::report_metrics_loop(mn.clone(), metrics_rx);
 
-            loop {
-                let changed = metrics_rx.changed().await;
-
-                if let Err(changed_err) = changed {
-                    // Shutting down.
-                    info!(
-                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
-                        changed_err
-                    );
-                    break;
-                }
-
-                let mm = metrics_rx.borrow().clone();
-
-                // Report metrics about server state and role.
-                server_metrics::set_node_is_health(
-                    mm.state == ServerState::Follower || mm.state == ServerState::Leader,
-                );
-                if mm.current_leader.is_some() && mm.current_leader != last_leader {
-                    server_metrics::incr_leader_change();
-                }
-                server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
-                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.raft_store.id));
-
-                // metrics about raft log and state machine.
-                server_metrics::set_current_term(mm.current_term);
-                server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
-                server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                server_metrics::set_last_seq(meta_node.get_last_seq().await);
-
-                {
-                    let st = meta_node.get_raft_log_stat().await;
-                    server_metrics::set_raft_log_stat(st);
-                }
-
-                // metrics about server storage
-                server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
-                server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
-
-                last_leader = mm.current_leader;
-            }
-
-            Ok::<(), AnyError>(())
-        };
         let h = databend_common_base::runtime::spawn(
             fut.in_span(Span::enter_with_local_parent("watch-metrics")),
         );
@@ -482,12 +465,402 @@ impl MetaNode {
         }
     }
 
+    /// Report metrics changes periodically.
+    async fn report_metrics_loop(
+        meta_node: Arc<Self>,
+        mut metrics_rx: watch::Receiver<RaftMetrics>,
+    ) -> Result<(), AnyError> {
+        const RATE_LIMIT_INTERVAL: Duration = Duration::from_millis(200);
+        let mut last_leader: Option<u64> = None;
+
+        loop {
+            let loop_start = Instant::now();
+
+            let changed = metrics_rx.changed().await;
+
+            if let Err(changed_err) = changed {
+                // Shutting down.
+                info!(
+                    "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                    changed_err
+                );
+                break;
+            }
+
+            let mm = metrics_rx.borrow().clone();
+
+            // Report metrics about server state and role.
+            server_metrics::set_node_is_health(
+                mm.state == ServerState::Follower || mm.state == ServerState::Leader,
+            );
+            if mm.current_leader.is_some() && mm.current_leader != last_leader {
+                server_metrics::incr_leader_change();
+            }
+            server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
+            server_metrics::set_is_leader(mm.current_leader == Some(meta_node.raft_store.id));
+
+            // metrics about raft log and state machine.
+            server_metrics::set_current_term(mm.current_term);
+            server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
+            server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
+            server_metrics::set_last_seq(meta_node.get_last_seq().await);
+
+            {
+                let st = meta_node.get_raft_log_stat().await;
+                server_metrics::set_raft_log_stat(st);
+            }
+
+            // metrics about server storage
+            server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
+            server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
+            {
+                let stat = meta_node.get_snapshot_key_space_stat().await;
+
+                server_metrics::set_snapshot_primary_index_count(
+                    stat.get("kv--").copied().unwrap_or_default(),
+                );
+
+                server_metrics::set_snapshot_expire_index_count(
+                    stat.get("exp-").copied().unwrap_or_default(),
+                )
+            }
+
+            {
+                let db_stat = meta_node.get_snapshot_db_stat().await;
+                let snapshot = server_metrics::snapshot();
+                snapshot.block_count.set(db_stat.block_num as i64);
+                snapshot.data_size.set(db_stat.data_size as i64);
+                snapshot.index_size.set(db_stat.index_size as i64);
+                snapshot.avg_block_size.set(db_stat.avg_block_size as i64);
+                snapshot
+                    .avg_keys_per_block
+                    .set(db_stat.avg_keys_per_block as i64);
+                snapshot.read_block.set(db_stat.read_block as i64);
+                snapshot
+                    .read_block_from_cache
+                    .set(db_stat.read_block_from_cache as i64);
+                snapshot
+                    .read_block_from_disk
+                    .set(db_stat.read_block_from_disk as i64);
+            }
+
+            last_leader = mm.current_leader;
+
+            let metrics_str = crate::metrics::meta_metrics_to_prometheus_string();
+            let parsed_metrics = Self::parse_metrics_to_json(&metrics_str);
+            info!("metrics: {}", parsed_metrics);
+
+            let elapsed = loop_start.elapsed();
+            if elapsed < RATE_LIMIT_INTERVAL {
+                let sleep_duration = RATE_LIMIT_INTERVAL - elapsed;
+                sleep(sleep_duration).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse metrics string and return structured JSON value.
+    fn parse_metrics_to_json(metrics_str: &str) -> serde_json::Value {
+        use std::collections::BTreeMap;
+
+        use serde_json::Map;
+        use serde_json::Value;
+
+        let mut categories: BTreeMap<String, Map<String, Value>> = BTreeMap::new();
+        let mut histograms: BTreeMap<String, BTreeMap<String, f64>> = BTreeMap::new();
+
+        for line in metrics_str.lines() {
+            let line = line.trim();
+
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            if line.starts_with("metasrv_meta_network_rpc_delay_seconds_bucket") {
+                continue;
+            }
+
+            let line = if let Some(stripped) = line.strip_prefix("metasrv_") {
+                stripped
+            } else {
+                continue;
+            };
+
+            let parts: Vec<&str> = line.splitn(2, ' ').collect();
+            if parts.len() != 2 {
+                continue;
+            }
+
+            let (metric_name, value_str) = (parts[0], parts[1]);
+            let value: f64 = value_str.parse().unwrap_or(0.0);
+
+            let (category, clean_name) =
+                if let Some(stripped) = metric_name.strip_prefix("meta_network_") {
+                    ("meta_network", stripped)
+                } else if let Some(stripped) = metric_name.strip_prefix("raft_network_") {
+                    ("raft_network", stripped)
+                } else if let Some(stripped) = metric_name.strip_prefix("raft_storage_") {
+                    ("raft_storage", stripped)
+                } else if let Some(stripped) = metric_name.strip_prefix("server_") {
+                    ("server", stripped)
+                } else {
+                    continue;
+                };
+
+            if clean_name.contains("_bucket") {
+                if let Some((hist_key, le_value)) =
+                    Self::parse_histogram_bucket(category, clean_name)
+                {
+                    histograms
+                        .entry(hist_key)
+                        .or_default()
+                        .insert(le_value, value);
+                }
+                continue;
+            }
+
+            // Handle labeled and unlabeled metrics
+            Self::handle_labeled_metric(category, clean_name, value, &mut categories);
+        }
+
+        // Process histogram buckets and convert them to percentiles
+        // NOTE: hist_key format is "category.metric_name|sub_key" where:
+        // - "category.metric_name" is the base histogram identifier
+        // - "sub_key" is either "_default" (no labels) or "label1=value1,label2=value2" (with labels)
+        // This encoding allows us to group buckets by their labels before converting to percentiles
+        for (hist_key, buckets) in histograms {
+            // Split the encoded key back into main key and sub-key
+            // Example: "raft_network.append_sent_seconds|to=1" -> ("raft_network.append_sent_seconds", "to=1")
+            if let Some((main_key, sub_key)) = hist_key.split_once('|') {
+                // Parse the main key to extract category and metric name
+                // Example: "raft_network.append_sent_seconds" -> ["raft_network", "append_sent_seconds"]
+                let parts: Vec<&str> = main_key.splitn(2, '.').collect();
+                if parts.len() == 2 {
+                    let (category, metric_name) = (parts[0], parts[1]);
+
+                    // Convert the histogram buckets to percentile arrays
+                    if let Some(percentiles) = Self::convert_histogram_to_percentiles(buckets) {
+                        let category_map = categories.entry(category.to_string()).or_default();
+
+                        if sub_key == "_default" {
+                            // Histogram has no additional labels (only 'le' labels)
+                            // Store directly: raft_network.append_sent_seconds = [["p50", 0.001], ...]
+                            category_map.insert(metric_name.to_string(), percentiles);
+                        } else {
+                            // Histogram has additional labels beyond 'le'
+                            // Create nested structure: raft_network.append_sent_seconds.{to=1} = [["p50", 0.001], ...]
+                            let metric_map = category_map
+                                .entry(metric_name.to_string())
+                                .or_insert_with(|| Value::Object(serde_json::Map::new()))
+                                .as_object_mut()
+                                .unwrap();
+                            metric_map.insert(sub_key.to_string(), percentiles);
+                        }
+                    }
+                }
+            }
+        }
+
+        Value::Object(
+            categories
+                .into_iter()
+                .map(|(k, v)| (k, Value::Object(v)))
+                .collect(),
+        )
+    }
+
+    /// Handle a labeled or unlabeled metric by organizing it into the categories structure.
+    fn handle_labeled_metric(
+        category: &str,
+        clean_name: &str,
+        value: f64,
+        categories: &mut std::collections::BTreeMap<
+            String,
+            serde_json::Map<String, serde_json::Value>,
+        >,
+    ) {
+        use serde_json::Value;
+
+        if let Some((name_part, labels_part)) = clean_name.split_once('{') {
+            if let Some(labels_str) = labels_part.strip_suffix('}') {
+                // Parse labels and create sub-key
+                let label_key = Self::parse_label_key(labels_str);
+
+                let category_map = categories.entry(category.to_string()).or_default();
+                let metric_map = category_map
+                    .entry(name_part.to_string())
+                    .or_insert_with(|| Value::Object(serde_json::Map::new()))
+                    .as_object_mut()
+                    .unwrap();
+                metric_map.insert(label_key, Value::from(value));
+            } else {
+                // Malformed labels, treat as regular metric
+                categories
+                    .entry(category.to_string())
+                    .or_default()
+                    .insert(clean_name.to_string(), Value::from(value));
+            }
+        } else {
+            // No labels, regular metric
+            categories
+                .entry(category.to_string())
+                .or_default()
+                .insert(clean_name.to_string(), Value::from(value));
+        }
+    }
+
+    /// Parse label string and create a comma-separated key with quotes stripped.
+    fn parse_label_key(labels_str: &str) -> String {
+        labels_str
+            .split(',')
+            .map(|label_pair| {
+                let label_pair = label_pair.trim();
+                if let Some((key, value)) = label_pair.split_once('=') {
+                    let cleaned_value = value
+                        .strip_prefix('"')
+                        .and_then(|v| v.strip_suffix('"'))
+                        .unwrap_or(value);
+                    format!("{}={}", key, cleaned_value)
+                } else {
+                    label_pair.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    /// Parse a histogram bucket metric line and extract histogram key and le value.
+    /// Returns None if not a valid histogram bucket or if le="+Inf".
+    fn parse_histogram_bucket(category: &str, clean_name: &str) -> Option<(String, String)> {
+        if let Some((base_name, bucket_part)) = clean_name.split_once("_bucket") {
+            // Check if it has labels in curly braces
+            if let Some(labels_part) = bucket_part.strip_prefix('{') {
+                if let Some(labels_str) = labels_part.strip_suffix('}') {
+                    let mut le_value = None;
+                    let mut other_labels = Vec::new();
+
+                    // Split labels by comma and extract le value and other labels
+                    for label_pair in labels_str.split(',') {
+                        let label_pair = label_pair.trim();
+                        if let Some((key, value)) = label_pair.split_once('=') {
+                            if key == "le" {
+                                if let Some(quoted_value) =
+                                    value.strip_prefix('"').and_then(|v| v.strip_suffix('"'))
+                                {
+                                    if quoted_value != "+Inf" {
+                                        le_value = Some(quoted_value.to_string());
+                                    }
+                                }
+                            } else {
+                                // Strip quotes from other labels too for consistency
+                                if let Some((key, value)) = label_pair.split_once('=') {
+                                    let cleaned_value = value
+                                        .strip_prefix('"')
+                                        .and_then(|v| v.strip_suffix('"'))
+                                        .unwrap_or(value);
+                                    other_labels.push(format!("{}={}", key, cleaned_value));
+                                } else {
+                                    other_labels.push(label_pair.to_string());
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(le_val) = le_value {
+                        let hist_key = if other_labels.is_empty() {
+                            format!("{}.{}", category, base_name)
+                        } else {
+                            // For histograms with other labels, create sub-key structure later
+                            format!("{}.{}", category, base_name)
+                        };
+
+                        let sub_key = if other_labels.is_empty() {
+                            "_default".to_string()
+                        } else {
+                            Self::parse_label_key(&other_labels.join(","))
+                        };
+
+                        return Some((format!("{}|{}", hist_key, sub_key), le_val));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Convert histogram bucket data to percentiles.
+    /// Note: Prometheus histogram buckets contain cumulative counts (not individual bucket counts).
+    fn convert_histogram_to_percentiles(
+        buckets: std::collections::BTreeMap<String, f64>,
+    ) -> Option<serde_json::Value> {
+        use serde_json::Value;
+
+        let mut sorted_buckets: Vec<(f64, f64)> = buckets
+            .iter()
+            .filter_map(|(le, cumulative_count)| {
+                le.parse::<f64>()
+                    .ok()
+                    .map(|le_val| (le_val, *cumulative_count))
+            })
+            .collect();
+
+        if sorted_buckets.is_empty() {
+            return None;
+        }
+
+        sorted_buckets.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        // The total count is the largest cumulative count (highest bucket)
+        let total_count = sorted_buckets
+            .iter()
+            .map(|(_, count)| *count)
+            .fold(0.0, f64::max);
+
+        if total_count <= 0.0 {
+            return None;
+        }
+
+        let mut percentiles = [None; 4];
+        let thresholds = [(0.5, 0), (0.9, 1), (0.99, 2), (0.999, 3)];
+
+        // Find the first bucket where cumulative count >= threshold
+        for &(le, cumulative_count) in &sorted_buckets {
+            for &(threshold_ratio, index) in &thresholds {
+                let threshold = total_count * threshold_ratio;
+                if cumulative_count >= threshold && percentiles[index].is_none() {
+                    percentiles[index] = Some(le);
+                }
+            }
+        }
+
+        // Convert to simple array format: [["p50", 5.0], ["p90", 100.0]...]
+        let result_values: Vec<Value> = [
+            ("p50", percentiles[0]),
+            ("p90", percentiles[1]),
+            ("p99", percentiles[2]),
+            ("p99.9", percentiles[3]),
+        ]
+        .iter()
+        .filter_map(|(label, value)| value.map(|v| serde_json::json!([label, v])))
+        .collect();
+
+        if !result_values.is_empty() {
+            Some(Value::Array(result_values))
+        } else {
+            None
+        }
+    }
+
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
     #[fastrace::trace]
-    pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+    pub async fn start(
+        config: &MetaConfig,
+        version: BuildInfoRef,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(config :? =(config); "start()");
-        let mn = Self::do_start(config).await?;
+        let mn = Self::do_start(config, version).await?;
         info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
     }
@@ -735,7 +1108,10 @@ impl MetaNode {
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
-            let sm = self.raft_store.get_state_machine().await;
+            let sm = self
+                .raft_store
+                .get_state_machine_write("is_in_cluster-get-membership")
+                .await;
             sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
@@ -755,24 +1131,30 @@ impl MetaNode {
         )))
     }
 
-    async fn do_start(conf: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+    async fn do_start(
+        conf: &MetaConfig,
+        version: BuildInfoRef,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open(raft_conf).await?;
+            let mn = MetaNode::open(raft_conf, version).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
-        let mn = MetaNode::open(raft_conf).await?;
+        let mn = MetaNode::open(raft_conf, version).await?;
         Ok(mn)
     }
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
-    pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open(&config.raft_config).await?;
+    pub async fn boot(
+        config: &MetaConfig,
+        version: BuildInfoRef,
+    ) -> Result<Arc<MetaNode>, MetaStartupError> {
+        let mn = Self::open(&config.raft_config, version).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
@@ -839,7 +1221,7 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-node").await;
         let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
@@ -848,7 +1230,7 @@ impl MetaNode {
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-nodes").await;
         let nodes = sm
             .sys_data_ref()
             .nodes_ref()
@@ -874,6 +1256,14 @@ impl MetaNode {
             .unwrap_or_default()
     }
 
+    async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
+        self.raft_store.get_snapshot_key_space_stat().await
+    }
+
+    async fn get_snapshot_db_stat(&self) -> DBStat {
+        self.raft_store.get_snapshot_db_stat().await
+    }
+
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .raft_store
@@ -892,6 +1282,7 @@ impl MetaNode {
 
         let raft_log_status = self.get_raft_log_stat().await.into();
         let snapshot_key_count = self.get_snapshot_key_count().await;
+        let snapshot_key_space_stat = self.get_snapshot_key_space_stat().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -905,11 +1296,12 @@ impl MetaNode {
 
         Ok(MetaNodeStatus {
             id: self.raft_store.id,
-            binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
+            binary_version: self.version.semantic.to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
             raft_log: raft_log_status,
             snapshot_key_count,
+            snapshot_key_space_stat,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
@@ -926,7 +1318,7 @@ impl MetaNode {
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
-        let sm = self.raft_store.state_machine.read().await;
+        let sm = self.raft_store.get_state_machine_read("get-last-seq").await;
         sm.sys_data_ref().curr_seq()
     }
 
@@ -935,7 +1327,10 @@ impl MetaNode {
         // Maybe stale get: from local state machine
 
         let nodes = {
-            let sm = self.raft_store.state_machine.read().await;
+            let sm = self
+                .raft_store
+                .get_state_machine_read("get-grpc-advertise-addrs")
+                .await;
             sm.sys_data_ref()
                 .nodes_ref()
                 .values()
@@ -972,7 +1367,7 @@ impl MetaNode {
                "handle_forwardable_request");
 
         let mut n_retry = 20;
-        let mut slp = Duration::from_millis(200);
+        let mut slp = Duration::from_millis(1_000);
 
         loop {
             let assume_leader_res = self.assume_leader().await;
@@ -1089,7 +1484,6 @@ impl MetaNode {
         node_id: NodeId,
         node: Node,
     ) -> Result<AppliedState, MetaAPIError> {
-        // TODO: use txid?
         let cmd = Cmd::AddNode {
             node_id,
             node,
@@ -1105,6 +1499,21 @@ impl MetaNode {
             .await?;
 
         Ok(resp)
+    }
+
+    /// Propose a log entry to set a feature.
+    pub async fn set_feature(
+        &self,
+        feature: StateMachineFeature,
+        enable: bool,
+    ) -> Result<(), MetaAPIError> {
+        let cmd = Cmd::SetFeature {
+            feature: feature.to_string(),
+            enable,
+        };
+
+        self.write(LogEntry::new(cmd)).await?;
+        Ok(())
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
@@ -1154,26 +1563,43 @@ impl MetaNode {
         }
     }
 
-    pub(crate) async fn add_watcher(
+    pub(crate) fn insert_watch_sender(
+        &self,
+        sender: Arc<WatchStreamSender<WatchTypes>>,
+    ) -> Weak<WatchStreamSender<WatchTypes>> {
+        let weak = Arc::downgrade(&sender);
+
+        self.dispatcher_handle
+            .request(move |dispatcher: &mut Dispatcher<WatchTypes>| {
+                dispatcher.insert_watch_stream_sender(sender);
+            });
+
+        weak
+    }
+
+    pub(crate) fn new_watch_sender(
         &self,
         request: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Weak<WatchStreamSender<WatchTypes>>, Status> {
-        let stream_sender = self
-            .dispatcher_handle
-            .request_blocking(move |dispatcher: &mut Dispatcher<WatchTypes>| {
-                let key_range = match build_key_range(&request.key, &request.key_end) {
-                    Ok(kr) => kr,
-                    Err(e) => return Err(Status::invalid_argument(e.to_string())),
-                };
+    ) -> Result<Arc<WatchStreamSender<WatchTypes>>, Status> {
+        let key_range = match build_key_range(&request.key, &request.key_end) {
+            Ok(kr) => kr,
+            Err(e) => return Err(Status::invalid_argument(e.to_string())),
+        };
 
-                let interested = event_filter_from_filter_type(request.filter_type());
-                Ok(dispatcher.add_watcher(key_range, interested, tx))
-            })
-            .await
-            .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))??;
+        let interested = event_filter_from_filter_type(request.filter_type());
 
-        Ok(stream_sender)
+        let sender = Dispatcher::new_watch_stream_sender(key_range.clone(), interested, tx);
+        Ok(sender)
+    }
+
+    /// Get a kvapi::KVApi implementation.
+    pub fn kv_api(&self) -> MetaKVApi {
+        MetaKVApi::new(self)
+    }
+
+    pub fn kv_api_owned(self: &Arc<Self>) -> MetaKVApiOwned {
+        MetaKVApiOwned::new(self.clone())
     }
 }
 
@@ -1182,5 +1608,366 @@ pub(crate) fn event_filter_from_filter_type(filter_type: FilterType) -> EventFil
         FilterType::All => EventFilter::all(),
         FilterType::Update => EventFilter::update(),
         FilterType::Delete => EventFilter::delete(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_metrics_to_json() {
+        let metrics_input = r#"
+# This is a comment
+metasrv_meta_network_recv_bytes_total 1234
+metasrv_meta_network_req_failed_total 0
+metasrv_meta_network_req_success_total 5
+metasrv_meta_network_rpc_delay_ms_bucket{le="1.0"} 0
+metasrv_meta_network_rpc_delay_ms_bucket{le="10.0"} 2
+metasrv_meta_network_rpc_delay_ms_bucket{le="100.0"} 4
+metasrv_meta_network_rpc_delay_ms_bucket{le="1000.0"} 5
+metasrv_meta_network_rpc_delay_ms_bucket{le="+Inf"} 5
+metasrv_meta_network_rpc_delay_seconds_bucket{le="1.0"} 0
+metasrv_raft_network_active_peers{id="1",addr="127.0.0.1:29003"} 1
+metasrv_raft_storage_snapshot_building 0
+metasrv_server_current_term 1
+metasrv_server_is_leader 1
+non_metasrv_metric 123
+
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        // Verify expected categories are present
+        assert!(result.get("meta_network").is_some());
+        assert!(result.get("raft_network").is_some());
+        assert!(result.get("raft_storage").is_some());
+        assert!(result.get("server").is_some());
+
+        // Verify some expected metrics
+        let meta_network = result.get("meta_network").unwrap();
+        assert!(meta_network.get("recv_bytes_total").is_some());
+        assert!(meta_network.get("req_success_total").is_some());
+        assert!(meta_network.get("rpc_delay_ms").is_some()); // Should be converted to percentiles
+
+        let server = result.get("server").unwrap();
+        assert!(server.get("current_term").is_some());
+        assert!(server.get("is_leader").is_some());
+    }
+
+    #[test]
+    fn test_parse_metrics_empty_input() {
+        let result = MetaNode::parse_metrics_to_json("");
+
+        // Should return empty JSON object
+        assert!(result.is_object());
+        assert_eq!(result.as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_metrics_comments_only() {
+        let metrics_input = r#"
+# Comment line 1
+# Comment line 2
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        // Should return empty JSON object for comments only
+        assert!(result.is_object());
+        assert_eq!(result.as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_metrics_malformed_lines() {
+        let metrics_input = r#"
+metasrv_server_current_term 1
+malformed_line_without_value
+metasrv_meta_network_invalid_value abc
+metasrv_server_is_leader 0
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        // Should handle malformed lines gracefully and return valid JSON object
+        assert!(result.is_object());
+
+        // Should have parsed the valid metrics
+        let server = result.get("server").unwrap();
+        assert_eq!(server.get("current_term").unwrap(), 1.0);
+        assert_eq!(server.get("is_leader").unwrap(), 0.0);
+
+        // Invalid value should be parsed as 0.0 due to unwrap_or(0.0)
+        let meta_network = result.get("meta_network");
+        if let Some(meta_net) = meta_network {
+            if let Some(invalid_val) = meta_net.get("invalid_value") {
+                assert_eq!(invalid_val, 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_convert_histogram_to_percentiles() {
+        use std::collections::BTreeMap;
+
+        // Typical case: varied latencies
+        let mut buckets = BTreeMap::new();
+        buckets.insert("1.0".to_string(), 10.0);
+        buckets.insert("5.0".to_string(), 50.0);
+        buckets.insert("10.0".to_string(), 80.0);
+        buckets.insert("100.0".to_string(), 100.0);
+
+        let result = MetaNode::convert_histogram_to_percentiles(buckets).unwrap();
+        let array = result.as_array().unwrap();
+        assert_eq!(array.len(), 4);
+        assert_eq!(array[0][0], "p50");
+        assert_eq!(array[0][1], 5.0);
+        assert_eq!(array[1][0], "p90");
+        assert_eq!(array[1][1], 100.0);
+
+        // Edge case: all requests fast (uniform cumulative count)
+        let mut fast_buckets = BTreeMap::new();
+        fast_buckets.insert("0.001".to_string(), 9.0);
+        fast_buckets.insert("0.01".to_string(), 9.0);
+        fast_buckets.insert("1.0".to_string(), 9.0);
+
+        let fast_result = MetaNode::convert_histogram_to_percentiles(fast_buckets).unwrap();
+        let fast_array = fast_result.as_array().unwrap();
+        assert_eq!(fast_array[0][1], 0.001);
+        assert_eq!(fast_array[2][1], 0.001); // p99
+
+        // Edge case: empty or zero counts
+        assert!(MetaNode::convert_histogram_to_percentiles(BTreeMap::new()).is_none());
+
+        let mut zero_buckets = BTreeMap::new();
+        zero_buckets.insert("1.0".to_string(), 0.0);
+        assert!(MetaNode::convert_histogram_to_percentiles(zero_buckets).is_none());
+    }
+
+    #[test]
+    fn test_parse_metrics_to_json_big() {
+        let metrics_input = r#"
+metasrv_server_current_leader_id 0
+metasrv_server_is_leader 1
+metasrv_server_node_is_health 1
+metasrv_server_leader_changes_total 1
+metasrv_server_applying_snapshot 0
+metasrv_server_snapshot_key_count 4024528
+metasrv_server_snapshot_primary_index_count 102696918
+metasrv_server_snapshot_expire_index_count 78
+metasrv_server_snapshot_block_count 504
+metasrv_server_snapshot_data_size 642273909
+metasrv_server_snapshot_index_size 79306
+metasrv_server_snapshot_avg_block_size 1274352
+metasrv_server_snapshot_avg_keys_per_block 7985
+metasrv_server_snapshot_read_block 28072
+metasrv_server_snapshot_read_block_from_cache 27621
+metasrv_server_snapshot_read_block_from_disk 451
+metasrv_server_raft_log_cache_items 11386
+metasrv_server_raft_log_cache_used_size 3887263
+metasrv_server_raft_log_wal_open_chunk_size 3881166
+metasrv_server_raft_log_wal_offset 1864954656
+metasrv_server_raft_log_wal_closed_chunk_count 0
+metasrv_server_raft_log_wal_closed_chunk_total_size 0
+metasrv_server_raft_log_size 3881166
+metasrv_server_proposals_applied 3459805
+metasrv_server_last_log_index 3459807
+metasrv_server_last_seq 6681352
+metasrv_server_current_term 1
+metasrv_server_proposals_pending 30
+metasrv_server_proposals_failed_total 0
+metasrv_server_read_failed_total 0
+metasrv_server_watchers 0
+metasrv_server_version{component="metasrv",semver="v1.2.794-nightly",sha="4fca845964"} 1
+metasrv_meta_network_rpc_delay_seconds_sum 801.2423599059944
+metasrv_meta_network_rpc_delay_ms_sum 787255.0
+metasrv_meta_network_rpc_delay_ms_count 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="1.0"} 4
+metasrv_meta_network_rpc_delay_ms_bucket{le="2.0"} 4
+metasrv_meta_network_rpc_delay_ms_bucket{le="5.0"} 378
+metasrv_meta_network_rpc_delay_ms_bucket{le="10.0"} 812
+metasrv_meta_network_rpc_delay_ms_bucket{le="20.0"} 5523
+metasrv_meta_network_rpc_delay_ms_bucket{le="50.0"} 27461
+metasrv_meta_network_rpc_delay_ms_bucket{le="100.0"} 27946
+metasrv_meta_network_rpc_delay_ms_bucket{le="200.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="500.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="1000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="2000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="5000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="10000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="30000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="60000.0"} 28019
+metasrv_meta_network_rpc_delay_ms_bucket{le="+Inf"} 28019
+metasrv_meta_network_sent_bytes_total 5346188
+metasrv_meta_network_recv_bytes_total 35974092
+metasrv_meta_network_req_inflights 30
+metasrv_meta_network_req_success_total 520648
+metasrv_meta_network_req_failed_total 0
+metasrv_meta_network_watch_initialization_total 0
+metasrv_meta_network_watch_change_total 0
+metasrv_meta_network_stream_get_item_sent_total 0
+metasrv_meta_network_stream_mget_item_sent_total 472897
+metasrv_meta_network_stream_list_item_sent_total 68422
+metasrv_raft_storage_snapshot_building 1
+metasrv_raft_storage_snapshot_written_entries_total 80114031
+
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        println!("{}", result);
+
+        // Verify expected categories are present
+        assert!(result.get("meta_network").is_some());
+        assert!(result.get("raft_storage").is_some());
+        assert!(result.get("server").is_some());
+
+        // Verify some expected metrics
+        let meta_network = result.get("meta_network").unwrap();
+        assert!(meta_network.get("recv_bytes_total").is_some());
+        assert!(meta_network.get("req_success_total").is_some());
+        assert!(meta_network.get("rpc_delay_ms").is_some()); // Should be converted to percentiles
+
+        let server = result.get("server").unwrap();
+        assert!(server.get("current_term").is_some());
+        assert!(server.get("is_leader").is_some());
+    }
+
+    #[test]
+    fn test_parse_metrics_to_json_labeled_buckets() {
+        let metrics_input = r#"
+metasrv_raft_network_active_peers{id="1",addr="127.0.0.1:29003"} 1
+metasrv_raft_network_active_peers{id="2",addr="127.0.0.1:29006"} 1
+metasrv_raft_network_append_sent_seconds_bucket{le="+Inf",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="+Inf",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.001",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.001",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.002",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.002",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.004",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.004",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.008",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.008",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.016",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.016",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.032",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.032",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.064",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.064",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.128",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.128",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.256",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.256",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="0.512",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="0.512",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="1.024",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="1.024",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="131.072",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="131.072",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="16.384",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="16.384",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="2.048",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="2.048",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="262.144",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="262.144",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="32.768",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="32.768",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="4.096",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="4.096",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="524.288",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="524.288",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="65.536",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="65.536",to="2"} 6
+metasrv_raft_network_append_sent_seconds_bucket{le="8.192",to="1"} 9
+metasrv_raft_network_append_sent_seconds_bucket{le="8.192",to="2"} 6
+metasrv_raft_network_append_sent_seconds_count{to="1"} 9
+metasrv_raft_network_append_sent_seconds_count{to="2"} 6
+
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        println!("{}", result);
+
+        // Verify expected categories are present
+        assert!(result.get("raft_network").is_some());
+
+        // Verify labeled histograms use sub-key structure
+        let raft_network = result.get("raft_network").unwrap();
+        let append_sent_seconds = raft_network.get("append_sent_seconds").unwrap();
+        assert!(append_sent_seconds.is_object());
+
+        let hist_obj = append_sent_seconds.as_object().unwrap();
+        assert!(hist_obj.get("to=1").is_some());
+        assert!(hist_obj.get("to=2").is_some());
+
+        // Verify the histograms contain percentile arrays
+        let hist1 = hist_obj.get("to=1").unwrap();
+        let hist2 = hist_obj.get("to=2").unwrap();
+        assert!(hist1.is_array());
+        assert!(hist2.is_array());
+
+        // Verify regular labeled metrics use sub-key structure
+        let active_peers = raft_network.get("active_peers").unwrap();
+        assert!(active_peers.is_object());
+        let peers_obj = active_peers.as_object().unwrap();
+        assert!(peers_obj.get("id=1,addr=127.0.0.1:29003").is_some());
+        assert!(peers_obj.get("id=2,addr=127.0.0.1:29006").is_some());
+    }
+
+    #[test]
+    fn test_parse_metrics_label_handling() {
+        let metrics_input = r#"
+metasrv_server_current_term 1
+metasrv_server_version{component="metasrv",semver="v1.2.794"} 1
+metasrv_raft_network_active_peers{id="1",addr="127.0.0.1:29003"} 1
+metasrv_raft_network_active_peers{id="2",addr="127.0.0.1:29006"} 1
+metasrv_meta_network_req_inflights{type="read"} 5
+metasrv_meta_network_req_inflights{type="write"} 3
+metasrv_server_no_labels 42
+        "#;
+
+        let result = MetaNode::parse_metrics_to_json(metrics_input);
+
+        // Verify categories exist
+        assert!(result.get("server").is_some());
+        assert!(result.get("raft_network").is_some());
+        assert!(result.get("meta_network").is_some());
+
+        let server = result.get("server").unwrap();
+        let raft_network = result.get("raft_network").unwrap();
+        let meta_network = result.get("meta_network").unwrap();
+
+        // Metrics without labels should use simple names
+        assert_eq!(server.get("current_term").unwrap(), 1.0);
+        assert_eq!(server.get("no_labels").unwrap(), 42.0);
+
+        // Metrics with labels should use sub-key structure
+        let version = server.get("version").unwrap().as_object().unwrap();
+        assert_eq!(
+            version.get("component=metasrv,semver=v1.2.794").unwrap(),
+            1.0
+        );
+
+        let active_peers = raft_network
+            .get("active_peers")
+            .unwrap()
+            .as_object()
+            .unwrap();
+        assert_eq!(active_peers.get("id=1,addr=127.0.0.1:29003").unwrap(), 1.0);
+        assert_eq!(active_peers.get("id=2,addr=127.0.0.1:29006").unwrap(), 1.0);
+
+        let req_inflights = meta_network
+            .get("req_inflights")
+            .unwrap()
+            .as_object()
+            .unwrap();
+        assert_eq!(req_inflights.get("type=read").unwrap(), 5.0);
+        assert_eq!(req_inflights.get("type=write").unwrap(), 3.0);
+
+        // Verify that labeled metrics exist as objects (not simple values)
+        assert!(server.get("version").unwrap().is_object());
+        assert!(raft_network.get("active_peers").unwrap().is_object());
+        assert!(meta_network.get("req_inflights").unwrap().is_object());
     }
 }

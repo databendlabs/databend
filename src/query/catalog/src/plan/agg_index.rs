@@ -51,7 +51,7 @@ pub struct AggIndexInfo {
 }
 
 /// This meta just indicate the block is from aggregating index.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct AggIndexMeta {
     pub is_agg: bool,
     // Number of aggregation functions.
@@ -75,6 +75,6 @@ local_block_meta_serde!(AggIndexMeta);
 #[typetag::serde(name = "agg_index_meta")]
 impl BlockMetaInfo for AggIndexMeta {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }

@@ -41,7 +41,7 @@ Limit
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.00
@@ -79,7 +79,6 @@ HashJoin
 ├── probe keys: [t2.b (#7)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.20
 ├── EvalScalar(Build)
 │   ├── output columns: [a (#1), b (#2)]
@@ -122,7 +121,6 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 2.00
 ├── AggregateFinal(Build)
 │   ├── output columns: [COUNT(*) (#12)]
@@ -140,7 +138,6 @@ HashJoin
 │           ├── probe keys: [t3.b (#10)]
 │           ├── keys is null equal: [false]
 │           ├── filters: []
-│           ├── build join filters:
 │           ├── estimated rows: 0.20
 │           ├── EvalScalar(Build)
 │           │   ├── output columns: [b (#5)]
@@ -189,7 +186,7 @@ HashJoin
 query T
 explain select name from system.functions order by example
 ----
-Sort
+Sort(Single)
 ├── output columns: [functions.name (#0), functions.example (#4)]
 ├── sort keys: [example ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -213,7 +210,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── Filter(Build)
 │   ├── output columns: []

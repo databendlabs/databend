@@ -31,6 +31,7 @@ pub mod marked_deleted_index_id;
 pub mod marked_deleted_index_ident;
 pub mod marked_deleted_table_index_id;
 pub mod marked_deleted_table_index_ident;
+pub mod sequence_storage;
 pub mod table_lock_ident;
 pub mod table_niv;
 
@@ -110,6 +111,9 @@ pub use table::RenameTableReq;
 pub use table::SetTableColumnMaskPolicyAction;
 pub use table::SetTableColumnMaskPolicyReply;
 pub use table::SetTableColumnMaskPolicyReq;
+pub use table::SetTableRowAccessPolicyAction;
+pub use table::SetTableRowAccessPolicyReply;
+pub use table::SetTableRowAccessPolicyReq;
 pub use table::TableCopiedFileInfo;
 pub use table::TableCopiedFileNameIdent;
 pub use table::TableId;

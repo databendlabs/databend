@@ -38,6 +38,8 @@ mod util;
 
 mod snapshot_hint;
 
+mod vacuum;
+
 pub use agg_index_sink::AggIndexSink;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
@@ -54,3 +56,4 @@ pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
 pub use util::read_block;
 pub use util::set_backoff;
+pub use vacuum::vacuum_tables_from_info;

@@ -16,7 +16,7 @@ Error: APIError: QueryFailed: [1008]error:
   --> SQL:1:8
   |
 1 | select base64(1)
-  |        ^^^^^^^^^ no function matches the given name: 'base64', do you mean 'to_base64'?
+  |        ^^^^^^^^^ no function matches the given name: 'base64', do you mean 'base64_encode', 'base64_decode_binary', 'base64_decode_string', 'to_base64'?
 
 
 Error: APIError: QueryFailed: [1065]error: 

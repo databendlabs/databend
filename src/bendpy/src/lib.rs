@@ -29,6 +29,7 @@ use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
@@ -55,7 +56,7 @@ fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
     }
 
     // if config is file read it to config_str
-    let conf = if std::fs::exists(Path::new(config)).unwrap() {
+    let conf = if std::fs::exists(Path::new(config)).unwrap_or_default() {
         Config::load_with_config_file(config).unwrap()
     } else {
         let temp_dr = tempfile::tempdir().unwrap();
@@ -69,7 +70,9 @@ embedded_dir = "{local_dir}"
 type = "fs"
 allow_insecure = true
 [storage.fs]
-data_path = "{local_dir}"#
+data_path = "{local_dir}"
+allow_insecure = true
+"#
             )
         } else {
             config.to_string()
@@ -86,7 +89,7 @@ data_path = "{local_dir}"#
     INIT.call_once(|| {
         RUNTIME
             .block_on(async {
-                GlobalServices::init(&conf, false).await?;
+                GlobalServices::init(&conf, &BUILD_INFO, false).await?;
                 // init oss license manager
                 OssLicenseManager::init("".to_string()).unwrap();
                 // Cluster register.

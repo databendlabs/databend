@@ -337,7 +337,8 @@ impl NativeDeserializeDataTransform {
             PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                    .project_column_ref(|name| Ok(schema.column_with_name(name).unwrap().0))
+                    .unwrap()
             }),
         ))
     }
@@ -383,7 +384,7 @@ impl NativeDeserializeDataTransform {
                     .map(|index| {
                         let data_type = self.src_schema.field(*index).data_type().clone();
                         let default_val = &self.block_reader.default_vals[*index];
-                        BlockEntry::new(data_type, Value::Scalar(default_val.to_owned()))
+                        BlockEntry::new_const_column(data_type, default_val.to_owned(), 1)
                     })
                     .collect::<Vec<_>>();
 
@@ -405,10 +406,10 @@ impl NativeDeserializeDataTransform {
                         let part = FuseBlockPartInfo::from_part(&self.parts[0])?;
                         let num_rows = part.nums_rows;
 
-                        let data_type = self.src_schema.field(*index).data_type().clone();
+                        let data_type = self.src_schema.field(*index).data_type();
                         let default_val = self.block_reader.default_vals[*index].clone();
                         let value = Value::Scalar(default_val);
-                        let col = value.convert_to_full_column(&data_type, num_rows);
+                        let col = value.convert_to_full_column(data_type, num_rows);
                         let mut bitmap = MutableBitmap::from_len_set(num_rows);
                         sorter.push_column(&col, &mut bitmap);
                     }

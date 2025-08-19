@@ -12,7 +12,6 @@ Filter
     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 1.00
     ├── AggregateFinal(Build)
     │   ├── output columns: [COUNT(*) (#4), t2.number (#2)]
@@ -30,7 +29,6 @@ Filter
     │           ├── probe keys: []
     │           ├── keys is null equal: []
     │           ├── filters: []
-    │           ├── build join filters:
     │           ├── estimated rows: 1.00
     │           ├── TableScan(Build)
     │           │   ├── table: default.system.numbers
@@ -57,7 +55,6 @@ Filter
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
@@ -92,7 +89,6 @@ Filter
     ├── probe keys: [number (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
@@ -123,7 +119,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: []
@@ -213,7 +208,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -244,7 +238,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -275,7 +268,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -331,7 +323,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -370,7 +361,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t.number (#0) < numbers.number (#1)]
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -401,7 +391,6 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -498,7 +487,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t.number (#0) < t1.number (#2)]
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -516,7 +504,6 @@ HashJoin
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: [t.number (#0) > t1.number (#1)]
-    ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
@@ -577,7 +564,6 @@ EvalScalar
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
     │   ├── output columns: [_exists_scalar_subquery (#4)]
@@ -795,7 +781,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL))]
-├── build join filters:
 ├── estimated rows: 3.00
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
@@ -849,7 +834,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL), '$')]
-├── build join filters:
 ├── estimated rows: 3.00
 ├── ConstantTableScan(Build)
 │   ├── output columns: [c1 (#1)]
@@ -867,4 +851,3 @@ HashJoin
 
 statement ok
 drop table if exists t;
-

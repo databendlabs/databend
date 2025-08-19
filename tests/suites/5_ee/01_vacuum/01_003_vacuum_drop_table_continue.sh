@@ -29,7 +29,7 @@ chmod 444 /tmp/test_vacuum_drop_table_continue/
 stmt "drop database test_vacuum_drop_table_continue" 
 
 # can't vacuum files of table a, but can go on vacuum other tables
-stmt "set data_retention_time_in_days=0; vacuum drop table" 
+stmt "set data_retention_time_in_days=0; vacuum drop table" > /dev/null 2>&1
 
 chmod 755 /tmp/test_vacuum_drop_table_continue/
 find /tmp/test_vacuum_drop_table_continue/ -type d -exec chmod 755 {} +

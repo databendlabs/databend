@@ -39,11 +39,12 @@ mod http_client;
 pub use http_client::StorageHttpClient;
 
 mod operator;
-pub use operator::build_operator;
 pub use operator::check_operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 pub use operator::OperatorRegistry;
+
+mod operator_cache;
 
 pub mod metrics;
 pub use crate::metrics::StorageMetrics;
@@ -70,17 +71,21 @@ pub use stage::STDIN_FD;
 mod copy;
 mod histogram;
 mod merge;
+mod meta_hll;
 mod metrics_layer;
 mod multi_table_insert;
 mod statistics;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
+pub use copy::FileParseErrorAtLine;
 pub use copy::FileStatus;
 pub use histogram::Histogram;
 pub use histogram::HistogramBucket;
 pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use merge::MutationStatus;
+pub use meta_hll::MetaHLL;
+pub use meta_hll::MetaHLL12;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

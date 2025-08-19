@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
@@ -21,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -36,7 +38,6 @@ use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
 
-use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
@@ -61,13 +62,13 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("execute pipeline finished successfully, starting run refresh job.");
+            info!("[REFRESH-HOOK] Pipeline execution completed successfully, starting refresh job");
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
-                    info!("execute refresh job successfully.");
+                    info!("[REFRESH-HOOK] Refresh job completed successfully");
                 }
                 Err(e) => {
-                    info!("execute refresh job failed. {:?}", e);
+                    info!("[REFRESH-HOOK] Refresh job failed: {:?}", e);
                 }
             }
         }
@@ -80,6 +81,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
     let table_id = table.get_id();
+
+    ctx.clear_table_meta_timestamps_cache();
 
     let mut plans = Vec::new();
 
@@ -123,7 +126,6 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                         let query_ctx = ctx_cloned.clone();
                         build_res.main_pipeline.set_on_finished(always_callback(
                             move |_: &ExecutionInfo| {
-                                hook_clear_m_cte_temp_table(&query_ctx)?;
                                 hook_vacuum_temp_files(&query_ctx)?;
                                 hook_disk_temp_dir(&query_ctx)?;
                                 Ok(())
@@ -160,7 +162,6 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                         let query_ctx = ctx_cloned.clone();
                         build_res.main_pipeline.set_on_finished(always_callback(
                             move |_info: &ExecutionInfo| {
-                                hook_clear_m_cte_temp_table(&query_ctx)?;
                                 hook_vacuum_temp_files(&query_ctx)?;
                                 hook_disk_temp_dir(&query_ctx)?;
                                 Ok(())
@@ -263,7 +264,13 @@ async fn generate_refresh_inverted_index_plan(
         if index.sync_creation {
             continue;
         }
+        let index_type = match index.index_type {
+            TableIndexType::Inverted => ast::TableIndexType::Inverted,
+            TableIndexType::Ngram => ast::TableIndexType::Ngram,
+            TableIndexType::Vector => ast::TableIndexType::Vector,
+        };
         let plan = RefreshTableIndexPlan {
+            index_type,
             catalog: desc.catalog.clone(),
             database: desc.database.clone(),
             table: desc.table.clone(),

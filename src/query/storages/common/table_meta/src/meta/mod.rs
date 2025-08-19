@@ -42,6 +42,7 @@ pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;
 pub use utils::try_extract_uuid_str_from_path;
 pub use utils::uuid_from_date_time;
+pub use utils::SnapshotTimestampValidationContext;
 pub use utils::TableMetaTimestamps;
 pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
@@ -49,6 +50,7 @@ pub(crate) use utils::*;
 pub use v0::ColumnMeta as ColumnMetaV0;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
+pub use versions::SegmentStatisticsVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
 pub use versions::Versioned;
@@ -64,5 +66,6 @@ pub mod testing {
     pub use super::v2::TableSnapshot as TableSnapshotV2;
     pub use super::v3::SegmentInfo as SegmentInfoV3;
     pub use super::v3::TableSnapshot as TableSnapshotV3;
+    pub use super::v3::TableSnapshotStatistics as TableSnapshotStatisticsV3;
     pub use super::v4::TableSnapshot as TableSnapshotV4;
 }

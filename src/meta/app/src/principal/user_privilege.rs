@@ -78,6 +78,14 @@ pub enum UserPrivilegeType {
     CreateDatabase = 1 << 20,
     // Privilege to Create warehouse
     CreateWarehouse = 1 << 21,
+    // Privilege to Create Connection
+    CreateConnection = 1 << 22,
+    // Privilege to Access Connection
+    AccessConnection = 1 << 23,
+    // Privilege to Create Sequence
+    CreateSequence = 1 << 24,
+    // Privilege to Access Sequence
+    AccessSequence = 1 << 25,
     // Discard Privilege Type
     Set = 1 << 4,
 }
@@ -105,6 +113,8 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Write
         | CreateDatabase
         | CreateWarehouse
+        | CreateConnection
+        | AccessConnection
     }
 );
 
@@ -133,6 +143,10 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
             UserPrivilegeType::CreateWarehouse => "CREATE WAREHOUSE",
+            UserPrivilegeType::CreateConnection => "CREATE CONNECTION",
+            UserPrivilegeType::AccessConnection => "ACCESS CONNECTION",
+            UserPrivilegeType::CreateSequence => "CREATE SEQUENCE",
+            UserPrivilegeType::AccessSequence => "ACCESS SEQUENCE",
         })
     }
 }
@@ -173,6 +187,18 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             databend_common_ast::ast::UserPrivilegeType::CreateWarehouse => {
                 UserPrivilegeType::CreateWarehouse
             }
+            databend_common_ast::ast::UserPrivilegeType::CreateConnection => {
+                UserPrivilegeType::CreateConnection
+            }
+            databend_common_ast::ast::UserPrivilegeType::AccessConnection => {
+                UserPrivilegeType::AccessConnection
+            }
+            databend_common_ast::ast::UserPrivilegeType::CreateSequence => {
+                UserPrivilegeType::CreateSequence
+            }
+            databend_common_ast::ast::UserPrivilegeType::AccessSequence => {
+                UserPrivilegeType::AccessSequence
+            }
             databend_common_ast::ast::UserPrivilegeType::Set => UserPrivilegeType::Set,
         }
     }
@@ -207,11 +233,15 @@ impl UserPrivilegeSet {
         let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
         let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse });
+        let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
+        let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse | CreateConnection | CreateSequence });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
             | wh_privs_without_ownership.privileges
+            | connection_privs_without_ownership.privileges
+            | seq_privs_without_ownership.privileges
             | udf_privs_without_ownership.privileges)
             .into()
     }
@@ -248,6 +278,22 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{  Usage | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{  Usage }).into()
+        }
+    }
+
+    pub fn available_privileges_on_connection(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ AccessConnection | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ AccessConnection }).into()
+        }
+    }
+
+    pub fn available_privileges_on_sequence(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ AccessSequence | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ AccessSequence }).into()
         }
     }
 

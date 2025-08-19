@@ -32,6 +32,7 @@ use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
@@ -83,6 +84,20 @@ impl Default for Aggregate {
 }
 
 impl Aggregate {
+    pub fn get_distribution_keys(&self, before_partial: bool) -> Result<Vec<ScalarExpr>> {
+        if before_partial {
+            self.group_items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| item.bound_column_expr(format!("_group_item_{}", index)))
+                .collect()
+        } else {
+            Ok(vec![
+                self.group_items[0].bound_column_expr("_group_item_0".to_string())?
+            ])
+        }
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for group_item in self.group_items.iter() {
@@ -164,6 +179,12 @@ impl Operator for Aggregate {
         RelOp::Aggregate
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let iter = self.group_items.iter().map(|expr| &expr.scalar);
+        let iter = iter.chain(self.aggregate_functions.iter().map(|expr| &expr.scalar));
+        Box::new(iter)
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
 
@@ -226,14 +247,11 @@ impl Operator for Aggregate {
 
                     // Group aggregation, enforce `Hash` distribution
                     required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
-                        "before_partial" => Ok(Distribution::Hash(
-                            self.group_items
-                                .iter()
-                                .map(|item| item.scalar.clone())
-                                .collect(),
-                        )),
+                        "before_partial" => {
+                            Ok(Distribution::Hash(self.get_distribution_keys(true)?))
+                        }
                         "before_merge" => {
-                            Ok(Distribution::Hash(vec![self.group_items[0].scalar.clone()]))
+                            Ok(Distribution::Hash(self.get_distribution_keys(false)?))
                         }
                         value => Err(ErrorCode::Internal(format!(
                             "Bad settings value group_by_shuffle_mode = {:?}",
@@ -321,22 +339,24 @@ impl Operator for Aggregate {
                     let settings = ctx.get_settings();
 
                     // Group aggregation, enforce `Hash` distribution
-                    match settings.get_group_by_shuffle_mode()?.as_str() {
+                    let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
+                    // Grouping set must be merged before_merge
+                    if self.grouping_sets.is_some() {
+                        group_by_shuffle_mode = "before_merge".to_string();
+                    }
+
+                    match group_by_shuffle_mode.as_str() {
                         "before_partial" => {
                             children_required.push(vec![RequiredProperty {
-                                distribution: Distribution::Hash(
-                                    self.group_items
-                                        .iter()
-                                        .map(|item| item.scalar.clone())
-                                        .collect(),
-                                ),
+                                distribution: Distribution::Hash(self.get_distribution_keys(true)?),
                             }]);
                         }
                         "before_merge" => {
                             children_required.push(vec![RequiredProperty {
-                                distribution: Distribution::Hash(vec![self.group_items[0]
-                                    .scalar
-                                    .clone()]),
+                                distribution: Distribution::Hash(
+                                    self.get_distribution_keys(false)?,
+                                ),
                             }]);
                         }
                         value => {

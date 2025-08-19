@@ -15,6 +15,7 @@
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
+use databend_query::sessions::BuildInfoRef;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
@@ -23,6 +24,7 @@ use crate::fail_safe::RealFailSafeHandler;
 use crate::hilbert_clustering::RealHilbertClusteringHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::resource_management::init_resources_management;
+use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
@@ -33,19 +35,20 @@ use crate::virtual_column::RealVirtualColumnHandler;
 pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
-    pub async fn init(cfg: InnerConfig) -> Result<()> {
+    pub async fn init(cfg: InnerConfig, version: BuildInfoRef) -> Result<()> {
         RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
-        RealStorageEncryptionHandler::init(&cfg)?;
+        RealStorageEncryptionHandler::init(&cfg, version)?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
+        RealRowAccessPolicyHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
         RealTableIndexHandler::init()?;
-        RealStorageQuotaHandler::init(&cfg)?;
+        RealStorageQuotaHandler::init(&cfg, version)?;
         RealFailSafeHandler::init()?;
-        init_resources_management(&cfg).await?;
+        init_resources_management(&cfg, version).await?;
         RealHilbertClusteringHandler::init()?;
         Ok(())
     }

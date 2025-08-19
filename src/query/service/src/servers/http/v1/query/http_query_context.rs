@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use http::StatusCode;
 use log::warn;
 use poem::FromRequest;
@@ -24,7 +26,13 @@ use poem::Request;
 use poem::RequestBody;
 
 use crate::auth::Credential;
+use crate::servers::http::middleware::session_header::ClientSession;
+use crate::servers::http::middleware::ClientCapabilities;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::servers::http::v1::HttpSessionConf;
+use crate::sessions::BuildInfoRef;
+use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 
@@ -45,6 +53,11 @@ pub struct HttpQueryContext {
     pub client_session_id: Option<String>,
     pub user_name: String,
     pub is_sticky_node: bool,
+    pub client_session: Option<ClientSession>,
+    // for now only used for worksheet
+    pub fixed_coordinator_node: bool,
+    pub client_caps: ClientCapabilities,
+    pub version: BuildInfoRef,
 }
 
 impl HttpQueryContext {
@@ -101,6 +114,41 @@ impl HttpQueryContext {
         }
 
         Ok(())
+    }
+
+    pub async fn create_session(
+        &self,
+        http_session_conf: &Option<HttpSessionConf>,
+        session_type: SessionType,
+    ) -> databend_common_exception::Result<(Arc<Session>, Arc<QueryContext>)> {
+        let session = self.upgrade_session(session_type).map_err(|err| {
+            ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
+        })?;
+
+        if let Some(cid) = session.get_client_session_id() {
+            ClientSessionManager::instance().on_query_start(&cid, &self.user_name, &session);
+        };
+        if let Some(session_conf) = http_session_conf {
+            session_conf.restore(&session, self).await?;
+        };
+        let user_agent = &self.user_agent;
+        session.set_client_host(self.client_host.clone());
+
+        let ctx = session.create_query_context(self.version).await?;
+
+        // Deduplicate label is used on the DML queries which may be retried by the client.
+        // It can be used to avoid the duplicated execution of the DML queries.
+        let deduplicate_label = &self.deduplicate_label;
+        if let Some(label) = deduplicate_label {
+            unsafe {
+                ctx.get_settings().set_deduplicate_label(label.clone())?;
+            }
+        }
+        if let Some(ua) = user_agent {
+            ctx.set_ua(ua.clone());
+        }
+        ctx.update_init_query_id(self.query_id.clone());
+        Ok((session, ctx))
     }
 }
 

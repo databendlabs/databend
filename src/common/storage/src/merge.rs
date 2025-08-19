@@ -15,7 +15,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct MutationStatus {
     pub insert_rows: u64,
     pub deleted_rows: u64,

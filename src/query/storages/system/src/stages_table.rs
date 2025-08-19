@@ -33,6 +33,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -62,7 +63,7 @@ impl AsyncSystemTable for StagesTable {
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
         let stages = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false).await?;
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
             stages
                 .into_iter()
                 .filter(|stage| {

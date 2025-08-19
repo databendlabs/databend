@@ -33,6 +33,7 @@ pub(crate) fn append_data_to_parquet_files(
     group_id: &std::sync::atomic::AtomicUsize,
     mem_limit: usize,
     max_threads: usize,
+    create_by: String,
 ) -> Result<()> {
     let is_single = info.options.single;
     let max_file_size = info.options.max_file_size;
@@ -66,6 +67,7 @@ pub(crate) fn append_data_to_parquet_files(
             query_id.clone(),
             gid,
             max_file_size,
+            create_by.clone(),
         )
     })?;
     Ok(())

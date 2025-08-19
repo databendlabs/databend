@@ -22,12 +22,13 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
-use crate::types::BinaryColumn;
 use crate::types::DataType;
-use crate::Column;
+use crate::BlockEntry;
 use crate::ColumnBuilder;
-use crate::InputColumns;
+use crate::ProjectedBlock;
 use crate::Scalar;
+use crate::StateSerdeItem;
+use crate::StateSerdeType;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
@@ -46,7 +47,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()>;
@@ -56,7 +57,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         addrs: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, addr) in addrs.iter().enumerate() {
@@ -66,37 +67,30 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()>;
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
+    fn serialize_type(&self) -> Vec<StateSerdeItem>;
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        None
+    fn serialize_data_type(&self) -> DataType {
+        let serde_type = StateSerdeType::new(self.serialize_type());
+        serde_type.data_type()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()>;
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()>;
 
-    /// Batch merge and deserialize the state from binary array
+    /// Batch deserialize the state and merge
     fn batch_merge(
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        state: &BinaryColumn,
-    ) -> Result<()> {
-        for (place, mut data) in places.iter().zip(state.iter()) {
-            self.merge(AggrState::new(*place, loc), &mut data)?;
-        }
-
-        Ok(())
-    }
-
-    fn batch_merge_single(&self, place: AggrState, state: &Column) -> Result<()> {
-        let c = state.as_binary().unwrap();
-        for mut data in c.iter() {
-            self.merge(place, &mut data)?;
-        }
-        Ok(())
-    }
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()>;
 
     fn batch_merge_states(
         &self,
@@ -119,12 +113,17 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(AggrState::new(*place, &loc), builder)?;
+            self.merge_result(AggrState::new(*place, &loc), false, builder)?;
         }
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(
+        &self,
+        place: AggrState,
+        read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()>;
 
     // std::mem::needs_drop::<State>
     // if true will call drop_state
@@ -145,12 +144,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
-    fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, _columns: ProjectedBlock) -> Option<Bitmap> {
         None
-    }
-
-    // some features
-    fn convert_const_to_full(&self) -> bool {
-        true
     }
 }

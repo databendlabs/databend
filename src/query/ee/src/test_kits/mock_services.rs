@@ -22,6 +22,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
+use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
 use crate::table_index::RealTableIndexHandler;
@@ -36,6 +37,7 @@ impl MockServices {
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
+        RealRowAccessPolicyHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealTableIndexHandler::init()?;

@@ -18,6 +18,8 @@ use std::time::Duration;
 use async_channel::Sender;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
@@ -46,6 +48,7 @@ impl StatisticsSender {
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
+        perf_guard: Option<QueryPerfGuard>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
@@ -117,6 +120,10 @@ impl StatisticsSender {
 
                 if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
+                }
+
+                if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
+                    warn!("Perf send has error, cause: {:?}.", error);
                 }
             }
         });
@@ -221,6 +228,18 @@ impl StatisticsSender {
         let data_cache_metrics = ctx.get_data_cache_metrics();
         let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
         flight_sender.send(data_packet).await
+    }
+
+    async fn send_perf(
+        perf_guard: &Option<QueryPerfGuard>,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        if let Some((_flag_guard, profiler_guard)) = perf_guard {
+            let dumped = QueryPerf::dump(profiler_guard)?;
+            let data_packet = DataPacket::QueryPerf(dumped);
+            flight_sender.send(data_packet).await?;
+        }
+        Ok(())
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {

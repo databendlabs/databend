@@ -37,3 +37,27 @@ good_plan: |
                                   └── JoinFilter [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
                                       └── TableScan (STORE_SALES) [partitions: 70,412/72,718, bytes: 1,212,628,258,304]
                                           └── columns: [SS_SOLD_DATE_SK, SS_ITEM_SK, SS_EXT_SALES_PRICE]
+
+tables:
+  call_center: tpcds/call_center.sql
+  catalog_page: tpcds/catalog_page.sql
+  catalog_returns: tpcds/catalog_returns.sql
+  customer: tpcds/customer.sql
+  customer_address: tpcds/customer_address.sql
+  customer_demographics: tpcds/customer_demographics.sql
+  date_dim: tpcds/date_dim.sql
+  household_demographics: tpcds/household_demographics.sql
+  income_band: tpcds/income_band.sql
+  inventory: tpcds/inventory.sql
+  item: tpcds/item.sql
+  promotion: tpcds/promotion.sql
+  reason: tpcds/reason.sql
+  ship_mode: tpcds/ship_mode.sql
+  store: tpcds/store.sql
+  store_returns: tpcds/store_returns.sql
+  store_sales: tpcds/store_sales.sql
+  time_dim: tpcds/time_dim.sql
+  warehouse: tpcds/warehouse.sql
+  web_page: tpcds/web_page.sql
+  web_returns: tpcds/web_returns.sql
+  web_site: tpcds/web_site.sql

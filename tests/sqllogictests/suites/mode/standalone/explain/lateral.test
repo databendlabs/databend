@@ -41,7 +41,6 @@ HashJoin
 ├── probe keys: [number (#3)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -63,7 +62,6 @@ HashJoin
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 100.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
@@ -103,7 +101,6 @@ HashJoin
 ├── probe keys: [t1.b (#3), number (#4)]
 ├── keys is null equal: [false, false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -129,7 +126,6 @@ HashJoin
             ├── probe keys: [outer.number (#4)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 100.00
             ├── TableScan(Build)
             │   ├── table: default.system.numbers

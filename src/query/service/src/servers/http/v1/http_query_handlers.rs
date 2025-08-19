@@ -31,10 +31,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
-use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
 use fastrace::prelude::*;
-use highway::HighwayHash;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
@@ -56,6 +54,7 @@ use poem::Request;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
@@ -170,7 +169,7 @@ impl QueryResponse {
         id: String,
         r: HttpQueryResponseInternal,
         is_final: bool,
-    ) -> impl IntoResponse {
+    ) -> (impl IntoResponse, bool) {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -220,7 +219,12 @@ impl QueryResponse {
         };
         let rows = data.num_rows();
 
-        Json(QueryResponse {
+        let next_is_final = next_uri
+            .as_ref()
+            .map(|u| u.ends_with("final"))
+            .unwrap_or(false);
+
+        let resp = Json(QueryResponse {
             data,
             state: state.state,
             schema: state.schema.clone(),
@@ -241,7 +245,8 @@ impl QueryResponse {
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
-        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+        .with_header(HEADER_QUERY_PAGE_ROWS, rows);
+        (resp, next_is_final)
     }
 }
 
@@ -286,7 +291,7 @@ async fn query_final_handler(
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                Ok(QueryResponse::from_internal(query_id, response, true))
+                Ok(QueryResponse::from_internal(query_id, response, true).0)
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
@@ -340,14 +345,13 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
-                query.check_client_session_id(&ctx.client_session_id)?;
                 if let Some(reason) = query.check_removed() {
                     Err(query_id_removed(&query_id, reason))
                 } else {
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false))
+                    Ok(QueryResponse::from_internal(query_id, response, false).0)
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -388,17 +392,33 @@ async fn query_page_handler(
 
             query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(reason) = query.check_removed() {
+                log::info!(
+                    "[HTTP-QUERY] /query/{}/page/{} - query is removed (reason: {})",
+                    query_id,
+                    page_no,
+                    reason
+                );
                 Err(query_id_removed(&query_id, reason))
             } else {
                 query.update_expire_time(true).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    log::info!(
+                        "[HTTP-QUERY] /query/{}/page/{} - get response page error (reason: {})",
+                        query_id,
+                        page_no,
+                        err.message()
+                    );
                     poem::Error::from_string(
                         format!("[HTTP-QUERY] {}", err.message()),
                         StatusCode::NOT_FOUND,
                     )
                 })?;
                 query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+                let (resp, next_is_final) = QueryResponse::from_internal(query_id, resp, false);
+                if next_is_final {
+                    query.wait_for_final()
+                }
+                Ok(resp)
             }
         }
     };
@@ -422,6 +442,7 @@ async fn query_page_handler(
 
 #[poem::handler]
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(mut req): Json<HttpQueryRequest>,
@@ -491,7 +512,12 @@ pub(crate) async fn query_handler(
                         &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                     );
                 query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+                let (resp, next_is_final) =
+                    QueryResponse::from_internal(query.id.to_string(), resp, false);
+                if next_is_final {
+                    query.wait_for_final()
+                }
+                Ok(resp.into_response())
             }
         }
     };
@@ -516,8 +542,26 @@ pub(crate) async fn query_handler(
                 }
             };
 
+            log::info!(
+                "[Workload-Group] attach workload group {}({}) for query {}, quotas: {:?}",
+                workload_group.meta.name,
+                workload_group.meta.id,
+                ctx.query_id,
+                workload_group.meta.quotas
+            );
+
             parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
             tracking_workload_group = Some(workload_group);
+        } else if let Ok(user) = session.get_current_user() {
+            log::info!(
+                "[Workload-Group] The user {} does not have a workload group.",
+                user.name
+            );
+        } else {
+            log::info!(
+                "[Workload-Group] The query {:?} does not have a workload group.",
+                session.get_current_query_id()
+            );
         }
 
         let name = Some(ctx.query_id.clone());
@@ -584,7 +628,7 @@ pub async fn heartbeat_handler(
             http::header::CONTENT_TYPE,
             HeaderValue::from_static("application/json"),
         );
-        let agent = format!("databend-query/{}", *DATABEND_SEMVER);
+        let agent = format!("databend-query/{}", ctx.version.semantic);
         headers.insert(
             http::header::USER_AGENT,
             HeaderValue::from_str(&agent).unwrap(),
@@ -773,8 +817,8 @@ fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
 }
 
 fn query_id_to_trace_id(query_id: &str) -> TraceId {
-    let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
-    TraceId(((hash_high as u128) << 64) + (hash_low as u128))
+    let uuid = Uuid::parse_str(query_id).unwrap_or_else(|_| Uuid::now_v7());
+    TraceId(uuid.as_u128())
 }
 
 /// The HTTP query endpoints are expected to be responses within 60 seconds.

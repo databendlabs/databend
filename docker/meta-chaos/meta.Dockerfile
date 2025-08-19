@@ -8,7 +8,7 @@ RUN apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
-COPY ./distro/$TARGETPLATFORM/databend-meta /databend-meta
-COPY ./distro/$TARGETPLATFORM/databend-metactl /databend-metactl
+COPY ./distro/$TARGETPLATFORM/databend-meta /usr/bin/databend-meta
+COPY ./distro/$TARGETPLATFORM/databend-metactl /usr/bin/databend-metactl
 COPY ./distro/$TARGETPLATFORM/cat-logs.sh /cat-logs.sh
-ENTRYPOINT ["/databend-meta"]
+ENTRYPOINT ["databend-meta"]

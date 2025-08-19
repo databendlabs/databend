@@ -12,25 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
-use crate::plans::Scan;
-use crate::plans::WindowFuncType;
 use crate::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
@@ -44,7 +46,7 @@ use crate::IndexType;
 )]
 pub struct SExpr {
     pub plan: Arc<RelOperator>,
-    pub(crate) children: Vec<Arc<SExpr>>,
+    pub children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 
@@ -67,15 +69,17 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: Arc<RelOperator>,
+        plan: impl Into<Arc<RelOperator>>,
         children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
+        let plan = plan.into();
+        let children = children.into();
         SExpr {
             plan,
-            children: children.into(),
+            children,
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
             stat_info: Arc::new(Mutex::new(stat_info)),
@@ -83,12 +87,12 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
-        Self::create(plan, [child.into()], None, None, None)
+    pub fn create_unary(plan: impl Into<Arc<RelOperator>>, child: impl Into<Arc<SExpr>>) -> Self {
+        Self::create(plan.into(), [child.into()], None, None, None)
     }
 
     pub fn create_binary(
-        plan: Arc<RelOperator>,
+        plan: impl Into<Arc<RelOperator>>,
         left_child: impl Into<Arc<SExpr>>,
         right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
@@ -101,17 +105,15 @@ impl SExpr {
         )
     }
 
-    pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
+    pub fn create_leaf(plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [], None, None, None)
     }
 
-    pub fn build_unary(self, plan: Arc<RelOperator>) -> Self {
-        debug_assert_eq!(plan.arity(), 1);
+    pub fn build_unary(self, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [self.into()], None, None, None)
     }
 
-    pub fn ref_build_unary(self: &Arc<SExpr>, plan: Arc<RelOperator>) -> Self {
-        debug_assert_eq!(plan.arity(), 1);
+    pub fn ref_build_unary(self: &Arc<SExpr>, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [self.clone()], None, None, None)
     }
 
@@ -131,18 +133,33 @@ impl SExpr {
     }
 
     pub fn unary_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 1);
+        debug_assert_eq!(self.children.len(), 1);
         &self.children[0]
     }
 
+    pub fn unary_child_arc(&self) -> Arc<SExpr> {
+        assert_eq!(self.children.len(), 1);
+        self.children[0].clone()
+    }
+
     pub fn left_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 2);
+        debug_assert_eq!(self.children.len(), 2);
         &self.children[0]
     }
 
     pub fn right_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 2);
+        debug_assert_eq!(self.children.len(), 2);
         &self.children[1]
+    }
+
+    pub fn build_side_child(&self) -> &SExpr {
+        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[1]
+    }
+
+    pub fn probe_side_child(&self) -> &SExpr {
+        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[0]
     }
 
     pub fn arity(&self) -> usize {
@@ -167,9 +184,9 @@ impl SExpr {
         }
     }
 
-    pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
+    pub fn replace_plan(&self, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self {
-            plan,
+            plan: plan.into(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
@@ -194,188 +211,25 @@ impl SExpr {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
-    //
+    #[recursive::recursive]
+    pub fn support_lazy_materialize(&self) -> bool {
+        self.plan.support_lazy_materialize()
+            && self
+                .children
+                .iter()
+                .all(|child| child.support_lazy_materialize())
+    }
+
     #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
+        let iter = self.plan.scalar_expr_iter();
+        for scalar in iter {
+            for udf in scalar.get_udf_names()? {
+                udfs.insert(udf);
+            }
+        }
 
-        match self.plan.as_ref() {
-            RelOperator::Scan(scan) => {
-                let Scan {
-                    push_down_predicates,
-                    prewhere,
-                    agg_index,
-                    ..
-                } = scan;
-
-                if let Some(push_down_predicates) = push_down_predicates {
-                    for push_down_predicate in push_down_predicates {
-                        push_down_predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-                if let Some(prewhere) = prewhere {
-                    for predicate in &prewhere.predicates {
-                        predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-                if let Some(agg_index) = agg_index {
-                    for predicate in &agg_index.predicates {
-                        predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                    for selection in &agg_index.selection {
-                        selection.scalar.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-            }
-            RelOperator::Exchange(exchange) => {
-                if let Exchange::Hash(hash) = exchange {
-                    for hash in hash {
-                        hash.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-            }
-            RelOperator::Join(op) => {
-                for equi_condition in op.equi_conditions.iter() {
-                    equi_condition.left.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                    equi_condition
-                        .right
-                        .get_udf_names()?
-                        .iter()
-                        .for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                }
-                for non in &op.non_equi_conditions {
-                    non.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::EvalScalar(op) => {
-                for item in &op.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Filter(op) => {
-                for predicate in &op.predicates {
-                    predicate.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Aggregate(op) => {
-                for group_items in &op.group_items {
-                    group_items.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-                for agg_func in &op.aggregate_functions {
-                    agg_func.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Window(op) => {
-                match &op.function {
-                    WindowFuncType::Aggregate(agg) => {
-                        for arg in agg.exprs() {
-                            arg.get_udf_names()?.iter().for_each(|udf| {
-                                udfs.insert(*udf);
-                            });
-                        }
-                    }
-                    WindowFuncType::LagLead(lag_lead) => {
-                        // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
-                        lag_lead.arg.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                        if let Some(default) = &lag_lead.default {
-                            default.get_udf_names()?.iter().for_each(|udf| {
-                                udfs.insert(*udf);
-                            });
-                        }
-                    }
-                    WindowFuncType::NthValue(nth) => {
-                        nth.arg.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                    _ => {}
-                }
-                for arg in &op.arguments {
-                    arg.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-                for order_by in &op.order_by {
-                    order_by
-                        .order_by_item
-                        .scalar
-                        .get_udf_names()?
-                        .iter()
-                        .for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                }
-                for partition_by in &op.partition_by {
-                    partition_by.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::ProjectSet(op) => {
-                for srf in &op.srfs {
-                    srf.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Udf(udf) => {
-                for item in &udf.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::AsyncFunction(async_func) => {
-                for item in &async_func.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::MutationSource(mutation_source) => {
-                for predicate in &mutation_source.predicates {
-                    predicate.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Limit(_)
-            | RelOperator::UnionAll(_)
-            | RelOperator::Sort(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::CompactBlock(_) => {}
-        };
         for child in &self.children {
             let udf = child.get_udfs()?;
             udf.iter().for_each(|udf| {
@@ -385,53 +239,69 @@ impl SExpr {
         Ok(udfs)
     }
 
+    #[recursive::recursive]
+    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<IndexType>> {
+        let mut udf_ids = BTreeSet::new();
+        if let RelOperator::Udf(udf) = self.plan.as_ref() {
+            for item in udf.items.iter() {
+                udf_ids.insert(item.index);
+            }
+        }
+        for child in &self.children {
+            let udfs = child.get_udfs_col_ids()?;
+            udf_ids.extend(udfs);
+        }
+        Ok(udf_ids)
+    }
+
     // Add column index to Scan nodes that match the given table index
     pub fn add_column_index_to_scans(
         &self,
         table_index: IndexType,
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
+        vector_index: &Option<VectorIndexInfo>,
     ) -> SExpr {
-        #[recursive::recursive]
-        fn add_column_index_to_scans_recursive(
-            s_expr: &SExpr,
-            column_index: IndexType,
+        struct Visitor<'a> {
             table_index: IndexType,
-            inverted_index: &Option<InvertedIndexInfo>,
-        ) -> SExpr {
-            let mut s_expr = s_expr.clone();
-            s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
-                if p.table_index == table_index {
-                    p.columns.insert(column_index);
-                    if inverted_index.is_some() {
-                        p.inverted_index = inverted_index.clone();
+            column_index: IndexType,
+            inverted_index: &'a Option<InvertedIndexInfo>,
+            vector_index: &'a Option<VectorIndexInfo>,
+        }
+
+        impl<'a> SExprVisitor for Visitor<'a> {
+            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+                if let Some(p) = expr.plan.as_ref().as_scan() {
+                    if p.table_index == self.table_index {
+                        let mut p = p.clone();
+                        p.columns.insert(self.column_index);
+                        if self.inverted_index.is_some() {
+                            p.inverted_index = self.inverted_index.clone();
+                        }
+                        if self.vector_index.is_some() {
+                            p.vector_index = self.vector_index.clone();
+                        }
+                        let expr = expr.replace_plan(p);
+                        return Ok(VisitAction::Replace(expr));
+                    } else {
+                        return Ok(VisitAction::SkipChildren);
                     }
                 }
-                Arc::new(p.into())
-            } else {
-                s_expr.plan
-            };
-
-            if s_expr.children.is_empty() {
-                s_expr
-            } else {
-                let mut children = Vec::with_capacity(s_expr.children.len());
-                for child in s_expr.children.iter() {
-                    children.push(Arc::new(add_column_index_to_scans_recursive(
-                        child,
-                        column_index,
-                        table_index,
-                        inverted_index,
-                    )));
-                }
-
-                s_expr.children = children;
-
-                s_expr
+                Ok(VisitAction::Continue)
             }
         }
 
-        add_column_index_to_scans_recursive(self, column_index, table_index, inverted_index)
+        let mut visitor = Visitor {
+            table_index,
+            column_index,
+            inverted_index,
+            vector_index,
+        };
+        let expr = self.accept(&mut visitor);
+        if let Ok(Some(expr)) = expr {
+            return expr;
+        }
+        self.clone()
     }
 
     // The method will clear the applied rules of current SExpr and its children.
@@ -466,5 +336,38 @@ impl SExpr {
             .derive_relational_prop(&RelExpr::SExpr { expr: self })?;
         *self.rel_prop.lock().unwrap() = Some(rel_prop.clone());
         Ok(rel_prop)
+    }
+
+    pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
+        struct DataDistributionVisitor {
+            result: Option<Exchange>,
+        }
+        impl SExprVisitor for DataDistributionVisitor {
+            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+                match expr.plan.as_ref() {
+                    RelOperator::Exchange(exchange) => {
+                        self.result = Some(exchange.clone());
+                        Ok(VisitAction::Stop)
+                    }
+
+                    RelOperator::Join(_) => {
+                        let child = expr.probe_side_child();
+                        self.result = child.get_data_distribution()?;
+                        Ok(VisitAction::Stop)
+                    }
+                    _ => {
+                        if expr.arity() > 0 {
+                            Ok(VisitAction::Continue)
+                        } else {
+                            Ok(VisitAction::Stop)
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut visitor = DataDistributionVisitor { result: None };
+        let _ = self.accept(&mut visitor);
+        Ok(visitor.result)
     }
 }

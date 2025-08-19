@@ -15,11 +15,15 @@ onlyif mysql
 query T
 explain pipeline select a from t1 ignore_result
 ----
-EmptySink × 1
-  DeserializeDataTransform × 1
-    SyncReadParquetDataTransform × 1
-      BlockPartitionSource × 1
-
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "EmptySink" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+}
 
 statement ok
 drop table t1

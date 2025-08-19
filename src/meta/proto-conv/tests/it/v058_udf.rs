@@ -60,6 +60,7 @@ fn test_decode_v57_udf() -> anyhow::Result<()> {
                 DataType::Number(NumberDataType::Int32),
             ],
             return_type: DataType::Number(NumberDataType::Int64),
+            immutable: None,
         }),
         created_on: DateTime::<Utc>::default(),
     };

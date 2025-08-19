@@ -17,20 +17,18 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -70,6 +68,10 @@ impl TableMetaFunc for FuseBlock {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
             TableField::new(
+                "vector_index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
                 "virtual_column_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
@@ -95,11 +97,12 @@ impl TableMetaFunc for FuseBlock {
         let mut bloom_filter_size = Vec::with_capacity(len);
         let mut inverted_index_size = Vec::with_capacity(len);
         let mut ngram_index_size = Vec::with_capacity(len);
+        let mut vector_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
-        let mut row_num = 0;
+        let mut num_rows = 0;
         let chunk_size =
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
@@ -124,6 +127,7 @@ impl TableMetaFunc for FuseBlock {
                     bloom_filter_size.push(block.bloom_filter_index_size);
                     inverted_index_size.push(block.inverted_index_size);
                     ngram_index_size.push(block.ngram_filter_index_size);
+                    vector_index_size.push(block.vector_index_size);
                     virtual_column_size.push(
                         block
                             .virtual_block_meta
@@ -131,8 +135,8 @@ impl TableMetaFunc for FuseBlock {
                             .map(|m| m.virtual_column_size),
                     );
 
-                    row_num += 1;
-                    if row_num >= limit {
+                    num_rows += 1;
+                    if num_rows >= limit {
                         break 'FOR;
                     }
                 }
@@ -141,49 +145,20 @@ impl TableMetaFunc for FuseBlock {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(snapshot_id))),
-                BlockEntry::new(
-                    DataType::Timestamp,
-                    Value::Scalar(Scalar::Timestamp(timestamp)),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(block_location.build())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(block_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(file_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(row_count)),
-                ),
-                BlockEntry::new(
-                    DataType::String.wrap_nullable(),
-                    Value::Column(StringType::from_opt_data(bloom_filter_location)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(bloom_filter_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                    Value::Column(UInt64Type::from_opt_data(inverted_index_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                    Value::Column(UInt64Type::from_opt_data(ngram_index_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                    Value::Column(UInt64Type::from_opt_data(virtual_column_size)),
-                ),
+                BlockEntry::new_const_column_arg::<StringType>(snapshot_id, num_rows),
+                BlockEntry::new_const_column_arg::<TimestampType>(timestamp, num_rows),
+                Column::String(block_location.build()).into(),
+                UInt64Type::from_data(block_size).into(),
+                UInt64Type::from_data(file_size).into(),
+                UInt64Type::from_data(row_count).into(),
+                StringType::from_opt_data(bloom_filter_location).into(),
+                UInt64Type::from_data(bloom_filter_size).into(),
+                UInt64Type::from_opt_data(inverted_index_size).into(),
+                UInt64Type::from_opt_data(ngram_index_size).into(),
+                UInt64Type::from_opt_data(vector_index_size).into(),
+                UInt64Type::from_opt_data(virtual_column_size).into(),
             ],
-            row_num,
+            num_rows,
         ))
     }
 }

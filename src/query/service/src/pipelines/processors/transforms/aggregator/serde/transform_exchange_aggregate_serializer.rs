@@ -125,12 +125,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 continue;
             }
 
-            match AggregateMeta::downcast_from(block.take_meta().unwrap()) {
-                None => unreachable!(),
-                Some(AggregateMeta::Spilled(_)) => unreachable!(),
-                Some(AggregateMeta::Serialized(_)) => unreachable!(),
-                Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
-                Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
+            match block.take_meta().and_then(AggregateMeta::downcast_from) {
                 Some(AggregateMeta::AggregateSpilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -172,6 +167,8 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     let c = serialize_block(block_number, c, &self.options)?;
                     serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
+
+                _ => unreachable!(),
             };
         }
 
@@ -209,8 +206,8 @@ fn exchange_agg_spilling_aggregate_payload(
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
 
-        for column in columns.into_iter() {
-            let column = column.into_column(data_block.num_rows());
+        for entry in columns.into_iter() {
+            let column = entry.to_column();
             let column_data = serialize_column(&column);
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);

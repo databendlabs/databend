@@ -19,33 +19,33 @@ io-uring = [
     "databend-common-meta-store/io-uring",
 ]
 
-enable_queries_executor = []
-
 [dependencies]
 anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-flight = { workspace = true }
-arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
+arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
-arrow-udf-runtime = { workspace = true, features = ["javascript", "wasm"] }
+arrow-udf-runtime = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-compat = { workspace = true }
 async-recursion = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-backoff = { workspace = true, features = ["futures", "tokio"] }
+backoff = { workspace = true }
 backon = { workspace = true }
 base64 = { workspace = true }
 buf-list = { workspace = true }
 bumpalo = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
+bytesize = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
+cron = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
@@ -74,7 +74,6 @@ databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
-databend-common-openai = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sinks = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
@@ -83,21 +82,19 @@ databend-common-script = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-storages-basic = { workspace = true }
 databend-common-storages-delta = { workspace = true }
 databend-common-storages-factory = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
-databend-common-storages-memory = { workspace = true }
-databend-common-storages-null = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
-databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-stage = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { workspace = true }
-databend-common-storages-view = { workspace = true }
+databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }
@@ -106,6 +103,7 @@ databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
+databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-index = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
@@ -118,6 +116,8 @@ databend-storages-common-session = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
+dyn-clone = { workspace = true }
+enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
 flatbuffers = { workspace = true }
@@ -126,10 +126,8 @@ futures-util = { workspace = true }
 geozero = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
-highway = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
-indicatif = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
@@ -160,7 +158,6 @@ reqwest = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 rustls-pki-types = { workspace = true }
-rustyline = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
@@ -171,8 +168,9 @@ sqlx = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true, features = ["net"] }
-toml = { workspace = true, features = ["parse"] }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+toml = { workspace = true }
 tonic = { workspace = true }
 typetag = { workspace = true }
 url = { workspace = true }

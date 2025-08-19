@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -25,16 +26,14 @@ use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 use databend_common_storages_stage::build_streaming_load_pipeline;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -42,6 +41,13 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::physical_plans::DistributedInsertSelect;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -117,7 +123,9 @@ impl Interpreter for InsertInterpreter {
             self.ctx
                 .get_table_meta_timestamps(table.as_ref(), snapshot)?
         } else {
-            Default::default()
+            // For non-fuse table, the table meta timestamps does not matter,
+            // just passes a placeholder value here
+            TableMetaTimestamps::new(None, Duration::hours(1))
         };
 
         let mut build_res = PipelineBuildResult::create();
@@ -174,52 +182,52 @@ impl Interpreter for InsertInterpreter {
                     _ => unreachable!(),
                 };
 
-                let explain_plan = select_plan
-                    .format(metadata.clone(), Default::default())?
-                    .format_pretty()?;
+                let explain_plan = {
+                    let metadata = metadata.read();
+                    select_plan
+                        .format(&metadata, Default::default())?
+                        .format_pretty()?
+                };
+
                 info!("Insert select plan: \n{}", explain_plan);
 
                 let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
                 // here we remove the last exchange merge plan to trigger distribute insert
-                let insert_select_plan = match (select_plan, table.support_distributed_insert()) {
-                    (PhysicalPlan::Exchange(ref mut exchange), true) => {
+                let mut insert_select_plan = {
+                    if table.support_distributed_insert()
+                        && let Some(exchange) = Exchange::from_physical_plan(&select_plan)
+                    {
                         // insert can be dispatched to different nodes if table support_distributed_insert
                         let input = exchange.input.clone();
-
-                        exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
-                            DistributedInsertSelect {
-                                // TODO(leiysky): we reuse the id of exchange here,
-                                // which is not correct. We should generate a new id for insert.
-                                plan_id: exchange.plan_id,
-                                input,
-                                table_info: table1.get_table_info().clone(),
-                                select_schema: plan.schema(),
-                                select_column_bindings,
-                                insert_schema: self.plan.dest_schema(),
-                                cast_needed: self.check_schema_cast(plan)?,
-                                table_meta_timestamps,
-                            },
-                        )));
-                        PhysicalPlan::Exchange(exchange.clone())
-                    }
-                    (other_plan, _) => {
-                        // insert should wait until all nodes finished
-                        PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                            // TODO: we reuse the id of other plan here,
-                            // which is not correct. We should generate a new id for insert.
-                            plan_id: other_plan.get_id(),
-                            input: Box::new(other_plan),
+                        exchange.derive(vec![PhysicalPlan::new(DistributedInsertSelect {
+                            input,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,
                             insert_schema: self.plan.dest_schema(),
                             cast_needed: self.check_schema_cast(plan)?,
                             table_meta_timestamps,
-                        }))
+                            meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
+                        })])
+                    } else {
+                        // insert should wait until all nodes finished
+                        PhysicalPlan::new(DistributedInsertSelect {
+                            // TODO: we reuse the id of other plan here,
+                            // which is not correct. We should generate a new id for insert.
+                            input: select_plan,
+                            table_info: table1.get_table_info().clone(),
+                            select_schema: plan.schema(),
+                            select_column_bindings,
+                            insert_schema: self.plan.dest_schema(),
+                            cast_needed: self.check_schema_cast(plan)?,
+                            table_meta_timestamps,
+                            meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
+                        })
                     }
                 };
 
+                insert_select_plan.adjust_plan_id(&mut 0);
                 let mut build_res =
                     build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
                         .await?;
@@ -259,7 +267,6 @@ impl Interpreter for InsertInterpreter {
                     plan.required_source_schema.clone(),
                     plan.default_exprs.clone(),
                     plan.block_thresholds,
-                    plan.on_error_mode.clone(),
                 )?;
                 if !plan.values_consts.is_empty() {
                     let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));

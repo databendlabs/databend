@@ -16,8 +16,6 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::seq_value::KVMeta;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MatchSeq;
@@ -28,6 +26,7 @@ use log::info;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
+use crate::testing::since_epoch_sec;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;
 
@@ -55,7 +54,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     let key = "expire-kv";
     let value2 = "value2";
-    let now_sec = SeqV::<()>::now_ms() / 1000;
+    let now_sec = since_epoch_sec();
 
     info!("--- write a kv expiring in 3 sec");
     {
@@ -68,9 +67,9 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- get kv with expire now+3");
     let seq = {
-        let resp = leader.get_kv(key).await?;
+        let resp = leader.kv_api().get_kv(key).await?;
         let seq_v = resp.unwrap();
-        assert_eq!(Some(KVMeta::new_expire(now_sec + 3)), seq_v.meta);
+        assert_eq!(Some(now_sec + 3), seq_v.meta.unwrap().expires_at_sec_opt());
         seq_v.seq
     };
 
@@ -85,7 +84,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     info!("--- get updated kv with new expire now+1000, assert the updated value");
     {
-        let resp = leader.get_kv(key).await?;
+        let resp = leader.kv_api().get_kv(key).await?;
         let seq_v = resp.unwrap();
         let want = (now_sec + 1000) * 1000;
         let expire_ms = seq_v.meta.unwrap().get_expire_at_ms().unwrap();
@@ -115,10 +114,16 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     // This way on every node applying a log always get the same result.
     info!("--- get updated kv with new expire, assert the updated value");
     {
-        let sm = learner.raft_store.state_machine.read().await;
+        let sm = learner
+            .raft_store
+            .get_state_machine_read("test_meta_node_replicate_kv_with_expire")
+            .await;
         let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
-        assert_eq!(Some(KVMeta::new_expire(now_sec + 1000)), seq_v.meta);
+        assert_eq!(
+            Some(now_sec + 1000),
+            seq_v.meta.unwrap().expires_at_sec_opt()
+        );
         assert_eq!(value2.to_string().into_bytes(), seq_v.data);
     }
 

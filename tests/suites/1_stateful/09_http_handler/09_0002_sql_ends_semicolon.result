@@ -1,0 +1,10 @@
+>>>> create or replace table t_09_0002 (a int)
+<<<<
+"Succeeded"
+null
+"Succeeded"
+null
+"Succeeded"
+null
+"Succeeded"
+null

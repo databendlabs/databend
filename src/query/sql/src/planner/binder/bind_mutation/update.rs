@@ -313,11 +313,11 @@ impl Binder {
             };
         }
 
-        mutation.required_columns = Box::new(
-            std::iter::once(mutation.row_id_index)
-                .chain(any_columns.into_iter().map(|c| c.new))
-                .collect(),
-        );
+        // update required columns
+        for any_column in any_columns {
+            mutation.required_columns.remove(&any_column.old);
+            mutation.required_columns.insert(any_column.new);
+        }
 
         let aggr_expr =
             self.bind_aggregate(&mut mutation.bind_context, s_expr.unary_child().clone())?;

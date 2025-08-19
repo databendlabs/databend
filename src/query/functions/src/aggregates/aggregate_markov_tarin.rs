@@ -24,27 +24,33 @@ use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::NGramHash;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::assert_unary_arguments;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::extract_number_param;
+use super::AggrStateLoc;
 use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::StateAddr;
 
 pub struct MarkovTarin {
     display_name: String,
@@ -76,12 +82,12 @@ impl AggregateFunction for MarkovTarin {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let model: &mut MarkovModel = place.get();
-        let col = StringType::try_downcast_column(&columns[0]).unwrap();
+        let col = columns[0].downcast::<StringType>().unwrap();
 
         let mut code_points = Vec::new();
         if let Some(validity) = validity {
@@ -100,28 +106,60 @@ impl AggregateFunction for MarkovTarin {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let model = place.get::<MarkovModel>();
-        let col = StringType::try_downcast_column(&columns[0]).unwrap();
         let mut code_points = Vec::new();
-        model.consume(
-            self.params.order,
-            col.index(row).unwrap().as_bytes(),
-            &mut code_points,
-        );
+        let data = match &columns[0] {
+            BlockEntry::Const(Scalar::String(s), _, _) => s.as_bytes(),
+            BlockEntry::Column(Column::String(col)) => col.index(row).unwrap().as_bytes(),
+            _ => unreachable!(),
+        };
+        model.consume(self.params.order, data, &mut code_points);
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<MarkovModel>();
-        borsh_serialize_state(writer, state)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<MarkovModel>();
-        let mut rhs = borsh_deserialize_state::<MarkovModel>(reader)?;
-        state.merge(&mut rhs);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<MarkovModel>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
 
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<MarkovModel>();
+                let mut rhs = borsh_partial_deserialize::<MarkovModel>(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<MarkovModel>();
+                let mut rhs = borsh_partial_deserialize::<MarkovModel>(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        }
         Ok(())
     }
 
@@ -133,7 +171,12 @@ impl AggregateFunction for MarkovTarin {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let model = place.get::<MarkovModel>();
         model.finalize(&self.params);
 

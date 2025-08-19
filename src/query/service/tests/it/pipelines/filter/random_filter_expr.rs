@@ -176,7 +176,7 @@ fn convert_scalar_expr_to_remote_expr(
     )]));
     let expr = scalar_expr
         .type_check(schema.as_ref())?
-        .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        .project_column_ref(|index| schema.index_of(&index.to_string()))?;
     Ok(expr.as_remote_expr())
 }
 

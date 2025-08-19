@@ -28,6 +28,7 @@ use serde::de::Error;
 
 use crate::meta::supported_stat_type;
 use crate::meta::v0;
+use crate::meta::Location;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -69,6 +70,14 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AdditionalStatsMeta {
+    /// The size of the stats data in bytes.
+    pub size: u64,
+    /// The file location of the stats data.
+    pub location: Location,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
@@ -78,11 +87,18 @@ pub struct Statistics {
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
     pub index_size: u64,
+    pub bloom_index_size: Option<u64>,
+    pub ngram_index_size: Option<u64>,
+    pub inverted_index_size: Option<u64>,
+    pub vector_index_size: Option<u64>,
+    pub virtual_column_size: Option<u64>,
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
+
+    pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
 
 // conversions from old meta data
@@ -240,9 +256,15 @@ impl Statistics {
             uncompressed_byte_size: v0.uncompressed_byte_size,
             compressed_byte_size: v0.compressed_byte_size,
             index_size: v0.index_size,
+            bloom_index_size: None,
+            ngram_index_size: None,
+            inverted_index_size: None,
+            vector_index_size: None,
+            virtual_column_size: None,
             col_stats,
             cluster_stats: None,
             virtual_block_count: None,
+            additional_stats_meta: None,
         }
     }
 }

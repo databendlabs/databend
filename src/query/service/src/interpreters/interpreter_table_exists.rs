@@ -21,7 +21,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_sql::plans::ExistsTablePlan;
 
 use crate::interpreters::Interpreter;
@@ -62,9 +61,10 @@ impl Interpreter for ExistsTableInterpreter {
         };
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![BlockEntry::new(
+            vec![BlockEntry::new_const_column(
                 DataType::Number(NumberDataType::UInt8),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
+                Scalar::Number(NumberScalar::UInt8(result)),
+                1,
             )],
             1,
         )])

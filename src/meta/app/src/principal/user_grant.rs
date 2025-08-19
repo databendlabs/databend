@@ -48,6 +48,8 @@ pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "indexes",
 ];
 
+pub const SENSITIVE_SYSTEM_RESOURCE: &str = "system_history";
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
@@ -58,6 +60,8 @@ pub enum GrantObject {
     UDF(String),
     Stage(String),
     Warehouse(String),
+    Connection(String),
+    Sequence(String),
 }
 
 impl GrantObject {
@@ -91,6 +95,8 @@ impl GrantObject {
             (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
             (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
             (GrantObject::Warehouse(w), GrantObject::Warehouse(rw)) => w == rw,
+            (GrantObject::Connection(c), GrantObject::Connection(rc)) => c == rc,
+            (GrantObject::Sequence(s), GrantObject::Sequence(rs)) => s == rs,
             _ => false,
         }
     }
@@ -114,6 +120,12 @@ impl GrantObject {
             GrantObject::Warehouse(_) => {
                 UserPrivilegeSet::available_privileges_on_warehouse(available_ownership)
             }
+            GrantObject::Connection(_) => {
+                UserPrivilegeSet::available_privileges_on_connection(available_ownership)
+            }
+            GrantObject::Sequence(_) => {
+                UserPrivilegeSet::available_privileges_on_sequence(available_ownership)
+            }
         }
     }
 
@@ -122,7 +134,9 @@ impl GrantObject {
             GrantObject::Global
             | GrantObject::Stage(_)
             | GrantObject::UDF(_)
-            | GrantObject::Warehouse(_) => None,
+            | GrantObject::Warehouse(_)
+            | GrantObject::Sequence(_)
+            | GrantObject::Connection(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
@@ -144,6 +158,8 @@ impl fmt::Display for GrantObject {
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
             GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
+            GrantObject::Connection(c) => write!(f, "CONNECTION {c}"),
+            GrantObject::Sequence(s) => write!(f, "SEQUENCE {s}"),
         }
     }
 }

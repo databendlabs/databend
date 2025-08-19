@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
+use crate::types::BooleanType;
 use crate::ColumnSet;
 use crate::DataBlock;
 use crate::Evaluator;
@@ -40,6 +41,8 @@ pub struct FilterExecutor {
     selection_range: Vec<Range<u32>>,
     fn_registry: &'static FunctionRegistry,
     keep_order: bool,
+
+    filter: Expr,
 }
 
 impl FilterExecutor {
@@ -59,6 +62,7 @@ impl FilterExecutor {
         } else {
             vec![]
         };
+
         Self {
             select_expr,
             func_ctx,
@@ -70,14 +74,24 @@ impl FilterExecutor {
             selection_range: vec![],
             fn_registry,
             keep_order,
+            filter: expr,
         }
     }
 
     // Filter a DataBlock, return the filtered DataBlock.
     pub fn filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let origin_count = data_block.num_rows();
-        let result_count = self.select(&data_block)?;
-        self.take(data_block, origin_count, result_count)
+        if self.func_ctx.enable_selector_executor {
+            let origin_count = data_block.num_rows();
+            let result_count = self.select(&data_block)?;
+            self.take(data_block, origin_count, result_count)
+        } else {
+            let evaluator = Evaluator::new(&data_block, &self.func_ctx, self.fn_registry);
+            let filter = evaluator
+                .run(&self.filter)?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            data_block.filter_boolean_value(&filter)
+        }
     }
 
     // Store the filtered indices of data_block in `true_selection` and return the number of filtered indices.

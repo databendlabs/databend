@@ -9,6 +9,11 @@ SELECT FROM_BASE64(TO_BASE64('abc'))::STRING
 abc
 
 query T
+SELECT BASE64_DECODE_STRING(TO_BASE64('abc'))
+----
+abc
+
+query T
 SELECT TO_BASE64(NULL)
 ----
 NULL

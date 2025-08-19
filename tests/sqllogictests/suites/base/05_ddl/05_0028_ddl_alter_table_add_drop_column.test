@@ -256,7 +256,10 @@ statement ok
 ALTER TABLE `05_0028_at_t0_4` ADD COLUMN e int COMMENT 'end'
 
 statement ok
-ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d uint64 COMMENT 'middle'
+ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d uint64
+
+statement ok
+ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d COMMENT 'middle'
 
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_4`

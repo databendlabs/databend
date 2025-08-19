@@ -25,7 +25,6 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::servers::flight::v1::actions::get_profile::get_profile;
 use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
@@ -37,7 +36,6 @@ use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_qu
 use crate::servers::flight::v1::actions::system_action::system_action;
 use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
-use crate::servers::flight::v1::actions::GET_PROFILE;
 use crate::servers::flight::v1::actions::GET_RUNNING_QUERY_DUMP;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
@@ -73,7 +71,13 @@ impl FlightActions {
             Box::new(move |request| {
                 let mut deserializer = serde_json::Deserializer::from_slice(request);
                 deserializer.disable_recursion_limit();
-                let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+
+                let deserializer = serde_stacker::Deserializer {
+                    de: &mut deserializer,
+                    red_zone: recursive::get_minimum_stack_size(),
+                    stack_size: recursive::get_stack_allocation_size(),
+                };
+
                 let request = Req::deserialize(deserializer).map_err(|cause| {
                     ErrorCode::BadArguments(format!(
                         "Cannot parse request for {}, cause: {:?}",
@@ -97,7 +101,12 @@ impl FlightActions {
                         Ok(v) => {
                             let mut out = Vec::with_capacity(512);
                             let mut serializer = serde_json::Serializer::new(&mut out);
-                            let serializer = serde_stacker::Serializer::new(&mut serializer);
+                            let serializer = serde_stacker::Serializer {
+                                ser: &mut serializer,
+                                red_zone: recursive::get_minimum_stack_size(),
+                                stack_size: recursive::get_stack_allocation_size(),
+                            };
+
                             v.serialize(serializer).map_err(|cause| {
                                 ErrorCode::BadBytes(format!(
                                     "Cannot serialize response for {}, cause: {:?}",
@@ -136,6 +145,5 @@ pub fn flight_actions() -> FlightActions {
         .action(KILL_QUERY, kill_query)
         .action(SET_PRIORITY, set_priority)
         .action(SYSTEM_ACTION, system_action)
-        .action(GET_PROFILE, get_profile)
         .action(GET_RUNNING_QUERY_DUMP, get_running_query_dump)
 }

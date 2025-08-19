@@ -15,12 +15,12 @@
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
@@ -69,7 +69,7 @@ impl DeleteByExprMutator {
     ) -> Result<(Value<BooleanType>, Value<BooleanType>)> {
         // filter rows that's is not processed
         let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
-        let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
+        let old_filter: Value<BooleanType> = filter_entry.value().try_downcast().unwrap();
         // false means this row is not processed, so use `not` to reverse it.
         let (filter_not, _) = get_not(old_filter.clone(), &self.func_ctx, data_block.num_rows())?;
         let filter_not = filter_not.try_downcast().unwrap();
@@ -147,13 +147,12 @@ impl DeleteByExprMutator {
 
                 let const_expr = Expr::Constant(Constant {
                     span: None,
-                    scalar: databend_common_expression::Scalar::Boolean(false),
+                    scalar: Scalar::Boolean(false),
                     data_type: DataType::Boolean,
                 });
 
                 let const_predicates = expr2prdicate(&evaluator, &const_expr)?;
-
-                res_block.add_column(BlockEntry::from_arg_value(const_predicates));
+                res_block.add_value(const_predicates.upcast(), DataType::Boolean);
 
                 Ok((res_block, self.get_row_id_block(filtered_block)))
             }

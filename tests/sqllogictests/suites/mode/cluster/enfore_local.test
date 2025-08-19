@@ -1,0 +1,28 @@
+statement ok
+set enforce_local = 1;
+
+query T
+EXPLAIN SELECT number FROM numbers_mt(100000) GROUP BY number;
+----
+AggregateFinal
+├── output columns: [numbers_mt.number (#0)]
+├── group by: [number]
+├── aggregate functions: []
+├── estimated rows: 100000.00
+└── AggregatePartial
+    ├── group by: [number]
+    ├── aggregate functions: []
+    ├── estimated rows: 100000.00
+    └── TableScan
+        ├── table: default.system.numbers_mt
+        ├── output columns: [number (#0)]
+        ├── read rows: 100000
+        ├── read size: 781.25 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 2
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 100000.00
+
+
+statement ok
+set enforce_local = 0;

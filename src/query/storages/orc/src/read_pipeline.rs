@@ -17,16 +17,19 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_storage::init_stage_operator;
+use jiff::tz::TimeZone;
 
 use super::OrcTable;
 use crate::processors::decoder::StripeDecoder;
 use crate::processors::source::ORCSource;
+use crate::processors::variant_decoder::StripeDecoderForVariantTable;
 
 impl OrcTable {
     #[inline]
@@ -53,23 +56,56 @@ impl OrcTable {
             PushDownInfo::projection_of_push_downs(&self.stage_table_info.schema, None);
         let data_schema: DataSchema = self.stage_table_info.schema.clone().into();
         let data_schema = Arc::new(data_schema);
-        pipeline.add_source(
-            |output| {
-                ORCSource::try_create(
-                    output,
+
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|m| {
+                m.values()
+                    .map(|i| i.column_type.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if let Some((arrow_schema, schema_from)) = &self.schema {
+            pipeline.add_source(
+                |output| {
+                    ORCSource::try_create_with_schema(
+                        output,
+                        ctx.clone(),
+                        Arc::new(operator.clone()),
+                        arrow_schema.clone(),
+                        Some(schema_from.clone()),
+                        projection.clone(),
+                    )
+                },
+                num_source,
+            )?;
+            pipeline.try_resize(max_threads)?;
+            pipeline.add_accumulating_transformer(|| {
+                StripeDecoder::new(
                     ctx.clone(),
-                    Arc::new(operator.clone()),
-                    self.arrow_schema.clone(),
-                    Some(self.schema_from.clone()),
-                    projection.clone(),
+                    data_schema.clone(),
+                    arrow_schema.clone(),
+                    internal_columns.clone(),
                 )
-            },
-            num_source,
-        )?;
-        pipeline.try_resize(max_threads)?;
-        pipeline.add_accumulating_transformer(|| {
-            StripeDecoder::new(ctx.clone(), data_schema.clone(), self.arrow_schema.clone())
-        });
+            });
+        } else {
+            pipeline.add_source(
+                |output| {
+                    ORCSource::try_create(output, ctx.clone(), Arc::new(operator.clone()), None)
+                },
+                num_source,
+            )?;
+            pipeline.try_resize(max_threads)?;
+            let settings = ctx.get_settings();
+            let tz_string = settings.get_timezone()?;
+            let tz = TimeZone::get(&tz_string).map_err(|e| {
+                ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
+            })?;
+            pipeline.add_accumulating_transformer(|| {
+                StripeDecoderForVariantTable::new(ctx.clone(), tz.clone(), internal_columns.clone())
+            });
+        }
         Ok(())
     }
 }

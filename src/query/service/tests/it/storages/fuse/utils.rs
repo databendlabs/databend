@@ -15,10 +15,28 @@
 use std::str;
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+
+pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> TableSnapshot {
+    TableSnapshot::try_new(
+        prev_table_seq,
+        None,
+        schema,
+        Statistics::default(),
+        vec![],
+        None,
+        TableMetaTimestamps::new(None, Duration::hours(1)),
+    )
+    .unwrap()
+}
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
@@ -36,6 +54,7 @@ pub async fn do_purge_test(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    segment_stat_count: u32,
 ) -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
@@ -63,6 +82,7 @@ pub async fn do_purge_test(
         segment_count,
         block_count,
         index_count,
+        segment_stat_count,
         Some(()),
         None,
     )

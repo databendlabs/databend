@@ -30,7 +30,12 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::FILENAME_COLUMN_ID;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -48,8 +53,7 @@ use crate::utils::map_orc_error;
 
 pub struct OrcTable {
     pub(super) stage_table_info: StageTableInfo,
-    pub(super) arrow_schema: arrow_schema::SchemaRef,
-    pub(super) schema_from: String,
+    pub(super) schema: Option<(arrow_schema::SchemaRef, String)>,
     pub(super) table_info: TableInfo,
 }
 
@@ -61,43 +65,56 @@ impl OrcTable {
         )?;
         Ok(Arc::new(OrcTable {
             stage_table_info: info.stage_table_info.clone(),
-            arrow_schema: info.arrow_schema.clone(),
-            schema_from: info.schema_from.clone(),
+            schema: info.schema.clone(),
             table_info,
         }))
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(mut stage_table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
+    pub async fn try_create(
+        ctx: &dyn TableContext,
+        mut stage_table_info: StageTableInfo,
+    ) -> Result<Arc<dyn Table>> {
         let stage_info = &stage_table_info.stage_info;
-        let files_to_read = &stage_table_info.files_to_copy;
-        let operator = init_stage_operator(stage_info)?;
-        let first_file = match &files_to_read {
-            Some(files) => files[0].clone(),
-            None => stage_table_info
-                .files_info
-                .first_file(&operator)
-                .await?
-                .clone(),
-        };
-        let schema_from = first_file.path.clone();
+        if stage_table_info.is_variant {
+            let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                "_$1",
+                TableDataType::Variant,
+            )]));
+            let table_info = create_orc_table_info(schema, stage_info)?;
+            Ok(Arc::new(OrcTable {
+                table_info,
+                stage_table_info,
+                schema: None,
+            }))
+        } else {
+            let files_to_read = &stage_table_info.files_to_copy;
+            let operator = init_stage_operator(stage_info)?;
+            let first_file = match &files_to_read {
+                Some(files) => Some(files[0].clone()),
+                None => stage_table_info.files_info.first_file(&operator).await?,
+            };
 
-        let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
+            let Some(first_file) = first_file else {
+                return ctx.get_zero_table().await;
+            };
 
-        let table_schema = Arc::new(
-            TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
-        );
+            let schema_from = first_file.path.clone();
+            let arrow_schema = Self::prepare_metas(first_file, operator.clone()).await?;
+            let table_schema = Arc::new(
+                TableSchema::try_from(arrow_schema.as_ref()).map_err(ErrorCode::from_std_error)?,
+            );
 
-        let table_info = create_orc_table_info(table_schema.clone(), stage_info)?;
+            let table_info = create_orc_table_info(table_schema.clone(), stage_info)?;
 
-        stage_table_info.schema = table_schema;
+            stage_table_info.schema = table_schema;
 
-        Ok(Arc::new(OrcTable {
-            table_info,
-            stage_table_info,
-            arrow_schema,
-            schema_from,
-        }))
+            Ok(Arc::new(OrcTable {
+                table_info,
+                stage_table_info,
+                schema: Some((arrow_schema, schema_from)),
+            }))
+        }
     }
 
     #[async_backtrace::framed]
@@ -136,6 +153,10 @@ impl Table for OrcTable {
         false
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+    }
+
     fn support_prewhere(&self) -> bool {
         false
     }
@@ -147,8 +168,7 @@ impl Table for OrcTable {
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::ORCSource(OrcTableInfo {
             stage_table_info: self.stage_table_info.clone(),
-            arrow_schema: self.arrow_schema.clone(),
-            schema_from: self.schema_from.clone(),
+            schema: self.schema.clone(),
         })
     }
 

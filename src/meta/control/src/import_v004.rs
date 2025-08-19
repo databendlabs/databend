@@ -24,7 +24,7 @@ use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
-use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV004;
+use databend_common_meta_raft_store::sm_v003::adapter::SMEntryV002ToV004;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
@@ -58,10 +58,10 @@ pub async fn import_v004(
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v004");
 
-    let sys_data = Arc::new(Mutex::new(SysData::default()));
+    let sys_data_holder = Arc::new(Mutex::new(SysData::default()));
 
-    let mut converter = SnapshotUpgradeV002ToV004 {
-        sys_data: sys_data.clone(),
+    let mut converter = SMEntryV002ToV004 {
+        sys_data: sys_data_holder.clone(),
     };
 
     for line in lines {
@@ -79,6 +79,7 @@ pub async fn import_v004(
                 tx.send(WriteEntry::Data(kv)).await?;
             }
         } else {
+            let kv_entry = kv_entry.upgrade();
             if let RaftStoreEntry::DataHeader { .. } = kv_entry {
                 // Data header is not stored in V004 RaftLog
                 continue;
@@ -92,20 +93,16 @@ pub async fn import_v004(
     let max_log_id = raft_log_importer.max_log_id;
     raft_log_importer.flush().await?;
 
-    let s = {
-        let r = sys_data.lock().unwrap();
+    let sys_data = {
+        let r = sys_data_holder.lock().unwrap();
         r.clone()
     };
-
-    tx.send(WriteEntry::Finish(s)).await?;
-    let temp_snapshot_data = join_handle.await??;
-
-    let last_applied = {
-        let r = sys_data.lock().unwrap();
-        *r.last_applied_ref()
-    };
+    let last_applied = *sys_data.last_applied_ref();
     let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
-    let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
+
+    tx.send(WriteEntry::Finish((snapshot_id.clone(), sys_data)))
+        .await?;
+    let db = join_handle.await??;
 
     eprintln!(
         "{data_version}: Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",

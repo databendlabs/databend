@@ -90,9 +90,24 @@ impl Rule for RulePushDownFilterAggregate {
                 && predicate_used_columns.is_subset(&aggregate_group_columns)
             {
                 pushed_down_predicates.push(predicate.clone());
-                // Keep full remaining_predicates cause grouping_sets exists
-                if aggregate.grouping_sets.is_some() {
-                    remaining_predicates.push(predicate);
+                // If all used columns in predicate are in group columns
+                // we can push down the predicate, otherwise we need to keep the predicate
+                // eg: explain select * from (select number % 3 a, number % 4 b from
+                // range(1, 1000)t(number) group by cube(a,b))  where a is null and b is null;
+
+                // we can't push down the predicate cause filter will remove all rows
+                // but we can't remove the predicate cause the null will be generated
+                // by group by cube
+                if let Some(grouping_sets) = &aggregate.grouping_sets {
+                    if grouping_sets
+                        .sets
+                        .iter()
+                        .all(|s| predicate_used_columns.iter().all(|c| s.contains(c)))
+                    {
+                        remaining_predicates.push(predicate);
+                    } else {
+                        return Ok(());
+                    }
                 }
             } else {
                 remaining_predicates.push(predicate)

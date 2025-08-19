@@ -103,7 +103,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
     ) -> Result<Vec<Entry>, StorageError> {
         let (start, end) = range_boundary(range);
 
-        let io = IODesc::read_logs(format!(
+        let mut io = IODesc::read_logs(format!(
             "RaftStore(id={})::try_get_log_entries([{},{})",
             self.id, start, end
         ));
@@ -119,7 +119,8 @@ impl RaftLogReader<TypeConfig> for RaftStore {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| io.err_submit(e))?;
 
-        debug!("{}", io.ok_done());
+        io.set_done_time();
+        info!("{}", io.ok_done());
         Ok(entries)
     }
 
@@ -193,7 +194,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             let mut log = self.log.write().await;
 
             log.save_vote(Cw(*vote)).map_err(|e| io.err_submit(e))?;
-            log.flush(raft_log_v004::Callback::new_oneshot(tx, &io))
+            log.flush(raft_log_v004::Callback::new_oneshot(tx, io.clone()))
                 .map_err(|e| io.err_submit_flush(e))?;
         }
 
@@ -230,8 +231,11 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
         debug!("{}", io.ok_submit());
 
-        log.flush(raft_log_v004::Callback::new_io_flushed(callback, &io))
-            .map_err(|e| io.err_submit_flush(e))?;
+        log.flush(raft_log_v004::Callback::new_io_flushed(
+            callback,
+            io.clone(),
+        ))
+        .map_err(|e| io.err_submit_flush(e))?;
 
         info!("{}", io.ok_submit_flush());
 

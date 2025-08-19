@@ -25,6 +25,7 @@ pub struct StripeInMemory {
     pub path: String,
     pub stripe: Stripe,
     pub schema: Option<HashableSchema>,
+    pub start_row: u64,
 }
 
 local_block_meta_serde!(StripeInMemory);

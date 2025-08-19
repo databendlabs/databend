@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
@@ -25,7 +24,6 @@ use reqwest::ClientBuilder;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
-use url::Url;
 
 use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
@@ -83,10 +81,11 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        header.insert(
+            "X-DATABEND-CLIENT-CAPS",
+            HeaderValue::from_str("session_cookie").unwrap(),
+        );
         let cookie_provider = GlobalCookieStore::new();
-        let cookie = HeaderValue::from_str("cookie_enabled=true").unwrap();
-        let mut initial_cookies = [&cookie].into_iter();
-        cookie_provider.set_cookies(&mut initial_cookies, &Url::parse("https://a.com").unwrap());
         let client = ClientBuilder::new()
             .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)

@@ -12,14 +12,11 @@ databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-storages-basic = { workspace = true }
 databend-common-storages-delta = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
-databend-common-storages-memory = { workspace = true }
-databend-common-storages-null = { workspace = true }
-databend-common-storages-random = { workspace = true }
 databend-common-storages-stream = { workspace = true }
-databend-common-storages-view = { workspace = true }
 databend-storages-common-index = { workspace = true }
 
 [lints]

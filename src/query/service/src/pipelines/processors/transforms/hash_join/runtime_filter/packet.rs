@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
+use std::fmt::Debug;
 
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -28,12 +30,25 @@ use databend_common_expression::Scalar;
 /// * `inlist` - Deduplicated list of build key column
 /// * `min_max` - The min and max values of the build column
 /// * `bloom` - The deduplicated hashes of the build column
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
 pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
     pub bloom: Option<HashSet<u64>>,
+}
+
+impl Debug for RuntimeFilterPacket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "RuntimeFilterPacket {{ id: {}, inlist: {:?}, min_max: {:?}, bloom: {:?} }}",
+            self.id,
+            self.inlist,
+            self.min_max,
+            self.bloom.is_some()
+        )
+    }
 }
 
 /// Represents a collection of runtime filter packets that correspond to a join operator.

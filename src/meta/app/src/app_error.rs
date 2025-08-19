@@ -20,6 +20,7 @@ use databend_common_meta_types::MatchSeq;
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
 use crate::principal::ProcedureIdentity;
+use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
@@ -361,14 +362,14 @@ impl crate::app_error::UpdateStreamMetasFailed {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
+#[error("DuplicatedUpsertFiles: {table_id:?} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
-    table_id: u64,
+    table_id: Vec<u64>,
     context: String,
 }
 
 impl DuplicatedUpsertFiles {
-    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+    pub fn new(table_id: Vec<u64>, context: impl Into<String>) -> Self {
         DuplicatedUpsertFiles {
             table_id,
             context: context.into(),
@@ -897,13 +898,13 @@ impl IndexColumnIdNotFound {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("OutofSequenceRange: `{name}` while `{context}`")]
-pub struct OutofSequenceRange {
+#[error("OutOfSequenceRange: `{name}` while `{context}`")]
+pub struct OutOfSequenceRange {
     name: String,
     context: String,
 }
 
-impl OutofSequenceRange {
+impl OutOfSequenceRange {
     pub fn new(name: impl ToString, context: impl ToString) -> Self {
         Self {
             name: name.to_string(),
@@ -923,6 +924,18 @@ impl WrongSequenceCount {
         Self {
             name: name.to_string(),
         }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("UnsupportedSequenceStorageVersion: `{version}`")]
+pub struct UnsupportedSequenceStorageVersion {
+    version: u64,
+}
+
+impl UnsupportedSequenceStorageVersion {
+    pub fn new(version: u64) -> Self {
+        Self { version }
     }
 }
 
@@ -1077,6 +1090,9 @@ pub enum AppError {
     UnknownDataMask(#[from] UnknownError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
+    UnknownRowAccessPolicy(#[from] UnknownError<row_access_policy_name_ident::Resource>),
+
+    #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
@@ -1157,10 +1173,13 @@ pub enum SequenceError {
     UnknownSequence(#[from] UnknownError<SequenceRsc>),
 
     #[error(transparent)]
-    OutofSequenceRange(#[from] OutofSequenceRange),
+    OutOfSequenceRange(#[from] OutOfSequenceRange),
 
     #[error(transparent)]
     WrongSequenceCount(#[from] WrongSequenceCount),
+
+    #[error(transparent)]
+    UnsupportedSequenceStorageVersion(#[from] UnsupportedSequenceStorageVersion),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1452,12 +1471,6 @@ impl AppErrorMessage for IndexColumnIdNotFound {
     }
 }
 
-impl AppErrorMessage for UnknownDatamask {
-    fn message(&self) -> String {
-        format!("Datamask '{}' does not exists", self.name)
-    }
-}
-
 impl AppErrorMessage for UnmatchColumnDataType {
     fn message(&self) -> String {
         format!(
@@ -1476,7 +1489,7 @@ impl AppErrorMessage for UnmatchMaskPolicyReturnType {
     }
 }
 
-impl AppErrorMessage for OutofSequenceRange {
+impl AppErrorMessage for OutOfSequenceRange {
     fn message(&self) -> String {
         format!("Sequence '{}' out of range", self.name)
     }
@@ -1488,6 +1501,15 @@ impl AppErrorMessage for WrongSequenceCount {
     }
 }
 
+impl AppErrorMessage for UnsupportedSequenceStorageVersion {
+    fn message(&self) -> String {
+        format!(
+            "Sequence storage version({}) is not supported",
+            self.version
+        )
+    }
+}
+
 impl AppErrorMessage for SequenceError {
     fn message(&self) -> String {
         match self {
@@ -1495,11 +1517,14 @@ impl AppErrorMessage for SequenceError {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
             SequenceError::UnknownSequence(e) => format!("UnknownSequence: '{}'", e.message()),
-            SequenceError::OutofSequenceRange(e) => {
-                format!("OutofSequenceRange: '{}'", e.message())
+            SequenceError::OutOfSequenceRange(e) => {
+                format!("OutOfSequenceRange: '{}'", e.message())
             }
             SequenceError::WrongSequenceCount(e) => {
-                format!("SequenceAlreadyExists: '{}'", e.message())
+                format!("WrongSequenceCount: '{}'", e.message())
+            }
+            SequenceError::UnsupportedSequenceStorageVersion(e) => {
+                format!("UnsupportedSequenceStorageVersion: '{}'", e.message())
             }
         }
     }
@@ -1600,6 +1625,9 @@ impl From<AppError> for ErrorCode {
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::UnknownRowAccessPolicy(err) => {
+                ErrorCode::UnknownRowAccessPolicy(err.message())
+            }
 
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::UnmatchMaskPolicyReturnType(err) => {
@@ -1632,8 +1660,11 @@ impl From<SequenceError> for ErrorCode {
         match app_err {
             SequenceError::SequenceAlreadyExists(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::UnknownSequence(err) => ErrorCode::SequenceError(err.message()),
-            SequenceError::OutofSequenceRange(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::OutOfSequenceRange(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::UnsupportedSequenceStorageVersion(err) => {
+                ErrorCode::SequenceError(err.message())
+            }
         }
     }
 }

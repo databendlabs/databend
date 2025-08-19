@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
+export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 stmt "drop database if exists db01;"
 stmt "create database db01;"
@@ -91,6 +91,13 @@ echo "GRANT Super ON *.* TO 'test-user'" | $BENDSQL_CLIENT_CONNECT
 echo "set data_retention_time_in_days=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
 echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
+
+echo "=== NETWORK_POLICY SETTING ==="
+echo "drop network policy if exists test_user_without_account_admin"  | $TEST_USER_CONNECT
+echo "create network policy test_user_without_account_admin allowed_ip_list=('127.0.0.0/24')"  | $TEST_USER_CONNECT
+echo "set global network_policy='test_user_without_account_admin'"  | $TEST_USER_CONNECT
+echo "unset global network_policy"  | $TEST_USER_CONNECT
+echo "drop network policy if exists test_user_without_account_admin"  | $TEST_USER_CONNECT
 
 ## select data
 echo "select 'test -- select'" | $TEST_USER_CONNECT

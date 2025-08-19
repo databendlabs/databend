@@ -23,14 +23,26 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::types::decimal::DecimalScalar;
+use crate::types::i256;
 use crate::types::number::NumberScalar;
+use crate::types::DecimalSize;
 use crate::Scalar;
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, EnumAsInner)]
+pub enum IndexDecimalScalar {
+    // For compatibility reason
+    // The old version only support Decimal128 and Decimal256
+    // We don't store decimal64 in index scalar, this is only used for compatibility reading
+    Decimal64(i64, DecimalSize),
+    Decimal128(i128, DecimalSize),
+    Decimal256(i256, DecimalSize),
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, EnumAsInner)]
 pub enum IndexScalar {
     Null,
     Number(NumberScalar),
-    Decimal(DecimalScalar),
+    Decimal(IndexDecimalScalar),
     Timestamp(i64),
     Date(i32),
     Interval(months_days_micros),
@@ -50,7 +62,21 @@ impl TryFrom<IndexScalar> for Scalar {
         Ok(match value {
             IndexScalar::Null => Scalar::Null,
             IndexScalar::Number(num_scalar) => Scalar::Number(num_scalar),
-            IndexScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
+            IndexScalar::Decimal(dec_scalar) => match dec_scalar {
+                IndexDecimalScalar::Decimal128(v, size) => {
+                    if size.can_carried_by_64() {
+                        Scalar::Decimal(DecimalScalar::Decimal64(v as i64, size))
+                    } else {
+                        Scalar::Decimal(DecimalScalar::Decimal128(v, size))
+                    }
+                }
+                IndexDecimalScalar::Decimal256(v, size) => {
+                    Scalar::Decimal(DecimalScalar::Decimal256(v, size))
+                }
+                IndexDecimalScalar::Decimal64(v, size) => {
+                    Scalar::Decimal(DecimalScalar::Decimal64(v, size))
+                }
+            },
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Interval(interval) => Scalar::Interval(interval),
@@ -77,7 +103,16 @@ impl TryFrom<Scalar> for IndexScalar {
         Ok(match value {
             Scalar::Null => IndexScalar::Null,
             Scalar::Number(num_scalar) => IndexScalar::Number(num_scalar),
-            Scalar::Decimal(dec_scalar) => IndexScalar::Decimal(dec_scalar),
+            Scalar::Decimal(dec_scalar) => {
+                match dec_scalar {
+                    // still save as old format for compatibility
+                    DecimalScalar::Decimal64(v, size) => {
+                        IndexScalar::Decimal(IndexDecimalScalar::Decimal128(v as i128, size))
+                    }
+                    DecimalScalar::Decimal128(v, size) => IndexScalar::Decimal(IndexDecimalScalar::Decimal128(v, size)),
+                    DecimalScalar::Decimal256(v, size) => IndexScalar::Decimal(IndexDecimalScalar::Decimal256(v, size)),
+                }
+            }
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Interval(interval) => IndexScalar::Interval(interval),

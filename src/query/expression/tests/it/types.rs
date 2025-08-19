@@ -77,7 +77,7 @@ fn test_convert_types() {
 
     let random_block = rand_block_for_all_types(1024);
     for (idx, c) in random_block.columns().iter().enumerate() {
-        let c = c.value.as_column().unwrap().clone();
+        let c = c.as_column().unwrap().clone();
 
         let data = serialize_column(&c);
         let c2 = deserialize_column(&data).unwrap();

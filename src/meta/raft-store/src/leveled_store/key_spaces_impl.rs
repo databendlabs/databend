@@ -18,27 +18,29 @@ use std::fmt;
 use std::io;
 use std::io::Error;
 
-use crate::leveled_store::map_api::MapKey;
+use state_machine_api::ExpireKey;
+use state_machine_api::UserKey;
+
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::state_machine::ExpireKey;
+use crate::leveled_store::map_api::MapKeyPrefix;
 
-impl MapKeyEncode for String {
-    const PREFIX: &'static str = "kv--";
+impl MapKeyEncode for UserKey {
+    const PREFIX: MapKeyPrefix = "kv--";
 
     fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
-        w.write_str(self.as_str())
+        w.write_str(self.key.as_str())
     }
 }
 
-impl MapKeyDecode for String {
+impl MapKeyDecode for UserKey {
     fn decode(buf: &str) -> Result<Self, Error> {
-        Ok(buf.to_string())
+        Ok(Self::new(buf))
     }
 }
 
 impl MapKeyEncode for ExpireKey {
-    const PREFIX: &'static str = "exp-";
+    const PREFIX: MapKeyPrefix = "exp-";
 
     fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
         // max u64 len is 20: 18446744073709551616
@@ -111,22 +113,18 @@ impl MapKeyDecode for ExpireKey {
     }
 }
 
-impl<M> MapKey<M> for ExpireKey {
-    type V = String;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_string_encode_decode() {
-        let key = "key".to_string();
+    fn test_user_key_encode_decode() {
+        let key = UserKey::new("key");
         let mut buf: String = String::new();
         key.encode(&mut buf).unwrap();
-        assert_eq!(key, buf);
+        assert_eq!(key.as_str(), buf);
 
-        assert_eq!(key, String::decode(&buf).unwrap());
+        assert_eq!(key, UserKey::decode(&buf).unwrap());
     }
 
     #[test]

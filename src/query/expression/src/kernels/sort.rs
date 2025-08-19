@@ -100,7 +100,7 @@ impl DataBlock {
         let mut sort_compare = SortCompare::new(descriptions.to_owned(), num_rows, limit);
 
         for desc in descriptions.iter() {
-            let array = block.get_by_offset(desc.offset).value.clone();
+            let array = block.get_by_offset(desc.offset).value();
             sort_compare.visit_value(array)?;
             sort_compare.increment_column_index();
         }

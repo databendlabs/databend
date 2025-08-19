@@ -52,7 +52,6 @@ jobs:
       - Linux
       - 8c32g
       - aws
-      - spot
     strategy:
       matrix:
         include:
@@ -68,6 +67,8 @@ jobs:
         timeout-minutes: 60
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
+          DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
+          DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
@@ -76,7 +77,7 @@ jobs:
           features: python-udf
 
   docker:
-    needs: [info, build]
+    needs: [ info, build ]
     timeout-minutes: 10
     runs-on:
       - self-hosted
@@ -84,7 +85,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - spot
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -153,9 +153,17 @@ jobs:
 
             > note: this image tag is only available for internal use.
 
+  explain:
+    needs: [info, build, docker]
+    uses: ./.github/workflows/reuse.explain.yml
+    secrets: inherit
+    with:
+      run_id: ${{ github.run_id }}
+      version: ${{ needs.docker.outputs.tag }}
+
   benchmark:
     if: needs.info.outputs.target
-    needs: [info, build, docker]
+    needs: [ info, build, docker ]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
@@ -164,6 +172,4 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: aws
-      runner_capacity: spot
       target: ${{ needs.info.outputs.target }}

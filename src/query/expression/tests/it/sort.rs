@@ -23,12 +23,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
 
-use crate::common::new_block;
 use crate::rand_block_for_all_types;
 
 #[test]
 fn test_block_sort() -> Result<()> {
-    let block = new_block(&[
+    let block = DataBlock::new_from_columns(vec![
         Int64Type::from_data(vec![6i64, 4, 3, 2, 1, 1, 7]),
         StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
     ]);
@@ -100,16 +99,16 @@ fn test_block_sort() -> Result<()> {
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
-                entry.value.as_column().unwrap(),
+                entry.as_column().unwrap(),
                 expect,
                 "the column after sort is wrong, expect: {:?}, got: {:?}",
                 expect,
-                entry.value
+                entry.value()
             );
         }
     }
 
-    let decimal_block = new_block(&[
+    let decimal_block = DataBlock::new_from_columns(vec![
         Decimal128Type::from_data_with_size(vec![6i128, 4, 3, 2, 1, 1, 7], None),
         StringType::from_data(vec!["b1", "b2", "b3", "b4", "b5", "b6", "b7"]),
     ]);
@@ -181,11 +180,11 @@ fn test_block_sort() -> Result<()> {
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
-                entry.value.as_column().unwrap(),
+                entry.as_column().unwrap(),
                 expect,
                 "the column after sort is wrong, expect: {:?}, got: {:?}",
                 expect,
-                entry.value
+                entry.value()
             );
         }
     }
@@ -235,8 +234,8 @@ fn sort_concat() {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 }

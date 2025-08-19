@@ -39,6 +39,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_sql::binder::AsyncFunctionDesc;
 use jiff::tz::TimeZone;
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
@@ -49,7 +50,6 @@ use redis::RedisConnectionInfo;
 use sqlx::MySqlPool;
 
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
-use crate::sql::executor::physical_plans::AsyncFunctionDesc;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::DictGetFunctionArgument;
 use crate::sql::plans::DictionarySource;
@@ -603,12 +603,9 @@ impl TransformAsyncFunction {
         // only support one key field.
         let arg_index = arg_indices[0];
         let entry = data_block.get_by_offset(arg_index);
-        let value = op.dict_get(&entry.value, data_type, dict_arg).await?;
-        let entry = BlockEntry {
-            data_type: data_type.clone(),
-            value,
-        };
-        data_block.add_column(entry);
+        let value = op.dict_get(&entry.value(), data_type, dict_arg).await?;
+        let entry = BlockEntry::new(value, || (data_type.clone(), data_block.num_rows()));
+        data_block.add_entry(entry);
 
         Ok(())
     }

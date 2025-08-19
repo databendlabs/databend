@@ -27,6 +27,7 @@ pub(crate) const ID_GEN_SHARE: &str = "share_id";
 pub(crate) const ID_GEN_SHARE_ENDPOINT: &str = "share_endpoint_id";
 
 pub(crate) const ID_GEN_DATA_MASK: &str = "data_mask";
+pub(crate) const ID_GEN_ROW_POLICY: &str = "row_access";
 pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";
 
 pub(crate) const ID_GEN_PROCEDURE: &str = "procedure_id";
@@ -92,6 +93,12 @@ impl IdGenerator {
     pub fn data_mask_id() -> Self {
         Self {
             resource: ID_GEN_DATA_MASK.to_string(),
+        }
+    }
+
+    pub fn row_access_id() -> Self {
+        Self {
+            resource: ID_GEN_ROW_POLICY.to_string(),
         }
     }
 

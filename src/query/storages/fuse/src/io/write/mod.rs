@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;
 mod inverted_index_writer;
 mod meta_writer;
 mod stream;
+mod vector_index_writer;
 mod virtual_column_builder;
 mod write_settings;
 
+pub use block_statistics_writer::build_column_hlls;
+pub use block_statistics_writer::BlockStatsBuilder;
 pub use block_writer::serialize_block;
 pub use block_writer::write_data;
 pub use block_writer::BlockBuilder;
@@ -37,6 +41,8 @@ pub use meta_writer::CachedMetaWriter;
 pub use meta_writer::MetaWriter;
 pub(crate) use stream::StreamBlockBuilder;
 pub(crate) use stream::StreamBlockProperties;
+pub use vector_index_writer::VectorIndexBuilder;
+pub(crate) use vector_index_writer::VectorIndexState;
 pub use virtual_column_builder::VirtualColumnBuilder;
 pub use write_settings::WriteSettings;
 pub use write_settings::MAX_BLOCK_UNCOMPRESSED_SIZE;

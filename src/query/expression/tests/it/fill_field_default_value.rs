@@ -67,7 +67,7 @@ fn test_data_block_create_with_default_value_functions() -> Result<()> {
             TableField::new("e", TableDataType::String),
         ]);
 
-        let block = new_block(&[
+        let block = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![1i32, 2, 3]),
             Int32Type::from_data(vec![4i32, 5, 6]),
         ]);

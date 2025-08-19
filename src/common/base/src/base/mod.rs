@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod build_info;
 mod dma;
 mod net;
 mod ordered_float;
@@ -28,6 +29,7 @@ mod take_mut;
 mod uniq_id;
 mod watch_notify;
 
+pub use build_info::*;
 pub use dma::dma_buffer_to_bytes;
 pub use dma::dma_read_file;
 pub use dma::dma_read_file_range;

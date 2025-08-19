@@ -56,10 +56,10 @@ impl Interpreter for DescSequenceInterpreter {
             ident: self.plan.ident.clone(),
         };
         let catalog = self.ctx.get_default_catalog()?;
-        let reply = catalog.get_sequence(req).await?;
+        // Already check seq privilege before interpreter
+        let reply = catalog.get_sequence(req, None).await?;
 
         let name = vec![self.plan.ident.name().to_string()];
-        let start = vec![reply.meta.start];
         let interval = vec![reply.meta.step];
         let current = vec![reply.meta.current];
         let created_on = vec![reply.meta.create_on.timestamp_micros()];
@@ -67,7 +67,6 @@ impl Interpreter for DescSequenceInterpreter {
         let comment = vec![reply.meta.comment];
         let blocks = vec![DataBlock::new_from_columns(vec![
             StringType::from_data(name),
-            UInt64Type::from_data(start),
             Int64Type::from_data(interval),
             UInt64Type::from_data(current),
             TimestampType::from_data(created_on),

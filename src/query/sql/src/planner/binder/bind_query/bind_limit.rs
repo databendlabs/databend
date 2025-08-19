@@ -37,10 +37,14 @@ impl Binder {
             return s_expr;
         }
 
+        let mut metadata = self.metadata.write();
+        let lazy_columns = metadata.lazy_columns().clone();
+        metadata.clear_lazy_columns();
         let limit_plan = Limit {
             before_exchange: false,
             limit,
             offset,
+            lazy_columns,
         };
         SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(s_expr))
     }

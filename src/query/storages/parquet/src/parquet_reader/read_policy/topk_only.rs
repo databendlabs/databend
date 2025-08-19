@@ -239,7 +239,7 @@ impl ReadPolicy for TopkOnlyPolicy {
                 transform_record_batch(&self.remain_schema, &batch, &self.remain_field_paths)?;
             if let Some(q) = self.prefetched.as_mut() {
                 let prefetched = q.pop_front().unwrap();
-                block.add_column(prefetched);
+                block.add_entry(prefetched);
             }
             let block = block.resort(&self.src_schema, &self.dst_schema)?;
             Ok(Some(block))

@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
-use databend_common_base::base::tokio::sync::RwLockWriteGuard;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
+use databend_common_meta_raft_store::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
 use databend_common_meta_raft_store::raft_log_v004;
@@ -43,16 +44,22 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Snapshot;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StorageError;
+use databend_common_meta_types::snapshot_db::DBStat;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_metrics::count::Count;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use raft_log::api::raft_log_writer::RaftLogWriter;
-use tokio::time::sleep;
+
+use crate::metrics::raft_metrics;
+use crate::metrics::SnapshotBuilding;
+use crate::store::lock_guards::ReadGuard;
+use crate::store::lock_guards::WriteGuard;
 
 /// This is the inner store that implements the raft log storage API.
 pub struct RaftStoreInner {
@@ -175,9 +182,41 @@ impl RaftStoreInner {
         Ok(sm)
     }
 
-    /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, SMV003> {
-        self.state_machine.write().await
+    pub async fn get_state_machine_read(&self, for_what: impl ToString) -> ReadGuard<'_, SMV003> {
+        let for_what = for_what.to_string();
+
+        let g = self
+            .state_machine
+            .read()
+            .with_timing(|_output, total, _busy| {
+                info!(
+                    "StateMachineLock-Read-Acquire: total: {:?}; {}",
+                    total, &for_what
+                );
+            })
+            .await;
+
+        ReadGuard::new(for_what, g)
+    }
+
+    pub async fn get_state_machine_write(
+        &self,
+        for_what: impl fmt::Display,
+    ) -> WriteGuard<'_, SMV003> {
+        let for_what = for_what.to_string();
+
+        let g = self
+            .state_machine
+            .write()
+            .with_timing(|_output, total, _busy| {
+                info!(
+                    "StateMachineLock-Write-Acquire: total: {:?}; {}",
+                    total, &for_what
+                );
+            })
+            .await;
+
+        WriteGuard::new(for_what, g)
     }
 
     #[fastrace::trace]
@@ -186,14 +225,20 @@ impl RaftStoreInner {
 
         info!(id = self.id; "do_build_snapshot start");
 
+        let _guard = SnapshotBuilding::guard();
+
+        let permit = self.new_compactor_acquirer().await.acquire().await;
+
         let mut compactor = {
-            let mut w = self.state_machine.write().await;
+            let mut w = self
+                .get_state_machine_write("do_build_snapshot-new-compactor")
+                .await;
             w.freeze_writable();
-            w.acquire_compactor().await
+            w.new_compactor(permit)
         };
 
-        let (sys_data, mut strm) = compactor
-            .compact()
+        let (mut sys_data, mut strm) = compactor
+            .compact_into_stream()
             .await
             .map_err(|e| StorageError::read_snapshot(None, &e))?;
 
@@ -224,18 +269,30 @@ impl RaftStoreInner {
                 .await
                 .map_err(|e| StorageError::read_snapshot(None, &e))?
             {
+                // The first 4 chars are key space, such as: "kv--/" or "exp-/"
+                // Get the first 4 chars as key space.
+                let prefix = &ent.0.as_str()[..4];
+                let ks = sys_data.key_counts_mut();
+                if let Some(count) = ks.get_mut(prefix) {
+                    *count += 1;
+                } else {
+                    ks.insert(prefix.to_string(), 1);
+                }
+
                 tx.send(WriteEntry::Data(ent))
                     .await
                     .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
+
+                raft_metrics::storage::incr_snapshot_written_entries();
             }
 
-            tx.send(WriteEntry::Finish(sys_data))
+            tx.send(WriteEntry::Finish((snapshot_id.clone(), sys_data)))
                 .await
                 .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
         }
 
         // Get snapshot write result
-        let temp_snapshot_data = th
+        let db = th
             .await
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
@@ -246,23 +303,31 @@ impl RaftStoreInner {
                 StorageError::write_snapshot(Some(signature.clone()), &e)
             })?;
 
-        let db = temp_snapshot_data
-            .move_to_final_path(snapshot_id.to_string())
-            .map_err(|e| {
-                error!(error :% = e; "move temp snapshot to final path error");
-                StorageError::write_snapshot(Some(signature.clone()), &e)
-            })?;
-
         info!(
             snapshot_id :% = snapshot_id.to_string(),
             snapshot_file_size :% = db.file_size(),
             snapshot_stat :% = db.stat(); "do_build_snapshot complete");
 
         {
-            let mut sm = self.state_machine.write().await;
+            let mut sm = self
+                .get_state_machine_write("do_build_snapshot-replace-compacted")
+                .await;
             sm.levels_mut()
-                .replace_with_compacted(compactor, db.clone());
+                .replace_with_compacted(&mut compactor, db.clone());
+            info!("do_build_snapshot-replace_with_compacted returned");
         }
+
+        // Consume and drop compactor, dropping it may involve blocking IO
+        databend_common_base::runtime::spawn_blocking(move || {
+            let drop_start = std::time::Instant::now();
+            drop(compactor);
+            info!(
+                "do_build_snapshot-compactor-drop completed in {:?}",
+                drop_start.elapsed()
+            );
+        })
+        .await
+        .expect("compactor drop task should not panic");
 
         // Clean old snapshot
         ss_store.new_loader().clean_old_snapshots().await?;
@@ -278,15 +343,43 @@ impl RaftStoreInner {
     ///
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
     pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
-        let sm = self.state_machine.read().await;
+        let sm = self
+            .get_state_machine_read("try_get_snapshot_key_count")
+            .await;
         let db = sm.levels().persisted()?;
         Some(db.stat().key_num)
+    }
+
+    /// Returns the count of keys in each key space from the snapshot data.
+    ///
+    /// Key spaces include:
+    /// - `"exp-"`: expire index data
+    /// - `"kv--"`: key-value data
+    ///
+    /// Returns an empty map if no snapshot exists.
+    pub(crate) async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
+        let sm = self
+            .get_state_machine_read("get_snapshot_key_space_stat")
+            .await;
+        let Some(db) = sm.levels().persisted() else {
+            return Default::default();
+        };
+        db.sys_data().key_counts().clone()
+    }
+
+    /// Get the statistics of the snapshot database.
+    pub(crate) async fn get_snapshot_db_stat(&self) -> DBStat {
+        let sm = self.get_state_machine_read("get_snapshot_db_stat").await;
+        let Some(db) = sm.levels().persisted() else {
+            return Default::default();
+        };
+        db.db_stat()
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[fastrace::trace]
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
-        let mut sm = self.state_machine.write().await;
+        let mut sm = self.get_state_machine_write("do_install_snapshot").await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
             MetaStorageError(
                 AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
@@ -316,32 +409,13 @@ impl RaftStoreInner {
             Ok(line)
         }
 
-        // Lock all data components so that we have a consistent view.
-        //
-        // Hold the singleton compactor to prevent snapshot from being replaced until exporting finished.
-        // Holding it prevent logs from being purged.
-        //
-        // Although vote and log must be consistent,
-        // it is OK to export RaftState and logs without transaction protection(i.e. they do not share a lock),
-        // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
+        let permit = self.new_compactor_acquirer().await.acquire().await;
+
         let compactor = {
-            // If there is a compactor running,
-            // and it will be installed back to SM with
-            // `self.state_machine.write().await.levels_mut().replace_with_compacted()`.
-            // This compactor can not block with self.state_machine lock held.
-            // Otherwise, there is a deadlock:
-            // - This thread holds self.state_machine lock, acquiring compactor.
-            // - The other thread holds compactor, acquiring self.state_machine lock.
-            loop {
-                let got = {
-                    let mut sm = self.state_machine.write().await;
-                    sm.try_acquire_compactor()
-                };
-                if let Some(c) = got {
-                    break c;
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
+            let sm_read = self
+                .get_state_machine_read("new-compactor-for-export")
+                .await;
+            sm_read.new_compactor(permit)
         };
 
         let mut dump = {
@@ -420,7 +494,7 @@ impl RaftStoreInner {
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("get_node").await;
         let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
@@ -430,7 +504,7 @@ impl RaftStoreInner {
         &self,
         list_ids: impl Fn(&Membership) -> Vec<NodeId>,
     ) -> Vec<Node> {
-        let sm = self.state_machine.read().await;
+        let sm = self.get_state_machine_read("get-nodes").await;
         let membership = sm.sys_data_ref().last_membership_ref().membership();
 
         debug!("in-statemachine membership: {:?}", membership);
@@ -465,5 +539,10 @@ impl RaftStoreInner {
             })?;
 
         Ok(endpoint)
+    }
+
+    async fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+        let sm = self.get_state_machine_read("new_compactor_acquirer").await;
+        sm.new_compactor_acquirer()
     }
 }

@@ -47,7 +47,7 @@ pub struct RulePushDownRankLimitAggregate {
 impl RulePushDownRankLimitAggregate {
     pub fn new(max_limit: usize) -> Self {
         Self {
-            id: RuleID::RulePushDownRankLimitAggregate,
+            id: RuleID::PushDownRankLimitAggregate,
             matchers: vec![
                 Matcher::MatchOp {
                     op_type: RelOp::Limit,

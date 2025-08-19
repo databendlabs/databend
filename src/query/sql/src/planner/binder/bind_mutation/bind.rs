@@ -26,12 +26,8 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::ROW_VERSION_COL_NAME;
 
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -40,15 +36,11 @@ use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::plans::BoundColumnRef;
-use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
@@ -207,36 +199,13 @@ impl Binder {
         let mut matched_evaluators = Vec::with_capacity(matched_clauses.len());
         let mut unmatched_evaluators = Vec::with_capacity(unmatched_clauses.len());
         let mut field_index_map = HashMap::<usize, String>::new();
-        let update_row_version = if self.has_update(&matched_clauses) {
-            // If exists update clause and change tracking enabled, we need to update row_version,
-            // we need database name and table name in update_row_version, if the table alias is
-            // not None, after the binding phase, the bound columns will have a database of None,
-            // so we adjust it accordingly.
-            let database_name = if table_name_alias.is_some() {
-                None
-            } else {
-                Some(database_name.clone())
-            };
-            let update_row_version = if table.change_tracking_enabled() {
-                Some(Self::update_row_version(
-                    table.schema_with_stream(),
-                    &bind_context.columns,
-                    database_name.as_deref(),
-                    Some(&target_table_name),
-                )?)
-            } else {
-                None
-            };
-
+        if self.has_update(&matched_clauses) {
             // If exists update clause, we need to read all columns of target table.
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let column_index = Self::find_column_index(&target_column_entries, field.name())?;
                 field_index_map.insert(idx, column_index.to_string());
             }
-            update_row_version
-        } else {
-            None
-        };
+        }
 
         if table.change_tracking_enabled() && mutation_strategy != MutationStrategy::NotMatchedOnly
         {
@@ -264,7 +233,6 @@ impl Binder {
                     clause,
                     table_schema.clone(),
                     all_source_columns.clone(),
-                    update_row_version.clone(),
                     &target_table_name,
                     &database_name,
                 )
@@ -359,7 +327,6 @@ impl Binder {
         clause: &MatchedClause,
         schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
-        update_row_version: Option<(FieldIndex, ScalarExpr)>,
         target_name: &str,
         database_name: &str,
     ) -> Result<MatchedEvaluator> {
@@ -377,7 +344,7 @@ impl Binder {
             None
         };
 
-        let mut update = if let MatchOperation::Update {
+        let update = if let MatchOperation::Update {
             update_list,
             is_star,
         } = &clause.operation
@@ -438,10 +405,6 @@ impl Binder {
             None
         };
 
-        // update row_version
-        if let Some((index, row_version)) = update_row_version {
-            update.as_mut().map(|v| v.insert(index, row_version));
-        }
         Ok(MatchedEvaluator { condition, update })
     }
 
@@ -548,46 +511,6 @@ impl Binder {
             }
         }
         false
-    }
-
-    pub fn update_row_version(
-        schema: Arc<TableSchema>,
-        columns: &[ColumnBinding],
-        database_name: Option<&str>,
-        table_name: Option<&str>,
-    ) -> Result<(FieldIndex, ScalarExpr)> {
-        let col_name = ROW_VERSION_COL_NAME;
-        let index = schema.index_of(col_name)?;
-        let mut row_version = None;
-        for column_binding in columns.iter() {
-            if BindContext::match_column_binding(
-                database_name,
-                table_name,
-                col_name,
-                column_binding,
-            ) {
-                row_version = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: column_binding.clone(),
-                }));
-                break;
-            }
-        }
-        let col = row_version.ok_or_else(|| ErrorCode::Internal("row_version It's a bug"))?;
-        let scalar = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "plus".to_string(),
-            params: vec![],
-            arguments: vec![
-                col,
-                ConstantExpr {
-                    span: None,
-                    value: Scalar::Number(NumberScalar::UInt64(1)),
-                }
-                .into(),
-            ],
-        });
-        Ok((index, scalar))
     }
 }
 

@@ -6,6 +6,9 @@ sql: |
 
 auto_statistics: true
 
+tables:
+  integers: basic/01_integers.sql
+
 good_plan: |
   Result [output: DT.D_YEAR, ITEM.I_BRAND_ID, ITEM.I_BRAND, SUM(...)]
   └── SortWithLimit [limit: 100]

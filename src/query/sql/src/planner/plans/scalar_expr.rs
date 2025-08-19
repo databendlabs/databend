@@ -35,9 +35,11 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::GrantObjectVisibilityChecker;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -449,21 +451,20 @@ impl ScalarExpr {
         has_subquery.has_subquery
     }
 
-    pub fn get_subquery(&self, result: Vec<SubqueryExpr>) -> Vec<SubqueryExpr> {
-        struct GetSubquery {
-            subquerys: Vec<SubqueryExpr>,
+    pub fn collect_subquery(&self, result: &mut Vec<SubqueryExpr>) {
+        struct CollectSubQuery<'a> {
+            subquerys: &'a mut Vec<SubqueryExpr>,
         }
 
-        impl<'a> Visitor<'a> for GetSubquery {
+        impl<'a> Visitor<'a> for CollectSubQuery<'a> {
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
                 self.subquerys.push(subquery.clone());
                 Ok(())
             }
         }
 
-        let mut get_subquery = GetSubquery { subquerys: result };
-        get_subquery.visit(self).unwrap();
-        get_subquery.subquerys
+        let mut visitor = CollectSubQuery { subquerys: result };
+        visitor.visit(self).unwrap();
     }
 }
 
@@ -1101,17 +1102,22 @@ impl Display for UDFLanguage {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Educe, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[educe(Hash(bound = false))]
 pub struct UDFScriptCode {
     pub language: UDFLanguage,
     pub runtime_version: String,
+    #[educe(Hash(ignore))]
+    pub imports_stage_info: Vec<(StageInfo, String)>,
+    pub imports: Vec<String>,
+    pub packages: Vec<String>,
     pub code: Arc<Box<[u8]>>,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String), // server_addr
-    Script(UDFScriptCode),
+    Script(Box<UDFScriptCode>),
 }
 
 impl UDFType {
@@ -1210,15 +1216,27 @@ pub struct AsyncFunctionCall {
 }
 
 impl AsyncFunctionCall {
-    pub async fn generate(&self, tenant: Tenant, catalog: Arc<dyn Catalog>) -> Result<Scalar> {
+    pub async fn generate(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
+                if let Some(visibility_checker) = &visibility_checker {
+                    if !visibility_checker.check_seq_visibility(sequence_name) {
+                        return Err(ErrorCode::PermissionDenied(format!("Permission denied: privilege ACCESS SEQUENCE is required on sequence {}", sequence_name)));
+                    }
+                }
                 let req = GetSequenceNextValueReq {
                     ident: SequenceIdent::new(&tenant, sequence_name.clone()),
                     count: 1,
                 };
                 // Call meta's api to generate an incremental value.
-                let reply = catalog.get_sequence_next_value(req).await?;
+                let reply = catalog
+                    .get_sequence_next_value(req, visibility_checker)
+                    .await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {

@@ -43,7 +43,7 @@ pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u6
         vec![Scalar::Number(NumberScalar::Float64(
             DISTINCT_ERROR_RATE.into(),
         ))],
-        &[column.clone()],
+        &[column.clone().into()],
         rows,
         vec![],
     )?;
@@ -83,51 +83,48 @@ pub fn gen_columns_statistics(
                 let mut min = Scalar::Null;
                 let mut max = Scalar::Null;
 
-                let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows, vec![])?;
-                let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows, vec![])?;
+                if col.len() > 0 {
+                    let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
+                    let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
 
-                if mins.len() > 0 {
-                    min = if let Some(v) = mins.index(0) {
-                        if let Some(v) = v.to_owned().trim_min() {
-                            v
+                    if mins.len() > 0 {
+                        min = if let Some(v) = mins.index(0) {
+                            if let Some(v) = v.to_owned().trim_min() {
+                                v
+                            } else {
+                                continue;
+                            }
                         } else {
                             continue;
                         }
-                    } else {
-                        continue;
                     }
-                }
 
-                if maxs.len() > 0 {
-                    max = if let Some(v) = maxs.index(0) {
-                        if let Some(v) = v.to_owned().trim_max() {
-                            v
+                    if maxs.len() > 0 {
+                        max = if let Some(v) = maxs.index(0) {
+                            if let Some(v) = v.to_owned().trim_max() {
+                                v
+                            } else {
+                                continue;
+                            }
                         } else {
                             continue;
                         }
-                    } else {
-                        continue;
                     }
                 }
 
                 let (is_all_null, bitmap) = col.validity();
                 let unset_bits = match (is_all_null, bitmap) {
-                    (true, _) => rows,
-                    (false, Some(bitmap)) => bitmap.null_count(),
+                    (_, Some(bitmap)) => bitmap.null_count(),
+                    (true, None) => rows,
                     (false, None) => 0,
                 };
 
                 // use distinct count calculated by the xor hash function to avoid repetitive operation.
-                let distinct_of_values = if let Some(value) = column_distinct_count
+                let distinct_of_values = if let Some(&value) = column_distinct_count
                     .as_ref()
                     .and_then(|v| v.get(&column_id))
                 {
-                    // value calculated by xor hash function include NULL, need to subtract one.
-                    if unset_bits > 0 {
-                        *value as u64 - 1
-                    } else {
-                        *value as u64
-                    }
+                    value as u64
                 } else {
                     calc_column_distinct_of_values(&col, rows)?
                 };
@@ -171,7 +168,7 @@ pub trait Trim: Sized {
     fn may_be_trimmed(&self) -> bool;
 }
 
-pub const STATS_REPLACEMENT_CHAR: char = '\u{FFFD}';
+pub const END_OF_UNICODE_RANGE: char = '\u{10FFFF}';
 pub const STATS_STRING_PREFIX_LEN: usize = 16;
 
 impl Trim for Scalar {
@@ -223,7 +220,7 @@ impl Trim for Scalar {
                     // in reversed order, break at the first one we met
                     let mut idx = None;
                     for (i, c) in sliced.char_indices().rev() {
-                        if c < STATS_REPLACEMENT_CHAR {
+                        if c < END_OF_UNICODE_RANGE {
                             idx = Some(i);
                             break;
                         }
@@ -238,7 +235,7 @@ impl Trim for Scalar {
                         if i < replacement_point {
                             r.push(c)
                         } else {
-                            r.push(STATS_REPLACEMENT_CHAR);
+                            r.push(END_OF_UNICODE_RANGE);
                         }
                     }
 
@@ -253,6 +250,55 @@ impl Trim for Scalar {
         match self {
             Scalar::String(s) => s.len() >= STATS_STRING_PREFIX_LEN,
             _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+
+    use crate::statistics::Trim;
+    use crate::statistics::END_OF_UNICODE_RANGE;
+    use crate::statistics::STATS_STRING_PREFIX_LEN;
+
+    #[test]
+    fn test_trim_max() {
+        {
+            let invalid = END_OF_UNICODE_RANGE
+                .to_string()
+                .repeat(STATS_STRING_PREFIX_LEN + 1);
+            assert_eq!(Scalar::String(invalid).trim_max(), None);
+        }
+
+        {
+            let s = END_OF_UNICODE_RANGE
+                .to_string()
+                .repeat(STATS_STRING_PREFIX_LEN);
+            let scalar = Scalar::String(s.clone());
+            assert_eq!(scalar.clone().trim_max(), Some(scalar));
+        }
+
+        {
+            let s = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN + 1);
+            let res = Scalar::String(s.clone()).trim_max();
+            let mut exp = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 1);
+            exp.push(END_OF_UNICODE_RANGE);
+            assert_eq!(res, Some(Scalar::String(exp)));
+        }
+
+        {
+            let mut s = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 1);
+            s.push(END_OF_UNICODE_RANGE);
+            s.push(END_OF_UNICODE_RANGE);
+
+            let res = Scalar::String(s.clone()).trim_max();
+
+            let mut exp = '👍'.to_string().repeat(STATS_STRING_PREFIX_LEN - 2);
+            exp.push(END_OF_UNICODE_RANGE);
+            exp.push(END_OF_UNICODE_RANGE);
+
+            assert_eq!(res, Some(Scalar::String(exp)));
         }
     }
 }

@@ -12,26 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 
+use super::assert_unary_arguments;
+use super::batch_merge1;
 use super::get_levels;
+use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::QuantileData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggregateFunctionRef;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -53,10 +60,25 @@ where
     }
 }
 
+impl<T> QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
+{
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value.extend(
+            rhs.value
+                .iter()
+                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
+        );
+        Ok(())
+    }
+}
+
 impl<T> UnaryState<T, ArrayType<T>> for QuantileState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
     fn add(
         &mut self,
@@ -68,12 +90,7 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.value.extend(
-            rhs.value
-                .iter()
-                .map(|v| T::to_owned_scalar(T::to_scalar_ref(v))),
-        );
-        Ok(())
+        self.merge(rhs)
     }
 
     fn merge_result(
@@ -109,10 +126,46 @@ where
     }
 }
 
+impl<T> StateSerde for QuantileState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 impl<T> UnaryState<T, T> for QuantileState<T>
 where
-    T: ValueType + Sync + Send,
-    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
     fn add(
         &mut self,
@@ -172,91 +225,56 @@ pub fn try_create_aggregate_quantile_disc_function(
             with_number_mapped_type!(|NUM_TYPE| match num_type {
                 NumberDataType::NUM_TYPE => {
                     if params.len() > 1 {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             ArrayType<NumberType<NUM_TYPE>>,
-                        >::try_create(
-                            display_name,
-                            DataType::Array(Box::new(data_type)),
-                            params,
-                            arguments[0].clone(),
+                        >::create(
+                            display_name, DataType::Array(Box::new(data_type))
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     } else {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             NumberType<NUM_TYPE>,
-                        >::try_create(
-                            display_name, data_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, data_type)
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     }
                 }
             })
         }
-        DataType::Decimal(size) if size.can_carried_by_128() => {
-            let data_type = DataType::Decimal(size);
-            if params.len() > 1 {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i128>>,
-                    DecimalType<i128>,
-                    ArrayType<DecimalType<i128>>,
-                >::try_create(
-                    display_name,
-                    DataType::Array(Box::new(data_type)),
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i128>>,
-                    DecimalType<i128>,
-                    DecimalType<i128>,
-                >::try_create(
-                    display_name, data_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            }
-        }
         DataType::Decimal(size) => {
-            let data_type = DataType::Decimal(size);
-            if params.len() > 1 {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i256>>,
-                    DecimalType<i256>,
-                    ArrayType<DecimalType<i256>>,
-                >::try_create(
-                    display_name,
-                    DataType::Array(Box::new(data_type)),
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i256>>,
-                    DecimalType<i256>,
-                    DecimalType<i256>,
-                >::try_create(
-                    display_name, data_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            }
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let data_type = DataType::Decimal(size);
+                    if params.len() > 1 {
+                        AggregateUnaryFunction::<
+                            QuantileState<DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            ArrayType<DecimalType<DECIMAL>>,
+                        >::create(
+                            display_name, DataType::Array(Box::new(data_type))
+                        )
+                        .with_function_data(Box::new(QuantileData { levels }))
+                        .with_need_drop(true)
+                        .finish()
+                    } else {
+                        AggregateUnaryFunction::<
+                            QuantileState<DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::create(display_name, data_type)
+                        .with_function_data(Box::new(QuantileData { levels }))
+                        .with_need_drop(true)
+                        .finish()
+                    }
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
@@ -264,6 +282,7 @@ pub fn try_create_aggregate_quantile_disc_function(
         ))),
     })
 }
+
 pub fn aggregate_quantile_disc_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_disc_function))
 }

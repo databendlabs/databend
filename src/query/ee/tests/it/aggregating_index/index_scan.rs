@@ -23,7 +23,7 @@ use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::SortColumnDescription;
-use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::Planner;
@@ -724,7 +724,6 @@ fn get_sort_col_descs(num_cols: usize) -> Vec<SortColumnDescription> {
             offset: i,
             nulls_first: false,
             asc: true,
-            is_nullable: false,
         });
     }
     sorts
@@ -1041,10 +1040,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
                 "query_out_of_memory_behavior".to_string(),
                 "spilling".to_string(),
             ),
-            (
-                "max_query_memory_usage".to_string(),
-                "1".to_string(),
-            ),
+            ("max_query_memory_usage".to_string(), "1".to_string()),
         ]))
     } else {
         None
@@ -1057,7 +1053,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
             if let Some(s) = spill_settings.as_ref() {
                 let settings = session.get_settings();
                 // Make sure the operator will spill the aggregation.
-                settings.set_batch_settings(s)?;
+                settings.set_batch_settings(s, false)?;
             }
 
             // Prepare table and data

@@ -164,11 +164,10 @@ impl CsvReader {
 
                             if let Err(e) = self.check_num_field() {
                                 self.load_ctx.error_handler.on_error(
-                                    e,
+                                    e.with_row(self.pos.rows),
                                     None,
                                     file_status,
                                     &self.pos.path,
-                                    self.pos.rows,
                                 )?;
                                 ReadRecordOutput::RecordSkipped
                             } else {

@@ -185,7 +185,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 num_rows,
             )?;
             debug_assert_eq!(block.num_columns(), 1);
-            let topk_col = block.columns()[0].value.as_column().unwrap();
+            let topk_col = block.columns()[0].as_column().unwrap();
             if sorter.never_match_any(topk_col) {
                 // All rows in current row group are filtered out.
                 return Ok(None);

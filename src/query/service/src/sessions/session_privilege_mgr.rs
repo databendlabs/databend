@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -84,6 +85,7 @@ pub trait SessionPrivilegeManager {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
@@ -171,16 +173,9 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     ///    `secondary_roles` will be set to None, which is default.
     /// 2. NONE: only the current_role has effects on validate_privilge, `secondary_roles`
     ///    will be set to Some([]).
-    /// We can release this restriction in the future if any user needed. If an user want to set
-    /// secondary_roles to be a subset of the roles granted to the current user, he can pass
-    /// `secondary_roles` as Some([role1, role2, .. etc.]).
+    /// 3. SpecifyRoles: Some([role1, role2, .. etc.]).
     #[async_backtrace::framed]
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
-        if secondary_roles.is_some() && !secondary_roles.as_ref().unwrap().is_empty() {
-            return Err(ErrorCode::InvalidArgument(
-                "only ALL or NONE is allowed on setting secondary roles",
-            ));
-        }
         self.session_ctx.set_secondary_roles(secondary_roles);
         Ok(())
     }
@@ -206,7 +201,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         let secondary_roles = self.session_ctx.get_secondary_roles();
 
-        // if secondary_roles is not set, return all the available roles
+        // SET SECONDARY ROLES ALL, return all the available roles
         if secondary_roles.is_none() {
             let available_roles = self.get_all_available_roles().await?;
             return Ok(available_roles);
@@ -385,6 +380,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         // TODO(liyz): is it check the visibility according onwerships?
         let roles = self.get_all_effective_roles().await?;
@@ -395,14 +391,50 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                 vec![]
             } else {
                 let user_api = UserApiProvider::instance();
-                let ownerships = user_api
-                    .role_api(&self.session_ctx.get_current_tenant())
-                    .list_ownerships()
-                    .await?;
+                let ownerships = match object {
+                    Object::All => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_ownerships()
+                        .await?
+                        .into_iter()
+                        .map(|item| item.data)
+                        .collect(),
+                    Object::UDF => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_udf_ownerships()
+                            .await?
+                    }
+                    Object::Stage => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_stage_ownerships()
+                            .await?
+                    }
+                    Object::Sequence => {
+                        let res = user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_seq_ownerships()
+                            .await?;
+                        res
+                    }
+                    Object::Connection => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_connection_ownerships()
+                            .await?
+                    }
+                    Object::Warehouse => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_warehouse_ownerships()
+                            .await?
+                    }
+                };
                 let mut ownership_objects = vec![];
                 for ownership in ownerships {
-                    if roles_name.contains(&ownership.data.role) {
-                        ownership_objects.push(ownership.data.object);
+                    if roles_name.contains(&ownership.role) {
+                        ownership_objects.push(ownership.object);
                     }
                 }
                 ownership_objects

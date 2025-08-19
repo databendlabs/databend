@@ -17,19 +17,19 @@
 use std::future;
 use std::io;
 
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
 use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
+use state_machine_api::ExpireValue;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::map_api::AsMap;
-use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
@@ -92,7 +92,7 @@ impl<'a> DBExporter<'a> {
 
         // expire index
 
-        let strm = MapView(self.db).expire_map().range(..).await?;
+        let strm = MapView(self.db).as_expire_map().range(..).await?;
         let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
             // Tombstone will be converted to None and be ignored.
             let exp_val = ExpireValue::from_marked(marked);
@@ -102,11 +102,14 @@ impl<'a> DBExporter<'a> {
 
         // kv
 
-        let strm = MapView(self.db).str_map().range(..).await?;
-        let kv_strm = strm.try_filter_map(|(str_k, marked)| {
+        let strm = MapView(self.db).as_user_map().range(..).await?;
+        let kv_strm = strm.try_filter_map(|(user_key, seq_marked)| {
             // Tombstone will be converted to None and be ignored.
-            let seqv: Option<SeqV<_>> = marked.into();
-            let ent = seqv.map(|value| SMEntry::GenericKV { key: str_k, value });
+            let seqv: Option<SeqV<_>> = seq_marked.into();
+            let ent = seqv.map(|value| SMEntry::GenericKV {
+                key: user_key.to_string(),
+                value,
+            });
             future::ready(Ok(ent))
         });
 

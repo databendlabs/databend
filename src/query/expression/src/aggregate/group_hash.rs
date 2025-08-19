@@ -29,10 +29,10 @@ use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::Decimal64As128Type;
 use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
-use crate::types::DecimalType;
+use crate::types::DecimalView;
 use crate::types::GeographyColumn;
 use crate::types::GeographyType;
 use crate::types::GeometryType;
@@ -47,24 +47,24 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::visitor::ValueVisitor;
-use crate::with_decimal_type;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
-use crate::InputColumns;
+use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::Value;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
+pub fn group_hash_columns(cols: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-    for (i, col) in cols.iter().enumerate() {
+    for (i, entry) in cols.iter().enumerate() {
         if i == 0 {
-            combine_group_hash_column::<true>(col, values);
+            combine_group_hash_column::<true>(&entry.to_column(), values);
         } else {
-            combine_group_hash_column::<false>(col, values);
+            combine_group_hash_column::<false>(&entry.to_column(), values);
         }
     }
 }
@@ -107,18 +107,16 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         Ok(())
     }
 
-    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
-        match column {
-            DecimalColumn::Decimal64(buffer, _) => {
-                self.combine_group_hash_type_column::<Decimal64As128Type>(&buffer);
+    fn visit_any_decimal(&mut self, decimal_column: DecimalColumn) -> Result<()> {
+        with_decimal_mapped_type!(|F| match decimal_column {
+            DecimalColumn::F(buffer, size) => {
+                with_decimal_mapped_type!(|T| match size.data_kind() {
+                    DecimalDataKind::T => {
+                        self.combine_group_hash_type_column::<DecimalView<F, T>>(&buffer);
+                    }
+                });
             }
-            DecimalColumn::Decimal128(buffer, _) => {
-                self.combine_group_hash_type_column::<DecimalType<i128>>(&buffer);
-            }
-            DecimalColumn::Decimal256(buffer, _) => {
-                self.combine_group_hash_type_column::<DecimalType<i256>>(&buffer);
-            }
-        }
+        });
         Ok(())
     }
 
@@ -329,10 +327,15 @@ where I: Index
     }
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
-        with_decimal_type!(|DECIMAL_TYPE| match column {
-            DecimalColumn::DECIMAL_TYPE(buffer, _) => {
-                let buffer = buffer.as_ref();
-                self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+        with_decimal_mapped_type!(|F| match &column {
+            DecimalColumn::F(_, size) => {
+                with_decimal_mapped_type!(|T| match size.data_kind() {
+                    DecimalDataKind::T => {
+                        type D = DecimalView<F, T>;
+                        let buffer = D::try_downcast_column(&Column::Decimal(column)).unwrap();
+                        self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+                    }
+                })
             }
         })
     }
@@ -565,7 +568,6 @@ mod tests {
     use crate::BlockEntry;
     use crate::DataBlock;
     use crate::FromData;
-    use crate::Scalar;
     use crate::Value;
 
     fn merge_hash_slice(ls: &[u64]) -> u64 {
@@ -576,24 +578,10 @@ mod tests {
     fn test_value_spread() -> Result<()> {
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Scalar(Scalar::String("a".to_string())),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Column(StringType::from_data(vec![
-                        "a", "b", "c", "d", "e", "f", "g", "h", "i",
-                    ])),
-                ),
+                Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3]).into(),
+                BlockEntry::new_const_column_arg::<StringType>("a".to_string(), 9),
+                Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3]).into(),
+                StringType::from_data(vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"]).into(),
             ],
             9,
         );
@@ -603,7 +591,7 @@ mod tests {
             let mut target = vec![0; data.num_rows()];
             for (i, entry) in data.columns().iter().enumerate() {
                 let indices = [0, 3, 8];
-                group_hash_value_spread(&indices, entry.value.to_owned(), i == 0, &mut target)?;
+                group_hash_value_spread(&indices, entry.value(), i == 0, &mut target)?;
             }
 
             assert_eq!(

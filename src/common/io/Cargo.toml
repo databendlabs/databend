@@ -23,7 +23,7 @@ hex = { workspace = true }
 jiff = { workspace = true }
 lexical-core = { workspace = true }
 micromarshal = { workspace = true }
-roaring = { workspace = true, features = ["serde"] }
+roaring = { workspace = true }
 scroll = { workspace = true }
 serde = { workspace = true }
 wkt = { workspace = true }

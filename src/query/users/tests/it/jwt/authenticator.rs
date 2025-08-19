@@ -15,8 +15,11 @@
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::tokio;
+use databend_common_config::QueryConfig;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
+use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -53,7 +56,15 @@ async fn test_parse_non_custom_claim() -> Result<()> {
         .mount(&server)
         .await;
     let first_url = format!("http://{}{}", server.address(), json_path);
-    let auth = JwtAuthenticator::create(first_url, vec![], 600, 10).unwrap();
+    let cfg = QueryConfig {
+        tenant_id: Tenant::new_literal("test-tenant"),
+        cluster_id: "test-cluster".to_string(),
+        jwt_key_file: first_url,
+        jwks_refresh_interval: 86400,
+        jwks_refresh_timeout: 10,
+        ..Default::default()
+    };
+    let auth = JwtAuthenticator::create(&cfg, &BUILD_INFO).unwrap();
     let user_name = "test-user2";
     let my_additional_data = MyAdditionalData {
         user_is_admin: false,

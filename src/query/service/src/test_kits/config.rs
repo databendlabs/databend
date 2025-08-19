@@ -33,6 +33,7 @@ impl ConfigBuilder {
         conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
         conf.query.cluster_id = String::from("test_cluster");
+        conf.query.warehouse_id = String::from("test_warehouse");
 
         // add builtin users for test
         let users = vec![UserConfig {
@@ -152,6 +153,11 @@ ADDRESS = 'https://databend.com';"
 
     pub fn query_flight_address(mut self, value: impl Into<String>) -> ConfigBuilder {
         self.conf.query.flight_api_address = value.into();
+        self
+    }
+
+    pub fn enable_meta_service_ownership_cache(mut self) -> ConfigBuilder {
+        self.conf.cache.meta_service_ownership_cache = true;
         self
     }
 

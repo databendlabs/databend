@@ -18,7 +18,7 @@ mod expr;
 mod format;
 mod query;
 pub mod quote;
-mod statements;
+pub(crate) mod statements;
 
 pub use common::*;
 pub use expr::*;

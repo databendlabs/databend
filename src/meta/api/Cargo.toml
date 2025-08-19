@@ -30,6 +30,7 @@ logcall = { workspace = true }
 maplit = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
+seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

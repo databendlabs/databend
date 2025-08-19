@@ -44,6 +44,9 @@ impl Debug for RuntimeFilterInfo {
                 .collect::<Vec<String>>()
                 .join(","),
             self.bloom
+                .iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<&String>>()
         )
     }
 }

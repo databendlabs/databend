@@ -15,7 +15,6 @@
 //! Test metasrv SchemaApi by writing to one node and then reading from another,
 //! on a restarted cluster.
 
-use std::ops::Deref;
 use std::time::Duration;
 
 use databend_common_grpc::ConnectionFactory;
@@ -23,8 +22,8 @@ use databend_common_meta_client::from_digit_ver;
 use databend_common_meta_client::to_digit_ver;
 use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::METACLI_COMMIT_SEMVER;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_version::DATABEND_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;
 use log::info;
@@ -82,7 +81,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
 
         let res = MetaGrpcClient::handshake(
             &mut client,
-            &METACLI_COMMIT_SEMVER,
+            &DATABEND_SEMVER,
             &[("foo", (500, 500, 500))],
             "root",
             "xxx",
@@ -92,7 +91,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
         debug!("handshake res: {:?}", res);
         let e = res.unwrap_err();
 
-        let server_ver = from_digit_ver(to_digit_ver(METACLI_COMMIT_SEMVER.deref()));
+        let server_ver = from_digit_ver(to_digit_ver(&DATABEND_SEMVER));
         let server_ver = (server_ver.major, server_ver.minor, server_ver.patch);
 
         let want = format!(

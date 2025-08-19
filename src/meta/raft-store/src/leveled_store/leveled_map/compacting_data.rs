@@ -22,7 +22,10 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
+use map_api::MapKV;
 use rotbl::v001::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
@@ -31,8 +34,7 @@ use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
-use crate::marked::Marked;
-use crate::state_machine::ExpireKey;
+use crate::utils::add_cooperative_yielding;
 
 /// The data to compact.
 ///
@@ -69,12 +71,12 @@ impl<'a> CompactingData<'a> {
         let mut data = newest.new_level();
 
         // Copy all expire data and keep tombstone.
-        let strm = (*immutable_levels).expire_map().range(..).await?;
+        let strm = (*immutable_levels).as_expire_map().range(..).await?;
         let bt = strm.try_collect().await?;
         data.replace_expire(bt);
 
         // Copy all kv data and keep tombstone.
-        let strm = (*immutable_levels).str_map().range(..).await?;
+        let strm = (*immutable_levels).as_user_map().range(..).await?;
         let bt = strm.try_collect().await?;
         data.replace_kv(bt);
 
@@ -88,9 +90,10 @@ impl<'a> CompactingData<'a> {
     ///
     /// It returns a small chunk of sys data that is always copied across levels,
     /// and a stream contains `kv` and `expire` entries.
+    /// The stream Item is 2 items tuple of key, and value with seq.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
-    pub async fn compact(
+    pub async fn compact_into_stream(
         &self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
         fn with_context(e: io::Error, key: &impl fmt::Debug) -> io::Error {
@@ -107,17 +110,20 @@ impl<'a> CompactingData<'a> {
 
         // expire index: prefix `exp-/`.
 
-        let strm = (*self.immutable_levels).expire_map().range(..).await?;
-        let expire_strm = strm.map(|item: Result<(ExpireKey, Marked<String>), io::Error>| {
-            let (k, v) = item?;
-            RotblCodec::encode_key_seq_marked(&k, v).map_err(|e| with_context(e, &k))
+        let strm = (*self.immutable_levels).as_expire_map().range(..).await?;
+        let expire_strm = strm.map(|item: Result<(ExpireKey, SeqMarked<String>), io::Error>| {
+            let (expire_key, marked_string) = item?;
+
+            RotblCodec::encode_key_seq_marked(&expire_key, marked_string)
+                .map_err(|e| with_context(e, &expire_key))
         });
 
         // kv: prefix: `kv--/`
 
-        let strm = (*self.immutable_levels).str_map().range(..).await?;
-        let kv_strm = strm.map(|item: Result<(String, Marked), io::Error>| {
+        let strm = (*self.immutable_levels).as_user_map().range(..).await?;
+        let kv_strm = strm.map(|item: Result<MapKV<UserKey>, io::Error>| {
             let (k, v) = item?;
+
             RotblCodec::encode_key_seq_marked(&k, v).map_err(|e| with_context(e, &k))
         });
 
@@ -136,6 +142,8 @@ impl<'a> CompactingData<'a> {
 
         // Filter out tombstone
         let normal_strm = coalesce.try_filter(|(_k, v)| future::ready(v.is_normal()));
+
+        let normal_strm = add_cooperative_yielding(normal_strm, "compact");
 
         Ok((sys_data, normal_strm.boxed()))
     }

@@ -41,6 +41,7 @@ fn test_decode_v121_avro_file_format_params() -> anyhow::Result<()> {
         compression: StageFileCompression::Zstd,
         missing_field_as: NullAs::FieldDefault,
         null_if: vec!["null".to_string(), "NULL".to_string()],
+        use_logic_type: true,
     };
     common::test_load_old(
         func_name!(),
@@ -63,6 +64,7 @@ fn test_decode_v121_file_format_params() -> anyhow::Result<()> {
             compression: StageFileCompression::Zstd,
             missing_field_as: NullAs::FieldDefault,
             null_if: vec!["null".to_string(), "NULL".to_string()],
+            use_logic_type: true,
         })
     };
     common::test_load_old(func_name!(), file_format_params_v121.as_slice(), 0, want())?;

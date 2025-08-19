@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
@@ -98,6 +99,7 @@ static DELETES_FILE_PUSHDOWN_INFO: LazyLock<PushDownInfo> = LazyLock::new(|| Pus
     agg_index: None,
     change_type: None,
     inverted_index: None,
+    vector_index: None,
     sample: None,
 });
 
@@ -320,11 +322,8 @@ impl RowGroupReader {
         let mut positional_deletes = Vec::new();
 
         while let Some(block) = reader.read_block_from_stream(&mut stream).await? {
-            let num_rows = block.num_rows();
-            let column = block.columns()[0].to_column(num_rows);
-            let column = column.as_number().unwrap().as_int64().unwrap();
-
-            positional_deletes.extend_from_slice(column.as_slice())
+            let view = block.get_by_offset(0).downcast::<Int64Type>().unwrap();
+            positional_deletes.extend(view.iter())
         }
         Ok(positional_deletes)
     }

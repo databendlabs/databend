@@ -24,7 +24,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
@@ -86,15 +85,12 @@ impl Interpreter for ShowCreateDictionaryInterpreter {
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
         };
 
-        let create_query: String =
+        let create_query =
             Self::show_create_query(catalog.as_ref(), &dictionary, &dict_name, &settings).await?;
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(dict_name))),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(create_query)),
-                ),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(dict_name), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(create_query), 1),
             ],
             1,
         );

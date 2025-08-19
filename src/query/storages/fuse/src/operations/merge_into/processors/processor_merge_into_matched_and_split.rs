@@ -386,7 +386,7 @@ impl Processor for MatchedSplitProcessor {
 
                 let filter: Value<BooleanType> = current_block
                     .get_by_offset(current_block.num_columns() - 1)
-                    .value
+                    .value()
                     .try_downcast()
                     .unwrap();
                 current_block = current_block.filter_boolean_value(&filter)?;
@@ -454,7 +454,7 @@ impl MatchedSplitProcessor {
                         expr: Box::new(RawExpr::ColumnRef {
                             span: None,
                             id: idx,
-                            data_type: col.data_type.clone(),
+                            data_type: col.data_type(),
                             display_name: "".to_string(),
                         }),
                         dest_type: self.target_table_schema.fields[idx].data_type().clone(),

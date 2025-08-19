@@ -20,8 +20,9 @@ use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::Vote;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
+use state_machine_api::ExpireValue;
 
 use crate::SledBytesError;
 use crate::SledSerde;
@@ -109,6 +110,14 @@ impl SledSerde for SnapshotMeta {
 }
 
 impl SledSerde for Node {
+    fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+    where Self: Sized {
+        let s = serde_json::from_slice(v.as_ref())?;
+        Ok(s)
+    }
+}
+
+impl SledSerde for ExpireValue {
     fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
     where Self: Sized {
         let s = serde_json::from_slice(v.as_ref())?;

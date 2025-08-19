@@ -56,13 +56,13 @@ impl NodeInfo {
     pub fn create(
         id: String,
         secret: String,
-        cpu_nums: u64,
         http_address: String,
         flight_address: String,
         discovery_address: String,
         binary_version: String,
         cache_id: String,
     ) -> NodeInfo {
+        let cpu_nums = num_cpus::get() as u64;
         NodeInfo {
             id,
             secret,

@@ -35,6 +35,7 @@ fn test_decode_v93_parquet_file_format_params() -> anyhow::Result<()> {
         compression: StageFileCompression::Zstd,
         missing_field_as: Default::default(),
         null_if: vec!["".to_string(), "a".to_string()],
+        use_logic_type: true,
     };
     common::test_load_old(
         func_name!(),

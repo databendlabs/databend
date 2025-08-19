@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
 use databend_common_storage::Histogram;
+use databend_common_storage::MetaHLL12;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -25,22 +26,20 @@ use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 
-pub type MetaHLL = simple_hll::HyperLogLog<12>;
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
-    /// format version of snapshot
+    /// format version of statistics
     pub format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
-    pub hll: HashMap<ColumnId, MetaHLL>,
+    pub hll: HashMap<ColumnId, MetaHLL12>,
     pub histograms: HashMap<ColumnId, Histogram>,
 }
 
 impl TableSnapshotStatistics {
     pub fn new(
-        hll: HashMap<ColumnId, MetaHLL>,
+        hll: HashMap<ColumnId, MetaHLL12>,
         histograms: HashMap<ColumnId, Histogram>,
         snapshot_id: SnapshotId,
     ) -> Self {
@@ -69,7 +68,7 @@ impl From<v2::TableSnapshotStatistics> for TableSnapshotStatistics {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id: value.snapshot_id,
-            hll: HashMap::new(),
+            hll: value.hll,
             histograms: HashMap::new(),
         }
     }

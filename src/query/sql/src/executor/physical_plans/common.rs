@@ -16,12 +16,16 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_expression::types::DataType;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 
 use crate::plans::UDFField;
 use crate::plans::UDFType;
 use crate::IndexType;
+
+pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
@@ -78,6 +82,8 @@ pub enum MutationKind {
     Insert,
     Compact,
     MergeInto,
+    /// refresh index, virtual column.
+    Refresh,
 }
 
 impl Display for MutationKind {
@@ -90,6 +96,7 @@ impl Display for MutationKind {
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),
             MutationKind::MergeInto => write!(f, "MergeInto"),
+            MutationKind::Refresh => write!(f, "Refresh"),
         }
     }
 }

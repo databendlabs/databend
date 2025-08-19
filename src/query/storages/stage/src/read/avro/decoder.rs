@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use apache_avro::schema::UnionSchema;
 use apache_avro::types::Value;
 use apache_avro::Reader;
 use apache_avro::Schema;
@@ -39,6 +40,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::AvroFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_storage::FileParseError;
 use lexical_core::FromLexical;
 use num_bigint::BigInt;
 use num_traits::NumCast;
@@ -51,7 +53,6 @@ use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::default_expr_evaluator::DefaultExprEvaluator;
 use crate::read::error_handler::ErrorHandler;
 use crate::read::load_context::LoadContext;
-use crate::read::whole_file_reader::WholeFileData;
 
 #[derive(Default, Debug)]
 struct Error {
@@ -78,6 +79,7 @@ impl Error {
 }
 
 type ReadFieldResult = std::result::Result<(), Error>;
+
 pub(super) struct AvroDecoder {
     pub is_rounding_mode: bool,
     pub params: AvroFileFormatParams,
@@ -87,6 +89,32 @@ pub(super) struct AvroDecoder {
     pub schema: TableSchemaRef,
     pub default_expr_evaluator: Option<Arc<DefaultExprEvaluator>>,
     is_select: bool,
+}
+
+fn date_time_to_int(schema: &mut Schema) {
+    match schema {
+        Schema::Array(a) => date_time_to_int(&mut a.items),
+        Schema::Map(m) => date_time_to_int(&mut m.types),
+        Schema::Union(u) => {
+            *u = {
+                let mut variants = u.variants().to_owned();
+                variants.iter_mut().for_each(date_time_to_int);
+                UnionSchema::new(variants).expect("should never fail")
+            }
+        }
+        Schema::Record(r) => r
+            .fields
+            .iter_mut()
+            .for_each(|f| date_time_to_int(&mut f.schema)),
+        Schema::Date => *schema = Schema::Int,
+        Schema::TimestampMillis
+        | Schema::TimestampMicros
+        | Schema::TimestampNanos
+        | Schema::LocalTimestampMillis
+        | Schema::LocalTimestampMicros
+        | Schema::LocalTimestampNanos => *schema = Schema::Long,
+        _ => {}
+    }
 }
 
 impl AvroDecoder {
@@ -103,16 +131,13 @@ impl AvroDecoder {
         }
     }
 
-    pub fn add(&self, state: &mut BlockBuilderState, data: WholeFileData) -> Result<()> {
-        self.read_file(&data.data, state)
-    }
-
     fn read_file_for_select(
         &self,
         reader: Reader<&[u8]>,
         state: &mut BlockBuilderState,
+        schema: Schema,
     ) -> Result<()> {
-        let schema = MatchedSchema::Primary(reader.writer_schema().clone());
+        let schema = MatchedSchema::Primary(schema);
         for (row, value) in reader.enumerate() {
             let column_builder = if let ColumnBuilder::Variant(b) = &mut state.column_builders[0] {
                 b
@@ -121,26 +146,66 @@ impl AvroDecoder {
                     "invalid column builder when querying avro",
                 ));
             };
-            self.read_variant(column_builder, value.unwrap(), &schema)
-                .map_err(|e| {
-                    ErrorCode::BadBytes(format!("fail to read row {row}: {:?}", e.reason))
-                })?;
+            if let Err(e) = self.read_variant(column_builder, value.unwrap(), &schema) {
+                self.error_handler.on_error(
+                    FileParseError::InvalidRow {
+                        format: "AVRO".to_string(),
+                        message: e.reason.unwrap_or_default().to_string(),
+                    }
+                    .with_row(row),
+                    None,
+                    &mut state.file_status,
+                    &state.file_path,
+                )?;
+            }
             state.add_row(row)
         }
         Ok(())
     }
-    fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
-        let reader = Reader::new(file_data).unwrap();
-        if self.is_select {
-            return self.read_file_for_select(reader, state);
+    pub fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
+        let reader = match Reader::new(file_data) {
+            Ok(r) => r,
+            Err(e) => {
+                let e = match e {
+                    apache_avro::Error::HeaderMagic | apache_avro::Error::ReadHeader(_) => {
+                        FileParseError::WrongFileType {
+                            format: "AVRO".to_string(),
+                            message: e.to_string(),
+                        }
+                    }
+                    _ => FileParseError::BadFile {
+                        format: "AVRO".to_string(),
+                        message: e.to_string(),
+                    },
+                };
+                return self.error_handler.on_error(
+                    e.with_row(0),
+                    None,
+                    &mut state.file_status,
+                    &state.file_path,
+                );
+            }
+        };
+
+        let mut schema = reader.writer_schema().clone();
+        if !self.params.use_logic_type {
+            date_time_to_int(&mut schema);
         }
-        let src_schema = reader.writer_schema().clone();
-        let src_schema = if let Schema::Record(record) = src_schema {
+        if self.is_select {
+            return self.read_file_for_select(reader, state, schema);
+        }
+        let src_schema = if let Schema::Record(record) = schema {
             record
         } else {
-            return Err(ErrorCode::BadArguments(
-                "only support avro with record as top level type",
-            ));
+            let e = FileParseError::WrongRootType {
+                message: "copy from AVRO only support record as root type".to_string(),
+            };
+            return self.error_handler.on_error(
+                e.with_row(0),
+                None,
+                &mut state.file_status,
+                &state.file_path,
+            );
         };
         let names = self
             .schema
@@ -272,6 +337,13 @@ impl AvroDecoder {
                             }
                             self.read_number(c, OrderedFloat::<f64>(v))
                         }
+                        Value::TimestampMicros(v)
+                        | Value::LocalTimestampMicros(v)
+                        | Value::TimestampMillis(v)
+                        | Value::LocalTimestampMillis(v)
+                        | Value::TimestampNanos(v)
+                        | Value::LocalTimestampNanos(v) => self.read_number(c, v),
+                        Value::Date(v) => self.read_number(c, v),
                         _ => Err(Error::default()),
                     }
                 }
@@ -368,9 +440,9 @@ impl AvroDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, value: Value) -> ReadFieldResult {
         let v = match value {
-            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000000,
-            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v * 1000,
-            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v,
+            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000,
+            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v,
+            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v / 1000,
             _ => return Err(Error::default()),
         };
         column.push(v);
@@ -679,6 +751,7 @@ mod test {
         assert_eq!(expected, row);
         Ok(())
     }
+
     #[test]
     fn test_decimal() -> Result<(), String> {
         let avro_schema = json!(
@@ -695,8 +768,7 @@ mod test {
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -728,8 +800,7 @@ mod test {
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
 
         let value = make_value("12345");
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

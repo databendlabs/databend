@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -95,12 +96,20 @@ impl Marshal for TableSnapshotStatistics {
     }
 }
 
+impl Marshal for SegmentStatistics {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        assert_eq!(self.format_version, SegmentStatistics::VERSION);
+        self.to_bytes()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-
+    use chrono::Duration;
     use databend_common_base::runtime::catch_unwind;
     use databend_common_expression::TableSchema;
     use databend_storages_common_table_meta::meta::Statistics;
+    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
     use super::*;
 
@@ -133,7 +142,8 @@ mod tests {
                     Statistics::default(),
                     vec![],
                     None,
-                    Default::default(),
+                    // Dummy timestamps for test
+                    TableMetaTimestamps::new(None, Duration::hours(1)),
                 )
                 .unwrap();
                 snapshot.format_version = v;
@@ -150,7 +160,8 @@ mod tests {
             Statistics::default(),
             vec![],
             None,
-            Default::default(),
+            // Dummy timestamps for test
+            TableMetaTimestamps::new(None, Duration::hours(1)),
         )
         .unwrap();
         snapshot.marshal().unwrap();

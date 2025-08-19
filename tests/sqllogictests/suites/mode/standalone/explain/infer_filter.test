@@ -842,7 +842,6 @@ HashJoin
 ├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [t2.id (#1)]
@@ -878,4 +877,3 @@ drop table if exists t1;
 
 statement ok
 drop table if exists t2;
-

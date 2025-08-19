@@ -20,6 +20,7 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -66,8 +67,9 @@ impl MySQLConnection {
                     }
                 };
 
+                let version = GlobalConfig::version();
                 let mut interactive_worker =
-                    InteractiveWorker::create(session.clone(), client_addr);
+                    InteractiveWorker::create(session.clone(), version, client_addr);
                 let opts = IntermediaryOptions {
                     process_use_statement_on_query: true,
                     reject_connection_on_dbname_absence: false,
@@ -101,7 +103,12 @@ impl MySQLConnection {
                     .drop_client_session_id(&session_id, &user)
                     .await
                     .ok();
-                drop_all_temp_tables(&session_id, session.temp_tbl_mgr(), "mysql").await
+                drop_all_temp_tables(
+                    &format!("{user}/{session_id}"),
+                    session.temp_tbl_mgr(),
+                    "mysql",
+                )
+                .await
             });
             let _ = futures::executor::block_on(join_handle);
         });

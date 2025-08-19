@@ -13,13 +13,13 @@
 ## limitations under the License.
 
 statement ok
-drop database if exists test_index
+drop database if exists test_inverted_index
 
 statement ok
-create database test_index
+create database test_inverted_index
 
 statement ok
-use test_index
+use test_inverted_index
 
 statement ok
 CREATE TABLE t (id int, content string, INVERTED INDEX idx1 (content) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop')
@@ -467,16 +467,31 @@ statement ok
 ALTER TABLE books MODIFY COLUMN title string not null
 
 query TTT
-SELECT name, type, definition FROM system.indexes order by name
+SELECT name, type, definition FROM system.indexes WHERE type = 'INVERTED' ORDER BY name;
 ----
 idx INVERTED t1(body)tokenizer='chinese'
 idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
 idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer='chinese'
 
+query TII
+select name, index_size, inverted_index_size from system.tables where name='t1' and database='test_inverted_index';
+----
+t1 2828 2390
+
 query III
-select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_index', 't1')
+select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_inverted_index', 't1')
 ----
 10 438 2390
+
+query IIII
+select block_count, row_count, index_size, inverted_index_size from fuse_segment('test_inverted_index', 't1');
+----
+1 10 2828 2390
+
+query IIII
+select block_count, row_count, index_size, inverted_index_size from fuse_snapshot('test_inverted_index', 't1');
+----
+1 10 2828 2390
 
 statement ok
 CREATE TABLE t2 (id int, body string)
@@ -495,5 +510,5 @@ statement ok
 use default
 
 statement ok
-drop database test_index
+drop database test_inverted_index
 

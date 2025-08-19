@@ -1,4 +1,9 @@
-query 
+
+query
+select * from @data/invalid_path/alltypes_plain.parquet (pattern => '')
+----
+
+query
 select * from @data/parquet/alltypes_plain.parquet (pattern => '')
 ----
 4 1 0 0 0 0 0.0 0.0 03/01/09 0 2009-03-01 00:00:00.000000
@@ -10,7 +15,7 @@ select * from @data/parquet/alltypes_plain.parquet (pattern => '')
 0 1 0 0 0 0 0.0 0.0 01/01/09 0 2009-01-01 00:00:00.000000
 1 0 1 1 1 10 1.1 10.1 01/01/09 1 2009-01-01 00:01:00.000000
 
-query 
+query
 select id from  @data/parquet/alltypes_plain.parquet (pattern=>'') where tinyint_col = 0 order by timestamp_col limit 5
 ----
 0
@@ -24,7 +29,7 @@ drop view if exists view_parquet
 statement ok
 create view view_parquet as select * from @data/parquet/alltypes_plain.parquet  (FILE_FORMAT=>'parquet', pattern=>'')
 
-query 
+query
 select * from view_parquet
 ----
 4 1 0 0 0 0 0.0 0.0 03/01/09 0 2009-03-01 00:00:00.000000
@@ -36,7 +41,7 @@ select * from view_parquet
 0 1 0 0 0 0 0.0 0.0 01/01/09 0 2009-01-01 00:00:00.000000
 1 0 1 1 1 10 1.1 10.1 01/01/09 1 2009-01-01 00:01:00.000000
 
-query 
+query
 select id from view_parquet where tinyint_col = 0 order by timestamp_col limit 5
 ----
 0
@@ -59,3 +64,12 @@ query I
 select count() from @data/parquet/no-stats.parquet (pattern => '') where line_item_usage_start_date < '2024-09-11 06:00:00'
 ----
 0
+
+query error gen
+settings (parquet_fast_read_bytes=0) select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
+
+query error gen
+select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
+
+query error gen
+select * from @data/parquet/diff_schema/ (files=>('gen.py', 'f1.parquet'));

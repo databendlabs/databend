@@ -140,8 +140,8 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let block = DataBlock::new(
             ctx.columns
                 .iter()
-                .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-                .collect::<Vec<_>>(),
+                .map(|(_, col)| col.clone().into())
+                .collect(),
             num_rows,
         );
 
@@ -150,16 +150,8 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         });
 
         let evaluator = Evaluator::new(&block, &ctx.func_ctx, &BUILTIN_FUNCTIONS);
-        let result = if ctx.strict_eval {
-            evaluator.run(&expr)
-        } else {
-            evaluator.run_fast(&expr)
-        };
-        let optimized_result = if ctx.strict_eval {
-            evaluator.run(&optimized_expr)
-        } else {
-            evaluator.run_fast(&expr)
-        };
+        let result = evaluator.run(&expr);
+        let optimized_result = evaluator.run(&expr);
         match &result {
             Ok(result) => assert!(
                 result.semantically_eq(&optimized_result.clone().unwrap()),
@@ -283,10 +275,10 @@ fn test_arrow_conversion(col: &Column, strict: bool) {
     let data_type = col.data_type();
     let col = if !strict {
         match col {
-            Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal_data_type()),
+            Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal()),
             col @ Column::Nullable(nullable) => match &nullable.column {
                 Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
-                    column: Column::Decimal(decimal.clone().strict_decimal_data_type()),
+                    column: Column::Decimal(decimal.clone().strict_decimal()),
                     validity: nullable.validity.clone(),
                 })),
                 _ => col.clone(),
@@ -367,14 +359,12 @@ fn test_if_function() -> Result<()> {
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
     let block = DataBlock::new(
         vec![
-            BlockEntry {
-                data_type: UInt8Type::data_type(),
-                value: Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
-            },
-            BlockEntry {
-                data_type: Int32Type::data_type().wrap_nullable(),
-                value: Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
-            },
+            UInt8Type::from_data(vec![2_u8, 1]).into(),
+            BlockEntry::new_const_column(
+                Int32Type::data_type().wrap_nullable(),
+                Scalar::Number(NumberScalar::Int32(2400)),
+                2,
+            ),
         ],
         2,
     );

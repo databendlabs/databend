@@ -16,9 +16,11 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingGuard;
@@ -27,7 +29,6 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
@@ -44,7 +45,6 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -53,7 +53,7 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
-use display_more::DisplayOptionExt;
+use databend_common_tracing::start_trace_for_remote_request;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -64,6 +64,7 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
+use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
@@ -73,6 +74,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
+use watcher::dispatch::Command;
 use watcher::key_range::build_key_range;
 use watcher::util::new_initialization_sink;
 use watcher::util::try_forward;
@@ -88,11 +90,11 @@ use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
-use crate::version::METASRV_SEMVER;
 use crate::version::MIN_METACLI_SEMVER;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
+    version: BuildInfoRef,
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
@@ -112,6 +114,7 @@ impl Drop for MetaServiceImpl {
 impl MetaServiceImpl {
     pub fn create(meta_node: Weak<MetaNode>) -> Self {
         Self {
+            version: meta_node.upgrade().unwrap().version,
             token: GrpcToken::create(),
             meta_node,
         }
@@ -145,6 +148,7 @@ impl MetaServiceImpl {
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m
+                    .kv_api()
                     .upsert_kv(a.clone())
                     .log_elapsed_info(format!("UpsertKV: {:?}", a))
                     .await;
@@ -160,10 +164,8 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_read_v1(
         &self,
-        request: Request<RaftRequest>,
+        req: MetaGrpcReadReq,
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
-        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
-
         debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
         let req = ForwardRequest::new(1, req);
@@ -273,7 +275,7 @@ impl MetaService for MetaServiceImpl {
                 .map_err(|e| Status::internal(e.to_string()))?;
 
             let resp = HandshakeResponse {
-                protocol_version: to_digit_ver(&METASRV_SEMVER),
+                protocol_version: to_digit_ver(&self.version.semantic),
                 payload: token.into_bytes(),
             };
             let output = futures::stream::once(async { Ok(resp) });
@@ -296,8 +298,7 @@ impl MetaService for MetaServiceImpl {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let _guard = RequestInFlight::guard();
 
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+            let root = start_trace_for_remote_request(func_path!(), &request);
             let reply = self.handle_kv_api(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -316,12 +317,23 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
 
         let _guard = thread_tracking_guard(&request);
-        ThreadTracker::tracking_future(async move {
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
-            let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+
+        let root = start_trace_for_remote_request(func_path!(), &request);
+
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+        let req_typ = req.type_name();
+
+        ThreadTracker::tracking_future(async move {
+            let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
+
+            let strm = strm
+                .map(move |item| {
+                    network_metrics::incr_stream_sent_item(req_typ);
+                    item
+                })
+                .boxed();
 
             let mut resp = Response::new(strm);
             GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
@@ -343,8 +355,7 @@ impl MetaService for MetaServiceImpl {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let _guard = RequestInFlight::guard();
 
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+            let root = start_trace_for_remote_request(func_path!(), &request);
             let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -425,8 +436,11 @@ impl MetaService for MetaServiceImpl {
 
         info!("{}: Received WatchRequest: {}", func_name!(), watch);
 
-        let key_range =
-            build_key_range(&watch.key, &watch.key_end).map_err(Status::invalid_argument)?;
+        let key_range = build_key_range(
+            &UserKey::new(&watch.key),
+            &watch.key_end.as_ref().map(UserKey::new),
+        )
+        .map_err(Status::invalid_argument)?;
         let flush = watch.initial_flush;
 
         let (tx, rx) = mpsc::channel(4);
@@ -445,11 +459,14 @@ impl MetaService for MetaServiceImpl {
         // This approach prevents race conditions and guarantees that no events will be
         // delivered out of order to the watcher.
         let stream = {
-            let sm = &mn.raft_store.state_machine;
-            let sm = sm.write().await;
+            let sm = mn
+                .raft_store
+                .get_state_machine_read("new-watch-stream")
+                .await;
 
-            let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
-            let sender_str = weak_sender.upgrade().map(|s| s.to_string());
+            let sender = mn.new_watch_sender(watch, tx.clone())?;
+            let sender_str = sender.to_string();
+            let weak_sender = mn.insert_watch_sender(sender);
 
             // Build a closure to remove the stream tx from Dispatcher when the stream is dropped.
             let on_drop = {
@@ -461,13 +478,26 @@ impl MetaService for MetaServiceImpl {
 
             let stream = WatchStream::new(rx, Box::new(on_drop));
 
+            let stream = stream.map(move |item| {
+                if let Ok(ref resp) = item {
+                    network_metrics::incr_watch_sent(resp);
+                }
+                item
+            });
+
             if flush {
                 let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
                 let strm = sm.range_kv(key_range).await?;
 
+                info!("created initialization stream for {}", sender_str);
+
+                let sndr = sender_str.clone();
+
                 let fu = async move {
                     try_forward(strm, snk, ctx).await;
+
+                    info!("initialization flush complete for watcher {}", sndr);
 
                     // Send an empty message with `is_initialization=false` to indicate
                     // the end of the initialization flush.
@@ -477,15 +507,20 @@ impl MetaService for MetaServiceImpl {
                             error!("failed to send flush complete message: {}", e);
                         })
                         .ok();
+
+                    info!(
+                        "finished sending initialization complete flag for watcher {}",
+                        sndr
+                    );
                 };
                 let fu = Box::pin(fu);
 
                 info!(
                     "sending initial flush Future to watcher {} via Dispatcher",
-                    sender_str.display()
+                    sender_str
                 );
 
-                mn.dispatcher_handle.send_future(fu);
+                mn.dispatcher_handle.send_command(Command::Future(fu));
             }
 
             stream
@@ -544,7 +579,8 @@ impl MetaService for MetaServiceImpl {
                 wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
             }),
 
-            snapshot_key_count: status.snapshot_key_count as u64,
+            snapshot_key_count: status.snapshot_key_count,
+
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,
@@ -576,7 +612,12 @@ impl MetaService for MetaServiceImpl {
         if let Some(addr) = r {
             let resp = ClientInfo {
                 client_addr: addr.to_string(),
-                server_time: Some(SeqV::<()>::now_ms()),
+                server_time: Some(
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                ),
             };
             return Ok(Response::new(resp));
         }

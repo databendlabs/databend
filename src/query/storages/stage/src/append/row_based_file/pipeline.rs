@@ -97,6 +97,7 @@ pub(crate) fn append_data_to_row_based_files(
             query_id.clone(),
             gid,
             compression,
+            format.suffix(),
         )
     })?;
     Ok(())

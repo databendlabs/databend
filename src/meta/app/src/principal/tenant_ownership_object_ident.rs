@@ -105,6 +105,7 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::principal::OwnershipObject;
@@ -270,6 +271,21 @@ mod tests {
             let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
             assert_eq!(role_grantee, parsed);
         }
+    }
+
+    #[test]
+    fn test_ownership_seq_list_key() {
+        use databend_common_meta_kvapi::kvapi::Key;
+        let obj = OwnershipObject::Sequence {
+            name: "seq1".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(Tenant::new_literal("tenant1"), obj);
+        let dir_name = kvapi::DirName::new(ident);
+        assert_eq!(
+            dir_name.to_string_key(),
+            "__fd_object_owners/tenant1/sequence-by-name"
+        );
     }
 
     #[test]

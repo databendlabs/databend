@@ -36,7 +36,6 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
@@ -82,6 +81,8 @@ pub struct HashJoinProbeState {
     /// `probe_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in probe schema.
     pub(crate) probe_projections: ColumnSet,
+    // used in cross join
+    pub(crate) build_projections: ColumnSet,
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
@@ -100,6 +101,7 @@ impl HashJoinProbeState {
         func_ctx: FunctionContext,
         hash_join_state: Arc<HashJoinState>,
         probe_projections: &ColumnSet,
+        build_projections: &ColumnSet,
         probe_keys: &[RemoteExpr],
         mut probe_schema: DataSchemaRef,
         join_type: &JoinType,
@@ -139,6 +141,7 @@ impl HashJoinProbeState {
             merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
+            build_projections: build_projections.clone(),
         })
     }
 
@@ -200,14 +203,15 @@ impl HashJoinProbeState {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
         let probe_keys = &self.hash_join_state.hash_join_desc.probe_keys;
-        let mut keys_columns = probe_keys
+        let mut keys_entries: Vec<BlockEntry> = probe_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
                     .run(expr)?
-                    .convert_to_full_column(expr.data_type(), input_num_rows))
+                    .convert_to_full_column(expr.data_type(), input_num_rows)
+                    .into())
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<_>>()?;
 
         if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
             && self
@@ -217,7 +221,7 @@ impl HashJoinProbeState {
                 .is_none()
         {
             self.hash_join_state.init_markers(
-                (&keys_columns).into(),
+                (&keys_entries).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
@@ -231,11 +235,11 @@ impl HashJoinProbeState {
             let ty = expr.data_type();
             ty.is_nullable() || ty.is_null()
         }) {
-            let valids = keys_columns
+            let valids = keys_entries
                 .iter()
                 .zip(is_null_equal.iter().copied())
                 .filter(|(_, is_null_equal)| !is_null_equal)
-                .map(|(col, _)| col.validity())
+                .map(|(entry, _)| entry.as_column().unwrap().validity())
                 .try_fold(None, |valids, (is_all_null, tmp_valids)| {
                     if is_all_null {
                         ControlFlow::Break(Some(Bitmap::new_constant(false, input_num_rows)))
@@ -250,20 +254,22 @@ impl HashJoinProbeState {
             None
         };
 
-        keys_columns
+        keys_entries
             .iter_mut()
             .zip(is_null_equal.iter().copied())
-            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
-            .for_each(|(col, _)| {
-                *col = col.remove_nullable();
+            .filter(|(entry, is_null_equal)| !is_null_equal && entry.data_type().is_nullable())
+            .for_each(|(entry, _)| {
+                *entry = entry.clone().remove_nullable();
             });
-        let probe_keys = (&keys_columns).into();
+        let probe_keys = (&keys_entries).into();
 
         let probe_has_null = if self.join_type() == JoinType::LeftMark {
-            match &input.get_by_offset(0).value {
-                Value::Scalar(Scalar::Null) => true,
-                Value::Column(Column::Nullable(c)) if c.validity.null_count() > 0 => true,
-                _ => false,
+            match input.get_by_offset(0) {
+                BlockEntry::Const(scalar, _, _) => scalar.is_null(),
+                BlockEntry::Column(column) => column
+                    .as_nullable()
+                    .map(|c| c.validity().null_count() > 0)
+                    .unwrap_or(false),
             }
         } else {
             false
@@ -448,9 +454,7 @@ impl HashJoinProbeState {
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
+            return Err(ErrorCode::aborting());
         }
 
         // Probe states.
@@ -501,15 +505,14 @@ impl HashJoinProbeState {
 
             let probe_block = if !projected_probe_fields.is_empty() {
                 // Create null chunk for unmatched rows in probe side
-                Some(DataBlock::new(
-                    projected_probe_fields
-                        .iter()
-                        .map(|df| {
-                            BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null))
-                        })
-                        .collect(),
-                    build_indexes_occupied,
-                ))
+                let entries = projected_probe_fields.iter().map(|df| {
+                    BlockEntry::new_const_column(
+                        df.data_type().clone(),
+                        Scalar::Null,
+                        build_indexes_occupied,
+                    )
+                });
+                Some(DataBlock::from_iter(entries, build_indexes_occupied))
             } else {
                 None
             };

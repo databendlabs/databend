@@ -21,7 +21,7 @@ use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
-use mockall::predicate::*;
+use databend_common_version::BUILD_INFO;
 
 fn make_role_key(role: &str) -> String {
     format!("__fd_roles/admin/{}", role)
@@ -92,7 +92,7 @@ mod add {
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> databend_common_exception::Result<(Arc<MetaStore>, RoleMgr)> {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
     let client = test_api.deref().clone();
 
     let test_api = Arc::new(test_api);
@@ -104,7 +104,7 @@ async fn new_role_api(
         test_api.clone(),
         &tenant,
         enable_meta_data_upgrade_json_to_pb_from_v307,
-        Arc::new(Mutex::new(cache)),
+        Some(Arc::new(Mutex::new(cache))),
     );
     Ok((test_api, mgr))
 }

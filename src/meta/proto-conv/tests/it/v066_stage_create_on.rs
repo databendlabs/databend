@@ -59,6 +59,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
                 compression: StageFileCompression::Zstd,
                 missing_field_as: Default::default(),
                 null_if: vec![],
+                use_logic_type: true,
             },
         ),
         copy_options: mt::principal::CopyOptions {

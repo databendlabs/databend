@@ -27,10 +27,10 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::InputColumns;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
+use databend_common_expression::ProjectedBlock;
 
 pub struct SerializedPayload {
     pub bucket: isize,
@@ -42,9 +42,10 @@ pub struct SerializedPayload {
 impl SerializedPayload {
     pub fn get_group_by_column(&self) -> &Column {
         let entry = self.data_block.columns().last().unwrap();
-        entry.value.as_column().unwrap()
+        entry.as_column().unwrap()
     }
 
+    #[fastrace::trace(name = "SerializedPayload::convert_to_aggregate_table")]
     pub fn convert_to_aggregate_table(
         &self,
         group_types: Vec<DataType>,
@@ -69,10 +70,10 @@ impl SerializedPayload {
         );
 
         let states_index: Vec<usize> = (0..num_states).collect();
-        let agg_states = InputColumns::new_block_proxy(&states_index, &self.data_block);
+        let agg_states = ProjectedBlock::project(&states_index, &self.data_block);
 
         let group_index: Vec<usize> = (num_states..(num_states + group_len)).collect();
-        let group_columns = InputColumns::new_block_proxy(&group_index, &self.data_block);
+        let group_columns = ProjectedBlock::project(&group_index, &self.data_block);
 
         let _ = hashtable.add_groups(
             &mut state,

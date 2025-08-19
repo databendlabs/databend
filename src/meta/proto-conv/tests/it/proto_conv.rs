@@ -82,9 +82,10 @@ fn new_sequence_meta() -> mt::SequenceMeta {
         create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         comment: Some("seq".to_string()),
-        start: 1,
         step: 1,
+        #[allow(deprecated)]
         current: 10,
+        storage_version: 0,
     }
 }
 
@@ -167,6 +168,7 @@ fn new_table_meta() -> mt::TableMeta {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        row_access_policy: Some("p1".to_string()),
         indexes: btreemap! {},
     }
 }
@@ -257,6 +259,11 @@ fn new_table_statistics() -> databend_common_meta_app::schema::TableStatistics {
         data_bytes: 200,
         compressed_data_bytes: 15,
         index_data_bytes: 20,
+        bloom_index_size: None,
+        ngram_index_size: None,
+        inverted_index_size: None,
+        vector_index_size: None,
+        virtual_column_size: None,
         number_of_segments: Some(1),
         number_of_blocks: Some(2),
     }
@@ -304,6 +311,7 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
         language: "python".to_string(),
         arg_types: vec![DataType::String],
         return_type: DataType::Boolean,
+        immutable: None,
     }
 }
 

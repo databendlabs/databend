@@ -42,7 +42,7 @@ fn setup() -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
 
 fn get_remote_log_elements() -> RemoteLogElement {
     RemoteLogElement {
-        timestamp: chrono::Local::now().timestamp_micros(),
+        timestamp: jiff::Timestamp::now().as_microsecond(),
         path: "databend_query::interpreters::common::query_log: query_log.rs:71".to_string(),
         target: "databend::log::query".to_string(),
         cluster_id: "test_cluster".to_string(),

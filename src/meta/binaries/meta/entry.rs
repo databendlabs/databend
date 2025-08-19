@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::StopHandle;
 use databend_common_base::base::Stoppable;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -29,9 +30,15 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
-use databend_common_tracing::init_logging;
+use databend_common_storage::init_operator;
 use databend_common_tracing::set_panic_hook;
+use databend_common_tracing::GlobalLogger;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_GIT_SEMVER;
+use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
@@ -39,10 +46,6 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
-use databend_meta::version::METASRV_COMMIT_VERSION;
-use databend_meta::version::METASRV_GIT_SEMVER;
-use databend_meta::version::METASRV_GIT_SHA;
-use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::info;
 use log::warn;
@@ -61,18 +64,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     set_panic_hook(binary_version);
 
-    // app name format: node_id@cluster_id
-    let app_name_shuffle = format!(
-        "databend-meta-{}@{}",
-        conf.raft_config.id, conf.raft_config.cluster_name
-    );
-    let mut log_labels = BTreeMap::new();
-    log_labels.insert(
-        "cluster_name".to_string(),
-        conf.raft_config.cluster_name.clone(),
-    );
-    let guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
-    Box::new(guards).leak();
+    init_logging_system(&conf).await?;
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
@@ -137,6 +129,9 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         if conf.log.tracing.on {
             println!("    Tracing: {}", conf.log.tracing);
         }
+        if conf.log.history.on {
+            println!("    Storage: {}", conf.log.history.on);
+        }
         let r = &conf.raft_config;
         println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
         println!("      Dir: {}", r.raft_dir);
@@ -155,14 +150,17 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_node = MetaNode::start(&conf).await?;
+    let meta_node = MetaNode::start(&conf, &BUILD_INFO).await?;
 
     let mut stop_handler = StopHandle::<AnyError>::create();
     let stop_tx = StopHandle::<AnyError>::install_termination_handle();
 
     // HTTP API service.
     {
-        server_metrics::set_version(METASRV_GIT_SEMVER.to_string(), METASRV_GIT_SHA.to_string());
+        server_metrics::set_version(
+            DATABEND_GIT_SEMVER.to_string(),
+            VERGEN_GIT_SHA.unwrap_or("unknown").to_string(),
+        );
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
@@ -208,15 +206,11 @@ async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), Met
     println!("Register this node: {{{}}}", node);
     println!();
 
-    let ent = LogEntry {
-        txid: None,
-        time_ms: None,
-        cmd: Cmd::AddNode {
-            node_id,
-            node,
-            overriding: true,
-        },
-    };
+    let ent = LogEntry::new(Cmd::AddNode {
+        node_id,
+        node,
+        overriding: true,
+    });
     info!("Raft log entry for updating node: {:?}", ent);
 
     meta_node.write(ent).await?;
@@ -231,7 +225,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
-                ..Default::default()
+                ..RpcClientConf::empty(&BUILD_INFO)
             };
             let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),
@@ -353,7 +347,7 @@ async fn run_cmd(conf: &Config) -> bool {
 
     match conf.cmd.as_str() {
         "ver" => {
-            println!("version: {}", METASRV_SEMVER.deref());
+            println!("version: {}", DATABEND_SEMVER.deref());
             println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
             println!("data-version: {:?}", DATA_VERSION);
         }
@@ -382,6 +376,38 @@ async fn run_cmd(conf: &Config) -> bool {
     }
 
     true
+}
+
+async fn init_logging_system(conf: &Config) -> anyhow::Result<()> {
+    let app_name = format!(
+        "databend-meta-{}@{}",
+        conf.raft_config.id, conf.raft_config.cluster_name
+    );
+
+    let log_labels = [
+        ("cluster_name", conf.raft_config.cluster_name.as_str()),
+        ("node_id", &conf.raft_config.id.to_string()),
+        ("cluster_id", conf.raft_config.cluster_name.as_str()),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+
+    GlobalInstance::init_production();
+    GlobalLogger::init(&app_name, &conf.log, log_labels);
+
+    if conf.log.history.on {
+        GlobalIORuntime::init(num_cpus::get())?;
+
+        let params = conf.log.history.storage_params.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("Log history is enabled but storage_params is not set")
+        })?;
+
+        let remote_log_op = init_operator(params).map_err(|e| anyhow::anyhow!(e))?;
+        GlobalLogger::instance().set_operator(remote_log_op).await;
+    }
+
+    Ok(())
 }
 
 fn pretty<T>(v: &T) -> Result<String, serde_json::Error>

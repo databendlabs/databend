@@ -1,0 +1,86 @@
+name: Explain
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        description: The run id for explain
+        required: true
+        type: string
+      version:
+        description: The version of databend to explain
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup_bendsql
+
+      - name: Get Latest Release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version_latest=$(gh api /repos/databendlabs/databend/releases/latest | jq -r '.tag_name')
+          echo "version=${version_latest}" >> $GITHUB_OUTPUT
+          echo "Compare explain: ${{ inputs.version }} vs ${version_latest}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Warehouse Base
+        id: warehouse-base
+        env:
+          CLOUD_USER: ${{ secrets.BENCHMARK_CLOUD_USER }}
+          CLOUD_PASSWORD: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
+          CLOUD_GATEWAY: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          WAREHOUSE_SIZE: XSmall
+          WAREHOUSE_VERSION: ${{ steps.latest.outputs.version }}
+          WAREHOUSE_NAME: explain-${{ inputs.run_id }}-base
+        run: |
+          ./scripts/ci/cloud/create_warehouse.sh
+          echo "name=${WAREHOUSE_NAME}" >> $GITHUB_OUTPUT
+          echo "dsn=databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/explain?warehouse=${WAREHOUSE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Warehouse Compare
+        id: warehouse-compare
+        env:
+          CLOUD_USER: ${{ secrets.BENCHMARK_CLOUD_USER }}
+          CLOUD_PASSWORD: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
+          CLOUD_GATEWAY: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          WAREHOUSE_SIZE: XSmall
+          WAREHOUSE_VERSION: ${{ inputs.version }}
+          WAREHOUSE_NAME: explain-${{ inputs.run_id }}-compare
+        run: |
+          ./scripts/ci/cloud/create_warehouse.sh
+          echo "name=${WAREHOUSE_NAME}" >> $GITHUB_OUTPUT
+          echo "dsn=databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443/explain?warehouse=${WAREHOUSE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Run ExplainB Analysis
+        uses: BohuTANG/explainb-action@v0.1.0
+        with:
+          bendsql-dsn1: ${{ steps.warehouse-base.outputs.dsn }}
+          bendsql-dsn2: ${{ steps.warehouse-compare.outputs.dsn }}
+          runbend: 'true'
+          verbose: 'true'
+
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: explainb-report
+          path: report.html
+
+      - name: clean
+        if: always()
+        continue-on-error: true
+        env:
+          BENDSQL_DSN: "databend://${{ secrets.BENCHMARK_CLOUD_USER }}:${{ secrets.BENCHMARK_CLOUD_PASSWORD }}@${{ secrets.BENCHMARK_CLOUD_GATEWAY }}:443/?warehouse=default"
+        run: |
+          echo "DROP WAREHOUSE IF EXISTS '${{ steps.warehouse-base.outputs.name }}';" | bendsql -o table
+          echo "DROP WAREHOUSE IF EXISTS '${{ steps.warehouse-compare.outputs.name }}';" | bendsql -o table

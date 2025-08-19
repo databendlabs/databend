@@ -17,9 +17,7 @@ use std::assert_matches::assert_matches;
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -64,12 +62,7 @@ async fn test_spill_with_partition() -> Result<()> {
     assert_eq!(block.num_rows(), 100);
     assert_eq!(block.num_columns(), 2);
     for (col_idx, col) in block.columns().iter().enumerate() {
-        for (idx, cell) in col
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::Int32), 100)
-            .iter()
-            .enumerate()
-        {
+        for (idx, cell) in col.to_column().iter().enumerate() {
             assert_eq!(
                 cell,
                 ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))

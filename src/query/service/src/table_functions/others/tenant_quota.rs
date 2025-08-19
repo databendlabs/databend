@@ -183,10 +183,10 @@ impl TenantQuotaSource {
     fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
         Ok(DataBlock::new(
             vec![
-                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_databases),
-                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_tables_per_database),
-                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_stages),
-                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_files_per_stage),
+                BlockEntry::new_const_column_arg::<UInt32Type>(quota.max_databases, 1),
+                BlockEntry::new_const_column_arg::<UInt32Type>(quota.max_tables_per_database, 1),
+                BlockEntry::new_const_column_arg::<UInt32Type>(quota.max_stages, 1),
+                BlockEntry::new_const_column_arg::<UInt32Type>(quota.max_files_per_stage, 1),
             ],
             1,
         ))

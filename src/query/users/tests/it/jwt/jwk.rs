@@ -5,6 +5,7 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_users::JwkKeyStore;
 use databend_common_users::PubKey;
+use databend_common_version::BUILD_INFO;
 use jwt_simple::prelude::*;
 use parking_lot::Mutex;
 
@@ -39,7 +40,7 @@ impl MockJwksLoader {
 async fn test_jwk_store_with_random_keys() -> Result<()> {
     let mock_jwks_loader = Arc::new(MockJwksLoader::new());
     let mock_jwks_loader_cloned = mock_jwks_loader.clone();
-    let jwk_store = JwkKeyStore::new("jwks_key".to_string())
+    let jwk_store = JwkKeyStore::new("jwks_key".to_string(), &BUILD_INFO)
         .with_load_keys_func(Arc::new(move || mock_jwks_loader_cloned.load_keys()))
         .with_max_recent_cached_maps(2)
         .with_retry_interval(0);
@@ -76,7 +77,7 @@ async fn test_jwk_store_with_random_keys() -> Result<()> {
 async fn test_jwk_store_with_random_keys_and_long_retry_interval() -> Result<()> {
     let mock_jwks_loader = Arc::new(MockJwksLoader::new());
     let mock_jwks_loader_cloned = mock_jwks_loader.clone();
-    let jwk_store = JwkKeyStore::new("jwks_key".to_string())
+    let jwk_store = JwkKeyStore::new("jwks_key".to_string(), &BUILD_INFO)
         .with_load_keys_func(Arc::new(move || mock_jwks_loader_cloned.load_keys()))
         .with_max_recent_cached_maps(2)
         .with_retry_interval(3600);

@@ -95,6 +95,14 @@ where
         let column: Buffer<T> = values.into();
         let column: Buffer<F> = unsafe { std::mem::transmute(column) };
         let mut col = F::upcast_column(column, self.decimal_size);
+
+        if self.decimal_size.can_carried_by_64() {
+            let Column::Decimal(decimal_column) = col else {
+                unreachable!()
+            };
+            col = Column::Decimal(decimal_column.strict_decimal());
+        }
+
         if self.data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }
@@ -128,7 +136,7 @@ where
     }
 }
 
-pub fn read_nested_decimal<T: IntegerType, F: Decimal, R: NativeReadBuf>(
+pub(crate) fn read_nested_decimal<T: IntegerType, F: Decimal, R: NativeReadBuf>(
     reader: &mut R,
     data_type: TableDataType,
     decimal_size: DecimalSize,

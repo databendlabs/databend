@@ -6,7 +6,7 @@ testbucket/data/ndjson/ts.ndjson {"t":1736305865000} 1
 testbucket/data/ndjson/ts.ndjson {"t":1736305866000000} 2
 
 statement ok
-create or replace table t(file_name string, value variant,  row int)
+create or replace table t(file_name string, value variant,  `row` int)
 
 query ok
 copy into t from (select metadata$filename, $1, metadata$file_row_number + 1  from @data_s3/ndjson/ts.ndjson) file_format=(type=ndjson)

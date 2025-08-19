@@ -65,6 +65,8 @@ impl HttpService {
                 "/v1/ctrl/trigger_transfer_leader",
                 get(super::http::v1::ctrl::trigger_transfer_leader),
             )
+            .at("/v1/features/list", get(super::http::v1::features::list))
+            .at("/v1/features/set", get(super::http::v1::features::set))
             .at(
                 "/v1/cluster/nodes",
                 get(super::http::v1::cluster_state::nodes_handler),

@@ -30,7 +30,9 @@ use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
@@ -47,6 +49,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
@@ -73,6 +76,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::storages::Table;
 
@@ -88,95 +92,102 @@ pub struct QueryContextShared {
     // Query level
     pub(crate) query_settings: Arc<Settings>,
     /// total_scan_values for scan stats
-    pub(in crate::sessions) total_scan_values: Arc<Progress>,
+    pub(super) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
-    pub(in crate::sessions) scan_progress: Arc<Progress>,
+    pub(super) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
-    pub(in crate::sessions) write_progress: Arc<Progress>,
+    pub(super) write_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in join.
-    pub(in crate::sessions) join_spill_progress: Arc<Progress>,
+    pub(super) join_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in agg.
-    pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
+    pub(super) agg_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in group by
-    pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
+    pub(super) group_by_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in window partition
-    pub(in crate::sessions) window_partition_spill_progress: Arc<Progress>,
+    pub(super) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
-    pub(in crate::sessions) result_progress: Arc<Progress>,
-    pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode<ContextError>>>>,
-    pub(in crate::sessions) warnings: Arc<Mutex<Vec<String>>>,
-    pub(in crate::sessions) session: Arc<Session>,
-    pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
-    pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<RwLock<Arc<Cluster>>>,
-    pub(in crate::sessions) warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
-    pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
-    pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) aborting: Arc<AtomicBool>,
-    pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
-    pub(in crate::sessions) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
-    pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
-    pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
-    pub(in crate::sessions) data_operator: DataOperator,
-    pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
-    pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
-    pub(in crate::sessions) created_time: SystemTime,
+    pub(super) result_progress: Arc<Progress>,
+    pub(super) version: BuildInfoRef,
+    error: Arc<Mutex<Option<ErrorCode<ContextError>>>>,
+    warnings: Arc<Mutex<Vec<String>>>,
+    pub(super) session: Arc<Session>,
+    runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
+    pub(super) init_query_id: Arc<RwLock<String>>,
+    cluster_cache: Arc<RwLock<Arc<Cluster>>>,
+    warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
+    running_query: Arc<RwLock<Option<String>>>,
+    running_query_kind: Arc<RwLock<Option<QueryKind>>>,
+    running_query_text_hash: Arc<RwLock<Option<String>>>,
+    running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
+    aborting: Arc<AtomicBool>,
+    pub(super) abort_notify: Arc<WatchNotify>,
+    pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
+    affect: Arc<Mutex<Option<QueryAffect>>>,
+    pub(super) catalog_manager: Arc<CatalogManager>,
+    pub(super) data_operator: DataOperator,
+    executor: Arc<RwLock<Weak<PipelineExecutor>>>,
+    stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
+    pub(super) created_time: SystemTime,
     // now it is only set in query_log::log_query_finished
-    pub(in crate::sessions) finish_time: RwLock<Option<SystemTime>>,
+    pub(super) finish_time: RwLock<Option<SystemTime>>,
     // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
     // We use this field to count maximum of one error found per data file.
     #[allow(clippy::type_complexity)]
-    pub(in crate::sessions) on_error_map:
-        Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
-    pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
-    pub(in crate::sessions) copy_status: Arc<CopyStatus>,
-    pub(in crate::sessions) mutation_status: Arc<RwLock<MutationStatus>>,
-    pub(in crate::sessions) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
+    on_error_map: Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
+    on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
+    pub(super) copy_status: Arc<CopyStatus>,
+    pub(super) mutation_status: Arc<RwLock<MutationStatus>>,
+    pub(super) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
-    pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
-    pub(in crate::sessions) cacheable: Arc<AtomicBool>,
-    pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
-    pub(in crate::sessions) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
-    pub(in crate::sessions) enable_sort_spill: Arc<AtomicBool>,
+    pub(super) partitions_shas: Arc<RwLock<Vec<String>>>,
+    pub(super) cacheable: Arc<AtomicBool>,
+    pub(super) can_scan_from_agg_index: Arc<AtomicBool>,
+    pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
+    pub(super) enable_sort_spill: Arc<AtomicBool>,
     // Status info.
-    pub(in crate::sessions) status: Arc<RwLock<String>>,
+    pub(super) status: Arc<RwLock<String>>,
 
     // Client User-Agent
-    pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
+    pub(super) user_agent: Arc<RwLock<String>>,
 
-    pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+    pub(super) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
-    pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+    pub(super) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
 
-    pub(in crate::sessions) runtime_filter_ready:
-        Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
+    pub(super) runtime_filter_ready: Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
 
-    pub(in crate::sessions) wait_runtime_filter: Arc<RwLock<HashMap<IndexType, bool>>>,
+    pub(super) wait_runtime_filter: Arc<RwLock<HashMap<IndexType, bool>>>,
 
-    pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
+    pub(super) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
     // Records query level data cache metrics
-    pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
+    pub(super) query_cache_metrics: DataCacheMetrics,
 
-    pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
-    pub(in crate::sessions) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
+    pub(super) query_queued_duration: Arc<RwLock<Duration>>,
 
-    pub(in crate::sessions) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
-    pub(in crate::sessions) spilled_files:
+    pub(super) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
+
+    pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
+    pub(super) spilled_files:
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
-    pub(in crate::sessions) unload_callbacked: AtomicBool,
-    pub(in crate::sessions) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
-    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
+    pub(super) unload_callbacked: AtomicBool,
+    pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
+    pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
     // Used by hilbert clustering when do recluster.
-    pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    pub(super) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
 
-    pub(in crate::sessions) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
+    pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(in crate::sessions) next_broadcast_id: AtomicU32,
-    pub(in crate::sessions) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+    pub(super) next_broadcast_id: AtomicU32,
+    pub(super) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+
+    // QueryPerf used to draw flamegraph
+    pub(super) perf_flag: AtomicBool,
+    pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
+
+    pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
 }
 
 #[derive(Default)]
@@ -191,6 +202,7 @@ impl QueryContextShared {
     pub fn try_create(
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
@@ -203,6 +215,7 @@ impl QueryContextShared {
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             write_progress: Arc::new(Progress::create()),
+            version,
             error: Arc::new(Mutex::new(None)),
             warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
@@ -211,6 +224,7 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
+            abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
@@ -242,7 +256,6 @@ impl QueryContextShared {
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
             table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
-
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
@@ -253,6 +266,9 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             next_broadcast_id: AtomicU32::new(0),
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
+            perf_flag: AtomicBool::new(false),
+            nodes_perf: Arc::new(Mutex::new(HashMap::new())),
+            materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -306,6 +322,10 @@ impl QueryContextShared {
         }
     }
 
+    pub fn get_version(&self) -> &BuildInfoRef {
+        &self.version
+    }
+
     pub fn set_error<C>(&self, err: ErrorCode<C>) {
         let err = err.with_context("query context error");
 
@@ -356,7 +376,7 @@ impl QueryContextShared {
         }
 
         self.aborting.store(true, Ordering::Release);
-
+        self.abort_notify.notify_waiters();
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
@@ -401,12 +421,9 @@ impl QueryContextShared {
 
     pub fn check_aborting(&self) -> Result<(), ContextError> {
         if self.aborting.load(Ordering::Acquire) {
-            Err(self.get_error().unwrap_or_else(|| {
-                ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                )
-                .with_context("query aborted")
-            }))
+            Err(self
+                .get_error()
+                .unwrap_or_else(|| ErrorCode::aborting().with_context("query aborted")))
         } else {
             Ok(())
         }
@@ -426,6 +443,10 @@ impl QueryContextShared {
 
     pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.session.get_current_role()
+    }
+
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.session.get_secondary_roles()
     }
 
     /// Get all tables that already attached in this query.
@@ -625,6 +646,10 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        // `create view as view_query` the view_query should not cover create view
+        if !self.get_query_str().is_empty() {
+            return;
+        }
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
@@ -643,14 +668,18 @@ impl QueryContextShared {
 
     pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
         {
-            let mut running_query_hash = self.running_query_text_hash.write();
-            *running_query_hash = Some(text_hash);
+            if self.get_query_text_hash().is_empty() {
+                let mut running_query_hash = self.running_query_text_hash.write();
+                *running_query_hash = Some(text_hash);
+            }
         }
 
         {
-            let mut running_query_parameterized_hash =
-                self.running_query_parameterized_hash.write();
-            *running_query_parameterized_hash = Some(parameterized_hash);
+            if self.get_query_parameterized_hash().is_empty() {
+                let mut running_query_parameterized_hash =
+                    self.running_query_parameterized_hash.write();
+                *running_query_parameterized_hash = Some(parameterized_hash);
+            }
         }
     }
 
@@ -775,6 +804,13 @@ impl QueryContextShared {
         }
     }
 
+    pub fn get_query_execution_stats(&self) -> Option<ExecutorStatsSnapshot> {
+        if let Some(executor) = self.executor.read().upgrade() {
+            return Some(executor.get_query_execution_stats());
+        }
+        None
+    }
+
     pub fn set_query_memory_tracking(&self, mem_stat: Option<Arc<MemStat>>) {
         let mut mem_stat_guard = self.mem_stat.write();
         *mem_stat_guard = mem_stat;
@@ -840,10 +876,6 @@ impl QueryContextShared {
         nodes_peek_memory_usage
     }
 
-    pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
-        self.table_meta_timestamps.clone()
-    }
-
     pub fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.pruned_partitions_stats.read().clone()
     }
@@ -853,6 +885,23 @@ impl QueryContextShared {
             .write()
             .entry(plan_id)
             .or_insert(stats);
+    }
+
+    pub fn set_perf_flag(&self, flag: bool) {
+        self.perf_flag.store(flag, Ordering::SeqCst);
+    }
+
+    pub fn get_perf_flag(&self) -> bool {
+        self.perf_flag.load(Ordering::SeqCst)
+    }
+
+    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.nodes_perf.clone()
+    }
+
+    pub fn set_nodes_perf(&self, node: String, perf: String) {
+        let mut nodes_perf = self.nodes_perf.lock();
+        nodes_perf.insert(node, perf);
     }
 }
 

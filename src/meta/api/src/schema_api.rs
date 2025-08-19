@@ -76,6 +76,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -94,12 +96,13 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 
+use crate::errors::TableError;
 use crate::kv_app_error::KVAppError;
 use crate::meta_txn_error::MetaTxnError;
 
@@ -273,10 +276,21 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
+    async fn update_multi_table_meta_with_txn_id(
+        &self,
+        req: UpdateMultiTableMetaReq,
+        txn_id: String,
+    ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
+
     async fn set_table_column_mask_policy(
         &self,
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
+
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, MetaTxnError>;
 
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<(), KVAppError>;
 

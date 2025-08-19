@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -30,22 +37,24 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
-use databend_common_sql::executor::physical_plans::UnionAll;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
-use databend_common_storages_memory::MemoryTable;
+use databend_common_storages_basic::MemoryTable;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::RecursiveCteScan;
+use crate::physical_plans::UnionAll;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::processors::transforms::transform_merge_block::project_block;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
@@ -89,7 +98,7 @@ impl TransformRecursiveCteSource {
                 }
             })
             .collect::<Vec<_>>();
-        SyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
+        AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
             ctx,
             union_plan,
             left_outputs,
@@ -131,27 +140,30 @@ impl TransformRecursiveCteSource {
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
-        Ok((
-            PullingExecutorStream::create(pulling_executor)?
-                .try_collect::<Vec<DataBlock>>()
-                .await?,
-            cte_scan_tables,
-        ))
+        let isolate_runtime = Runtime::with_worker_threads(2, Some("r-cte-source".to_string()))?;
+        let join_handle = isolate_runtime.spawn(async move {
+            let stream = PullingExecutorStream::create(pulling_executor)?;
+            stream.try_collect::<Vec<DataBlock>>().await
+        });
+        let data_blocks = join_handle.await.flatten()?;
+        Ok((data_blocks, cte_scan_tables))
     }
 }
 
 #[async_trait::async_trait]
-impl SyncSource for TransformRecursiveCteSource {
+impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let mut res = None;
         let mut data = DataBlock::empty();
-        match GlobalIORuntime::instance().block_on(Self::execute_r_cte(
+        match Self::execute_r_cte(
             self.ctx.clone(),
             self.recursive_step,
             self.union_plan.clone(),
-        )) {
+        )
+        .await
+        {
             Ok(res) => {
                 if !res.0.is_empty() {
                     data = DataBlock::concat(&res.0)?;
@@ -191,7 +203,7 @@ impl SyncSource for TransformRecursiveCteSource {
             let ctx = self.ctx.clone();
             let table_names = self.union_plan.cte_scan_names.clone();
             // Recursive end, remove all tables
-            let _ = GlobalIORuntime::instance().block_on(drop_tables(ctx, table_names));
+            let _ = drop_tables(ctx, table_names).await?;
         }
         Ok(res)
     }
@@ -216,143 +228,171 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
     Ok(())
 }
 
-#[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<()> {
-    match plan {
-        PhysicalPlan::Filter(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::EvalScalar(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::ProjectSet(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregateExpand(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregatePartial(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregateFinal(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Window(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::WindowPartition(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Sort(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Limit(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::RowFetch(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::HashJoin(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.build.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.probe.as_ref()).await?;
-        }
-        PhysicalPlan::RangeJoin(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
-        }
-        PhysicalPlan::Exchange(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::UnionAll(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
-        }
-
-        PhysicalPlan::Udf(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::RecursiveCteScan(plan) => {
-            // Create memory table for cte scan
-            let table_fields = plan
-                .output_schema
-                .fields()
-                .iter()
-                .map(|field| {
-                    Ok(TableField::new(
-                        field.name(),
-                        infer_schema_type(field.data_type())?,
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let schema = TableSchemaRefExt::create(table_fields);
-
-            let create_table_plan = CreateTablePlan {
-                create_option: CreateOption::CreateIfNotExists,
-                tenant: Tenant {
-                    tenant: ctx.get_tenant().tenant,
-                },
-                catalog: ctx.get_current_catalog(),
-                database: ctx.get_current_database(),
-                table: plan.table_name.clone(),
-                schema,
-                engine: Engine::Memory,
-                engine_options: Default::default(),
-                table_properties: Default::default(),
-                table_partition: None,
-                storage_params: None,
-                options: Default::default(),
-                field_comments: vec![],
-                cluster_key: None,
-                as_select: None,
-                table_indexes: None,
-                attached_columns: None,
-            };
-            let create_table_interpreter =
-                CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-            let _ = create_table_interpreter.execute(ctx.clone()).await?;
-        }
-        PhysicalPlan::Shuffle(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AsyncFunction(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::TableScan(_)
-        | PhysicalPlan::ConstantTableScan(_)
-        | PhysicalPlan::ExpressionScan(_)
-        | PhysicalPlan::CacheScan(_)
-        | PhysicalPlan::DistributedInsertSelect(_)
-        | PhysicalPlan::ExchangeSource(_)
-        | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::CopyIntoTable(_)
-        | PhysicalPlan::CopyIntoLocation(_)
-        | PhysicalPlan::ReplaceAsyncSourcer(_)
-        | PhysicalPlan::ReplaceDeduplicate(_)
-        | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::ColumnMutation(_)
-        | PhysicalPlan::MutationSource(_)
-        | PhysicalPlan::Mutation(_)
-        | PhysicalPlan::MutationSplit(_)
-        | PhysicalPlan::MutationManipulate(_)
-        | PhysicalPlan::MutationOrganize(_)
-        | PhysicalPlan::AddStreamColumn(_)
-        | PhysicalPlan::CompactSource(_)
-        | PhysicalPlan::CommitSink(_)
-        | PhysicalPlan::Recluster(_)
-        | PhysicalPlan::HilbertPartition(_)
-        | PhysicalPlan::Duplicate(_)
-        | PhysicalPlan::ChunkFilter(_)
-        | PhysicalPlan::ChunkEvalScalar(_)
-        | PhysicalPlan::ChunkCastSchema(_)
-        | PhysicalPlan::ChunkFillAndReorder(_)
-        | PhysicalPlan::ChunkAppendData(_)
-        | PhysicalPlan::ChunkMerge(_)
-        | PhysicalPlan::ChunkCommitInsert(_)
-        | PhysicalPlan::BroadcastSource(_)
-        | PhysicalPlan::BroadcastSink(_) => {}
+    struct CollectMemoryTable {
+        ctx: Arc<QueryContext>,
+        plans: Vec<CreateTablePlan>,
     }
+
+    impl CollectMemoryTable {
+        pub fn create(ctx: Arc<QueryContext>) -> Box<dyn PhysicalPlanVisitor> {
+            Box::new(CollectMemoryTable { ctx, plans: vec![] })
+        }
+
+        pub fn take(&mut self) -> Vec<CreateTablePlan> {
+            std::mem::take(&mut self.plans)
+        }
+    }
+
+    impl PhysicalPlanVisitor for CollectMemoryTable {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+            if let Some(recursive_cte_scan) = RecursiveCteScan::from_physical_plan(plan) {
+                let table_fields = recursive_cte_scan
+                    .output_schema
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        Ok(TableField::new(
+                            field.name(),
+                            infer_schema_type(field.data_type())?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let schema = TableSchemaRefExt::create(table_fields);
+
+                self.plans.push(CreateTablePlan {
+                    schema,
+                    create_option: CreateOption::CreateIfNotExists,
+                    tenant: Tenant {
+                        tenant: self.ctx.get_tenant().tenant,
+                    },
+                    catalog: self.ctx.get_current_catalog(),
+                    database: self.ctx.get_current_database(),
+                    table: recursive_cte_scan.table_name.clone(),
+                    engine: Engine::Memory,
+                    engine_options: Default::default(),
+                    table_properties: Default::default(),
+                    table_partition: None,
+                    storage_params: None,
+                    options: Default::default(),
+                    field_comments: vec![],
+                    cluster_key: None,
+                    as_select: None,
+                    table_indexes: None,
+                    attached_columns: None,
+                });
+            }
+
+            Ok(())
+        }
+    }
+
+    let mut visitor = CollectMemoryTable::create(ctx.clone());
+    plan.visit(&mut visitor)?;
+
+    let create_table_plans = {
+        let visitor = visitor
+            .as_any()
+            .downcast_mut::<CollectMemoryTable>()
+            .unwrap();
+        visitor.take()
+    };
+
+    for create_table_plan in create_table_plans {
+        let create_table_interpreter =
+            CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+        let _ = create_table_interpreter.execute(ctx.clone()).await?;
+    }
+
     Ok(())
+}
+
+fn project_block(
+    func_ctx: &FunctionContext,
+    block: DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+    left_outputs: &[(IndexType, Option<Expr>)],
+    right_outputs: &[(IndexType, Option<Expr>)],
+    is_left: bool,
+) -> Result<DataBlock> {
+    let num_rows = block.num_rows();
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+    let columns = left_outputs
+        .iter()
+        .zip(right_outputs.iter())
+        .map(|(left, right)| {
+            if is_left {
+                if let Some(expr) = &left.1 {
+                    let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                        (expr.data_type().clone(), num_rows)
+                    });
+                    Ok(entry)
+                } else {
+                    Ok(block
+                        .get_by_offset(left_schema.index_of(&left.0.to_string())?)
+                        .clone())
+                }
+            } else if let Some(expr) = &right.1 {
+                let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                    (expr.data_type().clone(), num_rows)
+                });
+                Ok(entry)
+            } else if left.1.is_some() {
+                Ok(block
+                    .get_by_offset(right_schema.index_of(&right.0.to_string())?)
+                    .clone())
+            } else {
+                check_type(
+                    &left.0.to_string(),
+                    &right.0.to_string(),
+                    &block,
+                    left_schema,
+                    right_schema,
+                )
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataBlock::new(columns, num_rows))
+}
+
+fn check_type(
+    left_name: &str,
+    right_name: &str,
+    block: &DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+) -> Result<BlockEntry> {
+    let left_field = left_schema.field_with_name(left_name)?;
+    let left_data_type = left_field.data_type();
+
+    let right_field = right_schema.field_with_name(right_name)?;
+    let right_data_type = right_field.data_type();
+
+    let index = right_schema.index_of(right_name)?;
+
+    if left_data_type == right_data_type {
+        return Ok(block.get_by_offset(index).clone());
+    }
+
+    if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+        let origin = block.get_by_offset(index).clone();
+        let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
+        for idx in 0..block.num_rows() {
+            let scalar = origin.index(idx).unwrap();
+            builder.push(scalar);
+        }
+        Ok(builder.build().into())
+    } else {
+        Err(ErrorCode::IllegalDataType(
+            "The data type on both sides of the union does not match",
+        ))
+    }
 }

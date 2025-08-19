@@ -29,12 +29,14 @@ pin_project! {
     /// A [`Future`] that tracks the time spent on a future.
     /// When the future is ready, the callback will be called with the total time and busy time.
     #[must_use = "futures do nothing unless you `.await` or poll them"]
-    pub struct TimedFuture<'a, T, F>
-    where F: Fn(Duration, Duration) ,
-    F: 'a,
+    pub struct TimedFuture<'a, Fu, F>
+    where
+        F: Fn(&Fu::Output, Duration, Duration),
+        F: 'a,
+        Fu: Future,
     {
         #[pin]
-        inner: T,
+        inner: Fu,
 
         start: Option<Instant>,
         busy: Duration,
@@ -44,12 +46,13 @@ pin_project! {
     }
 }
 
-impl<'a, T, F> TimedFuture<'a, T, F>
+impl<'a, Fu, F> TimedFuture<'a, Fu, F>
 where
-    F: Fn(Duration, Duration),
+    F: Fn(&Fu::Output, Duration, Duration),
     F: 'a,
+    Fu: Future,
 {
-    pub fn new(inner: T, callback: F) -> Self {
+    pub fn new(inner: Fu, callback: F) -> Self {
         Self {
             inner,
             start: None,
@@ -60,12 +63,13 @@ where
     }
 }
 
-impl<'a, T: Future, F> Future for TimedFuture<'a, T, F>
+impl<'a, Fu, F> Future for TimedFuture<'a, Fu, F>
 where
-    F: Fn(Duration, Duration),
+    F: Fn(&Fu::Output, Duration, Duration),
     F: 'a,
+    Fu: Future,
 {
-    type Output = T::Output;
+    type Output = Fu::Output;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
@@ -80,9 +84,12 @@ where
 
         *this.busy += t0.elapsed();
 
-        if res.is_ready() {
-            let total = this.start.unwrap().elapsed();
-            (this.callback)(total, *this.busy);
+        match &res {
+            Poll::Ready(output) => {
+                let total = this.start.unwrap().elapsed();
+                (this.callback)(output, total, *this.busy);
+            }
+            Poll::Pending => {}
         }
 
         res
@@ -90,11 +97,13 @@ where
 }
 
 /// Enable timing for a future with `fu.with_timing(f)`.
-pub trait TimedFutureExt {
+pub trait TimedFutureExt
+where Self: Future
+{
     /// Wrap the future with a timing future.
     fn with_timing<'a, F>(self, f: F) -> TimedFuture<'a, Self, F>
     where
-        F: Fn(Duration, Duration) + 'a,
+        F: Fn(&Self::Output, Duration, Duration) + 'a,
         Self: Future + Sized;
 
     /// Wrap the future with a timing future,
@@ -103,14 +112,14 @@ pub trait TimedFutureExt {
         self,
         threshold: Duration,
         f: F,
-    ) -> TimedFuture<'a, Self, impl Fn(Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
     where
-        F: Fn(Duration, Duration) + 'a,
+        F: Fn(&Self::Output, Duration, Duration) + 'a,
         Self: Future + Sized,
     {
-        self.with_timing::<'a>(move |total, busy| {
+        self.with_timing::<'a>(move |output, total, busy| {
             if total >= threshold {
-                f(total, busy)
+                f(output, total, busy)
             }
         })
     }
@@ -119,11 +128,11 @@ pub trait TimedFutureExt {
     fn log_elapsed_debug<'a>(
         self,
         ctx: impl fmt::Display + 'a,
-    ) -> TimedFuture<'a, Self, impl Fn(Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
     where
         Self: Future + Sized,
     {
-        self.with_timing::<'a>(move |total, busy| {
+        self.with_timing::<'a>(move |_output, total, busy| {
             debug!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
         })
     }
@@ -132,11 +141,11 @@ pub trait TimedFutureExt {
     fn log_elapsed_info<'a>(
         self,
         ctx: impl fmt::Display + 'a,
-    ) -> TimedFuture<'a, Self, impl Fn(Duration, Duration)>
+    ) -> TimedFuture<'a, Self, impl Fn(&Self::Output, Duration, Duration)>
     where
         Self: Future + Sized,
     {
-        self.with_timing::<'a>(move |total, busy| {
+        self.with_timing::<'a>(move |_output, total, busy| {
             info!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
         })
     }
@@ -147,7 +156,7 @@ where T: Future + Sized
 {
     fn with_timing<'a, F>(self, f: F) -> TimedFuture<'a, Self, F>
     where
-        F: Fn(Duration, Duration),
+        F: Fn(&Self::Output, Duration, Duration),
         F: 'a,
     {
         TimedFuture::new(self, f)
@@ -187,7 +196,7 @@ mod tests {
         // Blocking sleep
 
         let f = BlockingSleep20ms {};
-        let f = TimedFuture::new(f, |total, busy| {
+        let f = TimedFuture::new(f, |_output, total, busy| {
             // println!("total: {:?}, busy: {:?}", total, busy);
             assert!(total >= Duration::from_millis(20));
             assert!(total <= Duration::from_millis(50));
@@ -201,7 +210,7 @@ mod tests {
         // Async sleep
 
         let f = async move { tokio::time::sleep(Duration::from_millis(20)).await };
-        let f = TimedFuture::new(f, |total, busy| {
+        let f = TimedFuture::new(f, |_output, total, busy| {
             // println!("total: {:?}, busy: {:?}", total, busy);
             assert!(total >= Duration::from_millis(20));
             assert!(total <= Duration::from_millis(50));
@@ -224,7 +233,7 @@ mod tests {
 
         // Blocking sleep
 
-        let f = BlockingSleep20ms {}.with_timing(|total, busy| {
+        let f = BlockingSleep20ms {}.with_timing(|_output, total, busy| {
             assert!(total >= Duration::from_millis(20));
             assert!(total <= Duration::from_millis(50));
 
@@ -236,13 +245,13 @@ mod tests {
 
         rt.block_on(BlockingSleep20ms {}.with_timing_threshold(
             Duration::from_millis(10),
-            |_total, _busy| {
+            |_output, _total, _busy| {
                 // OK, triggered
             },
         ));
         rt.block_on(
             BlockingSleep20ms {}
-                .with_timing_threshold(Duration::from_millis(100), |_total, _busy| {
+                .with_timing_threshold(Duration::from_millis(100), |_output, _total, _busy| {
                     unreachable!("should not be called")
                 }),
         );

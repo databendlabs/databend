@@ -142,7 +142,6 @@ impl Binder {
             false,
             false,
             true,
-            None,
             bind_context.allow_virtual_column,
         );
 
@@ -164,15 +163,6 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        if let Some(cte_name) = &bind_context.cte_context.cte_name {
-            if cte_name == table_name {
-                return Err(ErrorCode::SemanticError(format!(
-                    "The cte {table_name} is not recursive, but it references itself.",
-                ))
-                .set_span(span));
-            }
-        }
-
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
@@ -187,6 +177,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -366,7 +357,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let scan_id = self.metadata.write().next_scan_id();
         log::info!(
-            "[RUNTIME-FILTER]bind_base_table scan_id: {},table_entry: {:?}",
+            "[RUNTIME-FILTER] bind_base_table scan_id: {},table_entry: {:?}",
             scan_id,
             table
         );

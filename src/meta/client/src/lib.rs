@@ -29,12 +29,9 @@ mod message;
 pub mod required;
 pub(crate) mod rpc_handler;
 
-use std::sync::LazyLock;
-
 pub use channel_manager::MetaChannelManager;
 pub use client_handle::ClientHandle;
 pub use databend_common_meta_api::reply::reply_to_api_result;
-use databend_common_version::DATABEND_GIT_SEMVER;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
@@ -45,16 +42,6 @@ pub use message::Streamed;
 pub use required::FeatureSpec;
 pub use required::VersionTuple;
 use semver::Version;
-
-pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
-    let semver = DATABEND_GIT_SEMVER.expect("DATABEND_GIT_SEMVER can not be None");
-    let semver = semver.strip_prefix('v').unwrap_or(semver);
-
-    Version::parse(semver).expect(
-        "run `git fetch --tags` to solve this error,
-    to learn more about this error, please visit https://crates.io/crates/semver",
-    )
-});
 
 /// Oldest compatible nightly metasrv version
 ///
@@ -147,9 +134,23 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-06-09: since 1.2.755
 ///   🖥 server: remove `TxnReply::error`
 ///
-/// - 2025-06-11: since TODO: update when merge
+/// - 2025-06-11: since 1.2.756
 ///   🖥 server: add `TxnPutResponse::current`
 ///
+/// - 2025-06-24: since 1.2.764
+///   🖥 server: add `FetchAddU64` operation to the `TxnOp`
+///
+/// - 2025-06-26: since 1.2.764
+///   🖥 server: add `FetchAddU64.match_seq`
+///
+/// - 2025-07-01: since TODO: add when enables sequence storage v1
+///   👥 client: new sequence API v1: depends on `FetchAddU64`.
+///
+/// - 2025-07-03: since 1.2.770
+///   🖥 server: adaptive `expire_at` support both seconds and milliseconds.
+///
+/// - 2025-07-04: since 1.2.770
+///   🖥 server: add `PutSequential`.
 ///
 /// Server feature set:
 /// ```yaml

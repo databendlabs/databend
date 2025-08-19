@@ -2892,7 +2892,7 @@ evaluation (internal):
 
 ast            : d128 > 1.0
 raw expr       : gt(d128::Decimal(38, 0), 1.0)
-checked expr   : gt<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d128(2,1))
+checked expr   : gt<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -2913,7 +2913,7 @@ evaluation (internal):
 
 ast            : d128 = 1.0
 raw expr       : eq(d128::Decimal(38, 0), 1.0)
-checked expr   : eq<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d128(2,1))
+checked expr   : eq<Decimal(38, 0), Decimal(2, 1)>(d128, 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -2934,7 +2934,7 @@ evaluation (internal):
 
 ast            : 1.0 > d128
 raw expr       : gt(1.0, d128::Decimal(38, 0))
-checked expr   : gt<Decimal(2, 1), Decimal(38, 0)>(1.0_d128(2,1), d128)
+checked expr   : gt<Decimal(2, 1), Decimal(38, 0)>(1.0_d64(2,1), d128)
 optimized expr : true
 evaluation:
 +--------+----------------+---------+
@@ -2955,7 +2955,7 @@ evaluation (internal):
 
 ast            : 1.0 = d128
 raw expr       : eq(1.0, d128::Decimal(38, 0))
-checked expr   : eq<Decimal(2, 1), Decimal(38, 0)>(1.0_d128(2,1), d128)
+checked expr   : eq<Decimal(2, 1), Decimal(38, 0)>(1.0_d64(2,1), d128)
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3242,7 +3242,7 @@ evaluation (internal):
 
 ast            : n_d128 > 1.0
 raw expr       : gt(n_d128::Decimal(38, 0) NULL, 1.0)
-checked expr   : gt<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : gt<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3263,7 +3263,7 @@ evaluation (internal):
 
 ast            : n_d128 = 1.0
 raw expr       : eq(n_d128::Decimal(38, 0) NULL, 1.0)
-checked expr   : eq<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : eq<Decimal(38, 0) NULL, Decimal(2, 1) NULL>(n_d128, CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3284,7 +3284,7 @@ evaluation (internal):
 
 ast            : 1.0 > n_d128
 raw expr       : gt(1.0, n_d128::Decimal(38, 0) NULL)
-checked expr   : gt<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d128)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL), n_d128)
 optimized expr : true
 evaluation:
 +--------+---------------------+--------------+
@@ -3305,7 +3305,7 @@ evaluation (internal):
 
 ast            : 1.0 = n_d128
 raw expr       : eq(1.0, n_d128::Decimal(38, 0) NULL)
-checked expr   : eq<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d128)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(38, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL), n_d128)
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3592,7 +3592,7 @@ evaluation (internal):
 
 ast            : d256 > 1.0
 raw expr       : gt(d256::Decimal(76, 0), 1.0)
-checked expr   : gt<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d128(2,1))
+checked expr   : gt<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3613,7 +3613,7 @@ evaluation (internal):
 
 ast            : d256 = 1.0
 raw expr       : eq(d256::Decimal(76, 0), 1.0)
-checked expr   : eq<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d128(2,1))
+checked expr   : eq<Decimal(76, 0), Decimal(2, 1)>(d256, 1.0_d64(2,1))
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3634,7 +3634,7 @@ evaluation (internal):
 
 ast            : 1.0 > d256
 raw expr       : gt(1.0, d256::Decimal(76, 0))
-checked expr   : gt<Decimal(2, 1), Decimal(76, 0)>(1.0_d128(2,1), d256)
+checked expr   : gt<Decimal(2, 1), Decimal(76, 0)>(1.0_d64(2,1), d256)
 optimized expr : true
 evaluation:
 +--------+----------------+---------+
@@ -3655,7 +3655,7 @@ evaluation (internal):
 
 ast            : 1.0 = d256
 raw expr       : eq(1.0, d256::Decimal(76, 0))
-checked expr   : eq<Decimal(2, 1), Decimal(76, 0)>(1.0_d128(2,1), d256)
+checked expr   : eq<Decimal(2, 1), Decimal(76, 0)>(1.0_d64(2,1), d256)
 optimized expr : false
 evaluation:
 +--------+----------------+---------+
@@ -3942,7 +3942,7 @@ evaluation (internal):
 
 ast            : n_d256 > 1.0
 raw expr       : gt(n_d256::Decimal(76, 0) NULL, 1.0)
-checked expr   : gt<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : gt<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3963,7 +3963,7 @@ evaluation (internal):
 
 ast            : n_d256 = 1.0
 raw expr       : eq(n_d256::Decimal(76, 0) NULL, 1.0)
-checked expr   : eq<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL))
+checked expr   : eq<Decimal(76, 0) NULL, Decimal(2, 1) NULL>(n_d256, CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL))
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+
@@ -3984,7 +3984,7 @@ evaluation (internal):
 
 ast            : 1.0 > n_d256
 raw expr       : gt(1.0, n_d256::Decimal(76, 0) NULL)
-checked expr   : gt<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d256)
+checked expr   : gt<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL), n_d256)
 optimized expr : true
 evaluation:
 +--------+---------------------+--------------+
@@ -4005,7 +4005,7 @@ evaluation (internal):
 
 ast            : 1.0 = n_d256
 raw expr       : eq(1.0, n_d256::Decimal(76, 0) NULL)
-checked expr   : eq<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Decimal(2, 1) NULL), n_d256)
+checked expr   : eq<Decimal(2, 1) NULL, Decimal(76, 0) NULL>(CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Decimal(2, 1) NULL), n_d256)
 optimized expr : false
 evaluation:
 +--------+---------------------+--------------+

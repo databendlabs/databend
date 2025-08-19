@@ -17,15 +17,16 @@ use std::io::Write;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::DecimalView;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::visitor::ValueVisitor;
-use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 
@@ -98,10 +99,27 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
     }
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
-        with_decimal_mapped_type!(|DT| match column {
-            DecimalColumn::DT(column, _) => {
-                let column: Buffer<DT> = unsafe { std::mem::transmute(column) };
-                write_primitive::<DT, W>(
+        match column {
+            DecimalColumn::Decimal64(buffer, _) => {
+                let buffer: Vec<_> = DecimalView::<i64, i128>::iter_column(&buffer).collect();
+                write_primitive::<_, W>(
+                    self.w,
+                    &buffer.into(),
+                    self.validity.clone(),
+                    &self.write_options,
+                    self.scratch,
+                )
+            }
+            DecimalColumn::Decimal128(column, _) => write_primitive::<_, W>(
+                self.w,
+                &column,
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
+            DecimalColumn::Decimal256(column, _) => {
+                let column: Buffer<i256> = unsafe { std::mem::transmute(column) };
+                write_primitive::<i256, W>(
                     self.w,
                     &column,
                     self.validity.clone(),
@@ -109,7 +127,7 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
                     self.scratch,
                 )
             }
-        })
+        }
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {

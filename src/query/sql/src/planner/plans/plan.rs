@@ -33,7 +33,9 @@ use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
 use crate::optimizer::ir::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
+use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
@@ -77,11 +79,13 @@ use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
+use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
 use crate::plans::DescribeViewPlan;
+use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
@@ -93,6 +97,7 @@ use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
 use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
+use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
@@ -100,6 +105,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
@@ -205,6 +211,9 @@ pub enum Plan {
         graphical: bool,
         plan: Box<Plan>,
     },
+    ExplainPerf {
+        sql: String,
+    },
     ReportIssue(String),
 
     // Call is rewrite into Query
@@ -275,6 +284,9 @@ pub enum Plan {
     UnsetOptions(Box<UnsetOptionsPlan>),
     RefreshTableCache(Box<RefreshTableCachePlan>),
     ModifyTableConnection(Box<ModifyTableConnectionPlan>),
+    AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
+    DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
+    DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -328,6 +340,11 @@ pub enum Plan {
     CreateUDF(Box<CreateUDFPlan>),
     AlterUDF(Box<AlterUDFPlan>),
     DropUDF(Box<DropUDFPlan>),
+
+    // RowAccessPolicy
+    CreateRowAccessPolicy(Box<CreateRowAccessPolicyPlan>),
+    DropRowAccessPolicy(Box<DropRowAccessPolicyPlan>),
+    DescRowAccessPolicy(Box<DescRowAccessPolicyPlan>),
 
     // Role
     CreateRole(Box<CreateRolePlan>),
@@ -505,7 +522,8 @@ impl Plan {
             Plan::Explain { .. }
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. }
-            | Plan::ExplainAnalyze { .. } => {
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainPerf { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::DataMutation { schema, .. } => schema.clone(),

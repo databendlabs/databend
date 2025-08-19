@@ -16,9 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 use crate::sessions::Session;
@@ -26,15 +24,10 @@ use crate::sessions::SessionManager;
 
 /// Create a user for history log with necessary privileges
 pub fn get_history_log_user(tenant_id: &str, cluster_id: &str) -> UserInfo {
-    let mut user = UserInfo::new_no_auth(
+    UserInfo::new_no_auth(
         format!("{}-{}-history-log", tenant_id, cluster_id).as_str(),
         "0.0.0.0",
-    );
-    user.grants.grant_privileges(
-        &GrantObject::Global,
-        UserPrivilegeType::CreateDatabase.into(),
-    );
-    user
+    )
 }
 
 /// Create a dummy session for history log

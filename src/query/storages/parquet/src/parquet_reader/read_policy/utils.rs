@@ -50,7 +50,7 @@ pub fn evaluate_topk(
 ) -> Result<Option<DataBlock>> {
     debug_assert!(block.num_columns() >= 1);
     // The topk column must be the first column.
-    let topk_col = block.columns()[0].value.as_column().unwrap();
+    let topk_col = block.columns()[0].as_column().unwrap();
     let num_rows = topk_col.len();
     let filter = topk.evaluate_column(topk_col, sorter);
     if filter.null_count() == num_rows {

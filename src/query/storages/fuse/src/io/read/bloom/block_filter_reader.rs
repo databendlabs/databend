@@ -82,7 +82,7 @@ impl BloomBlockFilterReader for Location {
 
 /// load index column data
 #[fastrace::trace]
-async fn load_bloom_filter_by_columns<'a>(
+pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
     index_path: &'a str,
@@ -118,9 +118,10 @@ async fn load_bloom_filter_by_columns<'a>(
 
     let futs = col_metas
         .iter()
-        .map(|(idx, (_, col_chunk_meta))| {
+        .map(|(idx, (name, col_chunk_meta))| {
             load_column_bloom_filter(
                 *idx,
+                name,
                 col_chunk_meta,
                 index_path,
                 &dal,
@@ -150,6 +151,7 @@ async fn load_bloom_filter_by_columns<'a>(
 #[fastrace::trace]
 async fn load_column_bloom_filter<'a>(
     idx: ColumnId,
+    filter_name: &str,
     col_chunk_meta: &'a SingleColumnMeta,
     index_path: &'a str,
     dal: &'a Operator,
@@ -160,6 +162,7 @@ async fn load_column_bloom_filter<'a>(
         let column_data_reader = BloomColumnFilterReader::new(
             index_path.to_owned(),
             idx,
+            filter_name,
             col_chunk_meta,
             dal.clone(),
             bloom_index_schema_desc,
@@ -174,7 +177,11 @@ async fn load_column_bloom_filter<'a>(
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
+pub async fn load_index_meta(
+    dal: Operator,
+    path: &str,
+    length: u64,
+) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::bloom_index_meta_reader(dal);

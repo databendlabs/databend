@@ -27,6 +27,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -81,16 +82,23 @@ impl ParquetPredicate {
     pub fn evaluate(
         &self,
         batch: &RecordBatch,
-        partition_block_entries: Option<Vec<BlockEntry>>,
+        partition_block_scalars: Arc<[(DataType, Scalar)]>,
     ) -> Result<BooleanArray> {
         let data_schema = DataSchema::from(&self.schema);
         let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
-        let block = if let Some(partition_block_entries) = partition_block_entries {
-            let mut columns = block.columns().to_vec();
-            columns.extend_from_slice(&partition_block_entries);
-            DataBlock::new(columns, block.num_rows())
-        } else {
+        let block = if partition_block_scalars.is_empty() {
             block
+        } else {
+            let num_rows = block.num_rows();
+            let entries = block.take_columns().into_iter().chain(
+                partition_block_scalars
+                    .iter()
+                    .cloned()
+                    .map(|(data_type, scalar)| {
+                        BlockEntry::new_const_column(data_type, scalar, num_rows)
+                    }),
+            );
+            DataBlock::from_iter(entries, num_rows)
         };
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
@@ -117,10 +125,10 @@ pub fn build_predicate(
         .as_expr(&BUILTIN_FUNCTIONS)
         .project_column_ref(
             |name| match partition_columns.iter().position(|x| x == name) {
-                Some(i) => i + schema.fields.len(),
-                None => schema.index_of(name).unwrap(),
+                Some(i) => Ok(i + schema.fields.len()),
+                None => schema.index_of(name),
             },
-        );
+        )?;
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;

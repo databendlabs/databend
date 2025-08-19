@@ -23,31 +23,35 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
+use super::StateSerde;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct JsonArrayAggState<T>
@@ -71,7 +75,7 @@ where
 impl<T> ScalarStateFunc<T> for JsonArrayAggState<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize,
 {
     fn new() -> Self {
         Self::default()
@@ -132,17 +136,53 @@ where
     }
 }
 
+impl<T> StateSerde for JsonArrayAggState<T>
+where
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<Self>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.values.extend_from_slice(&rhs.values);
+            Ok(())
+        })
+    }
+}
+
 #[derive(Clone)]
-pub struct AggregateJsonArrayAggFunction<T, State> {
+struct AggregateJsonArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _t: PhantomData<fn(T, State)>,
 }
 
 impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
@@ -164,18 +204,18 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<State>();
-        match &columns[0] {
+        match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 state.add_batch(&column, Some(&nullable_column.validity))
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
                 state.add_batch(&column, None)
             }
         }
@@ -185,10 +225,10 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        match &columns[0] {
+        match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 let column_iter = T::iter_column(&column);
@@ -204,7 +244,7 @@ where
                     });
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
                 let column_iter = T::iter_column(&column);
                 column_iter.zip(places.iter()).for_each(|(v, place)| {
                     let state = AggrState::new(*place, loc).get::<State>();
@@ -216,9 +256,9 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
-        match &columns[0] {
+        match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
                 let valid = nullable_column.validity.get_bit(row);
                 if valid {
@@ -230,7 +270,7 @@ where
                 }
             }
             _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
                 let v = T::index_column(&column, row);
                 state.add(v);
             }
@@ -239,16 +279,27 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        State::serialize_type(None)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        State::batch_serialize(places, loc, builders)
+    }
 
-        state.merge(&rhs)
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        State::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -257,7 +308,12 @@ where
         state.merge(other)
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -280,7 +336,7 @@ impl<T, State> fmt::Display for AggregateJsonArrayAggFunction<T, State> {
 
 impl<T, State> AggregateJsonArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
@@ -288,7 +344,6 @@ where
             display_name: display_name.to_string(),
             return_type,
             _t: PhantomData,
-            _state: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -296,10 +351,11 @@ where
 
 pub fn try_create_aggregate_json_array_agg_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let return_type = DataType::Variant;
 

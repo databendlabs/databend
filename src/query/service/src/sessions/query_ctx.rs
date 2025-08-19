@@ -36,8 +36,10 @@ use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -68,6 +70,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -89,7 +92,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -109,26 +111,24 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
+use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
-use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_COMMIT_VERSION;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
-use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
 use log::debug;
@@ -145,6 +145,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
@@ -168,9 +169,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
-    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
-    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -188,15 +186,14 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
-            mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", shared.version.commit_detail),
+            mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
-            m_cte_temp_table: Default::default(),
         })
     }
 
@@ -587,6 +584,40 @@ impl QueryContext {
     pub fn get_node_peek_memory_usage(&self) -> HashMap<String, usize> {
         self.shared.get_nodes_peek_memory_usage()
     }
+
+    pub fn clear_table_meta_timestamps_cache(&self) {
+        self.shared.table_meta_timestamps.lock().clear();
+    }
+
+    pub fn get_materialized_cte_senders(
+        &self,
+        cte_name: &str,
+        cte_ref_count: usize,
+        channel_size: Option<usize>,
+    ) -> Vec<Sender<DataBlock>> {
+        let mut senders = vec![];
+        let mut receivers = vec![];
+        for _ in 0..cte_ref_count {
+            let (sender, receiver) = if let Some(channel_size) = channel_size {
+                async_channel::bounded(channel_size)
+            } else {
+                async_channel::unbounded()
+            };
+            senders.push(sender);
+            receivers.push(receiver);
+        }
+        self.shared
+            .materialized_cte_receivers
+            .lock()
+            .insert(cte_name.to_string(), receivers);
+        senders
+    }
+
+    pub fn get_materialized_cte_receiver(&self, cte_name: &str) -> Receiver<DataBlock> {
+        let mut receivers = self.shared.materialized_cte_receivers.lock();
+        let receivers = receivers.get_mut(cte_name).unwrap();
+        receivers.pop().unwrap()
+    }
 }
 
 #[async_trait::async_trait]
@@ -858,6 +889,10 @@ impl TableContext for QueryContext {
         self.shared.check_aborting()
     }
 
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.shared.abort_notify.clone()
+    }
+
     fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         self.shared.get_error()
     }
@@ -877,6 +912,11 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.shared.get_secondary_roles()
+    }
+
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_available_roles().await
     }
@@ -900,13 +940,18 @@ impl TableContext for QueryContext {
         self.get_current_session().get_id()
     }
 
+    fn get_current_client_session_id(&self) -> Option<String> {
+        self.get_current_session().get_client_session_id()
+    }
+
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         self.shared
             .session
-            .get_visibility_checker(ignore_ownership)
+            .get_visibility_checker(ignore_ownership, object)
             .await
     }
 
@@ -917,6 +962,10 @@ impl TableContext for QueryContext {
             SessionType::MySQL => self.mysql_version.clone(),
             _ => self.version.clone(),
         }
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
+        self.shared.version
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
@@ -968,21 +1017,15 @@ impl TableContext for QueryContext {
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
-        let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
+        let enable_binary_to_utf8_lossy = settings.get_enable_binary_to_utf8_lossy()?;
 
         Ok(FunctionContext {
             now,
             tz,
             rounding_mode,
             disable_variant_check,
-
-            openai_api_key: query_config.openai_api_key.clone(),
-            openai_api_version: query_config.openai_api_version.clone(),
-            openai_api_chat_base_url: query_config.openai_api_chat_base_url.clone(),
-            openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
-            openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
-            openai_api_completion_model: query_config.openai_api_completion_model.clone(),
+            enable_selector_executor: settings.get_enable_selector_executor()?,
 
             geometry_output_format,
             parse_datetime_ignore_remainder,
@@ -990,6 +1033,7 @@ impl TableContext for QueryContext {
             random_function_seed,
             week_start,
             date_format_style,
+            enable_binary_to_utf8_lossy,
         })
     }
 
@@ -1050,6 +1094,12 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut all = SessionManager::instance().get_query_execution_stats();
+        all.extend(DataExchangeManager::instance().get_query_execution_stats());
+        all
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
@@ -1151,6 +1201,20 @@ impl TableContext for QueryContext {
         }
     }
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        if self
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                    &self.get_current_user()?.identity().display(),
+                )));
+            }
+        }
         self.shared.get_connection(name).await
     }
 
@@ -1172,14 +1236,15 @@ impl TableContext for QueryContext {
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
         {
-            LicenseManagerSwitch::instance().check_enterprise_enabled(
-                unsafe {
-                    self.get_settings()
-                        .get_enterprise_license()
-                        .unwrap_or_default()
-                },
-                Feature::SystemHistory,
-            )?;
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::SystemHistory)?;
+
+            if GlobalConfig::instance().log.history.is_invisible(table) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "history table `{}` is configured as invisible",
+                    table
+                )));
+            }
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
@@ -1407,10 +1472,8 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        unsafe { self.get_settings().get_enterprise_license() }.unwrap_or_else(|_| {
-            // Try load license from embedded env if failed to load from settings.
-            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
-        })
+        self.get_settings()
+            .get_enterprise_license(self.get_version())
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
@@ -1532,53 +1595,94 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
-        let cache = self.shared.get_table_meta_timestamps();
-        let cached_item = cache.lock().get(&table_id).copied();
 
-        match cached_item {
-            Some(ts) => Ok(ts),
-            None => {
-                let delta = {
-                    let fuse_table = FuseTable::try_from_table(table)?;
-                    let duration = if fuse_table.is_transient() {
-                        Duration::from_secs(0)
-                    } else {
-                        let settings = self.get_settings();
-                        let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
-                        if max_exec_time_secs != 0 {
-                            Duration::from_secs(max_exec_time_secs)
-                        } else {
-                            // no limit, use retention period as delta
-                            // prefer table-level retention setting.
-                            match fuse_table.get_table_retention_period() {
-                                None => {
-                                    Duration::from_days(settings.get_data_retention_time_in_days()?)
-                                }
-                                Some(v) => v,
-                            }
-                        }
-                    };
+        let cached_table_timestamps = {
+            self.shared
+                .table_meta_timestamps
+                .lock()
+                .get(&table_id)
+                .copied()
+        };
 
-                    chrono::Duration::from_std(duration).map_err(|e| {
-                        ErrorCode::Internal(format!(
-                            "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
-                        ))
-                    })?
-                };
-                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
-                    table_id,
-                    previous_snapshot,
-                    delta,
-                );
-                cache.lock().insert(table_id, ts);
-                Ok(ts)
+        if let Some(ts) = cached_table_timestamps {
+            return Ok(ts);
+        }
+
+        let fuse_table = FuseTable::try_from_table(table)?;
+        let is_transient = fuse_table.is_transient();
+        let delta = {
+            let duration = if is_transient {
+                Duration::from_secs(0)
+            } else {
+                let settings = self.get_settings();
+                let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                if max_exec_time_secs != 0 {
+                    Duration::from_secs(max_exec_time_secs)
+                } else {
+                    // no limit, use retention period as delta
+                    // prefer table-level retention setting.
+                    match fuse_table.get_table_retention_period() {
+                        None => Duration::from_days(settings.get_data_retention_time_in_days()?),
+                        Some(v) => v,
+                    }
+                }
+            };
+
+            chrono::Duration::from_std(duration).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
+                ))
+            })?
+        };
+
+        let validation_context = SnapshotTimestampValidationContext {
+            table_id,
+            is_transient,
+        };
+
+        let table_meta_timestamps = TableMetaTimestamps::with_snapshot_timestamp_validation_context(
+            previous_snapshot,
+            delta,
+            Some(validation_context),
+        );
+
+        {
+            let txn_mgr_ref = self.txn_mgr();
+            let mut txn_mgr = txn_mgr_ref.lock();
+
+            if txn_mgr.is_active() {
+                // Transaction Timestamp Tracking:
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
+
+                if let Some(existing_ts) = existing_timestamp {
+                    // Defensively check that:
+                    // Inside an active transaction, if we already have a transaction timestamp for this table,
+                    // ensure the new segment_block_timestamp is greater than or equal to it.
+                    // This maintains timestamp monotonicity within the transaction, which is crucial for
+                    // the safety of vacuum operation.
+                    if table_meta_timestamps.segment_block_timestamp < existing_ts {
+                        return Err(ErrorCode::Internal(format!(
+                            "[QUERY-CTX] Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
+                            table_id, table_meta_timestamps.segment_block_timestamp, existing_ts
+                        )));
+                    }
+                } else {
+                    // When a table is first mutated within an active transaction, record its
+                    // segment_block_timestamp as the transaction's begin timestamp for this table.
+                    txn_mgr.set_table_txn_begin_timestamp(
+                        table_id,
+                        table_meta_timestamps.segment_block_timestamp,
+                    );
+                }
             }
         }
-    }
 
-    fn clear_table_meta_timestamps_cache(&self) {
-        let cache = self.shared.get_table_meta_timestamps();
-        cache.lock().clear();
+        {
+            let mut cache = self.shared.table_meta_timestamps.lock();
+            cache.insert(table_id, table_meta_timestamps);
+        }
+
+        Ok(table_meta_timestamps)
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {
@@ -1647,8 +1751,8 @@ impl TableContext for QueryContext {
         } else {
             format!("{}/", stage_root)
         };
-        match stage_info.file_format_params {
-            FileFormatParams::Parquet(..) => {
+        match &stage_info.file_format_params {
+            FileFormatParams::Parquet(fmt) => {
                 if max_column_position > 1 {
                     Err(ErrorCode::SemanticError(
                         "[QUERY-CTX] Query from parquet file only support $1 as column position",
@@ -1669,6 +1773,7 @@ impl TableContext for QueryContext {
                         read_options = read_options.with_do_prewhere(false);
                     }
                     ParquetTable::create(
+                        self,
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -1676,6 +1781,7 @@ impl TableContext for QueryContext {
                         self.get_settings(),
                         self.get_query_kind(),
                         case_sensitive,
+                        fmt,
                     )
                     .await
                 } else {
@@ -1699,6 +1805,14 @@ impl TableContext for QueryContext {
                 }
             }
             FileFormatParams::Orc(..) => {
+                let is_variant =
+                    match max_column_position {
+                        0 => false,
+                        1 => true,
+                        _ => return Err(ErrorCode::SemanticError(
+                            "[QUERY-CTX] Query from ORC file only support $1 as column position",
+                        )),
+                    };
                 let schema = Arc::new(TableSchema::empty());
                 let info = StageTableInfo {
                     schema,
@@ -1710,9 +1824,9 @@ impl TableContext for QueryContext {
                     default_exprs: None,
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    is_variant: false,
+                    is_variant,
                 };
-                OrcTable::try_create(info).await
+                OrcTable::try_create(self, info).await
             }
             FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -1827,44 +1941,6 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
-        self.m_cte_temp_table
-            .write()
-            .push((database_name.to_string(), table_name.to_string()));
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
-        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
-        let tenant = self.get_tenant();
-        for (db_name, table_name) in m_cte_temp_table.iter() {
-            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
-            let db = self
-                .get_catalog(CATALOG_DEFAULT)
-                .await?
-                .get_database(&tenant, db_name)
-                .await?;
-            let drop_table_req = DropTableByIdReq {
-                if_exists: true,
-                tenant: tenant.clone(),
-                tb_id: table.get_table_info().ident.table_id,
-                table_name: table_name.to_string(),
-                db_id: db.get_db_info().database_id.db_id,
-                db_name: db.name().to_string(),
-                engine: table.engine().to_string(),
-                temp_prefix: table
-                    .options()
-                    .get(OPT_KEY_TEMP_PREFIX)
-                    .cloned()
-                    .unwrap_or_default(),
-            };
-            drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req).await?;
-        }
-        let mut m_cte_temp_table = self.m_cte_temp_table.write();
-        m_cte_temp_table.clear();
-        Ok(())
-    }
-
     fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
         let mut streams = self.shared.streams_refs.write();
         let stream_key = (
@@ -1922,6 +1998,22 @@ impl TableContext for QueryContext {
 
     fn get_session_type(&self) -> SessionType {
         self.shared.session.get_type()
+    }
+
+    fn get_perf_flag(&self) -> bool {
+        self.shared.get_perf_flag()
+    }
+
+    fn set_perf_flag(&self, flag: bool) {
+        self.shared.set_perf_flag(flag);
+    }
+
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.shared.get_nodes_perf()
+    }
+
+    fn set_nodes_perf(&self, node: String, perf: String) {
+        self.shared.set_nodes_perf(node, perf);
     }
 }
 

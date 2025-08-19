@@ -45,6 +45,12 @@ pub enum Cmd {
     /// Remove node
     RemoveNode { node_id: NodeId },
 
+    /// Toggle a state machine feature.
+    ///
+    /// A feature that is implemented by meta-service must be enabled consistently across all nodes.
+    /// e.g, every node enable it or every node disable it.Cause the future affect the behavior of the state machine, if one server enables a feature and another no doesn't, it will result in inconsistent state across the cluster.
+    SetFeature { feature: String, enable: bool },
+
     /// Update or insert a general purpose kv store
     UpsertKV(UpsertKV),
 
@@ -68,6 +74,9 @@ impl fmt::Display for Cmd {
             }
             Cmd::RemoveNode { node_id } => {
                 write!(f, "remove_node:{}", node_id)
+            }
+            Cmd::SetFeature { feature, enable } => {
+                write!(f, "set_feature:{} to {}", feature, enable)
             }
             Cmd::UpsertKV(upsert_kv) => {
                 write!(f, "upsert_kv:{}", upsert_kv)
@@ -121,6 +130,24 @@ mod tests {
         // RemoveNode
         let cmd = super::Cmd::RemoveNode { node_id: 1 };
         let want = r#"{"RemoveNode":{"node_id":1}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // SetFeature, enable = true
+        let cmd = super::Cmd::SetFeature {
+            feature: "test_feature".to_string(),
+            enable: true,
+        };
+        let want = r#"{"SetFeature":{"feature":"test_feature","enable":true}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // SetFeature, enable = false
+        let cmd = super::Cmd::SetFeature {
+            feature: "test_feature".to_string(),
+            enable: false,
+        };
+        let want = r#"{"SetFeature":{"feature":"test_feature","enable":false}}"#;
         assert_eq!(want, serde_json::to_string(&cmd)?);
         assert_eq!(cmd, serde_json::from_str(want)?);
 

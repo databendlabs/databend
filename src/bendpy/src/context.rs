@@ -22,6 +22,8 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
@@ -37,6 +39,7 @@ use crate::utils::RUNTIME;
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
     pub(crate) session: Arc<Session>,
+    version: BuildInfoRef,
 }
 
 #[pymethods]
@@ -61,9 +64,12 @@ impl PySessionContext {
             let session = session_manager.register_session(session).unwrap();
 
             let config = GlobalConfig::instance();
-            UserApiProvider::try_create_simple(config.meta.to_meta_grpc_client_conf(), &tenant)
-                .await
-                .unwrap();
+            UserApiProvider::try_create_simple(
+                config.meta.to_meta_grpc_client_conf(&BUILD_INFO),
+                &tenant,
+            )
+            .await
+            .unwrap();
 
             let mut user = UserInfo::new_no_auth("root", "%");
             user.grants.grant_privileges(
@@ -75,7 +81,10 @@ impl PySessionContext {
             Ok::<Arc<Session>, PyErr>(session)
         })?;
 
-        let mut res = Self { session };
+        let mut res = Self {
+            session,
+            version: &BUILD_INFO,
+        };
 
         res.sql("CREATE DATABASE IF NOT EXISTS default", py)
             .and_then(|df| df.collect(py))?;
@@ -83,7 +92,7 @@ impl PySessionContext {
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
+        let ctx = wait_for_future(py, self.session.create_query_context(self.version)).unwrap();
         let res = wait_for_future(py, plan_sql(&ctx, sql));
 
         match res {

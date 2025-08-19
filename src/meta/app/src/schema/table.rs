@@ -241,9 +241,18 @@ pub struct TableStatistics {
     pub data_bytes: u64,
     /// Size of data compressed in bytes
     pub compressed_data_bytes: u64,
-    /// Size of index data in bytes
+    /// Size of all index data in bytes
     pub index_data_bytes: u64,
-
+    /// Size of bloom index in bytes
+    pub bloom_index_size: Option<u64>,
+    /// Size of ngram index in bytes
+    pub ngram_index_size: Option<u64>,
+    /// Size of inverted index in bytes
+    pub inverted_index_size: Option<u64>,
+    /// Size of vector index in bytes
+    pub vector_index_size: Option<u64>,
+    /// Size of virtual column in bytes
+    pub virtual_column_size: Option<u64>,
     /// number of segments
     pub number_of_segments: Option<u64>,
 
@@ -286,6 +295,8 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    // One table only has an unique row access policy
+    pub row_access_policy: Option<String>,
     pub indexes: BTreeMap<String, TableIndex>,
 }
 
@@ -478,6 +489,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            row_access_policy: None,
             indexes: BTreeMap::new(),
         }
     }
@@ -897,6 +909,25 @@ pub struct SetTableColumnMaskPolicyReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetTableRowAccessPolicyAction {
+    // new policy name
+    Set(String),
+    // old policy name
+    Unset(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetTableRowAccessPolicyReq {
+    pub tenant: Tenant,
+    pub table_id: u64,
+    pub policy_id: u64,
+    pub action: SetTableRowAccessPolicyAction,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetTableRowAccessPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {}

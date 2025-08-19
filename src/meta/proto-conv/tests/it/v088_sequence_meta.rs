@@ -31,9 +31,9 @@ fn test_decode_v88_sequence_meta() -> anyhow::Result<()> {
         create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         comment: Some("seq".to_string()),
-        start: 1,
         step: 1,
         current: 10,
+        storage_version: 0,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), sequence_meta_v88.as_slice(), 88, want())?;

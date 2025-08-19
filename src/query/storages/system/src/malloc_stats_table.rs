@@ -19,14 +19,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -85,9 +83,9 @@ impl MallocStatsTable {
         tikv_jemalloc_ctl::stats_print::stats_print(&mut buf, options)?;
         let json_value: serde_json::Value = serde_json::from_slice(&buf)?;
         let jsonb_value: jsonb::Value = (&json_value).into();
-        Ok(vec![BlockEntry::new(
-            DataType::Variant,
-            Value::Scalar(Scalar::Variant(jsonb_value.to_vec())),
+        Ok(vec![BlockEntry::new_const_column_arg::<VariantType>(
+            jsonb_value.to_vec(),
+            1,
         )])
     }
 }

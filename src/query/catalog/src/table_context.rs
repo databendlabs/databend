@@ -22,8 +22,11 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::WatchNotify;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -56,6 +59,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
@@ -197,6 +201,7 @@ pub trait TableContext: Send + Sync {
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<(), ContextError>;
+    fn get_abort_notify(&self) -> Arc<WatchNotify>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -214,7 +219,11 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    fn get_secondary_roles(&self) -> Option<Vec<String>>;
     fn get_current_session_id(&self) -> String {
+        unimplemented!()
+    }
+    fn get_current_client_session_id(&self) -> Option<String> {
         unimplemented!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
@@ -229,8 +238,10 @@ pub trait TableContext: Send + Sync {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
+    fn get_version(&self) -> BuildInfoRef;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> Tenant;
     /// Get the kind of session running query.
@@ -267,6 +278,13 @@ pub trait TableContext: Send + Sync {
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
         -> Result<Arc<dyn Table>>;
+
+    async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog("default").await?;
+        catalog
+            .get_table(&self.get_tenant(), "system", "zero")
+            .await
+    }
 
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
@@ -357,8 +375,6 @@ pub trait TableContext: Send + Sync {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
 
-    fn clear_table_meta_timestamps_cache(&self);
-
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 
@@ -403,10 +419,6 @@ pub trait TableContext: Send + Sync {
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
     fn get_shared_settings(&self) -> Arc<Settings>;
 
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()>;
-
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
         unimplemented!()
     }
@@ -432,6 +444,21 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn get_session_type(&self) -> SessionType {
+        unimplemented!()
+    }
+    fn get_perf_flag(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_perf_flag(&self, _flag: bool) {
+        unimplemented!()
+    }
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        unimplemented!()
+    }
+    fn set_nodes_perf(&self, _node: String, _perf: String) {
+        unimplemented!()
+    }
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         unimplemented!()
     }
 }

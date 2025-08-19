@@ -17,7 +17,6 @@ AggregateFinal
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 25000000.00
             ├── Exchange(Build)
             │   ├── output columns: [i2.i (#1)]

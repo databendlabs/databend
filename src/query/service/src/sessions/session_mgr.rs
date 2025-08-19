@@ -25,6 +25,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::ProcessInfoState;
@@ -32,6 +33,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_metrics::session::*;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -101,7 +103,7 @@ impl SessionManager {
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
-        let session = self.create_with_settings(typ, settings)?;
+        let session = self.create_with_settings(typ, settings, None)?;
 
         Ok(session)
     }
@@ -130,6 +132,7 @@ impl SessionManager {
         &self,
         typ: SessionType,
         settings: Arc<Settings>,
+        user: Option<UserInfo>,
     ) -> Result<Session> {
         let id = uuid::Uuid::new_v4().to_string();
         let mysql_conn_id = match typ {
@@ -137,7 +140,7 @@ impl SessionManager {
             _ => None,
         };
 
-        let session_ctx = SessionContext::try_create(settings, typ.clone())?;
+        let session_ctx = SessionContext::try_create(settings, typ.clone(), user)?;
         let session = Session::try_create(
             id.clone(),
             typ.clone(),
@@ -394,6 +397,26 @@ impl SessionManager {
         )))
     }
 
+    pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut res = Vec::new();
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                let query_id = context_shared.init_query_id.as_ref().read().clone();
+                let stats = context_shared.get_query_execution_stats();
+                if let Some(stats) = stats {
+                    res.push((query_id, stats));
+                }
+            }
+        }
+        res
+    }
+
     fn active_sessions_snapshot(&self) -> Vec<Weak<Session>> {
         // Here the situation is the same of method `graceful_shutdown`:
         //
@@ -404,8 +427,6 @@ impl SessionManager {
         // Since there are chances that we are the last one that holding the reference, and the
         // destruction of session need to acquire the write lock of `active_sessions`, which leads
         // to dead lock.
-        //
-        // Although online expression can also do this, to make this clearer, we wrap it in a block
 
         let active_sessions_guard = self.active_sessions.read();
         active_sessions_guard.values().cloned().collect::<Vec<_>>()
@@ -430,5 +451,38 @@ impl SessionManager {
         }
 
         false
+    }
+    pub fn get_all_temp_tables(
+        &self,
+    ) -> Result<
+        Vec<(
+            String,
+            SessionType,
+            databend_common_meta_app::schema::TableInfo,
+        )>,
+    > {
+        let mut all_temp_tables = Vec::new();
+        let sessions = self.active_sessions_snapshot();
+        for session in sessions {
+            if let Some(session) = session.upgrade() {
+                let temp_tables = {
+                    let mgr_ref = session.temp_tbl_mgr();
+                    let vals = mgr_ref.lock().list_tables();
+                    vals
+                }?;
+                for table in temp_tables {
+                    all_temp_tables.push((
+                        format!(
+                            "{}/{}",
+                            session.get_current_user()?.name.clone(),
+                            session.id.clone()
+                        ),
+                        session.typ.read().clone(),
+                        table,
+                    ));
+                }
+            }
+        }
+        Ok(all_temp_tables)
     }
 }

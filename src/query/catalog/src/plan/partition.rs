@@ -26,6 +26,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
@@ -346,11 +347,13 @@ pub struct ReclusterTask {
     pub level: i32,
 }
 
+pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
+
 #[derive(Clone)]
 pub enum ReclusterParts {
     Recluster {
         tasks: Vec<ReclusterTask>,
-        remained_blocks: Vec<Arc<BlockMeta>>,
+        remained_blocks: Vec<BlockMetaWithHLL>,
         removed_segment_indexes: Vec<usize>,
         removed_segment_summary: Statistics,
     },
@@ -398,7 +401,7 @@ impl ReclusterParts {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ReclusterInfoSideCar {
-    pub merged_blocks: Vec<Arc<BlockMeta>>,
+    pub merged_blocks: Vec<BlockMetaWithHLL>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
 }

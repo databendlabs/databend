@@ -33,3 +33,12 @@ else
 fi
 
 echo "set global copy_dedup_full_path_by_default = ${FULL_PATH}" | $BENDSQL_CLIENT_CONNECT
+
+if [ -z "$TEST_STAGE_SIZE" ] || [ "$TEST_STAGE_SIZE" = "small" ]; then
+		echo "set global parquet_fast_read_bytes = 1048576" | $BENDSQL_CLIENT_CONNECT
+elif [ "$TEST_STAGE_SIZE" = "large" ]; then
+		echo "set global parquet_fast_read_bytes = 0" | $BENDSQL_CLIENT_CONNECT
+else
+    echo "TEST_STAGE_DEDUP must be 'small' or 'large'" >&2
+    exit 1
+fi

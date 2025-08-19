@@ -27,6 +27,7 @@ use serde::Serialize;
 use crate::display::display_tuple_field_name;
 use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
+use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
 use crate::types::VectorDataType;
 use crate::BlockMetaInfo;
@@ -49,6 +50,8 @@ pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 // internal search column id.
 pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
 pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
+// internal vector score column id.
+pub const VECTOR_SCORE_COLUMN_ID: u32 = u32::MAX - 9;
 
 pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_000;
 pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_001_000;
@@ -65,6 +68,8 @@ pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
 // internal search column name.
 pub const SEARCH_MATCHED_COL_NAME: &str = "_search_matched";
 pub const SEARCH_SCORE_COL_NAME: &str = "_search_score";
+// internal vector score column name.
+pub const VECTOR_SCORE_COL_NAME: &str = "_vector_score";
 
 pub const CHANGE_ACTION_COL_NAME: &str = "change$action";
 pub const CHANGE_IS_UPDATE_COL_NAME: &str = "change$is_update";
@@ -79,14 +84,13 @@ pub const FILE_ROW_NUMBER_COLUMN_NAME: &str = "metadata$file_row_number";
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
-pub const ROW_VERSION_COLUMN_ID: u32 = u32::MAX - 13;
+
 pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
 pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
-pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
 // The change$row_id might be expended to the computation of
 // the ORIGIN_BLOCK_ROW_NUM_COL_NAME and BASE_ROW_ID_COL_NAME.
@@ -100,6 +104,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         BASE_BLOCK_IDS_COL_NAME,
         SEARCH_MATCHED_COL_NAME,
         SEARCH_SCORE_COL_NAME,
+        VECTOR_SCORE_COL_NAME,
         CHANGE_ACTION_COL_NAME,
         CHANGE_IS_UPDATE_COL_NAME,
         CHANGE_ROW_ID_COL_NAME,
@@ -107,7 +112,6 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         ORIGIN_VERSION_COL_NAME,
         ORIGIN_BLOCK_ID_COL_NAME,
         ORIGIN_BLOCK_ROW_NUM_COL_NAME,
-        ROW_VERSION_COL_NAME,
         FILENAME_COLUMN_NAME,
         FILE_ROW_NUMBER_COLUMN_NAME,
     ])
@@ -115,7 +119,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= SEARCH_SCORE_COLUMN_ID
+    column_id >= VECTOR_SCORE_COLUMN_ID
         || (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
@@ -126,17 +130,14 @@ pub fn is_internal_column(column_name: &str) -> bool {
 
 #[inline]
 pub fn is_stream_column_id(column_id: ColumnId) -> bool {
-    (ROW_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
+    (ORIGIN_VERSION_COLUMN_ID..=ORIGIN_BLOCK_ROW_NUM_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]
 pub fn is_stream_column(column_name: &str) -> bool {
     matches!(
         column_name,
-        ORIGIN_VERSION_COL_NAME
-            | ORIGIN_BLOCK_ID_COL_NAME
-            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
-            | ROW_VERSION_COL_NAME
+        ORIGIN_VERSION_COL_NAME | ORIGIN_BLOCK_ID_COL_NAME | ORIGIN_BLOCK_ROW_NUM_COL_NAME
     )
 }
 
@@ -364,9 +365,10 @@ impl DataSchema {
                 return Ok(i);
             }
         }
-        let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
+        let mut valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
+        valid_fields.truncate(16);
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{}\". Valid fields: {:?}",
+            "Unable to get field named \"{}\". Valid fields: {:?} ...",
             name, valid_fields
         )))
     }
@@ -674,7 +676,10 @@ impl TableSchema {
                     }
                 }
                 (
-                    TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_),
+                    TableDataType::Tuple { .. }
+                    | TableDataType::Array(_)
+                    | TableDataType::Map(_)
+                    | TableDataType::Vector(_),
                     _,
                 ) => {
                     // ignore leaf columns
@@ -1577,13 +1582,14 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
-        DataType::Decimal(size) => {
-            if size.can_carried_by_128() {
+        DataType::Decimal(size) => match size.data_kind() {
+            DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal128(*size)))
-            } else {
+            }
+            DecimalDataKind::Decimal256 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal256(*size)))
             }
-        }
+        },
         DataType::Date => Ok(TableDataType::Date),
         DataType::Interval => Ok(TableDataType::Interval),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(

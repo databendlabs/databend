@@ -22,6 +22,7 @@ use databend_common_exception::ToErrorCode;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license::StorageQuota;
+use databend_common_license::license::VerifyResult;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_version::DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY;
@@ -216,17 +217,32 @@ impl RealLicenseManager {
         }
 
         let verify_features = l.custom.features.as_ref().unwrap();
+        let mut has_verify_failed = false;
         for verify_feature in verify_features {
-            if verify_feature.verify(&feature)? {
-                return Ok(());
+            match verify_feature.verify(&feature)? {
+                VerifyResult::MissMatch => {}
+                VerifyResult::Success => {
+                    return Ok(());
+                }
+                VerifyResult::Failure => {
+                    has_verify_failed = true;
+                }
             }
         }
 
-        Err(ErrorCode::LicenseKeyInvalid(format!(
-            "[LicenseManager] License does not support feature: {}. Supported features: {}",
-            feature,
-            l.custom.display_features()
-        )))
+        match has_verify_failed {
+            true => Err(ErrorCode::LicenseKeyInvalid(format!(
+                "[LicenseManager] License does not support feature: {}. Supported features: {}",
+                feature,
+                l.custom.display_features()
+            ))),
+            // If the feature is not included in the license, default verification is used.
+            false => feature.verify_default(format!(
+                "[LicenseManager] License does not support feature: {}. Supported features: {}",
+                feature,
+                l.custom.display_features()
+            )),
+        }
     }
 
     fn verify_if_expired(&self, feature: Feature) -> Result<()> {

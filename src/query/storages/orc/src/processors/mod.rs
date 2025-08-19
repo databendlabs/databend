@@ -14,3 +14,4 @@
 
 pub(crate) mod decoder;
 pub(crate) mod source;
+pub(crate) mod variant_decoder;

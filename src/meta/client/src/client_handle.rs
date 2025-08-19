@@ -235,12 +235,12 @@ impl ClientHandle {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+    pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaClientError> {
         self.request(message::GetClusterStatus {}).await
     }
 
     #[async_backtrace::framed]
-    pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
+    pub async fn get_client_info(&self) -> Result<ClientInfo, MetaClientError> {
         self.request(message::GetClientInfo {}).await
     }
 

@@ -17,12 +17,15 @@ use std::env;
 use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
+use databend_common_config::StorageConfig;
 use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
 use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
-use databend_common_tracing::HistoryConfig;
+use databend_common_tracing::HistoryConfig as InnerLogHistoryConfig;
+use databend_common_tracing::LogFormat;
 use databend_common_tracing::OTLPConfig;
 use databend_common_tracing::ProfileLogConfig;
 use databend_common_tracing::QueryLogConfig;
@@ -38,10 +41,9 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
-use crate::version::METASRV_COMMIT_VERSION;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
+#[clap(about, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command
@@ -140,9 +142,11 @@ impl Default for Config {
     }
 }
 
-impl From<Config> for InnerConfig {
-    fn from(outer: Config) -> Self {
-        let mut log: InnerLogConfig = outer.log.into();
+impl TryFrom<Config> for InnerConfig {
+    type Error = String;
+
+    fn try_from(outer: Config) -> Result<Self, Self::Error> {
+        let mut log: InnerLogConfig = outer.log.try_into()?;
         if outer.log_level != CONFIG_DEFAULT_LOG_LEVEL {
             log.file.level = outer.log_level.to_string();
         }
@@ -150,7 +154,7 @@ impl From<Config> for InnerConfig {
             log.file.dir = outer.log_dir.to_string();
         }
 
-        InnerConfig {
+        Ok(InnerConfig {
             cmd: outer.cmd,
             key: outer.key,
             value: outer.value,
@@ -168,7 +172,7 @@ impl From<Config> for InnerConfig {
             grpc_tls_server_cert: outer.grpc_tls_server_cert,
             grpc_tls_server_key: outer.grpc_tls_server_key,
             raft_config: outer.raft_config.into(),
-        }
+        })
     }
 }
 
@@ -422,6 +426,7 @@ impl Into<Config> for ConfigViaEnv {
                 stderr_level: self.metasrv_log_stderr_level,
                 stderr_format: self.metasrv_log_stderr_format,
             },
+            storage: StorageLogConfig::default(),
         };
 
         Config {
@@ -671,6 +676,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub stderr: StderrLogConfig,
+
+    #[clap(flatten)]
+    pub storage: StorageLogConfig,
 }
 
 impl Default for LogConfig {
@@ -679,19 +687,20 @@ impl Default for LogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerLogConfig> for LogConfig {
-    fn into(self) -> InnerLogConfig {
-        InnerLogConfig {
-            file: self.file.into(),
-            stderr: self.stderr.into(),
+impl TryInto<InnerLogConfig> for LogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerLogConfig, Self::Error> {
+        Ok(InnerLogConfig {
+            file: self.file.try_into()?,
+            stderr: self.stderr.try_into()?,
             otlp: OTLPConfig::default(),
             query: QueryLogConfig::default(),
             profile: ProfileLogConfig::default(),
             structlog: StructLogConfig::default(),
             tracing: TracingConfig::default(),
-            history: HistoryConfig::default(),
-        }
+            history: self.storage.into(),
+        })
     }
 }
 
@@ -700,6 +709,7 @@ impl From<InnerLogConfig> for LogConfig {
         Self {
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            storage: inner.history.into(),
         }
     }
 }
@@ -750,17 +760,23 @@ impl Default for FileLogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerFileLogConfig> for FileLogConfig {
-    fn into(self) -> InnerFileLogConfig {
-        InnerFileLogConfig {
+impl TryInto<InnerFileLogConfig> for FileLogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerFileLogConfig, Self::Error> {
+        let format = self
+            .file_format
+            .parse::<LogFormat>()
+            .map_err(|e| format!("Invalid file log format: {}", e))?;
+
+        Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
-            format: self.file_format,
+            format,
             limit: self.file_limit,
             max_size: self.file_max_size,
-        }
+        })
     }
 }
 
@@ -770,7 +786,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_on: inner.on,
             file_level: inner.level,
             file_dir: inner.dir,
-            file_format: inner.format,
+            file_format: inner.format.to_string(),
             file_limit: inner.limit,
             file_max_size: inner.max_size,
 
@@ -805,14 +821,20 @@ impl Default for StderrLogConfig {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<InnerStderrLogConfig> for StderrLogConfig {
-    fn into(self) -> InnerStderrLogConfig {
-        InnerStderrLogConfig {
+impl TryInto<InnerStderrLogConfig> for StderrLogConfig {
+    type Error = String;
+
+    fn try_into(self) -> Result<InnerStderrLogConfig, Self::Error> {
+        let format = self
+            .stderr_format
+            .parse::<LogFormat>()
+            .map_err(|e| format!("Invalid stderr log format: {}", e))?;
+
+        Ok(InnerStderrLogConfig {
             on: self.stderr_on,
             level: self.stderr_level,
-            format: self.stderr_format,
-        }
+            format,
+        })
     }
 }
 
@@ -821,7 +843,97 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
         Self {
             stderr_on: inner.on,
             stderr_level: inner.level,
-            stderr_format: inner.format,
+            stderr_format: inner.format.to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StorageLogConfig {
+    #[clap(
+        long = "log-storage-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub log_storage_on: bool,
+
+    /// Specifies the interval in seconds for how often the log is flushed
+    #[clap(
+        long = "log-storage-interval",
+        value_name = "VALUE",
+        default_value = "2"
+    )]
+    #[serde(rename = "interval")]
+    pub log_storage_interval: usize,
+
+    /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
+    ///
+    /// Note:
+    /// The default value uses an uuid to avoid conflicts with existing stages
+    #[clap(
+        long = "log-storage-stage-name",
+        value_name = "VALUE",
+        default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
+    )]
+    #[serde(rename = "stage_name")]
+    pub log_storage_stage_name: String,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-storage-level",
+        value_name = "VALUE",
+        default_value = "INFO"
+    )]
+    #[serde(rename = "level")]
+    pub log_storage_level: String,
+
+    /// Specify store the log into where
+    #[clap(skip)]
+    #[serde(rename = "params")]
+    pub log_storage_params: StorageConfig,
+}
+
+impl Default for StorageLogConfig {
+    fn default() -> Self {
+        StorageLogConfig {
+            log_storage_on: false,
+            log_storage_interval: 2,
+            log_storage_stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
+            log_storage_level: "INFO".to_string(),
+            log_storage_params: Default::default(),
+        }
+    }
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<InnerLogHistoryConfig> for StorageLogConfig {
+    fn into(self) -> InnerLogHistoryConfig {
+        let storage_params: Option<InnerStorageConfig> =
+            Some(self.log_storage_params.try_into().unwrap_or_default());
+        InnerLogHistoryConfig {
+            on: self.log_storage_on,
+            interval: self.log_storage_interval,
+            stage_name: self.log_storage_stage_name,
+            level: self.log_storage_level,
+            storage_params: storage_params.map(|cfg| cfg.params),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<InnerLogHistoryConfig> for StorageLogConfig {
+    fn from(value: InnerLogHistoryConfig) -> Self {
+        let inner_storage_config: Option<InnerStorageConfig> =
+            value.storage_params.map(|params| InnerStorageConfig {
+                params,
+                ..Default::default()
+            });
+        Self {
+            log_storage_on: value.on,
+            log_storage_interval: value.interval,
+            log_storage_stage_name: value.stage_name,
+            log_storage_level: value.level,
+            log_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
     }
 }

@@ -43,6 +43,8 @@ pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
 /// In memory object cache of TableSnapshotStatistics
 pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
+/// In memory object cache of SegmentStatistics
+pub type SegmentStatisticsCache = InMemoryLruCache<SegmentStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
@@ -51,6 +53,9 @@ pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
+
+pub type VectorIndexMetaCache = InMemoryLruCache<VectorIndexMeta>;
+pub type VectorIndexFileCache = InMemoryLruCache<VectorIndexFile>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
@@ -109,6 +114,13 @@ impl CachedObject<TableSnapshotStatistics> for TableSnapshotStatistics {
     }
 }
 
+impl CachedObject<SegmentStatistics> for SegmentStatistics {
+    type Cache = SegmentStatisticsCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_segment_statistics_cache()
+    }
+}
+
 impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
     type Cache = BloomIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
@@ -148,6 +160,20 @@ impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
     type Cache = InvertedIndexMetaCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_meta_cache()
+    }
+}
+
+impl CachedObject<VectorIndexFile> for VectorIndexFile {
+    type Cache = VectorIndexFileCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_vector_index_file_cache()
+    }
+}
+
+impl CachedObject<VectorIndexMeta> for VectorIndexMeta {
+    type Cache = VectorIndexMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_vector_index_meta_cache()
     }
 }
 
@@ -235,6 +261,15 @@ impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
     }
 }
 
+impl From<SegmentStatistics> for CacheValue<SegmentStatistics> {
+    fn from(value: SegmentStatistics) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
 impl From<FilterImpl> for CacheValue<FilterImpl> {
     fn from(value: FilterImpl) -> Self {
         CacheValue {
@@ -275,6 +310,24 @@ impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
     fn from(value: InvertedIndexFile) -> Self {
         CacheValue {
             mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<VectorIndexMeta> for CacheValue<VectorIndexMeta> {
+    fn from(value: VectorIndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<VectorIndexFile> for CacheValue<VectorIndexFile> {
+    fn from(value: VectorIndexFile) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<VectorIndexFile>() + value.data.len(),
             inner: Arc::new(value),
         }
     }

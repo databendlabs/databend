@@ -45,6 +45,7 @@ impl ResourcesManagement for SystemResourcesManagement {
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         assert!(config.query.cluster_id.is_empty());
+        assert!(config.query.warehouse_id.is_empty());
         assert!(config.query.resources_management.is_some());
 
         if let Some(resources_management) = &config.query.resources_management {

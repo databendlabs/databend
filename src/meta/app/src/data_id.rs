@@ -31,7 +31,7 @@ use crate::tenant_key::resource::TenantResource;
 /// e.g. TableId, DatabaseId as a value.
 ///
 /// `DataId<R>` can be dereferenced to `u64`.
-/// `DataId<R>` will take place of `Id<T>` in future.
+/// `DataId<R>` will take place of `Id<T>` in the future.
 ///
 /// When an id is used as a key in a key-value store,
 /// it is serialized in another way to keep order.

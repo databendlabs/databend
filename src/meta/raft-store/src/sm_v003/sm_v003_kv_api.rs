@@ -20,15 +20,16 @@ use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use seq_marked::SeqValue;
 
 use crate::sm_v003::SMV003;
 use crate::state_machine_api_ext::StateMachineApiExt;
+use crate::testing::since_epoch_millis;
 
 /// A wrapper that implements KVApi **readonly** methods for the state machine.
 pub struct SMV003KVApi<'a> {
@@ -44,7 +45,7 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
     }
 
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        let local_now_ms = SeqV::<()>::now_ms();
+        let local_now_ms = since_epoch_millis();
 
         let mut items = Vec::with_capacity(keys.len());
 
@@ -58,7 +59,7 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
     }
 
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-        let local_now_ms = SeqV::<()>::now_ms();
+        let local_now_ms = since_epoch_millis();
 
         let strm = self
             .sm

@@ -12,35 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal;
-use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::types::decimal::Decimal256Type;
+use databend_common_expression::types::compute_view::NumberConvertView;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumnBuilderMut;
-use databend_common_expression::types::number::Number;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataKind;
+use databend_common_expression::types::DecimalF64View;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
+use databend_common_expression::types::F64;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
-use num_traits::AsPrimitive;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 
+use super::aggregator_common::assert_params;
+use super::aggregator_common::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::aggregates::AggregateFunction;
 
 const STD_POP: u8 = 0;
 const STD_SAMP: u8 = 1;
@@ -115,28 +125,22 @@ impl<const TYPE: u8> StddevState<TYPE> {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-struct NumberAggregateStddevState<const TYPE: u8> {
-    state: StddevState<TYPE>,
-}
-
-impl<T, const TYPE: u8> UnaryState<T, NullableType<Float64Type>>
-    for NumberAggregateStddevState<TYPE>
+impl<T, const TYPE: u8> UnaryState<T, NullableType<Float64Type>> for StddevState<TYPE>
 where
-    T: ValueType,
-    T::Scalar: Number + AsPrimitive<f64>,
+    T: AccessType,
+    T::Scalar: Into<f64>,
 {
     fn add(
         &mut self,
         other: T::ScalarRef<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let value = T::to_owned_scalar(other).as_();
-        self.state.state_add(value)
+        let value = T::to_owned_scalar(other).into();
+        self.state_add(value)
     }
 
     fn merge(&mut self, other: &Self) -> Result<()> {
-        self.state.state_merge(&other.state)
+        self.state_merge(other)
     }
 
     fn merge_result(
@@ -144,56 +148,39 @@ where
         builder: NullableColumnBuilderMut<'_, Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        self.state.state_merge_result(builder)
+        self.state_merge_result(builder)
     }
 }
 
-struct DecimalFuncData {
-    pub scale: u8,
-}
-
-impl FunctionData for DecimalFuncData {
-    fn as_any(&self) -> &dyn Any {
-        self
+impl<const TYPE: u8> StateSerde for StddevState<TYPE> {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(Some(24))]
     }
-}
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-struct DecimalNumberAggregateStddevState<const TYPE: u8> {
-    state: StddevState<TYPE>,
-}
-
-impl<T, const TYPE: u8> UnaryState<T, NullableType<Float64Type>>
-    for DecimalNumberAggregateStddevState<TYPE>
-where
-    T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
-{
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        function_data: Option<&dyn FunctionData>,
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let stddev_func_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<DecimalFuncData>()
-        };
-        let value = T::to_owned_scalar(other).to_float64(stddev_func_data.scale);
-        self.state.state_add(value)
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
     }
 
-    fn merge(&mut self, other: &Self) -> Result<()> {
-        self.state.state_merge(&other.state)
-    }
-
-    fn merge_result(
-        &mut self,
-        builder: NullableColumnBuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
     ) -> Result<()> {
-        self.state.state_merge_result(builder)
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<Float64Type, NullableType<Float64Type>>>::merge(state, &rhs)
+        })
     }
 }
 
@@ -203,38 +190,30 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let return_type = DataType::Number(NumberDataType::Float64).wrap_nullable();
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
             AggregateUnaryFunction::<
-                NumberAggregateStddevState<TYPE>,
-                NumberType<NUM_TYPE>,
+                StddevState<TYPE>,
+                NumberConvertView<NUM_TYPE, F64>,
                 NullableType<Float64Type>,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
-        }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let func = AggregateUnaryFunction::<
-                DecimalNumberAggregateStddevState<TYPE>,
-                Decimal128Type,
-                NullableType<Float64Type>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
-            Ok(Arc::new(func))
+            >::create(display_name, return_type)
+            .finish()
         }
         DataType::Decimal(s) => {
-            let func = AggregateUnaryFunction::<
-                DecimalNumberAggregateStddevState<TYPE>,
-                Decimal256Type,
-                NullableType<Float64Type>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
-            Ok(Arc::new(func))
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    AggregateUnaryFunction::<
+                        StddevState<TYPE>,
+                        DecimalF64View<DECIMAL>,
+                        NullableType<Float64Type>,
+                    >::create(display_name, return_type)
+                    .finish()
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

@@ -34,6 +34,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -41,6 +42,7 @@ use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -151,18 +153,31 @@ impl TransformSerializeBlock {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(&table.table_info.meta)?;
+        let ndv_columns_map = table
+            .approx_distinct_cols
+            .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        let ngram_args = FuseTable::create_ngram_index_args(
+            &table.table_info.meta,
+            &table.table_info.meta.schema,
+        )?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+
         let virtual_column_builder = if ctx
             .get_settings()
             .get_enable_refresh_virtual_column_after_write()
             .unwrap_or_default()
+            && table.support_virtual_columns()
         {
-            VirtualColumnBuilder::try_create(ctx.clone(), table, source_schema.clone()).ok()
+            VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {
             None
         };
+        let vector_index_builder = VectorIndexBuilder::try_create(
+            ctx.clone(),
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+        );
 
         let block_builder = BlockBuilder {
             ctx,
@@ -171,9 +186,11 @@ impl TransformSerializeBlock {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            ndv_columns_map,
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,
+            vector_index_builder,
             table_meta_timestamps,
         };
         Ok(TransformSerializeBlock {

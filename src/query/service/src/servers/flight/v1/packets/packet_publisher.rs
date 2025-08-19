@@ -25,6 +25,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_types::NodeInfo;
 use databend_common_settings::Settings;
 use log::debug;
@@ -138,6 +139,8 @@ pub struct QueryEnv {
     pub request_server_id: String,
     pub workload_group: Option<String>,
     pub create_rpc_clint_with_current_rt: bool,
+    pub perf_flag: bool,
+    pub user: UserInfo,
 }
 
 impl QueryEnv {
@@ -161,19 +164,24 @@ impl QueryEnv {
     pub async fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
         let session_manager = SessionManager::instance();
 
-        let session = session_manager.register_session(
-            session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
-        )?;
+        let session = session_manager.register_session(session_manager.create_with_settings(
+            SessionType::FlightRPC,
+            self.settings.clone(),
+            Some(self.user.clone()),
+        )?)?;
 
         if let Some(workload_group) = &self.workload_group {
             session.set_current_workload_group(workload_group.clone());
         }
 
-        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: self.cluster.unassign,
-            nodes: self.cluster.nodes.clone(),
-            local_id: GlobalConfig::instance().query.node_id.clone(),
-        }))?;
+        let query_ctx = session.create_query_context_with_cluster(
+            Arc::new(Cluster {
+                unassign: self.cluster.unassign,
+                nodes: self.cluster.nodes.clone(),
+                local_id: GlobalConfig::instance().query.node_id.clone(),
+            }),
+            GlobalConfig::version(),
+        )?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());

@@ -47,13 +47,45 @@ pub mod server_metrics {
         };
     }
 
+    #[derive(Default, Debug, Clone)]
+    pub struct SnapshotStat {
+        /// The total number of blocks in the snapshot.
+        pub block_count: Gauge,
+        /// The total size in bytes of the block data section in the snapshot.
+        pub data_size: Gauge,
+        /// The total size in bytes of the block index section in the snapshot.
+        pub index_size: Gauge,
+        /// The average size in bytes of a block.
+        pub avg_block_size: Gauge,
+        /// The average number of keys per block.
+        pub avg_keys_per_block: Gauge,
+        /// The total number of read block from cache or from disk.
+        pub read_block: Gauge,
+        /// The total number of read block from cache.
+        pub read_block_from_cache: Gauge,
+        /// The total number of read block from disk.
+        pub read_block_from_disk: Gauge,
+    }
+
     struct ServerMetrics {
         current_leader_id: Gauge,
         is_leader: Gauge,
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
+
+        /// Primary index is index by string key. Each primary index has an optional expire index key.
+        ///
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
         snapshot_key_count: Gauge,
+
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
+        snapshot_primary_index_count: Gauge,
+
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
+        snapshot_expire_index_count: Gauge,
+
+        snapshot_stat: SnapshotStat,
 
         raft_log_cache_items: Gauge,
         raft_log_cache_used_size: Gauge,
@@ -82,7 +114,13 @@ pub mod server_metrics {
                 node_is_health: Gauge::default(),
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
+
                 snapshot_key_count: Gauge::default(),
+                snapshot_primary_index_count: Gauge::default(),
+                snapshot_expire_index_count: Gauge::default(),
+
+                snapshot_stat: Default::default(),
+
                 raft_log_cache_items: Gauge::default(),
                 raft_log_cache_used_size: Gauge::default(),
                 raft_log_wal_open_chunk_size: Gauge::default(),
@@ -127,6 +165,56 @@ pub mod server_metrics {
                 key!("snapshot_key_count"),
                 "number of keys in the last snapshot",
                 metrics.snapshot_key_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_primary_index_count"),
+                "number of primary keys in the last snapshot",
+                metrics.snapshot_primary_index_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_expire_index_count"),
+                "number of expire index keys in the last snapshot",
+                metrics.snapshot_expire_index_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_block_count"),
+                "number of blocks in the last snapshot",
+                metrics.snapshot_stat.block_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_data_size"),
+                "size of data section in the last snapshot",
+                metrics.snapshot_stat.data_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_index_size"),
+                "size of index section in the last snapshot",
+                metrics.snapshot_stat.index_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_avg_block_size"),
+                "average size of a block in the last snapshot",
+                metrics.snapshot_stat.avg_block_size.clone(),
+            );
+            registry.register(
+                key!("snapshot_avg_keys_per_block"),
+                "average number of keys per block in the last snapshot",
+                metrics.snapshot_stat.avg_keys_per_block.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block"),
+                "total number of read block from cache or from disk",
+                metrics.snapshot_stat.read_block.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block_from_cache"),
+                "total number of read block from cache",
+                metrics.snapshot_stat.read_block_from_cache.clone(),
+            );
+            registry.register(
+                key!("snapshot_read_block_from_disk"),
+                "total number of read block from disk",
+                metrics.snapshot_stat.read_block_from_disk.clone(),
             );
 
             registry.register(
@@ -227,6 +315,16 @@ pub mod server_metrics {
 
     pub fn set_snapshot_key_count(n: u64) {
         SERVER_METRICS.snapshot_key_count.set(n as i64);
+    }
+    pub fn set_snapshot_primary_index_count(n: u64) {
+        SERVER_METRICS.snapshot_primary_index_count.set(n as i64);
+    }
+    pub fn set_snapshot_expire_index_count(n: u64) {
+        SERVER_METRICS.snapshot_expire_index_count.set(n as i64);
+    }
+
+    pub fn snapshot() -> &'static SnapshotStat {
+        &SERVER_METRICS.snapshot_stat
     }
 
     pub fn set_raft_log_stat(st: RaftLogStat) {
@@ -348,6 +446,7 @@ pub mod raft_metrics {
             sent_bytes: Family<ToLabels, Counter>,
             recv_bytes: Family<FromLabels, Counter>,
             sent_failures: Family<ToLabels, Counter>,
+
             append_sent_seconds: Family<ToLabels, Histogram>,
             snapshot_send_success: Family<ToLabels, Counter>,
             snapshot_send_failure: Family<ToLabels, Counter>,
@@ -572,6 +671,7 @@ pub mod raft_metrics {
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
+        use prometheus_client::metrics::gauge::Gauge;
 
         use crate::metrics::registry::load_global_registry;
 
@@ -589,6 +689,14 @@ pub mod raft_metrics {
         struct StorageMetrics {
             raft_store_write_failed: Family<FuncLabels, Counter>,
             raft_store_read_failed: Family<FuncLabels, Counter>,
+
+            /// The number of tasks that are building a snapshot.
+            ///
+            /// It should be 0 or 1.
+            snapshot_building: Gauge,
+
+            /// The number of entries written to the snapshot file.
+            snapshot_written_entries: Counter,
         }
 
         impl StorageMetrics {
@@ -596,6 +704,9 @@ pub mod raft_metrics {
                 let metrics = Self {
                     raft_store_write_failed: Family::default(),
                     raft_store_read_failed: Family::default(),
+
+                    snapshot_building: Gauge::default(),
+                    snapshot_written_entries: Counter::default(),
                 };
 
                 let mut registry = load_global_registry();
@@ -609,6 +720,18 @@ pub mod raft_metrics {
                     "raft store read failed",
                     metrics.raft_store_read_failed.clone(),
                 );
+
+                registry.register(
+                    key!("snapshot_building"),
+                    "The number of tasks that are building a snapshot. It should be 0 or 1.",
+                    metrics.snapshot_building.clone(),
+                );
+                registry.register(
+                    key!("snapshot_written_entries"),
+                    "The number of entries written to the snapshot file.",
+                    metrics.snapshot_written_entries.clone(),
+                );
+
                 metrics
             }
         }
@@ -653,6 +776,14 @@ pub mod raft_metrics {
                     .inc();
             }
         }
+
+        pub fn incr_snapshot_building_by(cnt: i64) {
+            STORAGE_METRICS.snapshot_building.inc_by(cnt);
+        }
+
+        pub fn incr_snapshot_written_entries() {
+            STORAGE_METRICS.snapshot_written_entries.inc();
+        }
     }
 }
 
@@ -660,6 +791,8 @@ pub mod network_metrics {
     use std::sync::LazyLock;
     use std::time::Duration;
 
+    use databend_common_meta_types::protobuf::WatchResponse;
+    use log::error;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
@@ -681,6 +814,21 @@ pub mod network_metrics {
         req_inflights: Gauge,
         req_success: Counter,
         req_failed: Counter,
+
+        /// Number of items sent during watch stream initialization.
+        watch_initialization_item_sent: Counter,
+
+        /// Number of items sent when data changes in a watch stream.
+        watch_change_item_sent: Counter,
+
+        /// Number of items sent in a stream get response.
+        stream_get_item_sent: Counter,
+
+        /// Number of items sent in a stream mget response.
+        stream_mget_item_sent: Counter,
+
+        /// Number of items sent in a stream list response.
+        stream_list_item_sent: Counter,
     }
 
     impl NetworkMetrics {
@@ -694,8 +842,11 @@ pub mod network_metrics {
                 ),
                 rpc_delay_ms: Histogram::new(
                     vec![
-                        1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0,
-                        5000.0, 10000.0, 30000.0, 60000.0,
+                        1.0, 2.0, 3.0, 4.0, 5.0, 7.0, //
+                        10.0, 20.0, 30.0, 40.0, 50.0, 70.0, //
+                        100.0, 200.0, 300.0, 400.0, 500.0, 700.0, //
+                        1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 7000.0, //
+                        10000.0, 20000.0, 30000.0, 40000.0, 50000.0, 70000.0,
                     ]
                     .into_iter(),
                 ),
@@ -704,6 +855,13 @@ pub mod network_metrics {
                 req_inflights: Gauge::default(),
                 req_success: Counter::default(),
                 req_failed: Counter::default(),
+
+                watch_initialization_item_sent: Counter::default(),
+                watch_change_item_sent: Counter::default(),
+
+                stream_get_item_sent: Counter::default(),
+                stream_mget_item_sent: Counter::default(),
+                stream_list_item_sent: Counter::default(),
             };
 
             let mut registry = load_global_registry();
@@ -730,6 +888,33 @@ pub mod network_metrics {
                 metrics.req_success.clone(),
             );
             registry.register(key!("req_failed"), "req failed", metrics.req_failed.clone());
+
+            registry.register(
+                key!("watch_initialization"),
+                "Number of items sent during watch stream initialization",
+                metrics.watch_initialization_item_sent.clone(),
+            );
+            registry.register(
+                key!("watch_change"),
+                "Number of items sent when data changes in a watch stream",
+                metrics.watch_change_item_sent.clone(),
+            );
+
+            registry.register(
+                key!("stream_get_item_sent"),
+                "Number of items sent in a stream get response",
+                metrics.stream_get_item_sent.clone(),
+            );
+            registry.register(
+                key!("stream_mget_item_sent"),
+                "Number of items sent in a stream mget response",
+                metrics.stream_mget_item_sent.clone(),
+            );
+            registry.register(
+                key!("stream_list_item_sent"),
+                "Number of items sent in a stream list response",
+                metrics.stream_list_item_sent.clone(),
+            );
 
             metrics
         }
@@ -759,6 +944,42 @@ pub mod network_metrics {
             NETWORK_METRICS.req_success.inc();
         } else {
             NETWORK_METRICS.req_failed.inc();
+        }
+    }
+
+    /// Increment the number of items sent in a watch response.
+    ///
+    /// It determines the type of item based on the response type.
+    pub fn incr_watch_sent(resp: &WatchResponse) {
+        if resp.is_initialization {
+            incr_watch_sent_initialization_item();
+        } else {
+            incr_watch_sent_change_item();
+        }
+    }
+
+    pub fn incr_watch_sent_initialization_item() {
+        NETWORK_METRICS.watch_initialization_item_sent.inc();
+    }
+
+    pub fn incr_watch_sent_change_item() {
+        NETWORK_METRICS.watch_change_item_sent.inc();
+    }
+
+    pub fn incr_stream_sent_item(typ: &'static str) {
+        match typ {
+            "get" => {
+                NETWORK_METRICS.stream_get_item_sent.inc();
+            }
+            "mget" => {
+                NETWORK_METRICS.stream_mget_item_sent.inc();
+            }
+            "list" => {
+                NETWORK_METRICS.stream_list_item_sent.inc();
+            }
+            _ => {
+                error!("Unknown stream item type: {}", typ);
+            }
         }
     }
 }
@@ -801,4 +1022,13 @@ pub fn meta_metrics_to_prometheus_string() -> String {
     let mut text = String::new();
     prometheus_encode(&mut text, &registry).unwrap();
     text
+}
+
+#[derive(Default)]
+pub(crate) struct SnapshotBuilding;
+
+impl count::Count for SnapshotBuilding {
+    fn incr_count(&mut self, n: i64) {
+        raft_metrics::storage::incr_snapshot_building_by(n);
+    }
 }

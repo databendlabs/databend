@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfile;
 use databend_common_base::runtime::TimeSeriesProfileName;
 use databend_common_exception::Result;
@@ -190,7 +191,13 @@ impl InputPort {
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
-                address => Some((*Box::from_raw(address)).0),
+                address => {
+                    let block = (*Box::from_raw(address)).0;
+                    if let Ok(data_block) = block.as_ref() {
+                        ExecutorStats::record_thread_tracker(data_block.num_rows());
+                    }
+                    Some(block)
+                }
             }
         }
     }

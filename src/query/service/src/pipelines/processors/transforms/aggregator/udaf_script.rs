@@ -28,18 +28,24 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::StateSerdeItem;
+use databend_common_functions::aggregates::AggrStateLoc;
 use databend_common_functions::aggregates::AggregateFunction;
+use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
@@ -73,7 +79,7 @@ impl AggregateFunction for AggregateUdfScript {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -87,7 +93,7 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let input_batch = self.create_input_batch_row(columns, row)?;
         let state = place.get::<UdfAggState>();
         let state = self
@@ -98,23 +104,62 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<UdfAggState>();
-        state
-            .serialize(writer)
-            .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<UdfAggState>();
-        let rhs =
-            UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
-        let state = self
-            .runtime
-            .merge(&states)
-            .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
-        place.write(|| state);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<UdfAggState>();
+            state
+                .serialize(&mut binary_builder.data)
+                .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<UdfAggState>();
+                let rhs = UdfAggState::deserialize(&mut data)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+                let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
+                let merged_state = self
+                    .runtime
+                    .merge(&states)
+                    .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
+                AggrState::new(*place, loc).write(|| merged_state);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<UdfAggState>();
+                let rhs = UdfAggState::deserialize(&mut data)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+                let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
+                let merged_state = self
+                    .runtime
+                    .merge(&states)
+                    .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
+                AggrState::new(*place, loc).write(|| merged_state);
+            }
+        }
         Ok(())
     }
 
@@ -131,7 +176,12 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let array = self
             .runtime
@@ -160,7 +210,7 @@ impl fmt::Display for AggregateUdfScript {
 
 impl AggregateUdfScript {
     #[cfg(debug_assertions)]
-    fn check_columns(&self, columns: InputColumns) {
+    fn check_columns(&self, columns: ProjectedBlock) {
         let fields = self.argument_schema.fields();
         assert_eq!(columns.len(), fields.len());
         for (i, (col, field)) in columns.iter().zip(fields).enumerate() {
@@ -170,18 +220,19 @@ impl AggregateUdfScript {
 
     fn create_input_batch(
         &self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
     ) -> Result<RecordBatch> {
         #[cfg(debug_assertions)]
         self.check_columns(columns);
 
         let num_columns = columns.len();
+        let num_rows = if num_columns > 0 { columns[0].len() } else { 0 };
 
         let columns = columns.iter().cloned().collect();
         match validity {
-            Some(bitmap) => DataBlock::new_from_columns(columns).filter_with_bitmap(bitmap)?,
-            None => DataBlock::new_from_columns(columns),
+            Some(bitmap) => DataBlock::new(columns, num_rows).filter_with_bitmap(bitmap)?,
+            None => DataBlock::new(columns, num_rows),
         }
         .to_record_batch_with_dataschema(&self.argument_schema)
         .map_err(|err| {
@@ -192,14 +243,15 @@ impl AggregateUdfScript {
         })
     }
 
-    fn create_input_batch_row(&self, columns: InputColumns, row: usize) -> Result<RecordBatch> {
+    fn create_input_batch_row(&self, columns: ProjectedBlock, row: usize) -> Result<RecordBatch> {
         #[cfg(debug_assertions)]
         self.check_columns(columns);
 
         let num_columns = columns.len();
+        let num_rows = if num_columns > 0 { columns[0].len() } else { 0 };
 
-        let columns = columns.iter().cloned().collect();
-        DataBlock::new_from_columns(columns)
+        let entries = columns.iter().cloned().collect();
+        DataBlock::new(entries, num_rows)
             .slice(row..row + 1)
             .to_record_batch_with_dataschema(&self.argument_schema)
             .map_err(|err| {
@@ -613,6 +665,9 @@ def finish(state):
             language: UDFLanguage::Python,
             code: code.into(),
             runtime_version: "3.12".to_string(),
+            imports: vec![],
+            imports_stage_info: vec![],
+            packages: vec![],
         };
         let name = "test".to_string();
         let display_name = "test".to_string();

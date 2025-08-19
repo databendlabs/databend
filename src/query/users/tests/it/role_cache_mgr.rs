@@ -23,10 +23,12 @@ use databend_common_grpc::RpcClientConf;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
@@ -38,9 +40,9 @@ async fn test_role_cache_mgr() -> Result<()> {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
-    let conf = RpcClientConf::default();
+    let conf = RpcClientConf::empty(&BUILD_INFO);
     let tenant = Tenant::new_literal("tenant1");
 
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;
@@ -51,7 +53,9 @@ async fn test_role_cache_mgr() -> Result<()> {
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(false),
     );
-    user_manager.add_role(&tenant, role1, false).await?;
+    user_manager
+        .add_role(&tenant, role1, &CreateOption::CreateOrReplace)
+        .await?;
 
     let mut roles = role_cache_manager
         .find_related_roles(&tenant, &["role1".to_string()])

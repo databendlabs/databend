@@ -40,6 +40,7 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::UpsertKV;
+use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -123,12 +124,7 @@ async fn test_watch_single_key() -> anyhow::Result<()> {
 
     let seq: u64 = 1;
 
-    let watch = WatchRequest {
-        key: s("a"),
-        key_end: None,
-        filter_type: FilterType::All.into(),
-        initial_flush: false,
-    };
+    let watch = WatchRequest::new(s("a"), None);
 
     let key_a = s("a");
     let val_a = b("a");
@@ -167,12 +163,7 @@ async fn test_watch() -> anyhow::Result<()> {
     let mut seq: u64 = 1;
     // 1.update some events
     {
-        let watch = WatchRequest {
-            key: "a".to_string(),
-            key_end: Some("z".to_string()),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new("a".to_string(), Some("z".to_string()));
 
         let key_a = s("a");
         let key_b = s("b");
@@ -225,13 +216,7 @@ async fn test_watch() -> anyhow::Result<()> {
     // 2. test filter
     {
         let key_str = "1";
-        let watch = WatchRequest {
-            key: s(key_str),
-            key_end: None,
-            // filter only delete events
-            filter_type: FilterType::Delete.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(s(key_str), None).with_filter(FilterType::Delete);
 
         let key = s(key_str);
         let val = b("old");
@@ -290,12 +275,7 @@ async fn test_watch() -> anyhow::Result<()> {
 
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
 
-        let watch = WatchRequest {
-            key: start,
-            key_end: Some(end),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(start, Some(end));
 
         let conditions = vec![TxnCondition {
             key: txn_key.clone(),
@@ -359,12 +339,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     }
 
     let mut strm = {
-        let watch = WatchRequest {
-            key: s("a"),
-            key_end: Some(s("e")),
-            filter_type: FilterType::All.into(),
-            initial_flush: true,
-        };
+        let watch = WatchRequest::new(s("a"), Some(s("e"))).with_initial_flush(true);
         client.watch_with_initialization(watch).await?
     };
 
@@ -487,12 +462,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     let watch_client = make_client(&addr)?;
     let mut client_stream = {
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
-        let watch = WatchRequest {
-            key: start,
-            key_end: Some(end),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(start, Some(end));
         watch_client.request(watch).await?
     };
 
@@ -523,12 +493,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 1)));
-            let want2 = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 2)));
             let msg = client_stream.message().await?.unwrap();
-            assert!(Some(want.clone()) == msg.event || Some(want2.clone()) == msg.event,
-                    "expect {:?} equals {:?} or {:?}; the expire time is not accurate, so we need to check both",
-                msg.event, want, want2
-            );
+            assert!(msg.event.unwrap().close_to(&want, Duration::from_secs(2)));
         }
 
         // Check event generated when applying the txn
@@ -561,20 +527,30 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         fn tidy(mut ev: Event) -> Event {
             if let Some(ref mut prev) = ev.prev {
                 if let Some(ref mut meta) = prev.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             if let Some(ref mut current) = ev.current {
                 if let Some(ref mut meta) = current.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             ev
         }
 
+        fn tidy_timestamp(x: u64) -> u64 {
+            if x > 100_000_000_000 {
+                // tidy the timestamp in millis
+                x / 10_000 * 10_000
+            } else {
+                // tidy the timestamp in seconds
+                x / 10 * 10
+            }
+        }
+
         for ev in watch_events {
             let msg = client_stream.message().await?.unwrap();
-            assert_eq!(Some(tidy(ev)), msg.event.map(tidy));
+            assert!(tidy(ev).close_to(&tidy(msg.event.unwrap()), Duration::from_secs(2)));
         }
     }
 
@@ -588,12 +564,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let (tc, addr) = crate::tests::start_metasrv().await?;
 
-    let watch_req = || WatchRequest {
-        key: "a".to_string(),
-        key_end: Some("z".to_string()),
-        filter_type: FilterType::All.into(),
-        initial_flush: false,
-    };
+    let watch_req = || WatchRequest::new("a".to_string(), Some("z".to_string()));
 
     let client1 = make_client(&addr)?;
     let _watch_stream1 = client1.request(watch_req()).await?;
@@ -673,6 +644,7 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
 fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
     let client = MetaGrpcClient::try_create(
         vec![addr.to_string()],
+        &BUILD_INFO,
         "root",
         "xxx",
         None,

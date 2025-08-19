@@ -22,13 +22,14 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -65,7 +66,7 @@ pub struct DeltaTableSource {
 
     // Per partition
     stream: Option<ParquetRecordBatchStream<ParquetFileReader>>,
-    partition_block_entries: Vec<BlockEntry>,
+    partition_block_scalars: Vec<(DataType, Scalar)>,
 }
 
 impl DeltaTableSource {
@@ -99,7 +100,7 @@ impl DeltaTableSource {
             stream: None,
             generated_data: None,
             is_finished: false,
-            partition_block_entries: vec![],
+            partition_block_scalars: vec![],
         })))
     }
 }
@@ -154,11 +155,16 @@ impl Processor for DeltaTableSource {
                 .read_block_from_stream(&mut stream)
                 .await?
                 .map(|b| {
-                    let mut columns = b.columns().to_vec();
+                    let num_rows = b.num_rows();
+                    let mut entries = b.take_columns();
                     for (fi, pi) in self.output_partition_columns.iter() {
-                        columns.insert(*fi, self.partition_block_entries[*pi].clone());
+                        let (data_type, scalar) = self.partition_block_scalars[*pi].clone();
+                        entries.insert(
+                            *fi,
+                            BlockEntry::new_const_column(data_type, scalar, num_rows),
+                        );
                     }
-                    DataBlock::new(columns, b.num_rows())
+                    DataBlock::new(entries, num_rows)
                 })
                 .map(|b| check_block_schema(&self.output_schema, b))
                 .transpose()?
@@ -179,11 +185,9 @@ impl Processor for DeltaTableSource {
                         .cloned()
                         .zip(part.partition_values.iter().cloned())
                         .collect::<Vec<_>>();
-                    self.partition_block_entries = partition_fields
+                    self.partition_block_scalars = partition_fields
                         .iter()
-                        .map(|(f, v)| {
-                            BlockEntry::new(f.data_type().into(), Value::Scalar(v.clone()))
-                        })
+                        .map(|(f, v)| (f.data_type().into(), v.clone()))
                         .collect::<Vec<_>>();
                     let stream = self
                         .parquet_reader
@@ -211,30 +215,36 @@ fn check_block_schema(schema: &DataSchema, mut block: DataBlock) -> Result<DataB
         )));
     }
 
-    for (col, field) in block.columns_mut().iter_mut().zip(schema.fields().iter()) {
+    for (entry, field) in block.columns_mut().iter_mut().zip(schema.fields().iter()) {
         // If the actual data is nullable, the field must be nullbale.
-        if col.data_type.is_nullable_or_null() && !field.is_nullable() {
+        if entry.data_type().is_nullable_or_null() && !field.is_nullable() {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "Data schema mismatched (col name: {}). Data column is nullable, but schema field is not nullable",
                 field.name()
             )));
         }
         // The inner type of the data and field should be the same.
-        let data_type = col.data_type.remove_nullable();
+        let data_type = entry.data_type().remove_nullable();
         let schema_type = field.data_type().remove_nullable();
         if data_type != schema_type {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "Data schema mismatched (col name: {}). Data column type is {:?}, but schema field type is {:?}",
                 field.name(),
-                col.data_type,
+                entry.data_type(),
                 field.data_type()
             )));
         }
         // If the field is nullable but the actual data is not nullable,
         // we should wrap nullable for the data.
-        if field.is_nullable() && !col.data_type.is_nullable_or_null() {
-            col.data_type = col.data_type.wrap_nullable();
-            col.value = col.value.clone().wrap_nullable(None);
+        if field.is_nullable() && !entry.data_type().is_nullable_or_null() {
+            match entry {
+                BlockEntry::Const(_, data_type, _) => {
+                    *data_type = data_type.wrap_nullable();
+                }
+                BlockEntry::Column(column) => {
+                    *column = column.clone().wrap_nullable(None);
+                }
+            }
         }
     }
 

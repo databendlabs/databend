@@ -183,6 +183,10 @@ impl StatisticsReceiver {
                 ctx.get_data_cache_metrics().merge(metrics);
                 Ok(false)
             }
+            Ok(Some(DataPacket::QueryPerf(perf))) => {
+                ctx.set_nodes_perf(source_target.to_string(), perf);
+                Ok(false)
+            }
         }
     }
 

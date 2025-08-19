@@ -47,6 +47,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storages_fuse::table_functions::string_literal;
+use databend_common_users::Object;
 
 use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
@@ -210,7 +211,10 @@ impl AsyncSource for InspectParquetSource {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
-            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User
@@ -233,9 +237,12 @@ impl AsyncSource for InspectParquetSource {
         };
 
         let first_file = file_info.first_file(&operator).await?;
-
+        let Some(first_file) = first_file else {
+            return Ok(None);
+        };
         let parquet_schema =
             read_metadata_async(&first_file.path, &operator, Some(first_file.size)).await?;
+
         let created = match parquet_schema.file_metadata().created_by() {
             Some(user) => user.to_owned(),
             None => String::from("NULL"),
@@ -260,15 +267,19 @@ impl AsyncSource for InspectParquetSource {
         }
         let block = DataBlock::new(
             vec![
-                BlockEntry::from_arg_scalar::<StringType>(created),
-                BlockEntry::from_arg_scalar::<UInt64Type>(num_columns),
-                BlockEntry::from_arg_scalar::<UInt64Type>(
+                BlockEntry::new_const_column_arg::<StringType>(created, 1),
+                BlockEntry::new_const_column_arg::<UInt64Type>(num_columns, 1),
+                BlockEntry::new_const_column_arg::<UInt64Type>(
                     parquet_schema.file_metadata().num_rows() as _,
+                    1,
                 ),
-                BlockEntry::from_arg_scalar::<UInt64Type>(parquet_schema.num_row_groups() as _),
-                BlockEntry::from_arg_scalar::<UInt64Type>(serialized_size),
-                BlockEntry::from_arg_scalar::<Int64Type>(max_compressed),
-                BlockEntry::from_arg_scalar::<Int64Type>(max_uncompressed),
+                BlockEntry::new_const_column_arg::<UInt64Type>(
+                    parquet_schema.num_row_groups() as _,
+                    1,
+                ),
+                BlockEntry::new_const_column_arg::<UInt64Type>(serialized_size, 1),
+                BlockEntry::new_const_column_arg::<Int64Type>(max_compressed, 1),
+                BlockEntry::new_const_column_arg::<Int64Type>(max_uncompressed, 1),
             ],
             1,
         );

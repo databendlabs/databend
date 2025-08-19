@@ -120,7 +120,7 @@ fn build_proto() {
         )
         .type_attribute(
             "TxnOpResponse.response",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize, derive_more::TryInto, deepsize::DeepSizeOf)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, derive_more::TryInto, derive_more::From, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnOpResponse",
@@ -153,6 +153,18 @@ fn build_proto() {
         .field_attribute(
             "TxnRequest.operations",
             r#"#[serde(skip_serializing_if = "Vec::is_empty")] #[serde(default)]"#,
+        )
+        .type_attribute(
+            "FetchAddU64",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
+            "FetchAddU64Response",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
+            "PutSequential",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .compile_protos_with_config(config, &protos, &[&proto_dir])
         .unwrap();

@@ -30,11 +30,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::EmptySink;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
-use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::MutationBuildInfo;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
@@ -49,6 +45,10 @@ use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::create_push_down_filters;
+use crate::physical_plans::MutationBuildInfo;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -98,9 +98,12 @@ impl Interpreter for MutationInterpreter {
         // Build physical plan.
         let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
-        let query_plan = physical_plan
-            .format(self.metadata.clone(), Default::default())?
-            .format_pretty()?;
+        let query_plan = {
+            let metadata = self.metadata.read();
+            physical_plan
+                .format(&metadata, Default::default())?
+                .format_pretty()?
+        };
 
         info!("Query physical plan: \n{}", query_plan);
 

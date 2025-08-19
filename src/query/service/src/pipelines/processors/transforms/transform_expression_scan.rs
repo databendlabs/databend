@@ -56,14 +56,15 @@ impl BlockingTransform for TransformExpressionScan {
     fn consume(&mut self, input: DataBlock) -> Result<()> {
         let evaluator = Evaluator::new(&input, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for row in self.values.iter() {
-            let mut columns = Vec::with_capacity(row.len());
+            let mut entries = Vec::with_capacity(row.len());
             for expr in row {
-                let result = evaluator.run(expr)?;
-                let column = BlockEntry::new(expr.data_type().clone(), result);
-                columns.push(column);
+                let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                    (expr.data_type().clone(), input.num_rows())
+                });
+                entries.push(entry);
             }
             self.output_buffer
-                .push_back(DataBlock::new(columns, input.num_rows()));
+                .push_back(DataBlock::new(entries, input.num_rows()));
         }
         Ok(())
     }

@@ -249,7 +249,7 @@ fn convert_scalar_expr_to_expr(
     let schema = Arc::new(DataSchema::new(fields));
     let remote_expr = scalar_expr
         .type_check(schema.as_ref())?
-        .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap())
+        .project_column_ref(|index| schema.index_of(&index.to_string()))?
         .as_remote_expr();
     let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
     cast_expr_to_non_null_boolean(expr)

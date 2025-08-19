@@ -19,6 +19,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
@@ -64,9 +65,9 @@ impl MetaStore {
     /// Create a local meta service for testing.
     ///
     /// It is required to assign a base port as the port number range.
-    pub async fn new_local_testing() -> Self {
+    pub async fn new_local_testing(version: BuildInfoRef) -> Self {
         MetaStore::L(Arc::new(
-            LocalMetaService::new("MetaStore-new-local-testing")
+            LocalMetaService::new("MetaStore-new-local-testing", version)
                 .await
                 .unwrap(),
         ))
@@ -128,6 +129,7 @@ impl MetaStoreProvider {
                 LocalMetaService::new_with_fixed_dir(
                     self.rpc_conf.embedded_dir.clone(),
                     "MetaStoreProvider-created",
+                    self.rpc_conf.version,
                 )
                 .await
                 .unwrap(),

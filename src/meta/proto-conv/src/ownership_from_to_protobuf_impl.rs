@@ -91,6 +91,12 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::Warehouse(
                 pb::ownership_object::OwnershipWarehouseObject { id },
             ) => Ok(mt::principal::OwnershipObject::Warehouse { id }),
+            pb::ownership_object::Object::Connection(
+                pb::ownership_object::OwnershipConnectionObject { connection },
+            ) => Ok(mt::principal::OwnershipObject::Connection { name: connection }),
+            pb::ownership_object::Object::Sequence(
+                pb::ownership_object::OwnershipSequenceObject { sequence },
+            ) => Ok(mt::principal::OwnershipObject::Sequence { name: sequence }),
         }
     }
 
@@ -129,6 +135,20 @@ impl FromToProto for mt::principal::OwnershipObject {
             mt::principal::OwnershipObject::Warehouse { id } => {
                 Some(pb::ownership_object::Object::Warehouse(
                     pb::ownership_object::OwnershipWarehouseObject { id: id.clone() },
+                ))
+            }
+            mt::principal::OwnershipObject::Connection { name } => {
+                Some(pb::ownership_object::Object::Connection(
+                    pb::ownership_object::OwnershipConnectionObject {
+                        connection: name.clone(),
+                    },
+                ))
+            }
+            mt::principal::OwnershipObject::Sequence { name } => {
+                Some(pb::ownership_object::Object::Sequence(
+                    pb::ownership_object::OwnershipSequenceObject {
+                        sequence: name.clone(),
+                    },
                 ))
             }
         };

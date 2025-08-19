@@ -168,6 +168,10 @@ fn scatter_partitioned_payload(
 }
 
 impl FlightScatter for HashTableHashScatter {
+    fn name(&self) -> &'static str {
+        "HashTableHash"
+    }
+
     fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {

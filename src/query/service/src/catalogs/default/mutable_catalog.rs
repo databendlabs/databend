@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -97,6 +98,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
+use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -118,8 +121,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -165,9 +169,11 @@ impl MutableCatalog {
     /// MetaEmbedded
     /// ```
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig) -> Result<Self> {
+    pub async fn try_create_with_config(conf: InnerConfig, version: BuildInfoRef) -> Result<Self> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let provider = Arc::new(MetaStoreProvider::new(
+                conf.meta.to_meta_grpc_client_conf(version),
+            ));
 
             provider.create_meta_store().await.map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
@@ -307,7 +313,7 @@ impl Catalog for MutableCatalog {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
         info!(
-            "db name: {}, engine: {}",
+            "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
             &req.meta.engine
         );
@@ -697,15 +703,32 @@ impl Catalog for MutableCatalog {
             }
         }
 
+        let table_updates: Vec<String> = req
+            .update_table_metas
+            .iter()
+            .map(|(update_req, _)| {
+                format!("table_id={}, seq={}", update_req.table_id, update_req.seq)
+            })
+            .collect();
+
+        let stream_updates: Vec<String> = req
+            .update_stream_metas
+            .iter()
+            .map(|stream_req| format!("stream_id={}, seq={}", stream_req.stream_id, stream_req.seq))
+            .collect();
+
         info!(
-            "updating multi table meta. number of tables: {}",
-            req.update_table_metas.len()
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], req={:?}",
+            table_updates.join("; "),
+            stream_updates.join("; "),
+            req
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
-            "update multi table meta done. time used {:?}",
-            begin.elapsed()
+            "[CATALOG] Multiple table metadata update completed: elapsed_time={:?}, result={:?}",
+            begin.elapsed(),
+            res
         );
         Ok(res?)
     }
@@ -715,6 +738,17 @@ impl Catalog for MutableCatalog {
         req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
         Ok(self.ctx.meta.set_table_column_mask_policy(req).await?)
+    }
+
+    async fn set_table_row_access_policy(
+        &self,
+        req: SetTableRowAccessPolicyReq,
+    ) -> Result<SetTableRowAccessPolicyReply> {
+        self.ctx
+            .meta
+            .set_table_row_access_policy(req)
+            .await?
+            .map_err(Into::into)
     }
 
     #[async_backtrace::framed]
@@ -782,7 +816,20 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.create_sequence(req).await?)
     }
 
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
+
         let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
 
         let Some(seq_meta) = seq_meta else {
@@ -805,7 +852,16 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
         Ok(self.ctx.meta.get_sequence_next_value(req).await?)
     }
 

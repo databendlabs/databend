@@ -28,6 +28,7 @@ use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use log::info;
 
 use super::diff::SegmentsDiff;
 use crate::operations::set_backoff;
@@ -68,8 +69,18 @@ async fn try_rebuild_req(
     req: &mut UpdateMultiTableMetaReq,
     update_failed_tbls: Vec<(u64, u64, TableMeta)>,
 ) -> Result<()> {
+    info!(
+        "try_rebuild_req: update_failed_tbls={:?}",
+        update_failed_tbls
+    );
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
+        if table_meta.engine == "STREAM" {
+            return Err(ErrorCode::UnresolvableConflict(format!(
+                "Concurrent transaction commit failed. Stream table {} has unresolvable conflicts.",
+                tid
+            )));
+        }
         let latest_table = FuseTable::from_table_meta(tid, seq, table_meta)?;
         let default_cluster_key_id = latest_table.cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
@@ -103,6 +114,59 @@ async fn try_rebuild_req(
             default_cluster_key_id,
         );
         let merged_summary = deduct_statistics(&s, &base_snapshot.summary());
+
+        {
+            let txn_mgr_ref = ctx.txn_mgr();
+            let txn_mgr = txn_mgr_ref.lock();
+            if let Some(txn_begin_timestamp) =
+                txn_mgr.get_table_txn_begin_timestamp(latest_table.get_id())
+            {
+                let Some(latest_snapshot_timestamp) = latest_snapshot.timestamp() else {
+                    return Err(ErrorCode::UnresolvableConflict(format!(
+                        "Table {} snapshot lacks required timestamp. This table was created with a significantly outdated version that is no longer directly supported by the current version and requires migration.
+                         Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
+                        tid
+                    )));
+                };
+
+                // By enforcing txn_begin_timestamp >= latest_snapshot_timestamp, we ensure that
+                // vacuum operations won't remove table data (segment, blocks, etc.) that newly
+                // created in the current active transaction.
+
+                // In the current transaction, all the newly created table data (segments, blocks, etc.)
+                // has timestamps that are greater than or equal to txn_begin_timestamp, but the
+                // final snapshot which contains those data (and is yet to be committed) may have a timestamp
+                // that is larger than txn_begin_timestamp.
+
+                // To maintain vacuum safety, we must ensure that if the latest snapshot's timestamp
+                // (latest_snapshot_timestamp) is larger than txn_begin_timestamp, we abort the transaction
+                // to prevent potential data loss during vacuum operations.
+
+                // Example:
+                // session1:                                      session2:                    session3:
+                // begin;
+                // -- newly created table data
+                // -- timestamped as A
+                // insert into t values (1);
+                //                                              -- new snapshot S's ts is B
+                //                                              insert into t values (2);
+                //                                                                             -- using S as gc root
+                //                                                                             -- if B > A, then newly created table data
+                //                                                                             -- in session1 will be purged
+                //                                                                             call fuse_vacuum2('db', 't');
+                // -- while merging with S
+                // -- if A < B, this txn should abort
+                // commit;
+
+                if txn_begin_timestamp < latest_snapshot_timestamp {
+                    return Err(ErrorCode::UnresolvableConflict(format!(
+                       "Unresolvable conflict detected for table {} while resolving conflicts: txn started with logical timestamp {}, which is less than the latest table timestamp {}. Transaction must be aborted.",
+                        tid, txn_begin_timestamp, latest_snapshot_timestamp
+                    )));
+                }
+            }
+        }
+
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(latest_table.as_ref(), latest_snapshot.clone())?;
         let merged_snapshot = TableSnapshot::try_new(

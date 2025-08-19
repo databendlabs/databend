@@ -41,8 +41,6 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
-use databend_common_storages_system::ProfilesLogElement;
-use databend_common_storages_system::ProfilesLogQueue;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
@@ -51,7 +49,6 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -104,24 +101,24 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("[INTERPRETER] Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        let mut allow_disk_cache = false;
-        {
+        let allow_disk_cache = {
             let license_key = ctx.get_license_key();
-            if !license_key.is_empty() {
-                let validate_result = LicenseManagerSwitch::instance().check_license(license_key);
-                allow_disk_cache = validate_result.is_ok();
-                if let Err(e) = validate_result {
+            match LicenseManagerSwitch::instance().check_license(license_key.clone()) {
+                Ok(_) => true,
+                Err(e) if !license_key.is_empty() => {
                     let msg =
                             format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                                     e);
-                    log::error!("{}", msg);
+                    log::error!("{msg}");
 
                     // Also log at warning level to ensure the message could be propagated to client applications
                     // (e.g., BendSQL and MySQL interactive sessions)
-                    log::warn!("{}", msg);
-                };
+                    log::warn!("{msg}");
+                    false
+                }
+                _ => false,
             }
-        }
+        };
 
         CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
 
@@ -223,6 +220,8 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
             );
     }
 
+    log::info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
+
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
         error!("[INTERPRETER] Failed to log query finish: {:?}", error)
     }
@@ -292,7 +291,7 @@ async fn plan_sql(
     auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         return Ok((plan, extras, AcquireQueueGuard::create(vec![])));
     }
 
@@ -303,11 +302,11 @@ async fn plan_sql(
         // See PR https://github.com/databendlabs/databend/pull/16632
         let query_entry = QueryEntry::create_entry(&ctx, &extras, true)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras, guard))
     } else {
         // No lock is needed, plan the statement first, then acquire the queue guard.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         Ok((plan, extras, guard))
@@ -341,6 +340,7 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
 }
 
+#[fastrace::trace]
 pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>) -> Result<()> {
     let mut has_profiles = false;
     query_ctx.add_query_profiles(&info.profiling);
@@ -363,14 +363,8 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
                 statistics_desc: get_statistics_desc(),
             })?
         );
-        let profiles_queue = ProfilesLogQueue::instance()?;
-        profiles_queue.append_data(ProfilesLogElement {
-            query_id: query_ctx.get_id(),
-            profiles: query_profiles,
-        })?;
     }
 
-    hook_clear_m_cte_temp_table(&query_ctx)?;
     hook_vacuum_temp_files(&query_ctx)?;
     hook_disk_temp_dir(&query_ctx)?;
 

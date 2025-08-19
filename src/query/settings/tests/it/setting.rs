@@ -16,6 +16,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
@@ -140,7 +141,7 @@ async fn test_set_data_retention_time_in_days() {
 
     // Init with default.
     {
-        GlobalConfig::init(&InnerConfig::default()).unwrap();
+        GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     }
 
     let settings = Settings::create(Tenant::new_literal("test"));
@@ -192,7 +193,7 @@ async fn test_set_data_retention_time_in_days_from_config() {
     {
         let mut conf = InnerConfig::default();
         conf.query.data_retention_time_in_days_max = 33;
-        GlobalConfig::init(&conf).unwrap();
+        GlobalConfig::init(&conf, &BUILD_INFO).unwrap();
     }
 
     let settings = Settings::create(Tenant::new_literal("test"));

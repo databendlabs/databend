@@ -101,7 +101,6 @@ impl Dataframe {
                 false,
                 false,
                 false,
-                None,
                 false,
             );
 
@@ -337,6 +336,7 @@ impl Dataframe {
             before_exchange: false,
             limit,
             offset,
+            lazy_columns: Default::default(),
         };
         self.s_expr =
             SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(self.s_expr.clone()));

@@ -108,7 +108,6 @@ fn test_decode_v129_schema() -> anyhow::Result<()> {
     ];
     let want = || TableSchema::new(fields.clone());
     common::test_pb_from_to(func_name!(), want())?;
-    // common::test_pb_from_to2(func_name!(), want())?;
     common::test_load_old(func_name!(), table_schema_v129.as_slice(), 129, want())?;
     Ok(())
 }
@@ -254,6 +253,7 @@ fn test_decode_v129_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        row_access_policy: None,
         indexes: btreemap! {s("v") => TableIndex {
             index_type: TableIndexType::Vector,
             name: "v".to_string(),
@@ -264,7 +264,6 @@ fn test_decode_v129_table_meta() -> anyhow::Result<()> {
         }},
     };
     common::test_pb_from_to(func_name!(), want())?;
-    // common::test_pb_from_to2(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v129.as_slice(), 129, want())?;
 
     Ok(())

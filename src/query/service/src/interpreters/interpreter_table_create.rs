@@ -66,6 +66,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
+use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
@@ -74,12 +75,12 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
-use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::Insert;
@@ -213,6 +214,9 @@ impl CreateTableInterpreter {
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
+        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+            self.register_temp_table(prefix).await?;
+        }
 
         let table_id = reply.table_id;
         let prev_table_id = reply.prev_table_id;
@@ -279,7 +283,6 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .set_on_finished(always_callback(move |_: &ExecutionInfo| {
-                hook_clear_m_cte_temp_table(&query_ctx)?;
                 hook_vacuum_temp_files(&query_ctx)?;
                 hook_disk_temp_dir(&query_ctx)?;
                 Ok(())
@@ -355,6 +358,11 @@ impl CreateTableInterpreter {
                     data_bytes: snapshot.summary.uncompressed_byte_size,
                     compressed_data_bytes: snapshot.summary.compressed_byte_size,
                     index_data_bytes: snapshot.summary.index_size,
+                    bloom_index_size: snapshot.summary.bloom_index_size,
+                    ngram_index_size: snapshot.summary.ngram_index_size,
+                    inverted_index_size: snapshot.summary.inverted_index_size,
+                    vector_index_size: snapshot.summary.vector_index_size,
+                    virtual_column_size: snapshot.summary.virtual_column_size,
                     number_of_segments: Some(snapshot.segments.len() as u64),
                     number_of_blocks: Some(snapshot.summary.block_count),
                 });
@@ -376,10 +384,13 @@ impl CreateTableInterpreter {
         }
 
         let reply = catalog.create_table(req.clone()).await?;
+        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+            self.register_temp_table(prefix).await?;
+        }
 
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
             // iceberg table do not need to generate ownership.
-            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in the future.
             if let Some(current_role) = self.ctx.get_current_role() {
                 let tenant = self.ctx.get_tenant();
                 let db = catalog.get_database(&tenant, &self.plan.database).await?;
@@ -460,7 +471,8 @@ impl CreateTableInterpreter {
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
-        is_valid_bloom_index_columns(&table_meta.options, schema)?;
+        is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
+        is_valid_approx_distinct_columns(&table_meta.options, schema)?;
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;
@@ -515,6 +527,22 @@ impl CreateTableInterpreter {
         handler
             .build_attach_table_request(storage_prefix, &self.plan)
             .await
+    }
+
+    async fn register_temp_table(&self, prefix: String) -> Result<()> {
+        let session = self.ctx.get_current_session();
+        if let Some(id) = session.get_client_session_id() {
+            let client_session_manager = ClientSessionManager::instance();
+            client_session_manager.add_temp_tbl_mgr(prefix, session.temp_tbl_mgr().clone());
+            client_session_manager
+                .refresh_session_handle(
+                    self.ctx.get_tenant(),
+                    self.ctx.get_current_user()?.name,
+                    &id,
+                )
+                .await?;
+        }
+        Ok(())
     }
 }
 

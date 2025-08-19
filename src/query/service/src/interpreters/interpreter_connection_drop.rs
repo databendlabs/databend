@@ -15,7 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropConnectionPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -54,6 +57,21 @@ impl Interpreter for DropConnectionInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
+
+        // we should do `drop ownership` after actually drop object, and object maybe not exists.
+        // drop the ownership
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Connection {
+                name: self.plan.name.clone(),
+            };
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         user_mgr
             .drop_connection(&tenant, &plan.name, plan.if_exists)

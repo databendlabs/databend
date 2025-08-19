@@ -125,13 +125,6 @@ impl FuseTable {
         table_desc: String,
         seq: u64,
     ) -> Result<String> {
-        let cols = self
-            .schema()
-            .fields()
-            .iter()
-            .map(|f| f.name().clone())
-            .collect::<Vec<_>>();
-
         let suffix = format!("{:08x}", Utc::now().timestamp());
 
         let optimized_mode = self.optimize_stream_mode(mode, base_location).await?;
@@ -153,31 +146,41 @@ impl FuseTable {
                 )
             }
             StreamMode::Standard => {
+                let schema = self.schema();
+                let fields = schema.fields();
                 let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
 
                 let a_table_alias = format!("_change_insert${}", suffix);
                 let d_table_alias = format!("_change_delete${}", suffix);
 
-                let mut a_cols_vec = Vec::with_capacity(cols.len());
-                let mut d_alias_vec = Vec::with_capacity(cols.len());
-                let mut d_cols_vec = Vec::with_capacity(cols.len());
-                for col in cols {
-                    a_cols_vec.push(format!("{quote}{col}{quote}"));
-                    d_alias_vec.push(format!("{quote}{col}{quote} as d_{col}"));
-                    d_cols_vec.push(format!("d_{col}"));
+                let mut a_cols_vec = Vec::with_capacity(fields.len());
+                let mut d_alias_vec = Vec::with_capacity(fields.len());
+                let mut d_cols_vec = Vec::with_capacity(fields.len());
+                let mut exprs_vec = Vec::with_capacity(fields.len());
+                for field in fields {
+                    let name = field.name();
+                    a_cols_vec.push(format!("{quote}{name}{quote}"));
+                    d_alias_vec.push(format!("{quote}{name}{quote} as d_{name}"));
+                    d_cols_vec.push(format!("d_{name}"));
+
+                    if field.data_type().is_nullable_or_null() {
+                        exprs_vec.push(format!("not(equal_null({quote}{name}{quote}, d_{name}))"));
+                    } else {
+                        exprs_vec.push(format!("{quote}{name}{quote} <> d_{name}"));
+                    }
                 }
                 let a_cols = a_cols_vec.join(", ");
                 let d_cols_alias = d_alias_vec.join(", ");
                 let d_cols = d_cols_vec.join(", ");
+                let exprs = exprs_vec.join(" or ");
 
                 let cte_name = format!("_change${}", suffix);
                 format!(
-                    "with {cte_name} as materialized \
+                    "with {cte_name} as \
                     ( \
                         select * \
                         from ( \
                             select {a_cols}, \
-                                    _row_version, \
                                     'INSERT' as a_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
@@ -187,7 +190,6 @@ impl FuseTable {
                         ) as A \
                         FULL OUTER JOIN ( \
                             select {d_cols_alias}, \
-                                    _row_version, \
                                     'DELETE' as d_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
@@ -196,7 +198,7 @@ impl FuseTable {
                             from {table_desc} as {d_table_alias} \
                         ) as D \
                         on A.a_change$row_id = D.d_change$row_id \
-                        where A.a_change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
+                        where A.a_change$row_id is null or D.d_change$row_id is null or {exprs} \
                     ) \
                     select {a_cols}, \
                             a_change$action as change$action, \
@@ -297,7 +299,14 @@ impl FuseTable {
                 )
             };
         let bloom_index_cols = self.bloom_index_cols();
-        let ngram_args = Self::create_ngram_index_args(&self.table_info.meta)?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
+
+        info!(
+            "[FUSE-CHANGE-TRACKING] prune snapshot block start, at node {}",
+            ctx.get_cluster().local_id,
+        );
+
         let mut pruner = FusePruner::create_with_pages(
             &ctx,
             self.get_operator(),
@@ -314,9 +323,10 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "prune snapshot block end, final block numbers:{}, cost:{:?}",
+            "[FUSE-CHANGE-TRACKING] prune snapshot block end, final block numbers:{}, cost:{:?}, at node {}",
             block_metas.len(),
-            start.elapsed()
+            start.elapsed(),
+            ctx.get_cluster().local_id,
         );
 
         let block_metas = block_metas
@@ -461,6 +471,42 @@ impl FuseTable {
             .compressed_byte_size
             .abs_diff(base_summary.compressed_byte_size);
         let index_size = latest_summary.index_size.abs_diff(base_summary.index_size);
+
+        let bloom_index_size = match (
+            latest_summary.bloom_index_size,
+            base_summary.bloom_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let ngram_index_size = match (
+            latest_summary.ngram_index_size,
+            base_summary.ngram_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let inverted_index_size = match (
+            latest_summary.inverted_index_size,
+            base_summary.inverted_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let vector_index_size = match (
+            latest_summary.vector_index_size,
+            base_summary.vector_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let virtual_column_size = match (
+            latest_summary.virtual_column_size,
+            base_summary.virtual_column_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
         let number_of_blocks = latest_summary
             .block_count
             .abs_diff(base_summary.block_count);
@@ -470,6 +516,11 @@ impl FuseTable {
                 data_size: Some(data_size),
                 data_size_compressed: Some(data_size_compressed),
                 index_size: Some(index_size),
+                bloom_index_size,
+                ngram_index_size,
+                inverted_index_size,
+                vector_index_size,
+                virtual_column_size,
                 number_of_blocks: Some(number_of_blocks),
                 number_of_segments: None,
             })
@@ -482,6 +533,11 @@ impl FuseTable {
                 data_size: Some(data_size / 2),
                 data_size_compressed: Some(data_size_compressed / 2),
                 index_size: Some(index_size / 2),
+                bloom_index_size: bloom_index_size.map(|size| size / 2),
+                ngram_index_size: ngram_index_size.map(|size| size / 2),
+                inverted_index_size: inverted_index_size.map(|size| size / 2),
+                vector_index_size: vector_index_size.map(|size| size / 2),
+                virtual_column_size: virtual_column_size.map(|size| size / 2),
                 number_of_blocks: Some(number_of_blocks / 2),
                 number_of_segments: None,
             })

@@ -22,9 +22,11 @@ use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
+use databend_query::test_kits::TestFixture;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_table_meta::meta::Statistics;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+
+use crate::storages::fuse::utils::new_empty_snapshot;
 
 /// base snapshot contains segments 1, 2, 3,
 ///
@@ -37,14 +39,14 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 /// so the delete operation cannot be applied
 #[test]
 fn test_unresolvable_delete_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
         ("3".to_string(), 1),
     ];
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -65,7 +67,7 @@ fn test_unresolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
         "test",
     );
     assert!(result.is_err());
@@ -82,7 +84,7 @@ fn test_unresolvable_delete_conflict() {
 ///
 /// the delete operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 8 in the latest snapshot
 fn test_resolvable_delete_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -96,12 +98,18 @@ fn test_resolvable_delete_conflict() {
         uncompressed_byte_size: 6,
         compressed_byte_size: 6,
         index_size: 6,
+        bloom_index_size: Some(6),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),
@@ -115,9 +123,15 @@ fn test_resolvable_delete_conflict() {
         uncompressed_byte_size: 9,
         compressed_byte_size: 9,
         index_size: 9,
+        bloom_index_size: Some(9),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let removed_statistics = Statistics {
@@ -127,9 +141,15 @@ fn test_resolvable_delete_conflict() {
         uncompressed_byte_size: 5,
         compressed_byte_size: 5,
         index_size: 5,
+        bloom_index_size: Some(5),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let merged_statistics = Statistics {
@@ -139,9 +159,15 @@ fn test_resolvable_delete_conflict() {
         uncompressed_byte_size: 8,
         compressed_byte_size: 8,
         index_size: 8,
+        bloom_index_size: Some(8),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -162,7 +188,7 @@ fn test_resolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
         "test",
     );
     let snapshot = result.unwrap();
@@ -177,9 +203,15 @@ fn test_resolvable_delete_conflict() {
         uncompressed_byte_size: 12,
         compressed_byte_size: 12,
         index_size: 12,
+        bloom_index_size: Some(12),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
     assert_eq!(actual, expected);
 }
@@ -195,7 +227,7 @@ fn test_resolvable_delete_conflict() {
 ///
 /// the replace operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 6,5 in the latest snapshot
 fn test_resolvable_replace_conflict() {
-    let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut base_snapshot = new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
         ("1".to_string(), 1),
         ("2".to_string(), 1),
@@ -209,12 +241,18 @@ fn test_resolvable_replace_conflict() {
         uncompressed_byte_size: 6,
         compressed_byte_size: 6,
         index_size: 6,
+        bloom_index_size: Some(6),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
-    let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
+    let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
     latest_snapshot.segments = vec![
         ("2".to_string(), 1),
         ("3".to_string(), 1),
@@ -228,9 +266,15 @@ fn test_resolvable_replace_conflict() {
         uncompressed_byte_size: 9,
         compressed_byte_size: 9,
         index_size: 9,
+        bloom_index_size: Some(9),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let removed_statistics = Statistics {
@@ -240,9 +284,15 @@ fn test_resolvable_replace_conflict() {
         uncompressed_byte_size: 5,
         compressed_byte_size: 5,
         index_size: 5,
+        bloom_index_size: Some(5),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let merged_statistics = Statistics {
@@ -252,9 +302,15 @@ fn test_resolvable_replace_conflict() {
         uncompressed_byte_size: 8,
         compressed_byte_size: 8,
         index_size: 8,
+        bloom_index_size: Some(8),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -276,7 +332,7 @@ fn test_resolvable_replace_conflict() {
         None,
         TxnManager::init(),
         0,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
         "test",
     );
     let snapshot = result.unwrap();
@@ -295,9 +351,15 @@ fn test_resolvable_replace_conflict() {
         uncompressed_byte_size: 12,
         compressed_byte_size: 12,
         index_size: 12,
+        bloom_index_size: Some(12),
+        ngram_index_size: Default::default(),
+        inverted_index_size: Default::default(),
+        vector_index_size: Default::default(),
+        virtual_column_size: Default::default(),
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        additional_stats_meta: None,
     };
     assert_eq!(actual, expected);
 }

@@ -23,8 +23,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::NumberType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -32,18 +34,17 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
 use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
+use crate::physical_plans::LagLeadDefault;
 
 #[derive(Debug, Clone)]
 pub struct WindowSortDesc {
@@ -180,7 +181,6 @@ impl<T: Number> TransformWindow<T> {
     fn column_at(&self, index: &RowPtr, column_index: usize) -> &Column {
         self.block_at(index)
             .get_by_offset(column_index)
-            .value
             .as_column()
             .unwrap()
     }
@@ -225,6 +225,7 @@ impl<T: Number> TransformWindow<T> {
 
         let partition_by_columns = self.partition_indices.len();
         if partition_by_columns == 0 {
+            self.partition_size += self.block_rows(&self.partition_end);
             self.partition_end = end;
             return;
         }
@@ -454,10 +455,7 @@ impl<T: Number> TransformWindow<T> {
                     ColumnBuilder::with_capacity(&data_type, 0),
                 );
                 let new_column = builder.build();
-                output.add_column(BlockEntry::new(
-                    new_column.data_type(),
-                    Value::Column(new_column),
-                ));
+                output.add_column(new_column);
                 self.outputs.push_back(output);
                 self.next_output_block += 1;
             } else {
@@ -564,21 +562,24 @@ impl<T: Number> TransformWindow<T> {
                 let value = if self.frame_start == self.frame_end {
                     match &ll.default {
                         LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => {
-                            let block =
-                                &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(*col).value;
-                            value.index(self.current_row.row).unwrap().to_owned()
-                        }
+                        LagLeadDefault::Index(col) => self.blocks
+                            [self.current_row.block - self.first_block]
+                            .block
+                            .get_by_offset(*col)
+                            .index(self.current_row.row)
+                            .unwrap()
+                            .to_owned(),
                     }
                 } else {
-                    let block = &self
-                        .blocks
-                        .get(self.frame_start.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    let value = &block.get_by_offset(ll.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
+                    let value: Option<_> = try {
+                        self.blocks
+                            .get(self.frame_start.block - self.first_block)?
+                            .block
+                            .get_by_offset(ll.arg)
+                            .index(self.frame_start.row)?
+                            .to_owned()
+                    };
+                    value.unwrap()
                 };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
@@ -678,15 +679,12 @@ impl<T: Number> TransformWindow<T> {
         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
         let mut block_entry = block.get_by_offset(arg_index);
         if !ignore_null {
-            return match &block_entry.value {
-                Value::Scalar(scalar) => scalar.to_owned(),
-                Value::Column(col) => unsafe { col.index_unchecked(cur.row) }.to_owned(),
-            };
+            return unsafe { block_entry.index_unchecked(cur.row).to_owned() };
         }
 
         while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
-            match &block_entry.value {
-                Value::Scalar(scalar) => {
+            match block_entry {
+                BlockEntry::Const(scalar, _, _) => {
                     if scalar != &Scalar::Null {
                         return scalar.to_owned();
                     }
@@ -703,9 +701,9 @@ impl<T: Number> TransformWindow<T> {
                         block_entry = block.get_by_offset(arg_index);
                     }
                 }
-                Value::Column(col) => {
+                BlockEntry::Column(col) => {
                     let value = col.index(cur.row).unwrap();
-                    if value != ScalarRef::Null {
+                    if !matches!(value, ScalarRef::Null) {
                         return value.to_owned();
                     }
 
@@ -1184,17 +1182,13 @@ macro_rules! impl_advance_frame_bound_method {
                     } = self.order_by[0];
                     let preceding = asc == is_preceding;
                     let ref_col = self
-                        .column_at(&self.current_row, offset)
-                        .as_number()
-                        .unwrap();
-                    let ref_col = T::try_downcast_column(ref_col).unwrap();
+                        .column_at(&self.current_row, offset);
+                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
                     let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let cmp_col = self
-                            .column_at(&self.[<frame_ $bound>], offset)
-                            .as_number()
-                            .unwrap();
-                        let cmp_col = T::try_downcast_column(cmp_col).unwrap();
+                            .column_at(&self.[<frame_ $bound>], offset);
+                        let cmp_col = NumberType::<T>::try_downcast_column(cmp_col).unwrap();
                         let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
                         let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
                         if !asc {
@@ -1226,7 +1220,7 @@ macro_rules! impl_advance_frame_bound_method {
                         .as_nullable()
                         .unwrap()
                         .column;
-                    let ref_col = T::try_downcast_column(ref_col.as_number().unwrap()).unwrap();
+                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
                     let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let col = self
@@ -1246,7 +1240,7 @@ macro_rules! impl_advance_frame_bound_method {
                                 return;
                             }
                         }
-                        let cmp_col = T::try_downcast_column(col.column.as_number().unwrap()).unwrap();
+                        let cmp_col = NumberType::<T>::try_downcast_column(&col.column).unwrap();
                         let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
                         let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
                         if !asc {

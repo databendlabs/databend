@@ -27,12 +27,12 @@ rand = { workspace = true }
 recursive = { workspace = true }
 redis = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true, features = ["cookies"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqllogictest = { workspace = true }
 testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
+testcontainers-modules = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }

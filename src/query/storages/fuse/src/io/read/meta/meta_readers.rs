@@ -27,8 +27,11 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
+use databend_storages_common_table_meta::meta::SegmentStatisticsVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -51,6 +54,8 @@ pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<
 pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type InvertedIndexMetaReader = InMemoryCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
+pub type VectorIndexMetaReader = InMemoryCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
+pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -87,6 +92,13 @@ impl MetaReaders {
         )
     }
 
+    pub fn segment_stats_reader(dal: Operator) -> SegmentStatsReader {
+        SegmentStatsReader::new(
+            CacheManager::instance().get_segment_statistics_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
@@ -97,6 +109,13 @@ impl MetaReaders {
     pub fn inverted_index_meta_reader(dal: Operator) -> InvertedIndexMetaReader {
         InvertedIndexMetaReader::new(
             CacheManager::instance().get_inverted_index_meta_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn vector_index_meta_reader(dal: Operator) -> VectorIndexMetaReader {
+        VectorIndexMetaReader::new(
+            CacheManager::instance().get_vector_index_meta_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -121,6 +140,16 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
         let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
+        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        version.read(reader.reader())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SegmentStatistics> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<SegmentStatistics> {
+        let version = SegmentStatisticsVersion::try_from(params.ver)?;
         let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
         version.read(reader.reader())
     }
@@ -251,6 +280,24 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
         }
 
         Ok(InvertedIndexMeta { columns })
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
+        // read the ThriftFileMetaData, omit unnecessary conversions
+        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?;
+
+        VectorIndexMeta::try_from(meta)
     }
 }
 

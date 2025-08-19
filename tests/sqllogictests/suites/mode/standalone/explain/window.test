@@ -16,7 +16,7 @@ CREATE TABLE empsalary (depname string, empno bigint, salary int, enroll_date da
 query T
 explain SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
 ----
-Sort
+Sort(Single)
 ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2), sum(salary) OVER (PARTITION BY depname ORDER BY empno) (#4)]
 ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -47,24 +47,62 @@ set max_threads=4;
 statement ok
 set sort_spilling_memory_ratio = 0;
 
-statement ok
-set enable_parallel_multi_merge_sort = 0;
-
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
-CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortMerge × 4
-      SortPartialTransform × 4
-        Merge to Resize × 4
-          Transform Window × 1
-            TransformWindowPartitionCollect(Sort) × 1
-              ShuffleMergePartition(Window) × 1
-                ShufflePartition(Window) × 1
-                  DeserializeDataTransform × 1
-                    SyncReadParquetDataTransform × 1
-                      BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "Resize" ]
+    8 [ label = "SortPartialTransform" ]
+    9 [ label = "SortPartialTransform" ]
+    10 [ label = "SortPartialTransform" ]
+    11 [ label = "SortPartialTransform" ]
+    12 [ label = "TransformSortMerge" ]
+    13 [ label = "TransformSortMerge" ]
+    14 [ label = "TransformSortMerge" ]
+    15 [ label = "TransformSortMerge" ]
+    16 [ label = "KWayMergePartitioner" ]
+    17 [ label = "KWayMergeWorker" ]
+    18 [ label = "KWayMergeWorker" ]
+    19 [ label = "KWayMergeWorker" ]
+    20 [ label = "KWayMergeWorker" ]
+    21 [ label = "KWayMergeCombiner" ]
+    22 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "from: 0, to: 0" ]
+    7 -> 9 [ label = "from: 1, to: 0" ]
+    7 -> 10 [ label = "from: 2, to: 0" ]
+    7 -> 11 [ label = "from: 3, to: 0" ]
+    8 -> 12 [ label = "" ]
+    9 -> 13 [ label = "" ]
+    10 -> 14 [ label = "" ]
+    11 -> 15 [ label = "" ]
+    12 -> 16 [ label = "from: 0, to: 0" ]
+    13 -> 16 [ label = "from: 0, to: 1" ]
+    14 -> 16 [ label = "from: 0, to: 2" ]
+    15 -> 16 [ label = "from: 0, to: 3" ]
+    16 -> 17 [ label = "from: 0, to: 0" ]
+    16 -> 18 [ label = "from: 1, to: 0" ]
+    16 -> 19 [ label = "from: 2, to: 0" ]
+    16 -> 20 [ label = "from: 3, to: 0" ]
+    17 -> 21 [ label = "from: 0, to: 0" ]
+    18 -> 21 [ label = "from: 0, to: 1" ]
+    19 -> 21 [ label = "from: 0, to: 2" ]
+    20 -> 21 [ label = "from: 0, to: 3" ]
+    21 -> 22 [ label = "" ]
+}
 
 
 # Enable sort spilling
@@ -74,18 +112,59 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
-CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortMerge × 4
-      SortPartialTransform × 4
-        Merge to Resize × 4
-          Transform Window × 1
-            TransformWindowPartitionCollect(Sort) × 1
-              ShuffleMergePartition(Window) × 1
-                ShufflePartition(Window) × 1
-                  DeserializeDataTransform × 1
-                    SyncReadParquetDataTransform × 1
-                      BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "Resize" ]
+    8 [ label = "SortPartialTransform" ]
+    9 [ label = "SortPartialTransform" ]
+    10 [ label = "SortPartialTransform" ]
+    11 [ label = "SortPartialTransform" ]
+    12 [ label = "TransformSortMerge" ]
+    13 [ label = "TransformSortMerge" ]
+    14 [ label = "TransformSortMerge" ]
+    15 [ label = "TransformSortMerge" ]
+    16 [ label = "KWayMergePartitioner" ]
+    17 [ label = "KWayMergeWorker" ]
+    18 [ label = "KWayMergeWorker" ]
+    19 [ label = "KWayMergeWorker" ]
+    20 [ label = "KWayMergeWorker" ]
+    21 [ label = "KWayMergeCombiner" ]
+    22 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "from: 0, to: 0" ]
+    7 -> 9 [ label = "from: 1, to: 0" ]
+    7 -> 10 [ label = "from: 2, to: 0" ]
+    7 -> 11 [ label = "from: 3, to: 0" ]
+    8 -> 12 [ label = "" ]
+    9 -> 13 [ label = "" ]
+    10 -> 14 [ label = "" ]
+    11 -> 15 [ label = "" ]
+    12 -> 16 [ label = "from: 0, to: 0" ]
+    13 -> 16 [ label = "from: 0, to: 1" ]
+    14 -> 16 [ label = "from: 0, to: 2" ]
+    15 -> 16 [ label = "from: 0, to: 3" ]
+    16 -> 17 [ label = "from: 0, to: 0" ]
+    16 -> 18 [ label = "from: 1, to: 0" ]
+    16 -> 19 [ label = "from: 2, to: 0" ]
+    16 -> 20 [ label = "from: 3, to: 0" ]
+    17 -> 21 [ label = "from: 0, to: 0" ]
+    18 -> 21 [ label = "from: 0, to: 1" ]
+    19 -> 21 [ label = "from: 0, to: 2" ]
+    20 -> 21 [ label = "from: 0, to: 3" ]
+    21 -> 22 [ label = "" ]
+}
 
 
 statement ok
@@ -198,7 +277,7 @@ Filter
     ├── partition by: []
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [k (#4), v (#5)]
         ├── sort keys: [v DESC NULLS LAST]
         ├── estimated rows: 0.00
@@ -279,7 +358,7 @@ Window
 ├── partition by: []
 ├── order by: [b]
 ├── frame: [Range: Preceding(None) ~ CurrentRow]
-└── Sort
+└── Sort(Single)
     ├── output columns: [tbpush.b (#0)]
     ├── sort keys: [b ASC NULLS LAST]
     ├── estimated rows: 0.00
@@ -310,7 +389,7 @@ Filter
     ├── partition by: []
     ├── order by: [b]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [tbpush.b (#0)]
         ├── sort keys: [b ASC NULLS LAST]
         ├── estimated rows: 0.00
@@ -337,7 +416,7 @@ Filter
     ├── partition by: []
     ├── order by: [b]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [tbpush.b (#0)]
         ├── sort keys: [b ASC NULLS LAST]
         ├── estimated rows: 0.00
@@ -367,15 +446,25 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      TransformWindowPartitionCollect(Sort) × 1
-        ShuffleMergePartition(Window) × 1
-          ShufflePartition(Window) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataTransform × 1
-                BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "LimitTransform" ]
+    8 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+}
 
 # Enable sort spilling
 statement ok
@@ -385,15 +474,25 @@ set sort_spilling_memory_ratio = 60;
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      TransformWindowPartitionCollect(Sort) × 1
-        ShuffleMergePartition(Window) × 1
-          ShufflePartition(Window) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataTransform × 1
-                BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "LimitTransform" ]
+    8 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+}
 
 
 # Disable sort spilling
@@ -404,84 +503,202 @@ set sort_spilling_memory_ratio = 0;
 query T
 explain pipeline select a, dense_rank() over (partition by a order by a desc) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      TransformWindowPartitionCollect(Sort) × 1
-        ShuffleMergePartition(Window) × 1
-          ShufflePartition(Window) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataTransform × 1
-                BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "LimitTransform" ]
+    8 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+}
 
 # rows frame single window (can push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      TransformWindowPartitionCollect(Sort) × 1
-        ShuffleMergePartition(Window) × 1
-          ShufflePartition(Window) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataTransform × 1
-                BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "LimitTransform" ]
+    8 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+}
 
 # rows frame single window (can not push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and unbounded following) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      TransformWindowPartitionCollect(Sort) × 1
-        ShuffleMergePartition(Window) × 1
-          ShufflePartition(Window) × 1
-            DeserializeDataTransform × 1
-              SyncReadParquetDataTransform × 1
-                BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "LimitTransform" ]
+    8 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+}
 
 # rows frame multi window (can not push down limit)
 query T
 explain pipeline select a, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row),
 avg(a) over (order by a rows between unbounded preceding and current row) from t limit 3
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              Transform Window × 1
-                TransformWindowPartitionCollect(Sort) × 1
-                  ShuffleMergePartition(Window) × 1
-                    ShufflePartition(Window) × 1
-                      DeserializeDataTransform × 1
-                        SyncReadParquetDataTransform × 1
-                          BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "Resize" ]
+    8 [ label = "SortPartialTransform" ]
+    9 [ label = "SortPartialTransform" ]
+    10 [ label = "SortPartialTransform" ]
+    11 [ label = "SortPartialTransform" ]
+    12 [ label = "TransformSortMerge" ]
+    13 [ label = "TransformSortMerge" ]
+    14 [ label = "TransformSortMerge" ]
+    15 [ label = "TransformSortMerge" ]
+    16 [ label = "KWayMergePartitioner" ]
+    17 [ label = "KWayMergeWorker" ]
+    18 [ label = "KWayMergeWorker" ]
+    19 [ label = "KWayMergeWorker" ]
+    20 [ label = "KWayMergeWorker" ]
+    21 [ label = "KWayMergeCombiner" ]
+    22 [ label = "Transform Window" ]
+    23 [ label = "LimitTransform" ]
+    24 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "from: 0, to: 0" ]
+    7 -> 9 [ label = "from: 1, to: 0" ]
+    7 -> 10 [ label = "from: 2, to: 0" ]
+    7 -> 11 [ label = "from: 3, to: 0" ]
+    8 -> 12 [ label = "" ]
+    9 -> 13 [ label = "" ]
+    10 -> 14 [ label = "" ]
+    11 -> 15 [ label = "" ]
+    12 -> 16 [ label = "from: 0, to: 0" ]
+    13 -> 16 [ label = "from: 0, to: 1" ]
+    14 -> 16 [ label = "from: 0, to: 2" ]
+    15 -> 16 [ label = "from: 0, to: 3" ]
+    16 -> 17 [ label = "from: 0, to: 0" ]
+    16 -> 18 [ label = "from: 1, to: 0" ]
+    16 -> 19 [ label = "from: 2, to: 0" ]
+    16 -> 20 [ label = "from: 3, to: 0" ]
+    17 -> 21 [ label = "from: 0, to: 0" ]
+    18 -> 21 [ label = "from: 0, to: 1" ]
+    19 -> 21 [ label = "from: 0, to: 2" ]
+    20 -> 21 [ label = "from: 0, to: 3" ]
+    21 -> 22 [ label = "" ]
+    22 -> 23 [ label = "" ]
+    23 -> 24 [ label = "" ]
+}
 
 # row fetch with window function(pipeline explain)
 query T
 explain pipeline select *, sum(a) over (partition by a order by a desc rows between unbounded preceding and current row) from t where a > 1 order by b limit 3;
 ----
-CompoundBlockOperator(Project) × 1
-  TransformRowsFetcher × 1
-    LimitTransform × 1
-      Merge to MultiSortMerge × 1
-        TransformSortMergeLimit × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              Transform Window × 1
-                TransformWindowPartitionCollect(Sort) × 1
-                  ShuffleMergePartition(Window) × 1
-                    ShufflePartition(Window) × 1
-                      TransformFilter × 1
-                        AddInternalColumnsTransform × 1
-                          DeserializeDataTransform × 1
-                            SyncReadParquetDataTransform × 1
-                              BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "AddInternalColumnsTransform" ]
+    4 [ label = "TransformFilter" ]
+    5 [ label = "ShufflePartition(Window)" ]
+    6 [ label = "ShuffleMergePartition(Window)" ]
+    7 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    8 [ label = "Transform Window" ]
+    9 [ label = "Resize" ]
+    10 [ label = "SortPartialTransform" ]
+    11 [ label = "SortPartialTransform" ]
+    12 [ label = "SortPartialTransform" ]
+    13 [ label = "SortPartialTransform" ]
+    14 [ label = "TransformSortMergeLimit" ]
+    15 [ label = "TransformSortMergeLimit" ]
+    16 [ label = "TransformSortMergeLimit" ]
+    17 [ label = "TransformSortMergeLimit" ]
+    18 [ label = "KWayMergePartitioner" ]
+    19 [ label = "KWayMergeWorker" ]
+    20 [ label = "KWayMergeWorker" ]
+    21 [ label = "KWayMergeWorker" ]
+    22 [ label = "KWayMergeWorker" ]
+    23 [ label = "KWayMergeCombiner" ]
+    24 [ label = "LimitTransform" ]
+    25 [ label = "TransformRowsFetcher" ]
+    26 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+    8 -> 9 [ label = "" ]
+    9 -> 10 [ label = "from: 0, to: 0" ]
+    9 -> 11 [ label = "from: 1, to: 0" ]
+    9 -> 12 [ label = "from: 2, to: 0" ]
+    9 -> 13 [ label = "from: 3, to: 0" ]
+    10 -> 14 [ label = "" ]
+    11 -> 15 [ label = "" ]
+    12 -> 16 [ label = "" ]
+    13 -> 17 [ label = "" ]
+    14 -> 18 [ label = "from: 0, to: 0" ]
+    15 -> 18 [ label = "from: 0, to: 1" ]
+    16 -> 18 [ label = "from: 0, to: 2" ]
+    17 -> 18 [ label = "from: 0, to: 3" ]
+    18 -> 19 [ label = "from: 0, to: 0" ]
+    18 -> 20 [ label = "from: 1, to: 0" ]
+    18 -> 21 [ label = "from: 2, to: 0" ]
+    18 -> 22 [ label = "from: 3, to: 0" ]
+    19 -> 23 [ label = "from: 0, to: 0" ]
+    20 -> 23 [ label = "from: 0, to: 1" ]
+    21 -> 23 [ label = "from: 0, to: 2" ]
+    22 -> 23 [ label = "from: 0, to: 3" ]
+    23 -> 24 [ label = "" ]
+    24 -> 25 [ label = "" ]
+    25 -> 26 [ label = "" ]
+}
 
 # row fetch with window function(plan explain)
 query T
@@ -496,7 +713,7 @@ RowFetch
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7), sum(a) OVER (PARTITION BY a ORDER BY a DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#6)]
         ├── sort keys: [b ASC NULLS LAST]
         ├── estimated rows: 0.00
@@ -534,16 +751,27 @@ CREATE TABLE table43764_orc (rowkey VARCHAR NOT NULL, time TIMESTAMP NULL, sirc_
 query T
 explain pipeline select time, rowkey from (select *, row_number() over(partition by rowkey order by time desc) as rn from table43764_orc) a where rn = 1 limit 4
 ----
-CompoundBlockOperator(Project) × 1
-  LimitTransform × 1
-    TransformFilter × 1
-      Transform Window × 1
-        TransformWindowPartitionCollect(Sort) × 1
-          ShuffleMergePartition(WindowTopN) × 1
-            ShufflePartition(WindowTopN) × 1
-              DeserializeDataTransform × 1
-                SyncReadParquetDataTransform × 1
-                  BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(WindowTopN)" ]
+    4 [ label = "ShuffleMergePartition(WindowTopN)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "TransformFilter" ]
+    8 [ label = "LimitTransform" ]
+    9 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+    8 -> 9 [ label = "" ]
+}
 
 # top n 0
 query T
@@ -557,35 +785,89 @@ EvalScalar
 query T
 explain pipeline select *,lead(number,1, 42) over (order by number), lead(number,2,44) over (order by number), lead(number,3,44) over (order by number) from numbers(5);
 ----
-CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    CompoundBlockOperator(Map) × 1
-      Transform Window × 1
-        CompoundBlockOperator(Map) × 1
-          Transform Window × 1
-            Merge to MultiSortMerge × 1
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    CompoundBlockOperator(Map) × 1
-                      NumbersSourceTransform × 1
+digraph {
+    0 [ label = "NumbersSourceTransform" ]
+    1 [ label = "CompoundBlockOperator(Map)" ]
+    2 [ label = "Resize" ]
+    3 [ label = "SortPartialTransform" ]
+    4 [ label = "SortPartialTransform" ]
+    5 [ label = "SortPartialTransform" ]
+    6 [ label = "SortPartialTransform" ]
+    7 [ label = "TransformSortMerge" ]
+    8 [ label = "TransformSortMerge" ]
+    9 [ label = "TransformSortMerge" ]
+    10 [ label = "TransformSortMerge" ]
+    11 [ label = "KWayMergePartitioner" ]
+    12 [ label = "KWayMergeWorker" ]
+    13 [ label = "KWayMergeWorker" ]
+    14 [ label = "KWayMergeWorker" ]
+    15 [ label = "KWayMergeWorker" ]
+    16 [ label = "KWayMergeCombiner" ]
+    17 [ label = "Transform Window" ]
+    18 [ label = "CompoundBlockOperator(Map)" ]
+    19 [ label = "Transform Window" ]
+    20 [ label = "CompoundBlockOperator(Map)" ]
+    21 [ label = "Transform Window" ]
+    22 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "from: 0, to: 0" ]
+    2 -> 4 [ label = "from: 1, to: 0" ]
+    2 -> 5 [ label = "from: 2, to: 0" ]
+    2 -> 6 [ label = "from: 3, to: 0" ]
+    3 -> 7 [ label = "" ]
+    4 -> 8 [ label = "" ]
+    5 -> 9 [ label = "" ]
+    6 -> 10 [ label = "" ]
+    7 -> 11 [ label = "from: 0, to: 0" ]
+    8 -> 11 [ label = "from: 0, to: 1" ]
+    9 -> 11 [ label = "from: 0, to: 2" ]
+    10 -> 11 [ label = "from: 0, to: 3" ]
+    11 -> 12 [ label = "from: 0, to: 0" ]
+    11 -> 13 [ label = "from: 1, to: 0" ]
+    11 -> 14 [ label = "from: 2, to: 0" ]
+    11 -> 15 [ label = "from: 3, to: 0" ]
+    12 -> 16 [ label = "from: 0, to: 0" ]
+    13 -> 16 [ label = "from: 0, to: 1" ]
+    14 -> 16 [ label = "from: 0, to: 2" ]
+    15 -> 16 [ label = "from: 0, to: 3" ]
+    16 -> 17 [ label = "" ]
+    17 -> 18 [ label = "" ]
+    18 -> 19 [ label = "" ]
+    19 -> 20 [ label = "" ]
+    20 -> 21 [ label = "" ]
+    21 -> 22 [ label = "" ]
+}
 
 # same order same partiton by multi window
 query T
 explain pipeline select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), lead(number,2, 0) over (partition by number % 3 order by number + 1) from numbers(50);
 ----
-CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    TransformWindowPartitionCollect(Sort) × 1
-      ShuffleMergePartition(Window) × 1
-        ShufflePartition(Window) × 1
-          CompoundBlockOperator(Map) × 1
-            Transform Window × 1
-              TransformWindowPartitionCollect(Sort) × 1
-                ShuffleMergePartition(Window) × 1
-                  ShufflePartition(Window) × 1
-                    CompoundBlockOperator(Map) × 1
-                      NumbersSourceTransform × 1
+digraph {
+    0 [ label = "NumbersSourceTransform" ]
+    1 [ label = "CompoundBlockOperator(Map)" ]
+    2 [ label = "ShufflePartition(Window)" ]
+    3 [ label = "ShuffleMergePartition(Window)" ]
+    4 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    5 [ label = "Transform Window" ]
+    6 [ label = "CompoundBlockOperator(Map)" ]
+    7 [ label = "ShufflePartition(Window)" ]
+    8 [ label = "ShuffleMergePartition(Window)" ]
+    9 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    10 [ label = "Transform Window" ]
+    11 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "" ]
+    8 -> 9 [ label = "" ]
+    9 -> 10 [ label = "" ]
+    10 -> 11 [ label = "" ]
+}
 
 # window partition with empty sort items from same window partition  with sort items
 ## explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number + 1) a

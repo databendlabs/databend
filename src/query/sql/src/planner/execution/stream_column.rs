@@ -114,7 +114,6 @@ impl StreamContext {
                         .build(),
                     })
                 }
-                StreamColumnType::RowVersion => unreachable!(),
             };
 
             let new_stream_column_scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
@@ -136,7 +135,7 @@ impl StreamContext {
             exprs.push(
                 new_stream_column_scalar_expr
                     .as_expr()?
-                    .project_column_ref(|col| col.index),
+                    .project_column_ref(|col| Ok(col.index))?,
             );
         }
 
@@ -180,7 +179,7 @@ impl StreamContext {
         let mut new_block = block;
         for stream_column in self.stream_columns.iter() {
             let entry = stream_column.generate_column_values(meta, num_rows);
-            new_block.add_column(entry);
+            new_block.add_entry(entry);
         }
 
         self.operators

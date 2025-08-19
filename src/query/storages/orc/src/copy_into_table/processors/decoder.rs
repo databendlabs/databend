@@ -35,7 +35,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -101,7 +100,8 @@ impl StripeDecoderForCopy {
 
     fn project(&self, block: DataBlock, projection: &[Expr]) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut columns = Vec::with_capacity(projection.len());
+        let mut entries = Vec::with_capacity(projection.len());
+        let num_rows = block.num_rows();
         for (field, expr) in self.output_schema.fields().iter().zip(projection.iter()) {
             if let Expr::ColumnRef(ColumnRef {
                 display_name, id, ..
@@ -121,12 +121,11 @@ impl StripeDecoderForCopy {
                         .split(',')
                         .map(|s| s.parse::<i32>().unwrap())
                         .collect::<Vec<i32>>();
-                    let e = block.columns()[*id].clone();
-
-                    if let Value::Column(Column::Nullable(box NullableColumn {
-                        column: Column::Array(box ref array_column),
-                        ref validity,
-                    })) = e.value
+                    let entry = block.get_by_offset(*id);
+                    if let Some(Column::Nullable(box NullableColumn {
+                        column: Column::Array(box array_column),
+                        validity,
+                    })) = entry.as_column()
                     {
                         let column = array_column.underlying_column();
                         let offsets = array_column.underlying_offsets();
@@ -151,26 +150,25 @@ impl StripeDecoderForCopy {
                             }));
 
                             let new_array_column = ArrayColumn::new(new_tuple_column, offsets);
-                            let new_value =
-                                Value::Column(Column::Nullable(Box::new(NullableColumn {
-                                    column: Column::Array(Box::new(new_array_column)),
-                                    validity: validity.clone(),
-                                })));
+                            let column = Column::Nullable(Box::new(NullableColumn {
+                                column: Column::Array(Box::new(new_array_column)),
+                                validity: validity.clone(),
+                            }));
 
-                            let column = BlockEntry::new(field.data_type().clone(), new_value);
-                            columns.push(column);
+                            entries.push(column.into());
                             continue;
                         }
                     }
-                    log::error!("expect array of tuple, got {:?} {:?}", field, e.value);
+                    log::error!("expect array of tuple, got {:?} {:?}", field, entry.value());
                     unreachable!("expect value: array of tuple")
                 }
             }
-            let value = evaluator.run(expr)?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                (field.data_type().clone(), num_rows)
+            });
+            entries.push(entry);
         }
-        Ok(DataBlock::new(columns, block.num_rows()))
+        Ok(DataBlock::new(entries, num_rows))
     }
 }
 

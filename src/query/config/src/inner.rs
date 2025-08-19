@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use databend_common_base::base::mask_string;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
@@ -35,9 +36,9 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 
-use super::config::Commands;
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
+use super::config::TelemetryConfig;
 use crate::BuiltInConfig;
 
 /// Inner config for query.
@@ -45,13 +46,12 @@ use crate::BuiltInConfig;
 /// All function should implement based on this Config.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
-    pub subcommand: Option<Commands>,
-    pub config_file: String,
-
     // Query engine config.
     pub query: QueryConfig,
 
     pub log: LogConfig,
+
+    pub task: TaskConfig,
 
     // Meta Service config.
     pub meta: MetaConfig,
@@ -69,14 +69,17 @@ pub struct InnerConfig {
 
     // Spill Config
     pub spill: SpillConfig,
+
+    // Telemetry Config
+    pub telemetry: TelemetryConfig,
 }
 
 impl InnerConfig {
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`InnerConfig`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub async fn load() -> Result<Self> {
-        let mut cfg: Self = Config::load(true)?.try_into()?;
+    pub async fn init(cfg: Config, check_meta: bool) -> Result<Self> {
+        let mut cfg: Self = cfg.try_into()?;
 
         // Handle the node_id and node_secret for query node.
         cfg.query.node_id = GlobalUniqName::unique();
@@ -85,8 +88,7 @@ impl InnerConfig {
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
-        // Only check meta config when cmd is empty.
-        if cfg.subcommand.is_none() {
+        if check_meta {
             cfg.meta.check_valid()?;
         }
         Ok(cfg)
@@ -96,8 +98,7 @@ impl InnerConfig {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
-        let cfg: Self = Config::load(false)?.try_into()?;
-        Ok(cfg)
+        Config::load_with_config_file("")?.try_into()
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
@@ -136,8 +137,6 @@ impl InnerConfig {
 impl Debug for InnerConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("InnerConfig")
-            .field("subcommand", &self.subcommand)
-            .field("config_file", &self.config_file)
             .field("query", &self.query.sanitize())
             .field("log", &self.log)
             .field("meta", &self.meta)
@@ -155,6 +154,8 @@ pub struct QueryConfig {
     pub tenant_id: Tenant,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    /// ID for construct the warehouse.
+    pub warehouse_id: String,
     // ID for the query node.
     // This only initialized when InnerConfig::load().
     pub node_id: String,
@@ -232,14 +233,6 @@ pub struct QueryConfig {
     /// Max data retention time in days.
     pub data_retention_time_in_days_max: u64,
 
-    /// (azure) openai
-    pub openai_api_key: String,
-    pub openai_api_version: String,
-    pub openai_api_chat_base_url: String,
-    pub openai_api_embedding_base_url: String,
-    pub openai_api_embedding_model: String,
-    pub openai_api_completion_model: String,
-
     pub enable_udf_python_script: bool,
     pub enable_udf_js_script: bool,
     pub enable_udf_wasm_script: bool,
@@ -256,6 +249,9 @@ pub struct QueryConfig {
 
     pub settings: HashMap<String, UserSettingValue>,
     pub resources_management: Option<ResourcesManagementConfig>,
+
+    pub enable_queries_executor: bool,
+    pub check_connection_before_schedule: bool,
 }
 
 impl Default for QueryConfig {
@@ -263,6 +259,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
+            warehouse_id: "".to_string(),
             node_id: "".to_string(),
             node_secret: "".to_string(),
             num_cpus: 0,
@@ -281,7 +278,7 @@ impl Default for QueryConfig {
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
             http_handler_result_timeout_secs: 60,
-            http_session_timeout_secs: 3600,
+            http_session_timeout_secs: 14400,
             flight_api_address: "127.0.0.1:9090".to_string(),
             flight_sql_handler_host: "127.0.0.1".to_string(),
             flight_sql_handler_port: 8900,
@@ -309,7 +306,7 @@ impl Default for QueryConfig {
             max_storage_io_requests: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
-            jwks_refresh_interval: 600,
+            jwks_refresh_interval: 86400,
             jwks_refresh_timeout: 10,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
@@ -322,12 +319,6 @@ impl Default for QueryConfig {
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
             flight_sql_tls_server_key: "".to_string(),
-            openai_api_chat_base_url: "https://api.openai.com/v1/".to_string(),
-            openai_api_embedding_base_url: "https://api.openai.com/v1/".to_string(),
-            openai_api_key: "".to_string(),
-            openai_api_version: "".to_string(),
-            openai_api_completion_model: "gpt-3.5-turbo".to_string(),
-            openai_api_embedding_model: "text-embedding-ada-002".to_string(),
 
             enable_udf_js_script: true,
             enable_udf_python_script: true,
@@ -343,6 +334,8 @@ impl Default for QueryConfig {
             network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
             resources_management: None,
+            enable_queries_executor: false,
+            check_connection_before_schedule: true,
         }
     }
 }
@@ -362,7 +355,6 @@ impl QueryConfig {
             .databend_enterprise_license
             .clone()
             .map(|s| mask_string(&s, 3));
-        sanitized.openai_api_key = mask_string(&self.openai_api_key, 3);
         sanitized
     }
 }
@@ -439,7 +431,7 @@ impl MetaConfig {
         }
     }
 
-    pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
+    pub fn to_meta_grpc_client_conf(&self, version: BuildInfoRef) -> RpcClientConf {
         let embedded_dir = if self.embedded_dir.is_empty() {
             None
         } else {
@@ -447,6 +439,7 @@ impl MetaConfig {
         };
         RpcClientConf {
             embedded_dir,
+            version,
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),
@@ -495,6 +488,11 @@ impl Debug for MetaConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogConfig {
     Hive(CatalogHiveConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TaskConfig {
+    pub on: bool,
 }
 
 // TODO: add compat protocol support
@@ -556,6 +554,9 @@ impl Default for LocalConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheConfig {
+    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    pub meta_service_ownership_cache: bool,
+
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     pub enable_table_meta_cache: bool,
 
@@ -574,6 +575,9 @@ pub struct CacheConfig {
 
     /// Max number of cached table segment
     pub table_meta_statistic_count: u64,
+
+    /// Max number of cached segment statistics
+    pub segment_statistics_count: u64,
 
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     pub enable_table_index_bloom: bool,
@@ -609,6 +613,15 @@ pub struct CacheConfig {
 
     /// Max percentage of in memory inverted index filters cache relative to whole memory. By default it is 0 (disabled).
     pub inverted_index_filter_memory_ratio: u64,
+
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub vector_index_filter_memory_ratio: u64,
 
     pub data_cache_storage: CacheStorageTypeConfig,
 
@@ -727,12 +740,14 @@ impl Default for DiskCacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
+            meta_service_ownership_cache: false,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
             block_meta_count: 0,
             segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
+            segment_statistics_count: 0,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,
@@ -742,6 +757,9 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
+            vector_index_meta_count: 30000,
+            vector_index_filter_size: 64424509440,
+            vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,

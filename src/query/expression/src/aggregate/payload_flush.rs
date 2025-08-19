@@ -18,7 +18,6 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::AggrState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -33,12 +32,14 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ReturnType;
 use crate::types::TimestampType;
 use crate::with_number_mapped_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -48,8 +49,8 @@ use crate::BATCH_SIZE;
 
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
-    pub group_columns: Vec<Column>,
-    pub aggregate_results: Vec<Column>,
+    pub group_columns: Vec<BlockEntry>,
+    pub(super) aggregate_results: Vec<BlockEntry>,
     pub row_count: usize,
 
     pub flush_partition: usize,
@@ -87,10 +88,10 @@ impl PayloadFlushState {
         self.flush_page_row = 0;
     }
 
-    pub fn take_group_columns(&mut self) -> Vec<Column> {
+    pub fn take_group_columns(&mut self) -> Vec<BlockEntry> {
         std::mem::take(&mut self.group_columns)
     }
-    pub fn take_aggregate_results(&mut self) -> Vec<Column> {
+    pub fn take_aggregate_results(&mut self) -> Vec<BlockEntry> {
         std::mem::take(&mut self.aggregate_results)
     }
 }
@@ -123,7 +124,7 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(None));
+            return Ok(self.empty_block(0));
         }
         DataBlock::concat(&blocks)
     }
@@ -135,34 +136,25 @@ impl Payload {
 
         let row_count = state.row_count;
 
-        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        let mut entries = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
         if let Some(state_layout) = self.states_layout.as_ref() {
             let mut builders = state_layout.serialize_builders(row_count);
 
-            for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (loc, func)) in state_layout
-                    .states_loc
-                    .iter()
-                    .zip(self.aggrs.iter())
-                    .enumerate()
-                {
-                    {
-                        let builder = &mut builders[idx];
-                        func.serialize(AggrState::new(*place, loc), &mut builder.data)?;
-                        builder.commit_row();
-                    }
-                }
+            for ((loc, func), builder) in state_layout
+                .states_loc
+                .iter()
+                .zip(self.aggrs.iter())
+                .zip(builders.iter_mut())
+            {
+                let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+                func.batch_serialize(&state.state_places.as_slice()[0..row_count], loc, builders)?;
             }
 
-            cols.extend(
-                builders
-                    .into_iter()
-                    .map(|builder| Column::Binary(builder.build())),
-            );
+            entries.extend(builders.into_iter().map(|builder| builder.build().into()));
         }
 
-        cols.extend_from_slice(&state.take_group_columns());
-        Ok(Some(DataBlock::new_from_columns(cols)))
+        entries.extend_from_slice(&state.take_group_columns());
+        Ok(Some(DataBlock::new(entries, row_count)))
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
@@ -170,12 +162,12 @@ impl Payload {
         let mut blocks = vec![];
 
         while self.flush(&mut state) {
-            let cols = state.take_group_columns();
-            blocks.push(DataBlock::new_from_columns(cols));
+            let entries = state.take_group_columns();
+            blocks.push(DataBlock::new(entries, state.row_count));
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(None));
+            return Ok(self.empty_block(0));
         }
 
         DataBlock::concat(&blocks)
@@ -218,7 +210,7 @@ impl Payload {
 
         for col_index in 0..self.group_types.len() {
             let col = self.flush_column(col_index, state);
-            state.group_columns.push(col);
+            state.group_columns.push(col.into());
         }
 
         state.flush_page_row = end;
@@ -238,13 +230,17 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(size) => {
-                if size.can_carried_by_128() {
+            DataType::Decimal(size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => {
+                    self.flush_decimal_column::<i64>(col_offset, state, size)
+                }
+                DecimalDataKind::Decimal128 => {
                     self.flush_decimal_column::<i128>(col_offset, state, size)
-                } else {
+                }
+                DecimalDataKind::Decimal256 => {
                     self.flush_decimal_column::<i256>(col_offset, state, size)
                 }
-            }
+            },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),

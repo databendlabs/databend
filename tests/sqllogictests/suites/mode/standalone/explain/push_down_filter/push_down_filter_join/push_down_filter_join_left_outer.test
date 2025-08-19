@@ -31,7 +31,6 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -73,7 +72,6 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t1.a (#0) > 0]
-├── build join filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -107,7 +105,6 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -247,7 +244,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.j1

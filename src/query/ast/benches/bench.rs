@@ -18,11 +18,11 @@ fn main() {
 
 // bench                     fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                                │               │               │               │         │
-//    ├─ deep_function_call  732.9 ms      │ 732.9 ms      │ 732.9 ms      │ 732.9 ms      │ 1       │ 1
-//    ├─ deep_query          319.4 µs      │ 515.6 µs      │ 333.4 µs      │ 335.3 µs      │ 100     │ 100
-//    ├─ large_query         1.998 ms      │ 2.177 ms      │ 2.032 ms      │ 2.038 ms      │ 100     │ 100
-//    ├─ large_statement     1.952 ms      │ 2.079 ms      │ 2.016 ms      │ 2.011 ms      │ 100     │ 100
-//    ╰─ wide_expr           620.4 µs      │ 783.7 µs      │ 646 µs        │ 646.4 µs      │ 100     │ 100
+// ├─ deep_function_call  1.238 ms      │ 1.781 ms      │ 1.355 ms      │ 1.353 ms      │ 100     │ 100
+// ├─ deep_query          285.6 µs      │ 434.6 µs      │ 306.8 µs      │ 307 µs        │ 100     │ 100
+// ├─ large_query         1.739 ms      │ 1.893 ms      │ 1.795 ms      │ 1.801 ms      │ 100     │ 100
+// ├─ large_statement     1.745 ms      │ 1.885 ms      │ 1.807 ms      │ 1.806 ms      │ 100     │ 100
+// ╰─ wide_expr           562 µs        │ 651.9 µs      │ 588.2 µs      │ 590.5 µs      │ 100     │ 100
 
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
@@ -65,7 +65,7 @@ mod dummy {
 
     #[divan::bench]
     fn deep_function_call() {
-        let case = r#"ROUND(6378.138 * 2 * ASIN(SQRT(POW(SIN(RADIANS(CASE WHEN MOD(EXTRACT(SECOND FROM CURRENT_TIMESTAMP), 2) = 0 THEN 45.6789 ELSE 30.1234 END - IFNULL(NULLIF((SELECT 37.7749), 0), 15.4321))), 2) + POW(SIN(RADIANS((SELECT -122.4194) / 2)), 2) * COS(RADIANS(LEAST(60, GREATEST(20, (SELECT 25.5))))))) * (1000 + (RAND() * 500 - 250)), 2)"#;
+        let case = r#"json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert('{}'::variant, 'email_address', 'gokul', true), 'home_phone', 12345, true), 'mobile_phone', 345678, true), 'race_code', 'M', true), 'race_desc', 'm', true), 'marital_status_code', 'y', true), 'marital_status_desc', 'yu', true), 'prefix', 'hj', true), 'first_name', 'g', true), 'last_name', 'p', true), 'deceased_date', '2085-05-07', true), 'birth_date', '6789', true), 'middle_name', '89', true), 'middle_initial', '0789', true), 'gender_code', '56789', true), 'gender_desc', 'm', true), 'home_phone_line_type', 'uyt', true), 'mobile_phone_line_type', 4, true)"#;
         let tokens = tokenize_sql(case).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
         divan::black_box(expr);

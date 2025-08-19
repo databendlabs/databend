@@ -59,6 +59,7 @@ use opendal::Operator;
 
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
+use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 use crate::StorageHttpClient;
@@ -68,6 +69,15 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    let cache = get_operator_cache();
+    cache
+        .get_or_create(cfg)
+        .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
+}
+
+/// init_operator_uncached will init an opendal operator without caching.
+/// This function creates a new operator every time it's called.
+pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => {
             build_operator(init_azblob_operator(cfg)?, cfg.network_config.as_ref())?
@@ -136,10 +146,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 /// ```
 ///
 /// Please balance the performance and compile time.
-pub fn build_operator<B: Builder>(
-    builder: B,
-    cfg: Option<&StorageNetworkParams>,
-) -> Result<Operator> {
+fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
         // futures can be cancelled safely when the timeout is reached.
@@ -548,24 +555,8 @@ impl DataOperator {
         Ok(())
     }
 
-    /// Create a new data operator without check.
-    pub fn try_new(
-        conf: &StorageConfig,
-        spill_params: Option<StorageParams>,
-    ) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(&conf.params)?;
-        let spill_operator = spill_params.as_ref().map(init_operator).transpose()?;
-
-        Ok(DataOperator {
-            operator,
-            params: conf.params.clone(),
-            spill_operator,
-            spill_params,
-        })
-    }
-
     #[async_backtrace::framed]
-    pub async fn try_create(
+    async fn try_create(
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {

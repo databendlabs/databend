@@ -295,11 +295,11 @@ impl<T: AccessType> NullableColumn<T> {
         self.validity.len()
     }
 
-    pub fn column_ref(&self) -> &T::Column {
+    pub fn column(&self) -> &T::Column {
         &self.column
     }
 
-    pub fn validity_ref(&self) -> &Bitmap {
+    pub fn validity(&self) -> &Bitmap {
         &self.validity
     }
 
@@ -347,6 +347,10 @@ impl<T: AccessType> NullableColumn<T> {
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.column) + self.validity.as_slice().0.len()
     }
+
+    pub fn destructure(self) -> (T::Column, Bitmap) {
+        (self.column, self.validity)
+    }
 }
 
 impl<T: ReturnType> NullableColumn<T> {
@@ -362,7 +366,7 @@ impl<T: ReturnType> NullableColumn<T> {
 impl NullableColumn<AnyType> {
     pub fn new(column: Column, validity: Bitmap) -> Self {
         debug_assert_eq!(column.len(), validity.len());
-        debug_assert!(!column.is_nullable());
+        debug_assert!(!column.is_nullable() && !column.is_null());
         NullableColumn { column, validity }
     }
 }

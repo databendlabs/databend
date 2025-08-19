@@ -45,6 +45,7 @@
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -61,6 +62,7 @@ use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::workload_group::WorkloadGroupResource;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
+use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
@@ -131,7 +133,6 @@ impl CaptureLogSettings {
     }
 }
 
-#[derive(Clone)]
 pub struct TrackingPayload {
     pub query_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
@@ -141,6 +142,27 @@ pub struct TrackingPayload {
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
+    pub perf_enabled: bool,
+    pub process_rows: AtomicUsize,
+}
+
+impl Clone for TrackingPayload {
+    fn clone(&self) -> Self {
+        TrackingPayload {
+            query_id: self.query_id.clone(),
+            profile: self.profile.clone(),
+            mem_stat: self.mem_stat.clone(),
+            metrics: self.metrics.clone(),
+            capture_log_settings: self.capture_log_settings.clone(),
+            time_series_profile: self.time_series_profile.clone(),
+            local_time_series_profile: self.local_time_series_profile.clone(),
+            workload_group_resource: self.workload_group_resource.clone(),
+            perf_enabled: self.perf_enabled,
+            process_rows: AtomicUsize::new(
+                self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
+            ),
+        }
+    }
 }
 
 pub struct TrackingGuard {
@@ -165,6 +187,9 @@ impl Drop for TrackingGuard {
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
+
+            // Sync perf flag when restoring the previous payload
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
         });
     }
 }
@@ -216,6 +241,8 @@ impl ThreadTracker {
                 time_series_profile: None,
                 local_time_series_profile: None,
                 workload_group_resource: None,
+                perf_enabled: false,
+                process_rows: AtomicUsize::new(0),
             }),
         }
     }
@@ -225,7 +252,7 @@ impl ThreadTracker {
     pub fn init() {
         TRACKER.with(|x| {
             let _ = x.borrow_mut();
-        })
+        });
     }
 
     pub(crate) fn with<F, R>(f: F) -> R
@@ -245,6 +272,9 @@ impl ThreadTracker {
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
+
+            // Sync perf flag from the new payload to thread_local PERF_FLAG
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
 
             guard
         })
@@ -326,6 +356,18 @@ impl ThreadTracker {
             })
             .ok()
             .and_then(|x| x)
+    }
+
+    pub fn process_rows() -> usize {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .process_rows
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            })
+            .unwrap_or(0)
     }
 }
 

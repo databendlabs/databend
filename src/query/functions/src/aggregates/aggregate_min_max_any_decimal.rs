@@ -14,27 +14,30 @@
 
 use std::marker::PhantomData;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::StateAddr;
 
 use super::aggregate_scalar_state::ChangeIf;
+use super::batch_merge1;
+use super::batch_serialize1;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 pub struct MinMaxAnyDecimalState<T, C>
 where
     T: ValueType,
     T::Scalar: Decimal,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
     pub value: Option<<T::Scalar as Decimal>::U64Array>,
-    #[borsh(skip)]
     _c: PhantomData<C>,
 }
 
@@ -42,7 +45,6 @@ impl<T, C> Default for MinMaxAnyDecimalState<T, C>
 where
     T: ValueType,
     T::Scalar: Decimal,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
     fn default() -> Self {
@@ -57,8 +59,7 @@ impl<T, C> UnaryState<T, T> for MinMaxAnyDecimalState<T, C>
 where
     T: ValueType,
     T::Scalar: Decimal,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn add(
         &mut self,
@@ -136,5 +137,55 @@ where
             builder.push_default();
         }
         Ok(())
+    }
+}
+
+impl<T, C> StateSerde for MinMaxAnyDecimalState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Decimal,
+    C: ChangeIf<T>,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Decimal(T::Scalar::default_decimal_size())
+            .wrap_nullable()
+            .into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<NullableType<DecimalType<T::Scalar>>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                builder.push_item(state.value.map(T::Scalar::from_u64_array));
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<NullableType<DecimalType<T::Scalar>>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, value| {
+                let rhs = Self {
+                    value: value.map(T::Scalar::to_u64_array),
+                    _c: PhantomData,
+                };
+                <Self as UnaryState<T, T>>::merge(state, &rhs)
+            },
+        )
     }
 }

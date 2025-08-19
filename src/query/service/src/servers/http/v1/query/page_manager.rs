@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
@@ -151,7 +152,7 @@ impl PageManager {
         let columns = block
             .columns()
             .iter()
-            .map(|entry| entry.to_column(block.num_rows()))
+            .map(BlockEntry::to_column)
             .collect_vec();
 
         let block_memory_size = block.memory_size();

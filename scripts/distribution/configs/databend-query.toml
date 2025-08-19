@@ -6,7 +6,7 @@ max_active_sessions = 256
 shutdown_wait_timeout_ms = 5000
 
 # Internal flight rpc for cluster communication.
-flight_api_address = "0.0.0.0:9091"
+flight_api_address = "0.0.0.0:9090"
 
 # Admin REST API.
 admin_api_address = "0.0.0.0:8080"
@@ -33,7 +33,8 @@ flight_sql_handler_port = 8900
 tenant_id = "default"
 cluster_id = "default"
 
-table_engine_memory_enabled = true
+
+# NOTE: comment out one of the following blocks to enable a user for the first run.
 
 # [[query.users]]
 # name = "root"
@@ -42,13 +43,13 @@ table_engine_memory_enabled = true
 # [[query.users]]
 # name = "databend"
 # auth_type = "double_sha1_password"
-# # echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
+# # to generate auth_string: echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
 # auth_string = "3081f32caef285c232d066033c89a78d88a6d8a5"
 
 # [[query.users]]
 # name = "datafuselabs"
 # auth_type = "sha256_password"
-# #  echo -n "datafuselabs" | sha256sum
+# # to generate auth_string: echo -n "datafuselabs" | sha256sum
 # auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
 
 
@@ -64,7 +65,7 @@ dir = "/var/log/databend"
 endpoints = ["0.0.0.0:9191"]
 username = "root"
 password = "root"
-client_timeout_in_second = 60
+client_timeout_in_second = 10
 auto_sync_interval = 60
 
 # Storage config.

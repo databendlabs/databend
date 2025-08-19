@@ -30,7 +30,6 @@ parquet = { workspace = true }
 rmp-serde = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-simple_hll = { workspace = true, features = ["serde_borsh"] }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 zstd = { workspace = true }

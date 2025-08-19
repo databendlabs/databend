@@ -70,7 +70,12 @@ impl SetInterpreter {
         let mut is_globals = vec![];
 
         for (var, scalar) in self.set.idents.iter().zip(scalars.into_iter()) {
-            let scalar = scalar.as_string().unwrap();
+            let scalar = scalar.as_string().ok_or_else(|| {
+                ErrorCode::BadArguments(format!(
+                    "Expected string value for setting '{}', but got {:?}",
+                    var, scalar
+                ))
+            })?;
             let ok = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => false,
@@ -103,12 +108,33 @@ impl SetInterpreter {
                     let tenant = scalar.clone();
                     if config.query.internal_enable_sandbox_tenant && !tenant.is_empty() {
                         UserApiProvider::try_create_simple(
-                            config.meta.to_meta_grpc_client_conf(),
+                            config
+                                .meta
+                                .to_meta_grpc_client_conf(&databend_common_version::BUILD_INFO),
                             &Tenant::new_or_err(tenant, func_name!())?,
                         )
                         .await?;
                     }
 
+                    self.set_settings(var.to_string(), scalar.clone(), is_global)
+                        .await?;
+                    true
+                }
+                "use_legacy_query_executor" => {
+                    // This is a fallback setting, allowing user to fallback from **queries** executor
+                    // to the **query** executor. So, if queries executor not enable in the config
+                    // we will return an error.
+                    // TODO: we will remove this setting when queries executor is stable.
+                    let config = GlobalConfig::instance();
+                    if !config.query.enable_queries_executor {
+                        return Err(
+                            ErrorCode::InvalidArgument("This setting is not allowed when queries executor is not enabled in the configuration"));
+                    }
+                    if scalar.as_str() == "0" {
+                        return Err(ErrorCode::InvalidArgument(
+                            "This setting is not allowed set to 0, if already enable in the configuration, please use unset to revert this",
+                        ));
+                    }
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
                     true
@@ -197,8 +223,16 @@ impl Interpreter for SetInterpreter {
                 datablock
                     .columns()
                     .iter()
-                    .map(|c| c.value.index(0).unwrap().to_owned())
-                    .collect()
+                    .map(|c| {
+                        c.index(0)
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(
+                                    "Failed to access first row of datablock column".to_string(),
+                                )
+                            })
+                            .map(|s| s.to_owned())
+                    })
+                    .collect::<Result<Vec<_>>>()?
             }
         };
 

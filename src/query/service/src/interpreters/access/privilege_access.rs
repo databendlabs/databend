@@ -17,8 +17,10 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
@@ -31,9 +33,10 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
@@ -43,9 +46,11 @@ use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
+use crate::history_tables::session::get_history_log_user;
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
@@ -153,10 +158,78 @@ impl PrivilegeAccess {
                 name: name.to_string(),
             },
             GrantObject::Warehouse(id) => OwnershipObject::Warehouse { id: id.to_string() },
+            GrantObject::Connection(name) => OwnershipObject::Connection {
+                name: name.to_string(),
+            },
+            GrantObject::Sequence(name) => OwnershipObject::Sequence {
+                name: name.to_string(),
+            },
             GrantObject::Global => return Ok(None),
         };
 
         Ok(Some(object))
+    }
+
+    fn access_system_history(
+        &self,
+        catalog_name: Option<&str>,
+        db_name: Option<&str>,
+        stage_name: Option<&str>,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        let cluster = self.ctx.get_cluster();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
+        let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
+        if get_history_log_user(tenant_id.tenant_name(), &cluster_id).identity()
+            == self.ctx.get_current_user()?.identity()
+        {
+            return Ok(());
+        }
+        match (catalog_name, db_name, stage_name) {
+            (Some(catalog_name), Some(db_name), None) => {
+                if catalog_name == CATALOG_DEFAULT
+                    && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
+                    && !matches!(
+                        privilege,
+                        UserPrivilegeType::Select | UserPrivilegeType::Drop
+                    )
+                {
+                    return Err(ErrorCode::PermissionDenied(
+                        format!(
+                            "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
+                            privilege
+                        ),
+                    ));
+                }
+            }
+            (None, None, Some(stage_name)) => {
+                let config = GlobalConfig::instance();
+                let sensitive_system_stage = config.log.history.stage_name.clone();
+
+                return if stage_name.eq_ignore_ascii_case(&sensitive_system_stage) {
+                    if let Some(current_role) = self.ctx.get_current_role() {
+                        if current_role.name == BUILTIN_ROLE_ACCOUNT_ADMIN {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                                privilege
+                            )))
+                        }
+                    } else {
+                        Err(ErrorCode::PermissionDenied(format!(
+                            "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                            privilege
+                        )))
+                    }
+                } else {
+                    Ok(())
+                };
+            }
+            _ => unreachable!(),
+        }
+
+        Ok(())
     }
 
     async fn validate_db_access(
@@ -166,6 +239,7 @@ impl PrivilegeAccess {
         privileges: UserPrivilegeType,
         if_exists: bool,
     ) -> Result<()> {
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privileges)?;
         let tenant = self.ctx.get_tenant();
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
@@ -227,7 +301,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -269,6 +343,8 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
+
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privilege)?;
 
         if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
@@ -432,6 +508,66 @@ impl PrivilegeAccess {
         }
     }
 
+    async fn validate_connection_access(
+        &self,
+        connection: String,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Connection(connection),
+            privilege,
+            false,
+            false,
+        )
+        .await
+    }
+
+    async fn validate_seq_access(&self, seq: String) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Sequence(seq),
+            UserPrivilegeType::AccessSequence,
+            false,
+            false,
+        )
+        .await
+    }
+
     async fn has_ownership(
         &self,
         session: &Arc<Session>,
@@ -496,6 +632,8 @@ impl PrivilegeAccess {
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::Warehouse(_)
+            | GrantObject::Connection(_)
+            | GrantObject::Sequence(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
         };
@@ -547,11 +685,13 @@ impl PrivilegeAccess {
                     GrantObject::Global
                     | GrantObject::UDF(_)
                     | GrantObject::Warehouse(_)
+                    | GrantObject::Connection(_)
+                    | GrantObject::Sequence(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -587,6 +727,9 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
+
+        // History Config has a inner stage, can not be operator by any user.
+        self.access_system_history(None, None, Some(&stage_info.stage_name), privilege)?;
 
         // Note: validate_stage_access is not used for validate Create Stage privilege
         self.validate_access(
@@ -728,6 +871,11 @@ impl AccessChecker for PrivilegeAccess {
             .ctx
             .get_settings()
             .get_enable_experimental_rbac_check()?;
+
+        let enable_seq_rbac_check = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?;
         let tenant = self.ctx.get_tenant();
         let ctl_name = self.ctx.get_current_catalog();
 
@@ -813,8 +961,7 @@ impl AccessChecker for PrivilegeAccess {
                         };
                     }
                     Some(RewriteKind::ShowSequences) => {
-                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                            .await?;
+                        // will check privilege in show_sequences_table
                     }
                     _ => {}
                 };
@@ -863,6 +1010,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
             }
+            Plan::ExplainPerf {..} => {}
 
             Plan::ReportIssue(_) => {}
 
@@ -1009,6 +1157,15 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::ModifyTableConnection(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::AddTableRowAccessPolicy(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropTableRowAccessPolicy(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::DropAllTableRowAccessPolicies(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableColumn(plan) => {
@@ -1211,6 +1368,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Set(plan) => {
                 use databend_common_ast::ast::SetType;
                 if let SetType::SettingsGlobal = plan.set_type {
+                    plan.idents.iter()
+                        .try_for_each(|setting| {
+                            if setting.eq_ignore_ascii_case("network_policy") && !self.ctx.get_current_user()?.is_account_admin() {
+                                return Err(ErrorCode::PermissionDenied("Permission Denied: Setting of network_policy is restricted to account_admin role".to_string()));
+                            }
+                            Ok(())
+                        })?;
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                         .await?;
                 }
@@ -1218,6 +1382,14 @@ impl AccessChecker for PrivilegeAccess {
             Plan::Unset(plan) => {
                 use databend_common_ast::ast::SetType;
                 if let SetType::SettingsGlobal = plan.unset_type {
+                    plan.vars.iter()
+                        .try_for_each(|setting| {
+                            if setting.eq_ignore_ascii_case("network_policy") && !self.ctx.get_current_user()?.is_account_admin() {
+                                    return Err(ErrorCode::PermissionDenied("Permission Denied: Setting of network_policy is restricted to account_admin role".to_string()));
+                            }
+                            Ok(())
+                            }
+                        )?;
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                         .await?;
                 }
@@ -1251,6 +1423,52 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
+            // Connection
+            Plan::CreateConnection(_) => {
+                let super_privilege_check_result = self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await;
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_connection_privilege_check()?
+                {
+                    return super_privilege_check_result;
+                }
+                if super_privilege_check_result.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
+                        .await?
+                }
+            }
+            Plan::DescConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::DropConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::CreateSequence(_) => {
+                let super_privilege_check_result = self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await;
+                if !enable_seq_rbac_check
+                {
+                    return super_privilege_check_result;
+                }
+                if super_privilege_check_result.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false)
+                        .await?
+                }
+            }
+            Plan::DescSequence(plan) => {
+                self.validate_seq_access(plan.ident.name().to_string())
+                    .await?;
+            }
+            Plan::DropSequence(plan) => {
+                self.validate_seq_access(plan.ident.name().to_string())
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -1267,10 +1485,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterPasswordPolicy(_)
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
-            | Plan::CreateConnection(_)
-            | Plan::ShowConnections(_)
-            | Plan::DescConnection(_)
-            | Plan::DropConnection(_)
             | Plan::CreateIndex(_)
             | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
@@ -1278,15 +1492,15 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
             | Plan::DescUser(_)
+            | Plan::CreateRowAccessPolicy(_)
+            | Plan::DropRowAccessPolicy(_)
+            | Plan::DescRowAccessPolicy(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_)
-            | Plan::CreateSequence(_)
-            | Plan::DescSequence(_)
-            | Plan::DropSequence(_) => {
+            | Plan::AlterTask(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1327,6 +1541,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ShowConnections(_) => {}
             Plan::ShowWarehouses => {
                 // check privilege in interpreter
             }
@@ -1425,7 +1640,9 @@ fn check_db_tb_ownership_access(
                 }
                 OwnershipObject::UDF { .. }
                 | OwnershipObject::Stage { .. }
-                | OwnershipObject::Warehouse { .. } => {}
+                | OwnershipObject::Warehouse { .. }
+                | OwnershipObject::Connection { .. }
+                | OwnershipObject::Sequence { .. } => {}
             }
         }
     }

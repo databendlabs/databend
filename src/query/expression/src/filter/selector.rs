@@ -424,7 +424,7 @@ impl<'a> Selector<'a> {
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
-        let column = self.evaluator.data_block().get_by_offset(id).value.clone();
+        let column = self.evaluator.data_block().get_by_offset(id).value();
         self.select_value(column, data_type, buffers, has_false)
     }
 

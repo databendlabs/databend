@@ -13,5 +13,5 @@
 <<<<
 >>>> curl Q5: {"sql": "select 1", "pagination": { "wait_time_secs": 2}, "session": {"txn_state": "Active"}} | jq .session.txn_state, .error.code
 "Fail"
-4004
+5112
 <<<<

@@ -18,26 +18,31 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::assert_params;
+use super::assert_variadic_arguments;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregator_common::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 struct AggregateCountState {
     count: u64,
@@ -51,10 +56,11 @@ pub struct AggregateCountFunction {
 impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
-        _params: Vec<Scalar>,
+        params: Vec<Scalar>,
         arguments: Vec<DataType>,
         _sort_descs: Vec<AggregateFunctionSortDesc>,
     ) -> Result<Arc<dyn AggregateFunction>> {
+        assert_params(display_name, params.len(), 0)?;
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateCountFunction {
             display_name: display_name.to_string(),
@@ -62,7 +68,7 @@ impl AggregateCountFunction {
     }
 
     pub fn desc() -> AggregateFunctionDescription {
-        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        let features = super::AggregateFunctionFeatures {
             returns_default_when_only_null: true,
             is_decomposable: true,
             ..Default::default()
@@ -93,7 +99,7 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -101,7 +107,7 @@ impl AggregateFunction for AggregateCountFunction {
         let nulls = if columns.is_empty() {
             validity.map(|v| v.null_count()).unwrap_or(0)
         } else {
-            match &columns[0] {
+            match &columns[0].to_column() {
                 Column::Nullable(c) => validity
                     .map(|v| v & (&c.validity))
                     .unwrap_or_else(|| c.validity.clone())
@@ -117,12 +123,12 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let validity = columns
             .iter()
-            .fold(None, |acc, col| column_merge_validity(col, acc));
+            .fold(None, |acc, col| column_merge_validity(&col.clone(), acc));
 
         match validity {
             Some(v) => {
@@ -149,21 +155,55 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(
+        &self,
+        place: AggrState,
+        _columns: ProjectedBlock,
+        _row: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        borsh_serialize_state(writer, &state.count)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::DataType(UInt64Type::data_type())]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        let other: u64 = borsh_deserialize_state(reader)?;
-        state.count += other;
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let mut builder = UInt64Type::downcast_builder(&mut builders[0]);
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+            builder.push(state.count);
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<UInt64Type>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+        if let Some(filter) = filter {
+            for (place, other) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+                state.count += other;
+            }
+        } else {
+            for (place, other) in iter {
+                let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+                state.count += other;
+            }
+        }
         Ok(())
     }
 
@@ -192,7 +232,12 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 let state = place.get::<AggregateCountState>();

@@ -176,6 +176,40 @@ impl PhysicalPlan {
                     children,
                 ))
             }
+            PhysicalPlan::MaterializedCTE(plan) => {
+                let input = plan.input.format_join(metadata)?;
+                let children = vec![
+                    FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
+                    FormatTreeNode::new(format!("ref_count: {}", plan.ref_count)),
+                    input,
+                ];
+                Ok(FormatTreeNode::with_children(
+                    format!("MaterializedCTE"),
+                    children,
+                ))
+            }
+            PhysicalPlan::MaterializeCTERef(plan) => {
+                let children = vec![
+                    FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
+                    FormatTreeNode::new(format!(
+                        "cte_schema: [{}]",
+                        format_output_columns(plan.cte_schema.clone(), &metadata.read(), false)
+                    )),
+                ];
+                Ok(FormatTreeNode::with_children(
+                    "MaterializeCTERef".to_string(),
+                    children,
+                ))
+            }
+            PhysicalPlan::Sequence(plan) => {
+                let left = plan.left.format_join(metadata)?;
+                let right = plan.right.format_join(metadata)?;
+                let children = vec![left, right];
+                Ok(FormatTreeNode::with_children(
+                    "Sequence".to_string(),
+                    children,
+                ))
+            }
             other => {
                 let children = other
                     .children()
@@ -526,6 +560,47 @@ fn to_format_tree(
         }
         PhysicalPlan::BroadcastSink(_plan) => {
             Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
+        }
+        PhysicalPlan::MaterializedCTE(plan) => {
+            let mut children = Vec::new();
+            append_profile_info(&mut children, profs, plan.plan_id);
+            children.push(to_format_tree(&plan.input, metadata, profs, context)?);
+            Ok(FormatTreeNode::with_children(
+                format!("MaterializedCTE: {}", plan.cte_name),
+                children,
+            ))
+        }
+        PhysicalPlan::MaterializeCTERef(plan) => {
+            let mut children = Vec::new();
+            children.push(FormatTreeNode::new(format!(
+                "cte_name: {}",
+                plan.cte_name.clone()
+            )));
+            children.push(FormatTreeNode::new(format!(
+                "cte_schema: [{}]",
+                format_output_columns(plan.cte_schema.clone(), metadata, false)
+            )));
+
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+
+            append_profile_info(&mut children, profs, plan.plan_id);
+            Ok(FormatTreeNode::with_children(
+                "MaterializeCTERef".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::Sequence(plan) => {
+            let mut children = Vec::new();
+            append_profile_info(&mut children, profs, plan.plan_id);
+            children.push(to_format_tree(&plan.left, metadata, profs, context)?);
+            children.push(to_format_tree(&plan.right, metadata, profs, context)?);
+            Ok(FormatTreeNode::with_children(
+                "Sequence".to_string(),
+                children,
+            ))
         }
     }
 }
@@ -1321,6 +1396,10 @@ fn sort_to_format_tree(
         FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
     ];
 
+    if let Some(id) = plan.broadcast_id {
+        children.push(FormatTreeNode::new(format!("broadcast id: {id}")));
+    }
+
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -1335,7 +1414,10 @@ fn sort_to_format_tree(
         context,
     )?);
 
-    Ok(FormatTreeNode::with_children("Sort".to_string(), children))
+    Ok(FormatTreeNode::with_children(
+        format!("Sort({})", plan.step),
+        children,
+    ))
 }
 
 fn window_partition_to_format_tree(
@@ -1587,8 +1669,21 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
-        FormatTreeNode::with_children(format!("build join filters:"), build_runtime_filters),
     ];
+
+    if !build_runtime_filters.is_empty() {
+        if plan.broadcast_id.is_some() {
+            children.push(FormatTreeNode::with_children(
+                format!("build join filters(distributed):"),
+                build_runtime_filters,
+            ));
+        } else {
+            children.push(FormatTreeNode::with_children(
+                format!("build join filters:"),
+                build_runtime_filters,
+            ));
+        }
+    }
 
     if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
         let mut column_indexes = column_map.keys().collect::<Vec<_>>();
@@ -1718,6 +1813,18 @@ fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<S
             "inverted pruning: {} to {}",
             info.pruning_stats.blocks_inverted_index_pruning_before,
             info.pruning_stats.blocks_inverted_index_pruning_after
+        );
+    }
+
+    // vector index pruning status.
+    if info.pruning_stats.blocks_vector_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "vector pruning: {} to {}",
+            info.pruning_stats.blocks_vector_index_pruning_before,
+            info.pruning_stats.blocks_vector_index_pruning_after
         );
     }
 

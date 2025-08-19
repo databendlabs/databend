@@ -1,0 +1,76 @@
+statement ok
+create or replace table t1(id int, name string)
+
+statement ok
+remove @data/unload/upload.test/
+
+# case 1: no values clause
+
+statement ok
+copy into @data/unload/upload.test/case1/ from (select 1, 'a') file_format=(type=csv);
+
+statement ok
+insert into t1 from @data/unload/upload.test/case1 file_format=(type='csv')
+
+query 
+select *  from t1
+----
+1 a
+
+query 
+list @data/unload/upload.test/
+----
+
+statement ok
+truncate table t1
+
+# case 2: only values key words, for compatibility
+
+statement ok
+copy into @data/unload/upload.test/case2/ from (select 2, 'a') file_format=(type=csv);
+
+statement ok
+insert into t1 VALUES from @data/unload/upload.test/case2 file_format=(type='csv')
+
+query
+select *  from t1
+----
+2 a
+
+query
+list @data/unload/upload.test/case1
+----
+
+statement ok
+truncate table t1
+
+# case 3: values with placeholders
+
+statement ok
+copy into @data/unload/upload.test/case3/ from (select 'a') file_format=(type=csv);
+
+statement ok
+insert into t1 VALUES (3, ?) from @data/unload/upload.test/case3 file_format=(type='csv')
+
+query
+select *  from t1
+----
+3 a
+
+query
+list @data/unload/upload.test/case1
+----
+
+statement ok
+truncate table t1
+
+# case 4: error if _databend_load not used in streaming load handler
+
+statement error reserved
+create stage _databend_load;
+
+statement error placeholder
+insert into t1 from @_databend_load file_format=(type='csv')
+
+statement error placeholder
+list @_databend_load

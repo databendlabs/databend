@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
@@ -23,6 +25,7 @@ use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -31,23 +34,27 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::With;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -66,7 +73,7 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
-    ownership_cache: Arc<Mutex<Cache>>,
+    ownership_cache: Option<Arc<Mutex<Cache>>>,
     upgrade_to_pb: bool,
 }
 
@@ -75,7 +82,7 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
         upgrade_to_pb: bool,
-        ownership_cache: Arc<Mutex<Cache>>,
+        ownership_cache: Option<Arc<Mutex<Cache>>>,
     ) -> Self {
         RoleMgr {
             kv_api,
@@ -172,23 +179,28 @@ impl RoleMgr {
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
-        let match_seq = MatchSeq::Exact(0);
-        let key = self.role_ident(role_info.identity()).to_string_key();
-        let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+    async fn add_role(
+        &self,
+        info: RoleInfo,
+        can_replace: bool,
+    ) -> Result<Result<(), ExistError<role_ident::Resource>>, MetaError> {
+        let seq = if can_replace {
+            MatchSeq::GE(0)
+        } else {
+            MatchSeq::Exact(0)
+        };
 
-        let upsert_kv = self.kv_api.upsert_kv(UpsertKV::new(
-            &key,
-            match_seq,
-            Operation::Update(value),
-            None,
-        ));
+        let key = RoleIdent::new(&self.tenant, &info.name);
+        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
 
-        let res_seq = upsert_kv.await?.added_seq_or_else(|_v| {
-            ErrorCode::RoleAlreadyExists(format!("Role '{}' already exists.", role_info.name))
-        })?;
+        if !can_replace && res.prev.is_some() {
+            return Ok(Err(
+                RoleIdent::new(&self.tenant, &info.name).exist_error(func_name!())
+            ));
+        }
 
-        Ok(res_seq)
+        Ok(Ok(()))
     }
 
     #[async_backtrace::framed]
@@ -237,7 +249,7 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
-        Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
+        Ok(self.kv_api.list_kv_collect(role_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
@@ -246,31 +258,35 @@ impl RoleApi for RoleMgr {
         let object_owner_prefix = self.ownership_object_prefix();
 
         let cached = {
-            let mut cache = self.ownership_cache.lock().await;
-            let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
+            if let Some(ownership_cache) = &self.ownership_cache {
+                let mut cache = ownership_cache.lock().await;
+                let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
 
-            match &kvs {
-                Ok(kvs) => {
-                    info!(
+                match &kvs {
+                    Ok(kvs) => {
+                        info!(
                         "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
                         kvs.len(),
                         kvs.first().map(|(k, _)| k),
                         kvs.last().map(|(k, _)| k),
                     );
+                    }
+                    Err(err) => {
+                        warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
+                    }
                 }
-                Err(err) => {
-                    warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
-                }
-            }
 
-            kvs.ok()
+                kvs.ok()
+            } else {
+                None
+            }
         };
 
         let values = if let Some(kvs) = cached {
             kvs
         } else {
             self.kv_api
-                .prefix_list_kv(object_owner_prefix.as_str())
+                .list_kv_collect(object_owner_prefix.as_str())
                 .await?
         };
 
@@ -292,6 +308,80 @@ impl RoleApi for RoleMgr {
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_udf_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::UDF {
+            name: "foo".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let udfs = values.try_collect().await?;
+        Ok(udfs)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_stage_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Stage {
+            name: "s1".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let stages = values.try_collect().await?;
+        Ok(stages)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_seq_ownerships(&self) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Sequence {
+            name: "seq1".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let seqs = values.try_collect().await?;
+        Ok(seqs)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_connection_ownerships(
+        &self,
+    ) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Connection {
+            name: "con".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let conns = values.try_collect().await?;
+        Ok(conns)
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    async fn list_warehouse_ownerships(
+        &self,
+    ) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
+        let obj = OwnershipObject::Warehouse {
+            id: "w".to_string(),
+        };
+
+        let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
+        let dir_name = DirName::new(ident);
+        let values = self.kv_api.list_pb_values(&dir_name).await?;
+        let ws = values.try_collect().await?;
+        Ok(ws)
     }
 
     /// General role update.
@@ -562,6 +652,8 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
         OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
+        OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
+        OwnershipObject::Sequence { name } => GrantObject::Sequence(name.to_string()),
     }
 }
 

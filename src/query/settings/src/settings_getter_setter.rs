@@ -15,6 +15,7 @@
 use std::str::FromStr;
 
 use databend_common_ast::parser::Dialect;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
@@ -187,9 +188,18 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    pub fn get_max_block_bytes(&self) -> Result<u64> {
+        self.try_get_u64("max_block_bytes")
+    }
+
     // Set max_block_size.
     pub fn set_max_block_size(&self, val: u64) -> Result<()> {
         self.try_set_u64("max_block_size", val)
+    }
+
+    // Get sequence_step_size.
+    pub fn get_sequence_step_size(&self) -> Result<u64> {
+        self.try_get_u64("sequence_step_size")
     }
 
     // Max block size for parquet reader
@@ -506,8 +516,16 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
+    pub fn get_enable_shuffle_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_shuffle_sort")? == 1)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
+    }
+
+    pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
+        Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
 
     pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
@@ -542,6 +560,22 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
+    pub fn get_enable_experimental_row_access_policy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
+    }
+
+    pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_connection_privilege_check")? != 0)
+    }
+
+    pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_sequence_privilege_check")? != 0)
+    }
+
+    pub fn get_enable_collect_column_statistics(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_collect_column_statistics")? != 0)
+    }
+
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_expand_roles")? != 0)
     }
@@ -554,9 +588,17 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    /// # Safety
-    pub unsafe fn get_enterprise_license(&self) -> Result<String> {
-        self.unchecked_try_get_string("enterprise_license")
+    pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
+        let license = unsafe {
+            self.unchecked_try_get_string("enterprise_license")
+                .unwrap_or_default()
+        };
+        if license.is_empty() {
+            // Try load license from embedded env if failed to load from settings.
+            version.embedded_license.clone()
+        } else {
+            license
+        }
     }
 
     /// # Safety
@@ -782,8 +824,8 @@ impl Settings {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
 
-    pub fn get_enable_experimental_queries_executor(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_queries_executor")? == 1)
+    pub fn get_use_legacy_query_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
     }
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
@@ -831,12 +873,26 @@ impl Settings {
         Ok(self.try_get_u64("random_function_seed")? == 1)
     }
 
+    pub fn get_enable_selector_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_selector_executor")? == 1)
+    }
+
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
         self.try_get_u64("dynamic_sample_time_budget_ms")
     }
 
     pub fn get_max_spill_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_spill_io_requests")
+    }
+
+    // Get grouping_sets_channel_size.
+    pub fn get_grouping_sets_channel_size(&self) -> Result<u64> {
+        self.try_get_u64("grouping_sets_channel_size")
+    }
+
+    // Set grouping_sets_channel_size.
+    pub fn set_grouping_sets_channel_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("grouping_sets_channel_size", val)
     }
 
     pub fn get_short_sql_max_length(&self) -> Result<u64> {
@@ -990,5 +1046,17 @@ impl Settings {
 
     pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_restore_worker")
+    }
+
+    pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
+    }
+
+    pub fn get_enforce_local(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_local")? == 1)
+    }
+
+    pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
     }
 }

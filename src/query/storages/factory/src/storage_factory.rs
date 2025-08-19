@@ -21,13 +21,13 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_storages_basic::view_table::ViewTable;
+use databend_common_storages_basic::MemoryTable;
+use databend_common_storages_basic::NullTable;
+use databend_common_storages_basic::RandomTable;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
-use databend_common_storages_memory::MemoryTable;
-use databend_common_storages_null::NullTable;
-use databend_common_storages_random::RandomTable;
 use databend_common_storages_stream::stream_table::StreamTable;
-use databend_common_storages_view::view_table::ViewTable;
 
 use crate::fuse::FuseTable;
 use crate::Table;

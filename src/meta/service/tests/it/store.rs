@@ -197,7 +197,10 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.blocking_append(logs.clone()).await?;
-    sto.state_machine.write().await.apply_entries(logs).await?;
+    sto.get_state_machine_write("test_meta_store_build_snapshot")
+        .await
+        .apply_entries(logs)
+        .await?;
 
     let curr_snap = sto.build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -246,7 +249,9 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     sto.blocking_append(logs.clone()).await?;
     {
-        let mut sm = sto.state_machine.write().await;
+        let mut sm = sto
+            .get_state_machine_write("test_meta_store_current_snapshot")
+            .await;
         sm.apply_entries(logs).await?;
     }
 
@@ -290,7 +295,10 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.blocking_append(logs.clone()).await?;
-        sto.state_machine.write().await.apply_entries(logs).await?;
+        sto.get_state_machine_write("test_meta_store_install_snapshot")
+            .await
+            .apply_entries(logs)
+            .await?;
 
         snap = sto.build_snapshot().await?;
     }
@@ -311,8 +319,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- check installed meta");
         {
             let mem = sto
-                .state_machine
-                .write()
+                .get_state_machine_write("test_meta_store_install_snapshot")
                 .await
                 .sys_data_ref()
                 .last_membership_ref()
@@ -327,8 +334,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             );
 
             let last_applied = *sto
-                .state_machine
-                .write()
+                .get_state_machine_write("test_meta_store_install_snapshot")
                 .await
                 .sys_data_ref()
                 .last_applied_ref();

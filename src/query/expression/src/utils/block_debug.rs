@@ -214,7 +214,7 @@ fn create_box_table(
 
             let mut v = vec![];
             for block_entry in block.columns() {
-                let value = block_entry.value.index(row).unwrap().to_string();
+                let value = block_entry.index(row).unwrap().to_string();
                 if replace_newline {
                     v.push(value.to_string().replace('\n', "\\n"));
                 } else {

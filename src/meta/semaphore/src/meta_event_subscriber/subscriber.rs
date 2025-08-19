@@ -124,7 +124,7 @@ impl MetaEventSubscriber {
 
             match &watch_result {
                 Ok(t) => {
-                    info!(
+                    log::debug!(
                         "{} received event from watch-stream: Ok({})",
                         self.ctx,
                         t.display()

@@ -89,6 +89,9 @@ impl Endpoints {
         self.nodes.keys()
     }
 
+    /// Set the current active to the specified one.
+    ///
+    /// Returns the previous one.
     pub fn set_current(
         &mut self,
         current: Option<impl ToString>,

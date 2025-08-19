@@ -159,6 +159,20 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (127, "2025-05-18: Add: UserOption::workload_group"),
     (128, "2025-05-22: Add: Storage Network config"),
     (129, "2025-05-30: Add: New DataType Vector"),
+    (130, "2025-06-19: Add: New UDF imports and packages in udf definition"),
+    (131, "2025-06-24: Add: add use_logic_type in ParquetFileFormatParam and AvroFileFormatParam"),
+    (132, "2025-06-25: Remove: SequenceMeta.start"),
+    (133, "2025-06-25: Add: Add new StageFileCompression Zip"),
+    (134, "2025-06-27: Add: SequenceMeta.storage_version"),
+    (135, "2025-07-16: Add: UDFServer.immutable, UDFScript.immutable"),
+    (136, "2025-07-17: Add: Task"),
+    (137, "2025-07-22: Add: GrantConnectionObject and UserPrivilegeType AccessConnection, AccessConnection"),
+    (138, "2025-07-23: Add: TableStatistics add index size"),
+    (139, "2025-07-25: Add: Grant/OwnershipSequenceObject and UserPrivilegeType AccessSequence, AccessSequence"),
+    (140, "2025-07-24: Add: TaskMessage::Delete add WarehouseOptions"),
+    (141, "2025-08-06: Add: row_access.proto"),
+    (142, "2025-08-15: Add: table_meta add row_access_policy"),
+    (143, "2025-08-18: Add: add UDTF"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

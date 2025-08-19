@@ -1,4 +1,8 @@
 query
+select * from infer_schema(location => '@data/invalid_xxx/tuple.parquet')
+----
+
+query
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
 id INT 0 0

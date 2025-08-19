@@ -55,7 +55,7 @@ impl AccumulatingTransform for BlockBuilderProcessor {
         self.state.file_path = data.path.clone();
         let num_rows = self.state.num_rows;
         self.state.file_full_path = format!("{}{}", self.ctx.stage_root, data.path);
-        self.decoder.add(&mut self.state, data)?;
+        self.decoder.read_file(&data.data, &mut self.state)?;
         self.state
             .add_internals_columns_batch(self.state.num_rows - num_rows);
 

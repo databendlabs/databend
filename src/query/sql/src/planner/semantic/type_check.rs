@@ -56,6 +56,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -70,15 +71,18 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
-use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
-use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::vector::VectorDataType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
+use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -90,6 +94,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::ASYNC_FUNCTIONS;
@@ -99,6 +104,8 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
@@ -108,7 +115,9 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -118,6 +127,8 @@ use itertools::Itertools;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
+use serde_json::json;
+use serde_json::to_string;
 use simsearch::SimSearch;
 use unicase::Ascii;
 
@@ -125,6 +136,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
+use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::ExprContext;
@@ -179,6 +191,9 @@ use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+
+const DEFAULT_DECIMAL_PRECISION: i64 = 38;
+const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 /// A helper for type checking.
 ///
@@ -1956,11 +1971,11 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             DataType::Decimal(s) if s.can_carried_by_128() => {
-                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(i128::MAX_PRECISION, s.scale());
                 DataType::Decimal(decimal_size)
             }
             DataType::Decimal(s) => {
-                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(i256::MAX_PRECISION, s.scale());
                 DataType::Decimal(decimal_size)
             }
             DataType::Null => DataType::Null,
@@ -2239,9 +2254,7 @@ impl<'a> TypeChecker<'a> {
                 let lambda_schema = DataSchema::new(lambda_fields);
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
-                    .project_column_ref(|index| {
-                        lambda_schema.index_of(&index.to_string()).unwrap()
-                    });
+                    .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
@@ -2699,6 +2712,9 @@ impl<'a> TypeChecker<'a> {
         let mut index_schema = None;
         let mut index_options = BTreeMap::new();
         for table_index in table_indexes.values() {
+            if table_index.index_type != TableIndexType::Inverted {
+                continue;
+            }
             if column_ids
                 .iter()
                 .all(|id| table_index.column_ids.contains(id))
@@ -2867,9 +2883,9 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewritten_func_result) =
-            self.try_rewrite_sugar_function(span, func_name, arguments)
-        {
+        if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
+            self.try_rewrite_sugar_function(span, func_name, arguments),
+        ) {
             return rewritten_func_result;
         }
 
@@ -2887,6 +2903,27 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
 
+        if let Some(rewritten_variant_expr) =
+            self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
+        {
+            return rewritten_variant_expr;
+        }
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &args)
+        {
+            return rewritten_vector_expr;
+        }
+
+        self.resolve_scalar_function_call(span, func_name, params, args)
+    }
+
+    pub fn resolve_scalar_function_call(
+        &self,
+        span: Span,
+        func_name: &str,
+        mut params: Vec<Scalar>,
+        mut args: Vec<ScalarExpr>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self
@@ -2899,43 +2936,8 @@ impl<'a> TypeChecker<'a> {
             Self::rewrite_substring(&mut args);
         }
 
-        if func_name == "grouping" {
-            // `grouping` will be rewritten again after resolving grouping sets.
-            return Ok(Box::new((
-                ScalarExpr::FunctionCall(FunctionCall {
-                    span,
-                    params: vec![],
-                    arguments: args,
-                    func_name: "grouping".to_string(),
-                }),
-                DataType::Number(NumberDataType::UInt32),
-            )));
-        }
-
-        if let Some(rewritten_func_func) =
-            self.try_rewrite_array_function(span, func_name, &params, &mut args, &mut arg_types)
-        {
-            return rewritten_func_func;
-        }
-        if let Some(rewritten_variant_expr) =
-            self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
-        {
-            return rewritten_variant_expr;
-        }
-
-        self.resolve_scalar_function_call(span, func_name, params, args)
-    }
-
-    pub fn resolve_scalar_function_call(
-        &self,
-        span: Span,
-        func_name: &str,
-        mut params: Vec<Scalar>,
-        args: Vec<ScalarExpr>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
-
         // inject the params
         if ["round", "truncate"].contains(&func_name)
             && !args.is_empty()
@@ -2993,7 +2995,7 @@ impl<'a> TypeChecker<'a> {
                         params[0]
                     )));
                 };
-                if precision < 0 || precision > MAX_DECIMAL256_PRECISION as i64 {
+                if precision < 0 || precision > i256::MAX_PRECISION as i64 {
                     return Err(ErrorCode::SemanticError(format!(
                         "Invalid value `{precision}` for `{func_name}` precision parameter"
                     )));
@@ -3012,6 +3014,61 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
+        } else if (func_name.eq_ignore_ascii_case("to_number")
+            || func_name.eq_ignore_ascii_case("to_numeric")
+            || func_name.eq_ignore_ascii_case("to_decimal")
+            || func_name.eq_ignore_ascii_case("try_to_number")
+            || func_name.eq_ignore_ascii_case("try_to_numeric")
+            || func_name.eq_ignore_ascii_case("try_to_decimal"))
+            && params.is_empty()
+        {
+            if args.is_empty() || args.len() > 4 {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, get {} params and {} arguments",
+                    params.len(),
+                    arguments.len()
+                )));
+            }
+            let func_ctx = self.ctx.get_function_context()?;
+            let arg_fn = |args: &[ScalarExpr],
+                          index: usize,
+                          arg_name: &str,
+                          default: i64|
+             -> Result<i64> {
+                Ok(args.get(index).map(|arg| {
+                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                        databend_common_expression::Expr::Constant(Constant {
+                                                                       scalar,
+                                                                       ..
+                                                                   }) => Ok(scalar.get_i64()),
+                        _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
+                    }
+                }).transpose()?.flatten().unwrap_or(default))
+            };
+
+            let (precision_index, scale_index) =
+                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                    (2, 3)
+                } else {
+                    (1, 2)
+                };
+            let precision = arg_fn(
+                &args,
+                precision_index,
+                "precision",
+                DEFAULT_DECIMAL_PRECISION,
+            )?;
+            let scale = arg_fn(&args, scale_index, "scale", DEFAULT_DECIMAL_SCALE)?;
+
+            if let Err(err) = DecimalSize::new(precision as u8, scale as u8) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, {}",
+                    err,
+                )));
+            }
+
+            params.push(Scalar::Number(NumberScalar::Int64(precision as _)));
+            params.push(Scalar::Number(NumberScalar::Int64(scale as _)));
         }
 
         let raw_expr = RawExpr::FunctionCall {
@@ -3283,7 +3340,12 @@ impl<'a> TypeChecker<'a> {
         let func_name = match is_diff {
             Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
             Expr::DateSub { .. } | Expr::DateAdd { .. } => {
-                format!("add_{}s", interval_kind.to_string().to_lowercase())
+                let interval_kind = interval_kind.to_string().to_lowercase();
+                if interval_kind == "month" {
+                    format!("date_add_{}s", interval_kind.to_string().to_lowercase())
+                } else {
+                    format!("add_{}s", interval_kind.to_string().to_lowercase())
+                }
             }
             Expr::DateBetween { .. } => {
                 format!("between_{}s", interval_kind.to_string().to_lowercase())
@@ -3552,7 +3614,10 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("currentuser"),
             Ascii::new("current_user"),
             Ascii::new("current_role"),
+            Ascii::new("current_secondary_roles"),
+            Ascii::new("current_available_roles"),
             Ascii::new("connection_id"),
+            Ascii::new("client_session_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
             Ascii::new("iff"),
@@ -3575,11 +3640,16 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
+            Ascii::new("equal_null"),
+            Ascii::new("hex_decode_string"),
+            Ascii::new("base64_decode_string"),
+            Ascii::new("try_hex_decode_string"),
+            Ascii::new("try_base64_decode_string"),
         ];
         FUNCTIONS
     }
 
-    fn try_rewrite_sugar_function(
+    async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -3618,9 +3688,69 @@ impl<'a> TypeChecker<'a> {
                     ),
                 }),
             ),
+            ("current_secondary_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_effective_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                let roles_comma_separated_string = res.iter().join(",");
+                let res = if self.ctx.get_secondary_roles().is_none() {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "ALL"
+                    })
+                } else {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "None"
+                    })
+                };
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize secondary roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
+            ("current_available_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_available_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize available roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_connection_id()),
+            })),
+            ("client_session_id", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(
+                    self.ctx.get_current_client_session_id().unwrap_or_default(),
+                ),
             })),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
@@ -3644,6 +3774,49 @@ impl<'a> TypeChecker<'a> {
                     },
                     arg_x,
                 ]))
+            }
+            ("equal_null", &[arg_x, arg_y]) => {
+                // Rewrite equal_null(x, y) to ifnull(x = y, false) or (x is null and y is null)
+                let eq_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::Eq,
+                    left: Box::new(arg_x.clone()),
+                    right: Box::new(arg_y.clone()),
+                };
+                let ifnull_expr = Expr::FunctionCall {
+                    span,
+                    func: ASTFunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(span, "ifnull"),
+                        args: vec![eq_expr, Expr::Literal {
+                            span,
+                            value: Literal::Boolean(false),
+                        }],
+                        params: vec![],
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+
+                let is_null_x = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_x.clone()),
+                    not: false,
+                };
+                let is_null_y = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_y.clone()),
+                    not: false,
+                };
+                let and_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::And,
+                    left: Box::new(is_null_x),
+                    right: Box::new(is_null_y),
+                };
+
+                Some(self.resolve_function(span, "or", vec![], &[&ifnull_expr, &and_expr]))
             }
             ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {
@@ -4130,92 +4303,37 @@ impl<'a> TypeChecker<'a> {
                     Some(self.resolve_map_access(span, expr, paths))
                 }
             }
-            _ => None,
-        }
-    }
-
-    fn array_functions() -> &'static [Ascii<&'static str>] {
-        static ARRAY_FUNCTIONS: &[Ascii<&'static str>] = &[
-            Ascii::new("array_count"),
-            Ascii::new("array_max"),
-            Ascii::new("array_min"),
-            Ascii::new("array_any"),
-            Ascii::new("array_approx_count_distinct"),
-            Ascii::new("array_unique"),
-            Ascii::new("array_sort_asc_null_first"),
-            Ascii::new("array_sort_desc_null_first"),
-            Ascii::new("array_sort_asc_null_last"),
-            Ascii::new("array_sort_desc_null_last"),
-            Ascii::new("array_remove_first"),
-            Ascii::new("array_remove_last"),
-            Ascii::new("array_distinct"),
-        ];
-        ARRAY_FUNCTIONS
-    }
-
-    fn try_rewrite_array_function(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        params: &[Scalar],
-        args: &mut [ScalarExpr],
-        arg_types: &mut [DataType],
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        // Try auto cast the Variant type to Array(Variant),
-        // so that the array functions support Variant type as argument.
-        let uni_case_func_name = Ascii::new(func_name);
-        if Self::array_functions().contains(&uni_case_func_name)
-            && !arg_types.is_empty()
-            && arg_types[0].remove_nullable() == DataType::Variant
-        {
-            let target_type = if arg_types[0].is_nullable() {
-                DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Nullable(
-                    Box::new(DataType::Variant),
-                )))))
-            } else {
-                DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Variant))))
-            };
-            let arg = args[0].clone();
-            args[0] = ScalarExpr::CastExpr(CastExpr {
-                span: None,
-                is_try: false,
-                argument: Box::new(arg),
-                target_type: Box::new(target_type.clone()),
-            });
-            arg_types[0] = target_type;
-
-            let result =
-                self.resolve_scalar_function_call(span, func_name, params.to_vec(), args.to_vec());
-            if func_name == "array_remove_first"
-                || func_name == "array_remove_last"
-                || func_name == "array_distinct"
-                || func_name == "array_sort_asc_null_first"
-                || func_name == "array_sort_desc_null_first"
-                || func_name == "array_sort_asc_null_last"
-                || func_name == "array_sort_desc_null_last"
+            (func_name, &[expr])
+                if matches!(
+                    func_name,
+                    "hex_decode_string"
+                        | "try_hex_decode_string"
+                        | "base64_decode_string"
+                        | "try_base64_decode_string"
+                ) =>
             {
-                if result.is_err() {
-                    return Some(result);
-                }
-                let box (result_scalar, result_type) = result.unwrap();
-
-                let result_target_type = if result_type.is_nullable() {
-                    DataType::Nullable(Box::new(DataType::Variant))
-                } else {
-                    DataType::Variant
-                };
-                let result_target_scalar = ScalarExpr::CastExpr(CastExpr {
-                    span: None,
-                    is_try: false,
-                    argument: Box::new(result_scalar),
-                    target_type: Box::new(result_target_type.clone()),
-                });
-                Some(Ok(Box::new((result_target_scalar, result_target_type))))
-            } else {
-                Some(result)
+                Some(self.resolve(&Expr::Cast {
+                    span,
+                    expr: Box::new(Expr::FunctionCall {
+                        span,
+                        func: ASTFunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(
+                                span,
+                                func_name.replace("_string", "_binary"),
+                            ),
+                            args: vec![expr.clone()],
+                            params: vec![],
+                            order_by: vec![],
+                            window: None,
+                            lambda: None,
+                        },
+                    }),
+                    target_type: TypeName::String,
+                    pg_style: false,
+                }))
             }
-        } else {
-            None
+            _ => None,
         }
     }
 
@@ -4281,6 +4399,191 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     return Some(Ok(Box::new((scalar, data_type))));
                 }
+            }
+        }
+        None
+    }
+
+    fn vector_functions() -> &'static [Ascii<&'static str>] {
+        static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("cosine_distance"),
+            Ascii::new("l1_distance"),
+            Ascii::new("l2_distance"),
+        ];
+        VECTOR_FUNCTIONS
+    }
+
+    fn try_rewrite_vector_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[ScalarExpr],
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        // Try rewrite vector distance function to vector score internal column,
+        // so that the vector index can be used to accelerate the query.
+        let uni_case_func_name = Ascii::new(func_name);
+        if Self::vector_functions().contains(&uni_case_func_name) {
+            match args {
+                [ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                }), ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                })]
+                | [ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                }), ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                })] => {
+                    let col_data_type = data_type.remove_nullable();
+                    let target_type = target_type.remove_nullable();
+                    if table_index.is_some()
+                        && matches!(col_data_type, DataType::Vector(_))
+                        && matches!(&**argument, ScalarExpr::ConstantExpr(_))
+                        && matches!(&target_type, DataType::Vector(_))
+                        && LicenseManagerSwitch::instance()
+                            .check_enterprise_enabled(
+                                self.ctx.get_license_key(),
+                                Feature::VectorIndex,
+                            )
+                            .is_ok()
+                    {
+                        let table_index = table_index.unwrap();
+                        let table_entry = self.metadata.read().table(table_index).clone();
+                        let table = table_entry.table();
+                        let table_info = table.get_table_info();
+                        let table_schema = table_info.schema();
+                        let table_indexes = &table_info.meta.indexes;
+                        if self
+                            .bind_context
+                            .vector_index_map
+                            .contains_key(&table_index)
+                        {
+                            return None;
+                        }
+                        let Ok(column_id) = table_schema.column_id_of(column_name) else {
+                            return None;
+                        };
+                        for vector_index in table_indexes.values() {
+                            if vector_index.index_type != TableIndexType::Vector {
+                                continue;
+                            }
+                            let Some(distances) = vector_index.options.get("distance") else {
+                                continue;
+                            };
+                            // distance_type must match function name
+                            let mut matched_distance = false;
+                            let distance_types: Vec<&str> = distances.split(',').collect();
+                            for distance_type in distance_types {
+                                if func_name.starts_with(distance_type) {
+                                    matched_distance = true;
+                                    break;
+                                }
+                            }
+                            if !matched_distance {
+                                continue;
+                            }
+                            if vector_index.column_ids.contains(&column_id) {
+                                let internal_column = InternalColumn::new(
+                                    VECTOR_SCORE_COL_NAME,
+                                    InternalColumnType::VectorScore,
+                                );
+                                let internal_column_binding = InternalColumnBinding {
+                                    database_name: database_name.clone(),
+                                    table_name: table_name.clone(),
+                                    internal_column,
+                                };
+                                let Ok(column_binding) =
+                                    self.bind_context.add_internal_column_binding(
+                                        &internal_column_binding,
+                                        self.metadata.clone(),
+                                        Some(table_index),
+                                        false,
+                                    )
+                                else {
+                                    return None;
+                                };
+
+                                let new_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    span,
+                                    column: column_binding,
+                                });
+
+                                let arg = ConstantExpr::try_from(*argument.clone()).unwrap();
+                                let Scalar::Array(arg_col) = arg.value else {
+                                    return None;
+                                };
+                                let arg_col = arg_col.remove_nullable();
+
+                                let col_vector_type = col_data_type.as_vector().unwrap();
+                                let col_dimension = col_vector_type.dimension() as usize;
+                                let arg_vector_type = target_type.as_vector().unwrap();
+                                let arg_dimension = arg_vector_type.dimension() as usize;
+                                if col_dimension != arg_dimension || arg_col.len() != col_dimension
+                                {
+                                    return None;
+                                }
+                                let mut query_values = Vec::with_capacity(arg_col.len());
+                                match arg_col {
+                                    Column::Number(num_col) => {
+                                        for i in 0..num_col.len() {
+                                            let num = unsafe { num_col.index_unchecked(i) };
+                                            query_values.push(num.to_f32());
+                                        }
+                                    }
+                                    Column::Decimal(dec_col) => {
+                                        for i in 0..dec_col.len() {
+                                            let dec = unsafe { dec_col.index_unchecked(i) };
+                                            query_values.push(F32::from(dec.to_float32()));
+                                        }
+                                    }
+                                    _ => {
+                                        return None;
+                                    }
+                                }
+
+                                let index_info = VectorIndexInfo {
+                                    index_name: vector_index.name.clone(),
+                                    index_version: vector_index.version.clone(),
+                                    index_options: vector_index.options.clone(),
+                                    column_id,
+                                    func_name: func_name.to_string(),
+                                    query_values,
+                                };
+                                self.bind_context
+                                    .vector_index_map
+                                    .insert(table_index, index_info);
+
+                                return Some(Ok(Box::new((
+                                    new_column,
+                                    DataType::Number(NumberDataType::Float32),
+                                ))));
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         None
@@ -4403,7 +4706,15 @@ impl<'a> TypeChecker<'a> {
         } else {
             Cow::Borrowed(like_str)
         };
-        if check_const(&new_like_str) {
+        if check_percent(&new_like_str) {
+            // Convert to `a is not null`
+            let is_not_null = Expr::IsNull {
+                span: None,
+                expr: Box::new(left.clone()),
+                not: true,
+            };
+            self.resolve(&is_not_null)
+        } else if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
         } else if check_prefix(&new_like_str) {
@@ -4482,6 +4793,7 @@ impl<'a> TypeChecker<'a> {
             UDFDefinition::UDAFScript(udf_def) => Ok(Some(
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
+            UDFDefinition::UDTF(_) => unreachable!(),
         }
     }
 
@@ -4502,14 +4814,43 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
+        let mut all_args_const = true;
         let mut args = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
+            // TODO: support cast constant
+            if !matches!(arg, ScalarExpr::ConstantExpr(_)) || ty != dest_type.remove_nullable() {
+                all_args_const = false;
+            }
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
             } else {
                 args.push(arg);
             }
+        }
+        let immutable = udf_definition.immutable.unwrap_or_default();
+        if immutable && all_args_const {
+            let mut arg_scalars = Vec::with_capacity(args.len());
+            for arg in &args {
+                let arg_scalar = match arg {
+                    ScalarExpr::ConstantExpr(constant) => constant.value.clone(),
+                    ScalarExpr::CastExpr(cast) => {
+                        let constant = ConstantExpr::try_from(*cast.argument.clone()).unwrap();
+                        constant.value.clone()
+                    }
+                    _ => unreachable!(),
+                };
+                arg_scalars.push(arg_scalar);
+            }
+            let value = databend_common_base::runtime::block_on(self.fold_udf_server(
+                name.as_str(),
+                arg_scalars,
+                udf_definition.clone(),
+            ))?;
+            return Ok(Box::new((
+                ConstantExpr { span, value }.into(),
+                udf_definition.return_type.clone(),
+            )));
         }
 
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
@@ -4532,6 +4873,54 @@ impl<'a> TypeChecker<'a> {
             .into(),
             udf_definition.return_type.clone(),
         )))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn fold_udf_server(
+        &mut self,
+        name: &str,
+        args: Vec<Scalar>,
+        udf_definition: UDFServer,
+    ) -> Result<Scalar> {
+        let mut block_entries = Vec::with_capacity(args.len());
+        for (arg, dest_type) in args.into_iter().zip(udf_definition.arg_types.iter()) {
+            let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
+            block_entries.push(entry);
+        }
+
+        let settings = self.ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_timeout = settings.get_external_server_request_timeout_secs()?;
+
+        let endpoint = UDFFlightClient::build_endpoint(
+            &udf_definition.address,
+            connect_timeout,
+            request_timeout,
+            &self.ctx.get_version().udf_client_user_agent(),
+        )?;
+
+        let num_rows = 1;
+        let mut client =
+            UDFFlightClient::connect(&udf_definition.handler, endpoint, connect_timeout, num_rows)
+                .await?
+                .with_tenant(self.ctx.get_tenant().tenant_name())?
+                .with_func_name(name)?
+                .with_handler_name(&udf_definition.handler)?
+                .with_query_id(&self.ctx.get_id())?
+                .with_headers(udf_definition.headers)?;
+
+        let result = client
+            .do_exchange(
+                name,
+                &udf_definition.handler,
+                num_rows,
+                block_entries,
+                &udf_definition.return_type,
+            )
+            .await?;
+
+        let value = unsafe { result.index_unchecked(0) };
+        Ok(value.to_owned())
     }
 
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
@@ -4581,8 +4970,13 @@ impl<'a> TypeChecker<'a> {
         let code_blob = match compress_algo {
             Some(algo) => {
                 log::trace!("Decompressing module using {:?} algorithm", algo);
-                let mut decoder = DecompressDecoder::new(algo);
-                decoder.decompress_all(&code_blob).map_err(|err| {
+                if algo == CompressAlgorithm::Zip {
+                    DecompressDecoder::decompress_all_zip(&code_blob)
+                } else {
+                    let mut decoder = DecompressDecoder::new(algo);
+                    decoder.decompress_all(&code_blob)
+                }
+                .map_err(|err| {
                     let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
                     log::error!("{}", error_msg);
                     ErrorCode::SemanticError(error_msg)
@@ -4608,6 +5002,9 @@ impl<'a> TypeChecker<'a> {
             arg_types,
             return_type,
             runtime_version,
+            imports,
+            packages,
+            immutable: _immutable,
         } = udf_definition;
 
         let language = language.parse()?;
@@ -4624,11 +5021,23 @@ impl<'a> TypeChecker<'a> {
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports_stage_info,
+            imports,
+            packages,
+        }));
 
         let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
@@ -4666,15 +5075,28 @@ impl<'a> TypeChecker<'a> {
             state_fields,
             return_type,
             runtime_version,
+            imports,
+            packages,
         } = udf_definition;
         let language = language.parse()?;
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports,
+            imports_stage_info,
+            packages,
+        }));
 
         let arguments = args
             .iter()
@@ -4811,7 +5233,7 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
+        let (sequence_name, display_name) = if let Expr::ColumnRef { column, .. } = arguments[0] {
             if column.database.is_some() || column.table.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "nextval function argument identifier should only contain one part".to_string(),
@@ -4819,7 +5241,10 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span));
             }
             match &column.column {
-                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Name(ident) => {
+                    let ident = normalize_identifier(ident, self.name_resolution_ctx);
+                    (ident.name.to_string(), format!("{}({})", func_name, ident))
+                }
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
                         "nextval function argument don't support identifier {}",
@@ -4841,9 +5266,21 @@ impl<'a> TypeChecker<'a> {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
         };
 
-        databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
+        let visibility_checker = if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            Some(databend_common_base::runtime::block_on(async move {
+                self.ctx
+                    .get_visibility_checker(false, Object::Sequence)
+                    .await
+            })?)
+        } else {
+            None
+        };
+        databend_common_base::runtime::block_on(catalog.get_sequence(req, visibility_checker))?;
 
-        let display_name = format!("{}({})", func_name, sequence_name);
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
 
@@ -5697,6 +6134,11 @@ pub fn validate_function_arg(
             }
         }
     }
+}
+
+// optimize special cases for like expression
+fn check_percent(like_str: &str) -> bool {
+    !like_str.is_empty() && like_str.chars().all(|c| c == '%')
 }
 
 // Some check functions for like expression

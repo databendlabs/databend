@@ -15,21 +15,24 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(try_blocks)]
 
+mod cmd;
 mod entry;
 
+use clap::Parser;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
 use databend_common_tracing::SignalListener;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_query::enterprise_services::EnterpriseServices;
 use entry::MainError;
 
+use self::cmd::Cmd;
 use crate::entry::init_services;
 use crate::entry::run_cmd;
 use crate::entry::start_services;
@@ -63,13 +66,17 @@ fn main() {
 pub async fn main_entrypoint() -> Result<(), MainError> {
     let make_error = || "an fatal error occurred in query";
 
-    let conf: InnerConfig = InnerConfig::load().await.with_context(make_error)?;
-    if run_cmd(&conf).await.with_context(make_error)? {
+    // if the usage is print, std::process::exit() will be called.
+    let mut cmd = Cmd::parse();
+    cmd.normalize();
+
+    if run_cmd(&cmd).await.with_context(make_error)? {
         return Ok(());
     }
 
+    let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
     init_services(&conf, true).await.with_context(make_error)?;
-    EnterpriseServices::init(conf.clone())
+    EnterpriseServices::init(conf.clone(), &BUILD_INFO)
         .await
         .with_context(make_error)?;
     start_services(&conf).await.with_context(make_error)

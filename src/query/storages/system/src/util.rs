@@ -15,7 +15,11 @@
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_exception::Result;
 use databend_common_expression::expr::*;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_string;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -37,40 +41,6 @@ pub fn generate_catalog_meta(ctl_name: &str) -> CatalogMeta {
                 },
             )),
             created_on: Default::default(),
-        }
-    }
-}
-
-pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
-    match expr {
-        Expr::Constant(_) | Expr::ColumnRef(_) => {}
-        Expr::Cast(Cast { expr, .. }) => find_eq_filter(expr, visitor),
-        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-            // Like: select * from (select * from system.tables where database='default') where name='t'
-            // push downs: [filters: [and_filters(and_filters(tables.database (#1) = 'default', tables.name (#2) = 't'), tables.database (#1) = 'default')], limit: NONE]
-            // database generate twice, so when call find_eq_filter, should check uniq.
-            if function.signature.name == "eq" {
-                match args.as_slice() {
-                    [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })]
-                    | [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                    {
-                        let _ = visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `table`, Column `database`
-                for arg in args {
-                    find_eq_filter(arg, visitor)
-                }
-            }
-        }
-        Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
-            for arg in args {
-                find_eq_filter(arg, visitor);
-            }
         }
     }
 }
@@ -137,115 +107,32 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
     }
 }
 
-pub fn find_eq_or_filter(
+pub fn extract_leveled_strings(
     expr: &Expr<String>,
-    visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>,
-    mut invalid_optimize: bool,
-) -> bool {
-    if invalid_optimize {
-        return true;
-    }
+    level_names: &[&str],
+    func_ctx: &FunctionContext,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let mut res1 = vec![];
+    let mut res2 = vec![];
+    let leveld_results =
+        FilterHelpers::find_leveled_eq_filters(expr, level_names, func_ctx, &BUILTIN_FUNCTIONS)?;
 
-    fn inner(
-        expr: &Expr<String>,
-        visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>,
-        invalid_optimize: &mut bool,
-    ) {
-        match expr {
-            Expr::Constant(_) | Expr::ColumnRef(_) => {}
-            Expr::Cast(Cast { expr, .. }) => inner(expr, visitor, invalid_optimize),
-            Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-                // Like: select * from (select * from system.tables where database='default') where name='t'
-                // push downs: [filters: [and_filters(and_filters(tables.database (#1) = 'default', tables.name (#2) = 't'), tables.database (#1) = 'default')], limit: NONE]
-                // database generate twice, so when call find_eq_filter, should check uniq.
-                match function.signature.name.as_str() {
-                    "eq" => {
-                        if let [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })]
-                        | [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =
-                            args.as_slice()
-                        {
-                            let _ = visitor(id, scalar);
-                        }
-                    }
-                    "and_filters" => {
-                        for arg in args {
-                            inner(arg, visitor, invalid_optimize);
-                            if *invalid_optimize {
-                                return;
-                            }
-                        }
-                    }
-                    "or" => {
-                        // Check for conflicting column references in "or" conditions.
-                        if args.windows(2).any(|w| {
-                            match (&w[0], &w[1]) {
-                                // e.g. will get all tables
-                                // database = 'a' or name = 't'
-                                // name = 't' or table_id = 123
-                               (Expr::FunctionCall(FunctionCall {
-                                        function: lfunc,
-                                        args: largs,
-                                        ..
-                                    }),
-                                    Expr::FunctionCall(FunctionCall {
-                                        function: rfunc,
-                                        args: rargs,
-                                        ..
-                                    }),
-                                ) => {
-                                    if lfunc.signature.name == "eq" && rfunc.signature.name == "eq" {
-                                        match (largs.as_slice(), rargs.as_slice()) {
-                                            (
-                                                [Expr::ColumnRef (ColumnRef{ id, .. }), Expr::Constant(_)]
-                                                | [Expr::Constant(_), Expr::ColumnRef (ColumnRef{ id, .. })],
-                                                [Expr::ColumnRef(ColumnRef { id: rid, .. }), Expr::Constant(_)]
-                                                | [Expr::Constant(_), Expr::ColumnRef(ColumnRef { id: rid, .. })],
-                                            ) => id != rid,
-                                            _ => false,
-                                        }
-                                    } else {
-                                        false
-                                    }
-                                }
-                                _ => false,
-                            }
-                        }) {
-                            *invalid_optimize = true;
-                            return;
-                        }
+    for (i, scalars) in leveld_results.iter().enumerate() {
+        for r in scalars.iter() {
+            let e = Expr::Constant(Constant {
+                span: None,
+                scalar: r.clone(),
+                data_type: r.as_ref().infer_data_type(),
+            });
 
-                        for arg in args {
-                            inner(arg, visitor, invalid_optimize);
-                            if *invalid_optimize {
-                                return;
-                            }
-                        }
-                    }
-                    // show drop tables will specific is_not_null(dropped_on)
-                    "is_not_null" => {
-                        if let Expr::ColumnRef(ColumnRef { id, .. }) = args[0].clone() {
-                            if id != "dropped_on" {
-                                *invalid_optimize = true;
-                            }
-                        }
-                    }
-                    _ => {
-                        // Any other function makes it invalid.
-                        *invalid_optimize = true;
-                    }
-                }
-            }
-            Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
-                for arg in args {
-                    inner(arg, visitor, invalid_optimize);
-                    if *invalid_optimize {
-                        return;
-                    }
+            if let Ok(s) = check_string::<usize>(None, func_ctx, &e, &BUILTIN_FUNCTIONS) {
+                match i {
+                    0 => res1.push(s),
+                    1 => res2.push(s),
+                    _ => unreachable!(),
                 }
             }
         }
     }
-
-    inner(expr, visitor, &mut invalid_optimize);
-    invalid_optimize
+    Ok((res1, res2))
 }
