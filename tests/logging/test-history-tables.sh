@@ -98,6 +98,16 @@ else
     echo "✓ meta node logs are collected as expected"
 fi
 
+startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like '%Ready for connections after%'\"}")
+startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
+if [[ "$startup_check_response_data" != *"2"* ]]; then
+    echo "ERROR: startup check failed"
+    echo "startup_check_response_data: $startup_check_response_data"
+    exit 1
+else
+    echo "✓ node startup test passed"
+fi
+
 # **Internal -> External**: should reset
 
 echo "Add a node with external history table enabled"
