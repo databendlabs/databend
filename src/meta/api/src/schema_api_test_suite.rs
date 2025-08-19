@@ -1410,22 +1410,13 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
         let db = "db";
         let table_name = "tbl";
 
-        let create_db_req = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent::new(&tenant, db),
-            meta: DatabaseMeta {
-                engine: "".to_string(),
-                ..DatabaseMeta::default()
-            },
-        };
-
-        let res = mt.create_database(create_db_req.clone()).await?;
-        let db_id = res.db_id;
+        let mut util = Util::new(mt, tenant_name, db, table_name, "");
+        let tenant = util.tenant();
+        util.create_db().await?;
+        let db_id = util.db_id();
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -4411,10 +4402,10 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant_table_drop_history";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
         let db_name = "table_table_drop_history_db1";
         let tbl_name = "table_table_drop_history_tb1";
+        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+        let tenant = util.tenant();
         let tbl_name_ident = TableNameIdent {
             tenant: tenant.clone(),
             db_name: db_name.to_string(),
@@ -4428,25 +4419,9 @@ impl SchemaApiTestSuite {
             )]))
         };
 
-        let db_id;
-
         info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
-            db_id = res.db_id;
-        }
+        util.create_db().await?;
+        let db_id = util.db_id();
 
         let created_on = Utc::now();
         let create_table_meta = TableMeta {
@@ -5719,21 +5694,12 @@ impl SchemaApiTestSuite {
     ) -> anyhow::Result<()> {
         let db_name = "db";
         let tenant_name = "concurrent_commit_table_meta";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let tbl_name = "tb";
 
-        let plan = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent::new(&tenant, db_name),
-            meta: DatabaseMeta {
-                engine: "".to_string(),
-                ..DatabaseMeta::default()
-            },
-        };
-
         let mt = Arc::new(b.build().await);
-        let res = mt.create_database(plan).await?;
-        let db_id = res.db_id;
+        let mut util = Util::new(&*mt, tenant_name, db_name, tbl_name, "");
+        util.create_db().await?;
+        let db_id = util.db_id();
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
