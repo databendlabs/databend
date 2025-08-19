@@ -25,7 +25,7 @@ echo "Cleaning up previous runs"
 killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
-rm -rf .databend
+rm -rf ./.databend
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
@@ -96,6 +96,18 @@ if [[ "$meta_count_response_data" != *"3"* ]]; then
     exit 1
 else
     echo "✓ meta node logs are collected as expected"
+fi
+
+startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Ready for connections after%'\"}")
+startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
+if [[ "$startup_check_response_data" != *"2"* ]]; then
+    echo "ERROR: startup check failed"
+    debug_info=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where message like 'Ready for connections after%'\"}")
+    echo "$debug_info"
+    echo "startup_check_response_data: $startup_check_response_data"
+    exit 1
+else
+    echo "✓ node startup test passed"
 fi
 
 # **Internal -> External**: should reset

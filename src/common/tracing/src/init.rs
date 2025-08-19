@@ -14,6 +14,8 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
@@ -47,6 +49,7 @@ const HEADER_TRACE_PARENT: &str = "traceparent";
 pub struct GlobalLogger {
     _drop_guards: Vec<Box<dyn Send + Sync + 'static>>,
     pub remote_log_operator: RwLock<Option<Operator>>,
+    pub ready: AtomicBool,
 }
 
 impl GlobalLogger {
@@ -59,8 +62,17 @@ impl GlobalLogger {
         let instance = Arc::new(Self {
             _drop_guards,
             remote_log_operator,
+            ready: AtomicBool::new(false),
         });
         GlobalInstance::set(instance);
+    }
+
+    pub fn dummy() -> Arc<GlobalLogger> {
+        Arc::new(Self {
+            _drop_guards: Vec::new(),
+            remote_log_operator: RwLock::new(None),
+            ready: AtomicBool::new(true),
+        })
     }
 
     pub fn instance() -> Arc<GlobalLogger> {
@@ -80,6 +92,7 @@ impl GlobalLogger {
     pub async fn set_operator(&self, operator: Operator) {
         let mut remote_log_operator = self.remote_log_operator.write().await;
         *remote_log_operator = Some(operator);
+        self.ready.store(true, Ordering::SeqCst);
     }
 }
 
