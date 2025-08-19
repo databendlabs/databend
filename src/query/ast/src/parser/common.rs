@@ -322,6 +322,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
                 span: Some(token.span),
             }))
         }),
+        // ROW could be a column name for compatibility
         map_res(rule! {ROW}, |token| {
             Ok(ColumnID::Name(Identifier::from_name(
                 transform_span(&[token.clone()]),
