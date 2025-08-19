@@ -338,6 +338,38 @@ message SnapshotResponseV003 {
   string vote = 10;
 }
 
+// Entry for InstallSnapshotV004 stream.
+// Can contain key-value data, commit signal, or both in the final message.
+message InstallEntryV004 {
+  // Protocol version to ensure compatibility
+  uint32 version = 1;
+
+  // Stream items
+  repeated StreamItem key_values = 2;
+
+  // Commit signal with metadata (optional)
+  optional Commit commit = 3;
+}
+
+// Commit signal with snapshot metadata
+message Commit {
+  // Snapshot ID as plain string
+  string snapshot_id = 1;
+
+  // JSON serialized system data
+  string sys_data = 2;
+
+  // Vote from raft.proto
+  Vote vote = 3;
+
+}
+
+// V004 snapshot response
+message InstallSnapshotResponseV004 {
+  // remote vote
+  Vote vote = 10;
+}
+
 service RaftService {
 
   // Forward a request to another node.
@@ -350,10 +382,17 @@ service RaftService {
   // raft RPC
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
+
   // Added in 1.2.547, 2024-06-27
   rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (SnapshotResponseV003);
+
+  // Stream-based snapshot installation with entry-by-entry transmission
+  rpc InstallSnapshotV004(stream InstallEntryV004) returns (InstallSnapshotResponseV004);
+
   rpc Vote(RaftRequest) returns (RaftReply);
+
   rpc VoteV001(VoteRequest) returns (VoteResponse);
+
   rpc TransferLeader(TransferLeaderRequest) returns (Empty);
 }
 
