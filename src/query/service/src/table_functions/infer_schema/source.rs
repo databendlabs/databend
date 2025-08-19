@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -47,6 +48,8 @@ use opendal::Scheme;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
+
+const DEFAULT_MAX_BYTES: u64 = 1 * 1024 * 1024;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -154,6 +157,7 @@ impl AsyncSource for InferSchemaSource {
                     &first_file.path,
                     &operator,
                     Some(first_file.size),
+                    self.args_parsed.max_bytes,
                     self.args_parsed.max_records,
                     &params,
                 )
@@ -170,6 +174,7 @@ impl AsyncSource for InferSchemaSource {
                     &first_file.path,
                     &operator,
                     Some(first_file.size),
+                    self.args_parsed.max_bytes,
                     self.args_parsed.max_records,
                 )
                 .await?;
@@ -210,6 +215,7 @@ pub async fn read_csv_metadata_async(
     path: &str,
     operator: &Operator,
     file_size: Option<u64>,
+    max_bytes: Option<u64>,
     max_records: Option<usize>,
     params: &CsvFileFormatParams,
 ) -> Result<ArrowSchema> {
@@ -223,8 +229,8 @@ pub async fn read_csv_metadata_async(
         Some(params.escape.as_bytes()[0])
     };
 
-    // TODO: It would be better if it could be read in the form of Read trait
-    let buf = operator.read_with(path).range(..file_size).await?;
+    let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
+    let buf = operator.read_with(path).range(..bytes_len).await?;
     let mut format = Format::default()
         .with_delimiter(params.field_delimiter.as_bytes()[0])
         .with_quote(params.quote.as_bytes()[0])
@@ -242,14 +248,15 @@ pub async fn read_json_metadata_async(
     path: &str,
     operator: &Operator,
     file_size: Option<u64>,
+    max_bytes: Option<u64>,
     max_records: Option<usize>,
 ) -> Result<ArrowSchema> {
     let file_size = match file_size {
         None => operator.stat(path).await?.content_length(),
         Some(n) => n,
     };
-    // TODO: It would be better if it could be read in the form of Read trait
-    let buf = operator.read_with(path).range(..file_size).await?;
+    let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
+    let buf = operator.read_with(path).range(..bytes_len).await?;
     let (schema, _) = infer_json_schema(buf, max_records)?;
 
     Ok(schema)
