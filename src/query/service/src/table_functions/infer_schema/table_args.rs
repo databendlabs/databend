@@ -26,6 +26,7 @@ pub(crate) struct InferSchemaArgsParsed {
     pub(crate) file_format: Option<String>,
     pub(crate) files_info: StageFilesInfo,
     pub(crate) max_records: Option<usize>,
+    pub(crate) max_bytes: Option<u64>,
 }
 
 impl InferSchemaArgsParsed {
@@ -41,6 +42,7 @@ impl InferSchemaArgsParsed {
             pattern: None,
         };
         let mut max_records = None;
+        let mut max_bytes = None;
 
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
@@ -58,6 +60,9 @@ impl InferSchemaArgsParsed {
                 }
                 "max_records_pre_file" => {
                     max_records = Some(i64_value(v)? as usize);
+                }
+                "max_bytes" => {
+                    max_bytes = Some(i64_value(v)? as u64);
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
@@ -77,6 +82,7 @@ impl InferSchemaArgsParsed {
             file_format,
             files_info,
             max_records,
+            max_bytes,
         })
     }
 }
