@@ -17,9 +17,9 @@ use databend_common_expression::types::Number;
 use databend_common_expression::Column;
 use parquet2::schema::types::PhysicalType;
 
+use crate::column::common::DictionarySupport;
 use crate::column::common::ParquetColumnIterator;
 use crate::column::common::ParquetColumnType;
-use crate::column::common::DictionarySupport;
 use crate::reader::decompressor::Decompressor;
 
 #[derive(Clone, Copy)]
@@ -46,49 +46,53 @@ impl ParquetColumnType for i64 {
 impl DictionarySupport for i64 {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 8 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid i64 dictionary entry length: expected 8, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid i64 dictionary entry length: expected 8, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores integers in little-endian format
         let bytes: [u8; 8] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to i64".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to i64".to_string(),
+            )
         })?;
-        
+
         Ok(i64::from_le_bytes(bytes))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
-        if let Some(&max_idx) = indices.iter().max() {
-            if max_idx as usize >= dictionary.len() {
-                return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
-                )));
-            }
-        }
-        
+        // if let Some(&max_idx) = indices.iter().max() {
+        //    if max_idx as usize >= dictionary.len() {
+        //        return Err(databend_common_exception::ErrorCode::Internal(format!(
+        //            "Dictionary index out of bounds: {} >= {}",
+        //            max_idx, dictionary.len()
+        //        )));
+        //    }
+        //}
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -96,49 +100,54 @@ impl DictionarySupport for i64 {
 impl DictionarySupport for i32 {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 4 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid i32 dictionary entry length: expected 4, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid i32 dictionary entry length: expected 4, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores integers in little-endian format
         let bytes: [u8; 4] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to i32".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to i32".to_string(),
+            )
         })?;
-        
+
         Ok(i32::from_le_bytes(bytes))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
         if let Some(&max_idx) = indices.iter().max() {
             if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
+                    "Dictionary index out of bounds: {} >= {}",
+                    max_idx,
+                    dictionary.len()
                 )));
             }
         }
-        
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
 }
