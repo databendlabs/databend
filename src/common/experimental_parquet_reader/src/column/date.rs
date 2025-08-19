@@ -54,29 +54,37 @@ impl DictionarySupport for Date {
         Ok(Date(i32::from_le_bytes(bytes)))
     }
     
-    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> databend_common_exception::Result<Vec<Self>> {
-        // Pre-allocate result vector with exact capacity
-        let mut result = Vec::with_capacity(indices.len());
-        
-        // Use unsafe set_len for maximum performance, then fill in-place
-        unsafe {
-            result.set_len(indices.len());
+    fn batch_from_dictionary_into_slice(
+        dictionary: &[Self], 
+        indices: &[i32], 
+        output: &mut [Self]
+    ) -> databend_common_exception::Result<()> {
+        // Validate output slice length
+        if output.len() != indices.len() {
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Output slice length ({}) doesn't match indices length ({})", 
+                output.len(), indices.len()
+            )));
         }
         
-        // Batch copy with bounds checking
-        for (i, &index) in indices.iter().enumerate() {
-            let dict_idx = index as usize;
-            if dict_idx >= dictionary.len() {
+        // Batch bounds checking - find max index once
+        if let Some(&max_idx) = indices.iter().max() {
+            if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
                     "Dictionary index out of bounds: {} >= {}", 
-                    dict_idx, dictionary.len()
+                    max_idx, dictionary.len()
                 )));
             }
-            // Direct assignment to pre-allocated memory
-            result[i] = dictionary[dict_idx];
         }
         
-        Ok(result)
+        // Fast unchecked copy - all bounds verified above
+        for (i, &index) in indices.iter().enumerate() {
+            unsafe {
+                *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
+            }
+        }
+        
+        Ok(())
     }
 }
 

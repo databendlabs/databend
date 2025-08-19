@@ -42,29 +42,21 @@ pub trait DictionarySupport: ParquetColumnType {
     /// Decoded value of type Self
     fn from_dictionary_entry(entry: &[u8]) -> Result<Self>;
     
-    /// Batch create values from dictionary using indices
-    /// This is the performance-critical path for dictionary decoding
+    /// Batch lookup from dictionary into provided output slice
     /// 
-    /// # Arguments  
-    /// * `dictionary` - Pre-parsed dictionary values
-    /// * `indices` - Array of dictionary indices
+    /// # Arguments
+    /// * `dictionary` - The dictionary values to lookup from
+    /// * `indices` - Array of dictionary indices 
+    /// * `output` - Output slice to write results into (must have same length as indices)
     /// 
-    /// # Returns
-    /// Vector of decoded values
-    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> Result<Vec<Self>> {
-        let mut result = Vec::with_capacity(indices.len());
-        for &index in indices {
-            let dict_idx = index as usize;
-            if dict_idx >= dictionary.len() {
-                return Err(ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    dict_idx, dictionary.len()
-                )));
-            }
-            result.push(dictionary[dict_idx]);
-        }
-        Ok(result)
-    }
+    /// # Performance
+    /// This is the performance-critical path for dictionary decoding.
+    /// Implementations should use batch bounds checking and unsafe operations for maximum speed.
+    fn batch_from_dictionary_into_slice(
+        dictionary: &[Self], 
+        indices: &[i32], 
+        output: &mut [Self]
+    ) -> Result<()>;
 }
 
 /// Extract definition levels, repetition levels, and values from a data page
@@ -385,8 +377,12 @@ fn process_rle_dictionary_encoding<T: DictionarySupport>(
     }
     
     // Batch dictionary lookup - performance critical path
-    let dict_values = T::batch_from_dictionary(dictionary, &indices)?;
-    column_data.extend(dict_values);
+    let old_len = column_data.len();
+    column_data.reserve(page_rows);
+    unsafe {
+        column_data.set_len(old_len + page_rows);
+    }
+    T::batch_from_dictionary_into_slice(dictionary, &indices, &mut column_data[old_len..])?;
     
     Ok(())
 }
