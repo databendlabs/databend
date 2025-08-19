@@ -11054,6 +11054,310 @@ Query(
 
 
 ---------- Input ----------
+select 33 as row, abc(33, row), def(row)
+---------- Output ---------
+SELECT 33 AS row, abc(33, row), def(row)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..9,
+                            ),
+                            value: UInt64(
+                                33,
+                            ),
+                        },
+                        alias: Some(
+                            Identifier {
+                                span: Some(
+                                    13..16,
+                                ),
+                                name: "row",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                18..30,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        18..21,
+                                    ),
+                                    name: "abc",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    Literal {
+                                        span: Some(
+                                            22..24,
+                                        ),
+                                        value: UInt64(
+                                            33,
+                                        ),
+                                    },
+                                    ColumnRef {
+                                        span: Some(
+                                            26..29,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        26..29,
+                                                    ),
+                                                    name: "row",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                32..40,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        32..35,
+                                    ),
+                                    name: "def",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            36..39,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        36..39,
+                                                    ),
+                                                    name: "row",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT func(ROW) FROM (SELECT 1 as ROW) t
+---------- Output ---------
+SELECT func(row) FROM (SELECT 1 AS ROW) AS t
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..41,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..16,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..11,
+                                    ),
+                                    name: "func",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    ColumnRef {
+                                        span: Some(
+                                            12..15,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        12..15,
+                                                    ),
+                                                    name: "row",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Subquery {
+                        span: Some(
+                            22..41,
+                        ),
+                        lateral: false,
+                        subquery: Query {
+                            span: Some(
+                                23..38,
+                            ),
+                            with: None,
+                            body: Select(
+                                SelectStmt {
+                                    span: Some(
+                                        23..38,
+                                    ),
+                                    hints: None,
+                                    distinct: false,
+                                    top_n: None,
+                                    select_list: [
+                                        AliasedExpr {
+                                            expr: Literal {
+                                                span: Some(
+                                                    30..31,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                            alias: Some(
+                                                Identifier {
+                                                    span: Some(
+                                                        35..38,
+                                                    ),
+                                                    name: "ROW",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                    from: [],
+                                    selection: None,
+                                    group_by: None,
+                                    having: None,
+                                    window_list: None,
+                                    qualify: None,
+                                },
+                            ),
+                            order_by: [],
+                            limit: [],
+                            offset: None,
+                            ignore_result: false,
+                        },
+                        alias: Some(
+                            TableAlias {
+                                name: Identifier {
+                                    span: Some(
+                                        40..41,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                columns: [],
+                            },
+                        ),
+                        pivot: None,
+                        unpivot: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select * from t sample row (99);
 ---------- Output ---------
 SELECT * FROM t SAMPLE ROW (99)

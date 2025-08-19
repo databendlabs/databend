@@ -322,6 +322,12 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
                 span: Some(token.span),
             }))
         }),
+        map_res(rule! {ROW}, |token| {
+            Ok(ColumnID::Name(Identifier::from_name(
+                transform_span(&[token.clone()]),
+                "row",
+            )))
+        }),
         map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
     ))(i)
 }

@@ -243,6 +243,8 @@ fn test_statement() {
         r#"select * FROM t where ((a));"#,
         r#"select * FROM t where ((select 1) > 1);"#,
         r#"select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));"#,
+        r#"select 33 as row, abc(33, row), def(row)"#,
+        r#"SELECT func(ROW) FROM (SELECT 1 as ROW) t"#,
         r#"select * from t sample row (99);"#,
         r#"select * from t sample block (99);"#,
         r#"select * from t sample row (10 rows);"#,
