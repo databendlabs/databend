@@ -98,10 +98,12 @@ else
     echo "✓ meta node logs are collected as expected"
 fi
 
-startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like '%Ready for connections after%'\"}")
+startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Ready for connections after%'\"}")
 startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
 if [[ "$startup_check_response_data" != *"2"* ]]; then
     echo "ERROR: startup check failed"
+    debug_info=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where message like 'Ready for connections after%'\"}")
+    echo "$debug_info"
     echo "startup_check_response_data: $startup_check_response_data"
     exit 1
 else

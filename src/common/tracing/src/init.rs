@@ -67,6 +67,14 @@ impl GlobalLogger {
         GlobalInstance::set(instance);
     }
 
+    pub fn dummy() -> Arc<GlobalLogger> {
+        Arc::new(Self {
+            _drop_guards: Vec::new(),
+            remote_log_operator: RwLock::new(None),
+            ready: AtomicBool::new(true),
+        })
+    }
+
     pub fn instance() -> Arc<GlobalLogger> {
         GlobalInstance::get()
     }

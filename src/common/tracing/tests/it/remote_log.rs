@@ -18,9 +18,11 @@ use std::time::Duration;
 
 use async_channel::bounded;
 use databend_common_base::base::tokio;
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_tracing::convert_to_batch;
 use databend_common_tracing::Config;
+use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::LogMessage;
 use databend_common_tracing::RemoteLog;
 use databend_common_tracing::RemoteLogBuffer;
@@ -103,17 +105,18 @@ async fn test_buffer_flush_with_buffer_limit() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_buffer_flush_with_buffer_interval() -> Result<()> {
+#[test]
+fn test_buffer_flush_with_buffer_interval() -> Result<()> {
+    init_global_logger()?;
     let (tx, rx) = bounded(10);
     let interval = Duration::from_secs(1).as_micros() as u64;
     let buffer = Arc::new(RemoteLogBuffer::new(tx.clone(), interval));
     for _i in 0..5 {
         buffer.log(get_remote_log_elements())?
     }
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    std::thread::sleep(Duration::from_secs(1));
     buffer.log(get_remote_log_elements())?;
-    let res = rx.recv().await.unwrap();
+    let res = rx.recv_blocking().unwrap();
     if let LogMessage::Flush(elements) = res {
         assert_eq!(elements.len(), 6);
     }
@@ -150,5 +153,13 @@ async fn test_do_flush() -> Result<()> {
     let exists = op.exists(path).await?;
     assert!(exists);
 
+    Ok(())
+}
+
+fn init_global_logger() -> Result<()> {
+    let thread = std::thread::current();
+    GlobalInstance::init_testing(thread.name().unwrap());
+    let instance = GlobalLogger::dummy();
+    GlobalInstance::set(instance);
     Ok(())
 }
