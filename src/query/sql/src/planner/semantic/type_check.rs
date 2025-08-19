@@ -1159,6 +1159,15 @@ impl<'a> TypeChecker<'a> {
             Expr::DateTrunc {
                 span, unit, date, ..
             } => self.resolve_date_trunc(*span, date, unit)?,
+            Expr::TimeSlice {
+                span,
+                unit,
+                date,
+                slice_length,
+                start_or_end,
+            } => {
+                self.resolve_time_slice(*span, date, *slice_length, unit, start_or_end.to_string())?
+            }
             Expr::LastDay {
                 span, unit, date, ..
             } => self.resolve_last_day(*span, date, unit)?,
@@ -3450,6 +3459,115 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_second", vec![],
                     &[date],
+                )
+            }
+            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
+        }
+    }
+
+    pub fn resolve_time_slice(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        slice_length: u64,
+        kind: &ASTIntervalKind,
+        start_or_end: String,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if slice_length < 1 {
+            return Err(ErrorCode::BadArguments(
+                "slice_length must be greater than or equal to 1",
+            ));
+        }
+        let slice_length = &Expr::Literal {
+            span: None,
+            value: Literal::UInt64(slice_length),
+        };
+        let start_or_end = if start_or_end.eq_ignore_ascii_case("start")
+            || start_or_end.eq_ignore_ascii_case("end")
+        {
+            &Expr::Literal {
+                span: None,
+                value: Literal::String(start_or_end),
+            }
+        } else {
+            return Err(ErrorCode::BadArguments(
+                "time_slice only support start or end",
+            ));
+        };
+
+        match kind {
+            ASTIntervalKind::Year => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_year", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::ISOYear => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_iso_year", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Quarter => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_quarter", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Month => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_month", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Week => {
+                let week_start = self.func_ctx.week_start;
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_week", vec![],
+                    &[date, slice_length, start_or_end, &Expr::Literal {
+                        span: None,
+                        value: Literal::UInt64(week_start as u64)
+                    }],
+                )
+            }
+            ASTIntervalKind::ISOWeek => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_iso_week", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Day => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_day", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Hour => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_hour", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Minute => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_minute", vec![],
+                    &[date, slice_length, start_or_end],
+                )
+            }
+            ASTIntervalKind::Second => {
+                self.resolve_function(
+                    span,
+                    "to_time_slice_of_second", vec![],
+                    &[date, slice_length, start_or_end],
                 )
             }
             _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),

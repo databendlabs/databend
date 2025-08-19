@@ -4399,6 +4399,32 @@ Functions overloads:
 42 to_string(Geometry NULL) :: String NULL
 43 to_string(Interval) :: String
 44 to_string(Interval NULL) :: String NULL
+0 to_time_slice_of_day(Date, UInt64, String) :: Date
+1 to_time_slice_of_day(Date NULL, UInt64 NULL, String NULL) :: Date NULL
+2 to_time_slice_of_day(Timestamp, UInt64, String) :: Timestamp
+3 to_time_slice_of_day(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_hour(Timestamp, UInt64, String) :: Timestamp
+1 to_time_slice_of_hour(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_minute(Timestamp, UInt64, String) :: Timestamp
+1 to_time_slice_of_minute(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_month(Date, UInt64, String) :: Date
+1 to_time_slice_of_month(Date NULL, UInt64 NULL, String NULL) :: Date NULL
+2 to_time_slice_of_month(Timestamp, UInt64, String) :: Timestamp
+3 to_time_slice_of_month(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_quarter(Date, UInt64, String) :: Date
+1 to_time_slice_of_quarter(Date NULL, UInt64 NULL, String NULL) :: Date NULL
+2 to_time_slice_of_quarter(Timestamp, UInt64, String) :: Timestamp
+3 to_time_slice_of_quarter(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_second(Timestamp, UInt64, String) :: Timestamp
+1 to_time_slice_of_second(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
+0 to_time_slice_of_week(Date, UInt64, String, Int64) :: Date
+1 to_time_slice_of_week(Date NULL, UInt64 NULL, String NULL, Int64 NULL) :: Date NULL
+2 to_time_slice_of_week(Timestamp, UInt64, String, Int64) :: Timestamp
+3 to_time_slice_of_week(Timestamp NULL, UInt64 NULL, String NULL, Int64 NULL) :: Timestamp NULL
+0 to_time_slice_of_year(Date, UInt64, String) :: Date
+1 to_time_slice_of_year(Date NULL, UInt64 NULL, String NULL) :: Date NULL
+2 to_time_slice_of_year(Timestamp, UInt64, String) :: Timestamp
+3 to_time_slice_of_year(Timestamp NULL, UInt64 NULL, String NULL) :: Timestamp NULL
 0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp

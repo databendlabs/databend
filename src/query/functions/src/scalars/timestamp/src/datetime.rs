@@ -59,6 +59,8 @@ use databend_common_expression::types::F64;
 use databend_common_expression::utils::date_helper::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
+use databend_common_expression::vectorize_3_arg;
+use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::EvalContext;
@@ -69,6 +71,7 @@ use databend_common_expression::Value;
 use dtparse::parse;
 use jiff::civil::date;
 use jiff::civil::Date;
+use jiff::civil::Weekday;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::TimeZone;
 use jiff::Unit;
@@ -2359,6 +2362,167 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
             round_timestamp(val, &ctx.func_ctx.tz, Round::TimeSlot)
+        }),
+    );
+
+    registry
+        .register_passthrough_nullable_3_arg::<DateType, UInt64Type, StringType, DateType, _, _>(
+            "to_time_slice_of_year",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_3_arg::<DateType, UInt64Type, StringType, DateType>(
+                |ts, slice_length, start_or_end, _| {
+                    let start_or_end = StartOrEnd::from(start_or_end);
+                    time_slice_date(
+                        ts,
+                        slice_length,
+                        TimePart::Year,
+                        start_or_end,
+                        Weekday::Monday,
+                    )
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<DateType, UInt64Type, StringType, DateType, _, _>(
+            "to_time_slice_of_quarter",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_3_arg::<DateType, UInt64Type, StringType, DateType>(
+                |ts, slice_length, start_or_end, _| {
+                    let start_or_end = StartOrEnd::from(start_or_end);
+                    time_slice_date(
+                        ts,
+                        slice_length,
+                        TimePart::Quarter,
+                        start_or_end,
+                        Weekday::Monday,
+                    )
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<DateType, UInt64Type, StringType, DateType, _, _>(
+            "to_time_slice_of_month",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_3_arg::<DateType, UInt64Type, StringType, DateType>(
+                |ts, slice_length, start_or_end, _| {
+                    let start_or_end = StartOrEnd::from(start_or_end);
+                    time_slice_date(
+                        ts,
+                        slice_length,
+                        TimePart::Month,
+                        start_or_end,
+                        Weekday::Monday,
+                    )
+                },
+            ),
+        );
+
+    registry.register_passthrough_nullable_4_arg::<DateType, UInt64Type, StringType,Int64Type, DateType, _, _>(
+        "to_time_slice_of_week",
+        |_,_,_, _,_| FunctionDomain::Full,
+        vectorize_4_arg::<DateType, UInt64Type, StringType,Int64Type, DateType>(|ts, slice_length, start_or_end, mode, _| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            if mode == 0 {
+                time_slice_date(ts, slice_length, TimePart::Week, start_or_end, Weekday::Sunday)
+            } else {
+                time_slice_date(ts, slice_length, TimePart::Week, start_or_end, Weekday::Monday)
+            }
+        }),
+    );
+
+    registry
+        .register_passthrough_nullable_3_arg::<DateType, UInt64Type, StringType, DateType, _, _>(
+            "to_time_slice_of_day",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_3_arg::<DateType, UInt64Type, StringType, DateType>(
+                |ts, slice_length, start_or_end, _| {
+                    let start_or_end = StartOrEnd::from(start_or_end);
+                    time_slice_date(
+                        ts,
+                        slice_length,
+                        TimePart::Day,
+                        start_or_end,
+                        Weekday::Monday,
+                    )
+                },
+            ),
+        );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_year",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Year, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_quarter",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Quarter, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_month",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Month, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_4_arg::<TimestampType, UInt64Type, StringType,Int64Type, TimestampType, _, _>(
+        "to_time_slice_of_week",
+        |_,_,_,_,_| FunctionDomain::Full,
+        vectorize_4_arg::<TimestampType, UInt64Type, StringType, Int64Type,TimestampType>(|ts, slice_length, start_or_end, mode, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            if mode == 0 {
+                time_slice_timestamp(ts, slice_length, TimePart::Week, start_or_end, Weekday::Sunday, &ctx.func_ctx.tz)
+            } else {
+                time_slice_timestamp(ts, slice_length, TimePart::Week, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_day",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Day, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_hour",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Hour, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_minute",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Minute, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<TimestampType, UInt64Type, StringType, TimestampType, _, _>(
+        "to_time_slice_of_second",
+        |_,_,_, _| FunctionDomain::Full,
+        vectorize_3_arg::<TimestampType, UInt64Type, StringType, TimestampType>(|ts, slice_length, start_or_end, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            time_slice_timestamp(ts, slice_length, TimePart::Second, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
         }),
     );
 
