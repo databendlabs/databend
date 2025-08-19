@@ -1106,4 +1106,8 @@ impl Settings {
     pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_spill_level")
     }
+
+    pub fn get_enable_fuse_parquet_dictionary_encoding(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_fuse_parquet_dictionary_encoding")? == 1)
+    }
 }
