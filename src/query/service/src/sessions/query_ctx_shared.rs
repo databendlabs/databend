@@ -30,6 +30,7 @@ use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
@@ -119,6 +120,7 @@ pub struct QueryContextShared {
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     aborting: Arc<AtomicBool>,
+    pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     affect: Arc<Mutex<Option<QueryAffect>>>,
@@ -222,6 +224,7 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
+            abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
@@ -373,7 +376,7 @@ impl QueryContextShared {
         }
 
         self.aborting.store(true, Ordering::Release);
-
+        self.abort_notify.notify_waiters();
         // TODO: Wait for the query to be processed (write out the last error)
     }
 

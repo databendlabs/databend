@@ -337,7 +337,8 @@ impl NativeDeserializeDataTransform {
             PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|name| schema.column_with_name(name).unwrap().0)
+                    .project_column_ref(|name| Ok(schema.column_with_name(name).unwrap().0))
+                    .unwrap()
             }),
         ))
     }

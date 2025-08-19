@@ -390,7 +390,7 @@ impl Partitioner {
         let left_most_cluster_key = &cluster_keys[0];
         let expr: Expr = left_most_cluster_key
             .as_expr(&BUILTIN_FUNCTIONS)
-            .project_column_ref(|name| table_schema.index_of(name).unwrap());
+            .project_column_ref(|name| table_schema.index_of(name))?;
         let func_ctx = ctx.get_function_context()?;
 
         let bloom_filter_column_info = bloom_filter_column_indexes

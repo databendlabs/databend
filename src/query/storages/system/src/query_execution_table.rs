@@ -24,7 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -183,8 +183,8 @@ impl QueryExecutionTable {
                 nodes.push(local_id.clone());
                 timestamps.push(timestamp as i64 * 1_000_000);
                 query_ids.push(query_id.clone());
-                process_rows.push(rows_for_timestamp.get(query_id).copied().unwrap_or(0));
-                process_times.push(times_for_timestamp.get(query_id).copied().unwrap_or(0));
+                process_rows.push(rows_for_timestamp.get(query_id).copied().unwrap_or(0) as u64);
+                process_times.push(times_for_timestamp.get(query_id).copied().unwrap_or(0) as u64);
             }
         }
 
@@ -192,8 +192,8 @@ impl QueryExecutionTable {
             StringType::from_data(nodes),
             TimestampType::from_data(timestamps),
             StringType::from_data(query_ids),
-            UInt32Type::from_data(process_rows),
-            UInt32Type::from_data(process_times),
+            UInt64Type::from_data(process_rows),
+            UInt64Type::from_data(process_times),
         ])
     }
 }

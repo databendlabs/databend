@@ -307,16 +307,16 @@ fn resolve_range_condition(
                 match join_predicate {
                     JoinPredicate::Left(_) => {
                         left = Some(arg.type_check(left_schema.as_ref())?.project_column_ref(
-                            |index| left_schema.index_of(&index.to_string()).unwrap(),
-                        ));
+                            |index| left_schema.index_of(&index.to_string()),
+                        )?);
                     }
                     JoinPredicate::Right(_) => {
                         if idx == 0 {
                             opposite = true;
                         }
                         right = Some(arg.type_check(right_schema.as_ref())?.project_column_ref(
-                            |index| right_schema.index_of(&index.to_string()).unwrap(),
-                        ));
+                            |index| right_schema.index_of(&index.to_string()),
+                        )?);
                     }
                     JoinPredicate::ALL(_)
                     | JoinPredicate::Both { .. }
@@ -347,6 +347,6 @@ fn resolve_range_condition(
 fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
     let expr = scalar
         .type_check(schema.as_ref())?
-        .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+        .project_column_ref(|index| schema.index_of(&index.to_string()))?;
     Ok(expr.as_remote_expr())
 }

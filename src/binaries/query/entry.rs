@@ -33,7 +33,6 @@ use databend_common_version::DATABEND_GIT_SHA;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
-use databend_query::local;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
@@ -54,30 +53,11 @@ use super::cmd::Commands;
 pub struct MainError;
 
 pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
-    let make_error = || "failed to run cmd";
-
     match &cmd.subcommand {
         None => return Ok(false),
         Some(Commands::Ver) => {
             println!("version: {}", *DATABEND_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
-        }
-        Some(Commands::Local {
-            query,
-            output_format,
-            config,
-        }) => {
-            let mut cmd = cmd.clone();
-            if !config.is_empty() {
-                cmd.config_file = config.to_string();
-            }
-            let conf = cmd
-                .init_inner_config(false)
-                .await
-                .with_context(make_error)?;
-            local::query_local(conf, &BUILD_INFO, query, output_format)
-                .await
-                .with_context(make_error)?
         }
     }
 

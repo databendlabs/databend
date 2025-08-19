@@ -36,6 +36,7 @@ use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
@@ -886,6 +887,10 @@ impl TableContext for QueryContext {
 
     fn check_aborting(&self) -> Result<(), ContextError> {
         self.shared.check_aborting()
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.shared.abort_notify.clone()
     }
 
     fn get_error(&self) -> Option<ErrorCode<ContextError>> {

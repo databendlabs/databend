@@ -248,7 +248,7 @@ impl ReplaceInterpreter {
             }
             let delete_column_name = delete_column_binding.unwrap().column_name.clone();
             let filter = cast_expr_to_non_null_boolean(
-                scalar.as_expr()?.project_column_ref(|col| col.index),
+                scalar.as_expr()?.project_column_ref(|col| Ok(col.index))?,
             )?;
 
             let filter = filter.as_remote_expr();

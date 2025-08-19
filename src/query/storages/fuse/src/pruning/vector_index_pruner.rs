@@ -125,7 +125,7 @@ impl VectorIndexPruner {
             let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             let column_refs = filter.column_refs();
             if column_refs.len() == 1 && column_refs.contains_key(VECTOR_SCORE_COL_NAME) {
-                let filter_expr = filter.project_column_ref(|_| 0);
+                let filter_expr = filter.project_column_ref(|_| Ok(0))?;
                 Some(filter_expr)
             } else {
                 None

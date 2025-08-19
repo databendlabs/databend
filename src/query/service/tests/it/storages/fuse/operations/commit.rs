@@ -22,6 +22,7 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::WatchNotify;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -896,6 +897,10 @@ impl TableContext for CtxDelegation {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.ctx.get_abort_notify()
     }
 }
 
