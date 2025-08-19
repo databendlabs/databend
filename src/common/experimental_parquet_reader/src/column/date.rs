@@ -17,6 +17,7 @@ use parquet2::schema::types::PhysicalType;
 
 use crate::column::common::ParquetColumnIterator;
 use crate::column::common::ParquetColumnType;
+use crate::column::common::DictionarySupport;
 use crate::column::number::IntegerMetadata;
 
 #[derive(Copy, Clone)]
@@ -30,6 +31,42 @@ impl ParquetColumnType for Date {
     fn create_column(data: Vec<Self>, _metadata: &Self::Metadata) -> Column {
         let raw_data: Vec<i32> = unsafe { std::mem::transmute(data) };
         Column::Date(raw_data.into())
+    }
+}
+
+// =============================================================================
+// Dictionary Support Implementation
+// =============================================================================
+
+impl DictionarySupport for Date {
+    fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
+        if entry.len() != 4 {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                format!("Invalid Date dictionary entry length: expected 4, got {}", entry.len())
+            ));
+        }
+        
+        // Parquet stores dates as i32 in little-endian format
+        let bytes: [u8; 4] = entry.try_into().map_err(|_| {
+            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to Date".to_string())
+        })?;
+        
+        Ok(Date(i32::from_le_bytes(bytes)))
+    }
+    
+    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> databend_common_exception::Result<Vec<Self>> {
+        let mut result = Vec::with_capacity(indices.len());
+        for &index in indices {
+            let dict_idx = index as usize;
+            if dict_idx >= dictionary.len() {
+                return Err(databend_common_exception::ErrorCode::Internal(format!(
+                    "Dictionary index out of bounds: {} >= {}", 
+                    dict_idx, dictionary.len()
+                )));
+            }
+            result.push(dictionary[dict_idx]);
+        }
+        Ok(result)
     }
 }
 

@@ -26,6 +26,47 @@ use streaming_decompression::FallibleStreamingIterator;
 
 use crate::reader::decompressor;
 
+// =============================================================================
+// Dictionary Support Trait
+// =============================================================================
+
+/// Trait for types that support dictionary encoding in Parquet
+/// This trait enables efficient dictionary-based deserialization for numeric types
+pub trait DictionarySupport: ParquetColumnType {
+    /// Create a value from a dictionary entry (raw bytes)
+    /// 
+    /// # Arguments
+    /// * `entry` - Raw bytes from dictionary page
+    /// 
+    /// # Returns
+    /// Decoded value of type Self
+    fn from_dictionary_entry(entry: &[u8]) -> Result<Self>;
+    
+    /// Batch create values from dictionary using indices
+    /// This is the performance-critical path for dictionary decoding
+    /// 
+    /// # Arguments  
+    /// * `dictionary` - Pre-parsed dictionary values
+    /// * `indices` - Array of dictionary indices
+    /// 
+    /// # Returns
+    /// Vector of decoded values
+    fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> Result<Vec<Self>> {
+        let mut result = Vec::with_capacity(indices.len());
+        for &index in indices {
+            let dict_idx = index as usize;
+            if dict_idx >= dictionary.len() {
+                return Err(ErrorCode::Internal(format!(
+                    "Dictionary index out of bounds: {} >= {}", 
+                    dict_idx, dictionary.len()
+                )));
+            }
+            result.push(dictionary[dict_idx]);
+        }
+        Ok(result)
+    }
+}
+
 /// Extract definition levels, repetition levels, and values from a data page
 fn extract_page_data(data_page: &parquet2::page::DataPage) -> Result<(&[u8], &[u8], &[u8])> {
     match parquet2::page::split_buffer(data_page) {
@@ -184,6 +225,334 @@ fn process_plain_encoding<T: Copy>(
     Ok(())
 }
 
+/// Process a complete data page for any type T
+fn process_data_page<T: Copy + DictionarySupport>(
+    data_page: &parquet2::page::DataPage,
+    column_data: &mut Vec<T>,
+    target_rows: usize,
+    is_nullable: bool,
+    expected_physical_type: &PhysicalType,
+    dictionary: Option<&[T]>,
+) -> Result<Option<Bitmap>> {
+    // Validate physical type
+    validate_physical_type(
+        data_page.descriptor.primitive_type.physical_type,
+        *expected_physical_type,
+    )?;
+
+    let (def_levels, _, values_buffer) = extract_page_data(data_page)?;
+    let remaining = target_rows - column_data.len();
+
+    // Defensive checks for nullable vs non-nullable columns
+    #[cfg(debug_assertions)]
+    validate_column_nullability(def_levels, is_nullable)?;
+
+    // Number of values(not rows), including NULLs
+    let num_values = data_page.num_values();
+
+    // Calculate how many rows this page will actually contribute
+    let page_rows = if is_nullable {
+        // For nullable columns, page contributes num_values rows (including NULLs)
+        num_values.min(remaining)
+    } else {
+        // For non-nullable columns, we need to handle different encodings differently
+        match data_page.encoding() {
+            parquet2::encoding::Encoding::Plain => {
+                let type_size = std::mem::size_of::<T>();
+                let num_values_in_buffer = values_buffer.len() / type_size;
+                num_values_in_buffer.min(remaining)
+            }
+            parquet2::encoding::Encoding::RleDictionary => {
+                // For RLE dictionary, we use num_values from the page header
+                num_values.min(remaining)
+            }
+            _ => num_values.min(remaining),
+        }
+    };
+
+    // Process definition levels to create validity bitmap (only for nullable columns)
+    let validity_bitmap = if is_nullable {
+        let bit_width = get_bit_width(data_page.descriptor.max_def_level);
+        let (bitmap, _non_null_count) =
+            decode_definition_levels(def_levels, bit_width, num_values, data_page)?;
+        bitmap
+    } else {
+        // For non-nullable columns, no validity bitmap needed
+        None
+    };
+
+    // Process values based on encoding
+    match data_page.encoding() {
+        parquet2::encoding::Encoding::Plain => {
+            // Validate values_buffer alignment for plain encoding
+            #[cfg(debug_assertions)]
+            {
+                let type_size = std::mem::size_of::<T>();
+                if values_buffer.len() % type_size != 0 {
+                    return Err(ErrorCode::Internal(format!(
+                        "Values buffer length ({}) is not aligned to type size ({}). Buffer may be corrupted.",
+                        values_buffer.len(),
+                        type_size
+                    )));
+                }
+            }
+            
+            process_plain_encoding(
+                values_buffer,
+                page_rows,
+                column_data,
+                validity_bitmap.as_ref(),
+            )?;
+        }
+        parquet2::encoding::Encoding::RleDictionary => {
+            if let Some(dict) = dictionary {
+                process_rle_dictionary_encoding(
+                    values_buffer,
+                    page_rows,
+                    column_data,
+                    dict,
+                )?;
+            } else {
+                return Err(ErrorCode::Internal(
+                    "RLE dictionary encoding requires dictionary page".to_string(),
+                ));
+            }
+        }
+        encoding => {
+            return Err(ErrorCode::Internal(format!(
+                "Unsupported encoding: {:?}",
+                encoding
+            )));
+        }
+    }
+
+    Ok(validity_bitmap)
+}
+
+/// Process dictionary page for numeric types
+fn process_dictionary_page<T: DictionarySupport>(
+    dict_page: &parquet2::page::DictPage,
+    dictionary: &mut Vec<T>,
+) -> Result<()> {
+    let dict_buffer: &[u8] = dict_page.buffer.as_ref();
+    let type_size = match T::PHYSICAL_TYPE {
+        PhysicalType::Int32 => 4,
+        PhysicalType::Int64 => 8,
+        PhysicalType::FixedLenByteArray(len) => len as usize,
+        _ => return Err(ErrorCode::Internal(format!(
+            "Unsupported physical type for dictionary: {:?}", T::PHYSICAL_TYPE
+        ))),
+    };
+    
+    // Parse dictionary entries based on physical type
+    for chunk in dict_buffer.chunks_exact(type_size) {
+        let value = T::from_dictionary_entry(chunk)?;
+        dictionary.push(value);
+    }
+    
+    Ok(())
+}
+
+/// Process RLE dictionary encoded data page
+fn process_rle_dictionary_encoding<T: DictionarySupport>(
+    values_buffer: &[u8],
+    page_rows: usize,
+    column_data: &mut Vec<T>,
+    dictionary: &[T],
+) -> Result<()> {
+    if values_buffer.is_empty() {
+        return Err(ErrorCode::Internal("Empty values buffer for RLE dictionary".to_string()));
+    }
+    
+    // First byte is bit_width
+    let bit_width = values_buffer[0];
+    
+    // Create RLE decoder
+    let mut rle_decoder = RleDecoder::new(bit_width);
+    rle_decoder.set_data(bytes::Bytes::copy_from_slice(&values_buffer[1..]));
+    
+    // Decode indices
+    let mut indices = vec![0i32; page_rows];
+    let decoded_count = rle_decoder
+        .get_batch(&mut indices)
+        .map_err(|e| ErrorCode::Internal(format!("Failed to decode RLE indices: {}", e)))?;
+    
+    if decoded_count != page_rows {
+        return Err(ErrorCode::Internal(format!(
+            "RLE decoder returned wrong count: expected={}, got={}", 
+            page_rows, decoded_count
+        )));
+    }
+    
+    // Batch dictionary lookup - performance critical path
+    let dict_values = T::batch_from_dictionary(dictionary, &indices)?;
+    column_data.extend(dict_values);
+    
+    Ok(())
+}
+
+// TODO rename this
+pub trait ParquetColumnType: Copy + Send + Sync + 'static {
+    /// Additional metadata needed to create columns (e.g., precision/scale for decimals)
+    type Metadata: Clone;
+
+    /// The Parquet physical type for this column type
+    const PHYSICAL_TYPE: PhysicalType;
+
+    /// Create a column from the deserialized data
+    fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> Column;
+}
+
+// TODO rename this
+pub struct ParquetColumnIterator<'a, T: ParquetColumnType + DictionarySupport> {
+    pages: Decompressor<'a>,
+    chunk_size: Option<usize>,
+    num_rows: usize,
+    is_nullable: bool,
+    metadata: T::Metadata,
+    dictionary: Option<Vec<T>>,  // Cached dictionary values
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T: ParquetColumnType + DictionarySupport> ParquetColumnIterator<'a, T> {
+    pub fn new(
+        pages: Decompressor<'a>,
+        num_rows: usize,
+        is_nullable: bool,
+        metadata: T::Metadata,
+        chunk_size: Option<usize>,
+    ) -> Self {
+        Self {
+            pages,
+            chunk_size,
+            num_rows,
+            is_nullable,
+            metadata,
+            dictionary: None,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+// WIP: State of iterator should be adjusted, if we allow chunk_size be chosen freely
+impl<'a, T: ParquetColumnType + DictionarySupport> Iterator for ParquetColumnIterator<'a, T> {
+    type Item = Result<Column>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let target_rows = self.chunk_size.unwrap_or(self.num_rows);
+        let mut column_data: Vec<T> = Vec::with_capacity(target_rows);
+        let mut validity_bitmaps = Vec::new();
+
+        while column_data.len() < target_rows {
+            // Get the next page
+            let page = match self.pages.next() {
+                Ok(Some(page)) => page,
+                Ok(None) => break,
+                Err(e) => {
+                    return Some(Err(ErrorCode::Internal(format!(
+                        "Failed to get next page: {}",
+                        e
+                    ))))
+                }
+            };
+
+            match page {
+                parquet2::page::Page::Data(data_page) => {
+                    let data_len_before = column_data.len();
+                    match process_data_page(
+                        data_page,
+                        &mut column_data,
+                        target_rows,
+                        self.is_nullable,
+                        &T::PHYSICAL_TYPE,
+                        self.dictionary.as_ref().map(|dict| dict.as_slice()),
+                    ) {
+                        Ok(validity_bitmap) => {
+                            if self.is_nullable {
+                                // For nullable columns, we must have a validity bitmap for each page
+                                if let Some(bitmap) = validity_bitmap {
+                                    let data_added = column_data.len() - data_len_before;
+
+                                    // Verify bitmap length matches data added
+                                    if bitmap.len() != data_added {
+                                        return Some(Err(ErrorCode::Internal(format!(
+                                            "Bitmap length mismatch: bitmap={}, data_added={}",
+                                            bitmap.len(),
+                                            data_added
+                                        ))));
+                                    }
+                                    validity_bitmaps.push(bitmap);
+                                } else {
+                                    // This should not happen for nullable columns
+                                    return Some(Err(ErrorCode::Internal(
+                                        "Nullable column page must produce validity bitmap"
+                                            .to_string(),
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => return Some(Err(e)),
+                    }
+                }
+                parquet2::page::Page::Dict(dict_page) => {
+                    if T::PHYSICAL_TYPE == PhysicalType::Int32 
+                        || T::PHYSICAL_TYPE == PhysicalType::Int64 
+                        || matches!(T::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(_)) {
+                        
+                        // Process dictionary page and cache the dictionary
+                        if let Some(ref mut dictionary) = self.dictionary {
+                            if let Err(e) = process_dictionary_page::<T>(dict_page, dictionary) {
+                                return Some(Err(e));
+                            }
+                        } else {
+                            let mut dictionary = Vec::new();
+                            if let Err(e) = process_dictionary_page::<T>(dict_page, &mut dictionary) {
+                                return Some(Err(e));
+                            }
+                            self.dictionary = Some(dictionary);
+                        }
+                    } else {
+                        return Some(Err(ErrorCode::Internal(
+                            "Dictionary page not supported for this type".to_string(),
+                        )));
+                    }
+                }
+            }
+        }
+
+        if column_data.is_empty() {
+            return None;
+        }
+
+        // Return the appropriate Column variant based on nullability
+        if self.is_nullable {
+            // For nullable columns, create NullableColumn
+            let column_len = column_data.len();
+            let base_column = T::create_column(column_data, &self.metadata);
+
+            // Combine validity bitmaps from multiple pages
+            let combined_bitmap = match combine_validity_bitmaps(validity_bitmaps, column_len) {
+                Ok(bitmap) => bitmap,
+                Err(e) => return Some(Err(e)),
+            };
+
+            let nullable_column = NullableColumn::new(base_column, combined_bitmap);
+            Some(Ok(Column::Nullable(Box::new(nullable_column))))
+        } else {
+            // For non-nullable columns, return the column directly
+            Some(Ok(T::create_column(column_data, &self.metadata)))
+        }
+    }
+}
+
+fn get_bit_width(max_level: i16) -> u32 {
+    if max_level == 1 {
+        1
+    } else {
+        16 - max_level.leading_zeros()
+    }
+}
+
 /// Convert endianness and copy data for big-endian systems
 ///
 /// This function handles the conversion from Parquet's little-endian format
@@ -251,13 +620,6 @@ fn convert_endianness_and_copy<T: Copy>(src_bytes: &[u8], dst_slice: &mut [T]) {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst_ptr, 32);
             }
         }
-        _ => {
-            // For other sizes, fall back to direct copy (may not be correct for all types)
-            unsafe {
-                let dst_ptr = dst_slice.as_mut_ptr() as *mut u8;
-                std::ptr::copy_nonoverlapping(src_bytes.as_ptr(), dst_ptr, type_size);
-            }
-        }
     }
 }
 
@@ -293,20 +655,6 @@ pub fn validate_physical_type(actual: PhysicalType, expected: PhysicalType) -> R
     Ok(())
 }
 
-/// Validate values buffer alignment
-#[cfg(debug_assertions)]
-pub fn validate_buffer_alignment<T>(values_buffer: &[u8]) -> Result<()> {
-    let type_size = std::mem::size_of::<T>();
-    if values_buffer.len() % type_size != 0 {
-        return Err(ErrorCode::Internal(format!(
-            "Values buffer length ({}) is not aligned to type size ({}). Buffer may be corrupted.",
-            values_buffer.len(),
-            type_size
-        )));
-    }
-    Ok(())
-}
-
 /// Combine multiple validity bitmaps from different pages
 pub fn combine_validity_bitmaps(
     validity_bitmaps: Vec<Bitmap>,
@@ -330,218 +678,5 @@ pub fn combine_validity_bitmaps(
             combined_bits.extend(bitmap.iter());
         }
         Ok(Bitmap::from_iter(combined_bits))
-    }
-}
-
-// TODO: this is not suitable for all types, should be adjusted later
-/// Process a complete data page for any type T
-fn process_data_page<T: Copy>(
-    data_page: &parquet2::page::DataPage,
-    column_data: &mut Vec<T>,
-    target_rows: usize,
-    is_nullable: bool,
-    expected_physical_type: &PhysicalType,
-) -> Result<Option<Bitmap>> {
-    // Validate physical type
-    validate_physical_type(
-        data_page.descriptor.primitive_type.physical_type,
-        *expected_physical_type,
-    )?;
-
-    let (def_levels, _, values_buffer) = extract_page_data(data_page)?;
-    let remaining = target_rows - column_data.len();
-
-    // Defensive checks for nullable vs non-nullable columns
-    #[cfg(debug_assertions)]
-    validate_column_nullability(def_levels, is_nullable)?;
-
-    // Number of values(not rows), including NULLs
-    let num_values = data_page.num_values();
-
-    // Validate values_buffer alignment
-    #[cfg(debug_assertions)]
-    validate_buffer_alignment::<T>(values_buffer)?;
-
-    // Calculate how many rows this page will actually contribute
-    let page_rows = if is_nullable {
-        // For nullable columns, page contributes num_values rows (including NULLs)
-        num_values.min(remaining)
-    } else {
-        let type_size = std::mem::size_of::<T>();
-        let num_values_in_buffer = values_buffer.len() / type_size;
-        // For non-nullable columns, page contributes num_values_in_buffer rows
-        num_values_in_buffer.min(remaining)
-    };
-
-    // Process definition levels to create validity bitmap (only for nullable columns)
-    let validity_bitmap = if is_nullable {
-        let bit_width = get_bit_width(data_page.descriptor.max_def_level);
-        let (bitmap, _non_null_count) =
-            decode_definition_levels(def_levels, bit_width, num_values, data_page)?;
-        bitmap
-    } else {
-        // For non-nullable columns, no validity bitmap needed
-        None
-    };
-
-    // Process values based on encoding
-    match data_page.encoding() {
-        parquet2::encoding::Encoding::Plain => {
-            process_plain_encoding(
-                values_buffer,
-                page_rows,
-                column_data,
-                validity_bitmap.as_ref(),
-            )?;
-        }
-        encoding => {
-            return Err(ErrorCode::Internal(format!(
-                "Unsupported encoding: {:?}",
-                encoding
-            )));
-        }
-    }
-
-    Ok(validity_bitmap)
-}
-
-// TODO rename this
-pub trait ParquetColumnType: Copy + Send + Sync + 'static {
-    /// Additional metadata needed to create columns (e.g., precision/scale for decimals)
-    type Metadata: Clone;
-
-    /// The Parquet physical type for this column type
-    const PHYSICAL_TYPE: PhysicalType;
-
-    /// Create a column from the deserialized data
-    fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> Column;
-}
-
-// TODO rename this
-pub struct ParquetColumnIterator<'a, T: ParquetColumnType> {
-    pages: Decompressor<'a>,
-    chunk_size: Option<usize>,
-    num_rows: usize,
-    is_nullable: bool,
-    metadata: T::Metadata,
-    _phantom: std::marker::PhantomData<T>,
-}
-
-impl<'a, T: ParquetColumnType> ParquetColumnIterator<'a, T> {
-    pub fn new(
-        pages: Decompressor<'a>,
-        num_rows: usize,
-        is_nullable: bool,
-        metadata: T::Metadata,
-        chunk_size: Option<usize>,
-    ) -> Self {
-        Self {
-            pages,
-            chunk_size,
-            num_rows,
-            is_nullable,
-            metadata,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-// WIP: State of iterator should be adjusted, if we allow chunk_size be chosen freely
-impl<'a, T: ParquetColumnType> Iterator for ParquetColumnIterator<'a, T> {
-    type Item = Result<Column>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let target_rows = self.chunk_size.unwrap_or(self.num_rows);
-        let mut column_data: Vec<T> = Vec::with_capacity(target_rows);
-        let mut validity_bitmaps = Vec::new();
-
-        while column_data.len() < target_rows {
-            // Get the next page
-            let page = match self.pages.next() {
-                Ok(Some(page)) => page,
-                Ok(None) => break,
-                Err(e) => {
-                    return Some(Err(ErrorCode::Internal(format!(
-                        "Failed to get next page: {}",
-                        e
-                    ))))
-                }
-            };
-
-            match page {
-                parquet2::page::Page::Data(data_page) => {
-                    let data_len_before = column_data.len();
-                    match process_data_page(
-                        data_page,
-                        &mut column_data,
-                        target_rows,
-                        self.is_nullable,
-                        &T::PHYSICAL_TYPE,
-                    ) {
-                        Ok(validity_bitmap) => {
-                            if self.is_nullable {
-                                // For nullable columns, we must have a validity bitmap for each page
-                                if let Some(bitmap) = validity_bitmap {
-                                    let data_added = column_data.len() - data_len_before;
-
-                                    // Verify bitmap length matches data added
-                                    if bitmap.len() != data_added {
-                                        return Some(Err(ErrorCode::Internal(format!(
-                                            "Bitmap length mismatch: bitmap={}, data_added={}",
-                                            bitmap.len(),
-                                            data_added
-                                        ))));
-                                    }
-                                    validity_bitmaps.push(bitmap);
-                                } else {
-                                    // This should not happen for nullable columns
-                                    return Some(Err(ErrorCode::Internal(
-                                        "Nullable column page must produce validity bitmap"
-                                            .to_string(),
-                                    )));
-                                }
-                            }
-                        }
-                        Err(e) => return Some(Err(e)),
-                    }
-                }
-                parquet2::page::Page::Dict(_) => {
-                    return Some(Err(ErrorCode::Internal(
-                        "Dictionary page not supported yet".to_string(),
-                    )));
-                }
-            }
-        }
-
-        if column_data.is_empty() {
-            return None;
-        }
-
-        // Return the appropriate Column variant based on nullability
-        if self.is_nullable {
-            // For nullable columns, create NullableColumn
-            let column_len = column_data.len();
-            let base_column = T::create_column(column_data, &self.metadata);
-
-            // Combine validity bitmaps from multiple pages
-            let combined_bitmap = match combine_validity_bitmaps(validity_bitmaps, column_len) {
-                Ok(bitmap) => bitmap,
-                Err(e) => return Some(Err(e)),
-            };
-
-            let nullable_column = NullableColumn::new(base_column, combined_bitmap);
-            Some(Ok(Column::Nullable(Box::new(nullable_column))))
-        } else {
-            // For non-nullable columns, return the column directly
-            Some(Ok(T::create_column(column_data, &self.metadata)))
-        }
-    }
-}
-
-fn get_bit_width(max_level: i16) -> u32 {
-    if max_level == 1 {
-        1
-    } else {
-        16 - max_level.leading_zeros()
     }
 }
