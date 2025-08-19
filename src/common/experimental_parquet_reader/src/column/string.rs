@@ -372,8 +372,6 @@ impl<'a> StringIter<'a> {
         #[cfg(target_arch = "x86_64")]
         if is_x86_feature_detected!("avx2") {
             // AVX2 path: 256-bit operations for maximum throughput
-            #[cfg(debug_assertions)]
-            eprintln!("🚀 Using AVX2 SIMD path for string RLE decoding");
 
             use std::arch::x86_64::*;
 
@@ -402,8 +400,6 @@ impl<'a> StringIter<'a> {
             }
         } else if is_x86_feature_detected!("sse2") {
             // Fallback to SSE2 for older CPUs (SSE4.2 uses same instructions)
-            #[cfg(debug_assertions)]
-            eprintln!("🔧 Using SSE2 SIMD path for string RLE decoding");
 
             use std::arch::x86_64::*;
 
