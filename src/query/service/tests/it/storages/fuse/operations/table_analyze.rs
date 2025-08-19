@@ -155,7 +155,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     }
 
     // analyze
-    analyze_table(&fixture).await?;
+    fixture.analyze_table().await?;
 
     // check summary after analyze
     let table = fixture.latest_default_table().await?;

@@ -342,15 +342,6 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
     append_sample_data_overwrite(num_blocks, false, fixture).await
 }
 
-pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
-    let query = format!(
-        "analyze table {}.{}",
-        fixture.default_db_name(),
-        fixture.default_table_name()
-    );
-    fixture.execute_command(&query).await
-}
-
 pub async fn do_mutation(
     ctx: Arc<QueryContext>,
     s_expr: SExpr,

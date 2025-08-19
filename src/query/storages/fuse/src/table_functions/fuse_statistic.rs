@@ -221,7 +221,10 @@ impl<'a> FuseStatisticImpl<'a> {
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("column_name", TableDataType::String),
-            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "stats_row_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
             TableField::new(
                 "actual_row_count",
                 TableDataType::Number(NumberDataType::UInt64),
