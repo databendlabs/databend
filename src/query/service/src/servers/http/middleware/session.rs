@@ -32,7 +32,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NodeInfo;
-use databend_common_version::DATABEND_SEMVER;
 use databend_enterprise_resources_management::ResourcesManagement;
 use fastrace::func_name;
 use headers::authorization::Basic;
@@ -471,6 +470,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string());
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
 
+        let version = GlobalConfig::version();
         Ok(HttpQueryContext {
             session,
             query_id,
@@ -490,6 +490,7 @@ impl<E> HTTPSessionEndpoint<E> {
             client_session,
             fixed_coordinator_node: is_worksheet,
             client_caps,
+            version,
         })
     }
 }
@@ -749,8 +750,14 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
         )
             .into_response(),
     };
-    resp.headers_mut()
-        .insert(HEADER_VERSION, DATABEND_SEMVER.to_string().parse().unwrap());
+    resp.headers_mut().insert(
+        HEADER_VERSION,
+        GlobalConfig::version()
+            .semantic
+            .to_string()
+            .parse()
+            .unwrap(),
+    );
     Ok(resp)
 }
 

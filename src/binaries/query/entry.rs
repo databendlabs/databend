@@ -26,6 +26,7 @@ use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::set_panic_hook;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_GIT_SHA;
@@ -87,7 +88,7 @@ pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), Main
         .with_context(make_error);
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf, ee_mode)
+    GlobalServices::init(conf, &BUILD_INFO, ee_mode)
         .await
         .with_context(make_error)
 }
@@ -212,11 +213,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Metric API service.
     {
-        set_system_version(
-            "query",
-            DATABEND_GIT_SEMVER.unwrap_or("unknown"),
-            DATABEND_GIT_SHA.as_str(),
-        );
+        set_system_version("query", DATABEND_GIT_SEMVER, DATABEND_GIT_SHA.as_str());
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv
@@ -245,7 +242,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             "{}:{}",
             conf.query.flight_sql_handler_host, conf.query.flight_sql_handler_port
         );
-        let mut srv = FlightSQLServer::create(conf.clone()).with_context(make_error)?;
+        let mut srv =
+            FlightSQLServer::create(conf.clone(), &BUILD_INFO).with_context(make_error)?;
         let listening = srv
             .start(address.parse().with_context(make_error)?)
             .await

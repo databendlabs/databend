@@ -123,7 +123,6 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
@@ -146,6 +145,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
@@ -186,8 +186,8 @@ impl QueryContext {
         let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
-            version: format!("Databend Query {}", *DATABEND_COMMIT_VERSION),
-            mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
+            version: format!("Databend Query {}", shared.version.commit_detail),
+            mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             query_settings,
@@ -964,6 +964,10 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn get_version(&self) -> BuildInfoRef {
+        self.shared.version
+    }
+
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
@@ -1232,10 +1236,8 @@ impl TableContext for QueryContext {
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
         {
-            LicenseManagerSwitch::instance().check_enterprise_enabled(
-                self.get_settings().get_enterprise_license(),
-                Feature::SystemHistory,
-            )?;
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::SystemHistory)?;
 
             if GlobalConfig::instance().log.history.is_invisible(table) {
                 return Err(ErrorCode::InvalidArgument(format!(
@@ -1470,7 +1472,8 @@ impl TableContext for QueryContext {
     }
 
     fn get_license_key(&self) -> String {
-        self.get_settings().get_enterprise_license()
+        self.get_settings()
+            .get_enterprise_license(self.get_version())
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {

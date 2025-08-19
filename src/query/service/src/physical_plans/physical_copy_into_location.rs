@@ -15,7 +15,9 @@
 use std::any::Any;
 
 use chrono::Duration;
+use databend_common_base::base::Version;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -103,7 +105,11 @@ impl IPhysicalPlan for CopyIntoLocation {
         )?;
 
         // The stage table that copying into
-        let to_table = StageSinkTable::create(self.info.clone(), self.input_table_schema.clone())?;
+        let to_table = StageSinkTable::create(
+            self.info.clone(),
+            self.input_table_schema.clone(),
+            sink_create_by(&builder.ctx.get_version().semantic),
+        )?;
 
         // StageSinkTable needs not to hold the table meta timestamps invariants, just pass a dummy one
         let dummy_table_meta_timestamps = TableMetaTimestamps::new(None, Duration::hours(1));
@@ -119,4 +125,24 @@ impl IPhysicalPlan for CopyIntoLocation {
             dummy_table_meta_timestamps,
         )
     }
+}
+
+fn sink_create_by(version: &Version) -> String {
+    const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
+
+    // example:  1.2.333-nightly
+    // tags may contain other items like `1.2.680-p2`, we will fill it with `1.2.680-p2.....`
+    let mut create_by = format!(
+        "Databend {}.{}.{}-{:.<7}",
+        version.major,
+        version.minor,
+        version.patch,
+        version.pre.as_str()
+    );
+
+    if create_by.len() != CREATE_BY_LEN {
+        create_by = format!("{:.<24}", create_by);
+        create_by.truncate(24);
+    }
+    create_by
 }

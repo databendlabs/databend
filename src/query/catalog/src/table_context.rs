@@ -22,6 +22,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
@@ -240,6 +241,7 @@ pub trait TableContext: Send + Sync {
         object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
+    fn get_version(&self) -> BuildInfoRef;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> Tenant;
     /// Get the kind of session running query.

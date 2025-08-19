@@ -39,10 +39,8 @@ pub(crate) struct TaskInterpreterManager;
 impl TaskInterpreterManager {
     pub fn build(ctx: &QueryContext) -> Result<TaskInterpreterImpl> {
         if GlobalConfig::instance().task.on {
-            LicenseManagerSwitch::instance().check_enterprise_enabled(
-                ctx.get_settings().get_enterprise_license(),
-                Feature::PrivateTask,
-            )?;
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::PrivateTask)?;
             return Ok(TaskInterpreterImpl::Private(PrivateTaskInterpreter));
         }
         Ok(TaskInterpreterImpl::Cloud(CloudTaskInterpreter))

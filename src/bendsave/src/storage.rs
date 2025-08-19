@@ -38,7 +38,9 @@ use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::license::RealLicenseManager;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::SessionManager;
 use futures::TryStream;
 use futures::TryStreamExt;
@@ -71,7 +73,8 @@ pub fn load_query_storage(cfg: &InnerConfig) -> Result<Operator> {
 pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
     let content = std::fs::read_to_string(path)?;
     let outer_config: databend_meta::configs::outer_v0::Config = toml::from_str(&content)?;
-    let inner_config: databend_meta::configs::Config = outer_config.into();
+    let inner_config: databend_meta::configs::Config =
+        outer_config.try_into().map_err(|msg| anyhow!("{msg}"))?;
 
     if !inner_config.raft_config.raft_dir.starts_with("/") {
         return Err(anyhow!(
@@ -91,7 +94,7 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
 pub fn init_query(cfg: &InnerConfig) -> Result<()> {
     GlobalInstance::init_production();
 
-    GlobalConfig::init(cfg)?;
+    GlobalConfig::init(cfg, &BUILD_INFO)?;
     GlobalIORuntime::init(cfg.storage.num_cpus as usize)?;
 
     Ok(())
@@ -102,11 +105,11 @@ pub fn init_query(cfg: &InnerConfig) -> Result<()> {
 ///
 /// We only need to call it while backup since we can't access metasrv while
 /// restoring.
-pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
+pub async fn verify_query_license(cfg: &InnerConfig, version: BuildInfoRef) -> Result<()> {
     RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
     SessionManager::init(cfg)?;
     UserApiProvider::init(
-        cfg.meta.to_meta_grpc_client_conf(),
+        cfg.meta.to_meta_grpc_client_conf(version),
         &CacheConfig::default(),
         BuiltIn::default(),
         &cfg.query.tenant_id,
@@ -119,8 +122,10 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     let session = session_manager.register_session(session)?;
     let settings = session.get_settings();
 
-    LicenseManagerSwitch::instance()
-        .check_enterprise_enabled(settings.get_enterprise_license(), Feature::SystemManagement)?;
+    LicenseManagerSwitch::instance().check_enterprise_enabled(
+        settings.get_enterprise_license(version),
+        Feature::SystemManagement,
+    )?;
 
     debug!("databend license check passed");
     Ok(())
@@ -141,7 +146,7 @@ pub async fn load_databend_meta() -> Result<(
     impl TryStream<Ok = Bytes, Error = anyhow::Error>,
 )> {
     let cfg = GlobalConfig::instance();
-    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf();
+    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf(&BUILD_INFO);
     debug!("connect meta services on {:?}", grpc_client_conf.endpoints);
 
     let meta_client = MetaGrpcClient::try_new(&grpc_client_conf)?;

@@ -23,9 +23,10 @@ use databend_common_exception::Result;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_store::MetaStore;
+use databend_common_version::BUILD_INFO;
 
 async fn create_workload_mgr() -> WorkloadMgr {
-    let test_api = MetaStore::new_local_testing().await;
+    let test_api = MetaStore::new_local_testing(&BUILD_INFO).await;
     WorkloadMgr::create(test_api.clone(), "test-tenant-id").unwrap()
 }
 

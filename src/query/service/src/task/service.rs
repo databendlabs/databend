@@ -59,6 +59,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_sql::Planner;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_version::BUILD_INFO;
 use futures::Stream;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
@@ -151,7 +152,7 @@ impl TaskService {
 
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
+        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf(&BUILD_INFO))
             .create_meta_store()
             .await
             .map_err(|e| {
@@ -584,7 +585,7 @@ impl TaskService {
         };
 
         let session = create_session(user, role).await?;
-        session.create_query_context_with_cluster(dummy_cluster)
+        session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO)
     }
 
     pub async fn lasted_task_run(&self, task_name: &str) -> Result<Option<TaskRun>> {

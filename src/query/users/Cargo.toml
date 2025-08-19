@@ -27,7 +27,6 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
-databend-common-version = { workspace = true }
 enumflags2 = { workspace = true }
 itertools = { workspace = true }
 jwt-simple = { workspace = true }
@@ -41,6 +40,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
+databend-common-version = { workspace = true }
 pretty_assertions = { workspace = true }
 wiremock = { workspace = true }
 

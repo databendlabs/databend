@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_client::errors::CreationError;
@@ -82,8 +83,11 @@ impl Drop for LocalMetaService {
 }
 
 impl LocalMetaService {
-    pub async fn new(name: impl fmt::Display) -> anyhow::Result<LocalMetaService> {
-        Self::new_with_fixed_dir(None, name).await
+    pub async fn new(
+        name: impl fmt::Display,
+        version: BuildInfoRef,
+    ) -> anyhow::Result<LocalMetaService> {
+        Self::new_with_fixed_dir(None, name, version).await
     }
 
     /// Create a new Config for test, with unique port assigned
@@ -94,6 +98,7 @@ impl LocalMetaService {
     pub async fn new_with_fixed_dir(
         dir: Option<String>,
         name: impl fmt::Display,
+        version: BuildInfoRef,
     ) -> anyhow::Result<LocalMetaService> {
         let name = name.to_string();
         let (temp_dir, dir_path) = if let Some(dir_path) = dir {
@@ -148,11 +153,11 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_node = MetaNode::start(&config).await?;
+        let meta_node = MetaNode::start(&config, version).await?;
         let mut grpc_server = GrpcServer::create(config.clone(), meta_node);
         grpc_server.start().await?;
 
-        let client = Self::grpc_client(&config).await?;
+        let client = Self::grpc_client(&config, version).await?;
 
         let local = LocalMetaService {
             _temp_dir: temp_dir,
@@ -178,11 +183,14 @@ impl LocalMetaService {
         }
     }
 
-    async fn grpc_client(config: &configs::Config) -> Result<Arc<ClientHandle>, CreationError> {
+    async fn grpc_client(
+        config: &configs::Config,
+        version: BuildInfoRef,
+    ) -> Result<Arc<ClientHandle>, CreationError> {
         let addr = config.grpc_api_address.clone();
-
         let client = MetaGrpcClient::try_create(
             vec![addr],
+            version,
             "root",
             "xxx",
             None,

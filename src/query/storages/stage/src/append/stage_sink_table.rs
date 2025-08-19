@@ -39,10 +39,15 @@ pub struct StageSinkTable {
     // But the Table trait need it:
     // fn get_table_info(&self) -> &TableInfo).
     table_info_placeholder: TableInfo,
+    create_by: String,
 }
 
 impl StageSinkTable {
-    pub fn create(info: CopyIntoLocationInfo, schema: TableSchemaRef) -> Result<Arc<dyn Table>> {
+    pub fn create(
+        info: CopyIntoLocationInfo,
+        schema: TableSchemaRef,
+        create_by: String,
+    ) -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo {
             name: "stage_sink".to_string(),
             ..Default::default()
@@ -52,6 +57,7 @@ impl StageSinkTable {
             info,
             schema,
             table_info_placeholder,
+            create_by,
         }))
     }
 
@@ -84,6 +90,7 @@ impl StageSinkTable {
                 &group_id,
                 mem_limit,
                 max_threads,
+                self.create_by.clone(),
             )?,
             _ => append_data_to_row_based_files(
                 pipeline,

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_config::QueryConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_version::DATABEND_SEMVER;
 use jwt_simple::algorithms::ECDSAP256PublicKeyLike;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::algorithms::RS256PublicKey;
@@ -80,13 +80,13 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn create(cfg: &QueryConfig) -> Option<Self> {
+    pub fn create(cfg: &QueryConfig, version: BuildInfoRef) -> Option<Self> {
         if cfg.jwt_key_file.is_empty() && cfg.jwt_key_files.is_empty() {
             return None;
         }
         let user_agent = format!(
             "Databend/{}/{}/{}",
-            *DATABEND_SEMVER,
+            version.semantic,
             cfg.tenant_id.tenant_name(),
             cfg.cluster_id
         );
@@ -95,7 +95,7 @@ impl JwtAuthenticator {
         let mut key_stores = vec![];
         if !cfg.jwt_key_file.is_empty() {
             key_stores.push(
-                jwk::JwkKeyStore::new(cfg.jwt_key_file.clone())
+                jwk::JwkKeyStore::new(cfg.jwt_key_file.clone(), version)
                     .with_user_agent(&user_agent)
                     .with_refresh_interval(cfg.jwks_refresh_interval)
                     .with_refresh_timeout(cfg.jwks_refresh_timeout),
@@ -103,7 +103,7 @@ impl JwtAuthenticator {
         }
         for u in &cfg.jwt_key_files {
             key_stores.push(
-                jwk::JwkKeyStore::new(u.clone())
+                jwk::JwkKeyStore::new(u.clone(), version)
                     .with_user_agent(&user_agent)
                     .with_refresh_interval(cfg.jwks_refresh_interval)
                     .with_refresh_timeout(cfg.jwks_refresh_timeout),

@@ -72,7 +72,9 @@ impl Config {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub fn load() -> Result<Self, MetaStartupError> {
-        let cfg = OuterV0Config::load(true)?.into();
+        let cfg = OuterV0Config::load(true)?
+            .try_into()
+            .map_err(MetaStartupError::InvalidConfig)?;
 
         Ok(cfg)
     }
@@ -91,7 +93,9 @@ impl Config {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self, MetaStartupError> {
-        let cfg: Self = OuterV0Config::load(false)?.into();
+        let cfg: Self = OuterV0Config::load(false)?
+            .try_into()
+            .map_err(MetaStartupError::InvalidConfig)?;
         Ok(cfg)
     }
 

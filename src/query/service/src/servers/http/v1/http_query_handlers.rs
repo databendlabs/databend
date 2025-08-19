@@ -31,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
-use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use http::HeaderMap;
@@ -629,7 +628,7 @@ pub async fn heartbeat_handler(
             http::header::CONTENT_TYPE,
             HeaderValue::from_static("application/json"),
         );
-        let agent = format!("databend-query/{}", *DATABEND_SEMVER);
+        let agent = format!("databend-query/{}", ctx.version.semantic);
         headers.insert(
             http::header::USER_AGENT,
             HeaderValue::from_str(&agent).unwrap(),

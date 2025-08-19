@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
@@ -143,10 +144,13 @@ impl Debug for DatabaseCatalog {
 
 impl DatabaseCatalog {
     #[async_backtrace::framed]
-    pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(
+        conf: InnerConfig,
+        version: BuildInfoRef,
+    ) -> Result<DatabaseCatalog> {
         let table_function_factory = TableFunctionFactory::create(&conf);
         let immutable_catalog = ImmutableCatalog::try_create_with_config(Some(&conf), None)?;
-        let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
+        let mutable_catalog = MutableCatalog::try_create_with_config(conf, version).await?;
         let session_catalog = SessionCatalog::create(mutable_catalog, SessionState::default());
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),

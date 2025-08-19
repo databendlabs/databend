@@ -47,6 +47,7 @@ use parking_lot::RwLock;
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
+use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -150,18 +151,22 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     #[async_backtrace::framed]
-    pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
+    pub async fn create_query_context(
+        self: &Arc<Self>,
+        version: BuildInfoRef,
+    ) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        self.create_query_context_with_cluster(cluster)
+        self.create_query_context_with_cluster(cluster, version)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
+        version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
-        let shared = QueryContextShared::try_create(session, cluster)?;
+        let shared = QueryContextShared::try_create(session, cluster, version)?;
 
         if let Some(mem_stat) = ThreadTracker::mem_stat() {
             let settings = self.get_settings();

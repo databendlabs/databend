@@ -39,6 +39,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
+use jiff::Timestamp;
 use log::Record;
 use logforth::Append;
 use logforth::Diagnostic;
@@ -208,17 +209,14 @@ impl RemoteLog {
     }
 
     pub fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
+        let timestamp = Timestamp::now().as_microsecond();
         let query_id = ThreadTracker::query_id().cloned();
-        let mut fields = Map::new();
         let target = record.target().to_string();
         let message = record.args().to_string();
-        for (k, v) in collect_kvs(record.key_values()) {
-            fields.insert(k, v.into());
-        }
+        let fields = Map::from_iter(collect_kvs(record.key_values()));
         let fields = serde_json::to_string(&fields).unwrap_or_default();
 
         let log_level = record.level().to_string();
-        let timestamp = chrono::Utc::now().timestamp_micros();
 
         let path = format!(
             "{}: {}:{}",
@@ -267,7 +265,7 @@ impl LogBuffer {
     pub fn new(sender: Sender<LogMessage>, interval: u64) -> Self {
         Self {
             queue: ConcurrentQueue::unbounded(),
-            last_collect: AtomicU64::new(chrono::Utc::now().timestamp_micros() as u64),
+            last_collect: AtomicU64::new(Timestamp::now().as_microsecond() as u64),
             sender,
             interval,
         }
@@ -277,13 +275,11 @@ impl LogBuffer {
     pub fn log(&self, log_element: RemoteLogElement) -> anyhow::Result<()> {
         self.queue.push(log_element)?;
         if self.queue.len() >= Self::MAX_BUFFER_SIZE {
-            self.last_collect.store(
-                chrono::Utc::now().timestamp_micros() as u64,
-                Ordering::SeqCst,
-            );
+            self.last_collect
+                .store(Timestamp::now().as_microsecond() as u64, Ordering::SeqCst);
             self.collect()?;
         }
-        let now = chrono::Utc::now().timestamp_micros() as u64;
+        let now = Timestamp::now().as_microsecond() as u64;
         let mut current_last_collect = 0;
         loop {
             match self.last_collect.compare_exchange_weak(

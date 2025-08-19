@@ -40,6 +40,7 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::UpsertKV;
+use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use test_harness::test;
@@ -643,6 +644,7 @@ fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Ev
 fn make_client(addr: impl ToString) -> anyhow::Result<Arc<ClientHandle>> {
     let client = MetaGrpcClient::try_create(
         vec![addr.to_string()],
+        &BUILD_INFO,
         "root",
         "xxx",
         None,

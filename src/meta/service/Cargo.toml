@@ -36,7 +36,6 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
-databend-common-version = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -69,6 +68,7 @@ watcher = { workspace = true }
 databend-common-meta-cache = { workspace = true }
 databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
+databend-common-version = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }

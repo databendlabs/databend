@@ -27,6 +27,7 @@ async fn test_flight_sql_server_port_used() -> Result<()> {
     let mut srv = FlightSQLServer {
         config: ConfigBuilder::create().build(),
         abort_notify: Default::default(),
+        version: &databend_common_version::BUILD_INFO,
     };
 
     let r = srv.start_with_incoming(local_socket).await;

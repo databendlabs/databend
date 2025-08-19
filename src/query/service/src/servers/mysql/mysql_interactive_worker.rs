@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::tokio::io::AsyncWrite;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -34,7 +35,6 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::StreamExt;
@@ -71,6 +71,7 @@ use crate::stream::DataBlockStream;
 
 struct InteractiveWorkerBase {
     session: Arc<Session>,
+    version: BuildInfoRef,
 }
 
 pub struct InteractiveWorker {
@@ -302,7 +303,7 @@ impl InteractiveWorkerBase {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_api = UserApiProvider::instance();
-        let ctx = self.session.create_query_context().await?;
+        let ctx = self.session.create_query_context(self.version).await?;
         let tenant = ctx.get_tenant();
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
@@ -415,7 +416,7 @@ impl InteractiveWorkerBase {
             }
             None => {
                 info!("Normal query: {}", query);
-                let context = self.session.create_query_context().await?;
+                let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
@@ -507,7 +508,11 @@ impl InteractiveWorkerBase {
 }
 
 impl InteractiveWorker {
-    pub fn create(session: Arc<Session>, client_addr: String) -> InteractiveWorker {
+    pub fn create(
+        session: Arc<Session>,
+        version: BuildInfoRef,
+        client_addr: String,
+    ) -> InteractiveWorker {
         let mut bs = vec![0u8; 20];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(bs.as_mut());
@@ -521,9 +526,9 @@ impl InteractiveWorker {
         }
 
         InteractiveWorker {
-            base: InteractiveWorkerBase { session },
+            version: format!("{MYSQL_VERSION}-{}", version.commit_detail),
+            base: InteractiveWorkerBase { session, version },
             salt: scramble,
-            version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
             keep_alive_task_started: false,
         }

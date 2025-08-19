@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use http::StatusCode;
@@ -34,7 +36,8 @@ use crate::sessions::TableContext;
 #[async_backtrace::framed]
 pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
     let sessions = SessionManager::instance();
-    let nodes = list_nodes(&sessions).await.map_err(|cause| {
+    let version = GlobalConfig::version();
+    let nodes = list_nodes(&sessions, version).await.map_err(|cause| {
         poem::Error::from_string(
             format!("Failed to fetch cluster nodes list. cause: {cause}"),
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -43,13 +46,16 @@ pub async fn cluster_list_handler() -> poem::Result<impl IntoResponse> {
     Ok(Json(nodes))
 }
 
-async fn list_nodes(session_manager: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>> {
+async fn list_nodes(
+    session_manager: &Arc<SessionManager>,
+    version: BuildInfoRef,
+) -> Result<Vec<Arc<NodeInfo>>> {
     let session = session_manager
         .create_session(SessionType::HTTPAPI("WatchCluster".to_string()))
         .await?;
 
     let session = session_manager.register_session(session)?;
 
-    let watch_cluster_context = session.create_query_context().await?;
+    let watch_cluster_context = session.create_query_context(version).await?;
     Ok(watch_cluster_context.get_cluster().get_nodes())
 }

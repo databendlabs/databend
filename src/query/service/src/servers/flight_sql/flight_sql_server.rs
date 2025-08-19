@@ -30,17 +30,23 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use crate::servers::Server as DatabendQueryServer;
+use crate::sessions::BuildInfoRef;
 
 pub struct FlightSQLServer {
     pub config: InnerConfig,
     pub abort_notify: Arc<Notify>,
+    pub version: BuildInfoRef,
 }
 
 impl FlightSQLServer {
-    pub fn create(config: InnerConfig) -> Result<Box<dyn DatabendQueryServer>> {
+    pub fn create(
+        config: InnerConfig,
+        version: BuildInfoRef,
+    ) -> Result<Box<dyn DatabendQueryServer>> {
         Ok(Box::new(Self {
             config,
             abort_notify: Arc::new(Notify::new()),
+            version,
         }))
     }
 
@@ -63,7 +69,7 @@ impl FlightSQLServer {
 
     #[async_backtrace::framed]
     pub async fn start_with_incoming(&mut self, addr: SocketAddr) -> Result<()> {
-        let flight_sql_service = FlightSqlServiceImpl::create();
+        let flight_sql_service = FlightSqlServiceImpl::create(self.version);
         let builder = Server::builder();
         let mut builder = if self.config.flight_sql_tls_server_enabled() {
             info!("databend query tls flight sql enabled");

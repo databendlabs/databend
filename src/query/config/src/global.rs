@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 
@@ -22,13 +24,19 @@ use crate::InnerConfig;
 pub struct GlobalConfig;
 
 impl GlobalConfig {
-    pub fn init(config: &InnerConfig) -> Result<()> {
+    pub fn init(config: &InnerConfig, version: BuildInfoRef) -> Result<()> {
         GlobalInstance::set(Arc::new(config.clone()));
+        GlobalInstance::set(Arc::new(version));
         Ok(())
     }
 
     pub fn instance() -> Arc<InnerConfig> {
         GlobalInstance::get()
+    }
+
+    pub fn version() -> BuildInfoRef {
+        let version: Arc<BuildInfoRef> = GlobalInstance::get();
+        version.deref()
     }
 
     pub fn try_get_instance() -> Option<Arc<InnerConfig>> {

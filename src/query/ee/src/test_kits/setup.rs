@@ -15,7 +15,7 @@
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_tracing::set_panic_hook;
-use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::BUILD_INFO;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use log::info;
@@ -26,8 +26,8 @@ pub struct TestFixture;
 
 impl TestFixture {
     pub async fn setup(config: &InnerConfig, public_key: String) -> Result<()> {
-        let binary_version = DATABEND_COMMIT_VERSION.clone();
-        set_panic_hook(binary_version);
+        let version = &BUILD_INFO;
+        set_panic_hook(version.commit_detail.clone());
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
@@ -36,7 +36,7 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config, false).await?;
+        GlobalServices::init_with(config, version, false).await?;
         MockServices::init(config, public_key).await?;
 
         // Cluster register.

@@ -142,6 +142,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
@@ -606,6 +607,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_fuse_version(&self) -> String {
+        todo!()
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
         todo!()
     }
 

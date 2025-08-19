@@ -119,7 +119,6 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use databend_common_version::UDF_CLIENT_USER_AGENT;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
@@ -4897,7 +4896,7 @@ impl<'a> TypeChecker<'a> {
             &udf_definition.address,
             connect_timeout,
             request_timeout,
-            UDF_CLIENT_USER_AGENT.as_str(),
+            &self.ctx.get_version().udf_client_user_agent(),
         )?;
 
         let num_rows = 1;

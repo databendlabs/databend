@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
@@ -71,8 +72,11 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
+        version: BuildInfoRef,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, default_catalog, catalog_creators).await?);
+        GlobalInstance::set(
+            Self::try_create(conf, default_catalog, catalog_creators, version).await?,
+        );
 
         Ok(())
     }
@@ -83,9 +87,12 @@ impl CatalogManager {
         conf: &InnerConfig,
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
+        version: BuildInfoRef,
     ) -> Result<Arc<CatalogManager>> {
         let meta = {
-            let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
+            let provider = Arc::new(MetaStoreProvider::new(
+                conf.meta.to_meta_grpc_client_conf(version),
+            ));
 
             provider.create_meta_store().await.map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))

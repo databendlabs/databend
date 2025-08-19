@@ -33,7 +33,12 @@ use databend_common_meta_types::MetaAPIError;
 use databend_common_storage::init_operator;
 use databend_common_tracing::set_panic_hook;
 use databend_common_tracing::GlobalLogger;
+use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_common_version::DATABEND_GIT_SEMVER;
+use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::METASRV_COMMIT_VERSION;
+use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
@@ -41,10 +46,6 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
-use databend_meta::version::METASRV_COMMIT_VERSION;
-use databend_meta::version::METASRV_GIT_SEMVER;
-use databend_meta::version::METASRV_GIT_SHA;
-use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::info;
 use log::warn;
@@ -149,14 +150,17 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_node = MetaNode::start(&conf).await?;
+    let meta_node = MetaNode::start(&conf, &BUILD_INFO).await?;
 
     let mut stop_handler = StopHandle::<AnyError>::create();
     let stop_tx = StopHandle::<AnyError>::install_termination_handle();
 
     // HTTP API service.
     {
-        server_metrics::set_version(METASRV_GIT_SEMVER.to_string(), METASRV_GIT_SHA.to_string());
+        server_metrics::set_version(
+            DATABEND_GIT_SEMVER.to_string(),
+            VERGEN_GIT_SHA.unwrap_or("unknown").to_string(),
+        );
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
@@ -221,7 +225,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
                 endpoints: vec![conf.grpc_api_address.clone()],
                 username: conf.username.clone(),
                 password: conf.password.clone(),
-                ..Default::default()
+                ..RpcClientConf::empty(&BUILD_INFO)
             };
             let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
                 Ok(s) => Arc::new(s),
@@ -343,7 +347,7 @@ async fn run_cmd(conf: &Config) -> bool {
 
     match conf.cmd.as_str() {
         "ver" => {
-            println!("version: {}", METASRV_SEMVER.deref());
+            println!("version: {}", DATABEND_SEMVER.deref());
             println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
             println!("data-version: {:?}", DATA_VERSION);
         }

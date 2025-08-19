@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SystemPlan;
 
@@ -23,7 +24,8 @@ pub static SYSTEM_ACTION: &str = "/actions/system_action";
 
 pub async fn system_action(plan: SystemPlan) -> Result<()> {
     let session = create_session()?;
-    let query_context = session.create_query_context().await?;
+    let version = GlobalConfig::version();
+    let query_context = session.create_query_context(version).await?;
     let interpreter = SystemActionInterpreter::from_flight(query_context, plan)?;
     interpreter.execute2().await.map(|_| ())
 }

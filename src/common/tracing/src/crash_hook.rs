@@ -27,6 +27,8 @@ use std::time::Duration;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::StackTrace;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 
 const BUFFER_SIZE: usize = {
     size_of::<i32>() // sig
@@ -466,8 +468,8 @@ impl SignalListener {
                     " Crash fault info ",
                     id,
                     crash_version,
-                    chrono::Utc::now(),
-                    chrono::Local::now(),
+                    Zoned::now().with_time_zone(TimeZone::UTC),
+                    Zoned::now(),
                     crash_query_id,
                     signal_mess,
                     stack_trace
@@ -484,8 +486,8 @@ impl SignalListener {
                     " Crash fault info ",
                     id,
                     crash_version,
-                    chrono::Utc::now(),
-                    chrono::Local::now(),
+                    Zoned::now().with_time_zone(TimeZone::UTC),
+                    Zoned::now(),
                     crash_query_id,
                     signal_mess,
                     stack_trace

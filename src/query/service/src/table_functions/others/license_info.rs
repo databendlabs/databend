@@ -194,7 +194,7 @@ impl AsyncSource for LicenseInfoSource {
         let settings = self.ctx.get_settings();
         // sync global changes on distributed node cluster.
         settings.load_changes().await?;
-        let license = settings.get_enterprise_license();
+        let license = settings.get_enterprise_license(self.ctx.get_version());
 
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;

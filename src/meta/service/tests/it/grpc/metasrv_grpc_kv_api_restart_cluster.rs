@@ -22,6 +22,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::UpsertKV;
+use databend_common_version::BUILD_INFO;
 use log::info;
 use test_harness::test;
 use tokio::time::sleep;
@@ -162,6 +163,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
     let client = MetaGrpcClient::try_create(
         vec![tcs[0].config.grpc_api_address.clone()],
+        &BUILD_INFO,
         "root",
         "xxx",
         // Without timeout, the client will not be able to reconnect.
