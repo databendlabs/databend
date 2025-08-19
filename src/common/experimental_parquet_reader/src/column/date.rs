@@ -55,8 +55,16 @@ impl DictionarySupport for Date {
     }
     
     fn batch_from_dictionary(dictionary: &[Self], indices: &[i32]) -> databend_common_exception::Result<Vec<Self>> {
+        // Pre-allocate result vector with exact capacity
         let mut result = Vec::with_capacity(indices.len());
-        for &index in indices {
+        
+        // Use unsafe set_len for maximum performance, then fill in-place
+        unsafe {
+            result.set_len(indices.len());
+        }
+        
+        // Batch copy with bounds checking
+        for (i, &index) in indices.iter().enumerate() {
             let dict_idx = index as usize;
             if dict_idx >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
@@ -64,8 +72,10 @@ impl DictionarySupport for Date {
                     dict_idx, dictionary.len()
                 )));
             }
-            result.push(dictionary[dict_idx]);
+            // Direct assignment to pre-allocated memory
+            result[i] = dictionary[dict_idx];
         }
+        
         Ok(result)
     }
 }
