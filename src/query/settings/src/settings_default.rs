@@ -883,6 +883,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_fuse_parquet_dictionary_encoding", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables dictionary encoding for fuse parquet storage format.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
