@@ -80,6 +80,7 @@ pub struct AdditionalStatsMeta {
     /// An optional HyperLogLog data structure.
     pub hll: Option<RawBlockHLL>,
     /// The count of the stats rows.
+    #[serde(default)]
     pub row_count: u64,
 }
 
