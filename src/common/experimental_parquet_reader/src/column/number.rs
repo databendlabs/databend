@@ -173,3 +173,142 @@ pub fn new_int64_iter(
 ) -> Int64Iter {
     ParquetColumnIterator::new(pages, num_rows, is_nullable, IntegerMetadata, chunk_size)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use databend_common_exception::Result;
+
+    #[test]
+    fn test_i32_dictionary_support() -> Result<()> {
+        // Test from_dictionary_entry
+        let entry = [42u8, 0, 0, 0]; // 42 in little-endian
+        let value = i32::from_dictionary_entry(&entry)?;
+        assert_eq!(value, 42);
+
+        // Test negative number
+        let entry = [255u8, 255, 255, 255]; // -1 in little-endian
+        let value = i32::from_dictionary_entry(&entry)?;
+        assert_eq!(value, -1);
+
+        // Test invalid entry size
+        let entry = [42u8, 0, 0]; // Only 3 bytes
+        let result = i32::from_dictionary_entry(&entry);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_i64_dictionary_support() -> Result<()> {
+        // Test from_dictionary_entry
+        let entry = [42u8, 0, 0, 0, 0, 0, 0, 0]; // 42 in little-endian
+        let value = i64::from_dictionary_entry(&entry)?;
+        assert_eq!(value, 42);
+
+        // Test large number
+        let entry = [255u8, 255, 255, 255, 255, 255, 255, 127]; // i64::MAX
+        let value = i64::from_dictionary_entry(&entry)?;
+        assert_eq!(value, i64::MAX);
+
+        // Test invalid entry size
+        let entry = [42u8, 0, 0, 0, 0, 0, 0]; // Only 7 bytes
+        let result = i64::from_dictionary_entry(&entry);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_i32_batch_from_dictionary_into_slice() -> Result<()> {
+        // Setup dictionary
+        let dictionary = vec![10i32, 20, 30, 40, 50];
+        
+        // Test normal indices
+        let indices = [0i32, 2, 4, 1, 3];
+        let mut output = vec![0i32; 5];
+        
+        i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        assert_eq!(output, vec![10, 30, 50, 20, 40]);
+
+        // Test repeated indices
+        let indices = [1i32, 1, 1, 1];
+        let mut output = vec![0i32; 4];
+        
+        i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        assert_eq!(output, vec![20, 20, 20, 20]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_i64_batch_from_dictionary_into_slice() -> Result<()> {
+        // Setup dictionary
+        let dictionary = vec![100i64, 200, 300];
+        
+        // Test normal indices
+        let indices = [2i32, 0, 1, 2, 0];
+        let mut output = vec![0i64; 5];
+        
+        i64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        assert_eq!(output, vec![300, 100, 200, 300, 100]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_dictionary_bounds_checking() -> Result<()> {
+        let dictionary = vec![10i32, 20, 30];
+        
+        // Test out of bounds index
+        let indices = [0i32, 3, 1]; // Index 3 is out of bounds
+        let mut output = vec![0i32; 3];
+        
+        let result = i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Dictionary index out of bounds"));
+
+        // Test negative index (should be caught as out of bounds when cast to usize)
+        let indices = [0i32, -1, 1];
+        let mut output = vec![0i32; 3];
+        
+        let result = i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_dictionary_and_indices() -> Result<()> {
+        // Test empty indices with non-empty dictionary
+        let dictionary = vec![10i32, 20, 30];
+        let indices: [i32; 0] = [];
+        let mut output: Vec<i32> = vec![];
+        
+        i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        assert_eq!(output.len(), 0);
+
+        // Test empty dictionary with empty indices
+        let dictionary: Vec<i32> = vec![];
+        let indices: [i32; 0] = [];
+        let mut output: Vec<i32> = vec![];
+        
+        i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        assert_eq!(output.len(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mismatched_output_slice_length() -> Result<()> {
+        let dictionary = vec![10i32, 20, 30];
+        let indices = [0i32, 1, 2];
+        let mut output = vec![0i32; 2]; // Output too small
+        
+        let result = i32::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Output slice length mismatch"));
+
+        Ok(())
+    }
+}

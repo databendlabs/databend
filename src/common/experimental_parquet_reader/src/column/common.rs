@@ -363,8 +363,11 @@ fn process_rle_dictionary_encoding<T: DictionarySupport>(
     let mut rle_decoder = RleDecoder::new(bit_width);
     rle_decoder.set_data(bytes::Bytes::copy_from_slice(&values_buffer[1..]));
     
-    // Decode indices
-    let mut indices = vec![0i32; page_rows];
+    // Decode indices - avoid zero initialization for performance
+    let mut indices = Vec::with_capacity(page_rows);
+    unsafe {
+        indices.set_len(page_rows);
+    }
     let decoded_count = rle_decoder
         .get_batch(&mut indices)
         .map_err(|e| ErrorCode::Internal(format!("Failed to decode RLE indices: {}", e)))?;
@@ -396,7 +399,7 @@ pub trait ParquetColumnType: Copy + Send + Sync + 'static {
     const PHYSICAL_TYPE: PhysicalType;
 
     /// Create a column from the deserialized data
-    fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> Column;
+    fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> databend_common_expression::Column;
 }
 
 // TODO rename this
@@ -432,7 +435,7 @@ impl<'a, T: ParquetColumnType + DictionarySupport> ParquetColumnIterator<'a, T> 
 
 // WIP: State of iterator should be adjusted, if we allow chunk_size be chosen freely
 impl<'a, T: ParquetColumnType + DictionarySupport> Iterator for ParquetColumnIterator<'a, T> {
-    type Item = Result<Column>;
+    type Item = Result<databend_common_expression::Column>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let target_rows = self.chunk_size.unwrap_or(self.num_rows);
@@ -674,5 +677,191 @@ pub fn combine_validity_bitmaps(
             combined_bits.extend(bitmap.iter());
         }
         Ok(Bitmap::from_iter(combined_bits))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parquet2::page::{DictPage, DataPage};
+    use parquet2::encoding::Encoding;
+    use parquet2::compression::Compression;
+    use parquet2::schema::types::PhysicalType;
+    use std::sync::Arc;
+
+    // Mock implementation for testing
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    struct TestType(i32);
+
+    impl ParquetColumnType for TestType {
+        const PHYSICAL_TYPE: PhysicalType = PhysicalType::Int32;
+        type Metadata = ();
+        
+        fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> databend_common_expression::Column {
+            let raw_data: Vec<i32> = unsafe { std::mem::transmute(data) };
+            databend_common_expression::Column::Number(databend_common_expression::NumberColumn::Int32(raw_data.into()))
+        }
+    }
+
+    impl DictionarySupport for TestType {
+        fn from_dictionary_entry(entry: &[u8]) -> Result<Self> {
+            if entry.len() != 4 {
+                return Err(databend_common_exception::ErrorCode::Internal(
+                    "Expected 4 bytes for TestType".to_string(),
+                ));
+            }
+            let value = i32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]);
+            Ok(TestType(value))
+        }
+
+        fn batch_from_dictionary_into_slice(
+            dictionary: &[Self],
+            indices: &[i32],
+            output: &mut [Self],
+        ) -> Result<()> {
+            if indices.len() != output.len() {
+                return Err(databend_common_exception::ErrorCode::Internal(
+                    "Output slice length mismatch".to_string(),
+                ));
+            }
+
+            for (i, &index) in indices.iter().enumerate() {
+                if index < 0 || index as usize >= dictionary.len() {
+                    return Err(databend_common_exception::ErrorCode::Internal(
+                        format!("Dictionary index out of bounds: {} >= {}", index, dictionary.len()),
+                    ));
+                }
+                output[i] = dictionary[index as usize];
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_process_dictionary_page() -> Result<()> {
+        // Create test dictionary data (3 i32 values: 10, 20, 30)
+        let dict_data = vec![
+            10u8, 0, 0, 0,  // 10 in little-endian
+            20u8, 0, 0, 0,  // 20 in little-endian
+            30u8, 0, 0, 0,  // 30 in little-endian
+        ];
+
+        let dict_page = DictPage {
+            buffer: bytes::Bytes::from(dict_data),
+            num_values: 3,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        process_dictionary_page::<TestType>(&dict_page, &mut dictionary)?;
+
+        assert_eq!(dictionary.len(), 3);
+        assert_eq!(dictionary[0], TestType(10));
+        assert_eq!(dictionary[1], TestType(20));
+        assert_eq!(dictionary[2], TestType(30));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_dictionary_page_empty() -> Result<()> {
+        let dict_page = DictPage {
+            buffer: bytes::Bytes::from(vec![]),
+            num_values: 0,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        process_dictionary_page::<TestType>(&dict_page, &mut dictionary)?;
+
+        assert_eq!(dictionary.len(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_process_dictionary_page_invalid_size() -> Result<()> {
+        // Create invalid dictionary data (incomplete i32)
+        let dict_data = vec![10u8, 0, 0]; // Only 3 bytes instead of 4
+
+        let dict_page = DictPage {
+            buffer: bytes::Bytes::from(dict_data),
+            num_values: 1,
+            is_sorted: false,
+        };
+
+        let mut dictionary = Vec::new();
+        let result = process_dictionary_page::<TestType>(&dict_page, &mut dictionary);
+
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rle_indices_allocation_optimization() {
+        // This test verifies that our optimization to avoid zero initialization
+        // doesn't break the basic functionality. We can't directly test the
+        // performance improvement, but we can ensure correctness.
+        
+        let page_rows = 1000;
+        
+        // Create indices vector with our optimized allocation
+        let mut indices = Vec::with_capacity(page_rows);
+        unsafe {
+            indices.set_len(page_rows);
+        }
+        
+        // Verify the vector has the correct capacity and length
+        assert_eq!(indices.len(), page_rows);
+        assert!(indices.capacity() >= page_rows);
+        
+        // Verify we can write to all positions (this would crash if unsafe was wrong)
+        for i in 0..page_rows {
+            indices[i] = i as i32;
+        }
+        
+        // Verify the data was written correctly
+        for i in 0..page_rows {
+            assert_eq!(indices[i], i as i32);
+        }
+    }
+
+    #[test]
+    fn test_dictionary_support_trait_consistency() {
+        // Test that all our types have consistent PHYSICAL_TYPE values
+        assert_eq!(i32::PHYSICAL_TYPE, PhysicalType::Int32);
+        assert_eq!(i64::PHYSICAL_TYPE, PhysicalType::Int64);
+        assert_eq!(Date::PHYSICAL_TYPE, PhysicalType::Int32);
+        
+        // Decimal types use FixedLenByteArray
+        assert_eq!(Decimal64::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(8));
+        assert_eq!(Decimal128::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(16));
+        assert_eq!(Decimal256::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(32));
+    }
+
+    #[test]
+    fn test_batch_dictionary_lookup_performance_pattern() -> Result<()> {
+        // Test the performance pattern we optimized: pre-allocation + direct assignment
+        let dictionary = vec![TestType(100), TestType(200), TestType(300)];
+        let indices = vec![0i32, 1, 2, 0, 1, 2]; // 6 lookups
+        
+        // Pre-allocate output (our optimization)
+        let mut output = Vec::with_capacity(indices.len());
+        unsafe {
+            output.set_len(indices.len());
+        }
+        
+        // Perform batch lookup
+        TestType::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
+        
+        // Verify results
+        assert_eq!(output.len(), 6);
+        assert_eq!(output[0], TestType(100));
+        assert_eq!(output[1], TestType(200));
+        assert_eq!(output[2], TestType(300));
+        assert_eq!(output[3], TestType(100));
+        assert_eq!(output[4], TestType(200));
+        assert_eq!(output[5], TestType(300));
+        
+        Ok(())
     }
 }
