@@ -15,16 +15,21 @@
 use std::fmt;
 use std::io;
 
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use log::info;
 use rotbl::v001::SeqMarked;
+use seq_marked::SeqData;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::leveled_store::db_builder::DBBuilder;
+use crate::leveled_store::value_convert::ValueConvert;
 use crate::sm_v003::write_entry::WriteEntry;
 use crate::sm_v003::writer_stat::WriterStat;
 use crate::snapshot_config::SnapshotConfig;
@@ -40,6 +45,25 @@ pub struct WriterV003 {
 }
 
 impl WriterV003 {
+    /// Convert protobuf SeqV to SeqMarked format for WriterV003.
+    /// Used by V004 snapshot receiver to process incoming KV data.
+    pub fn convert_seq_v_to_seq_marked(seq_v: pb::SeqV) -> Result<SeqMarked, io::Error> {
+        let native_seq_v = SeqV::from(seq_v);
+        let seq_marked_meta_value = SeqMarked::from(native_seq_v);
+        seq_marked_meta_value.conv_to()
+    }
+
+    /// Convert SeqMarked to protobuf SeqV for V004 snapshot streaming.
+    /// Used by V004 snapshot sender to stream KV data from snapshot DB.
+    /// Returns error for tombstones since they shouldn't be streamed.
+    pub fn convert_seq_data_to_seq_v(seq_data: SeqData) -> Result<pb::SeqV, io::Error> {
+        let seq_data = SeqData::<MetaValue>::conv_from(seq_data)?;
+        let (seq, (meta, data)) = seq_data.into_parts();
+
+        let seq_v = SeqV { seq, data, meta };
+        Ok(pb::SeqV::from(seq_v))
+    }
+
     /// Create a singleton writer for the snapshot.
     pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
         let (storage_path, temp_rel_path) = snapshot_config.snapshot_temp_dir_fn();

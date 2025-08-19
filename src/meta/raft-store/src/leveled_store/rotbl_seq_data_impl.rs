@@ -22,55 +22,45 @@
 
 use std::io;
 
-use rotbl::v001::Marked;
-use rotbl::v001::SeqMarked;
+use seq_marked::SeqData;
 use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;
 
 use crate::leveled_store::value_convert::ValueConvert;
 
-impl ValueConvert<SeqMarked> for SeqMarked<MetaValue> {
-    fn conv_to(self) -> Result<SeqMarked, io::Error> {
-        let (seq, data) = self.into_parts();
+impl ValueConvert<SeqData> for SeqData<MetaValue> {
+    fn conv_to(self) -> Result<SeqData, io::Error> {
+        let (seq, meta_value) = self.into_parts();
 
-        let seq_marked = match data {
-            Marked::TombStone => SeqMarked::new_tombstone(seq),
-            Marked::Normal(meta_value) => {
-                let bytes = meta_value.conv_to()?;
+        let bytes = meta_value.conv_to()?;
 
-                SeqMarked::new_normal(seq, bytes)
-            }
-        };
-        Ok(seq_marked)
+        let seq_data = SeqData::new(seq, bytes);
+
+        Ok(seq_data)
     }
 
-    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
+    fn conv_from(seq_marked: SeqData) -> Result<Self, io::Error> {
         let (seq, data) = seq_marked.into_parts();
-
-        let data = match data {
-            Marked::TombStone => {
-                return Ok(SeqMarked::new_tombstone(seq));
-            }
-            Marked::Normal(bytes) => bytes,
-        };
 
         let meta_value = ValueConvert::conv_from(data)?;
 
-        let marked = SeqMarked::new_normal(seq, meta_value);
-        Ok(marked)
+        let seq_data = SeqData::new(seq, meta_value);
+
+        Ok(seq_data)
     }
 }
 
 /// Conversion for ExpireValue
-impl ValueConvert<SeqMarked> for SeqMarked<String> {
-    fn conv_to(self) -> Result<SeqMarked, io::Error> {
-        let marked = self.map(|s| (None::<KVMeta>, s.into_bytes()));
+impl ValueConvert<SeqData> for SeqData<String> {
+    fn conv_to(self) -> Result<SeqData, io::Error> {
+        let sys_data = self.map(|s| (None::<KVMeta>, s.into_bytes()));
 
-        marked.conv_to()
+        sys_data.conv_to()
     }
 
-    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
-        let marked = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_marked)?;
+    fn conv_from(seq_data: SeqData) -> Result<Self, io::Error> {
+        let marked = SeqData::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_data)?;
+
         let marked = marked.try_map(|(_meta, value)| {
             String::from_utf8(value).map_err(|e| {
                 io::Error::new(
@@ -92,74 +82,69 @@ mod tests {
     #[test]
     fn test_marked_of_string_try_from_seq_marked() -> io::Result<()> {
         t_string_try_from(
-            SeqMarked::<String>::new_normal(1, s("hello")),
-            SeqMarked::new_normal(1, b("\x01\x04null\x05hello")),
+            SeqData::<String>::new(1, s("hello")),
+            SeqData::new(1, b("\x01\x04null\x05hello")),
         );
 
-        t_string_try_from(
-            SeqMarked::<String>::new_tombstone(2),
-            SeqMarked::new_tombstone(2),
-        );
         Ok(())
     }
 
-    fn t_string_try_from(marked: SeqMarked<String>, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().conv_to().unwrap();
+    fn t_string_try_from(marked: SeqData<String>, seq_marked: SeqData) {
+        let got: SeqData = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = SeqMarked::<String>::conv_from(got).unwrap();
+        let got = SeqData::<String>::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
     #[test]
     fn test_marked_try_from_seq_marked() -> io::Result<()> {
         t_try_from(
-            SeqMarked::new_normal(1, (None, b("hello"))),
-            SeqMarked::new_normal(1, b("\x01\x04null\x05hello")),
+            SeqData::new(1, (None, b("hello"))),
+            SeqData::new(1, b("\x01\x04null\x05hello")),
         );
 
         t_try_from(
-            SeqMarked::new_normal(1, (Some(KVMeta::new_expires_at(20)), b("hello"))),
-            SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
+            SeqData::new(1, (Some(KVMeta::new_expires_at(20)), b("hello"))),
+            SeqData::new(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
         );
 
-        t_try_from(SeqMarked::new_tombstone(2), SeqMarked::new_tombstone(2));
         Ok(())
     }
 
-    fn t_try_from(marked: SeqMarked<MetaValue>, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().conv_to().unwrap();
+    fn t_try_from(marked: SeqData<MetaValue>, seq_marked: SeqData) {
+        let got: SeqData = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = SeqMarked::conv_from(got).unwrap();
+        let got = SeqData::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
     #[test]
     fn test_invalid_seq_marked() {
         t_invalid(
-            SeqMarked::new_normal(1, b("\x00\x10{\"expire_at\":20}\x05hello")),
+            SeqData::new(1, b("\x00\x10{\"expire_at\":20}\x05hello")),
             "unsupported rotbl value version: 0",
         );
 
         t_invalid(
-            SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":2x}\x05hello")),
+            SeqData::new(1, b("\x01\x10{\"expire_at\":2x}\x05hello")),
             "fail to decode KVMeta from rotbl value: expected `,` or `}` at line 1 column 15",
         );
 
         t_invalid(
-            SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05h")),
+            SeqData::new(1, b("\x01\x10{\"expire_at\":20}\x05h")),
             "fail to decode rotbl value: UnexpectedEnd { additional: 4 }",
         );
 
         t_invalid(
-            SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello-")),
+            SeqData::new(1, b("\x01\x10{\"expire_at\":20}\x05hello-")),
             "remaining bytes in rotbl value: has read: 24, total: 25",
         );
     }
 
-    fn t_invalid(seq_mark: SeqMarked, want_err: impl ToString) {
-        let res = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_mark);
+    fn t_invalid(seq_mark: SeqData, want_err: impl ToString) {
+        let res = SeqData::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_mark);
         let err = res.unwrap_err();
         assert_eq!(want_err.to_string(), err.to_string());
     }
