@@ -2996,19 +2996,11 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
+            info!("create database res: {:?}", ());
 
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
+            assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -3356,19 +3348,11 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
+            info!("create database res: {:?}", ());
 
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
+            assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
         let created_on = Utc::now();
@@ -4145,18 +4129,10 @@ impl SchemaApiTestSuite {
             table_name: tb1_name.to_string(),
         };
 
-        let plan = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent::new(&tenant, db1_name),
-            meta: DatabaseMeta {
-                engine: "".to_string(),
-                ..DatabaseMeta::default()
-            },
-        };
-
-        let res = mt.create_database(plan).await?;
-        info!("create database res: {:?}", res);
-        let db_id = res.db_id;
+        let mut util = Util::new(mt, tenant_name, db1_name, "", "");
+        util.create_db().await?;
+        info!("create database res: {:?}", ());
+        let db_id = util.db_id();
 
         let created_on = Utc::now();
         let schema = || {
@@ -4878,18 +4854,9 @@ impl SchemaApiTestSuite {
         info!("--- create db1 tables");
         {
             let test_db_name = "db1";
-            let db_name = DatabaseNameIdent::new(&tenant, test_db_name);
-            let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: db_name.clone(),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(req).await?;
-            let db_id = res.db_id;
+            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            util.create_db().await?;
+            let db_id = util.db_id();
 
             let drop_ids =
                 create_dropped_table(mt, tenant_name, test_db_name, *db_id, DEFAULT_MGET_SIZE + 1)
@@ -4909,18 +4876,9 @@ impl SchemaApiTestSuite {
         info!("--- create db2 tables");
         {
             let test_db_name = "db2";
-            let db_name = DatabaseNameIdent::new(&tenant, test_db_name);
-            let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: db_name.clone(),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(req).await?;
-            let db_id = res.db_id;
+            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            util.create_db().await?;
+            let db_id = util.db_id();
 
             let drop_ids =
                 create_dropped_table(mt, tenant_name, test_db_name, *db_id, DEFAULT_MGET_SIZE)
@@ -4938,18 +4896,9 @@ impl SchemaApiTestSuite {
         info!("--- create db3 tables");
         {
             let test_db_name = "db3";
-            let db_name = DatabaseNameIdent::new(&tenant, test_db_name);
-            let req = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: db_name.clone(),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(req).await?;
-            let db_id = res.db_id;
+            let mut util = Util::new(mt, tenant_name, test_db_name, "", "");
+            util.create_db().await?;
+            let db_id = util.db_id();
 
             let drop_ids = create_dropped_table(mt, tenant_name, test_db_name, *db_id, 1).await?;
             let case_drop_ids_vec = vec![&mut case1_drop_ids, &mut case5_drop_ids];
@@ -5564,19 +5513,10 @@ impl SchemaApiTestSuite {
             // use a new tenant and db do test
             let db_name = "orphan_db";
             let tenant_name = "orphan_tenant";
-            let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
-
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            let db_id = res.db_id;
+            let mut orphan_util = Util::new(mt, tenant_name, db_name, "", "");
+            orphan_util.create_db().await?;
+            let db_id = orphan_util.db_id();
+            let tenant = orphan_util.tenant();
 
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
