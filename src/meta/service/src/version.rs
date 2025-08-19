@@ -65,6 +65,17 @@ pub(crate) mod raft {
         use feature_set::Action;
         use feature_set::Provide;
 
+        /// Removed and unused anymore.
+        #[rustfmt::skip]
+        pub const _PROVIDES_ARCHIVED: &[Action<Provide>] = &[
+            add_provide(("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
+            add_provide(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
+            add_provide(("install_snapshot", 2), "2024-05-06", (1,  2, 453)),
+            del_provide(("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
+            del_provide(("install_snapshot", 2), "2024-07-02", (1,  2, 552)),
+            del_provide(("install_snapshot", 1), "2025-07-02", (1,  2, 769)),
+        ];
+
         /// Feature set provided by raft server.
         ///
         /// This is a change-log of the features that raft server provides,
@@ -73,14 +84,8 @@ pub(crate) mod raft {
         pub const PROVIDES: &[Action<Provide>] = &[
             add_provide(("vote",             0), "2023-02-16", (0,  9,  41)),
             add_provide(("append",           0), "2023-02-16", (0,  9,  41)),
-            add_provide(("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
-            add_provide(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
-            add_provide(("install_snapshot", 2), "2024-05-06", (1,  2, 453)),
-            del_provide(("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
-            del_provide(("install_snapshot", 2), "2024-07-02", (1,  2, 552)),
             add_provide(("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
-            del_provide(("install_snapshot", 1), "2025-07-02", (1,  2, 769)),
-            add_provide(("vote",             1), "2025-07-20", (1,  0,   0)), // TODO: fix the version
+            add_provide(("vote",             1), "2025-07-20", (1,  2, 777)),
         ];
 
         /// The client features that raft server depends on.
@@ -97,6 +102,16 @@ pub(crate) mod raft {
         use feature_set::Action;
         use feature_set::Require;
 
+        /// Removed and unused anymore.
+        #[rustfmt::skip]
+        pub const _REQUIRES_ARCHIVED: &[Action<Require>] = &[
+            add_require( ("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
+            add_optional(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
+            add_require( ("install_snapshot", 1), "2023-05-21", (1,  2, 479)),
+            del_require( ("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
+            del_require( ("install_snapshot", 1), "2024-07-02", (1,  2, 552)),
+        ];
+
         /// The server features that raft client depends on.
         ///
         /// This is a change-log of the features that raft client depends on,
@@ -105,13 +120,7 @@ pub(crate) mod raft {
         pub const REQUIRES: &[Action<Require>] = &[
             add_require( ("vote",             0), "2023-02-16", (0,  9,  41)),
             add_require( ("append",           0), "2023-02-16", (0,  9,  41)),
-            add_require( ("install_snapshot", 0), "2023-02-16", (0,  9,  41)),
-            add_optional(("install_snapshot", 1), "2023-11-16", (1,  2, 212)),
-            add_require( ("install_snapshot", 1), "2023-05-21", (1,  2, 479)),
-            del_require( ("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
-            del_require( ("install_snapshot", 1), "2024-07-02", (1,  2, 552)),
             add_require( ("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
-
         ];
 
         /// Feature set provided by raft client.

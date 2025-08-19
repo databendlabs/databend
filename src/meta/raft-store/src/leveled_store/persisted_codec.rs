@@ -16,13 +16,13 @@
 
 use std::io;
 
-/// Convert one type to another type for this crate to convert between 3rd party types.
-pub trait ValueConvert<T>
+/// Convert one type `Self` to type `T` for persisting on disk for this crate to convert between 3rd party types.
+pub trait PersistedCodec<T>
 where Self: Sized
 {
     /// Convert `Self` to `T`.
-    fn conv_to(self) -> Result<T, io::Error>;
+    fn encode_to(self) -> Result<T, io::Error>;
 
-    /// Convert `T` to `Self`.
-    fn conv_from(value: T) -> Result<Self, io::Error>;
+    /// Parse `T` back to `Self`.
+    fn decode_from(value: T) -> Result<Self, io::Error>;
 }

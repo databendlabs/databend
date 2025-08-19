@@ -13716,9 +13716,9 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 
 [[package]]
 name = "seq-marked"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "835b34bd2bb988a2287b118e7a43054e6ad381a5cde3beb6ef27c4637c5aa828"
+checksum = "a9484923c6320a859e6e925359a06cb20067085b12c9d7999649ba9636646860"
 dependencies = [
  "bincode 2.0.1",
  "serde",

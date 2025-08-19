@@ -15,16 +15,21 @@
 use std::fmt;
 use std::io;
 
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use log::info;
 use rotbl::v001::SeqMarked;
+use seq_marked::SeqData;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::leveled_store::db_builder::DBBuilder;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 use crate::sm_v003::write_entry::WriteEntry;
 use crate::sm_v003::writer_stat::WriterStat;
 use crate::snapshot_config::SnapshotConfig;
