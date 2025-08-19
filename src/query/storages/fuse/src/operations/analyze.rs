@@ -211,12 +211,19 @@ impl SinkAnalyzeState {
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         self.ndv_states.retain(|k, _| column_ids.contains(k));
 
+        let mut new_snapshot = TableSnapshot::try_from_previous(
+            snapshot.clone(),
+            Some(table.get_table_info().ident.seq),
+            self.ctx
+                .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
+        )?;
+
         // 3. Generate new table statistics
-        let mut additional_stats_meta = AdditionalStatsMeta {
+        new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
             hll: Some(encode_column_hll(&self.ndv_states)?),
             row_count: snapshot.summary.row_count,
             ..Default::default()
-        };
+        });
         let table_statistics = if !self.histograms.is_empty() {
             let table_statistics = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
@@ -224,15 +231,14 @@ impl SinkAnalyzeState {
                 self.snapshot_id,
                 snapshot.summary.row_count,
             );
-            additional_stats_meta.location = Some((
+            new_snapshot.table_statistics_location = Some(
                 table
                     .meta_location_generator
                     .snapshot_statistics_location_from_uuid(
                         &table_statistics.snapshot_id,
                         table_statistics.format_version(),
                     )?,
-                table_statistics.format_version(),
-            ));
+            );
             Some(table_statistics)
         } else {
             None
@@ -241,16 +247,8 @@ impl SinkAnalyzeState {
         let (col_stats, cluster_stats) =
             regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
         // 4. Save table statistics
-        let mut new_snapshot = TableSnapshot::try_from_previous(
-            snapshot.clone(),
-            Some(table.get_table_info().ident.seq),
-            self.ctx
-                .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
-            FuseTable::generate_table_stats_from_prev(snapshot.as_ref()),
-        )?;
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
-        new_snapshot.summary.additional_stats_meta = Some(additional_stats_meta);
         table
             .commit_to_meta_server(
                 self.ctx.as_ref(),

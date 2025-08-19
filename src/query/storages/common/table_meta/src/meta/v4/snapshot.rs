@@ -34,7 +34,6 @@ use crate::meta::monotonically_increased_timestamp;
 use crate::meta::uuid_from_date_time;
 use crate::meta::v2;
 use crate::meta::v3;
-use crate::meta::AdditionalStatsMeta;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -91,6 +90,7 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
+    // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
 }
 
@@ -100,9 +100,9 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
-        mut summary: Statistics,
+        summary: Statistics,
         segments: Vec<Location>,
-        additional_stats_meta: Option<AdditionalStatsMeta>,
+        table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         let TableMetaTimestamps {
@@ -140,7 +140,6 @@ impl TableSnapshot {
             return Err(ErrorCode::TransactionTimeout(err_msg));
         }
 
-        summary.additional_stats_meta = additional_stats_meta;
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -151,7 +150,7 @@ impl TableSnapshot {
             summary,
             segments,
             cluster_key_meta: None,
-            table_statistics_location: None,
+            table_statistics_location,
         })
     }
 
@@ -174,7 +173,6 @@ impl TableSnapshot {
         previous: Arc<TableSnapshot>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
-        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self> {
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::try_new(
@@ -183,7 +181,7 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
-            additional_stats_meta,
+            previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )
     }
@@ -253,12 +251,7 @@ impl TableSnapshot {
 
     #[inline]
     pub fn table_statistics_location(&self) -> Option<String> {
-        self.table_statistics_location.clone().or_else(|| {
-            self.summary
-                .additional_stats_meta
-                .as_ref()
-                .and_then(|v| v.location.as_ref().map(|v| v.0.clone()))
-        })
+        self.table_statistics_location.clone()
     }
 }
 

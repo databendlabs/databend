@@ -210,7 +210,6 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
         snapshot_0.clone(),
         None,
         TestFixture::default_table_meta_timestamps(),
-        FuseTable::generate_table_stats_from_prev(&snapshot_0),
     )?;
     let snapshot_loc_1 = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
@@ -232,7 +231,6 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
         Arc::new(snapshot_1.clone()),
         None,
         TestFixture::default_table_meta_timestamps(),
-        FuseTable::generate_table_stats_from_prev(&snapshot_1),
     )?;
     snapshot_2.table_statistics_location = Some(table_statistics_location);
     fuse_table

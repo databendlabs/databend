@@ -96,7 +96,6 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
             current_snapshot.clone(),
             None,
             TestFixture::default_table_meta_timestamps(),
-            FuseTable::generate_table_stats_from_prev(&current_snapshot),
         )?;
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)

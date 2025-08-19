@@ -29,13 +29,11 @@ use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
-use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
 
 use super::diff::SegmentsDiff;
-use crate::io::TableMetaLocationGenerator;
 use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
@@ -123,19 +121,8 @@ async fn try_rebuild_req(
             &latest_snapshot.summary(),
             default_cluster_key_id,
         );
-        let merged_summary = deduct_statistics(&s, &base_snapshot.summary());
+        let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
         let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
-        if let Some(loc) = latest_snapshot.table_statistics_location() {
-            let ver = TableMetaLocationGenerator::table_statistics_version(&loc);
-            if let Some(ref mut meta) = additional_stats_meta {
-                meta.location = Some((loc, ver));
-            } else {
-                additional_stats_meta = Some(AdditionalStatsMeta {
-                    location: Some((loc, ver)),
-                    ..Default::default()
-                });
-            }
-        }
         let insert_row = insert_rows.get(&tid).cloned().unwrap_or(0);
         let new_hll = new_snapshot
             .as_ref()
@@ -158,6 +145,7 @@ async fn try_rebuild_req(
                 }
             }
         }
+        merged_summary.additional_stats_meta = additional_stats_meta;
 
         {
             let txn_mgr_ref = ctx.txn_mgr();
@@ -219,7 +207,7 @@ async fn try_rebuild_req(
             latest_table.schema().as_ref().clone(),
             merged_summary,
             merged_segments,
-            additional_stats_meta,
+            latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;
 

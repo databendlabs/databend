@@ -54,6 +54,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -150,13 +151,8 @@ impl FuseTable {
     ) -> Result<()> {
         let snapshot_location = location_generator
             .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
-        let table_statistics_location = snapshot
-            .summary
-            .additional_stats_meta
-            .as_ref()
-            .and_then(|v| v.location.clone());
         let need_to_save_statistics =
-            table_statistics_location.is_some() && table_statistics.is_some();
+            snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
         // 1. write down snapshot
         snapshot.write_meta(operator, &snapshot_location).await?;
@@ -164,10 +160,14 @@ impl FuseTable {
             table_statistics
                 .clone()
                 .unwrap()
-                .write_meta(operator, &table_statistics_location.clone().unwrap().0)
+                .write_meta(
+                    operator,
+                    &snapshot.table_statistics_location.clone().unwrap(),
+                )
                 .await?;
         }
 
+        let table_statistics_location = snapshot.table_statistics_location();
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = self
@@ -186,7 +186,7 @@ impl FuseTable {
             .await;
 
         if need_to_save_statistics {
-            let table_statistics_location: String = table_statistics_location.unwrap().0;
+            let table_statistics_location = table_statistics_location.unwrap();
             match &res {
                 Ok(_) => {
                     TableSnapshotStatistics::cache()
@@ -351,7 +351,6 @@ impl FuseTable {
                 latest_snapshot.clone(),
                 Some(latest_table_info.ident.seq),
                 table_meta_timestamps,
-                None,
             )?;
 
             let schema = self.schema();
@@ -372,8 +371,11 @@ impl FuseTable {
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
-            snapshot_tobe_committed.summary.additional_stats_meta =
-                Self::generate_table_stats_from_prev(latest_snapshot.as_ref());
+            snapshot_tobe_committed.summary.additional_stats_meta = latest_snapshot
+                .summary
+                .additional_stats_meta
+                .as_ref()
+                .cloned();
 
             decorate_snapshot(
                 &mut snapshot_tobe_committed,
@@ -517,31 +519,16 @@ impl FuseTable {
         snapshot: &Option<Arc<TableSnapshot>>,
         insert_hll: &BlockHLL,
         insert_rows: u64,
-    ) -> Result<Option<AdditionalStatsMeta>> {
+    ) -> Result<(Option<AdditionalStatsMeta>, Option<String>)> {
         let prev_stats_meta = snapshot
             .as_ref()
             .and_then(|v| v.summary.additional_stats_meta.as_ref());
-        let prev_stats_loc = snapshot
-            .as_ref()
-            .and_then(|v| v.table_statistics_location.as_ref())
-            .map(|v| {
-                let ver = TableMetaLocationGenerator::table_statistics_version(v);
-                (v.clone(), ver)
-            });
+        let mut table_statistics_location = snapshot.table_statistics_location();
         if insert_rows == 0 || insert_hll.is_empty() {
-            if prev_stats_loc.is_some() && prev_stats_meta.is_none() {
-                return Ok(Some(AdditionalStatsMeta {
-                    location: prev_stats_loc,
-                    ..Default::default()
-                }));
-            } else {
-                return Ok(prev_stats_meta.cloned());
-            }
+            return Ok((prev_stats_meta.cloned(), table_statistics_location));
         }
 
         let mut new_hll = insert_hll.clone();
-        let location = prev_stats_loc.or_else(|| prev_stats_meta.and_then(|v| v.location.clone()));
-        let mut set_loc = true;
         let row_count = match prev_stats_meta {
             Some(v) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
@@ -549,16 +536,19 @@ impl FuseTable {
                 v.row_count + insert_rows
             }
             _ => {
-                if let Some((prev, ver)) = &location {
+                if let Some(loc) = &table_statistics_location {
+                    let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
                     let load_params = LoadParams {
-                        location: prev.clone(),
+                        location: loc.clone(),
                         len_hint: None,
-                        ver: *ver,
+                        ver,
                         put_cache: true,
                     };
                     let prev_stats = reader.read(&load_params).await?;
-                    set_loc = !prev_stats.histograms.is_empty();
+                    if prev_stats.histograms.is_empty() {
+                        table_statistics_location = None;
+                    }
                     merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                     if prev_stats.row_count == 0 {
                         let snapshot_loc =
@@ -570,7 +560,7 @@ impl FuseTable {
                         let prev_snapshot = FuseTable::read_table_snapshot_with_reader(
                             reader,
                             Some(snapshot_loc),
-                            *ver,
+                            TableSnapshot::VERSION,
                         )
                         .await
                         .ok()
@@ -588,27 +578,11 @@ impl FuseTable {
             }
         };
 
-        Ok(Some(AdditionalStatsMeta {
-            size: 0,
-            location: if set_loc { location } else { None },
+        let meta = AdditionalStatsMeta {
             hll: Some(encode_column_hll(&new_hll)?),
             row_count,
-        }))
-    }
-
-    pub fn generate_table_stats_from_prev(prev: &TableSnapshot) -> Option<AdditionalStatsMeta> {
-        let mut additional_stats_meta = prev.summary.additional_stats_meta.clone();
-        if let Some(loc) = &prev.table_statistics_location {
-            let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-            if let Some(ref mut meta) = additional_stats_meta {
-                meta.location = Some((loc.clone(), ver));
-            } else {
-                additional_stats_meta = Some(AdditionalStatsMeta {
-                    location: Some((loc.clone(), ver)),
-                    ..Default::default()
-                });
-            }
-        }
-        additional_stats_meta
+            ..Default::default()
+        };
+        Ok((Some(meta), table_statistics_location))
     }
 }

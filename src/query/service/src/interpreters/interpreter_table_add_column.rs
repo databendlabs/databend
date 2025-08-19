@@ -245,7 +245,6 @@ pub(crate) async fn generate_new_snapshot(
             snapshot.clone(),
             Some(fuse_table.get_table_info().ident.seq),
             ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
-            FuseTable::generate_table_stats_from_prev(snapshot.as_ref()),
         )?;
 
         // replace schema

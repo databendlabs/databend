@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::vec;
 
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
@@ -61,14 +62,12 @@ fn test_unresolvable_delete_conflict() {
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+        &TableInfo::default(),
         None,
         Some(Arc::new(latest_snapshot)),
-        None,
         TxnManager::init(),
-        0,
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        None,
         None,
     );
     assert!(result.is_err());
@@ -183,14 +182,12 @@ fn test_resolvable_delete_conflict() {
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+        &TableInfo::default(),
         None,
         Some(Arc::new(latest_snapshot)),
-        None,
         TxnManager::init(),
-        0,
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        None,
         None,
     );
     let snapshot = result.unwrap();
@@ -328,14 +325,12 @@ fn test_resolvable_replace_conflict() {
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+        &TableInfo::default(),
         None,
         Some(Arc::new(latest_snapshot)),
-        None,
         TxnManager::init(),
-        0,
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        None,
         None,
     );
     let snapshot = result.unwrap();

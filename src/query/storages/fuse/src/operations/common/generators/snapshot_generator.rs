@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -41,38 +42,34 @@ pub trait SnapshotGenerator {
 
     fn generate_new_snapshot(
         &self,
-        schema: TableSchema,
+        table_info: &TableInfo,
         cluster_key_id: Option<u32>,
         previous: Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
-        table_id: u64,
         table_meta_timestamps: TableMetaTimestamps,
-        table_name: &str,
         additional_stats_meta: Option<AdditionalStatsMeta>,
+        table_statistics_location: Option<String>,
     ) -> Result<TableSnapshot> {
         let mut snapshot = self.do_generate_new_snapshot(
-            schema,
+            table_info,
             cluster_key_id,
             &previous,
-            prev_table_seq,
             table_meta_timestamps,
-            table_name,
             additional_stats_meta,
+            table_statistics_location,
         )?;
-        decorate_snapshot(&mut snapshot, txn_mgr, previous, table_id)?;
+        decorate_snapshot(&mut snapshot, txn_mgr, previous, table_info.ident.table_id)?;
         Ok(snapshot)
     }
 
     fn do_generate_new_snapshot(
         &self,
-        schema: TableSchema,
+        table_info: &TableInfo,
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
-        table_name: &str,
         additional_stats_meta: Option<AdditionalStatsMeta>,
+        table_statistics_location: Option<String>,
     ) -> Result<TableSnapshot>;
 }
 

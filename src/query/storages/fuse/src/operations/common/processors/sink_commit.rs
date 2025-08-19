@@ -71,6 +71,7 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
+        table_statistics_location: Option<String>,
         cluster_key_id: Option<u32>,
         table_info: TableInfo,
     },
@@ -361,6 +362,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             State::GenerateSnapshot {
                 previous,
                 additional_stats_meta,
+                table_statistics_location,
                 cluster_key_id,
                 table_info,
             } => {
@@ -392,17 +394,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 //    in this case, we only need standard conflict resolution.
                 // therefore, we can safely proceed.
 
-                let schema = self.table.schema().as_ref().clone();
                 match self.snapshot_gen.generate_new_snapshot(
-                    schema,
+                    &table_info,
                     cluster_key_id,
                     previous,
-                    Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
-                    table_info.ident.table_id,
                     self.table_meta_timestamps,
-                    table_info.name.as_str(),
                     additional_stats_meta,
+                    table_statistics_location,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
@@ -477,12 +476,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.snapshot_gen
                         .fill_default_values(schema, &previous)
                         .await?;
-                    let additional_stats_meta = fuse_table
+                    let (additional_stats_meta, table_statistics_location) = fuse_table
                         .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
                         .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
                         additional_stats_meta,
+                        table_statistics_location,
                         cluster_key_id: fuse_table.cluster_key_id(),
                         table_info,
                     };
@@ -630,12 +630,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
-                let additional_stats_meta = fuse_table
+                let (additional_stats_meta, table_statistics_location) = fuse_table
                     .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
                     .await?;
                 self.state = State::GenerateSnapshot {
                     previous,
                     additional_stats_meta,
+                    table_statistics_location,
                     cluster_key_id: fuse_table.cluster_key_id(),
                     table_info: fuse_table.table_info.clone(),
                 };

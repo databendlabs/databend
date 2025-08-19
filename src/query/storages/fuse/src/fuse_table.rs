@@ -326,21 +326,12 @@ impl FuseTable {
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         if let Some(snapshot) = snapshot {
-            if let Some((location, ver)) = snapshot
-                .summary
-                .additional_stats_meta
-                .as_ref()
-                .and_then(|v| v.location.clone())
-                .or_else(|| {
-                    snapshot.table_statistics_location.as_ref().map(|v| {
-                        let ver = TableMetaLocationGenerator::table_statistics_version(v);
-                        (v.clone(), ver)
-                    })
-                })
-            {
+            if let Some(loc) = &snapshot.table_statistics_location {
                 let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
+
+                let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                 let load_params = LoadParams {
-                    location,
+                    location: loc.clone(),
                     len_hint: None,
                     ver,
                     put_cache: true,

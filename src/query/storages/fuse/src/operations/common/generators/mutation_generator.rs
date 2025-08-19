@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -59,13 +59,12 @@ impl SnapshotGenerator for MutationGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        schema: TableSchema,
+        table_info: &TableInfo,
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
-        _table_name: &str,
         additional_stats_meta: Option<AdditionalStatsMeta>,
+        table_statistics_location: Option<String>,
     ) -> Result<TableSnapshot> {
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
@@ -91,13 +90,14 @@ impl SnapshotGenerator for MutationGenerator {
                         cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
+                    new_summary.additional_stats_meta = additional_stats_meta;
                     let new_snapshot = TableSnapshot::try_new(
-                        prev_table_seq,
+                        Some(table_info.ident.seq),
                         previous.clone(),
-                        schema,
+                        table_info.schema().as_ref().clone(),
                         new_summary,
                         new_segments,
-                        additional_stats_meta,
+                        table_statistics_location,
                         table_meta_timestamps,
                     )?;
 

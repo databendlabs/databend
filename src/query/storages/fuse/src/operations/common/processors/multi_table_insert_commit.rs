@@ -269,19 +269,17 @@ async fn build_update_table_meta_req(
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
-    let additional_stats_meta = fuse_table
+    let (additional_stats_meta, table_statistics_location) = fuse_table
         .generate_table_stats(&previous, insert_hll, insert_rows)
         .await?;
     let snapshot = snapshot_generator.generate_new_snapshot(
-        table.schema().as_ref().clone(),
+        table.get_table_info(),
         fuse_table.cluster_key_id(),
         previous,
-        Some(fuse_table.table_info.ident.seq),
         txn_mgr,
-        table.get_id(),
         table_meta_timestamps,
-        table.name(),
         additional_stats_meta,
+        table_statistics_location,
     )?;
 
     // write snapshot
