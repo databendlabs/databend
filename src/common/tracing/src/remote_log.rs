@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -85,6 +86,8 @@ pub struct LogBuffer {
     sender: Sender<LogMessage>,
     /// interval is in microseconds
     interval: u64,
+    /// Indicates whether the operator is ready to write logs
+    ready: AtomicBool,
 }
 
 /// Guard for `RemoteLog` to ensure the log is flushed before exiting
@@ -268,6 +271,7 @@ impl LogBuffer {
             last_collect: AtomicU64::new(Timestamp::now().as_microsecond() as u64),
             sender,
             interval,
+            ready: AtomicBool::new(false),
         }
     }
 
@@ -289,6 +293,15 @@ impl LogBuffer {
                 Ordering::SeqCst,
             ) {
                 Ok(_) => {
+                    if !self.ready.load(Ordering::SeqCst) {
+                        if let Some(_) = GlobalLogger::instance().get_operator() {
+                            self.ready.store(true, Ordering::SeqCst);
+                        } else {
+                            // If the operator is not ready, we store in the logs entry in queue temporarily
+                            // the queue will not always grow, MAX_BUFFER_SIZE will help to prevent it
+                            continue;
+                        }
+                    }
                     self.collect()?;
                     break;
                 }
