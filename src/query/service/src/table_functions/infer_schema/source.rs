@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_csv::reader::Format;
@@ -32,6 +31,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -145,6 +145,11 @@ impl AsyncSource for InferSchemaSource {
                 TableSchema::try_from(&arrow_schema)?
             }
             (Some(first_file), FileFormatParams::Csv(params)) => {
+                if params.compression != StageFileCompression::None {
+                    return Err(ErrorCode::InvalidCompressionData(
+                        "Compressed CSV files are not supported",
+                    ));
+                }
                 let arrow_schema = read_csv_metadata_async(
                     &first_file.path,
                     &operator,
@@ -155,7 +160,12 @@ impl AsyncSource for InferSchemaSource {
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
             }
-            (Some(first_file), FileFormatParams::NdJson(_)) => {
+            (Some(first_file), FileFormatParams::NdJson(params)) => {
+                if params.compression != StageFileCompression::None {
+                    return Err(ErrorCode::InvalidCompressionData(
+                        "Compressed NDJSON files are not supported",
+                    ));
+                }
                 let arrow_schema = read_json_metadata_async(
                     &first_file.path,
                     &operator,
@@ -167,7 +177,7 @@ impl AsyncSource for InferSchemaSource {
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet",
+                    "infer_schema is currently limited to format Parquet, CSV and NDJSON",
                 ));
             }
         };
@@ -214,7 +224,7 @@ pub async fn read_csv_metadata_async(
     };
 
     // TODO: It would be better if it could be read in the form of Read trait
-    let buf = operator.read_with(path).range(..file_size).await?.to_vec();
+    let buf = operator.read_with(path).range(..file_size).await?;
     let mut format = Format::default()
         .with_delimiter(params.field_delimiter.as_bytes()[0])
         .with_quote(params.quote.as_bytes()[0])
@@ -223,7 +233,7 @@ pub async fn read_csv_metadata_async(
     if let Some(escape) = escape {
         format = format.with_escape(escape);
     }
-    let (schema, _) = format.infer_schema(Cursor::new(&buf), max_records)?;
+    let (schema, _) = format.infer_schema(buf, max_records)?;
 
     Ok(schema)
 }
@@ -239,8 +249,8 @@ pub async fn read_json_metadata_async(
         Some(n) => n,
     };
     // TODO: It would be better if it could be read in the form of Read trait
-    let buf = operator.read_with(path).range(..file_size).await?.to_vec();
-    let (schema, _) = infer_json_schema(Cursor::new(&buf), max_records)?;
+    let buf = operator.read_with(path).range(..file_size).await?;
+    let (schema, _) = infer_json_schema(buf, max_records)?;
 
     Ok(schema)
 }
