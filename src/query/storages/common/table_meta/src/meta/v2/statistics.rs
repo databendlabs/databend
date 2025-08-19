@@ -73,13 +73,14 @@ pub struct ClusterStatistics {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct AdditionalStatsMeta {
-    /// For segment: the size of the stats data in bytes.
-    /// For snapshot: the count of the stats rows.
+    /// The size of the stats data in bytes.
     pub size: u64,
     /// The file location of the stats data.
     pub location: Option<Location>,
     /// An optional HyperLogLog data structure.
     pub hll: Option<RawBlockHLL>,
+    /// The count of the stats rows.
+    pub row_count: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]

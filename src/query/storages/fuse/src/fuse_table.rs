@@ -77,6 +77,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::Files;
+use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -1016,21 +1017,28 @@ impl Table for FuseTable {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
-            if let Some(table_statistics) = table_statistics {
-                FuseTableColumnStatisticsProvider::new(
-                    stats.clone(),
-                    table_statistics.histograms.clone(),
-                    Some(table_statistics.column_distinct_values()),
-                    snapshot.summary.row_count,
-                )
-            } else {
-                FuseTableColumnStatisticsProvider::new(
-                    stats.clone(),
-                    HashMap::new(),
-                    None,
-                    snapshot.summary.row_count,
-                )
-            }
+            let column_distinct_values = match snapshot
+                .summary
+                .additional_stats_meta
+                .as_ref()
+                .and_then(|v| v.hll.as_ref())
+            {
+                Some(v) if !v.is_empty() => decode_column_hll(v)?
+                    .map(|v| v.iter().map(|hll| (*hll.0, hll.1.count() as u64)).collect()),
+                _ => table_statistics
+                    .as_ref()
+                    .map(|v| v.column_distinct_values()),
+            };
+            let histograms = table_statistics
+                .as_ref()
+                .map(|v| v.histograms.clone())
+                .unwrap_or_default();
+            FuseTableColumnStatisticsProvider::new(
+                stats.clone(),
+                histograms,
+                column_distinct_values,
+                snapshot.summary.row_count,
+            )
         } else {
             FuseTableColumnStatisticsProvider::default()
         };

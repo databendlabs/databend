@@ -531,9 +531,8 @@ impl FuseTable {
         if insert_rows == 0 || insert_hll.is_empty() {
             if prev_stats_loc.is_some() && prev_stats_meta.is_none() {
                 return Ok(Some(AdditionalStatsMeta {
-                    size: 0,
                     location: prev_stats_loc,
-                    hll: None,
+                    ..Default::default()
                 }));
             } else {
                 return Ok(prev_stats_meta.cloned());
@@ -547,7 +546,7 @@ impl FuseTable {
             Some(v) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
-                v.size + insert_rows
+                v.row_count + insert_rows
             }
             _ => {
                 if let Some((prev, ver)) = &location {
@@ -590,9 +589,10 @@ impl FuseTable {
         };
 
         Ok(Some(AdditionalStatsMeta {
+            size: 0,
             location: if set_loc { location } else { None },
-            size: row_count,
             hll: Some(encode_column_hll(&new_hll)?),
+            row_count,
         }))
     }
 

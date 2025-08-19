@@ -117,7 +117,7 @@ impl AsyncSink for CommitMultiTableInsert {
                         self.ctx.txn_mgr(),
                         *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
                         &commit_meta.hll,
-                        *insert_rows.get(&table_id).unwrap(),
+                        insert_rows.get(&table_id).cloned().unwrap_or_default(),
                     )
                     .await?,
                     table.get_table_info().clone(),

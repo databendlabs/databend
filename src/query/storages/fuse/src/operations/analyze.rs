@@ -213,9 +213,9 @@ impl SinkAnalyzeState {
 
         // 3. Generate new table statistics
         let mut additional_stats_meta = AdditionalStatsMeta {
-            size: snapshot.summary.row_count,
-            location: None,
             hll: Some(encode_column_hll(&self.ndv_states)?),
+            row_count: snapshot.summary.row_count,
+            ..Default::default()
         };
         let table_statistics = if !self.histograms.is_empty() {
             let table_statistics = TableSnapshotStatistics::new(
@@ -743,7 +743,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let additional_stats_meta = AdditionalStatsMeta {
                     size: data.len() as u64,
                     location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
-                    hll: None,
+                    ..Default::default()
                 };
                 self.dal.write(&segment_stats_location, data).await?;
                 origin_summary.additional_stats_meta = Some(additional_stats_meta);

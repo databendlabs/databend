@@ -149,7 +149,7 @@ impl<'a> FuseStatisticImpl<'a> {
     ) -> Result<DataBlock> {
         let additional_stats_meta = summary.additional_stats_meta.as_ref();
         let row_count = additional_stats_meta
-            .map(|v| v.size)
+            .map(|v| v.row_count)
             .or_else(|| table_statistics.as_ref().map(|v| v.row_count))
             .unwrap_or(0);
         let actual_row_count = summary.row_count;

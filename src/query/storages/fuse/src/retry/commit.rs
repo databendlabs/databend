@@ -154,7 +154,7 @@ async fn try_rebuild_req(
                 let merged = merge_column_hll(new_hll, latest_hll);
                 if !merged.is_empty() {
                     latest_metas.hll = Some(encode_column_hll(&merged)?);
-                    latest_metas.size += insert_row;
+                    latest_metas.row_count += insert_row;
                 }
             }
         }
