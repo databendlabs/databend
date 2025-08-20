@@ -5193,6 +5193,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-column",
+ "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",

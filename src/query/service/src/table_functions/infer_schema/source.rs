@@ -14,6 +14,7 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_csv::reader::Format;
@@ -22,6 +23,8 @@ use arrow_schema::Schema as ArrowSchema;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
@@ -32,7 +35,6 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -148,11 +150,6 @@ impl AsyncSource for InferSchemaSource {
                 TableSchema::try_from(&arrow_schema)?
             }
             (Some(first_file), FileFormatParams::Csv(params)) => {
-                if params.compression != StageFileCompression::None {
-                    return Err(ErrorCode::InvalidCompressionData(
-                        "Compressed CSV files are not supported",
-                    ));
-                }
                 let arrow_schema = read_csv_metadata_async(
                     &first_file.path,
                     &operator,
@@ -165,11 +162,6 @@ impl AsyncSource for InferSchemaSource {
                 TableSchema::try_from(&arrow_schema)?
             }
             (Some(first_file), FileFormatParams::NdJson(params)) => {
-                if params.compression != StageFileCompression::None {
-                    return Err(ErrorCode::InvalidCompressionData(
-                        "Compressed NDJSON files are not supported",
-                    ));
-                }
                 let arrow_schema = read_json_metadata_async(
                     &first_file.path,
                     &operator,
@@ -230,7 +222,15 @@ pub async fn read_csv_metadata_async(
     };
 
     let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
-    let buf = operator.read_with(path).range(..bytes_len).await?;
+    let mut buf = operator.read_with(path).range(..bytes_len).await?.to_vec();
+
+    if let Some(algo) = CompressAlgorithm::from_path(path) {
+        buf = if CompressAlgorithm::Zip == algo {
+            DecompressDecoder::decompress_all_zip(&buf)?
+        } else {
+            DecompressDecoder::new(algo).decompress_batch(&buf)?
+        };
+    }
     let mut format = Format::default()
         .with_delimiter(params.field_delimiter.as_bytes()[0])
         .with_quote(params.quote.as_bytes()[0])
@@ -239,7 +239,7 @@ pub async fn read_csv_metadata_async(
     if let Some(escape) = escape {
         format = format.with_escape(escape);
     }
-    let (schema, _) = format.infer_schema(buf, max_records)?;
+    let (schema, _) = format.infer_schema(Cursor::new(buf), max_records)?;
 
     Ok(schema)
 }
@@ -256,8 +256,16 @@ pub async fn read_json_metadata_async(
         Some(n) => n,
     };
     let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
-    let buf = operator.read_with(path).range(..bytes_len).await?;
-    let (schema, _) = infer_json_schema(buf, max_records)?;
+    let mut buf = operator.read_with(path).range(..bytes_len).await?.to_vec();
+
+    if let Some(algo) = CompressAlgorithm::from_path(path) {
+        buf = if CompressAlgorithm::Zip == algo {
+            DecompressDecoder::decompress_all_zip(&buf)?
+        } else {
+            DecompressDecoder::new(algo).decompress_batch(&buf)?
+        };
+    }
+    let (schema, _) = infer_json_schema(Cursor::new(buf), max_records)?;
 
     Ok(schema)
 }
