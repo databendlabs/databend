@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 
+#[derive(Clone, Default)]
 pub struct TableStatsGenerator {
     prev_stats_meta: Option<AdditionalStatsMeta>,
     prev_stats_location: Option<String>,
@@ -53,5 +57,12 @@ impl TableStatsGenerator {
             row_count: self.row_count,
             ..Default::default()
         })
+    }
+
+    pub fn column_distinct_values(&self) -> HashMap<ColumnId, u64> {
+        self.hll
+            .iter()
+            .map(|(id, hll)| (*id, hll.count() as u64))
+            .collect()
     }
 }

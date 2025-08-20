@@ -65,8 +65,7 @@ fn test_unresolvable_delete_conflict() {
         None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        None,
-        None,
+        Default::default(),
     );
     assert!(result.is_err());
 }
@@ -184,8 +183,7 @@ fn test_resolvable_delete_conflict() {
         None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        None,
-        None,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -326,8 +324,7 @@ fn test_resolvable_replace_conflict() {
         None,
         &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        None,
-        None,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![

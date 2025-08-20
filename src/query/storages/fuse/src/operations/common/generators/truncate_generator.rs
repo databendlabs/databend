@@ -18,11 +18,11 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::TruncateMode;
-use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::SnapshotGenerator;
+use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct TruncateGenerator {
@@ -51,8 +51,7 @@ impl SnapshotGenerator for TruncateGenerator {
         _cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
-        _additional_stats_meta: Option<AdditionalStatsMeta>,
-        _table_statistics_location: Option<String>,
+        _table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
         TableSnapshot::try_new(
             Some(table_info.ident.seq),

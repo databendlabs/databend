@@ -120,15 +120,16 @@ impl Interpreter for AnalyzeTableInterpreter {
             let table_meta_timestamps = self
                 .ctx
                 .get_table_meta_timestamps(table, Some(snapshot.clone()))?;
-            let mut mutator = AnalyzeLightMutator::create(
+            if let Some(mut mutator) = AnalyzeLightMutator::try_new(
                 self.ctx.clone(),
                 operator,
                 snapshot,
                 cluster_key_id,
                 table_meta_timestamps,
-            );
-            mutator.target_select().await?;
-            mutator.try_commit(table).await?;
+            ) {
+                mutator.target_select().await?;
+                mutator.try_commit(table).await?;
+            }
             return Ok(PipelineBuildResult::create());
         }
 

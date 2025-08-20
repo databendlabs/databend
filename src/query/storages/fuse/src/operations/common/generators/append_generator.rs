@@ -26,7 +26,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::DefaultExprBinder;
-use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -38,6 +37,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::operations::common::SnapshotMerged;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct AppendGenerator {
@@ -121,8 +121,7 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         table_meta_timestamps: TableMetaTimestamps,
-        additional_stats_meta: Option<AdditionalStatsMeta>,
-        table_statistics_location: Option<String>,
+        table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
         let schema = table_info.schema().as_ref().clone();
 
@@ -223,7 +222,13 @@ impl SnapshotGenerator for AppendGenerator {
 
         // merge statistics will set the additional_stats_meta to none,
         // so reset additional_stats_meta here.
-        new_summary.additional_stats_meta = additional_stats_meta;
+        let table_statistics_location = table_stats_gen.table_statistics_location();
+        for (id, ndv) in table_stats_gen.column_distinct_values() {
+            if let Some(stats) = new_summary.col_stats.get_mut(&id) {
+                stats.distinct_of_values = Some(ndv);
+            }
+        }
+        new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
         TableSnapshot::try_new(
             Some(table_info.ident.seq),
             previous.clone(),
