@@ -79,20 +79,47 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
         data_type: probe_key.data_type.clone(),
         display_name: probe_key.display_name.clone(),
     };
-    let array = RawExpr::Constant {
+
+    let mut scalars = inlist.iter();
+
+    let first_scalar = scalars.next().unwrap();
+    let first_constant = RawExpr::Constant {
         span: None,
-        scalar: Scalar::Array(inlist),
+        scalar: first_scalar.to_owned(),
         data_type: None,
     };
-
-    let args = vec![array, raw_probe_key];
-    let contain_func = RawExpr::FunctionCall {
+    let mut or_expr = RawExpr::FunctionCall {
         span: None,
-        name: "contains".to_string(),
+        name: "eq".to_string(),
         params: vec![],
-        args,
+        args: vec![raw_probe_key.clone(), first_constant],
     };
-    let expr = type_check::check(&contain_func, &BUILTIN_FUNCTIONS)?;
+
+    for scalar in scalars {
+        let constant_expr = RawExpr::Constant {
+            span: None,
+            scalar: scalar.to_owned(),
+            data_type: None,
+        };
+
+        let eq_expr = RawExpr::FunctionCall {
+            span: None,
+            name: "eq".to_string(),
+            params: vec![],
+            args: vec![raw_probe_key.clone(), constant_expr],
+        };
+
+        or_expr = RawExpr::FunctionCall {
+            span: None,
+            name: "or".to_string(),
+            params: vec![],
+            args: vec![or_expr, eq_expr],
+        };
+    }
+
+    let final_expr = or_expr;
+
+    let expr = type_check::check(&final_expr, &BUILTIN_FUNCTIONS)?;
     Ok(expr)
 }
 
