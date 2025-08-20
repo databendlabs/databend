@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::io::Cursor;
@@ -19,7 +20,9 @@ use std::sync::Arc;
 
 use arrow_csv::reader::Format;
 use arrow_json::reader::infer_json_schema;
+use arrow_schema::ArrowError;
 use arrow_schema::Schema as ArrowSchema;
+use bytes::BufMut;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table_context::TableContext;
@@ -33,7 +36,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -51,7 +53,7 @@ use opendal::Scheme;
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-const DEFAULT_MAX_BYTES: u64 = 1024 * 1024;
+const DEFAULT_BYTES: u64 = 20;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -150,24 +152,37 @@ impl AsyncSource for InferSchemaSource {
                 TableSchema::try_from(&arrow_schema)?
             }
             (Some(first_file), FileFormatParams::Csv(params)) => {
-                let arrow_schema = read_csv_metadata_async(
+                let escape = if params.escape.is_empty() {
+                    None
+                } else {
+                    Some(params.escape.as_bytes()[0])
+                };
+
+                let mut format = Format::default()
+                    .with_delimiter(params.field_delimiter.as_bytes()[0])
+                    .with_quote(params.quote.as_bytes()[0])
+                    .with_header(params.headers != 0);
+                if let Some(escape) = escape {
+                    format = format.with_escape(escape);
+                }
+
+                let arrow_schema = read_metadata_async(
                     &first_file.path,
                     &operator,
                     Some(first_file.size),
-                    self.args_parsed.max_bytes,
                     self.args_parsed.max_records,
-                    &params,
+                    |reader, max_record| format.infer_schema(reader, max_record),
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
             }
             (Some(first_file), FileFormatParams::NdJson(_)) => {
-                let arrow_schema = read_json_metadata_async(
+                let arrow_schema = read_metadata_async(
                     &first_file.path,
                     &operator,
                     Some(first_file.size),
-                    self.args_parsed.max_bytes,
                     self.args_parsed.max_records,
+                    |reader, max_record| infer_json_schema(reader, max_record),
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
@@ -203,69 +218,60 @@ impl AsyncSource for InferSchemaSource {
     }
 }
 
-pub async fn read_csv_metadata_async(
+pub async fn read_metadata_async<
+    F: Fn(Cursor<&[u8]>, Option<usize>) -> std::result::Result<(ArrowSchema, usize), ArrowError>,
+>(
     path: &str,
     operator: &Operator,
     file_size: Option<u64>,
-    max_bytes: Option<u64>,
     max_records: Option<usize>,
-    params: &CsvFileFormatParams,
+    func_infer_schema: F,
 ) -> Result<ArrowSchema> {
     let file_size = match file_size {
         None => operator.stat(path).await?.content_length(),
         Some(n) => n,
     };
-    let escape = if params.escape.is_empty() {
-        None
-    } else {
-        Some(params.escape.as_bytes()[0])
-    };
-
-    let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
-    let mut buf = operator.read_with(path).range(..bytes_len).await?.to_vec();
-
-    if let Some(algo) = CompressAlgorithm::from_path(path) {
-        buf = if CompressAlgorithm::Zip == algo {
-            DecompressDecoder::decompress_all_zip(&buf)?
+    let algo = CompressAlgorithm::from_path(path);
+    let mut buf = Vec::new();
+    let mut offset: u64 = 0;
+    let mut chunk_size: u64 =
+        if max_records.is_none() || matches!(algo, Some(CompressAlgorithm::Zip)) {
+            file_size
         } else {
-            DecompressDecoder::new(algo).decompress_batch(&buf)?
+            DEFAULT_BYTES
         };
-    }
-    let mut format = Format::default()
-        .with_delimiter(params.field_delimiter.as_bytes()[0])
-        .with_quote(params.quote.as_bytes()[0])
-        .with_header(params.headers != 0);
 
-    if let Some(escape) = escape {
-        format = format.with_escape(escape);
-    }
-    let (schema, _) = format.infer_schema(Cursor::new(buf), max_records)?;
+    loop {
+        let end = cmp::min(offset + chunk_size, file_size);
 
-    Ok(schema)
-}
+        let chunk = operator.read_with(path).range(offset..end).await?;
+        buf.put(chunk);
 
-pub async fn read_json_metadata_async(
-    path: &str,
-    operator: &Operator,
-    file_size: Option<u64>,
-    max_bytes: Option<u64>,
-    max_records: Option<usize>,
-) -> Result<ArrowSchema> {
-    let file_size = match file_size {
-        None => operator.stat(path).await?.content_length(),
-        Some(n) => n,
-    };
-    let bytes_len = cmp::min(max_bytes.unwrap_or(DEFAULT_MAX_BYTES), file_size);
-    let mut buf = operator.read_with(path).range(..bytes_len).await?.to_vec();
+        offset = end;
 
-    if let Some(algo) = CompressAlgorithm::from_path(path) {
-        buf = if CompressAlgorithm::Zip == algo {
-            DecompressDecoder::decompress_all_zip(&buf)?
+        let bytes = if let Some(algo) = algo {
+            let decompress_bytes = if CompressAlgorithm::Zip == algo {
+                DecompressDecoder::decompress_all_zip(&buf)?
+            } else {
+                DecompressDecoder::new(algo).decompress_batch(&buf)?
+            };
+            Cow::Owned(decompress_bytes)
         } else {
-            DecompressDecoder::new(algo).decompress_batch(&buf)?
+            Cow::Borrowed(&buf)
         };
-    }
-    let (schema, _) = infer_json_schema(Cursor::new(buf), max_records)?;
 
-    Ok(schema)
+        if !bytes.is_empty() || offset >= file_size {
+            match func_infer_schema(Cursor::new(bytes.as_slice()), max_records) {
+                Ok((schema, _)) => {
+                    return Ok(schema);
+                }
+                Err(err) => {
+                    if offset >= file_size {
+                        return Err(ErrorCode::from(err));
+                    }
+                }
+            }
+        }
+        chunk_size = cmp::min(chunk_size * 2, file_size - offset);
+    }
 }
