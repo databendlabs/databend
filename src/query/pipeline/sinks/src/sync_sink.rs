@@ -97,7 +97,12 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
 
         match self.input.has_data() {
             true => {
-                self.input_data = Some(self.input.pull_data().unwrap()?);
+                let data = self.input.pull_data().ok_or_else(|| {
+                    databend_common_exception::ErrorCode::Internal(
+                        "Failed to pull data from input port in sync sink",
+                    )
+                })??;
+                self.input_data = Some(data);
                 Ok(Event::Sync)
             }
             false => {

@@ -234,7 +234,9 @@ impl PlanFragment {
         };
 
         let plan: PhysicalPlan = PhysicalPlan::new(plan.clone());
-        let mutation_source = plan.try_find_mutation_source().unwrap();
+        let mutation_source = plan
+            .try_find_mutation_source()
+            .ok_or_else(|| ErrorCode::Internal("No mutation source found in exchange sink plan"))?;
 
         let partitions: &Partitions = &mutation_source.partitions;
         let executors = Fragmenter::get_executors_nodes(ctx);
@@ -345,8 +347,10 @@ impl PlanFragment {
                 Box::new(SourceCollector { partitions: None })
             }
 
-            pub fn take(&mut self) -> Partitions {
-                self.partitions.take().unwrap()
+            pub fn take(&mut self) -> Result<Partitions> {
+                self.partitions.take().ok_or_else(|| {
+                    ErrorCode::Internal("No partitions collected from plan fragment")
+                })
             }
         }
 
@@ -371,8 +375,8 @@ impl PlanFragment {
         let partitions = visitor
             .as_any()
             .downcast_mut::<SourceCollector>()
-            .unwrap()
-            .take();
+            .ok_or_else(|| ErrorCode::Internal("Failed to downcast visitor to SourceCollector"))?
+            .take()?;
         let executors = Fragmenter::get_executors_nodes(ctx);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
@@ -542,7 +546,9 @@ impl PlanFragment {
         let data_sources = visitor
             .as_any()
             .downcast_mut::<DataSourceVisitor>()
-            .unwrap();
+            .ok_or_else(|| {
+                ErrorCode::Internal("Failed to downcast visitor to DataSourceVisitor")
+            })?;
         Ok(data_sources.take())
     }
 }

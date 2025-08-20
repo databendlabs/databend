@@ -158,7 +158,9 @@ impl Node {
     }
 
     pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger {
-        self.updated_list.create_trigger(index)
+        self.updated_list
+            .create_trigger(index)
+            .expect("Failed to create trigger")
     }
 }
 
