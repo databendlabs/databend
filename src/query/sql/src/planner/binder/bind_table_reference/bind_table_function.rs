@@ -31,6 +31,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
@@ -101,11 +102,13 @@ impl Binder {
                         span: *span,
                         expr: Box::new(Expr::Literal {
                             span: *span,
-                            value: Literal::String(self.table_args.positioned[pos].to_string()),
+                            value: Literal::String(scalar_ref_to_string(
+                                &self.table_args.positioned[pos].as_ref(),
+                            )),
                         }),
                         target_type: convert_to_type_name(ty),
                         pg_style: false,
-                    }
+                    };
                 }
             }
         }

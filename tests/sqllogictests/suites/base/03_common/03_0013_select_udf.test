@@ -242,3 +242,17 @@ create or replace function invalid_udtf_0 () RETURNS TABLE (c1_string string, c2
 
 statement error
 select * from invalid_udtf_0();
+
+statement ok
+create or replace table t2 (c1 string);
+
+statement ok
+insert into t2 values('hello'), ('databend');
+
+statement ok
+create or replace function filter_t2 (arg0 string) RETURNS TABLE (c1_string string) as $$ select * from t2 where c1 = arg0 $$;
+
+query T
+select * from filter_t2('hello');
+----
+hello
