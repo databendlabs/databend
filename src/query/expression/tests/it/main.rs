@@ -121,5 +121,8 @@ fn get_all_test_data_types() -> Vec<DataType> {
             DataType::Number(NumberDataType::UInt64),
             DataType::String,
         ]))),
+        DataType::Opaque(1),
+        DataType::Opaque(2),
+        DataType::Opaque(3),
     ]
 }

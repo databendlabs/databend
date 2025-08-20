@@ -389,6 +389,7 @@ impl From<&Column> for ArrayData {
             | Column::Variant(col)
             | Column::Geometry(col)
             | Column::Geography(GeographyColumn(col)) => col.clone().into(),
+            Column::Opaque(col) => col.arrow_data(),
         }
     }
 }

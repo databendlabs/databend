@@ -227,7 +227,8 @@ impl Domain {
             | DataType::Variant
             | DataType::Geometry
             | DataType::Geography
-            | DataType::Vector(_) => Domain::Undefined,
+            | DataType::Vector(_)
+            | DataType::Opaque(_) => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }

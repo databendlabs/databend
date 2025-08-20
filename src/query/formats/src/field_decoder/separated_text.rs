@@ -162,6 +162,9 @@ impl SeparatedTextDecoder {
             ColumnBuilder::EmptyMap { .. } => {
                 unreachable!("EmptyMap")
             }
+            ColumnBuilder::Opaque(_) => Err(ErrorCode::Unimplemented(
+                "Opaque type not supported in separated_text",
+            )),
         }
     }
 

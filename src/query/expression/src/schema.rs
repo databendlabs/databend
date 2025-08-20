@@ -1621,9 +1621,8 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             })
         }
         DataType::Vector(ty) => Ok(TableDataType::Vector(*ty)),
-        DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
-            "Cannot create table with type: {}",
-            data_type
+        DataType::Generic(_) | DataType::Opaque(_) => Err(ErrorCode::SemanticError(format!(
+            "Cannot create table with type: {data_type}",
         ))),
     }
 }

@@ -58,6 +58,8 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
+use crate::types::opaque::OpaqueColumn;
+use crate::types::opaque::OpaqueScalarRef;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
 use crate::types::vector::VectorDataType;
@@ -73,6 +75,7 @@ use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::visit_expr;
 use crate::with_integer_mapped_type;
+use crate::with_opaque_type;
 use crate::with_vector_number_type;
 use crate::Column;
 use crate::ColumnIndex;
@@ -199,6 +202,17 @@ impl Debug for ScalarRef<'_> {
                     write!(f, "[{}]", vals.iter().join(", "))
                 }
             }),
+            ScalarRef::Opaque(opaque) => {
+                with_opaque_type!(|T| match opaque {
+                    OpaqueScalarRef::T(vals) => {
+                        write!(
+                            f,
+                            "Opaque({})",
+                            vals.iter().map(|x| format!("{:x}", x)).join(",")
+                        )
+                    }
+                })
+            }
         }
     }
 }
@@ -214,6 +228,19 @@ impl Debug for Column {
         fn fmt_binary(f: &mut Formatter<'_>, name: &str, col: &BinaryColumn) -> std::fmt::Result {
             f.debug_tuple(name)
                 .field_with(|f| f.debug_list().entries(col.iter().map(FmtBinary)).finish())
+                .finish()
+        }
+
+        fn fmt_opaque(f: &mut Formatter<'_>, col: &OpaqueColumn) -> std::fmt::Result {
+            f.debug_tuple("Opaque")
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries((0..col.len()).map(|i| {
+                            let scalar = unsafe { col.index_unchecked(i) };
+                            format!("0x{}", hex::encode_upper(scalar.to_le_bytes()))
+                        }))
+                        .finish()
+                })
                 .finish()
         }
         match self {
@@ -237,6 +264,7 @@ impl Debug for Column {
             Column::Geometry(col) => fmt_binary(f, "Geometry", col),
             Column::Geography(col) => write!(f, "{col:?}"),
             Column::Vector(col) => write!(f, "{col:?}"),
+            Column::Opaque(col) => fmt_opaque(f, col),
         }
     }
 }
@@ -313,6 +341,7 @@ impl Display for ScalarRef<'_> {
                     write!(f, "[{}]", vals.iter().join(", "))
                 }
             }),
+            ScalarRef::Opaque(_) => todo!("Opaque scalar display not implemented"),
         }
     }
 }
@@ -610,6 +639,7 @@ impl Display for DataType {
             DataType::Geography => write!(f, "Geography"),
             DataType::Vector(vector) => write!(f, "{vector}"),
             DataType::Generic(index) => write!(f, "T{index}"),
+            DataType::Opaque(size) => write!(f, "Opaque({size})"),
         }
     }
 }

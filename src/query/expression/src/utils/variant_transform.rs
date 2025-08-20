@@ -48,6 +48,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         DataType::Array(ty) => contains_variant(ty.as_ref()),
         DataType::Map(ty) => contains_variant(ty.as_ref()),
         DataType::Tuple(types) => types.iter().any(contains_variant),
+        DataType::Opaque(_) => false,
     }
 }
 
@@ -107,6 +108,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
                 Scalar::Variant(value.to_vec())
             }
         }
+        ScalarRef::Opaque(_) => todo!("Opaque scalar variant transform not implemented"),
     };
     Ok(scalar)
 }

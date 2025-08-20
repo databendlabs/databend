@@ -31,6 +31,7 @@ pub mod null;
 pub mod nullable;
 pub mod number;
 pub mod number_class;
+pub mod opaque;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
@@ -77,6 +78,7 @@ pub use self::nullable::NullableColumn;
 pub use self::nullable::NullableType;
 pub use self::number::*;
 pub use self::number_class::*;
+pub use self::opaque::*;
 use self::simple_type::*;
 pub use self::string::StringColumn;
 pub use self::string::StringType;
@@ -125,6 +127,7 @@ pub enum DataType {
     Interval,
     Geography,
     Vector(VectorDataType),
+    Opaque(usize),
 
     // Used internally for generic types
     Generic(usize),
@@ -208,6 +211,7 @@ impl DataType {
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
             DataType::Generic(_) => true,
+            DataType::Opaque(_) => false,
         }
     }
 
@@ -235,6 +239,7 @@ impl DataType {
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
+            DataType::Opaque(_) => false,
         }
     }
 

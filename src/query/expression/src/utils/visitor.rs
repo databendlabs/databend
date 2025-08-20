@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use decimal::DecimalType;
 use geometry::GeometryType;
 
+use crate::types::opaque::OpaqueColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::*;
 use crate::*;
@@ -139,6 +140,11 @@ pub trait ValueVisitor: Sized {
         self.visit_typed_column::<VectorType>(column, &data_type)
     }
 
+    fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<Self::U, Self::Error> {
+        let data_type = DataType::Opaque(column.size() as _);
+        self.visit_typed_column::<AnyType>(Column::Opaque(column), &data_type)
+    }
+
     fn visit_typed_column<T: ValueType>(
         &mut self,
         column: T::Column,
@@ -181,6 +187,7 @@ pub trait ValueVisitor: Sized {
             Column::Geometry(column) => visitor.visit_geometry(column),
             Column::Geography(column) => visitor.visit_geography(column),
             Column::Vector(column) => visitor.visit_vector(column),
+            Column::Opaque(column) => visitor.visit_opaque(column),
         }
     }
 

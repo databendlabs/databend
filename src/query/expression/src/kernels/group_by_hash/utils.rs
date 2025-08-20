@@ -124,5 +124,6 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 }
             })
         }
+        Column::Opaque(_) => todo!("Opaque type group by hash not implemented"),
     }
 }

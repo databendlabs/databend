@@ -37,6 +37,7 @@ use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
+use crate::types::opaque::OpaqueColumn;
 use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::DataType;
@@ -385,6 +386,8 @@ impl Column {
             }
 
             DataType::Binary => Column::Binary(try_to_binary_column(array)?),
+            DataType::Opaque(size) => Column::Opaque(try_to_opaque_column(array, *size)?),
+
             DataType::Bitmap => Column::Bitmap(try_to_binary_column(array)?),
             DataType::Variant => Column::Variant(try_to_binary_column(array)?),
             DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
@@ -458,4 +461,29 @@ fn try_to_string_column(array: ArrayRef) -> Result<StringColumn> {
 
     let data = array.to_data();
     Ok(data.into())
+}
+
+fn try_to_opaque_column(array: ArrayRef, size: usize) -> Result<OpaqueColumn> {
+    let expected_type = ArrowDataType::FixedSizeList(
+        Field::new("buffer", ArrowDataType::UInt64, false).into(),
+        size as i32,
+    );
+    let array = if array.data_type() != &expected_type {
+        arrow_cast::cast(array.as_ref(), &expected_type)?
+    } else {
+        array
+    };
+
+    let array = array
+        .as_any()
+        .downcast_ref::<arrow_array::FixedSizeListArray>()
+        .ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Cannot downcast to FixedSizeListArray from array: {:?}",
+                array
+            ))
+        })?;
+
+    let data = array.values().to_data();
+    OpaqueColumn::try_from_arrow_data(data, size)
 }
