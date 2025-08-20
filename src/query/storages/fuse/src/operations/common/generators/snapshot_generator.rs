@@ -24,6 +24,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::ConflictResolveContext;
+use crate::statistics::TableStatsGenerator;
 
 #[async_trait::async_trait]
 pub trait SnapshotGenerator {
@@ -47,9 +48,10 @@ pub trait SnapshotGenerator {
         previous: Option<Arc<TableSnapshot>>,
         txn_mgr: TxnManagerRef,
         table_meta_timestamps: TableMetaTimestamps,
-        additional_stats_meta: Option<AdditionalStatsMeta>,
-        table_statistics_location: Option<String>,
+        table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
+        let table_statistics_location = table_stats_gen.table_statistics_location();
+        let additional_stats_meta = table_stats_gen.additional_stats_meta();
         let mut snapshot = self.do_generate_new_snapshot(
             table_info,
             cluster_key_id,

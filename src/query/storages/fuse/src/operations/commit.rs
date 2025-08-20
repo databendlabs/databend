@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,9 +43,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::decode_column_hll;
-use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
-use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -75,6 +74,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::set_backoff;
 use crate::operations::SnapshotHintWriter;
 use crate::statistics::merge_statistics;
+use crate::statistics::TableStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -514,18 +514,23 @@ impl FuseTable {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 
-    pub async fn generate_table_stats(
+    pub(crate) async fn generate_table_stats(
         &self,
         snapshot: &Option<Arc<TableSnapshot>>,
         insert_hll: &BlockHLL,
         insert_rows: u64,
-    ) -> Result<(Option<AdditionalStatsMeta>, Option<String>)> {
+    ) -> Result<TableStatsGenerator> {
         let prev_stats_meta = snapshot
             .as_ref()
             .and_then(|v| v.summary.additional_stats_meta.as_ref());
-        let mut table_statistics_location = snapshot.table_statistics_location();
+        let mut prev_stats_location = snapshot.table_statistics_location();
         if insert_rows == 0 || insert_hll.is_empty() {
-            return Ok((prev_stats_meta.cloned(), table_statistics_location));
+            return Ok(TableStatsGenerator::new(
+                prev_stats_meta.cloned(),
+                prev_stats_location,
+                0,
+                HashMap::new(),
+            ));
         }
 
         let mut new_hll = insert_hll.clone();
@@ -536,7 +541,7 @@ impl FuseTable {
                 v.row_count + insert_rows
             }
             _ => {
-                if let Some(loc) = &table_statistics_location {
+                if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
                     let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
                     let load_params = LoadParams {
@@ -547,7 +552,7 @@ impl FuseTable {
                     };
                     let prev_stats = reader.read(&load_params).await?;
                     if prev_stats.histograms.is_empty() {
-                        table_statistics_location = None;
+                        prev_stats_location = None;
                     }
                     merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                     if prev_stats.row_count == 0 {
@@ -578,11 +583,11 @@ impl FuseTable {
             }
         };
 
-        let meta = AdditionalStatsMeta {
-            hll: Some(encode_column_hll(&new_hll)?),
+        Ok(TableStatsGenerator::new(
+            None,
+            prev_stats_location,
             row_count,
-            ..Default::default()
-        };
-        Ok((Some(meta), table_statistics_location))
+            new_hll,
+        ))
     }
 }
