@@ -255,7 +255,7 @@ impl<'a> StringIter<'a> {
 
     /// Check if dictionary qualifies for small string fast path optimization.
     fn can_use_small_string_fast_path(&self, dict: &[Vec<u8>]) -> bool {
-        // TODO 12 is rather small?
+        // TODO 16 is rather small?
         dict.len() <= 16 && dict.iter().all(|s| s.len() <= 12)
     }
 
@@ -379,19 +379,24 @@ impl<'a> StringIter<'a> {
 
             for chunk in chunks_4 {
                 let idx1 = chunk[0] as usize;
-                let _idx2 = chunk[1] as usize;
+                let idx2 = chunk[1] as usize;
                 let idx3 = chunk[2] as usize;
-                let _idx4 = chunk[3] as usize;
+                let idx4 = chunk[3] as usize;
 
                 unsafe {
-                    // Load 2 Views at once using AVX2 (32 bytes = 2 Views)
-                    let views_12_ptr = dict_views_ptr.add(idx1) as *const __m256i;
-                    let views_34_ptr = dict_views_ptr.add(idx3) as *const __m256i;
+                    // Correctly load 4 independent Views using individual SSE2 loads
+                    // This ensures each dictionary index is properly used
+                    let view1 = _mm_loadu_si128(dict_views_ptr.add(idx1) as *const __m128i);
+                    let view2 = _mm_loadu_si128(dict_views_ptr.add(idx2) as *const __m128i);
+                    let view3 = _mm_loadu_si128(dict_views_ptr.add(idx3) as *const __m128i);
+                    let view4 = _mm_loadu_si128(dict_views_ptr.add(idx4) as *const __m128i);
 
-                    let views_12 = _mm256_loadu_si256(views_12_ptr);
-                    let views_34 = _mm256_loadu_si256(views_34_ptr);
+                    // Use AVX2 for optimized parallel storage
+                    // Combine pairs of Views into 256-bit registers
+                    let views_12 = _mm256_set_m128i(view2, view1);
+                    let views_34 = _mm256_set_m128i(view4, view3);
 
-                    // Store 2 Views at once
+                    // Store 2 Views at once using AVX2 (maintains performance benefit)
                     let output_12_ptr = views.as_mut_ptr().add(start_len + i) as *mut __m256i;
                     let output_34_ptr = views.as_mut_ptr().add(start_len + i + 2) as *mut __m256i;
 
