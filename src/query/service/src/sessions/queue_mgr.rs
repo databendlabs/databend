@@ -224,6 +224,19 @@ impl<Data: QueueData> QueueManager<Data> {
                     workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
                 }
 
+                let semaphore = workload_group.semaphore.clone();
+                let acquire = tokio::time::timeout(timeout, semaphore.acquire_owned());
+                let queue_future = AcquireQueueFuture::create(data.clone(), acquire, self.clone());
+
+                guards.push(queue_future.await?);
+
+                info!(
+                    "[QUERY-QUEUE] Successfully acquired from workload local group queue. elapsed: {:?}",
+                    instant.elapsed()
+                );
+
+                timeout -= instant.elapsed();
+
                 let workload_queue_guard = self
                     .acquire_workload_queue(
                         data.clone(),
@@ -234,7 +247,7 @@ impl<Data: QueueData> QueueManager<Data> {
                     .await?;
 
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}",
+                    "[QUERY-QUEUE] Successfully acquired from workload meta group queue. elapsed: {:?}",
                     instant.elapsed()
                 );
                 timeout -= instant.elapsed();
@@ -242,7 +255,7 @@ impl<Data: QueueData> QueueManager<Data> {
             }
         }
 
-        guards.push(self.acquire_warehouse_queue(data, timeout).await?);
+        guards.extend(self.acquire_warehouse_queue(data, timeout).await?);
 
         inc_session_running_acquired_queries();
         record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
@@ -294,9 +307,15 @@ impl<Data: QueueData> QueueManager<Data> {
         self: &Arc<Self>,
         data: Arc<Data>,
         timeout: Duration,
-    ) -> Result<AcquireQueueGuardInner> {
-        let acquire_res = match self.global_statement_queue {
-            true => {
+    ) -> Result<Vec<AcquireQueueGuardInner>> {
+        let mut guards = vec![];
+
+        let acquire = tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned());
+        let queue_future = AcquireQueueFuture::create(data.clone(), acquire, self.clone());
+
+        let acquire_res = match queue_future.await {
+            Ok(v) if self.global_statement_queue => {
+                guards.push(v);
                 let semaphore_acquire = self.meta_store.new_acquired_by_time(
                     data.get_lock_key(),
                     self.permits as u64,
@@ -304,31 +323,23 @@ impl<Data: QueueData> QueueManager<Data> {
                     data.lock_ttl(),
                 );
 
-                AcquireQueueFuture::create(
-                    data,
-                    tokio::time::timeout(timeout, semaphore_acquire),
-                    self.clone(),
-                )
-                .await
+                let acquire = tokio::time::timeout(timeout, semaphore_acquire);
+                let queue_future = AcquireQueueFuture::create(data, acquire, self.clone());
+                queue_future.await
             }
-            false => {
-                AcquireQueueFuture::create(
-                    data,
-                    tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
-                    self.clone(),
-                )
-                .await
-            }
+            Ok(v) => Ok(v),
+            Err(e) => Err(e),
         };
 
         match acquire_res {
             Ok(v) => {
+                guards.push(v);
                 info!(
                     "[QUERY-QUEUE] Successfully acquired from queue, current length: {}",
                     self.length()
                 );
 
-                Ok(v)
+                Ok(guards)
             }
             Err(e) => {
                 match e.code() {

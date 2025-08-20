@@ -22,10 +22,12 @@ use std::sync::Weak;
 
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroupResource;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::MEMORY_QUOTA_KEY;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
+use tokio::sync::Semaphore;
 
 use crate::workload::workload_mgr::WorkloadMgr;
 use crate::WorkloadApi;
@@ -150,6 +152,8 @@ impl WorkloadGroupResourceManagerInner {
                     resource_manager.remove_workload(id, mem_percentage);
                 }
             })),
+            permits: Semaphore::MAX_PERMITS,
+            semaphore: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
         });
 
         let old_workload_group = online_workload_group.insert(
@@ -158,44 +162,99 @@ impl WorkloadGroupResourceManagerInner {
         );
 
         let Some(old_workload_group) = old_workload_group else {
-            if let Some(QuotaValue::Percentage(v)) =
-                workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY)
-            {
-                self.percent_normalizer.update(*v);
+            let memory_quota = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY).cloned();
+            let concurrency_quota = workload_resource
+                .meta
+                .quotas
+                .get(MAX_CONCURRENCY_QUOTA_KEY)
+                .cloned();
+
+            if let Some(QuotaValue::Percentage(v)) = memory_quota {
+                self.percent_normalizer.update(v);
+            }
+
+            if let Some(QuotaValue::Number(v)) = concurrency_quota {
+                let mut_workload_resource =
+                    unsafe { Arc::get_mut_unchecked(&mut workload_resource) };
+                let permits = std::cmp::min(v, mut_workload_resource.permits);
+                let forget_permits = mut_workload_resource.permits - permits;
+                mut_workload_resource
+                    .semaphore
+                    .forget_permits(forget_permits);
+                mut_workload_resource.permits = permits;
             }
 
             self.update_mem_usage(&online_workload_group);
+
             return Ok(workload_resource);
         };
 
         if let Some(old_workload_group) = old_workload_group.upgrade() {
+            let new_memory_quota = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY).cloned();
+            let old_memory_quota = old_workload_group
+                .meta
+                .quotas
+                .get(MEMORY_QUOTA_KEY)
+                .cloned();
+            let concurrency_quota = workload_resource
+                .meta
+                .quotas
+                .get(MAX_CONCURRENCY_QUOTA_KEY)
+                .cloned();
+
             let mut_workload_resource = unsafe { Arc::get_mut_unchecked(&mut workload_resource) };
             mut_workload_resource.max_memory_usage = old_workload_group.max_memory_usage.clone();
 
-            let new_percentage = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY);
-            let old_percentage = old_workload_group.meta.quotas.get(MEMORY_QUOTA_KEY);
-
-            match (old_percentage, new_percentage) {
+            match (old_memory_quota, new_memory_quota) {
                 (None, Some(QuotaValue::Percentage(v))) => {
-                    self.percent_normalizer.update(*v);
+                    self.percent_normalizer.update(v);
                 }
                 (Some(QuotaValue::Percentage(v)), None) => {
-                    self.percent_normalizer.remove(*v);
+                    self.percent_normalizer.remove(v);
                 }
                 (Some(QuotaValue::Percentage(v)), Some(QuotaValue::Bytes(_))) => {
-                    self.percent_normalizer.remove(*v);
+                    self.percent_normalizer.remove(v);
                 }
                 (Some(QuotaValue::Percentage(old)), Some(QuotaValue::Percentage(new))) => {
-                    self.percent_normalizer.remove(*old);
-                    self.percent_normalizer.update(*new);
+                    self.percent_normalizer.remove(old);
+                    self.percent_normalizer.update(new);
                 }
                 (Some(QuotaValue::Bytes(_)), Some(QuotaValue::Percentage(v))) => {
-                    self.percent_normalizer.update(*v);
+                    self.percent_normalizer.update(v);
                 }
                 _ => {}
             }
 
             self.update_mem_usage(&online_workload_group);
+
+            mut_workload_resource.permits = old_workload_group.permits;
+            mut_workload_resource.semaphore = old_workload_group.semaphore.clone();
+
+            match concurrency_quota {
+                None => {
+                    let old_permit =
+                        std::cmp::min(Semaphore::MAX_PERMITS, mut_workload_resource.permits);
+
+                    let add_permit = Semaphore::MAX_PERMITS - old_permit;
+                    mut_workload_resource.semaphore.add_permits(add_permit);
+                    mut_workload_resource.permits = Semaphore::MAX_PERMITS;
+                }
+                Some(QuotaValue::Number(v)) if v > mut_workload_resource.permits => {
+                    let new_permit = std::cmp::min(v, Semaphore::MAX_PERMITS);
+                    let add_permits = new_permit - mut_workload_resource.permits;
+                    mut_workload_resource.semaphore.add_permits(add_permits);
+                    mut_workload_resource.permits = new_permit;
+                }
+                Some(QuotaValue::Number(v)) if v < mut_workload_resource.permits => {
+                    let new_permit = std::cmp::min(v, Semaphore::MAX_PERMITS);
+                    let forget_permits = mut_workload_resource.permits - new_permit;
+                    mut_workload_resource
+                        .semaphore
+                        .forget_permits(forget_permits);
+                    mut_workload_resource.permits = new_permit;
+                }
+                _ => {}
+            }
         }
 
         Ok(workload_resource)
