@@ -19,6 +19,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::Semaphore;
+
 use crate::runtime::MemStat;
 
 pub const CPU_QUOTA_KEY: &str = "cpu_quota";
@@ -77,6 +79,8 @@ impl WorkloadGroup {
 pub struct WorkloadGroupResource {
     pub meta: WorkloadGroup,
     pub queue_key: String,
+    pub permits: usize,
+    pub semaphore: Arc<Semaphore>,
     pub mem_stat: Arc<MemStat>,
     pub max_memory_usage: Arc<AtomicUsize>,
     #[allow(clippy::type_complexity)]
