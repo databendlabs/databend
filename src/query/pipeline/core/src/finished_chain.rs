@@ -186,7 +186,7 @@ impl FinishedCallbackChain {
 
     fn log_states(apply_states: &[ApplyState]) {
         let mut message = String::new();
-        writeln!(&mut message, "Executor apply finished callback state:").unwrap();
+        let _ = writeln!(&mut message, "Executor apply finished callback state:");
         for apply_state in apply_states {
             let execute_state = match apply_state.successfully {
                 true => "\u{2705}",
@@ -201,7 +201,7 @@ impl FinishedCallbackChain {
                 },
             };
 
-            writeln!(
+            let _ = writeln!(
                 &mut message,
                 "├──{}:{:?} - {}{}:{}:{}",
                 execute_state,
@@ -210,8 +210,7 @@ impl FinishedCallbackChain {
                 apply_state.location.file(),
                 apply_state.location.line(),
                 apply_state.location.column()
-            )
-            .unwrap();
+            );
         }
 
         info!("{}", message);

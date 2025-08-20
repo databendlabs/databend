@@ -140,11 +140,9 @@ impl Pipeline {
     }
 
     pub fn finalize(mut self, root_scope: Option<Arc<PlanScope>>) -> Pipeline {
-        if root_scope.is_none() {
+        let Some(root_scope) = root_scope else {
             return self;
-        }
-
-        let root_scope = root_scope.unwrap();
+        };
 
         for node in self.graph.node_weights_mut() {
             let Some(scope) = node.scope.as_mut() else {
@@ -598,7 +596,10 @@ impl Pipeline {
             if let Some((source, target)) = other.graph.edge_endpoints(index) {
                 let source = NodeIndex::new(offset + source.index());
                 let target = NodeIndex::new(offset + target.index());
-                let edge_weight = other.graph.edge_weight(index).unwrap();
+                let edge_weight = other
+                    .graph
+                    .edge_weight(index)
+                    .expect("Edge weight must exist for valid edge index");
                 self.graph.add_edge(source, target, edge_weight.clone());
             }
         }
