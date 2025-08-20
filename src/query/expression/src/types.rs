@@ -793,7 +793,7 @@ pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
     fn column_from_vec(vec: Vec<Self::Scalar>, generics: &GenericMap) -> Self::Column {
-        Self::column_from_iter(vec.iter().cloned(), generics)
+        Self::column_from_iter(vec.into_iter(), generics)
     }
 
     fn column_from_iter(
