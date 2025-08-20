@@ -25,7 +25,7 @@ echo "Cleaning up previous runs"
 killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
-rm -rf .databend
+rm -rf ./.databend
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
