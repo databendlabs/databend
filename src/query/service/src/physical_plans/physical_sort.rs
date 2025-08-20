@@ -18,13 +18,13 @@ use std::fmt::Display;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
+use databend_common_pipeline_transforms::sort::order_field_type;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -119,7 +119,7 @@ impl IPhysicalPlan for Sort {
                 debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
                 debug_assert_eq!(
                     fields.last().unwrap().data_type(),
-                    &self.order_col_type(&input_schema)?
+                    &order_field_type(&input_schema, &self.sort_desc(&input_schema)?),
                 );
                 fields.pop();
                 Ok(DataSchemaRefExt::create(fields))
@@ -152,7 +152,7 @@ impl IPhysicalPlan for Sort {
                     // the order column should be added to the output schema.
                     fields.push(DataField::new(
                         ORDER_COL_NAME,
-                        self.order_col_type(&input_schema)?,
+                        order_field_type(&input_schema, &self.sort_desc(&input_schema)?),
                     ));
                 }
                 Ok(DataSchemaRefExt::create(fields))
@@ -345,17 +345,17 @@ impl IPhysicalPlan for Sort {
 }
 
 impl Sort {
-    fn order_col_type(&self, schema: &DataSchema) -> Result<DataType> {
-        if self.order_by.len() == 1 {
-            let order_by_field = schema.field_with_name(&self.order_by[0].order_by.to_string())?;
-            if matches!(
-                order_by_field.data_type(),
-                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
-            ) {
-                return Ok(order_by_field.data_type().clone());
-            }
-        }
-        Ok(DataType::Binary)
+    fn sort_desc(&self, schema: &DataSchema) -> Result<Vec<SortColumnDescription>> {
+        self.order_by
+            .iter()
+            .map(|desc| {
+                Ok(SortColumnDescription {
+                    offset: schema.index_of(&desc.order_by.to_string())?,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                })
+            })
+            .collect()
     }
 }
 

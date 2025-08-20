@@ -183,7 +183,7 @@ impl SortPipelineBuilder {
                 max_threads,
                 self.block_size,
                 self.limit,
-                self.sort_desc,
+                &self.sort_desc,
                 self.remove_order_col_at_last,
                 self.enable_loser_tree,
             )
@@ -193,7 +193,7 @@ impl SortPipelineBuilder {
                 self.output_schema.clone(),
                 self.block_size,
                 self.limit,
-                self.sort_desc,
+                &self.sort_desc,
                 self.remove_order_col_at_last,
                 self.enable_loser_tree,
             )

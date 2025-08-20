@@ -41,7 +41,7 @@ fn create_pipeline(
         worker,
         block_size,
         limit,
-        sort_desc.into(),
+        &sort_desc,
         false,
         true,
     )?;
