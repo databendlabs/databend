@@ -53,7 +53,7 @@ use opendal::Scheme;
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-const DEFAULT_BYTES: u64 = 20;
+const DEFAULT_BYTES: u64 = 1024 * 1024;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -266,7 +266,9 @@ pub async fn read_metadata_async<
                     return Ok(schema);
                 }
                 Err(err) => {
-                    if offset >= file_size {
+                    if offset >= file_size
+                        || !matches!(err, ArrowError::CsvError(_) | ArrowError::JsonError(_))
+                    {
                         return Err(ErrorCode::from(err));
                     }
                 }
