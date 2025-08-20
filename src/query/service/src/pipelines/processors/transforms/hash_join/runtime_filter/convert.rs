@@ -19,9 +19,11 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Column;
+use databend_common_expression::Constant;
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
@@ -71,6 +73,13 @@ pub fn build_runtime_filter_infos(
 }
 
 fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<String>> {
+    if inlist.len() == 0 {
+        return Ok(Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Boolean(false),
+            data_type: DataType::Boolean,
+        }));
+    }
     let probe_key = probe_key.as_column_ref().unwrap();
 
     let raw_probe_key = RawExpr::ColumnRef {
