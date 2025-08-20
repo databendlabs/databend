@@ -62,7 +62,6 @@ use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
-use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
@@ -441,42 +440,21 @@ impl SchemaApiTestSuite {
         let db_name_ident = DatabaseNameIdent::new(&tenant, db_name);
         let db2_name_ident = DatabaseNameIdent::new(&tenant, db2_name);
 
-        let db_table_name_ident = TableNameIdent {
-            tenant: tenant.clone(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
-        };
-
-        let table_meta = |created_on| {
-            let mut meta = util.table_meta();
-            meta.updated_on = created_on;
-            meta.created_on = created_on;
-            meta
-        };
-
-        let created_on = Utc::now();
-
-        let req = CreateTableReq {
-            create_option: CreateOption::Create,
-            name_ident: db_table_name_ident.clone(),
-            table_meta: table_meta(created_on),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
-
         {
             info!("--- prepare db1,db3 and table");
             // prepare db1
-            let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, *res.db_id);
-            db_id = res.db_id;
+            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            util1.create_db().await?;
+            assert_eq!(1, *util1.db_id());
+            db_id = util1.db_id();
 
-            let res = self.create_database(mt, &tenant, "db3", "eng1").await?;
-            db3_id = res.db_id;
+            let mut util3 = Util::new(mt, "tenant1", "db3", "", "eng1");
+            util3.create_db().await?;
+            db3_id = util3.db_id();
 
-            let res = mt.create_table(req).await?;
-            table_id = res.table_id;
+            let mut table_util = Util::new(mt, "tenant1", "db1", "table", "JSON");
+            let res = table_util.create_table().await?;
+            table_id = res.0;
 
             let db_id_name_key = DatabaseIdToName { db_id: *db_id };
             let ret_db_name_ident: DatabaseNameIdentRaw = get_kv_data(mt, &db_id_name_key).await?;
@@ -870,20 +848,25 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn database_list<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
         let db_names = ["db1", "db2"];
         let engines = ["eng1", "eng2"];
         let tenant = Tenant::new_or_err("tenant1", func_name!())?;
         {
-            let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, *res.db_id);
-            db_ids.push(res.db_id);
+            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            util1.create_db().await?;
+            assert_eq!(1, *util1.db_id());
+            db_ids.push(util1.db_id());
 
-            let res = self.create_database(mt, &tenant, "db2", "eng2").await?;
-            assert!(*res.db_id > 1);
-            db_ids.push(res.db_id);
+            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng2");
+            util2.create_db().await?;
+            assert!(*util2.db_id() > 1);
+            db_ids.push(util2.db_id());
         }
 
         info!("--- list_databases");
@@ -909,25 +892,31 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn database_list_in_diff_tenant<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         info!("--- prepare db1 and db2");
         let tenant1 = Tenant::new_or_err("tenant1", func_name!())?;
         let tenant2 = Tenant::new_or_err("tenant2", func_name!())?;
 
         let mut db_ids = vec![];
         {
-            let res = self.create_database(mt, &tenant1, "db1", "eng1").await?;
-            assert_eq!(1, *res.db_id);
-            db_ids.push(res.db_id);
+            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            util1.create_db().await?;
+            assert_eq!(1, *util1.db_id());
+            db_ids.push(util1.db_id());
 
-            let res = self.create_database(mt, &tenant1, "db2", "eng2").await?;
-            assert!(*res.db_id > 1);
-            db_ids.push(res.db_id);
+            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng2");
+            util2.create_db().await?;
+            assert!(*util2.db_id() > 1);
+            db_ids.push(util2.db_id());
         }
 
         let db_id_3 = {
-            let res = self.create_database(mt, &tenant2, "db3", "eng1").await?;
-            res.db_id
+            let mut util3 = Util::new(mt, "tenant2", "db3", "", "eng1");
+            util3.create_db().await?;
+            util3.db_id()
         };
 
         info!("--- get_databases by tenant1");
@@ -957,7 +946,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn database_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn database_rename<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant = Tenant::new_or_err("tenant1", func_name!())?;
         let db_name = "db1";
         let db2_name = "db2";
@@ -982,9 +974,10 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db1 and db2");
         {
-            // prepare db2
-            let res = self.create_database(mt, &tenant, "db1", "eng1").await?;
-            assert_eq!(1, *res.db_id);
+            // prepare db1
+            let mut util1 = Util::new(mt, "tenant1", "db1", "", "eng1");
+            util1.create_db().await?;
+            assert_eq!(1, *util1.db_id());
 
             info!("--- rename not exists db4 to exists db1");
             {
@@ -1004,8 +997,9 @@ impl SchemaApiTestSuite {
             }
 
             // prepare db2
-            let res = self.create_database(mt, &tenant, "db2", "eng1").await?;
-            assert!(*res.db_id > 1);
+            let mut util2 = Util::new(mt, "tenant1", "db2", "", "eng1");
+            util2.create_db().await?;
+            assert!(*util2.db_id() > 1);
         }
 
         info!("--- rename exists db db1 to exists db db2");
@@ -1113,7 +1107,7 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn database_drop_undrop_list_history<MT: SchemaApi>(
+    async fn database_drop_undrop_list_history<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -1408,38 +1402,23 @@ impl SchemaApiTestSuite {
         util.create_db().await?;
         let db_id = util.db_id();
 
-        let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]))
-        };
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: BTreeMap::new(),
-            updated_on: created_on,
-            created_on,
-            ..TableMeta::default()
-        };
         let created_on = Utc::now();
-
-        let req = CreateTableReq {
-            create_option: CreateOption::Create,
-            name_ident: TableNameIdent {
-                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                db_name: db.to_string(),
-                table_name: table_name.to_string(),
-            },
-
-            table_meta: table_meta(created_on),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
-        let resp = mt.create_table(req.clone()).await?;
-        let table_id = resp.table_id;
+        let (table_id, _table_meta) = util
+            .create_table_with(
+                |mut meta| {
+                    meta.schema = Arc::new(TableSchema::new(vec![TableField::new(
+                        "number",
+                        TableDataType::Number(NumberDataType::UInt64),
+                    )])); // Use simple schema (only number field)
+                    meta.engine = "JSON".to_string(); // Util was constructed with empty engine
+                    meta.options = BTreeMap::new(); // Different from Util's default options
+                    meta.updated_on = created_on;
+                    meta.created_on = created_on;
+                    meta
+                },
+                |req| req,
+            )
+            .await?;
 
         let table_id_to_name = TableIdToName { table_id };
         // delete TableIdToName before drop table
@@ -1461,61 +1440,42 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_least_visible_time<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_least_visible_time<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb1";
-        let name_ident = TableNameIdent {
-            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-            db_name: db_name.to_string(),
-            table_name: tbl_name.to_string(),
-        };
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
                 TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
-        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            mt.create_database(plan).await?;
-        }
-
+        info!("--- prepare db and create table");
         let table_id;
-        info!("--- create table");
         {
-            let table_meta = |created_on| TableMeta {
-                schema: schema(),
-                engine: "JSON".to_string(),
-                options: options(),
-                updated_on: created_on,
-                created_on,
-                ..TableMeta::default()
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "");
+            util.create_db().await?;
+
             let created_on = Utc::now();
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident.clone(),
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-            let res = mt.create_table(req.clone()).await?;
-            table_id = res.table_id;
+            let (tid, _table_meta) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.engine = "JSON".to_string(); // Util was constructed with empty engine
+                        meta.updated_on = created_on;
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
+            table_id = tid;
         }
 
         info!("--- test lvt");
@@ -1635,28 +1595,26 @@ impl SchemaApiTestSuite {
 
         info!("--- create tb2 and get table");
         let created_on = Utc::now();
-
-        let mut req = CreateTableReq {
-            create_option: CreateOption::Create,
-            name_ident: TableNameIdent {
-                tenant: tenant.clone(),
-                db_name: db_name.to_string(),
-                table_name: tbl_name.to_string(),
-            },
-            table_meta: table_meta(created_on),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
         let tb_ident_2 = {
             {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                let res = mt.create_table(req.clone()).await?;
+                let (table_id, _) = util
+                    .create_table_with(
+                        |mut meta| {
+                            meta.schema = schema(); // Use local schema function (only number field)
+                            meta.engine = "JSON".to_string();
+                            meta.updated_on = created_on;
+                            meta.created_on = created_on;
+                            meta
+                        },
+                        |req| req,
+                    )
+                    .await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 assert!(old_db.meta.seq < cur_db.meta.seq);
-                assert!(res.table_id >= 1, "table id >= 1");
+                assert!(table_id >= 1, "table id >= 1");
 
-                let tb_id = res.table_id;
+                let tb_id = table_id;
 
                 let req = GetTableReq::new(&tenant, db_name, tbl_name);
                 let got = mt.get_table(req).await?;
@@ -1677,10 +1635,23 @@ impl SchemaApiTestSuite {
         };
         info!("--- create table again with if_not_exists = true");
         {
-            req.create_option = CreateOption::CreateIfNotExists;
-            let res = mt.create_table(req.clone()).await?;
+            let (table_id, _) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.engine = "JSON".to_string();
+                        meta.updated_on = created_on;
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |mut req| {
+                        req.create_option = CreateOption::CreateIfNotExists;
+                        req
+                    },
+                )
+                .await?;
             assert_eq!(
-                tb_ident_2.table_id, res.table_id,
+                tb_ident_2.table_id, table_id,
                 "new table id is still the same"
             );
 
@@ -1698,8 +1669,18 @@ impl SchemaApiTestSuite {
 
         info!("--- create table again with if_not_exists = false");
         {
-            req.create_option = CreateOption::Create;
-
+            let req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db_name.to_string(),
+                    table_name: tbl_name.to_string(),
+                },
+                table_meta: table_meta(created_on),
+                as_dropped: false,
+                table_properties: None,
+                table_partition: None,
+            };
             let res = mt.create_table(req).await;
             info!("create table res: {:?}", res);
 
@@ -2189,7 +2170,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_rename<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -2238,39 +2222,24 @@ impl SchemaApiTestSuite {
             );
         }
 
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db1_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-        }
-
+        info!("--- prepare db and table");
         let created_on = Utc::now();
-        let create_tb2_req = CreateTableReq {
-            create_option: CreateOption::Create,
-            name_ident: TableNameIdent {
-                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                db_name: db1_name.to_string(),
-                table_name: tb2_name.to_string(),
-            },
-            table_meta: table_meta(created_on),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
+        let mut util = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+        util.create_db().await?;
 
         info!("--- create table for rename");
         let tb_ident = {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
-            mt.create_table(create_tb2_req.clone()).await?;
+            let (_table_id, _table_meta) = util
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
@@ -2331,7 +2300,17 @@ impl SchemaApiTestSuite {
         info!("--- create db1,db2, ok");
         let tb_ident2 = {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
-            mt.create_table(create_tb2_req.clone()).await?;
+            let mut util2 = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+            let (_table_id, _table_meta) = util2
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db1_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
@@ -2391,16 +2370,8 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare other db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db2_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            mt.create_database(plan).await?;
+            let mut util = Util::new(mt, tenant_name, db2_name, "", "");
+            util.create_db().await?;
         }
 
         info!("--- rename table to other db, ok");
@@ -2440,7 +2411,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_update_meta<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_update_meta<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -2462,47 +2436,32 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
-        }
+        info!("--- prepare db and table");
+        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+        util.create_db().await?;
+        assert_eq!(1, *util.db_id(), "first database id is 1");
 
         info!("--- create and get table");
         {
             let created_on = Utc::now();
 
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-
             let _tb_ident_2 = {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                let res = mt.create_table(req.clone()).await?;
+                let (table_id, _table_meta) = util
+                    .create_table_with(
+                        |mut meta| {
+                            meta.schema = schema(); // Use local schema function (only number field)
+                            meta.options = Default::default(); // Different from Util's default options
+                            meta.created_on = created_on;
+                            meta
+                        },
+                        |req| req,
+                    )
+                    .await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 assert!(old_db.meta.seq < cur_db.meta.seq);
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id = res.table_id;
+                assert!(table_id >= 1, "table id >= 1");
+                let tb_id = table_id;
 
                 let got = mt
                     .get_table((tenant_name, db_name, tbl_name).into())
@@ -2998,7 +2957,6 @@ impl SchemaApiTestSuite {
         {
             let mut util = Util::new(mt, tenant_name, db_name, "", "");
             util.create_db().await?;
-            info!("create database res: {:?}", ());
 
             assert_eq!(1, *util.db_id(), "first database id is 1");
         }
@@ -3006,33 +2964,24 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
         info!("--- create table");
         {
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_1.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-            let _res = mt.create_table(req.clone()).await?;
+            let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+            let table_meta_val = table_meta(created_on);
 
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_2.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-            let _res = mt.create_table(req.clone()).await?;
+            for table_name in [tbl_name_1, tbl_name_2] {
+                let req = CreateTableReq {
+                    create_option: CreateOption::Create,
+                    name_ident: TableNameIdent {
+                        tenant: tenant.clone(),
+                        db_name: db_name.to_string(),
+                        table_name: table_name.to_string(),
+                    },
+                    table_meta: table_meta_val.clone(),
+                    as_dropped: false,
+                    table_properties: None,
+                    table_partition: None,
+                };
+                let _res = mt.create_table(req).await?;
+            }
         }
 
         info!("--- create mask policy");
@@ -3338,7 +3287,7 @@ impl SchemaApiTestSuite {
             )]))
         };
 
-        let table_meta = |created_on| TableMeta {
+        let _table_meta = |created_on| TableMeta {
             schema: schema(),
             engine: "JSON".to_string(),
             options: Default::default(),
@@ -3350,41 +3299,37 @@ impl SchemaApiTestSuite {
         {
             let mut util = Util::new(mt, tenant_name, db_name, "", "");
             util.create_db().await?;
-            info!("create database res: {:?}", ());
 
             assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
-        let created_on = Utc::now();
         info!("--- create table");
         {
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_1.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-            let _res = mt.create_table(req.clone()).await?;
+            // Create tb1
+            let mut util_tb1 = Util::new(mt, tenant_name, db_name, tbl_name_1, "JSON");
+            let (_table_id, _) = util_tb1
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.options = Default::default(); // Different from Util's default options
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
 
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_2.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-            let _res = mt.create_table(req.clone()).await?;
+            // Create tb2
+            let mut util_tb2 = Util::new(mt, tenant_name, db_name, tbl_name_2, "JSON");
+            let (_table_id, _) = util_tb2
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema(); // Use local schema function (only number field)
+                        meta.options = Default::default(); // Different from Util's default options
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
         }
 
         info!("--- create row access policy");
@@ -3543,7 +3488,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_upsert_option<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_upsert_option<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -3567,47 +3515,31 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
-        info!("--- prepare db");
-        {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
-        }
+        info!("--- prepare db and table");
+        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "JSON");
+        util.create_db().await?;
+        assert_eq!(1, *util.db_id(), "first database id is 1");
 
         info!("--- create and get table");
         {
             let created_on = Utc::now();
 
-            let req = CreateTableReq {
-                create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                table_meta: table_meta(created_on),
-                as_dropped: false,
-                table_properties: None,
-                table_partition: None,
-            };
-
             let _tb_ident_2 = {
                 let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
-                let res = mt.create_table(req.clone()).await?;
+                let (table_id, _table_meta) = util
+                    .create_table_with(
+                        |mut meta| {
+                            meta.schema = schema(); // Use local schema function (only number field)
+                            meta.created_on = created_on;
+                            meta
+                        },
+                        |req| req,
+                    )
+                    .await?;
                 let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
                 assert!(old_db.meta.seq < cur_db.meta.seq);
-                assert!(res.table_id >= 1, "table id >= 1");
-                let tb_id = res.table_id;
+                assert!(table_id >= 1, "table id >= 1");
+                let tb_id = table_id;
 
                 let got = mt
                     .get_table((tenant_name, db_name, tbl_name).into())
@@ -4129,7 +4061,7 @@ impl SchemaApiTestSuite {
             table_name: tb1_name.to_string(),
         };
 
-        let mut util = Util::new(mt, tenant_name, db1_name, "", "");
+        let mut util = Util::new(mt, tenant_name, db1_name, tb1_name, "JSON");
         util.create_db().await?;
         info!("create database res: {:?}", ());
         let db_id = util.db_id();
@@ -4142,24 +4074,16 @@ impl SchemaApiTestSuite {
             )]))
         };
 
-        let create_table_meta = TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            created_on,
-            ..TableMeta::default()
-        };
-
-        let req = CreateTableReq {
-            create_option: CreateOption::Create,
-            name_ident: tbl_name_ident.clone(),
-            table_meta: create_table_meta.clone(),
-            as_dropped: false,
-            table_properties: None,
-            table_partition: None,
-        };
-
-        let res = mt.create_table(req).await?;
-        let table_id = res.table_id;
+        let (table_id, _table_meta) = util
+            .create_table_with(
+                |mut meta| {
+                    meta.schema = schema(); // Use local schema function (only number field)
+                    meta.created_on = created_on;
+                    meta
+                },
+                |req| req,
+            )
+            .await?;
         info!("--- create and get stage file info");
         {
             let stage_info = TableCopiedFileInfo {
@@ -4174,6 +4098,13 @@ impl SchemaApiTestSuite {
                 file_info: file_info.clone(),
                 ttl: Some(std::time::Duration::from_secs(86400)),
                 insert_if_not_exists: true,
+            };
+
+            let create_table_meta = TableMeta {
+                schema: schema(),
+                engine: "JSON".to_string(),
+                created_on,
+                ..TableMeta::default()
             };
 
             let req = UpdateTableMetaReq {
@@ -4955,7 +4886,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_drop_undrop_list_history<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_drop_undrop_list_history<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant_drop_undrop_list_history_db1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -4994,21 +4928,12 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
+            assert_eq!(1, *util.db_id(), "first database id is 1");
 
-            assert_eq!(1, *res.db_id, "first database id is 1");
-
-            db_id = res.db_id;
+            db_id = util.db_id();
         }
 
         let created_on = Utc::now();
@@ -5680,7 +5605,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn get_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn get_table_by_id<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -5706,19 +5634,10 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
-
-            assert_eq!(1, *res.db_id, "first database id is 1");
+            assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
         info!("--- create and get table");
@@ -5825,7 +5744,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn get_db_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn get_db_name_by_id<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -5833,21 +5755,12 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare and get db");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
-            let res = mt.create_database(plan).await?;
-            info!("create database res: {:?}", res);
+            assert_eq!(1, *util.db_id(), "first database id is 1");
 
-            assert_eq!(1, *res.db_id, "first database id is 1");
-
-            let got = mt.get_db_name_by_id(*res.db_id).await?;
+            let got = mt.get_db_name_by_id(*util.db_id()).await?;
             assert_eq!(got, db_name.to_string())
         }
 
@@ -6034,9 +5947,12 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn get_table_copied_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn get_table_copied_file<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let _tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -6066,16 +5982,8 @@ impl SchemaApiTestSuite {
         };
         info!("--- prepare db and table");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let _ = mt.create_database(plan).await?;
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -6241,15 +6149,19 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_list<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let db_name = "db1";
 
         info!("--- prepare db");
         {
-            let res = self.create_database(mt, &tenant, db_name, "eng1").await?;
-            assert_eq!(1, *res.db_id, "first database id is 1");
+            let mut util = Util::new(mt, tenant_name, db_name, "", "eng1");
+            util.create_db().await?;
+            assert_eq!(1, *util.db_id(), "first database id is 1");
         }
 
         let db_id = DatabaseId::new(1u64);
@@ -6366,7 +6278,10 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn table_index_create_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_index_create_drop<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
@@ -6392,16 +6307,8 @@ impl SchemaApiTestSuite {
 
         info!("--- prepare db and table");
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let _ = mt.create_database(plan).await?;
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -7432,29 +7339,6 @@ impl SchemaApiTestSuite {
             inner: DatabaseNameIdent::new(tenant, db_name),
         }
     }
-
-    async fn create_database<MT: SchemaApi>(
-        &self,
-        mt: &MT,
-        tenant: &Tenant,
-        db_name: &str,
-        engine: &str,
-    ) -> anyhow::Result<CreateDatabaseReply> {
-        info!("--- create database {}", db_name);
-
-        let req = CreateDatabaseReq {
-            create_option: CreateOption::Create,
-            name_ident: DatabaseNameIdent::new(tenant, db_name),
-            meta: DatabaseMeta {
-                engine: engine.to_string(),
-                ..Default::default()
-            },
-        };
-
-        let res = mt.create_database(req).await?;
-        info!("create database res: {:?}", res);
-        Ok(res)
-    }
 }
 
 // Test write and read meta on different nodes
@@ -7727,9 +7611,12 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn update_table_with_copied_files<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn update_table_with_copied_files<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let _tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -7761,16 +7648,8 @@ impl SchemaApiTestSuite {
             table_name: tbl_name.to_string(),
         };
         {
-            let plan = CreateDatabaseReq {
-                create_option: CreateOption::Create,
-                name_ident: DatabaseNameIdent::new(&tenant, db_name),
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let _ = mt.create_database(plan).await?;
+            let mut util = Util::new(mt, tenant_name, db_name, "", "");
+            util.create_db().await?;
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
@@ -8272,6 +8151,39 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
 
         self.mt.drop_database(req).await?;
         Ok(())
+    }
+
+    /// Create table but let user customize the table meta
+    async fn create_table_with(
+        &mut self,
+        f: impl FnOnce(TableMeta) -> TableMeta,
+        r: impl FnOnce(CreateTableReq) -> CreateTableReq,
+    ) -> anyhow::Result<(u64, TableMeta)> {
+        let table_meta = self.table_meta();
+
+        let table_meta = f(table_meta);
+
+        let req = CreateTableReq {
+            create_option: CreateOption::Create,
+            name_ident: TableNameIdent {
+                tenant: self.tenant(),
+                db_name: self.db_name(),
+                table_name: self.tbl_name(),
+            },
+            table_meta: table_meta.clone(),
+            as_dropped: false,
+            table_properties: None,
+            table_partition: None,
+        };
+
+        let req = r(req);
+
+        let resp = self.mt.create_table(req.clone()).await?;
+        let table_id = resp.table_id;
+
+        self.table_id = table_id;
+
+        Ok((table_id, table_meta))
     }
 
     async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
