@@ -662,7 +662,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(buf) => buf.len(),
             ScalarRef::Geography(s) => s.0.len(),
             ScalarRef::Vector(s) => s.memory_size(),
-            ScalarRef::Opaque(o) => o.size() * 8,
+            ScalarRef::Opaque(o) => o.memory_size(),
         }
     }
 
@@ -857,7 +857,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(s) => s.len() * n + (n + 1) * 8,
             ScalarRef::Geography(s) => s.0.len() * n + (n + 1) * 8,
             ScalarRef::Vector(s) => s.memory_size() * n,
-            ScalarRef::Opaque(o) => o.size() * 8 * n,
+            ScalarRef::Opaque(o) => o.memory_size() * n,
         }
     }
 }
@@ -1000,7 +1000,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Geometry(v) => v.hash(state),
             ScalarRef::Geography(v) => v.hash(state),
             ScalarRef::Vector(v) => v.hash(state),
-            ScalarRef::Opaque(_) => todo!("Opaque scalar hash not implemented"),
+            ScalarRef::Opaque(v) => v.hash(state),
         }
     }
 }
@@ -1171,7 +1171,7 @@ impl Column {
             Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
             Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
             Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
-            Column::Opaque(col) => ScalarRef::Opaque(unsafe { col.index_unchecked(index) }),
+            Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
         }
     }
 
@@ -1928,7 +1928,13 @@ impl ColumnBuilder {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat(s.0, n))
             }
             ScalarRef::Vector(s) => ColumnBuilder::Vector(VectorColumnBuilder::repeat(s, n)),
-            ScalarRef::Opaque(_) => todo!("Opaque scalar repeat not implemented"),
+            ScalarRef::Opaque(v) => {
+                with_opaque_type!(|T| match v {
+                    OpaqueScalarRef::T(arr) => {
+                        ColumnBuilder::Opaque(OpaqueColumnBuilder::T(vec![**arr; n]))
+                    }
+                })
+            }
         }
     }
 
@@ -2172,6 +2178,18 @@ impl ColumnBuilder {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat_default(len))
             }
 
+            DataType::Opaque(size) => {
+                with_opaque_size_mapped!(|T| match *size {
+                    T => ColumnBuilder::Opaque(OpaqueColumnBuilder::T(vec![
+                        unsafe {
+                            std::mem::zeroed()
+                        };
+                        len
+                    ])),
+                    _ => unreachable!("Unsupported Opaque size: {}", size),
+                })
+            }
+
             DataType::Array(ty) => ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
                 builder: Self::with_capacity(ty, 0),
                 offsets: vec![0; len + 1],
@@ -2192,7 +2210,6 @@ impl ColumnBuilder {
             DataType::Vector(vector_ty) => {
                 ColumnBuilder::Vector(VectorColumnBuilder::repeat_default(vector_ty, len))
             }
-            DataType::Opaque(_) => todo!("Opaque type repeat_default not implemented"),
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }

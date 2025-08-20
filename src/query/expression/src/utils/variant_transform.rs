@@ -83,6 +83,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Interval(_)
         | ScalarRef::Boolean(_)
         | ScalarRef::Binary(_)
+        | ScalarRef::Opaque(_)
         | ScalarRef::String(_)
         | ScalarRef::Bitmap(_)
         | ScalarRef::Geometry(_)
@@ -108,7 +109,6 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
                 Scalar::Variant(value.to_vec())
             }
         }
-        ScalarRef::Opaque(_) => todo!("Opaque scalar variant transform not implemented"),
     };
     Ok(scalar)
 }

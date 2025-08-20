@@ -284,6 +284,7 @@ impl Display for ScalarRef<'_> {
                 }
                 Ok(())
             }
+            ScalarRef::Opaque(o) => write!(f, "{o:?}"),
             ScalarRef::String(s) => write!(f, "{}", QuotedString(s, '\'')),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
@@ -341,7 +342,6 @@ impl Display for ScalarRef<'_> {
                     write!(f, "[{}]", vals.iter().join(", "))
                 }
             }),
-            ScalarRef::Opaque(_) => todo!("Opaque scalar display not implemented"),
         }
     }
 }

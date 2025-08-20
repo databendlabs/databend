@@ -302,7 +302,7 @@ pub enum OpaqueScalar {
     Opaque6([u64; 6]),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OpaqueScalarRef<'a> {
     Opaque1(&'a [u64; 1]),
     Opaque2(&'a [u64; 2]),
@@ -344,7 +344,7 @@ impl<'a> OpaqueScalarRef<'a> {
     }
 
     pub fn data_type(&self) -> DataType {
-        DataType::Opaque(self.size() as _)
+        DataType::Opaque(self.size())
     }
 
     pub fn as_slice(&self) -> &[u64] {
@@ -353,8 +353,12 @@ impl<'a> OpaqueScalarRef<'a> {
         })
     }
 
+    pub fn memory_size(&self) -> usize {
+        self.size() * 8
+    }
+
     pub fn to_le_bytes(&self) -> Vec<u8> {
-        let mut buffer = vec![0_u8; self.size() * 8];
+        let mut buffer = vec![0_u8; self.memory_size()];
         for (i, v) in self.as_slice().iter().enumerate() {
             buffer.as_mut_slice()[i * 8..(i + 1) * 8].copy_from_slice(&v.to_le_bytes())
         }
