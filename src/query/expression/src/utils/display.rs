@@ -649,6 +649,7 @@ impl Display for TableDataType {
         match &self {
             TableDataType::Boolean => write!(f, "Boolean"),
             TableDataType::Binary => write!(f, "Binary"),
+            TableDataType::Opaque(size) => write!(f, "Opaque({size})"),
             TableDataType::String => write!(f, "String"),
             TableDataType::Number(num) => write!(f, "{num}"),
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),

@@ -43,6 +43,7 @@ use goldenfile::Mint;
 use crate::common::*;
 use crate::get_all_test_data_types;
 use crate::rand_block_for_all_types;
+use crate::DataTypeFilter;
 
 #[test]
 pub fn test_pass() {
@@ -250,7 +251,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
 
     let mut rng = rand::thread_rng();
     let num_blocks = rng.gen_range(5..30);
-    let data_types: Vec<DataType> = get_all_test_data_types();
+    let data_types: Vec<DataType> = get_all_test_data_types(DataTypeFilter::All);
 
     let mut count = 0;
     let mut take_indices = Vec::new();
@@ -271,7 +272,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
             .unwrap();
         filter.slice(slice_start, slice_len);
 
-        let random_block = rand_block_for_all_types(len);
+        let random_block = rand_block_for_all_types(len, DataTypeFilter::All);
         let random_block = random_block.slice(slice_start..slice_end);
 
         {
@@ -405,7 +406,7 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
     for _ in 0..rng.gen_range(5..30) {
         let len = rng.gen_range(5..100);
 
-        let block = rand_block_for_all_types(len);
+        let block = rand_block_for_all_types(len, DataTypeFilter::All);
 
         let mut count = 0;
         let mut take_indices = Vec::new();
@@ -449,7 +450,7 @@ pub fn test_filters() -> databend_common_exception::Result<()> {
     let num_rows = 24;
     let blocks = 10;
     for _ in 0..rng.gen_range(5..30) {
-        let a = rand_block_for_all_types(num_rows);
+        let a = rand_block_for_all_types(num_rows, DataTypeFilter::All);
         let b = DataBlock::concat(&vec![a.clone(); blocks])?;
         let c = b.clone();
 
@@ -556,7 +557,7 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
         let slice_end = rng.gen_range(slice_start..len);
         let scatter_size = rng.gen_range(2..25);
 
-        let random_block = rand_block_for_all_types(len);
+        let random_block = rand_block_for_all_types(len, DataTypeFilter::All);
         let random_block = random_block.slice(slice_start..slice_end);
         let len = slice_end - slice_start;
 

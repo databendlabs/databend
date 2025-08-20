@@ -230,6 +230,7 @@ impl FromToProto for ex::TableDataType {
                     Dt24::BoolT(_) => ex::TableDataType::Boolean,
                     Dt24::BinaryT(_) => ex::TableDataType::Binary,
                     Dt24::StringT(_) => ex::TableDataType::String,
+                    Dt24::OpaqueT(size) => ex::TableDataType::Opaque(size as _),
                     Dt24::NumberT(n) => {
                         ex::TableDataType::Number(ex::types::NumberDataType::from_pb(n)?)
                     }
@@ -287,6 +288,7 @@ impl FromToProto for ex::TableDataType {
             TableDataType::Boolean => new_pb_dt24(Dt24::BoolT(pb::Empty {})),
             TableDataType::Binary => new_pb_dt24(Dt24::BinaryT(pb::Empty {})),
             TableDataType::String => new_pb_dt24(Dt24::StringT(pb::Empty {})),
+            TableDataType::Opaque(size) => new_pb_dt24(Dt24::OpaqueT(*size as _)),
             TableDataType::Number(n) => {
                 let x = n.to_pb()?;
                 new_pb_dt24(Dt24::NumberT(x))

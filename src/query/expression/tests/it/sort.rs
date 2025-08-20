@@ -24,6 +24,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
 
 use crate::rand_block_for_all_types;
+use crate::DataTypeFilter;
 
 #[test]
 fn test_block_sort() -> Result<()> {
@@ -204,8 +205,8 @@ fn sort_concat() {
     let num_blocks = 100;
 
     for _i in 0..num_blocks {
-        let block_a = rand_block_for_all_types(rng.gen_range(0..100));
-        let block_b = rand_block_for_all_types(rng.gen_range(0..100));
+        let block_a = rand_block_for_all_types(rng.gen_range(0..100), DataTypeFilter::All);
+        let block_b = rand_block_for_all_types(rng.gen_range(0..100), DataTypeFilter::All);
 
         let mut sort_index: Vec<usize> = (0..block_a.num_columns()).collect();
         sort_index.shuffle(&mut rng);

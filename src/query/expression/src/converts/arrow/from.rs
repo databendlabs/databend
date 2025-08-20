@@ -34,6 +34,7 @@ use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
+use super::ARROW_EXT_TYPE_OPAQUE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
@@ -105,6 +106,12 @@ impl TryFrom<&Field> for TableField {
                     )));
                 }
             },
+            ARROW_EXT_TYPE_OPAQUE => {
+                let ArrowDataType::FixedSizeList(_, size) = arrow_f.data_type() else {
+                    unreachable!()
+                };
+                TableDataType::Opaque(*size as _)
+            }
             _ => match arrow_f.data_type() {
                 ArrowDataType::Null => TableDataType::Null,
                 ArrowDataType::Boolean => TableDataType::Boolean,
@@ -465,8 +472,8 @@ fn try_to_string_column(array: ArrayRef) -> Result<StringColumn> {
 
 fn try_to_opaque_column(array: ArrayRef, size: usize) -> Result<OpaqueColumn> {
     let expected_type = ArrowDataType::FixedSizeList(
-        Field::new("buffer", ArrowDataType::UInt64, false).into(),
-        size as i32,
+        Field::new_list_field(ArrowDataType::UInt64, false).into(),
+        size as _,
     );
     let array = if array.data_type() != &expected_type {
         arrow_cast::cast(array.as_ref(), &expected_type)?

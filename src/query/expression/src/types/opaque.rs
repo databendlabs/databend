@@ -414,12 +414,17 @@ impl OpaqueColumn {
         with_opaque_mapped_type!(|T| match self {
             OpaqueColumn::T(buffer) => {
                 unsafe {
+                    let child = ArrayDataBuilder::new(ArrowDataType::UInt64)
+                        .len(self.len() * self.size())
+                        .add_buffer(buffer.clone().into())
+                        .build_unchecked();
+
                     ArrayDataBuilder::new(ArrowDataType::FixedSizeList(
-                        Field::new("buffer", ArrowDataType::UInt64, false).into(),
+                        Field::new_list_field(ArrowDataType::UInt64, false).into(),
                         T,
                     ))
                     .len(self.len())
-                    .add_buffer(buffer.clone().into())
+                    .add_child_data(child)
                     .build_unchecked()
                 }
             }
