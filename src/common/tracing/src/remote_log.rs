@@ -193,7 +193,6 @@ impl RemoteLog {
         flush_buffer: Vec<RemoteLogElement>,
         path: &str,
     ) -> Result<()> {
-        eprintln!("do flush");
         let props = WriterProperties::builder()
             .set_compression(Compression::ZSTD(ZstdLevel::try_new(1)?))
             .set_dictionary_enabled(false)
@@ -278,7 +277,6 @@ impl LogBuffer {
         if self.queue.len() >= Self::MAX_BUFFER_SIZE {
             self.last_collect
                 .store(Timestamp::now().as_microsecond() as u64, Ordering::SeqCst);
-            eprintln!("collect force remote log, queue size: {}", self.queue.len());
             self.collect()?;
         }
         let now = Timestamp::now().as_microsecond() as u64;
@@ -297,7 +295,6 @@ impl LogBuffer {
                     if !GlobalLogger::instance().ready.load(Ordering::SeqCst) {
                         break;
                     }
-                    eprintln!("collect remote log, queue size: {}", self.queue.len());
                     self.collect()?;
                     break;
                 }
