@@ -110,8 +110,6 @@ select * from infer_schema(location => '@data/csv/max_records.csv.zst', file_for
 id BIGINT 1 0
 value BIGINT 1 1
 
-# max_records.csv is 71 bytes
-# enough bytes
 query TTBI
 select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
 ----
@@ -123,6 +121,19 @@ select * from infer_schema(location => '@data/csv/max_records.csv.xz', file_form
 ----
 id BIGINT 1 0
 value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/types.csv', file_format => 'head_csv_format')
+----
+bool_col BOOLEAN 1 0
+int_col BIGINT 1 1
+float_col DOUBLE 1 2
+date_col DATE 1 3
+ts_sec TIMESTAMP 1 4
+ts_ms TIMESTAMP 1 5
+ts_us TIMESTAMP 1 6
+ts_ns TIMESTAMP 1 7
+utf8_col VARCHAR 1 8
 
 # NDJSON
 query TTBI
@@ -162,8 +173,6 @@ select * from infer_schema(location => '@data/ndjson/max_records.ndjson.zst', fi
 id BIGINT 1 0
 value BIGINT 1 1
 
-# max_records.csv is 252 bytes
-# enough bytes
 query TTBI
 select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
 ----
@@ -175,3 +184,16 @@ select * from infer_schema(location => '@data/ndjson/max_records.ndjson.xz', fil
 ----
 id BIGINT 1 0
 value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/types.ndjson', file_format => 'NDJSON')
+----
+bool_col BOOLEAN 1 0
+int_col BIGINT 1 1
+float_col DOUBLE 1 2
+date_col VARCHAR 1 3
+ts_sec VARCHAR 1 4
+ts_ms VARCHAR 1 5
+ts_us VARCHAR 1 6
+ts_ns VARCHAR 1 7
+utf8_col VARCHAR 1 8
