@@ -391,7 +391,7 @@ impl<Data: QueueData> QueueManager<Data> {
 
 #[derive(Debug)]
 pub struct AcquireQueueGuard {
-    inner: Vec<AcquireQueueGuardInner>,
+    pub inner: Vec<AcquireQueueGuardInner>,
 }
 
 impl AcquireQueueGuard {

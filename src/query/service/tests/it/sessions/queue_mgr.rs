@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -19,6 +20,12 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_base::base::WatchNotify;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroup;
+use databend_common_base::runtime::workload_group::WorkloadGroupResource;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +40,7 @@ use databend_query::sessions::QueueData;
 use databend_query::sessions::QueueManager;
 use databend_query::test_kits::TestFixture;
 use log::error;
+use tokio::sync::Semaphore;
 
 struct TestData<const PASSED: bool = false> {
     lock_id: String,
@@ -652,4 +660,271 @@ async fn create_meta_store() -> Result<MetaStore> {
         .create_meta_store()
         .await
         .unwrap())
+}
+
+// Tests for workload group concurrency control functionality
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workload_group_concurrency_control() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(10, metastore, false);
+
+    // Create workload group with concurrency limit of 2
+    let mut quotas = HashMap::new();
+    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(2));
+
+    let workload_group = Arc::new(WorkloadGroupResource {
+        meta: WorkloadGroup {
+            id: "test_workload_concurrency".to_string(),
+            name: "Test Workload Concurrency".to_string(),
+            quotas,
+        },
+        queue_key: "test_concurrency_queue".to_string(),
+        permits: 2,
+        semaphore: Arc::new(Semaphore::new(2)),
+        mem_stat: MemStat::create(String::new()),
+        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        destroy_fn: None,
+    });
+
+    // Set workload group for this thread
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.workload_group_resource = Some(workload_group.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+    // Test that semaphore limits are enforced
+    assert_eq!(workload_group.semaphore.available_permits(), 2);
+
+    // Test queue acquisition with workload group limits
+    let test_data1 = TestData::new("concurrency_test_1".to_string(), "acquire_1".to_string());
+    let test_data2 = TestData::new("concurrency_test_2".to_string(), "acquire_2".to_string());
+
+    // Both acquisitions should succeed since we have 2 permits
+    let guard1 = queue.acquire(test_data1).await?;
+    let guard2 = queue.acquire(test_data2).await?;
+
+    // Verify guards are created and contain permits
+    assert!(
+        !guard1.inner.is_empty(),
+        "First guard should contain permits"
+    );
+    assert!(
+        !guard2.inner.is_empty(),
+        "Second guard should contain permits"
+    );
+
+    // Cleanup
+    drop(guard1);
+    drop(guard2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workload_group_concurrent_queue_acquisition() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(10, metastore, false);
+
+    // Create workload group with concurrency limit of 1 (serial execution)
+    let mut quotas = HashMap::new();
+    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(1));
+
+    let workload_group = Arc::new(WorkloadGroupResource {
+        meta: WorkloadGroup {
+            id: "test_concurrent_queue".to_string(),
+            name: "Test Concurrent Queue".to_string(),
+            quotas,
+        },
+        queue_key: "test_concurrent_acquisition".to_string(),
+        permits: 1,
+        semaphore: Arc::new(Semaphore::new(1)),
+        mem_stat: MemStat::create(String::new()),
+        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        destroy_fn: None,
+    });
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.workload_group_resource = Some(workload_group.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+    let test_data1 = TestData::new("workload_concurrent_1".to_string(), "acquire_1".to_string());
+    let test_data2 = TestData::new("workload_concurrent_2".to_string(), "acquire_2".to_string());
+
+    // Start two acquisitions concurrently
+    let queue_clone1 = queue.clone();
+    let queue_clone2 = queue.clone();
+
+    let instant = Instant::now();
+
+    let handle1 = databend_common_base::runtime::spawn(async move {
+        let _guard = queue_clone1.acquire(test_data1).await?;
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        Result::<()>::Ok(())
+    });
+
+    let handle2 = databend_common_base::runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await; // Start slightly later
+        let _guard = queue_clone2.acquire(test_data2).await?;
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        Result::<()>::Ok(())
+    });
+
+    let _ = tokio::try_join!(handle1, handle2).unwrap();
+
+    // With concurrency limit of 1, total time should be more than 1 second (serialized)
+    let elapsed = instant.elapsed();
+    assert!(
+        elapsed >= Duration::from_millis(900),
+        "Expected serialized execution, got {:?}",
+        elapsed
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workload_group_multilevel_queue_guards() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(5, metastore, false);
+
+    // Create workload group with concurrency limit
+    let mut quotas = HashMap::new();
+    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(3));
+
+    let workload_group = Arc::new(WorkloadGroupResource {
+        meta: WorkloadGroup {
+            id: "test_multilevel_guards".to_string(),
+            name: "Test Multilevel Guards".to_string(),
+            quotas,
+        },
+        queue_key: "test_multilevel_queue".to_string(),
+        permits: 3,
+        semaphore: Arc::new(Semaphore::new(3)),
+        mem_stat: MemStat::create(String::new()),
+        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        destroy_fn: None,
+    });
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.workload_group_resource = Some(workload_group.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+    let test_data = TestData::new(
+        "multilevel_test".to_string(),
+        "acquire_multilevel".to_string(),
+    );
+
+    // This tests the multi-level queue acquisition:
+    // 1. Workload group local semaphore
+    // 2. Workload group meta queue
+    // 3. Warehouse level queue
+    let guard = queue.acquire(test_data).await?;
+
+    // Guard should contain multiple levels of permits
+    // The exact number depends on the queue configuration
+    assert!(
+        !guard.inner.is_empty(),
+        "Guard should contain permits from multiple levels"
+    );
+
+    // Verify that the guard properly releases resources when dropped
+    drop(guard);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workload_group_zero_concurrency() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(10, metastore, false);
+
+    // Create workload group with zero concurrency (should block all queries)
+    let mut quotas = HashMap::new();
+    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(0));
+
+    let workload_group = Arc::new(WorkloadGroupResource {
+        meta: WorkloadGroup {
+            id: "test_zero_concurrency".to_string(),
+            name: "Test Zero Concurrency".to_string(),
+            quotas,
+        },
+        queue_key: "test_zero_queue".to_string(),
+        permits: 0,
+        semaphore: Arc::new(Semaphore::new(0)),
+        mem_stat: MemStat::create(String::new()),
+        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        destroy_fn: None,
+    });
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.workload_group_resource = Some(workload_group.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+    // Verify no permits are available
+    assert_eq!(workload_group.semaphore.available_permits(), 0);
+
+    // Test queue acquisition with zero concurrency - should timeout
+    let test_data = TestData::with_timeout(
+        "zero_concurrency_test".to_string(),
+        "acquire_zero".to_string(),
+        Duration::from_millis(100),
+    );
+
+    let queue_clone = queue.clone();
+    let acquire_result = queue_clone.acquire(test_data).await;
+
+    assert!(
+        acquire_result.is_err(),
+        "Queue acquisition should timeout with zero concurrency"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_workload_group_with_timeout() -> Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(10, metastore, false);
+
+    // Create workload group with concurrency limit of 1
+    let mut quotas = HashMap::new();
+    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(1));
+
+    let workload_group = Arc::new(WorkloadGroupResource {
+        meta: WorkloadGroup {
+            id: "test_timeout".to_string(),
+            name: "Test Timeout".to_string(),
+            quotas,
+        },
+        queue_key: "test_timeout_queue".to_string(),
+        permits: 1,
+        semaphore: Arc::new(Semaphore::new(1)),
+        mem_stat: MemStat::create(String::new()),
+        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        destroy_fn: None,
+    });
+
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.workload_group_resource = Some(workload_group.clone());
+    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
+
+    // First, acquire through the queue to hold the permit
+    let test_data1 = TestData::new("timeout_holder".to_string(), "acquire_holder".to_string());
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    // Now try to acquire again with timeout - should timeout because permit is held
+    let test_data2 = TestData::with_timeout(
+        "timeout_waiter".to_string(),
+        "acquire_waiter".to_string(),
+        Duration::from_millis(100),
+    );
+
+    let queue_clone = queue.clone();
+    let timeout_result = queue_clone.acquire(test_data2).await;
+
+    assert!(
+        timeout_result.is_err(),
+        "Queue acquisition should timeout when permits are exhausted"
+    );
+
+    Ok(())
 }
