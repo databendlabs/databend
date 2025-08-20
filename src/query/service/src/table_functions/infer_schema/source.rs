@@ -51,7 +51,7 @@ use opendal::Scheme;
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-const DEFAULT_MAX_BYTES: u64 = 1 * 1024 * 1024;
+const DEFAULT_MAX_BYTES: u64 = 1024 * 1024;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -161,7 +161,7 @@ impl AsyncSource for InferSchemaSource {
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
             }
-            (Some(first_file), FileFormatParams::NdJson(params)) => {
+            (Some(first_file), FileFormatParams::NdJson(_)) => {
                 let arrow_schema = read_json_metadata_async(
                     &first_file.path,
                     &operator,
