@@ -172,8 +172,16 @@ impl GlobalHistoryLog {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
+                                // this means the distributed semaphore is acquired by this node
+                                // and executed successfully
                                 persistent_error_cnt = 0;
                                 temp_error_cnt = 0;
+                            } else {
+                                // If the distributed semaphore is acquired by another node,
+                                // this node will wait for a relative longer time (15s to 20s)
+                                // before try again.
+                                // This is to avoid frequent acquire attempts
+                                sleep(Duration::from_secs(15 + random::<u64>() % 5)).await;
                             }
                             sleep(sleep_time).await;
                         }
@@ -235,6 +243,8 @@ impl GlobalHistoryLog {
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        dbg!(timestamp);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
