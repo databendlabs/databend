@@ -140,7 +140,7 @@ fn test_finish_flush() {
 
     let batch = profile.flush(true, &mut 4);
     assert_eq!(batch.len(), 2);
-    // sleep(1) is not exactly 1 second sleeping time, but **at least** 1 second.
+    // sleep(1) is not exactly 1 second sleep time, but **at least** 1 second.
     if batch[0].len() == 1 {
         // 99.9%: [[timestamp, 1000, 1]]
         assert_eq!(batch[0][0][1], 1000);

@@ -290,7 +290,7 @@ impl LogBuffer {
             ) {
                 Ok(_) => {
                     // Ensure operator is ready before collecting logs to prevent data loss during startup.
-                    // If operator is not ready, skip collection this round and keep logs entries in the queue
+                    // If operator is not ready, skip collection this round and keep log entries in the queue
                     // MAX_BUFFER_SIZE limit can help to prevent unbounded queue growth.
                     if !GlobalLogger::instance().ready.load(Ordering::SeqCst) {
                         break;
