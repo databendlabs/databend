@@ -57,6 +57,10 @@ impl ExprRuntimePruner {
 
         let part = FuseBlockPartInfo::from_part(part)?;
         let pruned = self.exprs.iter().any(|filter| {
+            // If the filter is a constant false, we can prune the partition.
+            if matches!(filter, Expr::Constant(Constant { scalar: Scalar::Boolean(false), .. })) {
+                return true;
+            }
             let column_refs = filter.column_refs();
             // Currently only support filter with one column (probe key).
             debug_assert!(column_refs.len() == 1);
