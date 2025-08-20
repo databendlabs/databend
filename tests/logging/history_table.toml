@@ -1,7 +1,6 @@
 [log.history]
 on = true
 interval = 1
-level = "DEBUG"
 
 [[log.history.tables]]
 table_name = "query_history"
