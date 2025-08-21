@@ -104,6 +104,7 @@ impl LockManager {
             Ok(revision) => {
                 self.insert_lock(revision, lock_holder);
                 let guard = LockGuard::new(self.clone(), revision);
+
                 Ok(Some(Arc::new(guard)))
             }
             Err(err) => {

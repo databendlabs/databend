@@ -84,6 +84,8 @@ pub trait QueueData: Send + Sync + 'static {
 
     fn enter_wait_pending(&self) {}
 
+    fn set_status(&self, _status: &str) {}
+
     fn exit_wait_pending(&self, _wait_time: Duration) {}
 
     fn get_abort_notify(&self) -> Arc<WatchNotify>;
@@ -227,6 +229,8 @@ impl<Data: QueueData> QueueManager<Data> {
                     workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
                 }
 
+                data.set_status("[QUERY-QUEUE] Waiting for local workload semaphore");
+
                 let semaphore = workload_group.semaphore.clone();
                 let acquire = tokio::time::timeout(timeout, semaphore.acquire_owned());
                 let queue_future = AcquireQueueFuture::create(data.clone(), acquire, self.clone());
@@ -234,7 +238,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 guards.push(queue_future.await?);
 
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from workload local group queue. elapsed: {:?}",
+                    "[QUERY-QUEUE] Successfully acquired from local workload semaphore. elapsed: {:?}",
                     instant.elapsed()
                 );
 
@@ -243,6 +247,8 @@ impl<Data: QueueData> QueueManager<Data> {
                 // Prevent concurrent access to meta and serialize the submission of acquire requests.
                 // This ensures that at most permits + nodes acquirers will be in the queue at any given time.
                 let _guard = workload_group.mutex.clone().lock_owned().await;
+                data.set_status("[QUERY-QUEUE] Waiting for global workload semaphore");
+
                 let workload_queue_guard = self
                     .acquire_workload_queue(
                         data.clone(),
@@ -253,13 +259,15 @@ impl<Data: QueueData> QueueManager<Data> {
                     .await?;
 
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from workload meta group queue. elapsed: {:?}",
+                    "[QUERY-QUEUE] Successfully acquired from global workload semaphore. elapsed: {:?}",
                     instant.elapsed()
                 );
                 timeout -= instant.elapsed();
                 guards.push(workload_queue_guard);
             }
         }
+
+        data.set_status("[QUERY-QUEUE] Waiting for warehouse resource scheduling");
 
         guards.extend(self.acquire_warehouse_queue(data, timeout).await?);
 
@@ -699,6 +707,10 @@ impl QueueData for QueryEntry {
     fn enter_wait_pending(&self) {
         self.ctx
             .set_status_info("[QUERY-QUEUE] Waiting for resource scheduling");
+    }
+
+    fn set_status(&self, status: &str) {
+        self.ctx.set_status_info(status);
     }
 
     fn exit_wait_pending(&self, wait_time: Duration) {
