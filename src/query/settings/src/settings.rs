@@ -207,18 +207,17 @@ pub struct SettingsIter<'a> {
 }
 
 impl<'a> SettingsIter<'a> {
-    pub fn create(settings: &'a Settings) -> SettingsIter<'a> {
-        let iter = DefaultSettings::instance()
-            .unwrap()
+    pub fn create(settings: &'a Settings) -> Result<SettingsIter<'a>> {
+        let iter = DefaultSettings::instance()?
             .settings
             .clone()
             .into_iter()
             .sorted_by(|(l, _), (r, _)| Ord::cmp(l, r));
 
-        SettingsIter::<'a> {
+        Ok(SettingsIter::<'a> {
             settings,
             inner: iter,
-        }
+        })
     }
 }
 
@@ -270,7 +269,9 @@ impl<'a> IntoIterator for &'a Settings {
     type IntoIter = SettingsIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        SettingsIter::<'a>::create(self)
+        // TODO: Handle error properly - for now, panic in case of error
+        // This should be refactored to use TryIntoIterator when stabilized
+        SettingsIter::<'a>::create(self).expect("Failed to create settings iterator")
     }
 }
 
@@ -304,8 +305,9 @@ mod tests {
             query_level_change: Arc::new(AtomicBool::new(false)),
         };
 
-        let settings =
-            serde_json::from_str::<Settings>(&serde_json::to_string(&settings).unwrap()).unwrap();
+        let settings_json = serde_json::to_string(&settings).expect("Failed to serialize settings");
+        let settings = serde_json::from_str::<Settings>(&settings_json)
+            .expect("Failed to deserialize settings");
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);

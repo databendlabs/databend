@@ -71,10 +71,7 @@ where
 /// Loads vector index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-pub(crate) async fn load_vector_index_meta(
-    dal: Operator,
-    path: &str,
-) -> Result<Arc<VectorIndexMeta>> {
+pub async fn load_vector_index_meta(dal: Operator, path: &str) -> Result<Arc<VectorIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::vector_index_meta_reader(dal);
@@ -95,7 +92,7 @@ pub(crate) async fn load_vector_index_meta(
 
 /// load index column data
 #[fastrace::trace]
-pub(crate) async fn load_vector_index_files<'a>(
+pub async fn load_vector_index_files<'a>(
     operator: Operator,
     settings: &ReadSettings,
     column_names: &'a [String],

@@ -39,10 +39,20 @@ pub enum DirectedEdge {
 }
 
 impl DirectedEdge {
-    pub fn get_source<N, E>(&self, graph: &StableGraph<N, E>) -> NodeIndex {
+    pub fn get_source<N, E>(&self, graph: &StableGraph<N, E>) -> Result<NodeIndex> {
         match self {
-            DirectedEdge::Source(edge_index) => graph.edge_endpoints(*edge_index).unwrap().0,
-            DirectedEdge::Target(edge_index) => graph.edge_endpoints(*edge_index).unwrap().1,
+            DirectedEdge::Source(edge_index) => graph
+                .edge_endpoints(*edge_index)
+                .map(|(source, _)| source)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!("Edge not found in graph: {:?}", edge_index))
+                }),
+            DirectedEdge::Target(edge_index) => graph
+                .edge_endpoints(*edge_index)
+                .map(|(_, target)| target)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!("Edge not found in graph: {:?}", edge_index))
+                }),
         }
     }
 
@@ -105,13 +115,20 @@ impl UpdateList {
     /// # Safety
     ///
     /// Must be thread safe call. In other words, it needs to be called in single thread or in mutex guard.
-    pub unsafe fn create_trigger(self: &Arc<Self>, edge_index: EdgeIndex) -> *mut UpdateTrigger {
+    pub unsafe fn create_trigger(
+        self: &Arc<Self>,
+        edge_index: EdgeIndex,
+    ) -> Result<*mut UpdateTrigger> {
         let inner = &mut *self.inner.get();
         let update_trigger = UpdateTrigger::create(edge_index, self.inner.get());
         inner
             .updated_triggers
             .push(Arc::new(UnsafeCell::new(update_trigger)));
-        inner.updated_triggers.last().unwrap().get()
+        inner
+            .updated_triggers
+            .last()
+            .map(|trigger| trigger.get())
+            .ok_or_else(|| ErrorCode::Internal("Failed to get last trigger after push"))
     }
 }
 

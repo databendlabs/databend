@@ -85,7 +85,7 @@ class Client(object):
             auth=auth,
             headers={
                 HEADER_CAPS: "session_header",
-                HEADER_SESSION: self.session_header
+                HEADER_SESSION: self.session_header,
             },
         )
         return response
@@ -143,7 +143,10 @@ def test_session():
 # 2. X-DATABEND-SESSION is ignored
 def test_no_session():
     client = requests.session()
-    payload =  {"sql": "select * from numbers(100)", "pagination": {"max_rows_per_page": 2}}
+    payload = {
+        "sql": "select * from numbers(100)",
+        "pagination": {"max_rows_per_page": 2},
+    }
     resp = client.post(
         query_url,
         auth=auth,
@@ -163,18 +166,21 @@ def test_no_session():
 HEADER_SESSION_ID = "X-DATABEND-SESSION-ID"
 HEADER_SESSION_ID_V = "101010"
 
+
 def do_query_from_worksheet(client, sql, sid=HEADER_SESSION_ID_V):
-    payload =  {"sql": sql, "pagination": {"max_rows_per_page": 2, "wait_time_secs": 10}}
+    payload = {"sql": sql, "pagination": {"max_rows_per_page": 2, "wait_time_secs": 10}}
     resp = client.post(
         query_url,
         auth=auth,
-        headers={"Content-Type": "application/json",
-                 "USER-AGENT": "worksheet",
-                 HEADER_SESSION_ID: sid,
-                 },
+        headers={
+            "Content-Type": "application/json",
+            "USER-AGENT": "worksheet",
+            HEADER_SESSION_ID: sid,
+        },
         json=payload,
     )
     return resp.json()
+
 
 def test_worksheet_session():
     client = requests.session()
@@ -184,15 +190,14 @@ def test_worksheet_session():
     resp = client.get(
         f"http://localhost:8000/{next_uri}",
         auth=auth,
-        headers={
-            "USER-AGENT": "worksheet",
-            HEADER_SESSION_ID: HEADER_SESSION_ID_V
-        },
+        headers={"USER-AGENT": "worksheet", HEADER_SESSION_ID: HEADER_SESSION_ID_V},
     )
     resp = resp.json()
     assert len(resp["data"]) == 2, resp
 
-    resp = do_query_from_worksheet(client, "create or replace temp table t09_0007(a int)")
+    resp = do_query_from_worksheet(
+        client, "create or replace temp table t09_0007(a int)"
+    )
     assert resp["state"] == "Succeeded", resp
     resp = do_query_from_worksheet(client, "insert into t09_0007 values (1)")
     assert resp["state"] == "Succeeded", resp

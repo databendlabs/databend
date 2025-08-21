@@ -663,8 +663,11 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         dal: Operator,
     ) -> Result<FusePruner> {
-        let ngram_args =
-            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
+        let ngram_args = Self::create_ngram_index_args(
+            &self.table_info.meta,
+            &self.table_info.meta.schema,
+            false,
+        )?;
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -719,23 +722,17 @@ impl FuseTable {
     pub fn create_ngram_index_args(
         table_meta: &TableMeta,
         table_schema: &TableSchema,
+        is_sync_write: bool,
     ) -> Result<Vec<NgramArgs>> {
         let mut ngram_index_args = Vec::with_capacity(table_meta.indexes.len());
         for index in table_meta.indexes.values() {
             if !matches!(index.index_type, TableIndexType::Ngram) {
                 continue;
             }
-            if !index.sync_creation {
+            if is_sync_write && !index.sync_creation {
                 continue;
             }
 
-            let Some((pos, field)) = table_schema
-                .fields()
-                .iter()
-                .find_position(|field| field.column_id() == index.column_ids[0])
-            else {
-                continue;
-            };
             let gram_size = match index.options.get("gram_size") {
                 None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
@@ -744,7 +741,17 @@ impl FuseTable {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
-            ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+
+            for column_id in &index.column_ids {
+                let Some((pos, field)) = table_schema
+                    .fields()
+                    .iter()
+                    .find_position(|field| field.column_id() == *column_id)
+                else {
+                    continue;
+                };
+                ngram_index_args.push(NgramArgs::new(pos, field.clone(), gram_size, bloom_size));
+            }
         }
         Ok(ngram_index_args)
     }

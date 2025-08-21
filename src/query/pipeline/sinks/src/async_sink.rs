@@ -135,7 +135,12 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
         match self.input.has_data() {
             true => {
                 // Wake up upstream while executing async work
-                self.input_data = Some(self.input.pull_data().unwrap()?);
+                let data = self.input.pull_data().ok_or_else(|| {
+                    databend_common_exception::ErrorCode::Internal(
+                        "Failed to pull data from input port in async sink",
+                    )
+                })??;
+                self.input_data = Some(data);
                 self.input.set_need_data();
                 Ok(Event::Async)
             }
@@ -150,12 +155,37 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;
-            self.inner.as_mut().unwrap().on_start().await?;
+            self.inner
+                .as_mut()
+                .ok_or_else(|| {
+                    databend_common_exception::ErrorCode::Internal(
+                        "AsyncSink inner is None when calling on_start",
+                    )
+                })?
+                .on_start()
+                .await?;
         } else if let Some(data_block) = self.input_data.take() {
-            self.finished = self.inner.as_mut().unwrap().consume(data_block).await?;
+            self.finished = self
+                .inner
+                .as_mut()
+                .ok_or_else(|| {
+                    databend_common_exception::ErrorCode::Internal(
+                        "AsyncSink inner is None when consuming data",
+                    )
+                })?
+                .consume(data_block)
+                .await?;
         } else if !self.called_on_finish {
             self.called_on_finish = true;
-            self.inner.as_mut().unwrap().on_finish().await?;
+            self.inner
+                .as_mut()
+                .ok_or_else(|| {
+                    databend_common_exception::ErrorCode::Internal(
+                        "AsyncSink inner is None when calling on_finish",
+                    )
+                })?
+                .on_finish()
+                .await?;
         }
 
         Ok(())

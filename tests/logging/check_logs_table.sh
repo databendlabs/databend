@@ -29,7 +29,7 @@ function check_query_log() {
   fi
 }
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "set global timezone='Asia/Shanghai'"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"set global timezone='Asia/Shanghai'\"}")
 
 # Execute the initial query and get the query_id
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')

@@ -1,5 +1,6 @@
 [log.history]
 on = true
+interval = 1
 
 [[log.history.tables]]
 table_name = "query_history"

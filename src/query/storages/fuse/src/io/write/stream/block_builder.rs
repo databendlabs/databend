@@ -227,6 +227,7 @@ impl StreamBlockBuilder {
             properties.ctx.clone(),
             &properties.table_indexes,
             properties.source_schema.clone(),
+            true,
         );
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map);
         let cluster_stats_state =
@@ -462,6 +463,7 @@ impl StreamBlockProperties {
         let ngram_args = FuseTable::create_ngram_index_args(
             &table.table_info.meta,
             &table.table_info.meta.schema,
+            true,
         )?;
         let ndv_columns_map = table
             .approx_distinct_cols

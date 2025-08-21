@@ -159,6 +159,7 @@ impl TransformSerializeBlock {
         let ngram_args = FuseTable::create_ngram_index_args(
             &table.table_info.meta,
             &table.table_info.meta.schema,
+            true,
         )?;
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
@@ -177,6 +178,7 @@ impl TransformSerializeBlock {
             ctx.clone(),
             &table.table_info.meta.indexes,
             source_schema.clone(),
+            true,
         );
         let serialize_hll = if matches!(
             kind,
