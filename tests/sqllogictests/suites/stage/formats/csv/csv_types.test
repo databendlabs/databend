@@ -17,7 +17,7 @@ create table iv(a int not null, b variant not null)
 query TIITI
 copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE
 ----
-csv/invalid_variant.csv 1 1 Invalid value 'invalidvariant' for column 1 (b Variant): expected value, pos 1 1
+csv/invalid_variant.csv 1 1 Invalid value 'invalidvariant' for column 1 (b Variant): expected ident, pos 3 1
 
 query IT
 select * from iv
