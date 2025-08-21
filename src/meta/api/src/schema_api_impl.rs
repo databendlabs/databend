@@ -2957,6 +2957,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let lock_key = &req.lock_key;
         let id_generator = IdGenerator::table_lock_id();
 
+        // ensure idempotent, reference from update_multi_table_meta.
+        let txn_id = Uuid::new_v4().to_string();
+        let txn_id_key = format!("_txn_id/{}", txn_id);
+
         let mut trials = txn_backoff(None, ctx);
         loop {
             trials.next().unwrap()?.await;
@@ -2978,16 +2982,35 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&id_generator, Eq, current_rev),
                 // assumes lock are absent.
                 txn_cond_seq(&key, Eq, 0),
+                TxnCondition::eq_seq(txn_id_key.clone(), 0),
             ];
             let if_then = vec![
                 txn_op_put(&id_generator, b"".to_vec()),
                 txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
+                TxnOp::put_with_ttl(txn_id_key.clone(), vec![], Some(Duration::from_secs(60))),
             ];
-            let txn_req = TxnRequest::new(condition, if_then);
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+            let else_then = vec![TxnOp::get(txn_id_key.clone())];
+            let txn_req = TxnRequest::new(condition, if_then).with_else(else_then);
+            let (succ, responses) = send_txn(self, txn_req).await?;
 
             if succ {
                 return Ok(CreateLockRevReply { revision });
+            }
+
+            // Check if transaction ID exists in else branch response (idempotency check)
+            // The "idempotency check" is only guaranteed roughly within 60 secs.
+            if let Some(Response::Get(get_resp)) =
+                responses.last().and_then(|r| r.response.as_ref())
+            {
+                // Defensive check, make sure the get(tx_id_key) is the last operation
+                assert_eq!(get_resp.key, txn_id_key, "Transaction ID key mismatch");
+                if get_resp.value.is_some() {
+                    info!(
+                        "Transaction ID {} exists, the lock revision has been created successfully",
+                        txn_id_key
+                    );
+                    return Ok(CreateLockRevReply { revision });
+                }
             }
         }
     }
