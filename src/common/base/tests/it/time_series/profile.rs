@@ -139,12 +139,26 @@ fn test_finish_flush() {
     profile.record(TimeSeriesProfileName::OutputRows, 1);
 
     let batch = profile.flush(true, &mut 4);
-
     assert_eq!(batch.len(), 2);
-    // [[timestamp, 1000, 1]]
-    assert_eq!(batch[0][0].len(), 3);
-    // [[timestamp, 2000, 2]]
-    assert_eq!(batch[1][0].len(), 3);
+    // sleep(1) is not exactly 1 second sleep time, but **at least** 1 second.
+    if batch[0].len() == 1 {
+        // 99.9%: [[timestamp, 1000, 1]]
+        assert_eq!(batch[0][0][1], 1000);
+        assert_eq!(batch[0][0][2], 1);
+    } else {
+        // 0.1%: [[timestamp, 1000], [timestamp+2, 1]]
+        assert_eq!(batch[0][0][1], 1000);
+        assert_eq!(batch[0][1][1], 1);
+    }
+    if batch[1].len() == 1 {
+        // 99.9%: [[timestamp, 2000, 2]]
+        assert_eq!(batch[1][0][1], 2000);
+        assert_eq!(batch[1][0][2], 2);
+    } else {
+        // 0.1%: [[timestamp, 2000], [timestamp+2, 2]]
+        assert_eq!(batch[1][0][1], 2000);
+        assert_eq!(batch[1][1][1], 2);
+    }
 }
 
 #[test]
