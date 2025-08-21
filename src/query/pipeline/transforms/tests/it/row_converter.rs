@@ -25,8 +25,8 @@ use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
-use databend_common_expression::RowConverter;
 use databend_common_expression::SortField;
+use databend_common_pipeline_transforms::sort::CommonRowConverter;
 use itertools::Itertools;
 use jsonb::parse_owned_jsonb;
 use rand::distributions::Alphanumeric;
@@ -58,7 +58,7 @@ fn test_fixed_width() {
         ]),
     ];
 
-    let converter = RowConverter::new(vec![
+    let converter = CommonRowConverter::new(vec![
         SortField::new(DataType::Number(NumberDataType::Int16).wrap_nullable()),
         SortField::new(DataType::Number(NumberDataType::Float32).wrap_nullable()),
     ])
@@ -75,7 +75,7 @@ fn test_fixed_width() {
 
 #[test]
 fn test_decimal128() {
-    let converter = RowConverter::new(vec![SortField::new(
+    let converter = CommonRowConverter::new(vec![SortField::new(
         DataType::Decimal(DecimalSize::new_unchecked(38, 7)).wrap_nullable(),
     )])
     .unwrap();
@@ -102,7 +102,7 @@ fn test_decimal128() {
 
 #[test]
 fn test_decimal256() {
-    let converter = RowConverter::new(vec![SortField::new(
+    let converter = CommonRowConverter::new(vec![SortField::new(
         DataType::Decimal(DecimalSize::new_unchecked(76, 7)).wrap_nullable(),
     )])
     .unwrap();
@@ -132,7 +132,8 @@ fn test_decimal256() {
 #[test]
 fn test_decimal_view() {
     fn run(size: DecimalSize, col: Column) {
-        let converter = RowConverter::new(vec![SortField::new(DataType::Decimal(size))]).unwrap();
+        let converter =
+            CommonRowConverter::new(vec![SortField::new(DataType::Decimal(size))]).unwrap();
         let num_rows = col.len();
         let rows = converter.convert_columns(&[col], num_rows);
         for i in 0..num_rows - 1 {
@@ -181,7 +182,7 @@ fn test_decimal_view() {
 #[test]
 fn test_bool() {
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::Boolean.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::Boolean.wrap_nullable())]).unwrap();
 
     let col = BooleanType::from_opt_data(vec![None, Some(false), Some(true)]);
     let num_rows = col.len();
@@ -192,7 +193,7 @@ fn test_bool() {
     assert!(rows.index(2).unwrap() > rows.index(0).unwrap());
     assert!(rows.index(1).unwrap() > rows.index(0).unwrap());
 
-    let converter = RowConverter::new(vec![SortField::new_with_options(
+    let converter = CommonRowConverter::new(vec![SortField::new_with_options(
         DataType::Boolean.wrap_nullable(),
         false,
         false,
@@ -209,7 +210,7 @@ fn test_bool() {
 #[test]
 fn test_null_encoding() {
     let col = Column::Null { len: 10 };
-    let converter = RowConverter::new(vec![SortField::new(DataType::Null)]).unwrap();
+    let converter = CommonRowConverter::new(vec![SortField::new(DataType::Null)]).unwrap();
     let rows = converter.convert_columns(&[col], 10);
 
     assert_eq!(rows.len(), 10);
@@ -227,7 +228,7 @@ fn test_binary() {
     ]);
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
@@ -254,7 +255,7 @@ fn test_binary() {
     let num_rows = col.len();
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
     for i in 0..rows.len() {
@@ -270,7 +271,7 @@ fn test_binary() {
         }
     }
 
-    let converter = RowConverter::new(vec![SortField::new_with_options(
+    let converter = CommonRowConverter::new(vec![SortField::new_with_options(
         DataType::Binary.wrap_nullable(),
         false,
         false,
@@ -298,7 +299,7 @@ fn test_string() {
         StringType::from_opt_data(vec![Some("hello"), Some("he"), None, Some("foo"), Some("")]);
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
@@ -322,7 +323,7 @@ fn test_string() {
     let num_rows = col.len();
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
     for i in 0..rows.len() {
@@ -338,7 +339,7 @@ fn test_string() {
         }
     }
 
-    let converter = RowConverter::new(vec![SortField::new_with_options(
+    let converter = CommonRowConverter::new(vec![SortField::new_with_options(
         DataType::String.wrap_nullable(),
         false,
         false,
@@ -397,7 +398,7 @@ fn test_variant() {
     let col = NullableColumn::new_column(Column::Variant(builder.build()), validity.into());
 
     let converter =
-        RowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())]).unwrap();
+        CommonRowConverter::new(vec![SortField::new(DataType::Variant.wrap_nullable())]).unwrap();
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
@@ -414,7 +415,7 @@ fn test_variant() {
         }
     }
 
-    let converter = RowConverter::new(vec![SortField::new_with_options(
+    let converter = CommonRowConverter::new(vec![SortField::new_with_options(
         DataType::Variant.wrap_nullable(),
         false,
         false,
@@ -548,7 +549,7 @@ fn fuzz_test() {
             })
             .collect();
 
-        let converter = RowConverter::new(fields).unwrap();
+        let converter = CommonRowConverter::new(fields).unwrap();
         let rows = converter.convert_columns(&columns, num_rows);
 
         for i in 0..num_rows {

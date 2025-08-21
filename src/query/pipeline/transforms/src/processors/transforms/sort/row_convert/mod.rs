@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -21,6 +22,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -28,12 +30,30 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use match_template::match_template;
 
-use super::RowConverter;
 use super::Rows;
-use super::SimpleRowConverter;
-use super::SimpleRowsAsc;
-use super::SimpleRowsDesc;
-use crate::sort::CommonRows;
+
+/// Convert columns to rows.
+pub trait RowConverter<T: Rows>
+where Self: Sized + Debug
+{
+    fn create(
+        sort_columns_descriptions: &[SortColumnDescription],
+        output_schema: DataSchemaRef,
+    ) -> Result<Self>;
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<T>;
+
+    fn convert_data_block(
+        &self,
+        sort_desc: &[SortColumnDescription],
+        data_block: &DataBlock,
+    ) -> Result<T> {
+        let order_by_cols = sort_desc
+            .iter()
+            .map(|desc| data_block.get_by_offset(desc.offset).clone())
+            .collect::<Vec<_>>();
+        self.convert(&order_by_cols, data_block.num_rows())
+    }
+}
 
 pub fn convert_rows(
     schema: DataSchemaRef,
@@ -109,11 +129,11 @@ where V: RowsTypeVisitor {
                         }
                     }
                 }),
-                _ => visitor.visit_type::<CommonRows, CommonConverter>()
+                _ => visitor.visit_type::<CommonRows, CommonRowConverter>()
                 }
             }
         }
-        _ => visitor.visit_type::<CommonRows, CommonConverter>(),
+        _ => visitor.visit_type::<CommonRows, CommonRowConverter>(),
     }
 }
 
@@ -162,3 +182,19 @@ pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> 
 
     select_row_type(&mut visitor)
 }
+
+fn null_sentinel(nulls_first: bool) -> u8 {
+    if nulls_first {
+        0
+    } else {
+        0xFF
+    }
+}
+
+mod common;
+mod fixed;
+mod simple;
+mod variable;
+
+pub use self::common::*;
+pub use self::simple::*;

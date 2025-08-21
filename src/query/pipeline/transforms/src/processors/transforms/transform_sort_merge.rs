@@ -21,7 +21,6 @@ use std::sync::Arc;
 use bytesize::ByteSize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -30,13 +29,14 @@ use databend_common_expression::SortColumnDescription;
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
+use super::sort::utils::has_order_field;
+use super::sort::CommonRowConverter;
 use super::sort::CommonRows;
 use super::sort::Rows;
 use super::sort::SortedStream;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use crate::processors::sort::Merger;
-use crate::sort::utils::has_order_field;
 
 /// Merge sort blocks without limit.
 ///
@@ -207,7 +207,8 @@ pub fn sort_merge(
     debug_assert!(have_order_col == has_order_field(&schema));
 
     type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
-    type MergeSortCommon = TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
+    type MergeSortCommon =
+        TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonRowConverter>;
 
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),

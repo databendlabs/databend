@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 
-use super::row_converter::null_sentinel;
-use crate::types::binary::BinaryColumnBuilder;
+use super::null_sentinel;
 
 /// The block size of the variable length encoding
 const BLOCK_SIZE: usize = 32;

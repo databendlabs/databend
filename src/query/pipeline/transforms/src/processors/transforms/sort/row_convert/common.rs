@@ -12,40 +12,157 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::DecimalDataKind;
+use databend_common_expression::types::DecimalView;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_number_type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FixedLengthEncoding;
+use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
+use jsonb::RawJsonb;
 
 use super::fixed;
-use super::fixed::FixedLengthEncoding;
 use super::variable;
-use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::decimal::DecimalColumn;
-use crate::types::i256;
-use crate::types::AccessType;
-use crate::types::DataType;
-use crate::types::DecimalDataKind;
-use crate::types::DecimalView;
-use crate::types::NumberColumn;
-use crate::types::NumberDataType;
-use crate::with_decimal_mapped_type;
-use crate::with_number_mapped_type;
-use crate::with_number_type;
-use crate::Column;
-use crate::SortField;
+use super::RowConverter;
+use super::Rows;
+
+pub type CommonRows = BinaryColumn;
+
+impl Rows for CommonRows {
+    const IS_ASC_COLUMN: bool = true;
+    type Item<'a> = &'a [u8];
+    type Type = BinaryType;
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn row(&self, index: usize) -> Self::Item<'_> {
+        unsafe { self.index_unchecked(index) }
+    }
+
+    fn to_column(&self) -> Column {
+        Column::Binary(self.clone())
+    }
+
+    fn try_from_column(col: &Column) -> Option<Self> {
+        col.as_binary().cloned()
+    }
+
+    fn slice(&self, range: Range<usize>) -> Self {
+        self.slice(range)
+    }
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a> {
+        match s {
+            Scalar::Binary(s) => s,
+            _ => unreachable!(),
+        }
+    }
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar {
+        Scalar::Binary(Vec::from(item))
+    }
+}
+
+impl RowConverter<CommonRows> for CommonRowConverter {
+    fn create(
+        sort_columns_descriptions: &[SortColumnDescription],
+        output_schema: DataSchemaRef,
+    ) -> Result<Self> {
+        let sort_fields = sort_columns_descriptions
+            .iter()
+            .map(|d| {
+                let data_type = output_schema.field(d.offset).data_type();
+                SortField::new_with_options(data_type.clone(), d.asc, d.nulls_first)
+            })
+            .collect::<Vec<_>>();
+        CommonRowConverter::new(sort_fields)
+    }
+
+    fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
+        let columns = columns
+            .iter()
+            .map(|entry| match entry {
+                BlockEntry::Const(Scalar::Variant(val), _, _) => {
+                    // convert variant value to comparable format.
+                    let raw_jsonb = RawJsonb::new(val);
+                    let buf = raw_jsonb.convert_to_comparable();
+                    let s = Scalar::Variant(buf);
+                    ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
+                }
+                BlockEntry::Const(_, _, _) => entry.to_column(),
+
+                BlockEntry::Column(c) => {
+                    let data_type = c.data_type();
+                    if !data_type.remove_nullable().is_variant() {
+                        return c.clone();
+                    }
+
+                    // convert variant value to comparable format.
+                    let (_, validity) = c.validity();
+                    let col = c.remove_nullable();
+                    let col = col.as_variant().unwrap();
+                    let mut builder =
+                        BinaryColumnBuilder::with_capacity(col.len(), col.total_bytes_len());
+                    for (i, val) in col.iter().enumerate() {
+                        if let Some(validity) = validity {
+                            if unsafe { !validity.get_bit_unchecked(i) } {
+                                builder.commit_row();
+                                continue;
+                            }
+                        }
+                        let raw_jsonb = RawJsonb::new(val);
+                        let buf = raw_jsonb.convert_to_comparable();
+                        builder.put_slice(buf.as_ref());
+                        builder.commit_row();
+                    }
+                    if data_type.is_nullable() {
+                        NullableColumn::new_column(
+                            Column::Variant(builder.build()),
+                            validity.unwrap().clone(),
+                        )
+                    } else {
+                        Column::Variant(builder.build())
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(self.convert_columns(&columns, num_rows))
+    }
+}
 
 /// Convert column-oriented data into comparable row-oriented data.
 ///
 /// **NOTE**: currently, Variant is treat as String.
 #[derive(Debug)]
-pub struct RowConverter {
+pub struct CommonRowConverter {
     fields: Arc<[SortField]>,
 }
 
-impl RowConverter {
+impl CommonRowConverter {
     pub fn new(fields: Vec<SortField>) -> Result<Self> {
         if !fields.iter().all(|f| Self::support_data_type(&f.data_type)) {
             return Err(ErrorCode::Unimplemented(format!(
@@ -107,17 +224,13 @@ impl RowConverter {
                         lengths.iter_mut().for_each(|x| *x += NUM_TYPE::ENCODED_LEN)
                     }
                 }),
-                DataType::Decimal(size) => match size.data_kind() {
-                    DecimalDataKind::Decimal64 => {
-                        lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN)
-                    }
-                    DecimalDataKind::Decimal128 => {
-                        lengths.iter_mut().for_each(|x| *x += i128::ENCODED_LEN)
-                    }
-                    DecimalDataKind::Decimal256 => {
-                        lengths.iter_mut().for_each(|x| *x += i256::ENCODED_LEN)
-                    }
-                },
+                DataType::Decimal(size) => {
+                    with_decimal_mapped_type!(|F| match size.data_kind() {
+                        DecimalDataKind::F => {
+                            lengths.iter_mut().for_each(|x| *x += F::ENCODED_LEN)
+                        }
+                    });
+                }
                 DataType::Timestamp => lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN),
                 DataType::Interval => lengths
                     .iter_mut()
@@ -156,16 +269,16 @@ impl RowConverter {
                             .iter()
                             .zip(validity.iter())
                             .zip(lengths.iter_mut())
-                            .for_each(|((str, v), length)| {
-                                *length += variable::encoded_len(str.as_bytes(), !v)
+                            .for_each(|((s, v), length)| {
+                                *length += variable::encoded_len(s.as_bytes(), !v)
                             })
                     } else {
                         col.as_string()
                             .unwrap()
                             .iter()
                             .zip(lengths.iter_mut())
-                            .for_each(|(str, length)| {
-                                *length += variable::encoded_len(str.as_bytes(), false)
+                            .for_each(|(s, length)| {
+                                *length += variable::encoded_len(s.as_bytes(), false)
                             })
                     }
                 }
@@ -192,7 +305,7 @@ impl RowConverter {
                             })
                     }
                 }
-                _ => unimplemented!(),
+                _ => unreachable!(),
             }
         }
 
@@ -224,15 +337,6 @@ impl RowConverter {
         let buffer = vec![0_u8; cur_offset as usize];
 
         BinaryColumnBuilder::from_data(buffer, offsets)
-    }
-}
-
-#[inline(always)]
-pub(super) fn null_sentinel(nulls_first: bool) -> u8 {
-    if nulls_first {
-        0
-    } else {
-        0xFF
     }
 }
 

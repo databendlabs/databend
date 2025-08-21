@@ -34,7 +34,7 @@ mod group_by;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
-mod row;
+
 mod schema;
 mod serde;
 mod sort;
