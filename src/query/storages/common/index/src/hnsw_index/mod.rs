@@ -24,6 +24,8 @@ mod quantization;
 mod search_context;
 mod visited_pool;
 
+use std::collections::BTreeMap;
+
 pub use common::fixed_length_priority_queue::FixedLengthPriorityQueue;
 pub use common::types::ScoredPointOffset;
 use databend_common_exception::ErrorCode;
@@ -35,6 +37,7 @@ pub use quantization::DistanceType;
 #[derive(Clone)]
 pub struct VectorIndexMeta {
     pub columns: Vec<(String, SingleColumnMeta)>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug)]
@@ -86,6 +89,20 @@ impl TryFrom<FileMetaData> for VectorIndexMeta {
             }
         }
         col_metas.shrink_to_fit();
-        Ok(Self { columns: col_metas })
+
+        let mut metadata = BTreeMap::new();
+        if let Some(key_value_metadata) = meta.key_value_metadata {
+            for key_value in &key_value_metadata {
+                if key_value.key == "ARROW:schema" || key_value.value.is_none() {
+                    continue;
+                }
+                metadata.insert(key_value.key.clone(), key_value.value.clone().unwrap());
+            }
+        }
+
+        Ok(Self {
+            columns: col_metas,
+            metadata,
+        })
     }
 }

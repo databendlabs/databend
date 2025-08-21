@@ -191,7 +191,11 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
-            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?,
+            Self::create_ngram_index_args(
+                &self.table_info.meta,
+                &self.table_info.meta.schema,
+                false,
+            )?,
             None,
         )?;
 

@@ -20,9 +20,12 @@ use std::time::Instant;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
@@ -34,10 +37,16 @@ use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_mi
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::TableCompression;
 use log::debug;
 use log::info;
+use opendal::Operator;
+use parquet::file::metadata::KeyValue;
+
+use crate::io::read::load_vector_index_files;
 
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
@@ -74,6 +83,7 @@ impl VectorIndexBuilder {
         ctx: Arc<dyn TableContext>,
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
+        is_sync: bool,
     ) -> Option<VectorIndexBuilder> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VectorIndex)
@@ -87,7 +97,7 @@ impl VectorIndexBuilder {
             if !matches!(index.index_type, TableIndexType::Vector) {
                 continue;
             }
-            if !index.sync_creation {
+            if is_sync && !index.sync_creation {
                 continue;
             }
 
@@ -192,50 +202,16 @@ impl VectorIndexBuilder {
         Ok(())
     }
 
-    #[async_backtrace::framed]
     pub fn finalize(&mut self, location: &Location) -> Result<VectorIndexState> {
         let start = Instant::now();
         info!("Start build vector HNSW index for location: {}", location.0);
 
-        let mut columns = BTreeMap::new();
-        for offset in &self.field_offsets_set {
-            columns.insert(*offset, vec![]);
-        }
-        std::mem::swap(&mut self.columns, &mut columns);
-
-        let mut concated_columns = BTreeMap::new();
-        for (offset, columns) in columns.into_iter() {
-            let concated_column = Column::concat_columns(columns.into_iter())?;
-            concated_columns.insert(offset, concated_column);
-        }
-
-        let mut index_fields = Vec::new();
-        let mut index_columns = Vec::new();
-        let mut metadata = BTreeMap::new();
-
-        for (field_offsets, index_param) in self.field_offsets.iter().zip(&self.index_params) {
-            debug!("Building HNSW index for {}", index_param.index_name);
-            for (offset, column_id) in field_offsets {
-                let Some(column) = concated_columns.get(offset) else {
-                    return Err(ErrorCode::Internal("Can't find vector column"));
-                };
-                for distance in &index_param.distances {
-                    let (mut hnsw_index_fields, mut hnsw_index_columns) = HNSWIndex::build(
-                        index_param.m,
-                        index_param.ef_construct,
-                        *column_id,
-                        column.clone(),
-                        *distance,
-                    )?;
-                    index_fields.append(&mut hnsw_index_fields);
-                    index_columns.append(&mut hnsw_index_columns);
-                }
-            }
-            metadata.insert(
-                index_param.index_name.clone(),
-                index_param.index_version.clone(),
-            );
-        }
+        let result = self.build_vector_index()?;
+        let VectorIndexResult {
+            index_fields,
+            index_columns,
+            metadata,
+        } = result;
 
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
@@ -247,6 +223,7 @@ impl VectorIndexBuilder {
             &mut data,
             // Zstd has the best compression ratio
             TableCompression::Zstd,
+            Some(metadata),
         )?;
 
         let size = data.len() as u64;
@@ -268,4 +245,164 @@ impl VectorIndexBuilder {
 
         Ok(state)
     }
+
+    #[async_backtrace::framed]
+    pub async fn finalize_with_existing(
+        &mut self,
+        operator: Operator,
+        settings: &ReadSettings,
+        location: &Location,
+        existing_location: Option<&Location>,
+        existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
+        existing_index_meta: Option<BTreeMap<String, String>>,
+    ) -> Result<VectorIndexState> {
+        // If there's no existing vector index, just use the regular finalize method
+        if existing_location.is_none() || existing_column_metas.is_none() {
+            return self.finalize(location);
+        }
+
+        // Process new vector index data
+        let start = Instant::now();
+        info!(
+            "Start build merged vector HNSW index for location: {}",
+            location.0
+        );
+
+        let existing_location = existing_location.unwrap();
+        let existing_column_metas = existing_column_metas.unwrap();
+
+        let existing_column_names = existing_column_metas
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+
+        let existing_columns = load_vector_index_files(
+            operator,
+            settings,
+            &existing_column_names,
+            &existing_location.0,
+        )
+        .await?;
+
+        info!(
+            "Read existing vector index at location={} in {} ms",
+            existing_location.0,
+            start.elapsed().as_millis() as u64
+        );
+
+        let result = self.build_vector_index()?;
+        let VectorIndexResult {
+            mut index_fields,
+            mut index_columns,
+            mut metadata,
+        } = result;
+
+        for (name, _) in existing_column_metas.into_iter() {
+            let existing_field = TableField::new(&name, TableDataType::Binary);
+            index_fields.push(existing_field);
+        }
+        for existing_column in existing_columns.into_iter() {
+            index_columns.push(BlockEntry::Column(existing_column));
+        }
+
+        if let Some(existing_index_meta) = existing_index_meta {
+            for (key, value) in &existing_index_meta {
+                let version_meta = KeyValue {
+                    key: key.clone(),
+                    value: Some(value.clone()),
+                };
+                metadata.push(version_meta);
+            }
+        }
+
+        // Create merged index
+        let index_schema = TableSchemaRefExt::create(index_fields);
+        let index_block = DataBlock::new(index_columns, 1);
+
+        // Serialize to parquet
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = blocks_to_parquet(
+            index_schema.as_ref(),
+            vec![index_block],
+            &mut data,
+            // Zstd has the best compression ratio
+            TableCompression::Zstd,
+            Some(metadata),
+        )?;
+
+        let size = data.len() as u64;
+        let state = VectorIndexState {
+            location: location.clone(),
+            size,
+            data,
+        };
+
+        // Perf.
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        {
+            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
+        }
+        info!(
+            "Finish build merged vector HNSW index: location={}, size={} bytes in {} ms",
+            location.0, size, elapsed_ms
+        );
+
+        Ok(state)
+    }
+
+    fn build_vector_index(&mut self) -> Result<VectorIndexResult> {
+        let mut columns = BTreeMap::new();
+        for offset in &self.field_offsets_set {
+            columns.insert(*offset, vec![]);
+        }
+        std::mem::swap(&mut self.columns, &mut columns);
+
+        let mut concated_columns = BTreeMap::new();
+        for (offset, columns) in columns.into_iter() {
+            let concated_column = Column::concat_columns(columns.into_iter())?;
+            concated_columns.insert(offset, concated_column);
+        }
+
+        let mut index_fields = Vec::new();
+        let mut index_columns = Vec::new();
+        let mut metadata = Vec::with_capacity(self.index_params.len());
+
+        for (field_offsets, index_param) in self.field_offsets.iter().zip(&self.index_params) {
+            debug!("Building HNSW index for {}", index_param.index_name);
+            for (offset, column_id) in field_offsets {
+                let Some(column) = concated_columns.get(offset) else {
+                    return Err(ErrorCode::Internal("Can't find vector column"));
+                };
+                for distance in &index_param.distances {
+                    let (mut hnsw_index_fields, mut hnsw_index_columns) = HNSWIndex::build(
+                        index_param.m,
+                        index_param.ef_construct,
+                        *column_id,
+                        column.clone(),
+                        *distance,
+                    )?;
+                    index_fields.append(&mut hnsw_index_fields);
+                    index_columns.append(&mut hnsw_index_columns);
+                }
+            }
+            let version_meta = KeyValue {
+                key: index_param.index_name.clone(),
+                value: Some(index_param.index_version.clone()),
+            };
+            metadata.push(version_meta);
+        }
+
+        let result = VectorIndexResult {
+            index_fields,
+            index_columns,
+            metadata,
+        };
+        Ok(result)
+    }
+}
+
+struct VectorIndexResult {
+    index_fields: Vec<TableField>,
+    index_columns: Vec<BlockEntry>,
+    metadata: Vec<KeyValue>,
 }

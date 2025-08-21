@@ -18,10 +18,9 @@ use databend_common_ast::ast;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -63,9 +62,13 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), Feature::NgramIndex)?;
             }
-            ast::TableIndexType::Vector | ast::TableIndexType::Aggregating => {
+            ast::TableIndexType::Vector => {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VectorIndex)?;
+            }
+            ast::TableIndexType::Aggregating => {
                 return Err(ErrorCode::RefreshIndexError(
-                    "Only Inverted and Ngram support Refresh",
+                    "Don't support refresh aggregating index",
                 ));
             }
         }
@@ -86,58 +89,63 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 self.plan.index_type, index_name
             )));
         };
-        let mut index_fields = Vec::with_capacity(index.column_ids.len());
+        let table_schema = &table_meta.schema;
+        let mut field_indices = Vec::with_capacity(index.column_ids.len());
         for column_id in &index.column_ids {
-            for field in &table_meta.schema.fields {
+            for (index, field) in table_schema.fields.iter().enumerate() {
                 if field.column_id() == *column_id {
-                    index_fields.push(field.clone());
+                    field_indices.push(index);
                     break;
                 }
             }
         }
-        if index_fields.len() != index.column_ids.len() {
+        if field_indices.len() != index.column_ids.len() {
             return Err(ErrorCode::RefreshIndexError(format!(
                 "{} index {} is invalid",
                 self.plan.index_type, index_name
             )));
         }
         let index_version = index.version.clone();
-        let index_schema = TableSchemaRefExt::create(index_fields);
+        let index_schema = table_schema.project(&field_indices);
 
         let mut build_res = PipelineBuildResult::create();
-
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        let index_type = match self.plan.index_type {
+            ast::TableIndexType::Inverted => TableIndexType::Inverted,
+            ast::TableIndexType::Ngram => TableIndexType::Ngram,
+            ast::TableIndexType::Vector => TableIndexType::Vector,
+            ast::TableIndexType::Aggregating => unreachable!(),
+        };
 
         match self.plan.index_type {
             ast::TableIndexType::Inverted => {
+                // TODO: Refactor refresh inverted index
                 fuse_table
                     .do_refresh_inverted_index(
                         self.ctx.clone(),
                         index_name,
                         index_version,
                         &index.options,
-                        index_schema,
+                        index_schema.into(),
                         segment_locs,
                         &mut build_res.main_pipeline,
                     )
                     .await?;
             }
-            ast::TableIndexType::Ngram => {
+            _ => {
                 assert!(segment_locs.is_none());
                 let handler = get_table_index_handler();
                 let _ = handler
                     .do_refresh_table_index(
-                        schema::TableIndexType::Ngram,
+                        index_type,
                         fuse_table,
                         self.ctx.clone(),
                         index_name,
-                        index_schema,
+                        index_schema.into(),
                         &mut build_res.main_pipeline,
                     )
                     .await?;
-            }
-            ast::TableIndexType::Vector | ast::TableIndexType::Aggregating => {
-                unreachable!()
             }
         }
 
