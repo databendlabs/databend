@@ -177,7 +177,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    None,
+                    cte_suffix_name,
                     false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -296,7 +296,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    None,
+                    cte_suffix_name,
                     bind_context.allow_virtual_column,
                 );
 
