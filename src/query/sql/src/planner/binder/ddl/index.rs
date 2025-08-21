@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
+use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableIndexStmt;
 use databend_common_ast::ast::DropIndexStmt;
 use databend_common_ast::ast::DropTableIndexStmt;
@@ -500,6 +501,12 @@ impl Binder {
         let column_ids_set = column_ids.iter().copied().collect::<HashSet<_>>();
         for table_index in table_info.meta.indexes.values() {
             if index_name == table_index.name {
+                if matches!(
+                    create_option,
+                    CreateOption::CreateIfNotExists | CreateOption::CreateOrReplace
+                ) {
+                    continue;
+                }
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Index `{}` already exist",
                     index_name
