@@ -22,9 +22,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -676,9 +673,6 @@ FROM test_stream;
 8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
 9 "Richard" 33 "Austin" "hiking" "cycling"
 10 "Lisa" 26 "Chicago" "gaming" "reading"
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_virtual_column
