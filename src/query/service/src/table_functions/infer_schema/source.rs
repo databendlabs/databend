@@ -174,9 +174,7 @@ impl AsyncSource for InferSchemaSource {
                     &operator,
                     Some(first_file.size),
                     self.args_parsed.max_records,
-                    |reader, max_record| {
-                        format.infer_schema(reader, max_record).map_err(Some)
-                    },
+                    |reader, max_record| format.infer_schema(reader, max_record).map_err(Some),
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
