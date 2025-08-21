@@ -3495,83 +3495,24 @@ impl<'a> TypeChecker<'a> {
             ));
         };
 
-        match kind {
-            ASTIntervalKind::Year => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_year", vec![],
-                    &[date, slice_length, start_or_end],
-                )
+        let kind = match kind {
+            ASTIntervalKind::Year |
+            ASTIntervalKind::Quarter |
+            ASTIntervalKind::Month|
+            ASTIntervalKind::Week| ASTIntervalKind::ISOWeek | ASTIntervalKind::Day | ASTIntervalKind::Hour | ASTIntervalKind::Minute | ASTIntervalKind::Second => {
+                    &Expr::Literal {
+                    span: None,
+                    value: Literal::String(kind.to_string())
+                }
             }
-            ASTIntervalKind::ISOYear => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_iso_year", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Quarter => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_quarter", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Month => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_month", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Week => {
-                let week_start = self.func_ctx.week_start;
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_week", vec![],
-                    &[date, slice_length, start_or_end, &Expr::Literal {
-                        span: None,
-                        value: Literal::UInt64(week_start as u64)
-                    }],
-                )
-            }
-            ASTIntervalKind::ISOWeek => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_iso_week", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Day => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_day", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Hour => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_hour", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Minute => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_minute", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            ASTIntervalKind::Second => {
-                self.resolve_function(
-                    span,
-                    "to_time_slice_of_second", vec![],
-                    &[date, slice_length, start_or_end],
-                )
-            }
-            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
-        }
+            _ => return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
+        };
+        self.resolve_function(span, "time_slice", vec![], &[
+            date,
+            slice_length,
+            start_or_end,
+            kind,
+        ])
     }
 
     pub fn resolve_last_day(

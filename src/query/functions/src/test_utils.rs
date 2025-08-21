@@ -529,21 +529,21 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 span: None,
                 value: Literal::String(start_or_end),
             };
-            with_interval_mapped_name!(|INTERVAL| match unit {
-                IntervalKind::INTERVAL => RawExpr::FunctionCall {
-                    span,
-                    name: concat!("to_time_slice_of_", INTERVAL).to_string(),
-                    params: vec![],
-                    args: vec![
-                        transform_expr(*date, columns),
-                        transform_expr(slice_length, columns),
-                        transform_expr(start_or_end, columns),
-                    ],
-                },
-                kind => {
-                    unimplemented!("{kind:?} is not supported")
-                }
-            })
+            let unit = Expr::Literal {
+                span: None,
+                value: Literal::String(unit.to_string()),
+            };
+            RawExpr::FunctionCall {
+                span,
+                name: "time_slice".to_string(),
+                params: vec![],
+                args: vec![
+                    transform_expr(*date, columns),
+                    transform_expr(slice_length, columns),
+                    transform_expr(unit, columns),
+                    transform_expr(start_or_end, columns),
+                ],
+            }
         }
         AExpr::LastDay { span, unit, date } => {
             with_interval_mapped_name!(|INTERVAL| match unit {

@@ -1171,6 +1171,30 @@ pub enum TimePart {
     Hour,
     Minute,
     Second,
+    None,
+}
+
+impl TimePart {
+    pub fn from(s: &str) -> Self {
+        match s.to_ascii_uppercase().as_str() {
+            "YEAR" => Self::Year,
+            "QUARTER" => Self::Quarter,
+            "MONTH" => Self::Month,
+            "WEEK" => Self::Week,
+            "DAY" => Self::Day,
+            "HOUR" => Self::Hour,
+            "MINUTE" => Self::Minute,
+            "SECOND" => Self::Second,
+            _ => Self::None,
+        }
+    }
+
+    pub fn date_part(&self) -> bool {
+        matches!(
+            self,
+            Self::Year | Self::Quarter | Self::Month | Self::Week | Self::Day
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1319,6 +1343,7 @@ pub fn time_slice_timestamp(
                 .to_zoned(tz.clone())
                 .datetime()
         }
+        TimePart::None => unreachable!(),
     };
 
     let result = match start_or_end {
@@ -1356,6 +1381,7 @@ fn add_units_to_datetime(start: DateTime, slice_length: i64, part: TimePart) -> 
         TimePart::Hour => start + (slice_length * 3600).seconds(),
         TimePart::Minute => start + (slice_length * 60).seconds(),
         TimePart::Second => start + slice_length.seconds(),
+        TimePart::None => unreachable!(),
     }
 }
 
