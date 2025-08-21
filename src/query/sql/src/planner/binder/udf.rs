@@ -27,6 +27,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::DataField;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -232,6 +233,32 @@ impl Binder {
                         arg_types,
                         return_types,
                         sql: sql.to_string(),
+                    }),
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::ScalarUDF {
+                arg_types,
+                definition,
+                return_type,
+            } => {
+                let arg_types = arg_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition: PlanUDFDefinition::ScalarUDF(ScalarUDF {
+                        arg_types,
+                        return_type,
+                        definition: definition.clone(),
                     }),
                     created_on: Utc::now(),
                 })
