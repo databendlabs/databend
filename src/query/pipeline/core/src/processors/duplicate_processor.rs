@@ -81,7 +81,11 @@ impl Processor for DuplicateProcessor {
 
         self.input.set_need_data();
         if self.input.has_data() {
-            let block = self.input.pull_data().unwrap();
+            let block = self.input.pull_data().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Failed to pull data from input port when data is available",
+                )
+            })?;
             for output in self.outputs.iter() {
                 if !output.is_finished() {
                     output.push_data(block.clone());

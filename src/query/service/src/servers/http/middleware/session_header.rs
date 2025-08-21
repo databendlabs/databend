@@ -95,7 +95,7 @@ impl ClientSession {
 
     pub fn try_decode_for_worksheet(req: &Request) -> Option<Self> {
         if let Some(v) = req.headers().get(HEADER_SESSION_ID) {
-            let id = v.to_str().unwrap().to_string().trim().to_owned();
+            let id = v.to_str().ok()?.to_string().trim().to_owned();
             if !id.is_empty() {
                 return Some(ClientSession {
                     header: ClientSessionHeader {
@@ -140,7 +140,12 @@ impl ClientSession {
     ) -> Result<Option<ClientSession>, String> {
         if caps.session_header {
             if let Some(v) = headers.get(HEADER_SESSION) {
-                let v = v.to_str().unwrap().to_string().trim().to_owned();
+                let v = v
+                    .to_str()
+                    .map_err(|_| "Invalid header value")?
+                    .to_string()
+                    .trim()
+                    .to_owned();
                 if !v.is_empty() {
                     let header = decode_json_header(HEADER_SESSION, &v)?;
                     return Ok(Some(Self::old_session(
@@ -241,14 +246,17 @@ impl ClientSession {
 
     pub fn on_response(&self, resp: &mut Response) {
         let mut header = self.header.clone();
-        resp.headers_mut()
-            .insert(HEADER_SESSION_ID, header.id.parse().unwrap());
+        if let Ok(session_id_value) = header.id.parse() {
+            resp.headers_mut()
+                .insert(HEADER_SESSION_ID, session_id_value);
+        }
         if ClientSessionType::CustomHeader == self.typ {
             if self.refreshed {
                 header.last_refresh_time = SystemTime::now();
             }
-            resp.headers_mut()
-                .insert(HEADER_SESSION, header.encode().parse().unwrap());
+            if let Ok(session_value) = header.encode().parse() {
+                resp.headers_mut().insert(HEADER_SESSION, session_value);
+            }
         }
     }
 }
