@@ -25,9 +25,6 @@ statement ok
 USE test_virtual_db
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -742,9 +739,6 @@ drop table data_main
 
 statement ok
 drop table data_staging
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 USE default

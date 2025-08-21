@@ -4323,6 +4323,7 @@ dependencies = [
  "chrono",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -9450,8 +9451,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a452366d21e8d3cbca680c41388e01d6a88739afef7877961946a6da409f9ccd"
+source = "git+https://github.com/b41sh/jsonb?rev=ef5482fe9c07d87daa84115b86fd9af55dea277c#ef5482fe9c07d87daa84115b86fd9af55dea277c"
 dependencies = [
  "byteorder",
  "ethnum",

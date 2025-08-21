@@ -22,9 +22,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -448,7 +445,7 @@ SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 6
 
 statement ok
-set enable_refresh_virtual_column_after_write = 0;
+set enable_experimental_virtual_column = 0;
 
 statement ok
 INSERT INTO tweets FROM (SELECT * FROM tweets);
@@ -457,6 +454,12 @@ query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
 6
+
+statement error
+REFRESH VIRTUAL COLUMN FOR tweets;
+
+statement ok
+set enable_experimental_virtual_column = 1;
 
 statement ok
 REFRESH VIRTUAL COLUMN FOR tweets;
@@ -493,9 +496,6 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
-
-statement ok
-set enable_refresh_virtual_column_after_write = 1;
 
 statement ok
 CREATE OR REPLACE TABLE STUDENT_GRADES (
@@ -676,9 +676,6 @@ FROM test_stream;
 8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
 9 "Richard" 33 "Austin" "hiking" "cycling"
 10 "Lisa" 26 "Chicago" "gaming" "reading"
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_virtual_column

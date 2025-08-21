@@ -16,6 +16,8 @@ use std::str::FromStr;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::ColumnId;
@@ -32,11 +34,6 @@ use jsonb::OwnedJsonb;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -247,7 +244,10 @@ async fn test_virtual_column_builder() -> Result<()> {
         "['geo']['lat']",
     )
     .unwrap();
-    assert_eq!(meta_geo_lat.data_type, VariantDataType::Jsonb);
+    assert_eq!(
+        meta_geo_lat.data_type,
+        VariantDataType::Decimal(DecimalDataType::from(DecimalSize::new_unchecked(18, 1)))
+    );
 
     let entries = vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
@@ -316,11 +316,6 @@ async fn test_virtual_column_builder() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder_stream_write() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 

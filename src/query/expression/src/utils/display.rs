@@ -734,6 +734,11 @@ impl Display for VariantDataType {
             VariantDataType::Float64 => write!(f, "Float64"),
             VariantDataType::String => write!(f, "String"),
             VariantDataType::Array(inner) => write!(f, "Array({inner})"),
+            VariantDataType::Decimal(inner) => write!(f, "Decimal({inner})"),
+            VariantDataType::Binary => write!(f, "Binary"),
+            VariantDataType::Date => write!(f, "Date"),
+            VariantDataType::Timestamp => write!(f, "Timestamp"),
+            VariantDataType::Interval => write!(f, "Interval"),
         }
     }
 }
