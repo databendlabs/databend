@@ -50,7 +50,7 @@ pub(super) fn encoded_len(val: &[u8], is_null: bool) -> usize {
 /// - [`BLOCK_SIZE`] bytes of string data, padded with 0s
 /// - `0xFF_u8` if this is not the last block for this string
 /// - otherwise the length of the block as a `u8`
-pub(super) fn encode<'a, I>(
+pub(super) fn var_encode<'a, I>(
     out: &mut BinaryColumnBuilder,
     i: I,
     (all_null, validity): (bool, Option<&Bitmap>),

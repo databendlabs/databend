@@ -18,7 +18,7 @@ use databend_common_expression::FixedLengthEncoding;
 
 use super::null_sentinel;
 
-pub fn encode<T, I>(
+pub fn fixed_encode<T, I>(
     out: &mut BinaryColumnBuilder,
     iter: I,
     (all_null, validity): (bool, Option<&Bitmap>),
