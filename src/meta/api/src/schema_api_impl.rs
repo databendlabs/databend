@@ -2987,7 +2987,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let if_then = vec![
                 txn_op_put(&id_generator, b"".to_vec()),
                 txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
-                TxnOp::put_with_ttl(txn_id_key.clone(), vec![], Some(Duration::from_secs(60))),
+                TxnOp::put_with_ttl(txn_id_key.clone(), vec![], Some(req.ttl)),
             ];
             let else_then = vec![TxnOp::get(txn_id_key.clone())];
             let txn_req = TxnRequest::new(condition, if_then).with_else(else_then);
@@ -2997,8 +2997,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 return Ok(CreateLockRevReply { revision });
             }
 
-            // Check if transaction ID exists in else branch response (idempotency check)
-            // The "idempotency check" is only guaranteed roughly within 60 secs.
+            // Check if transaction ID exists in else branch response (idempotency check).
             if let Some(Response::Get(get_resp)) =
                 responses.last().and_then(|r| r.response.as_ref())
             {
