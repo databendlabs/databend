@@ -359,7 +359,7 @@ jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
 jiff = { version = "0.2.10", features = ["serde", "tzdb-bundle-always"] }
-jsonb = "0.5.3"
+jsonb = "0.5.4"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
