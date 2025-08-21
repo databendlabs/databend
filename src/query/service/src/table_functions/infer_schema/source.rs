@@ -19,7 +19,8 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_csv::reader::Format;
-use arrow_json::reader::infer_json_schema;
+use arrow_json::reader::infer_json_schema_from_iterator;
+use arrow_json::reader::ValueIter;
 use arrow_schema::ArrowError;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::BufMut;
@@ -53,7 +54,9 @@ use opendal::Scheme;
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-const DEFAULT_BYTES: u64 = 1024 * 1024;
+const DEFAULT_BYTES: u64 = 10;
+const MAX_ZIP_FILE_SIZE: u64 = 20 * 1024 * 1024;
+const MAX_COMPRESS_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -171,7 +174,9 @@ impl AsyncSource for InferSchemaSource {
                     &operator,
                     Some(first_file.size),
                     self.args_parsed.max_records,
-                    |reader, max_record| format.infer_schema(reader, max_record),
+                    |reader, max_record| {
+                        format.infer_schema(reader, max_record).map_err(Some)
+                    },
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
@@ -182,7 +187,23 @@ impl AsyncSource for InferSchemaSource {
                     &operator,
                     Some(first_file.size),
                     self.args_parsed.max_records,
-                    |reader, max_record| infer_json_schema(reader, max_record),
+                    |reader, max_record| {
+                        let mut records = ValueIter::new(reader, max_record);
+
+                        let schema = if let Some(max_record) = max_record {
+                            let mut tmp: Vec<std::result::Result<_, ArrowError>> =
+                                Vec::with_capacity(max_record);
+
+                            for result in records {
+                                tmp.push(Ok(result.map_err(|_| None)?));
+                            }
+                            infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)?
+                        } else {
+                            infer_json_schema_from_iterator(&mut records).map_err(Some)?
+                        };
+
+                        Ok((schema, 0))
+                    },
                 )
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
@@ -219,7 +240,10 @@ impl AsyncSource for InferSchemaSource {
 }
 
 pub async fn read_metadata_async<
-    F: Fn(Cursor<&[u8]>, Option<usize>) -> std::result::Result<(ArrowSchema, usize), ArrowError>,
+    F: Fn(
+        Cursor<&[u8]>,
+        Option<usize>,
+    ) -> std::result::Result<(ArrowSchema, usize), Option<ArrowError>>,
 >(
     path: &str,
     operator: &Operator,
@@ -232,6 +256,18 @@ pub async fn read_metadata_async<
         Some(n) => n,
     };
     let algo = CompressAlgorithm::from_path(path);
+    let fn_check_data_size = |size: u64| {
+        if (matches!(algo, Some(CompressAlgorithm::Zip)) && size > MAX_ZIP_FILE_SIZE)
+            || size > MAX_COMPRESS_FILE_SIZE
+        {
+            return Err(ErrorCode::InvalidCompressionData(
+                "Compression data is too large",
+            ));
+        }
+        Ok(())
+    };
+
+    fn_check_data_size(file_size)?;
     let mut buf = Vec::new();
     let mut offset: u64 = 0;
     let mut chunk_size: u64 =
@@ -259,19 +295,20 @@ pub async fn read_metadata_async<
         } else {
             Cow::Borrowed(&buf)
         };
+        fn_check_data_size(bytes.len() as u64)?;
 
         if !bytes.is_empty() || offset >= file_size {
             match func_infer_schema(Cursor::new(bytes.as_slice()), max_records) {
                 Ok((schema, _)) => {
                     return Ok(schema);
                 }
-                Err(err) => {
-                    if offset >= file_size
-                        || !matches!(err, ArrowError::CsvError(_) | ArrowError::JsonError(_))
-                    {
-                        return Err(ErrorCode::from(err));
+                Err(Some(err)) => {
+                    if matches!(err, ArrowError::CsvError(_)) && offset < file_size {
+                        continue;
                     }
+                    return Err(ErrorCode::from(err));
                 }
+                Err(None) => (),
             }
         }
         chunk_size = cmp::min(chunk_size * 2, file_size - offset);
