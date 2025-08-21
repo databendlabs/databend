@@ -197,3 +197,5 @@ ts_ms VARCHAR 1 5
 ts_us VARCHAR 1 6
 ts_ns VARCHAR 1 7
 utf8_col VARCHAR 1 8
+arr_col ARRAY(STRING) 1 9
+obj_col TUPLE(A INT64, B STRING) 1 10
