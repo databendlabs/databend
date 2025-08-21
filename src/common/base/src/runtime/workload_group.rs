@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 
 use crate::runtime::MemStat;
@@ -80,6 +81,7 @@ pub struct WorkloadGroupResource {
     pub meta: WorkloadGroup,
     pub queue_key: String,
     pub permits: usize,
+    pub mutex: Arc<Mutex<()>>,
     pub semaphore: Arc<Semaphore>,
     pub mem_stat: Arc<MemStat>,
     pub max_memory_usage: Arc<AtomicUsize>,
