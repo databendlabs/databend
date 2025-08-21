@@ -176,7 +176,7 @@ statement ok
 DROP TABLE t_string
 
 statement ok
-create or replace table t2(a int, b int);
+create or replace table t2(a int, b int) approx_distinct_columns = 'a';
 
 query I
 insert into t2 values(1,1),(2,2);
@@ -193,9 +193,6 @@ delete from t2 where a=1;
 ----
 1
 
-statement ok
-analyze table t2 noscan;
-
 query TII
 select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
 ----
@@ -209,12 +206,12 @@ query TII
 select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
 ----
 a 3 2
-b 3 2
+b 3 3
 
 query I
 select count() from fuse_snapshot('db_09_0020','t2');
 ----
-5
+4
 
 statement ok
 DROP TABLE t2;

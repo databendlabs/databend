@@ -800,11 +800,11 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:t.x (#1), probe key:o.x (#0), filter type:inlist,min_max
-├── estimated rows: 2.33
+├── estimated rows: 7.00
 ├── Filter(Build)
 │   ├── output columns: [t.x (#1), t.y (#2)]
 │   ├── filters: [is_true(t.y (#2) = 53)]
-│   ├── estimated rows: 1.00
+│   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── output columns: [x (#1), y (#2)]
