@@ -30,10 +30,10 @@ use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::utils::has_order_field;
-use super::sort::CommonRowConverter;
-use super::sort::CommonRows;
 use super::sort::Rows;
 use super::sort::SortedStream;
+use super::sort::VariableRowConverter;
+use super::sort::VariableRows;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use crate::processors::sort::Merger;
@@ -206,9 +206,9 @@ pub fn sort_merge(
 ) -> Result<Vec<DataBlock>> {
     debug_assert!(have_order_col == has_order_field(&schema));
 
-    type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
+    type MergeSortCommonImpl = TransformSortMerge<VariableRows>;
     type MergeSortCommon =
-        TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonRowConverter>;
+        TransformSortMergeBase<MergeSortCommonImpl, VariableRows, VariableRowConverter>;
 
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),

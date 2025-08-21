@@ -27,6 +27,7 @@ arrow-array = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-schema = { workspace = true }
 itertools = { workspace = true }
+proptest = { workspace = true }
 rand = { workspace = true }
 
 [lints]

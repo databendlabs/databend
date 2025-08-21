@@ -15,12 +15,7 @@
 use std::fmt::Debug;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -28,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
 use match_template::match_template;
 
 use super::Rows;
@@ -53,6 +49,8 @@ where Self: Sized + Debug
             .collect::<Vec<_>>();
         self.convert(&order_by_cols, data_block.num_rows())
     }
+
+    fn support_data_type(d: &DataType) -> bool;
 }
 
 pub fn convert_rows(
@@ -129,11 +127,67 @@ where V: RowsTypeVisitor {
                         }
                     }
                 }),
-                _ => visitor.visit_type::<CommonRows, CommonRowConverter>()
+                _ => visitor.visit_type::<VariableRows, VariableRowConverter>()
                 }
             }
         }
-        _ => visitor.visit_type::<CommonRows, CommonRowConverter>(),
+        _ => visitor.visit_type::<VariableRows, VariableRowConverter>(),
+    }
+}
+
+pub fn select_row_type_enable_fixed_rows<V>(visitor: &mut V) -> V::Result
+where V: RowsTypeVisitor {
+    let sort_desc = visitor.sort_desc();
+    if let &[desc] = &sort_desc {
+        let schema = visitor.schema();
+        let sort_type = schema.field(desc.offset).data_type();
+        let asc = desc.asc;
+
+        match_template! {
+        T = [ Boolean => BooleanType, Date => DateType, Timestamp => TimestampType, String => StringType, Interval => IntervalType ],
+        match sort_type {
+            DataType::T => {
+                return if asc {
+                    visitor.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
+                } else {
+                    visitor.visit_type::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
+                }
+            },
+            DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                NumberDataType::NUM_TYPE => {
+                    return if asc {
+                        visitor.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                    } else {
+                        visitor.visit_type::<SimpleRowsDesc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>()
+                    }
+                }
+            }),
+            _ => ()
+            }
+        }
+    }
+
+    let schema = visitor.schema();
+
+    let sort_fields = sort_desc
+        .iter()
+        .map(|d| {
+            let data_type = schema.field(d.offset).data_type();
+            SortField::new_with_options(data_type.clone(), d.asc, d.nulls_first)
+        })
+        .collect::<Vec<_>>();
+
+    match choose_encode_method(&sort_fields) {
+        Some(length) => match length.div_ceil(8) {
+            1 => visitor.visit_type::<FixedRows<1>, FixedRowConverter<1>>(),
+            2 => visitor.visit_type::<FixedRows<2>, FixedRowConverter<2>>(),
+            3 => visitor.visit_type::<FixedRows<3>, FixedRowConverter<3>>(),
+            4 => visitor.visit_type::<FixedRows<4>, FixedRowConverter<4>>(),
+            5 => visitor.visit_type::<FixedRows<5>, FixedRowConverter<5>>(),
+            6 => visitor.visit_type::<FixedRows<6>, FixedRowConverter<6>>(),
+            _ => visitor.visit_type::<VariableRows, VariableRowConverter>(),
+        },
+        None => visitor.visit_type::<VariableRows, VariableRowConverter>(),
     }
 }
 
@@ -191,10 +245,14 @@ fn null_sentinel(nulls_first: bool) -> u8 {
     }
 }
 
-mod common;
 mod fixed;
+mod fixed_encode;
 mod simple;
+#[cfg(test)]
+mod test_util;
 mod variable;
+mod variable_encode;
 
-pub use self::common::*;
+pub use self::fixed::*;
 pub use self::simple::*;
+pub use self::variable::*;

@@ -526,3 +526,17 @@ impl OpaqueColumnBuilder {
         })
     }
 }
+
+impl<const N: usize> crate::types::ReturnType for OpaqueType<N> {
+    fn create_builder(capacity: usize, _: &crate::types::GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
+    }
+}
+
+impl<const N: usize> crate::types::ArgType for OpaqueType<N> {
+    fn data_type() -> DataType {
+        DataType::Opaque(N)
+    }
+
+    fn full_domain() -> Self::Domain {}
+}
