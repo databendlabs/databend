@@ -18,6 +18,10 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -85,7 +89,16 @@ pub struct VirtualColumnMeta {
     // 3 => int64
     // 4 => float64
     // 5 => string
+    // 6 => decimal64
+    // 7 => decimal128
+    // 8 => decimal256
+    // 9 => binary
+    // 10 => date
+    // 11 => timestamp
+    // 12 => interval
     pub data_type: u8,
+    /// the scale size, only used for decimal type
+    pub scale: Option<u8>,
     /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
 }
@@ -100,26 +113,63 @@ impl VirtualColumnMeta {
     }
 
     pub fn data_type(&self) -> TableDataType {
+        let scale = self.scale.unwrap_or_default();
         match self.data_type {
             1 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
             2 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
             4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
             5 => TableDataType::Nullable(Box::new(TableDataType::String)),
+            6 => {
+                let size = DecimalSize::new_unchecked(i64::MAX_PRECISION, scale);
+                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
+                    size,
+                ))))
+            }
+            7 => {
+                let size = DecimalSize::new_unchecked(i128::MAX_PRECISION, scale);
+                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
+                    size,
+                ))))
+            }
+            8 => {
+                let size = DecimalSize::new_unchecked(i256::MAX_PRECISION, scale);
+                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
+                    size,
+                ))))
+            }
+            9 => TableDataType::Nullable(Box::new(TableDataType::Binary)),
+            10 => TableDataType::Nullable(Box::new(TableDataType::Date)),
+            11 => TableDataType::Nullable(Box::new(TableDataType::Timestamp)),
+            12 => TableDataType::Nullable(Box::new(TableDataType::Interval)),
             _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
         }
     }
 
-    pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
-        match variant_type {
+    pub fn data_type_code(variant_type: &VariantDataType) -> (u8, Option<u8>) {
+        let ty = match variant_type {
             VariantDataType::Jsonb => 0,
             VariantDataType::Boolean => 1,
             VariantDataType::UInt64 => 2,
             VariantDataType::Int64 => 3,
             VariantDataType::Float64 => 4,
             VariantDataType::String => 5,
+            VariantDataType::Decimal(ty) => match ty {
+                DecimalDataType::Decimal64(_) => 6,
+                DecimalDataType::Decimal128(_) => 7,
+                DecimalDataType::Decimal256(_) => 8,
+            },
+            VariantDataType::Binary => 9,
+            VariantDataType::Date => 10,
+            VariantDataType::Timestamp => 11,
+            VariantDataType::Interval => 12,
             _ => unreachable!(),
-        }
+        };
+        let scale = match variant_type {
+            VariantDataType::Decimal(ty) => Some(ty.scale()),
+            _ => None,
+        };
+        (ty, scale)
     }
 }
 
