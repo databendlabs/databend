@@ -821,6 +821,9 @@ impl HttpQuery {
                 .with_context(|| "failed to start query")
                 .flatten()
                 {
+                    crate::interpreters::hook_clear_m_cte_temp_table(&query_context)
+                        .inspect_err(|e| warn!("clear_m_cte_temp_table fail: {e}"))
+                        .ok();
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: vec![],

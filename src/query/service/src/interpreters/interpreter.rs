@@ -49,6 +49,7 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
+use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -365,6 +366,7 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         );
     }
 
+    hook_clear_m_cte_temp_table(&query_ctx)?;
     hook_vacuum_temp_files(&query_ctx)?;
     hook_disk_temp_dir(&query_ctx)?;
 

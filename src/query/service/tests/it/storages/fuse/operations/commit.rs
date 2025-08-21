@@ -902,6 +902,14 @@ impl TableContext for CtxDelegation {
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.ctx.get_abort_notify()
     }
+
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
