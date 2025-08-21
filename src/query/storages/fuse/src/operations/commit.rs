@@ -520,10 +520,13 @@ impl FuseTable {
         insert_hll: &BlockHLL,
         insert_rows: u64,
     ) -> Result<TableStatsGenerator> {
+        // Extract previous stats meta (row_count / hll, etc.) from snapshot
         let prev_stats_meta = snapshot
             .as_ref()
             .and_then(|v| v.summary.additional_stats_meta.as_ref());
+        // Previous statistics file location (if any)
         let mut prev_stats_location = snapshot.table_statistics_location();
+        // If no new rows are inserted, or HLL is empty, just reuse previous statistics
         if insert_rows == 0 || insert_hll.is_empty() {
             return Ok(TableStatsGenerator::new(
                 prev_stats_meta.cloned(),
@@ -533,13 +536,17 @@ impl FuseTable {
             ));
         }
 
+        // Initialize a new HLL with inserted rows
         let mut new_hll = insert_hll.clone();
+        // Calculate updated row_count
         let row_count = match prev_stats_meta {
+            // Case 1: Previous stats exist and already contain HLL → merge directly
             Some(v) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
                 v.row_count + insert_rows
             }
+            // Case 2: Previous meta has no HLL → need to load from stats file
             _ => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
@@ -551,11 +558,8 @@ impl FuseTable {
                         put_cache: true,
                     };
                     let prev_stats = reader.read(&load_params).await?;
-                    if prev_stats.histograms.is_empty() {
-                        prev_stats_location = None;
-                    }
-                    merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                     if prev_stats.row_count == 0 {
+                        // Fallback to snapshot for real row count
                         let snapshot_loc =
                             self.meta_location_generator().snapshot_location_from_uuid(
                                 &prev_stats.snapshot_id,
@@ -570,14 +574,24 @@ impl FuseTable {
                         .await
                         .ok()
                         .flatten();
-                        prev_snapshot
-                            .map_or(snapshot.as_ref().unwrap().summary.row_count * 4 / 5, |v| {
-                                v.summary.row_count + insert_rows
-                            })
+                        if let Some(prev) = prev_snapshot {
+                            // Successfully loaded the previous snapshot → use its row_count + inserted rows
+                            merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
+                            prev.summary.row_count + insert_rows
+                        } else {
+                            // Could not load previous snapshot → old stats are invalid
+                            // Drop prev_stats_location to mark stats as "reset",
+                            // and only use inserted rows as the new base.
+                            prev_stats_location = None;
+                            insert_rows
+                        }
                     } else {
+                        // Normal case: accumulate old row_count + inserted rows
+                        merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
                         prev_stats.row_count + insert_rows
                     }
                 } else {
+                    // No previous stats available → start from inserted rows only
                     insert_rows
                 }
             }
