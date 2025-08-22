@@ -1990,6 +1990,7 @@ Query {
                             },
                         ],
                     },
+                    user_specified_materialized: false,
                     materialized: false,
                     query: Query {
                         span: Some(
@@ -2228,7 +2229,8 @@ Query {
                             },
                         ],
                     },
-                    materialized: true,
+                    user_specified_materialized: true,
+                    materialized: false,
                     query: Query {
                         span: Some(
                             29..44,
@@ -2457,6 +2459,7 @@ Query {
                         },
                         columns: [],
                     },
+                    user_specified_materialized: false,
                     materialized: false,
                     query: Query {
                         span: Some(
@@ -2695,7 +2698,8 @@ Query {
                             },
                         ],
                     },
-                    materialized: true,
+                    user_specified_materialized: true,
+                    materialized: false,
                     query: Query {
                         span: Some(
                             29..44,
@@ -2784,7 +2788,8 @@ Query {
                         },
                         columns: [],
                     },
-                    materialized: true,
+                    user_specified_materialized: true,
+                    materialized: false,
                     query: Query {
                         span: Some(
                             67..82,
@@ -2861,6 +2866,7 @@ Query {
                         },
                         columns: [],
                     },
+                    user_specified_materialized: false,
                     materialized: false,
                     query: Query {
                         span: Some(
@@ -3237,6 +3243,7 @@ Query {
                             },
                         ],
                     },
+                    user_specified_materialized: false,
                     materialized: false,
                     query: Query {
                         span: Some(
@@ -3511,6 +3518,7 @@ Query {
                             },
                         ],
                     },
+                    user_specified_materialized: false,
                     materialized: false,
                     query: Query {
                         span: Some(
