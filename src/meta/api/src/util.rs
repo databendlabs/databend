@@ -449,15 +449,15 @@ impl IdempotentKVTxnSender {
         txn.else_then.push(TxnOp::get(self.txn_id.clone()));
 
         match send_txn(kv_api, txn).await {
-            Ok((true, mut op_responses)) => Ok({
-                // Pop the put_with_ttl txn_id KV pair response
-                op_responses.pop();
-                IdempotentKVTxnResponse::Success(op_responses)
+            Ok((true, mut then_op_responses)) => Ok({
+                // Pop the put_with_ttl txn_id KV pair operation response
+                then_op_responses.pop();
+                IdempotentKVTxnResponse::Success(then_op_responses)
             }),
-            Ok((false, mut op_responses)) => {
+            Ok((false, mut else_op_responses)) => {
                 // Since we manipulate the transaction, the last operation response SHOULD be the
-                // get transaction ID response. Let's check it.
-                let Some(last_op_resp) = op_responses.pop() else {
+                // get transaction ID operation response. Let's check it.
+                let Some(last_op_resp) = else_op_responses.pop() else {
                     return Err(MetaError::from(InvalidReply::new(
                         "Malformed transaction response",
                         &AnyError::error(format!(
@@ -509,8 +509,12 @@ impl IdempotentKVTxnSender {
                     // 3. This is a best-effort idempotency check, only guaranteed roughly
                     //    within the TTL duration of the transaction ID KV pair.
                     // 4. DO NOT rely on this mechanism for critical safety properties.
+                    //    The main purpose of this "idempotency check" is to help identify if this transaction
+                    //    has been committed successfully during implicit transaction retry.
                     info!("Transaction with ID {} already exist", self.txn_id);
-                    // Operation responses of else branch are omitted in this case
+                    // Operation responses of else-branch are omitted in this case:
+                    // Since `AlreadyCommitted` is somehow a "success" response, return the operation
+                    // responses of else-branch might be misleading. Currently, no scenarios expect to use it.
                     Ok(IdempotentKVTxnResponse::AlreadyCommitted)
                 } else {
                     info!(
@@ -518,7 +522,7 @@ impl IdempotentKVTxnSender {
                         self.txn_id
                     );
                     // Return operation responses of else branch (last response has been removed)
-                    Ok(IdempotentKVTxnResponse::Failed(op_responses))
+                    Ok(IdempotentKVTxnResponse::Failed(else_op_responses))
                 }
             }
             Err(e) => Err(e),
