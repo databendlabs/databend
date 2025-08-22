@@ -89,9 +89,7 @@ fn test_variant() {
 
 fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json(NULL)", &[]);
-    run_ast(file, "parse_json('nuLL')", &[]);
     run_ast(file, "parse_json('null')", &[]);
-    run_ast(file, "parse_json('  ')", &[]);
     run_ast(file, "parse_json('true')", &[]);
     run_ast(file, "parse_json('false')", &[]);
     run_ast(file, "parse_json('\"测试\"')", &[]);
@@ -124,16 +122,27 @@ fn test_parse_json(file: &mut impl Write) {
     )]);
 
     // json extension syntax
+    run_ast(file, "parse_json('  ')", &[]);
+    run_ast(file, "parse_json('nuLL')", &[]);
     run_ast(file, "parse_json('+10')", &[]);
     run_ast(file, "parse_json('001')", &[]);
     run_ast(file, "parse_json('.12')", &[]);
     run_ast(file, "parse_json('12.')", &[]);
+    run_ast(file, "parse_json('0xabc')", &[]);
+    run_ast(file, "parse_json('0x12abc.def')", &[]);
     run_ast(
         file,
         "parse_json('99999999999999999999999999999999999999')",
         &[],
     );
+    run_ast(file, r#"parse_json('\'single quoted string\'')"#, &[]);
     run_ast(file, "parse_json('[1,2,,4]')", &[]);
+    run_ast(
+        file,
+        "parse_json('{ key :\"val\", key123_$测试 :\"val\" }')",
+        &[],
+    );
+    run_ast(file, "parse_json('{ 123 :\"val\" }')", &[]);
 }
 
 fn test_try_parse_json(file: &mut impl Write) {

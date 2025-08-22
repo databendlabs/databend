@@ -228,6 +228,18 @@ impl UserFunctionsTable {
                         states: BTreeMap::new(),
                         immutable: None,
                     },
+                    UDFDefinition::ScalarUDF(x) => UserFunctionArguments {
+                        arg_types: x
+                            .arg_types
+                            .iter()
+                            .map(|(name, ty)| format!("{name} {ty}"))
+                            .collect(),
+                        return_type: Some(x.return_type.to_string()),
+                        server: None,
+                        parameters: vec![],
+                        states: Default::default(),
+                        immutable: None,
+                    },
                 },
             })
             .collect())

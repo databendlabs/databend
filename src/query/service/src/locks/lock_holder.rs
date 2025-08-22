@@ -103,7 +103,7 @@ impl LockHolder {
 
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_lock_nums(lock_type, 1);
+                record_acquired_lock_nums(lock_type.clone(), 1);
                 break;
             }
 
@@ -156,6 +156,13 @@ impl LockHolder {
             }
         }
 
+        log::info!(
+            "Acquired table lock successfully(table_id: {}, lock_type: {}, revision: {}, elapsed: {:?})",
+            table_id,
+            lock_type,
+            revision,
+            start.elapsed()
+        );
         Ok(revision)
     }
 
