@@ -82,8 +82,11 @@ impl IPhysicalPlan for MaterializeCTERef {
             |output_port| {
                 CTESource::create(builder.ctx.clone(), output_port.clone(), receiver.clone())
             },
-            builder.settings.get_max_threads()? as usize,
-        )
+            1,
+        )?;
+        builder
+            .main_pipeline
+            .try_resize(builder.settings.get_max_threads()? as usize)
     }
 }
 
