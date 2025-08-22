@@ -29,6 +29,7 @@ use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::escape_for_key;
+use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::workload_group::QuotaValue;
@@ -100,6 +101,7 @@ pub(crate) struct Inner<Data: QueueData> {
 pub struct QueueManager<Data: QueueData> {
     permits: usize,
     meta_store: MetaStore,
+    tokio_mutex: Arc<TokioMutex<()>>,
     semaphore: Arc<Semaphore>,
     global_statement_queue: bool,
     queue: Mutex<HashMap<Data::Key, Inner<Data>>>,
@@ -152,6 +154,7 @@ impl<Data: QueueData> QueueManager<Data> {
             global_statement_queue,
             queue: Mutex::new(HashMap::new()),
             semaphore: Arc::new(Semaphore::new(permits)),
+            tokio_mutex: Arc::new(TokioMutex::new(())),
         })
     }
 
@@ -241,6 +244,9 @@ impl<Data: QueueData> QueueManager<Data> {
 
                 timeout -= instant.elapsed();
 
+                // Prevent concurrent access to meta and serialize the submission of acquire requests.
+                // This ensures that at most permits + nodes acquirers will be in the queue at any given time.
+                let _guard = workload_group.mutex.clone().lock_owned().await;
                 data.set_status("[QUERY-QUEUE] Waiting for global workload semaphore");
 
                 let workload_queue_guard = self
@@ -331,6 +337,9 @@ impl<Data: QueueData> QueueManager<Data> {
                     data.lock_ttl(),
                 );
 
+                // Prevent concurrent access to meta and serialize the submission of acquire requests.
+                // This ensures that at most permits + nodes acquirers will be in the queue at any given time.
+                let _guard = self.tokio_mutex.clone().lock_owned().await;
                 let acquire = tokio::time::timeout(timeout, semaphore_acquire);
                 let queue_future = AcquireQueueFuture::create(data, acquire, self.clone());
                 queue_future.await
