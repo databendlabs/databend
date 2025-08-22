@@ -56,6 +56,7 @@ pub fn add_k_way_merge_sort(
     sort_desc: &[SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
+    enable_fixed_rows: bool,
 ) -> Result<()> {
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
@@ -76,7 +77,7 @@ pub fn add_k_way_merge_sort(
                 sort_desc,
                 pipeline,
             };
-            select_row_type(&mut builder)
+            select_row_type(&mut builder, enable_fixed_rows)
         }
     }
 }

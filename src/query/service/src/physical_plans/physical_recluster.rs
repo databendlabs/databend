@@ -213,11 +213,13 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
+                let settings = builder.ctx.get_settings();
                 let sort_pipeline_builder = SortPipelineBuilder::create(
                     builder.ctx.clone(),
                     schema,
                     sort_descs.into(),
                     None,
+                    settings.get_enable_fixed_rows_sort()?,
                 )?
                 .with_block_size_hit(sort_block_size)
                 .remove_order_col_at_last();
@@ -225,7 +227,7 @@ impl IPhysicalPlan for Recluster {
                 sort_pipeline_builder.build_full_sort_pipeline(&mut builder.main_pipeline)?;
 
                 // Compact after merge sort.
-                let max_threads = builder.ctx.get_settings().get_max_threads()? as usize;
+                let max_threads = settings.get_max_threads()? as usize;
                 build_compact_block_no_split_pipeline(
                     &mut builder.main_pipeline,
                     block_thresholds,

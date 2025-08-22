@@ -57,6 +57,7 @@ pub fn convert_rows(
     schema: DataSchemaRef,
     sort_desc: &[SortColumnDescription],
     data: DataBlock,
+    enable_fixed_rows: bool,
 ) -> Result<Column> {
     struct ConvertRowsVisitor<'a> {
         schema: DataSchemaRef,
@@ -97,10 +98,10 @@ pub fn convert_rows(
         data,
     };
 
-    select_row_type(&mut visitor)
+    select_row_type(&mut visitor, enable_fixed_rows)
 }
 
-pub fn select_row_type<V>(visitor: &mut V) -> V::Result
+fn select_row_type_old<V>(visitor: &mut V) -> V::Result
 where V: RowsTypeVisitor {
     match &visitor.sort_desc() {
         &[desc] => {
@@ -135,7 +136,7 @@ where V: RowsTypeVisitor {
     }
 }
 
-pub fn select_row_type_enable_fixed_rows<V>(visitor: &mut V) -> V::Result
+fn select_row_type_enable_fixed_rows<V>(visitor: &mut V) -> V::Result
 where V: RowsTypeVisitor {
     let sort_desc = visitor.sort_desc();
     if let &[desc] = &sort_desc {
@@ -191,6 +192,15 @@ where V: RowsTypeVisitor {
     }
 }
 
+pub fn select_row_type<V>(visitor: &mut V, enable_fixed_rows: bool) -> V::Result
+where V: RowsTypeVisitor {
+    if enable_fixed_rows {
+        select_row_type_enable_fixed_rows(visitor)
+    } else {
+        select_row_type_old(visitor)
+    }
+}
+
 pub trait RowsTypeVisitor {
     type Result;
     fn schema(&self) -> DataSchemaRef;
@@ -203,7 +213,11 @@ pub trait RowsTypeVisitor {
         C: RowConverter<R> + Send + 'static;
 }
 
-pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> DataType {
+pub fn order_field_type(
+    schema: &DataSchema,
+    desc: &[SortColumnDescription],
+    enable_fixed_rows: bool,
+) -> DataType {
     struct OrderFieldTypeVisitor<'a> {
         schema: DataSchemaRef,
         sort_desc: &'a [SortColumnDescription],
@@ -234,7 +248,7 @@ pub fn order_field_type(schema: &DataSchema, desc: &[SortColumnDescription]) -> 
         sort_desc: desc,
     };
 
-    select_row_type(&mut visitor)
+    select_row_type(&mut visitor, enable_fixed_rows)
 }
 
 fn null_sentinel(nulls_first: bool) -> u8 {

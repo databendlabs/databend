@@ -49,6 +49,7 @@ pub fn try_add_multi_sort_merge(
     sort_desc: &[SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
 ) -> Result<()> {
     debug_assert!(remove_order_col != schema.has_field(ORDER_COL_NAME));
 
@@ -73,7 +74,7 @@ pub fn try_add_multi_sort_merge(
                 enable_loser_tree,
             };
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-                ProcessorPtr::create(select_row_type(&mut builder)?),
+                ProcessorPtr::create(select_row_type(&mut builder, enable_fixed_rows_sort)?),
                 inputs_port,
                 vec![output_port],
             )]));
