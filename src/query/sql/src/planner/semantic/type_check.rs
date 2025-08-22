@@ -107,6 +107,7 @@ use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -191,6 +192,7 @@ use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::UDFArgVisitor;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -4794,6 +4796,9 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
+            UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
+                self.resolve_scalar_udf(span, name, arguments, udf_def)?,
+            )),
         }
     }
 
@@ -5185,6 +5190,57 @@ impl<'a> TypeChecker<'a> {
             }
             .into(),
             scalar.1,
+        )))
+    }
+
+    fn resolve_scalar_udf(
+        &mut self,
+        span: Span,
+        func_name: String,
+        arguments: &[Expr],
+        udf_definition: ScalarUDF,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let arg_types = udf_definition.arg_types;
+        if arg_types.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                arg_types.len(),
+                arguments.len()
+            ))
+            .set_span(span));
+        }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
+        let mut udf_expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut visitor = UDFArgVisitor::new(&arg_types, arguments);
+        udf_expr.drive_mut(&mut visitor);
+
+        // independent context
+        let box (expr, _) = TypeChecker::try_create(
+            &mut BindContext::new(),
+            self.ctx.clone(),
+            &NameResolutionContext::default(),
+            MetadataRef::default(),
+            &[],
+            self.forbid_udf,
+        )?
+        .resolve(&udf_expr)?;
+        let return_ty = udf_definition.return_type;
+        let expr = CastExpr {
+            span,
+            is_try: false,
+            argument: Box::new(expr),
+            target_type: Box::new(return_ty.clone()),
+        };
+        Ok(Box::new((
+            UDFLambdaCall {
+                span,
+                func_name,
+                scalar: Box::new(expr.into()),
+            }
+            .into(),
+            return_ty,
         )))
     }
 
