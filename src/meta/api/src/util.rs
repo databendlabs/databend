@@ -449,10 +449,14 @@ impl IdempotentKVTxnSender {
         txn.else_then.push(TxnOp::get(self.txn_id.clone()));
 
         match send_txn(kv_api, txn).await {
-            Ok((true, op_responses)) => Ok(IdempotentKVTxnResponse::Success(op_responses)),
+            Ok((true, mut op_responses)) => Ok({
+                // Pop the put_with_ttl txn_id KV pair response
+                op_responses.pop();
+                IdempotentKVTxnResponse::Success(op_responses)
+            }),
             Ok((false, mut op_responses)) => {
-                // Since we manipulate the transaction response, we expect the last operation response
-                // to be the get transaction ID response. Let's check it.
+                // Since we manipulate the transaction, the last operation response SHOULD be the
+                // get transaction ID response. Let's check it.
                 let Some(last_op_resp) = op_responses.pop() else {
                     return Err(MetaError::from(InvalidReply::new(
                         "Malformed transaction response",
@@ -494,16 +498,16 @@ impl IdempotentKVTxnSender {
                 }
 
                 if get_txn_id.value.is_some() {
-                    // Transaction failed because the txn_id already exists, indicating this
-                    // transaction ID was previously used and committed successfully.
+                    // The txn_id already exists, indicating some transaction with the same transaction
+                    // ID was previously committed successfully.
                     //
-                    // Notes about this "idempotency" mechanism:
+                    // Notes about this "idempotency":
                     // 1. This method ALLOWS sending different transaction each time
                     //    while using the same txn_id for duplicate prevention.
                     // 2. It is the CALLER'S RESPONSIBILITY to ensure that all transactions
                     //    sharing the same txn_id do make sense, even if their actual content differs.
                     // 3. This is a best-effort idempotency check, only guaranteed roughly
-                    //    within the TTL duration of the transaction ID.
+                    //    within the TTL duration of the transaction ID KV pair.
                     // 4. DO NOT rely on this mechanism for critical safety properties.
                     info!("Transaction with ID {} already exist", self.txn_id);
                     // Operation responses of else branch are omitted in this case
@@ -519,5 +523,11 @@ impl IdempotentKVTxnSender {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+impl Default for IdempotentKVTxnSender {
+    fn default() -> Self {
+        Self::new()
     }
 }
