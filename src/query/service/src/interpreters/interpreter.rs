@@ -97,6 +97,14 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        {
+            let mutation_status = ctx.get_mutation_status();
+            let mut mutation_status = mutation_status.write();
+            mutation_status.insert_rows = 0;
+            mutation_status.deleted_rows = 0;
+            mutation_status.update_rows = 0;
+        }
+
         let make_error = || "failed to execute interpreter";
 
         ctx.set_status_info("[INTERPRETER] Building execution pipeline");
