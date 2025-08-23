@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
@@ -22,6 +24,7 @@ use log::warn;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 use map_api::map_key::MapKey;
+use map_api::mvcc;
 use map_api::BeforeAfter;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
@@ -33,19 +36,45 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameSpace {
+    Sys,
+    User,
+    Expire,
+}
+
+pub enum Key {
+    Sys,
+    User(UserKey),
+    Expire(ExpireKey),
+}
+
+pub enum Value {
+    Sys(Box<dyn FnOnce(&mut SysData) + 'static>),
+    User(MetaValue),
+    Expire(String),
+}
+
+impl Value {
+    pub fn new_sys<F>(f: F) -> Self
+    where F: FnOnce(&mut SysData) + 'static {
+        Value::Sys(Box::new(f))
+    }
+}
+
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    pub(crate) sys_data: SysData,
+    pub(crate) sys_data: Arc<Mutex<SysData>>,
 
     /// Generic Key-value store.
-    pub(crate) kv: BTreeMap<UserKey, SeqMarked<MetaValue>>,
+    pub(crate) kv: mvcc::Table<UserKey, MetaValue>,
 
     /// The expiration queue of generic kv.
-    pub(crate) expire: BTreeMap<ExpireKey, SeqMarked<String>>,
+    pub(crate) expire: mvcc::Table<ExpireKey, String>,
 }
 
 impl Level {
@@ -62,7 +91,7 @@ impl Level {
     }
 
     pub(crate) fn sys_data_ref(&self) -> &SysData {
-        &self.sys_data
+        self.sys_data.as_ref()
     }
 
     pub(crate) fn sys_data_mut(&mut self) -> &mut SysData {
@@ -70,12 +99,12 @@ impl Level {
     }
 
     /// Replace the kv store with a new one.
-    pub(crate) fn replace_kv(&mut self, kv: BTreeMap<UserKey, SeqMarked<MetaValue>>) {
+    pub(crate) fn replace_kv(&mut self, kv: mvcc::Table<UserKey, MetaValue>) {
         self.kv = kv;
     }
 
     /// Replace the expiry queue with a new one.
-    pub(crate) fn replace_expire(&mut self, expire: BTreeMap<ExpireKey, SeqMarked<String>>) {
+    pub(crate) fn replace_expire(&mut self, expire: mvcc::Table<ExpireKey, String>) {
         self.expire = expire;
     }
 }

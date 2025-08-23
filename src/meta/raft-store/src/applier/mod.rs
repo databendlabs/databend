@@ -14,6 +14,7 @@
 
 use std::future::ready;
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_types::node::Node;
@@ -58,17 +59,31 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use map_api::mvcc;
 use num::FromPrimitive;
 use seq_marked::SeqValue;
 use state_machine_api::StateMachineApi;
+use tempfile::env::override_temp_dir;
 
+use crate::leveled_store::level::Key;
+use crate::leveled_store::level::NameSpace;
+use crate::leveled_store::level::Value;
+use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
+use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::state_machine_api_ext::StateMachineApiExt;
+
+pub struct ApplierView {
+    _permit: ApplierPermit,
+    data: Arc<LeveledMapData>,
+}
+
+// type ApplierView = mvcc::View<NameSpace, Key, Value, BaseView>;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a, SM>
 where SM: StateMachineApi<SysData> + 'static
 {
-    sm: &'a mut SM,
+    sm: ApplierView,
 
     /// The context of the current applying log.
     pub(crate) cmd_ctx: CmdContext,
@@ -107,7 +122,9 @@ where SM: StateMachineApi<SysData> + 'static
 
         self.clean_expired_kvs(log_time_ms).await?;
 
-        *self.sm.sys_data_mut().last_applied_mut() = Some(*log_id);
+        self.sm.access_sys_data(move |sys_data| {
+            *sys_data.last_applied_mut() = Some(*log_id);
+        });
 
         let applied_state = match entry.payload {
             EntryPayload::Blank => {
@@ -123,8 +140,12 @@ where SM: StateMachineApi<SysData> + 'static
             EntryPayload::Membership(ref mem) => {
                 info!("apply: membership: {} {:?}", log_id, mem);
 
-                *self.sm.sys_data_mut().last_membership_mut() =
-                    StoredMembership::new(Some(*log_id), mem.clone());
+                let membership = StoredMembership::new(Some(*log_id), mem.clone());
+
+                self.sm.access_sys_data(move |sys_data| {
+                    *sys_data.last_membership_mut() = membership;
+                });
+
                 AppliedState::None
             }
         };
@@ -171,23 +192,20 @@ where SM: StateMachineApi<SysData> + 'static
     /// Insert a node only when it does not exist or `overriding` is true.
     #[fastrace::trace]
     fn apply_add_node(&mut self, node_id: &u64, node: &Node, overriding: bool) -> AppliedState {
-        let prev = self.sm.sys_data_mut().nodes_mut().get(node_id).cloned();
+        let prev = self
+            .sm
+            .access_sys_data(|sys_data| sys_data.nodes_mut().get(node_id).cloned());
 
-        if prev.is_none() {
+        if prev.is_none() || overriding {
             self.sm
-                .sys_data_mut()
-                .nodes_mut()
-                .insert(*node_id, node.clone());
-            info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
-            return (prev, Some(node.clone())).into();
-        }
+                .access_sys_data(|sys_data| sys_data.nodes_mut().insert(*node_id, node.clone()));
 
-        if overriding {
-            self.sm
-                .sys_data_mut()
-                .nodes_mut()
-                .insert(*node_id, node.clone());
-            info!("applied AddNode(overriding): {}={:?}", node_id, node);
+            if prev.is_none() {
+                info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
+            } else {
+                info!("applied AddNode(overriding): {}={:?}", node_id, node);
+            }
+
             (prev, Some(node.clone())).into()
         } else {
             (prev.clone(), prev).into()
@@ -196,7 +214,10 @@ where SM: StateMachineApi<SysData> + 'static
 
     #[fastrace::trace]
     fn apply_remove_node(&mut self, node_id: &u64) -> AppliedState {
-        let prev = self.sm.sys_data_mut().nodes_mut().remove(node_id);
+        let prev = self
+            .sm
+            .access_sys_data(|sys_data| sys_data.nodes_mut().remove(node_id));
+
         info!("applied RemoveNode: {}={:?}", node_id, prev);
 
         (prev, None).into()
@@ -223,14 +244,17 @@ where SM: StateMachineApi<SysData> + 'static
     /// Toggle a state machine functional feature.
     #[fastrace::trace]
     fn apply_set_feature(&mut self, feature: &str, enable: bool) -> AppliedState {
-        let sys_data = self.sm.sys_data_mut();
-        let prev = sys_data.feature_enabled(feature);
+        let prev = self.sm.access_sys_data(|sys_data| {
+            let prev = sys_data.feature_enabled(feature);
 
-        if enable {
-            sys_data.features_mut().insert(feature.to_string());
-        } else {
-            sys_data.features_mut().remove(feature);
-        }
+            if enable {
+                sys_data.features_mut().insert(feature.to_string());
+            } else {
+                sys_data.features_mut().remove(feature);
+            }
+
+            prev
+        });
 
         info!(
             "apply_set_feature done: {} from {} to {}",

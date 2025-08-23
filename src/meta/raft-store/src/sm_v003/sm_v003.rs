@@ -15,6 +15,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::io;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use databend_common_meta_types::raft_types::Entry;
@@ -42,7 +44,7 @@ pub struct SMV003 {
     levels: LeveledMap,
 
     /// Since when to start cleaning expired keys.
-    cleanup_start_time_ms: Duration,
+    cleanup_start_time_ms: Arc<Mutex<Duration>>,
 
     /// Callback when a change is applied to state machine
     pub(crate) on_change_applied: Option<OnChange>,
@@ -81,24 +83,21 @@ impl StateMachineApi<SysData> for SMV003 {
         &mut self.levels
     }
 
-    fn cleanup_start_timestamp(&self) -> Duration {
-        self.cleanup_start_time_ms
-    }
-
-    fn set_cleanup_start_timestamp(&mut self, timestamp: Duration) {
-        self.cleanup_start_time_ms = timestamp;
-    }
-
-    fn sys_data_mut(&mut self) -> &mut SysData {
-        self.levels.sys_data_mut()
-    }
-
     fn on_change_applied(&mut self, change: (String, Option<SeqV>, Option<SeqV>)) {
         let Some(on_change_applied) = &self.on_change_applied else {
             // No subscribers, do nothing.
             return;
         };
         (*on_change_applied)(change);
+    }
+
+    fn with_cleanup_start_timestamp<T>(&self, f: impl FnOnce(&mut Duration) -> T) -> T {
+        let mut ts = self.cleanup_start_time_ms.lock().unwrap();
+        f(&mut *ts)
+    }
+
+    fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        self.levels.with_sys_data(f)
     }
 }
 

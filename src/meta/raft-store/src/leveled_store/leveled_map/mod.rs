@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use compactor::Compactor;
 use databend_common_meta_types::snapshot_db::DB;
@@ -29,6 +30,7 @@ use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 
 #[cfg(test)]
 mod acquire_compactor_test;
+pub mod applier_acquirer;
 pub mod compacting_data;
 pub mod compactor;
 pub mod compactor_acquirer;
@@ -36,19 +38,13 @@ pub mod compactor_acquirer;
 mod leveled_map_test;
 mod map_api_impl;
 
-/// State machine data organized in multiple levels.
+/// The data of the leveled map.
 ///
-/// Similar to leveldb.
-///
-/// The top level is the newest and writable.
-/// Others are immutable.
-#[derive(Debug)]
-pub struct LeveledMap {
-    /// A semaphore that permits at most one compactor to run.
-    compaction_semaphore: Arc<Semaphore>,
-
+/// The top level is the newest and writable and there is **at most one** candidate writer.
+#[derive(Debug, Default)]
+pub struct LeveledMapData {
     /// The top level is the newest and writable.
-    writable: Level,
+    writable: Mutex<Level>,
 
     /// The immutable levels.
     immutable_levels: ImmutableLevels,
@@ -56,25 +52,57 @@ pub struct LeveledMap {
     persisted: Option<DB>,
 }
 
+/// State machine data organized in multiple levels.
+///
+/// Similar to leveldb.
+///
+/// The top level is the newest and writable.
+/// Others are immutable.
+///
+/// - A writer must acquire a permit to write_semaphore.
+/// - A compactor must:
+///   - acquire the compaction_semaphore first,
+///   - then acquire `write_semaphore` to move `writeable` to `immutable_levels`,
+#[derive(Debug)]
+pub struct LeveledMap {
+    /// A semaphore that permits at most one compactor to run.
+    compaction_semaphore: Arc<Semaphore>,
+
+    /// Get a permit to write.
+    ///
+    /// Only one writer is allowed, to achieve serialization.
+    /// For historical reason, inserting a tombstone does not increase the seq.
+    /// Thus, mvcc isolation with the seq can not completely separate two concurrent writer.
+    write_semaphore: Arc<Semaphore>,
+
+    data: Arc<LeveledMapData>,
+}
+
 impl Default for LeveledMap {
     fn default() -> Self {
         Self {
-            // Only one compactor is allowed.
+            // Only one compactor is allowed a time.
             compaction_semaphore: Arc::new(Semaphore::new(1)),
-            writable: Default::default(),
-            immutable_levels: Default::default(),
-            persisted: None,
+            // Only one writer is allowed a time.
+            write_semaphore: Arc::new(Semaphore::new(1)),
+            data: Arc::new(LeveledMapData::default()),
         }
     }
 }
 
-impl AsRef<SysData> for LeveledMap {
-    fn as_ref(&self) -> &SysData {
-        self.writable.sys_data_ref()
-    }
-}
-
 impl LeveledMap {
+    pub fn sys_data(&self) -> Arc<SysData> {
+        self.data.writable.lock().unwrap().sys_data.clone()
+    }
+
+    pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        let mut writable = self.data.writable.lock().unwrap();
+        let mut sys_data = writable.sys_data.lock().unwrap();
+
+        f(&mut sys_data)
+    }
+
+    // TODO:
     pub(crate) fn clear(&mut self) {
         self.writable = Default::default();
         self.immutable_levels = Default::default();
@@ -83,15 +111,16 @@ impl LeveledMap {
 
     /// Return the [`LevelIndex`] of the newest **immutable** data
     pub(crate) fn immutable_level_index(&self) -> Option<LevelIndex> {
-        let newest = self.immutable_levels.newest()?;
+        let newest = self.data.immutable_levels.newest()?;
         Some(*newest.level_index())
     }
 
     /// Return an iterator of all levels in reverse order.
+    /// TODO:
     pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         [&self.writable]
             .into_iter()
-            .chain(self.immutable_levels.iter_levels())
+            .chain(self.data.immutable_levels.iter_levels())
     }
 
     /// Return the top level and an iterator of all immutable levels, in newest to oldest order.
@@ -128,7 +157,7 @@ impl LeveledMap {
     }
 
     pub fn persisted(&self) -> Option<&DB> {
-        self.persisted.as_ref()
+        self.data.persisted.as_ref()
     }
 
     pub fn persisted_mut(&mut self) -> &mut Option<DB> {
