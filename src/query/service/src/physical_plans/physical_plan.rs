@@ -121,7 +121,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn formatter_with_depth(&self, depth: usize) -> Result<Box<dyn PhysicalFormat + '_>> {
-        const MAX_DEPTH: usize = 1000; // Reasonable limit for most query plans
+        const MAX_DEPTH: usize = 4096; // Consistent with query binder depth limit
         if depth > MAX_DEPTH {
             return Err(ErrorCode::Internal(format!(
                 "Physical plan formatting depth exceeded maximum limit of {}", 
@@ -147,7 +147,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn try_find_mutation_source_with_depth(&self, depth: usize) -> Option<MutationSource> {
-        const MAX_DEPTH: usize = 1000;
+        const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
             return None; // Prevent stack overflow, return None as safe fallback
         }
@@ -166,7 +166,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn get_all_data_source_with_depth(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>, depth: usize) {
-        const MAX_DEPTH: usize = 1000;
+        const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
             return; // Prevent stack overflow
         }
@@ -181,7 +181,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn set_pruning_stats_with_depth(&mut self, stats: &mut HashMap<u32, PartStatistics>, depth: usize) {
-        const MAX_DEPTH: usize = 1000;
+        const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
             return; // Prevent stack overflow
         }
@@ -196,7 +196,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn is_distributed_plan_with_depth(&self, depth: usize) -> bool {
-        const MAX_DEPTH: usize = 1000;
+        const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
             return false; // Safe default to prevent stack overflow
         }
@@ -209,7 +209,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     }
 
     fn is_warehouse_distributed_plan_with_depth(&self, depth: usize) -> bool {
-        const MAX_DEPTH: usize = 1000;
+        const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
             return false; // Safe default to prevent stack overflow
         }
@@ -334,9 +334,9 @@ impl Clone for PhysicalPlan {
 }
 
 impl Debug for PhysicalPlan {
-    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)
+        // Use a simple format to avoid potential recursion issues
+        write!(f, "PhysicalPlan({})", self.get_name())
     }
 }
 
@@ -377,11 +377,20 @@ impl PhysicalPlan {
         }
     }
 
-    #[recursive::recursive]
     pub fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
+        self.derive_with_depth(handle, 0)
+    }
+
+    fn derive_with_depth(&self, handle: &mut Box<dyn DeriveHandle>, depth: usize) -> PhysicalPlan {
+        const MAX_DEPTH: usize = 4096;
+        if depth > MAX_DEPTH {
+            // Return a copy of self as safe fallback to prevent stack overflow
+            return self.clone();
+        }
+        
         let mut children = vec![];
         for child in self.children() {
-            children.push(child.derive_with(handle));
+            children.push(child.derive_with_depth(handle, depth + 1));
         }
 
         match handle.derive(self, children) {
@@ -390,10 +399,21 @@ impl PhysicalPlan {
         }
     }
 
-    #[recursive::recursive]
     pub fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
+        self.visit_with_depth(visitor, 0)
+    }
+
+    fn visit_with_depth(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>, depth: usize) -> Result<()> {
+        const MAX_DEPTH: usize = 4096;
+        if depth > MAX_DEPTH {
+            return Err(ErrorCode::Internal(format!(
+                "Physical plan visit depth exceeded maximum limit of {}", 
+                MAX_DEPTH
+            )));
+        }
+        
         for child in self.children() {
-            child.visit(visitor)?;
+            child.visit_with_depth(visitor, depth + 1)?;
         }
 
         visitor.visit(self)
