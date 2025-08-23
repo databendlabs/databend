@@ -1008,12 +1008,8 @@ impl Table for FuseTable {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
-            let column_distinct_values = match snapshot
-                .summary
-                .additional_stats_meta
-                .as_ref()
-                .and_then(|v| v.hll.as_ref())
-            {
+            let additional_stats_meta = snapshot.summary.additional_stats_meta.as_ref();
+            let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {
                 Some(v) if !v.is_empty() => decode_column_hll(v)?
                     .map(|v| v.iter().map(|hll| (*hll.0, hll.1.count() as u64)).collect()),
                 _ => table_statistics
@@ -1024,10 +1020,15 @@ impl Table for FuseTable {
                 .as_ref()
                 .map(|v| v.histograms.clone())
                 .unwrap_or_default();
+            let stats_row_count = additional_stats_meta
+                .map(|v| v.row_count)
+                .or(table_statistics.as_ref().map(|v| v.row_count))
+                .unwrap_or(0);
             FuseTableColumnStatisticsProvider::new(
                 stats.clone(),
                 histograms,
                 column_distinct_values,
+                stats_row_count,
                 snapshot.summary.row_count,
             )
         } else {

@@ -427,6 +427,7 @@ impl<'a> StatsApplier<'a> {
                                 .or_else(|| default_max_datum(&column.data_type())),
                             ndv: stats.ndv,
                             null_count: stats.null_count.unwrap_or(0),
+                            in_memory_size: 0,
                         }),
                     );
                 }

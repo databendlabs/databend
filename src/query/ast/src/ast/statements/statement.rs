@@ -191,6 +191,7 @@ pub enum Statement {
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
+    ShowStatistics(ShowStatisticsStmt),
 
     // Dictionaries
     CreateDictionary(CreateDictionaryStmt),
@@ -469,6 +470,7 @@ impl Statement {
             | Statement::ShowTables(..)
             | Statement::ShowCreateTable(..)
             | Statement::DescribeTable(..)
+            | Statement::ShowStatistics(..)
             | Statement::ShowTablesStatus(..)
             | Statement::ShowDropTables(..)
             | Statement::OptimizeTable(..)
@@ -817,6 +819,7 @@ impl Display for Statement {
             Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ShowTablesStatus(stmt) => write!(f, "{stmt}")?,
             Statement::ShowDropTables(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowStatistics(stmt) => write!(f, "{stmt}")?,
             Statement::AttachTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DropTable(stmt) => write!(f, "{stmt}")?,

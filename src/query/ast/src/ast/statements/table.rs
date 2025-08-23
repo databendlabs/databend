@@ -1058,3 +1058,45 @@ impl Display for ModifyColumnAction {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+pub struct ShowStatisticsStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub target: ShowStatsTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+pub enum ShowStatsTarget {
+    #[default]
+    Database,
+    Table(Identifier),
+}
+
+impl Display for ShowStatisticsStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW STATISTICS")?;
+        match &self.target {
+            ShowStatsTarget::Database => {
+                if let Some(database) = &self.database {
+                    write!(f, " FROM DATABASE ")?;
+                    if let Some(catalog) = &self.catalog {
+                        write!(f, "{catalog}.",)?;
+                    }
+                    write!(f, "{database}")?;
+                }
+            }
+            ShowStatsTarget::Table(table) => {
+                write!(f, " FROM TABLE ")?;
+                if let Some(database) = &self.database {
+                    if let Some(catalog) = &self.catalog {
+                        write!(f, "{catalog}.",)?;
+                    }
+                    write!(f, "{database}.")?;
+                }
+                write!(f, "{table}")?;
+            }
+        }
+        Ok(())
+    }
+}
