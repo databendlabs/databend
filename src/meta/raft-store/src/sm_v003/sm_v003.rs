@@ -30,6 +30,7 @@ use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 
 use crate::applier::Applier;
+use crate::applier::ApplierData;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
@@ -37,17 +38,17 @@ use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
-type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
+pub(crate) type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 
 #[derive(Default)]
 pub struct SMV003 {
     levels: LeveledMap,
 
     /// Since when to start cleaning expired keys.
-    cleanup_start_time_ms: Arc<Mutex<Duration>>,
+    cleanup_start_time: Arc<Mutex<Duration>>,
 
     /// Callback when a change is applied to state machine
-    pub(crate) on_change_applied: Option<OnChange>,
+    pub(crate) on_change_applied: Arc<Option<OnChange>>,
 }
 
 impl fmt::Debug for SMV003 {
@@ -56,35 +57,35 @@ impl fmt::Debug for SMV003 {
             .field("levels", &self.levels)
             .field(
                 "on_change_applied",
-                &self.on_change_applied.as_ref().map(|_x| "is_set"),
+                &self.on_change_applied.as_ref().as_ref().map(|_x| "is_set"),
             )
             .finish()
     }
 }
 
-impl StateMachineApi<SysData> for SMV003 {
-    type UserMap = LeveledMap;
+impl StateMachineApi<SysData> for ApplierData {
+    type UserMap = ApplierData;
 
     fn user_map(&self) -> &Self::UserMap {
-        &self.levels
+        self
     }
 
     fn user_map_mut(&mut self) -> &mut Self::UserMap {
-        &mut self.levels
+        self
     }
 
-    type ExpireMap = LeveledMap;
+    type ExpireMap = ApplierData;
 
     fn expire_map(&self) -> &Self::ExpireMap {
-        &self.levels
+        self
     }
 
     fn expire_map_mut(&mut self) -> &mut Self::ExpireMap {
-        &mut self.levels
+        self
     }
 
     fn on_change_applied(&mut self, change: (String, Option<SeqV>, Option<SeqV>)) {
-        let Some(on_change_applied) = &self.on_change_applied else {
+        let Some(on_change_applied) = self.on_change_applied.as_ref().as_ref() else {
             // No subscribers, do nothing.
             return;
         };
@@ -92,12 +93,12 @@ impl StateMachineApi<SysData> for SMV003 {
     }
 
     fn with_cleanup_start_timestamp<T>(&self, f: impl FnOnce(&mut Duration) -> T) -> T {
-        let mut ts = self.cleanup_start_time_ms.lock().unwrap();
+        let mut ts = self.cleanup_start_time.lock().unwrap();
         f(&mut *ts)
     }
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        self.levels.with_sys_data(f)
+        self.view.base().with_sys_data(f)
     }
 }
 

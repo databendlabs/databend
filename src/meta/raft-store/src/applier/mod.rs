@@ -14,7 +14,10 @@
 
 use std::future::ready;
 use std::io;
+use std::io::Error;
+use std::ops::RangeBounds;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use databend_common_meta_types::node::Node;
@@ -60,9 +63,17 @@ use log::error;
 use log::info;
 use log::warn;
 use map_api::mvcc;
+use map_api::mvcc::ViewReadonly;
+use map_api::IOResultStream;
+use map_api::MapKey;
 use num::FromPrimitive;
+use seq_marked::InternalSeq;
+use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
 use state_machine_api::StateMachineApi;
+use state_machine_api::UserKey;
 use tempfile::env::override_temp_dir;
 
 use crate::leveled_store::level::Key;
@@ -70,20 +81,164 @@ use crate::leveled_store::level::NameSpace;
 use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
 use crate::leveled_store::leveled_map::LeveledMapData;
+use crate::sm_v003::OnChange;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
-pub struct ApplierView {
+type StateMachineView = mvcc::View<NameSpace, Key, Value, Arc<LeveledMapData>>;
+
+pub struct ApplierData {
+    /// Hold a unique permit to serialize all apply operations to the state machine.
     _permit: ApplierPermit,
-    data: Arc<LeveledMapData>,
+
+    pub(crate) view: StateMachineView,
+
+    /// Since when to start cleaning expired keys.
+    pub(crate) cleanup_start_time: Arc<Mutex<Duration>>,
+
+    pub(crate) on_change_applied: Arc<Option<OnChange>>,
 }
 
-// type ApplierView = mvcc::View<NameSpace, Key, Value, BaseView>;
+impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
+    fn base_seq(&self) -> InternalSeq {
+        self.view.base_seq()
+    }
+
+    fn set(&mut self, key: UserKey, value: Option<MetaValue>) {
+        self.view
+            .set(NameSpace::User, Key::User(key), value.map(Value::User));
+    }
+
+    async fn get(&self, key: UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
+        let got = self.view.get(NameSpace::User, Key::User(key)).await?;
+        Ok(got.map(|x| x.into_user()))
+    }
+
+    async fn range<R>(
+        &self,
+        range: R,
+    ) -> Result<IOResultStream<(UserKey, SeqMarked<MetaValue>)>, io::Error>
+    where
+        R: RangeBounds<UserKey> + Send + Sync + Clone + 'static,
+    {
+        let start = range.start_bound().cloned();
+        let end = range.end_bound().cloned();
+
+        let start = start.map(Key::User);
+        let end = end.map(Key::User);
+
+        let strm = self.view.range((start, end)).await?;
+
+        Ok(strm
+            .map_ok(|(k, v)| (k.into_user(), v.map(|x| x.into_user())))
+            .boxed())
+    }
+}
+
+impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
+    fn base_seq(&self) -> InternalSeq {
+        self.view.base_seq()
+    }
+
+    fn set(&mut self, key: ExpireKey, value: Option<String>) {
+        self.view.set(
+            NameSpace::Expire,
+            Key::Expire(key),
+            value.map(Value::Expire),
+        );
+    }
+
+    async fn get(&self, key: ExpireKey) -> Result<SeqMarked<String>, io::Error> {
+        let got = self.view.get(NameSpace::Expire, Key::Expire(key)).await?;
+        Ok(got.map(|x| x.into_expire()))
+    }
+
+    async fn range<R>(
+        &self,
+        range: R,
+    ) -> Result<IOResultStream<(ExpireKey, SeqMarked<String>)>, Error>
+    where
+        R: RangeBounds<ExpireKey> + Send + Sync + Clone + 'static,
+    {
+        let start = range.start_bound().cloned();
+        let end = range.end_bound().cloned();
+
+        let start = start.map(Key::Expire);
+        let end = end.map(Key::Expire);
+
+        let strm = self.view.range((start, end)).await?;
+
+        Ok(strm
+            .map_ok(|(k, v)| (k.into_expire(), v.map(|x| x.into_expire())))
+            .boxed())
+    }
+}
+
+impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
+    fn base_seq(&self) -> InternalSeq {
+        let seq = self.with_sys_data(|sys_data| sys_data.curr_seq());
+        InternalSeq::new(seq)
+    }
+
+    async fn get(&self, space: NameSpace, key: Key) -> Result<SeqMarked<Value>, io::Error> {
+        match space {
+            NameSpace::User => {
+                let key = key.into_user();
+                let got = self.compacted_view_get(key, *self.view_seq()).await?;
+                Ok(got.map(Value::User))
+            }
+            NameSpace::Expire => {
+                let key = key.into_expire();
+                let got = self.compacted_view_get(key, *self.view_seq()).await?;
+                Ok(got.map(Value::Expire))
+            }
+        }
+    }
+
+    async fn range<R>(
+        &self,
+        space: NameSpace,
+        range: R,
+    ) -> Result<IOResultStream<(Key, SeqMarked<Value>)>, io::Error>
+    where
+        R: RangeBounds<Key> + Send + Sync + Clone + 'static,
+    {
+        let start = range.start_bound().cloned();
+        let end = range.end_bound().cloned();
+
+        match space {
+            NameSpace::User => {
+                let start = start.map(|k| k.into_user());
+                let end = end.map(|k| k.into_user());
+
+                let strm = self
+                    .compacted_view_range((start, end), *self.view_seq())
+                    .await?;
+
+                Ok(strm
+                    .map_ok(|(k, v)| (Key::User(k), v.map(Value::User)))
+                    .boxed())
+            }
+            NameSpace::Expire => {
+                let start = start.map(|k| k.into_expire());
+                let end = end.map(|k| k.into_expire());
+
+                let strm = self
+                    .compacted_view_range((start, end), *self.view_seq())
+                    .await?;
+
+                Ok(strm
+                    .map_ok(|(k, v)| (Key::Expire(k), v.map(Value::Expire)))
+                    .boxed())
+            }
+        }
+    }
+}
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a, SM>
 where SM: StateMachineApi<SysData> + 'static
 {
-    sm: ApplierView,
+    sm: ApplierData,
 
     /// The context of the current applying log.
     pub(crate) cmd_ctx: CmdContext,

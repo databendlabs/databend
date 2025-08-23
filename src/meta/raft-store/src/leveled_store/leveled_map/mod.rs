@@ -12,21 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
+use std::io::Error;
+use std::range::RangeBounds;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use compactor::Compactor;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
+use futures_util::StreamExt;
 use log::info;
+use log::warn;
+use map_api::util;
+use map_api::IOResultStream;
+use map_api::MapApiRO;
+use map_api::MapKey;
+use seq_marked::SeqMarked;
+use stream_more::KMerge;
+use stream_more::StreamMore;
 use tokio::sync::Semaphore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::leveled_store::MapView;
 
 #[cfg(test)]
 mod acquire_compactor_test;
@@ -44,12 +58,113 @@ mod map_api_impl;
 #[derive(Debug, Default)]
 pub struct LeveledMapData {
     /// The top level is the newest and writable.
-    writable: Mutex<Level>,
+    pub(crate) writable: Mutex<Level>,
 
     /// The immutable levels.
-    immutable_levels: ImmutableLevels,
+    pub(crate) immutable_levels: ImmutableLevels,
 
-    persisted: Option<DB>,
+    pub(crate) persisted: Option<DB>,
+}
+
+impl LeveledMapData {
+    pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        let mut writable = self.writable.lock().unwrap();
+        let mut sys_data = writable.sys_data.lock().unwrap();
+
+        f(&mut sys_data)
+    }
+
+    pub(crate) async fn compacted_view_get<K>(
+        &self,
+        key: K,
+        upto_seq: u64,
+    ) -> Result<SeqMarked<K::V>, io::Error>
+    where
+        K: MapKey,
+    {
+        // TODO: test it
+
+        {
+            let writable = self.writable.lock().unwrap();
+            let got = writable.get_table().get(key.clone(), upto_seq).cloned();
+            if !got.is_not_found() {
+                return Ok(got);
+            }
+        }
+
+        for level in self.immutable_levels.iter_levels() {
+            let base = level.get_table().get(key.clone(), upto_seq).cloned();
+
+            if !base.is_not_found() {
+                return Ok(base);
+            }
+        }
+
+        let Some(db) = self.persisted.as_ref() else {
+            return Ok(SeqMarked::new_not_found());
+        };
+
+        let map_view = MapView(&db);
+        let got = map_view.get(&key).await?;
+        Ok(got)
+    }
+
+    pub(crate) async fn compacted_view_range<K, R>(
+        &self,
+        range: R,
+        upto_seq: u64,
+    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, io::Error>
+    where
+        K: MapKey,
+        R: RangeBounds<K> + Clone + Send + Sync + 'static,
+    {
+        // TODO: test it
+
+        let mut kmerge = KMerge::by(util::by_key_seq);
+
+        // writable level
+
+        let vec = {
+            let writable = self.writable.lock().unwrap();
+            let it = writable.get_table().range(range.clone(), upto_seq);
+            it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>()
+        };
+
+        if vec.len() > 1000 {
+            warn!(
+                "Level.writable::range(start={:?}, end={:?}) returns big range of len={}",
+                range.start_bound(),
+                range.end_bound(),
+                vec.len()
+            );
+        }
+
+        let strm = futures::stream::iter(vec).map(Ok).boxed();
+        kmerge = kmerge.merge(strm);
+
+        // Immutable levels
+
+        for level in self.immutable_levels.iter_levels() {
+            let it = level.get_table().range(range.clone(), upto_seq);
+
+            let vec = it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>();
+            let strm = futures::stream::iter(vec).map(Ok).boxed();
+            kmerge = kmerge.merge(strm);
+        }
+
+        // Bottom db level
+
+        if let Some(db) = self.persisted.as_ref() {
+            let map_view = MapView(&db);
+            let strm = map_view.range(range.clone()).await?;
+            kmerge = kmerge.merge(strm);
+        };
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let coalesce = kmerge.coalesce(util::merge_kv_results);
+
+        Ok(coalesce.boxed())
+    }
 }
 
 /// State machine data organized in multiple levels.

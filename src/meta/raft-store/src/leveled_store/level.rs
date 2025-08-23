@@ -38,27 +38,50 @@ use crate::leveled_store::sys_data_api::SysDataApiRO;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NameSpace {
-    Sys,
     User,
     Expire,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Key {
-    Sys,
     User(UserKey),
     Expire(ExpireKey),
 }
 
+impl Key {
+    pub fn into_user(self) -> UserKey {
+        match self {
+            Key::User(k) => k,
+            Key::Expire(_) => unreachable!("expect UserKey, got ExpireKey"),
+        }
+    }
+
+    pub fn into_expire(self) -> ExpireKey {
+        match self {
+            Key::User(_) => unreachable!("expect ExpireKey, got UserKey"),
+            Key::Expire(k) => k,
+        }
+    }
+}
+
 pub enum Value {
-    Sys(Box<dyn FnOnce(&mut SysData) + 'static>),
     User(MetaValue),
     Expire(String),
 }
 
 impl Value {
-    pub fn new_sys<F>(f: F) -> Self
-    where F: FnOnce(&mut SysData) + 'static {
-        Value::Sys(Box::new(f))
+    pub fn into_user(self) -> MetaValue {
+        match self {
+            Value::User(v) => v,
+            Value::Expire(_) => unreachable!("expect MetaValue, got String"),
+        }
+    }
+
+    pub fn into_expire(self) -> String {
+        match self {
+            Value::User(_) => unreachable!("expect String, got MetaValue"),
+            Value::Expire(v) => v,
+        }
     }
 }
 
@@ -75,6 +98,22 @@ pub struct Level {
 
     /// The expiration queue of generic kv.
     pub(crate) expire: mvcc::Table<ExpireKey, String>,
+}
+
+pub(crate) trait GetTable<K, V> {
+    fn get_table(&self) -> &mvcc::Table<K, V>;
+}
+
+impl GetTable<UserKey, MetaValue> for Level {
+    fn get_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
+        &self.kv
+    }
+}
+
+impl GetTable<ExpireKey, String> for Level {
+    fn get_table(&self) -> &mvcc::Table<ExpireKey, String> {
+        &self.expire
+    }
 }
 
 impl Level {
@@ -114,7 +153,7 @@ impl MapApiRO<UserKey> for Level {
     async fn get(&self, key: &UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
         let got = self
             .kv
-            .get(key)
+            .get(key.clone())
             .cloned()
             .unwrap_or(SeqMarked::new_not_found());
         Ok(got)

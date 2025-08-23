@@ -3828,7 +3828,7 @@ dependencies = [
  "futures-util",
  "hostname",
  "log",
- "map-api 0.2.7",
+ "map-api",
  "maplit",
  "num",
  "openraft",
@@ -3937,7 +3937,7 @@ dependencies = [
  "display-more",
  "futures-util",
  "log",
- "map-api 0.2.7",
+ "map-api",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -9989,22 +9989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "map-api"
-version = "0.2.7"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.7#f9b7ee4594f39e9e54e5afca9160e0bbb19d96aa"
-dependencies = [
- "async-trait",
- "deepsize",
- "futures",
- "futures-util",
- "log",
- "seq-marked",
- "serde",
- "stream-more",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14471,7 +14455,7 @@ name = "state-machine-api"
 version = "0.1.1"
 dependencies = [
  "display-more",
- "map-api 0.2.7 (git+https://github.com/databendlabs/map-api?tag=v0.2.7)",
+ "map-api",
  "serde",
 ]
 

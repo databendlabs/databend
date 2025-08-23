@@ -27,11 +27,36 @@ use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::SeqMarkedOf;
+
+#[async_trait::async_trait]
+impl<K> MapApiRO<K> for LeveledMapData
+where
+    K: MapKey + fmt::Debug,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
+    Level: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
+    for<'a> MapView<'a>: MapApiRO<K>,
+{
+    async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
+        let levels = self.iter_levels();
+        let persisted = self.persisted.as_ref().map(MapView).into_iter();
+        compacted_get(key, levels, persisted).await
+    }
+
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
+    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
+        let (top, levels) = self.iter_shared_levels();
+        let persisted = self.persisted.as_ref().map(MapView).into_iter();
+        compacted_range(range, top, levels, persisted).await
+    }
+}
 
 #[async_trait::async_trait]
 impl<K> MapApiRO<K> for LeveledMap
