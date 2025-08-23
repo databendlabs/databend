@@ -1155,12 +1155,6 @@ pub fn round_timestamp(ts: i64, tz: &TimeZone, round: Round) -> i64 {
     res.timestamp().as_microsecond()
 }
 
-const EPOCH_YEAR: i64 = 1970;
-const MONTHS_PER_YEAR: i64 = 12;
-const DAYS_PER_WEEK: i64 = 7;
-const JANUARY: u32 = 1;
-const MIDNIGHT_HOUR: u32 = 0;
-
 #[derive(Debug, Clone, Copy)]
 pub enum TimePart {
     Year,
@@ -1224,10 +1218,6 @@ fn epoch_date() -> Date {
     Date::new(1970, 1, 1).unwrap()
 }
 
-fn epoch_datetime() -> DateTime {
-    epoch_date().to_datetime(Time::midnight())
-}
-
 /// Add months to a date safely (handles negative months and day overflow)
 fn add_months_to_date(date: Date, months: i64) -> Date {
     // Represent months from year 0 as i64 to avoid overflow; year is i32 so convert
@@ -1264,68 +1254,14 @@ pub fn time_slice_timestamp(
     tz: &TimeZone,
 ) -> i64 {
     let slice_length = slice_length as i64;
-    let epoch_dt = epoch_datetime();
 
-    let dt = ts.to_timestamp(tz.clone()).datetime();
+    let ts = ts.to_timestamp(tz.clone());
+    let dt = ts.datetime();
 
     let start = match part {
-        TimePart::Year => {
-            let year_offset = (dt.date().year() as i64) - EPOCH_YEAR;
-            let slice_index = floordiv(year_offset, slice_length);
-            let start_year = EPOCH_YEAR + slice_index * slice_length;
-            DateTime::new(
-                start_year as i16,
-                JANUARY as i8,
-                1,
-                MIDNIGHT_HOUR as i8,
-                0,
-                0,
-                0,
-            )
-            .unwrap()
-        }
-        TimePart::Quarter | TimePart::Month => {
-            let unit_months = match part {
-                TimePart::Quarter => 3,
-                TimePart::Month => 1,
-                _ => unreachable!(),
-            };
-            let d = dt.date();
-            let months_since_epoch =
-                (d.year() as i64 - EPOCH_YEAR) * MONTHS_PER_YEAR + ((d.month() - 1) as i64);
-            let slice_months = slice_length * unit_months;
-            let slice_index = floordiv(months_since_epoch, slice_months);
-            let start_months_total = slice_index * slice_months;
-            let start_year = (EPOCH_YEAR + start_months_total / MONTHS_PER_YEAR) as i32;
-            let start_month0 = start_months_total.rem_euclid(MONTHS_PER_YEAR) as u32;
-            let start_month = start_month0 + 1;
-            DateTime::new(
-                start_year as i16,
-                start_month as i8,
-                1,
-                MIDNIGHT_HOUR as i8,
-                0,
-                0,
-                0,
-            )
-            .unwrap()
-        }
-        TimePart::Week => {
-            let epoch = epoch_date();
-            let epoch_wd = epoch.weekday();
-            let ep = epoch_wd.to_monday_zero_offset() as i32;
-            let ws = week_start.to_monday_zero_offset() as i32;
-            let delta = (ep - ws).rem_euclid(DAYS_PER_WEEK as i32) as i64;
-            let start_of_epoch_week = epoch - delta.day();
-            let days_since_start = (dt.date() - start_of_epoch_week).get_days();
-            let slice_days = slice_length * DAYS_PER_WEEK;
-            let slice_index = floordiv(days_since_start as i64, slice_days);
-            DateTime::from(start_of_epoch_week + (slice_index * slice_days).days())
-        }
-        TimePart::Day => {
-            let days_since_epoch = (dt.date() - epoch_dt.date()).get_days();
-            let slice_index = floordiv(days_since_epoch as i64, slice_length);
-            DateTime::from(epoch_dt.date() + (slice_index * slice_length).days())
+        TimePart::Year | TimePart::Quarter | TimePart::Month | TimePart::Week | TimePart::Day => {
+            let date = convert_start_date(dt.date(), part, week_start, slice_length);
+            DateTime::from(date)
         }
         TimePart::Hour | TimePart::Minute | TimePart::Second => {
             let unit_seconds = match part {
@@ -1335,7 +1271,7 @@ pub fn time_slice_timestamp(
                 _ => unreachable!(),
             };
             let total_unit_seconds = unit_seconds * slice_length;
-            let secs = ts.to_timestamp(tz.clone()).timestamp().as_second();
+            let secs = ts.timestamp().as_second();
             let slice_index = floordiv(secs, total_unit_seconds);
             let start_secs = slice_index * total_unit_seconds;
             Timestamp::new(start_secs, 0)
@@ -1361,23 +1297,10 @@ pub fn time_slice_timestamp(
 
 fn add_units_to_datetime(start: DateTime, slice_length: i64, part: TimePart) -> DateTime {
     match part {
-        TimePart::Year => {
-            let d = start.date();
-            let new_date = add_months_to_date(d, slice_length * 12);
+        TimePart::Year | TimePart::Quarter | TimePart::Month | TimePart::Week | TimePart::Day => {
+            let new_date = add_units_to_date(start.date(), slice_length, part);
             DateTime::from(new_date)
         }
-        TimePart::Quarter => {
-            let d = start.date();
-            let new_date = add_months_to_date(d, slice_length * 3);
-            DateTime::from(new_date)
-        }
-        TimePart::Month => {
-            let d = start.date();
-            let new_date = add_months_to_date(d, slice_length);
-            DateTime::from(new_date)
-        }
-        TimePart::Week => start + (slice_length * 7).days(),
-        TimePart::Day => start + slice_length.days(),
         TimePart::Hour => start + (slice_length * 3600).seconds(),
         TimePart::Minute => start + (slice_length * 60).seconds(),
         TimePart::Second => start + slice_length.seconds(),
@@ -1385,18 +1308,8 @@ fn add_units_to_datetime(start: DateTime, slice_length: i64, part: TimePart) -> 
     }
 }
 
-pub fn time_slice_date(
-    date: i32,
-    slice_length: u64,
-    part: TimePart,
-    start_or_end: StartOrEnd,
-    week_start: Weekday,
-) -> i32 {
-    let dur = SignedDuration::from_hours((date * 24) as i64);
-    let date = jiff::civil::date(1970, 1, 1).checked_add(dur).unwrap();
-    let slice_length = slice_length as i64;
-
-    let start: Date = match part {
+fn convert_start_date(date: Date, part: TimePart, week_start: Weekday, slice_length: i64) -> Date {
+    match part {
         TimePart::Year => {
             // Years: convert year to offset from 1970, floor to slice, align to Jan 1
             let year_offset = (date.year() as i64) - 1970;
@@ -1446,7 +1359,21 @@ pub fn time_slice_date(
             epoch_date() + (slice_index * slice_length).days()
         }
         _ => unreachable!(),
-    };
+    }
+}
+
+pub fn time_slice_date(
+    date: i32,
+    slice_length: u64,
+    part: TimePart,
+    start_or_end: StartOrEnd,
+    week_start: Weekday,
+) -> i32 {
+    let dur = SignedDuration::from_hours((date * 24) as i64);
+    let date = jiff::civil::date(1970, 1, 1).checked_add(dur).unwrap();
+    let slice_length = slice_length as i64;
+
+    let start = convert_start_date(date, part, week_start, slice_length);
 
     // Return Start or End (End = Start + slice_length * unit)
     let result = match start_or_end {
