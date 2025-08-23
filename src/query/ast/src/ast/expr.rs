@@ -267,6 +267,13 @@ pub enum Expr {
         unit: IntervalKind,
         date: Box<Expr>,
     },
+    TimeSlice {
+        span: Span,
+        date: Box<Expr>,
+        slice_length: u64,
+        unit: IntervalKind,
+        start_or_end: String,
+    },
     LastDay {
         span: Span,
         unit: IntervalKind,
@@ -329,6 +336,7 @@ impl Expr {
             | Expr::DateBetween { span, .. }
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
+            | Expr::TimeSlice { span, .. }
             | Expr::LastDay { span, .. }
             | Expr::PreviousDay { span, .. }
             | Expr::NextDay { span, .. }
@@ -496,6 +504,7 @@ impl Expr {
                 ..
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
             Expr::DateTrunc { span, date, .. } => merge_span(*span, date.whole_span()),
+            Expr::TimeSlice { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::LastDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::PreviousDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::NextDay { span, date, .. } => merge_span(*span, date.whole_span()),
@@ -869,6 +878,18 @@ impl Display for Expr {
                 }
                 Expr::DateTrunc { unit, date, .. } => {
                     write!(f, "DATE_TRUNC({unit}, {date})")?;
+                }
+                Expr::TimeSlice {
+                    unit,
+                    date,
+                    start_or_end,
+                    slice_length,
+                    ..
+                } => {
+                    write!(
+                        f,
+                        "TIME_SLICE({date}, {slice_length}, {unit}, '{start_or_end}')"
+                    )?;
                 }
                 Expr::LastDay { unit, date, .. } => {
                     write!(f, "LAST_DAY({date}, {unit})")?;

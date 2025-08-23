@@ -59,8 +59,10 @@ use databend_common_expression::types::F64;
 use databend_common_expression::utils::date_helper::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
+use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -69,6 +71,7 @@ use databend_common_expression::Value;
 use dtparse::parse;
 use jiff::civil::date;
 use jiff::civil::Date;
+use jiff::civil::Weekday;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::TimeZone;
 use jiff::Unit;
@@ -2359,6 +2362,40 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, TimestampType>(|val, ctx| {
             round_timestamp(val, &ctx.func_ctx.tz, Round::TimeSlot)
+        }),
+    );
+    registry.register_passthrough_nullable_4_arg::<DateType, UInt64Type, StringType,StringType, DateType, _, _>(
+        "time_slice",
+        |_,_,_, _,_| FunctionDomain::Full,
+        vectorize_with_builder_4_arg::<DateType, UInt64Type, StringType,StringType, DateType>(|ts, slice_length, start_or_end, part,output, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            let part = TimePart::from(part);
+            if !part.date_part() {
+                ctx.set_error(output.len(), "Date type only support Year | Quarter | Month | Week | Day".to_string());
+                output.push(0);
+            } else {
+                let mode = ctx.func_ctx.week_start;
+                let res = if mode == 0 {
+                    time_slice_date(ts, slice_length, part, start_or_end, Weekday::Sunday)
+                } else {
+                    time_slice_date(ts, slice_length, part, start_or_end, Weekday::Monday)
+                };
+                output.push(res)
+            }
+        }),
+    );
+    registry.register_passthrough_nullable_4_arg::<TimestampType, UInt64Type, StringType,StringType, TimestampType, _, _>(
+        "time_slice",
+        |_,_,_, _,_| FunctionDomain::Full,
+        vectorize_4_arg::<TimestampType, UInt64Type, StringType,StringType, TimestampType>(|ts, slice_length, start_or_end, part, ctx| {
+            let start_or_end = StartOrEnd::from(start_or_end);
+            let part = TimePart::from(part);
+            let mode = ctx.func_ctx.week_start;
+            if mode == 0 {
+                time_slice_timestamp(ts, slice_length, part, start_or_end, Weekday::Sunday, &ctx.func_ctx.tz)
+            } else {
+                time_slice_timestamp(ts, slice_length, part, start_or_end, Weekday::Monday, &ctx.func_ctx.tz)
+            }
         }),
     );
 
