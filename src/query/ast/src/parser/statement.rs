@@ -954,19 +954,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let show_statistics = map(
-        rule! {
-            SHOW ~ STATISTICS ~ FROM ~ #dot_separated_idents_1_to_3
-        },
-        |(_, _, _, (catalog, database, table))| {
-            Statement::ShowStatistics(ShowStatisticsStmt {
-                catalog,
-                database,
-                table,
-            })
-        },
-    );
-
     let show_tables_status = map(
         rule! {
             SHOW ~ ( TABLES | TABLE ) ~ STATUS ~ ( FROM ~ ^#ident )? ~ #show_limit?
@@ -2708,7 +2695,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
-            | #show_statistics: "`SHOW STATISTICS FROM [<database>.]<table>`"
             | #sequence
         ),
         rule!(

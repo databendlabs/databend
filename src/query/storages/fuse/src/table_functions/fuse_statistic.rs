@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -148,11 +147,6 @@ impl<'a> FuseStatisticImpl<'a> {
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
     ) -> Result<DataBlock> {
         let additional_stats_meta = summary.additional_stats_meta.as_ref();
-        let row_count = additional_stats_meta
-            .map(|v| v.row_count)
-            .or_else(|| table_statistics.as_ref().map(|v| v.row_count))
-            .unwrap_or(0);
-        let actual_row_count = summary.row_count;
         let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {
             Some(v) if !v.is_empty() => decode_column_hll(v)?
                 .map(|v| v.iter().map(|hll| (*hll.0, hll.1.count() as u64)).collect()),
@@ -181,7 +175,7 @@ impl<'a> FuseStatisticImpl<'a> {
             col_avg_size.push(
                 stats
                     .in_memory_size
-                    .checked_div(actual_row_count)
+                    .checked_div(summary.row_count)
                     .unwrap_or(0),
             );
             if let Some(his_info) = histograms.and_then(|v| v.get(i)) {
@@ -203,32 +197,18 @@ impl<'a> FuseStatisticImpl<'a> {
             }
         }
 
-        let num_rows = col_names.len();
-        Ok(DataBlock::new(
-            vec![
-                StringType::from_data(col_names).into(),
-                BlockEntry::new_const_column_arg::<UInt64Type>(row_count, num_rows),
-                BlockEntry::new_const_column_arg::<UInt64Type>(actual_row_count, num_rows),
-                UInt64Type::from_opt_data(col_ndvs).into(),
-                UInt64Type::from_data(col_null_count).into(),
-                UInt64Type::from_data(col_avg_size).into(),
-                StringType::from_data(col_his).into(),
-            ],
-            num_rows,
-        ))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(col_names),
+            UInt64Type::from_opt_data(col_ndvs),
+            UInt64Type::from_data(col_null_count),
+            UInt64Type::from_data(col_avg_size),
+            StringType::from_data(col_his),
+        ]))
     }
 
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("column_name", TableDataType::String),
-            TableField::new(
-                "stats_row_count",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "actual_row_count",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
             TableField::new(
                 "distinct_count",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
