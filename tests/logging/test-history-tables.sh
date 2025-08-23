@@ -83,7 +83,7 @@ drop_query_id=$(echo $response | jq -r '.id')
 echo "Query ID: $drop_query_id"
 
 echo "Running test queries to test inner history tables"
-./tests/logging/check_logs_table.sh
+./tests/logging/history_table/run_all_tests.sh
 
 response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
 
@@ -128,7 +128,7 @@ sleep 15
 
 
 echo "Running test queries to test external history tables"
-./tests/logging/check_logs_table.sh
+./tests/logging/history_table/run_all_tests.sh
 
 
 response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
