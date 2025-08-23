@@ -183,7 +183,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     fn set_pruning_stats_with_depth(&mut self, stats: &mut HashMap<u32, PartStatistics>, depth: usize) {
         const MAX_DEPTH: usize = 4096;
         if depth > MAX_DEPTH {
-            return; // Prevent stack overflow
+            return; // Prevent stack overflow - performance may be affected but correctness is preserved
         }
         
         for child in self.children_mut() {
