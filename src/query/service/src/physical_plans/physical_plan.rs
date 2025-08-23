@@ -116,26 +116,44 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         Box::new(std::iter::empty())
     }
 
-    #[recursive::recursive]
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        self.formatter_with_depth(0)
+    }
+
+    fn formatter_with_depth(&self, depth: usize) -> Result<Box<dyn PhysicalFormat + '_>> {
+        const MAX_DEPTH: usize = 1000; // Reasonable limit for most query plans
+        if depth > MAX_DEPTH {
+            return Err(ErrorCode::Internal(format!(
+                "Physical plan formatting depth exceeded maximum limit of {}", 
+                MAX_DEPTH
+            )));
+        }
+        
         let mut children = vec![];
         for child in self.children() {
-            children.push(child.formatter()?);
+            children.push(child.formatter_with_depth(depth + 1)?);
         }
 
         Ok(SimplePhysicalFormat::create(self.get_meta(), children))
     }
 
     /// Used to find data source info in a non-aggregation and single-table query plan.
-    #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         None
     }
 
-    #[recursive::recursive]
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        self.try_find_mutation_source_with_depth(0)
+    }
+
+    fn try_find_mutation_source_with_depth(&self, depth: usize) -> Option<MutationSource> {
+        const MAX_DEPTH: usize = 1000;
+        if depth > MAX_DEPTH {
+            return None; // Prevent stack overflow, return None as safe fallback
+        }
+        
         for child in self.children() {
-            if let Some(plan) = child.try_find_mutation_source() {
+            if let Some(plan) = child.try_find_mutation_source_with_depth(depth + 1) {
                 return Some(plan);
             }
         }
@@ -143,29 +161,61 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         None
     }
 
-    #[recursive::recursive]
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        self.get_all_data_source_with_depth(sources, 0);
+    }
+
+    fn get_all_data_source_with_depth(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>, depth: usize) {
+        const MAX_DEPTH: usize = 1000;
+        if depth > MAX_DEPTH {
+            return; // Prevent stack overflow
+        }
+        
         for child in self.children() {
-            child.get_all_data_source(sources);
+            child.get_all_data_source_with_depth(sources, depth + 1);
         }
     }
 
-    #[recursive::recursive]
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        self.set_pruning_stats_with_depth(stats, 0);
+    }
+
+    fn set_pruning_stats_with_depth(&mut self, stats: &mut HashMap<u32, PartStatistics>, depth: usize) {
+        const MAX_DEPTH: usize = 1000;
+        if depth > MAX_DEPTH {
+            return; // Prevent stack overflow
+        }
+        
         for child in self.children_mut() {
-            child.set_pruning_stats(stats)
+            child.set_pruning_stats_with_depth(stats, depth + 1);
         }
     }
 
-    #[recursive::recursive]
     fn is_distributed_plan(&self) -> bool {
-        self.children().any(|child| child.is_distributed_plan())
+        self.is_distributed_plan_with_depth(0)
     }
 
-    #[recursive::recursive]
+    fn is_distributed_plan_with_depth(&self, depth: usize) -> bool {
+        const MAX_DEPTH: usize = 1000;
+        if depth > MAX_DEPTH {
+            return false; // Safe default to prevent stack overflow
+        }
+        
+        self.children().any(|child| child.is_distributed_plan_with_depth(depth + 1))
+    }
+
     fn is_warehouse_distributed_plan(&self) -> bool {
+        self.is_warehouse_distributed_plan_with_depth(0)
+    }
+
+    fn is_warehouse_distributed_plan_with_depth(&self, depth: usize) -> bool {
+        const MAX_DEPTH: usize = 1000;
+        if depth > MAX_DEPTH {
+            return false; // Safe default to prevent stack overflow
+        }
+        
         self.children()
-            .any(|child| child.is_warehouse_distributed_plan())
+            .any(|child| child.is_warehouse_distributed_plan_with_depth(depth + 1))
     }
 
     fn display_in_profile(&self) -> bool {
@@ -276,7 +326,6 @@ pub struct PhysicalPlan {
 dyn_clone::clone_trait_object!(IPhysicalPlan);
 
 impl Clone for PhysicalPlan {
-    #[recursive::recursive]
     fn clone(&self) -> Self {
         PhysicalPlan {
             inner: self.inner.clone(),
