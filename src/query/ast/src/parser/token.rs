@@ -1176,8 +1176,6 @@ pub enum TokenKind {
     SEMI,
     #[token("SOUNDS", ignore(ascii_case))]
     SOUNDS,
-    #[token("STATISTICS", ignore(ascii_case))]
-    STATISTICS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
