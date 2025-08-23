@@ -23,7 +23,6 @@ use std::vec;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
-use databend_common_base::base::uuid::Uuid;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -155,6 +154,7 @@ use crate::kv_pb_api::UpsertPB;
 use crate::serialize_struct;
 use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
+use crate::util::IdempotentKVTxnSender;
 use crate::DatamaskApi;
 use crate::RowAccessPolicyApi;
 use crate::SchemaApi;
@@ -2485,6 +2485,7 @@ impl SchemaApiTestSuite {
             }
 
             info!("--- update table meta: simulate kv txn retried after commit");
+            let txn_sender = IdempotentKVTxnSender::new();
             {
                 // 1. Update test table, bump table version, expect success -- just the normal case
                 let table = util.get_table().await.unwrap();
@@ -2498,14 +2499,13 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                 };
-                let uuid = Uuid::new_v4();
                 let res = mt
-                    .update_multi_table_meta_with_txn_id(
+                    .update_multi_table_meta_with_sender(
                         UpdateMultiTableMetaReq {
                             update_table_metas: vec![(req.clone(), table.as_ref().clone())],
                             ..Default::default()
                         },
-                        uuid.to_string(),
+                        &txn_sender,
                     )
                     .await?;
 
@@ -2530,13 +2530,13 @@ impl SchemaApiTestSuite {
                 // Expects no KV api level error, and no app level error.
                 // For the convenience of reviewing, using explict type signature
                 let _r: databend_common_meta_app::schema::UpdateTableMetaReply = mt
-                    .update_multi_table_meta_with_txn_id(
+                    .update_multi_table_meta_with_sender(
                         UpdateMultiTableMetaReq {
                             update_table_metas: vec![(req, table.as_ref().clone())],
                             ..Default::default()
                         },
-                        // USING THE SAME UUID as kv txn_id
-                        uuid.to_string(),
+                        // USING THE SAME KVTxnSender
+                        &txn_sender,
                     )
                     .await?
                     .unwrap();
