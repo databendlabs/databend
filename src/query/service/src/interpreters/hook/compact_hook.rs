@@ -33,6 +33,7 @@ use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
@@ -187,6 +188,7 @@ async fn compact_table(
             let query_ctx = ctx.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |_info: &ExecutionInfo| {
+                    hook_clear_m_cte_temp_table(&query_ctx)?;
                     hook_vacuum_temp_files(&query_ctx)?;
                     hook_disk_temp_dir(&query_ctx)?;
                     Ok(())

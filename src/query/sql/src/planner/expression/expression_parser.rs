@@ -63,6 +63,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         false,
         false,
         false,
+        None,
         false,
     );
 
