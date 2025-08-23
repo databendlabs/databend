@@ -26491,6 +26491,7 @@ Query(
                             },
                             columns: [],
                         },
+                        user_specified_materialized: false,
                         materialized: false,
                         query: Query {
                             span: Some(

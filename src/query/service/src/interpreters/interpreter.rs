@@ -49,6 +49,7 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
+use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -96,6 +97,14 @@ pub trait Interpreter: Sync + Send {
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+        {
+            let mutation_status = ctx.get_mutation_status();
+            let mut mutation_status = mutation_status.write();
+            mutation_status.insert_rows = 0;
+            mutation_status.deleted_rows = 0;
+            mutation_status.update_rows = 0;
+        }
+
         let make_error = || "failed to execute interpreter";
 
         ctx.set_status_info("[INTERPRETER] Building execution pipeline");
@@ -365,6 +374,7 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         );
     }
 
+    hook_clear_m_cte_temp_table(&query_ctx)?;
     hook_vacuum_temp_files(&query_ctx)?;
     hook_disk_temp_dir(&query_ctx)?;
 

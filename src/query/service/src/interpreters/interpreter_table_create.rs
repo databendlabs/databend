@@ -75,6 +75,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::InsertInterpreter;
@@ -283,6 +284,7 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .set_on_finished(always_callback(move |_: &ExecutionInfo| {
+                hook_clear_m_cte_temp_table(&query_ctx)?;
                 hook_vacuum_temp_files(&query_ctx)?;
                 hook_disk_temp_dir(&query_ctx)?;
                 Ok(())
