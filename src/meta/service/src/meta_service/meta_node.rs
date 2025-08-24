@@ -1112,7 +1112,7 @@ impl MetaNode {
                 .raft_store
                 .get_state_machine_write("is_in_cluster-get-membership")
                 .await;
-            sm.sys_data_ref().last_membership_ref().membership().clone()
+            sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
 
@@ -1222,7 +1222,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.raft_store.get_state_machine_read("get-node").await;
-        let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
+        let n = sm.sys_data().nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -1232,7 +1232,7 @@ impl MetaNode {
 
         let sm = self.raft_store.get_state_machine_read("get-nodes").await;
         let nodes = sm
-            .sys_data_ref()
+            .sys_data()
             .nodes_ref()
             .values()
             .cloned()
@@ -1319,7 +1319,7 @@ impl MetaNode {
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
         let sm = self.raft_store.get_state_machine_read("get-last-seq").await;
-        sm.sys_data_ref().curr_seq()
+        sm.sys_data().curr_seq()
     }
 
     #[fastrace::trace]
@@ -1331,7 +1331,7 @@ impl MetaNode {
                 .raft_store
                 .get_state_machine_read("get-grpc-advertise-addrs")
                 .await;
-            sm.sys_data_ref()
+            sm.sys_data()
                 .nodes_ref()
                 .values()
                 .cloned()

@@ -47,6 +47,7 @@ http = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
+map-api = { workspace = true }
 maplit = { workspace = true }
 poem = { workspace = true }
 prometheus-client = { workspace = true }
