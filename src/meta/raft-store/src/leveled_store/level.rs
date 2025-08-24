@@ -36,6 +36,15 @@ pub enum Namespace {
     Expire,
 }
 
+impl mvcc::ViewNameSpace for Namespace {
+    fn if_increase_seq(&self) -> bool {
+        match self {
+            Namespace::User => true,
+            Namespace::Expire => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     User(UserKey),

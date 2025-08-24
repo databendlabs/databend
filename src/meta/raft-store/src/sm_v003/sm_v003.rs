@@ -26,6 +26,7 @@ use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
+use log::debug;
 use log::info;
 use map_api::mvcc;
 use map_api::mvcc::ScopedViewReadonly;
@@ -109,6 +110,7 @@ impl StateMachineApi<SysData> for ApplierData {
     }
 
     async fn commit(self) -> Result<(), Error> {
+        debug!("SMV003::commit: start");
         self.view.commit().await?;
         Ok(())
     }
