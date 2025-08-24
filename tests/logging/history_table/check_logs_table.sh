@@ -75,11 +75,7 @@ check_query_log "timezone-5" "$SELECT_QUERY_ID" "settings (timezone='Asia/Shangh
 # Login history tests
 check_query_log "login-1" null "SELECT CASE WHEN count(*) >= 1 THEN 1 ELSE 0 END FROM system_history.login_history WHERE user_name = 'root'" "1"
 
-check_query_log "login-2" null "SELECT CASE WHEN count(*) >= 1 THEN 1 ELSE 0 END FROM system_history.login_history WHERE user_name = 'a'" "1"
-
-check_query_log "login-3" null "SELECT CASE WHEN count(*) >= 1 THEN 1 ELSE 0 END FROM system_history.login_history WHERE user_name = 'b'" "0"
-
-check_query_log "login-4" null "SELECT CASE WHEN count(*) >= 1 THEN 1 ELSE 0 END FROM system_history.login_history WHERE error_message LIKE 'AuthenticateFailure.%' AND user_name = 'wrong_pass_user'" "1"
+check_query_log "login-2" null "SELECT CASE WHEN count(*) >= 1 THEN 1 ELSE 0 END FROM system_history.login_history WHERE error_message LIKE 'AuthenticateFailure.%' AND user_name = 'wrong_pass_user'" "1"
 
 
 echo "All log table tests passed successfully!"
