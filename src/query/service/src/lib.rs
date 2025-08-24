@@ -41,7 +41,7 @@
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![feature(debug_closure_helpers)]
-
+#![feature(associated_type_defaults)]
 extern crate core;
 
 pub mod auth;
