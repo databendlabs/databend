@@ -321,7 +321,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             let mem = sto
                 .get_state_machine_write("test_meta_store_install_snapshot")
                 .await
-                .sys_data_ref()
+                .sys_data()
                 .last_membership_ref()
                 .clone();
 
@@ -336,7 +336,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             let last_applied = *sto
                 .get_state_machine_write("test_meta_store_install_snapshot")
                 .await
-                .sys_data_ref()
+                .sys_data()
                 .last_applied_ref();
             assert_eq!(Some(log_id(1, 0, 9)), last_applied);
         }

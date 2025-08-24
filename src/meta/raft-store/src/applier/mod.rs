@@ -77,7 +77,7 @@ use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Key;
-use crate::leveled_store::level::NameSpace;
+use crate::leveled_store::level::Namespace;
 use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
 use crate::leveled_store::leveled_map::LeveledMapData;

@@ -25,29 +25,31 @@ use map_api::mvcc::Table;
 use map_api::IOResultStream;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Key;
-use crate::leveled_store::level::NameSpace;
+use crate::leveled_store::level::Namespace;
 use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::LeveledMapData;
 
 #[async_trait::async_trait]
-impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
+impl mvcc::ViewReadonly<Namespace, Key, Value> for Arc<LeveledMapData> {
     fn base_seq(&self) -> InternalSeq {
         let seq = self.with_sys_data(|sys_data| sys_data.curr_seq());
         InternalSeq::new(seq)
     }
 
-    async fn get(&self, space: NameSpace, key: Key) -> Result<SeqMarked<Value>, io::Error> {
+    async fn get(&self, space: Namespace, key: Key) -> Result<SeqMarked<Value>, io::Error> {
         match space {
-            NameSpace::User => {
+            Namespace::User => {
                 let key = key.into_user();
-                let got = self.compacted_view_get(key, *self.view_seq()).await?;
+                let got = self.compacted_view_get(key, *self.base_seq()).await?;
                 Ok(got.map(Value::User))
             }
-            NameSpace::Expire => {
+            Namespace::Expire => {
                 let key = key.into_expire();
-                let got = self.compacted_view_get(key, *self.view_seq()).await?;
+                let got = self.compacted_view_get(key, *self.base_seq()).await?;
                 Ok(got.map(Value::Expire))
             }
         }
@@ -55,7 +57,7 @@ impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
 
     async fn range<R>(
         &self,
-        space: NameSpace,
+        space: Namespace,
         range: R,
     ) -> Result<IOResultStream<(Key, SeqMarked<Value>)>, io::Error>
     where
@@ -65,24 +67,24 @@ impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
         let end = range.end_bound().cloned();
 
         match space {
-            NameSpace::User => {
+            Namespace::User => {
                 let start = start.map(|k| k.into_user());
                 let end = end.map(|k| k.into_user());
 
                 let strm = self
-                    .compacted_view_range((start, end), *self.view_seq())
+                    .compacted_view_range((start, end), *self.base_seq())
                     .await?;
 
                 Ok(strm
                     .map_ok(|(k, v)| (Key::User(k), v.map(Value::User)))
                     .boxed())
             }
-            NameSpace::Expire => {
+            Namespace::Expire => {
                 let start = start.map(|k| k.into_expire());
                 let end = end.map(|k| k.into_expire());
 
                 let strm = self
-                    .compacted_view_range((start, end), *self.view_seq())
+                    .compacted_view_range((start, end), *self.base_seq())
                     .await?;
 
                 Ok(strm
@@ -94,17 +96,17 @@ impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
 }
 
 #[async_trait::async_trait]
-impl mvcc::Commit<NameSpace, Key, Value> for Arc<LeveledMapData> {
+impl mvcc::Commit<Namespace, Key, Value> for Arc<LeveledMapData> {
     async fn commit(
         &mut self,
         last_seq: InternalSeq,
-        mut changes: BTreeMap<NameSpace, Table<Key, Value>>,
+        mut changes: BTreeMap<Namespace, Table<Key, Value>>,
     ) -> Result<(), Error> {
-        let writable = self.writable.lock().unwrap();
+        let mut writable = self.writable.lock().unwrap();
 
         // user map
 
-        let user_updates = changes.remove(&NameSpace::User);
+        let user_updates = changes.remove(&Namespace::User);
 
         if let Some(updates) = user_updates {
             let it = updates.inner.into_iter().map(|((k, seq_marked), v)| {
@@ -116,7 +118,7 @@ impl mvcc::Commit<NameSpace, Key, Value> for Arc<LeveledMapData> {
 
         // expire map
 
-        let expire_updates = changes.remove(&NameSpace::Expire);
+        let expire_updates = changes.remove(&Namespace::Expire);
 
         if let Some(updates) = expire_updates {
             let it = updates.inner.into_iter().map(|((k, seq_marked), v)| {

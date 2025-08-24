@@ -32,6 +32,7 @@ use log::warn;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 use map_api::mvcc::ScopedView;
+use map_api::mvcc::ScopedViewReadonly;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
@@ -45,6 +46,7 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;
+use crate::utils::seq_marked_to_seqv;
 
 #[async_trait::async_trait]
 pub trait StateMachineApiExt: StateMachineApi<SysData> {
@@ -69,7 +71,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
                 self.user_map_mut()
-                    .set(
+                    .fetch_and_set(
                         UserKey::new(&upsert_kv.key),
                         Some((kv_meta.clone(), v.clone())),
                     )
@@ -77,7 +79,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
             }
             Operation::Delete => {
                 self.user_map_mut()
-                    .set(UserKey::new(&upsert_kv.key), None)
+                    .fetch_and_set(UserKey::new(&upsert_kv.key), None)
                     .await?
             }
             #[allow(deprecated)]
@@ -108,7 +110,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
             // Old SM will just insert an expired record, and that causes the system seq increase by 1.
             let (_p, r) = self
                 .user_map_mut()
-                .set(UserKey::new(&upsert_kv.key), None)
+                .fetch_and_set(UserKey::new(&upsert_kv.key), None)
                 .await?;
             result = r;
         };
@@ -176,14 +178,13 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
 
         if let Some(exp_ms) = removed.expires_at_ms_opt() {
             self.expire_map_mut()
-                .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None)
-                .await?;
+                .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None);
         }
 
         if let Some(exp_ms) = added.expires_at_ms_opt() {
             let k = ExpireKey::new(exp_ms, *added.internal_seq());
             let v = key.to_string();
-            self.expire_map_mut().set(k, Some(v)).await?;
+            self.expire_map_mut().set(k, Some(v));
         }
 
         Ok(())
@@ -248,11 +249,3 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
 }
 
 impl<T> StateMachineApiExt for T where T: StateMachineApi<SysData> {}
-
-/// Convert internal data format [`SeqMarked<T>`] containing tombstone to a public API format [`SeqV`] without tombstone.
-///
-/// A tombstone is converted to None.
-fn seq_marked_to_seqv(k: UserKey, marked: SeqMarked<MetaValue>) -> Option<(String, SeqV)> {
-    let seqv = Into::<Option<SeqV>>::into(marked);
-    seqv.map(|x| (k.to_string(), x))
-}

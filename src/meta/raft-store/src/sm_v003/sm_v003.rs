@@ -25,16 +25,24 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::info;
+use map_api::mvcc;
+use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ViewReadonly;
 use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
+use state_machine_api::UserKey;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
+use crate::leveled_store::level::Key;
+use crate::leveled_store::level::Namespace;
+use crate::leveled_store::leveled_map::applier_acquirer::ApplierAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::LeveledMap;
+use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
@@ -131,40 +139,67 @@ impl SMV003 {
         // The snapshot is empty but contains Nodes data that are manually added.
         //
         // See: `databend_metactl::import`
-        let my_last_applied = *self.sys_data_ref().last_applied_ref();
+        let my_last_applied = *self.sys_data().last_applied_ref();
         #[allow(clippy::collapsible_if)]
         if my_last_applied.is_some() {
             if &my_last_applied >= sys_data.last_applied_ref() {
                 info!(
                     "SMV003 try to install a smaller snapshot({:?}), ignored, my last applied: {:?}",
                     sys_data.last_applied_ref(),
-                    self.sys_data_ref().last_applied_ref()
+                    self.sys_data().last_applied_ref()
                 );
                 return Ok(());
             }
         }
 
-        self.levels.clear();
-        let levels = self.levels_mut();
-        *levels.sys_data_mut() = sys_data;
-        *levels.persisted_mut() = Some(db);
+        self.levels.data = Arc::new(LeveledMapData {
+            writable: Default::default(),
+            immutable_levels: Default::default(),
+            persisted: Mutex::new(Some(Arc::new(db))),
+        });
+        self.levels.with_sys_data(|s| *s = sys_data);
         Ok(())
     }
 
     pub fn get_snapshot(&self) -> Option<DB> {
-        self.levels.persisted().cloned()
+        self.levels.persisted().map(|x| x.as_ref().clone())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn new_applier(&mut self) -> Applier<'_, Self> {
-        Applier::new(self)
+    pub fn data(&self) -> &Arc<LeveledMapData> {
+        &self.levels.data
+    }
+
+    pub async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
+        let view = self.data().to_readonly_view();
+        let got = view.get(UserKey::new(key.clone())).await?;
+        let seqv = Into::<Option<SeqV>>::into(got);
+        Ok(seqv)
+    }
+
+    pub(crate) async fn new_applier(&self) -> Applier<ApplierData> {
+        let acquirer = self.new_applier_acquirer();
+        let permit = acquirer.acquire().await;
+
+        let view = mvcc::View::new(self.levels.data.clone());
+        let applier_data = ApplierData {
+            _permit: permit,
+            view,
+            cleanup_start_time: self.cleanup_start_time.clone(),
+            on_change_applied: self.on_change_applied.clone(),
+        };
+
+        Applier::new(applier_data)
+    }
+
+    pub fn new_applier_acquirer(&self) -> ApplierAcquirer {
+        self.levels.new_applier_acquirer()
     }
 
     pub async fn apply_entries(
-        &mut self,
+        &self,
         entries: impl IntoIterator<Item = Entry>,
     ) -> Result<Vec<AppliedState>, StorageError> {
-        let mut applier = Applier::new(self);
+        let mut applier = self.new_applier().await;
 
         let mut res = vec![];
 
@@ -179,12 +214,12 @@ impl SMV003 {
         Ok(res)
     }
 
-    pub fn sys_data_ref(&self) -> &SysData {
-        self.levels.writable_ref().sys_data_ref()
+    pub fn sys_data(&self) -> SysData {
+        self.levels.with_sys_data(|x| x.clone())
     }
 
-    pub fn sys_data_mut(&mut self) -> &mut SysData {
-        self.levels.writable_mut().sys_data_mut()
+    pub fn with_sys_data<T>(&mut self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        self.levels.with_sys_data(f)
     }
 
     pub fn into_levels(self) -> LeveledMap {
@@ -200,7 +235,7 @@ impl SMV003 {
     }
 
     pub fn set_on_change_applied(&mut self, on_change_applied: OnChange) {
-        self.on_change_applied = Some(on_change_applied);
+        self.on_change_applied = Arc::new(Some(on_change_applied));
     }
 
     pub fn freeze_writable(&mut self) {
@@ -219,21 +254,5 @@ impl SMV003 {
 
     pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
         self.levels.new_compactor(permit)
-    }
-
-    /// Replace all the state machine data with the given one.
-    /// The input is a multi-level data.
-    pub fn replace(&mut self, level: LeveledMap) {
-        let applied = self.map_mut().writable_ref().last_applied_ref();
-        let new_applied = level.writable_ref().last_applied_ref();
-
-        assert!(
-            new_applied >= applied,
-            "the state machine({:?}) can not be replaced with an older one({:?})",
-            applied,
-            new_applied
-        );
-
-        self.levels = level;
     }
 }

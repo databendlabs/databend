@@ -32,17 +32,17 @@ use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Key;
-use crate::leveled_store::level::NameSpace;
+use crate::leveled_store::level::Namespace;
 use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
 use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::sm_v003::OnChange;
 
-pub(crate) type StateMachineView = mvcc::View<NameSpace, Key, Value, Arc<LeveledMapData>>;
+pub(crate) type StateMachineView = mvcc::View<Namespace, Key, Value, Arc<LeveledMapData>>;
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.
-    _permit: ApplierPermit,
+    pub(crate) _permit: ApplierPermit,
 
     pub(crate) view: StateMachineView,
 
@@ -53,18 +53,13 @@ pub(crate) struct ApplierData {
 }
 
 #[async_trait::async_trait]
-impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
+impl mvcc::ScopedViewReadonly<UserKey, MetaValue> for ApplierData {
     fn base_seq(&self) -> InternalSeq {
         self.view.base_seq()
     }
 
-    fn set(&mut self, key: UserKey, value: Option<MetaValue>) {
-        self.view
-            .set(NameSpace::User, Key::User(key), value.map(Value::User));
-    }
-
     async fn get(&self, key: UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
-        let got = self.view.get(NameSpace::User, Key::User(key)).await?;
+        let got = self.view.get(Namespace::User, Key::User(key)).await?;
         Ok(got.map(|x| x.into_user()))
     }
 
@@ -81,7 +76,7 @@ impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
         let start = start.map(Key::User);
         let end = end.map(Key::User);
 
-        let strm = self.view.range((start, end)).await?;
+        let strm = self.view.range(Namespace::User, (start, end)).await?;
 
         Ok(strm
             .map_ok(|(k, v)| (k.into_user(), v.map(|x| x.into_user())))
@@ -90,21 +85,21 @@ impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
 }
 
 #[async_trait::async_trait]
-impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
+impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
+    fn set(&mut self, key: UserKey, value: Option<MetaValue>) -> SeqMarked<()> {
+        self.view
+            .set(Namespace::User, Key::User(key), value.map(Value::User))
+    }
+}
+
+#[async_trait::async_trait]
+impl mvcc::ScopedViewReadonly<ExpireKey, String> for ApplierData {
     fn base_seq(&self) -> InternalSeq {
         self.view.base_seq()
     }
 
-    fn set(&mut self, key: ExpireKey, value: Option<String>) {
-        self.view.set(
-            NameSpace::Expire,
-            Key::Expire(key),
-            value.map(Value::Expire),
-        );
-    }
-
     async fn get(&self, key: ExpireKey) -> Result<SeqMarked<String>, io::Error> {
-        let got = self.view.get(NameSpace::Expire, Key::Expire(key)).await?;
+        let got = self.view.get(Namespace::Expire, Key::Expire(key)).await?;
         Ok(got.map(|x| x.into_expire()))
     }
 
@@ -121,10 +116,21 @@ impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
         let start = start.map(Key::Expire);
         let end = end.map(Key::Expire);
 
-        let strm = self.view.range((start, end)).await?;
+        let strm = self.view.range(Namespace::Expire, (start, end)).await?;
 
         Ok(strm
             .map_ok(|(k, v)| (k.into_expire(), v.map(|x| x.into_expire())))
             .boxed())
+    }
+}
+
+#[async_trait::async_trait]
+impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
+    fn set(&mut self, key: ExpireKey, value: Option<String>) -> SeqMarked<()> {
+        self.view.set(
+            Namespace::Expire,
+            Key::Expire(key),
+            value.map(Value::Expire),
+        )
     }
 }

@@ -5102,6 +5102,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "logcall",
+ "map-api",
  "maplit",
  "poem",
  "pretty_assertions",

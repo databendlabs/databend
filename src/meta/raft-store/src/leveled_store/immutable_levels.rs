@@ -60,7 +60,12 @@ impl ImmutableLevels {
     pub(crate) fn len(&self) -> usize {
         self.levels.len()
     }
-    pub(crate) fn levels(&mut self) -> &mut Vec<Immutable> {
+
+    pub(crate) fn levels(&self) -> &Vec<Immutable> {
+        &self.levels
+    }
+
+    pub(crate) fn levels_mut(&mut self) -> &mut Vec<Immutable> {
         &mut self.levels
     }
 }
