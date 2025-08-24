@@ -410,8 +410,8 @@ async fn move_bottom_to_db(
     base_path: &str,
     rel_path: &str,
 ) -> Result<(), io::Error> {
-    let mut immutables = lm.immutable_levels_ref().clone();
-    let bottom = immutables.levels().remove(0);
+    let mut immutables = lm.immutable_levels().clone();
+    let bottom = immutables.levels_mut().remove(0);
     lm.replace_immutable_levels(immutables);
 
     let bottom = ImmutableLevels::new([bottom]);

@@ -97,7 +97,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         sm.freeze_writable();
         let mut compactor = sm.acquire_compactor().await;
         compactor.compact_immutable_in_place().await?;
-        compactor.immutable_levels().clone()
+        compactor.immutable_levels()
     };
 
     let d = compacted.newest().unwrap().as_ref();
