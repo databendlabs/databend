@@ -310,7 +310,7 @@ impl<'a> MetaLeader<'a> {
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
             let sm = self.sto.get_state_machine_read("can_leave").await;
-            sm.sys_data_ref().last_membership_ref().membership().clone()
+            sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
 

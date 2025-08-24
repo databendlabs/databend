@@ -12,26 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
 use log::warn;
-use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
-use map_api::map_key::MapKey;
-use map_api::BeforeAfter;
+use map_api::mvcc;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
-use crate::leveled_store::sys_data_api::SysDataApiRO;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Namespace {
+    User,
+    Expire,
+}
+
+impl mvcc::ViewNameSpace for Namespace {
+    fn if_increase_seq(&self) -> bool {
+        match self {
+            Namespace::User => true,
+            Namespace::Expire => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Key {
+    User(UserKey),
+    Expire(ExpireKey),
+}
+
+impl Key {
+    pub fn into_user(self) -> UserKey {
+        match self {
+            Key::User(k) => k,
+            Key::Expire(_) => unreachable!("expect UserKey, got ExpireKey"),
+        }
+    }
+
+    pub fn into_expire(self) -> ExpireKey {
+        match self {
+            Key::User(_) => unreachable!("expect ExpireKey, got UserKey"),
+            Key::Expire(k) => k,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Value {
+    User(MetaValue),
+    Expire(String),
+}
+
+impl Value {
+    pub fn into_user(self) -> MetaValue {
+        match self {
+            Value::User(v) => v,
+            Value::Expire(_) => unreachable!("expect MetaValue, got String"),
+        }
+    }
+
+    pub fn into_expire(self) -> String {
+        match self {
+            Value::User(_) => unreachable!("expect String, got MetaValue"),
+            Value::Expire(v) => v,
+        }
+    }
+}
 
 /// A single level of state machine data.
 ///
@@ -39,13 +95,29 @@ use crate::leveled_store::sys_data_api::SysDataApiRO;
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    pub(crate) sys_data: SysData,
+    pub(crate) sys_data: Arc<Mutex<SysData>>,
 
     /// Generic Key-value store.
-    pub(crate) kv: BTreeMap<UserKey, SeqMarked<MetaValue>>,
+    pub(crate) kv: mvcc::Table<UserKey, MetaValue>,
 
     /// The expiration queue of generic kv.
-    pub(crate) expire: BTreeMap<ExpireKey, SeqMarked<String>>,
+    pub(crate) expire: mvcc::Table<ExpireKey, String>,
+}
+
+pub(crate) trait GetTable<K, V> {
+    fn get_table(&self) -> &mvcc::Table<K, V>;
+}
+
+impl GetTable<UserKey, MetaValue> for Level {
+    fn get_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
+        &self.kv
+    }
+}
+
+impl GetTable<ExpireKey, String> for Level {
+    fn get_table(&self) -> &mvcc::Table<ExpireKey, String> {
+        &self.expire
+    }
 }
 
 impl Level {
@@ -61,21 +133,18 @@ impl Level {
         }
     }
 
-    pub(crate) fn sys_data_ref(&self) -> &SysData {
-        &self.sys_data
-    }
-
-    pub(crate) fn sys_data_mut(&mut self) -> &mut SysData {
-        &mut self.sys_data
+    pub(crate) fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        let mut sys_data = self.sys_data.lock().unwrap();
+        f(&mut sys_data)
     }
 
     /// Replace the kv store with a new one.
-    pub(crate) fn replace_kv(&mut self, kv: BTreeMap<UserKey, SeqMarked<MetaValue>>) {
+    pub(crate) fn replace_kv(&mut self, kv: mvcc::Table<UserKey, MetaValue>) {
         self.kv = kv;
     }
 
     /// Replace the expiry queue with a new one.
-    pub(crate) fn replace_expire(&mut self, expire: BTreeMap<ExpireKey, SeqMarked<String>>) {
+    pub(crate) fn replace_expire(&mut self, expire: mvcc::Table<ExpireKey, String>) {
         self.expire = expire;
     }
 }
@@ -83,11 +152,7 @@ impl Level {
 #[async_trait::async_trait]
 impl MapApiRO<UserKey> for Level {
     async fn get(&self, key: &UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
-        let got = self
-            .kv
-            .get(key)
-            .cloned()
-            .unwrap_or(SeqMarked::new_not_found());
+        let got = self.kv.get(key.clone(), u64::MAX).cloned();
         Ok(got)
     }
 
@@ -96,8 +161,8 @@ impl MapApiRO<UserKey> for Level {
         // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .kv
-            .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .range(range, u64::MAX)
+            .map(|(k, v)| (k.clone(), v.cloned()))
             .collect::<Vec<_>>();
 
         if vec.len() > 1000 {
@@ -113,38 +178,9 @@ impl MapApiRO<UserKey> for Level {
 }
 
 #[async_trait::async_trait]
-impl MapApi<UserKey> for Level {
-    async fn set(
-        &mut self,
-        key: UserKey,
-        value: Option<MetaValue>,
-    ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error> {
-        // The chance it is the bottom level is very low in a loaded system.
-        // Thus, we always tombstone the key if it is None.
-
-        let marked = if let Some(meta_v) = value {
-            let seq = self.sys_data_mut().next_seq();
-            SeqMarked::new_normal(seq, meta_v)
-        } else {
-            // Do not increase the sequence number, just use the max seq for all tombstone.
-            let seq = self.curr_seq();
-            SeqMarked::new_tombstone(seq)
-        };
-
-        let prev = (*self).as_user_map().get(&key).await?;
-        self.kv.insert(key, marked.clone());
-        Ok((prev, marked))
-    }
-}
-
-#[async_trait::async_trait]
 impl MapApiRO<ExpireKey> for Level {
     async fn get(&self, key: &ExpireKey) -> Result<SeqMarkedOf<ExpireKey>, io::Error> {
-        let got = self
-            .expire
-            .get(key)
-            .cloned()
-            .unwrap_or(SeqMarked::new_not_found());
+        let got = self.expire.get(*key, u64::MAX).cloned();
         Ok(got)
     }
 
@@ -153,8 +189,8 @@ impl MapApiRO<ExpireKey> for Level {
         // Level is borrowed. It has to copy the result to make the returning stream static.
         let vec = self
             .expire
-            .range(range)
-            .map(|(k, v)| (*k, v.clone()))
+            .range(range, u64::MAX)
+            .map(|(k, v)| (*k, v.cloned()))
             .collect::<Vec<_>>();
 
         if vec.len() > 1000 {
@@ -166,32 +202,5 @@ impl MapApiRO<ExpireKey> for Level {
 
         let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
-    }
-}
-
-#[async_trait::async_trait]
-impl MapApi<ExpireKey> for Level {
-    async fn set(
-        &mut self,
-        key: ExpireKey,
-        value: Option<<ExpireKey as MapKey>::V>,
-    ) -> Result<BeforeAfter<SeqMarkedOf<ExpireKey>>, io::Error> {
-        let seq = self.curr_seq();
-
-        let marked = if let Some(v) = value {
-            SeqMarked::new_normal(seq, v)
-        } else {
-            SeqMarked::new_tombstone(seq)
-        };
-
-        let prev = (*self).as_expire_map().get(&key).await?;
-        self.expire.insert(key, marked.clone());
-        Ok((prev, marked))
-    }
-}
-
-impl AsRef<SysData> for Level {
-    fn as_ref(&self) -> &SysData {
-        &self.sys_data
     }
 }

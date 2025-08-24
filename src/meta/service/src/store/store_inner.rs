@@ -425,7 +425,7 @@ impl RaftStoreInner {
 
         // Log is dumped thus there won't be a gap between sm and log.
         // It is now safe to release the compactor.
-        let db = compactor.db().cloned();
+        let db = compactor.db();
         drop(compactor);
 
         // Export data header first
@@ -495,7 +495,7 @@ impl RaftStoreInner {
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         let sm = self.get_state_machine_read("get_node").await;
-        let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
+        let n = sm.sys_data().nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -505,16 +505,16 @@ impl RaftStoreInner {
         list_ids: impl Fn(&Membership) -> Vec<NodeId>,
     ) -> Vec<Node> {
         let sm = self.get_state_machine_read("get-nodes").await;
-        let membership = sm.sys_data_ref().last_membership_ref().membership();
+        let membership = sm.sys_data().last_membership_ref().membership().clone();
 
         debug!("in-statemachine membership: {:?}", membership);
 
-        let ids = list_ids(membership);
+        let ids = list_ids(&membership);
         debug!("filtered node ids: {:?}", ids);
         let mut ns = vec![];
 
         for id in ids {
-            let node = sm.sys_data_ref().nodes_ref().get(&id).cloned();
+            let node = sm.sys_data().nodes_ref().get(&id).cloned();
             if let Some(x) = node {
                 ns.push(x);
             }

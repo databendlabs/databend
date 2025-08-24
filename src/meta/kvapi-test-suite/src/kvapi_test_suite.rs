@@ -88,12 +88,15 @@ impl TestSuite {
         self.kv_write_read(&builder.build().await).await?;
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
+
         self.kv_timeout(&builder.build().await).await?;
         self.kv_expire_sec_or_ms(&builder.build().await).await?;
         self.kv_upsert_with_ttl(&builder.build().await).await?;
+
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
         self.kv_mget(&builder.build().await).await?;
+
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
         self.kv_transaction_fetch_add_u64(&builder.build().await)

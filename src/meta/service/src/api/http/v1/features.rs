@@ -114,12 +114,12 @@ pub async fn set(
 
 pub async fn features_state(meta_node: &Arc<MetaNode>) -> FeatureResponse {
     let enabled = {
-        let mut sm = meta_node
+        let sm = meta_node
             .raft_store
             .get_state_machine_write("get-state-machine-features")
             .await;
-        let x = sm.sys_data_mut().features();
-        x.iter().cloned().collect()
+        let x = sm.sys_data().features().clone();
+        x.into_iter().collect()
     };
 
     FeatureResponse {

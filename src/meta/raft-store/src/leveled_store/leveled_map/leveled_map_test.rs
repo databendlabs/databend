@@ -58,7 +58,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     ]);
 
     // Listing from the base level sees the old value.
-    let immutables = l.immutable_levels_ref();
+    let immutables = l.immutable_levels();
 
     let got = immutables
         .as_user_map()
@@ -235,7 +235,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Check base level
 
-    let immutables = l.immutable_levels_ref();
+    let immutables = l.immutable_levels();
 
     let strm = immutables.as_user_map().range(user_key("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;

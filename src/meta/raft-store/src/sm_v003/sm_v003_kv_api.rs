@@ -25,11 +25,15 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use map_api::mvcc::ScopedViewReadonly;
 use seq_marked::SeqValue;
+use state_machine_api::UserKey;
 
 use crate::sm_v003::SMV003;
-use crate::state_machine_api_ext::StateMachineApiExt;
 use crate::testing::since_epoch_millis;
+use crate::utils::add_cooperative_yielding;
+use crate::utils::prefix_right_bound;
+use crate::utils::seq_marked_to_seqv;
 
 /// A wrapper that implements KVApi **readonly** methods for the state machine.
 pub struct SMV003KVApi<'a> {
@@ -61,10 +65,21 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = since_epoch_millis();
 
-        let strm = self
-            .sm
-            .list_kv(prefix)
-            .await?
+        // get an unchanging readonly view
+        let view = self.sm.data().to_readonly_view();
+
+        let p = prefix.to_string();
+
+        let strm = if let Some(right) = prefix_right_bound(&p) {
+            view.range(UserKey::new(&p)..UserKey::new(right)).await?
+        } else {
+            view.range(UserKey::new(&p)..).await?
+        };
+
+        let strm = add_cooperative_yielding(strm, format!("SMV003KVApi::list_kv: {prefix}"))
+            // Skip tombstone
+            .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))))
+            // Skip expired
             .try_filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
             .map_ok(StreamItem::from);
 

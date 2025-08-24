@@ -22,6 +22,7 @@ use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 pub use map_api::map_key::MapKey;
 pub use map_api::map_value::MapValue;
+use map_api::mvcc;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
 use seq_marked::SeqMarked;
@@ -88,9 +89,9 @@ impl MapApiHelper {
         meta: Option<KVMeta>,
     ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error>
     where
-        T: MapApi<UserKey>,
+        T: mvcc::ScopedView<UserKey, MetaValue> + Send + Sync + 'static,
     {
-        let got = s.get(&key).await?;
+        let got = s.get(key.clone()).await?;
         if got.is_tombstone() {
             return Ok((got.clone(), got.clone()));
         }
@@ -98,6 +99,6 @@ impl MapApiHelper {
         // Safe unwrap(), got is Normal
         let (_meta, v) = got.into_data().unwrap();
 
-        s.set(key, Some((meta, v))).await
+        s.fetch_and_set(key, Some((meta, v))).await
     }
 }
