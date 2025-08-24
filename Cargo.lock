@@ -3828,7 +3828,7 @@ dependencies = [
  "futures-util",
  "hostname",
  "log",
- "map-api 0.3.0",
+ "map-api",
  "maplit",
  "num",
  "openraft",
@@ -3937,7 +3937,7 @@ dependencies = [
  "display-more",
  "futures-util",
  "log",
- "map-api 0.3.0",
+ "map-api",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -5102,7 +5102,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "logcall",
- "map-api 0.3.0",
+ "map-api",
  "maplit",
  "poem",
  "pretty_assertions",
@@ -9976,22 +9976,6 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.7"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.7#f9b7ee4594f39e9e54e5afca9160e0bbb19d96aa"
-dependencies = [
- "async-trait",
- "deepsize",
- "futures",
- "futures-util",
- "log",
- "seq-marked",
- "serde",
- "stream-more",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "map-api"
 version = "0.3.0"
 source = "git+https://github.com/databendlabs/map-api?tag=v0.3.0#45fbb3789589b5c31135e874e2f6eb8a595e3ede"
 dependencies = [
@@ -14472,11 +14456,12 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.1.1"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.1#637437b7a78b07bf39adff8bebef270f17c678dc"
+version = "0.2.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.2.1#e26b56c01e6185b7afd5b1b58b9e19ce734ce08a"
 dependencies = [
+ "async-trait",
  "display-more",
- "map-api 0.2.7",
+ "map-api",
  "serde",
 ]
 
