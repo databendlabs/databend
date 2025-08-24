@@ -249,7 +249,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     sto.blocking_append(logs.clone()).await?;
     {
-        let mut sm = sto
+        let sm = sto
             .get_state_machine_write("test_meta_store_current_snapshot")
             .await;
         sm.apply_entries(logs).await?;
