@@ -20,13 +20,12 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use log::info;
 use map_api::mvcc;
 use map_api::mvcc::Table;
 use map_api::IOResultStream;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
-use state_machine_api::MetaValue;
-use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Key;
 use crate::leveled_store::level::Namespace;
@@ -102,6 +101,10 @@ impl mvcc::Commit<Namespace, Key, Value> for Arc<LeveledMapData> {
         last_seq: InternalSeq,
         mut changes: BTreeMap<Namespace, Table<Key, Value>>,
     ) -> Result<(), Error> {
+        info!(
+            "Committing changes to leveled map data: last_seq={}, changes = {:?}",
+            last_seq, changes
+        );
         let mut writable = self.writable.lock().unwrap();
 
         // user map

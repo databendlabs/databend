@@ -14455,6 +14455,7 @@ dependencies = [
 name = "state-machine-api"
 version = "0.1.1"
 dependencies = [
+ "async-trait",
  "display-more",
  "map-api",
  "serde",

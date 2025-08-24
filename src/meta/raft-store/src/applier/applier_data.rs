@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc;

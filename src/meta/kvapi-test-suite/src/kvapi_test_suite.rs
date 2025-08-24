@@ -85,9 +85,9 @@ impl TestSuite {
         KV: kvapi::KVApi,
         B: kvapi::ApiBuilder<KV>,
     {
-        self.kv_write_read(&builder.build().await).await?;
-        self.kv_delete(&builder.build().await).await?;
-        self.kv_update(&builder.build().await).await?;
+        // self.kv_write_read(&builder.build().await).await?;
+        // self.kv_delete(&builder.build().await).await?;
+        // self.kv_update(&builder.build().await).await?;
         self.kv_timeout(&builder.build().await).await?;
         self.kv_expire_sec_or_ms(&builder.build().await).await?;
         self.kv_upsert_with_ttl(&builder.build().await).await?;

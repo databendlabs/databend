@@ -24,7 +24,6 @@ use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
-use crate::leveled_store::leveled_map::LeveledMapData;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///
@@ -33,7 +32,7 @@ pub struct Compactor {
     /// Acquired permit for this compactor.
     ///
     /// This is used to ensure that only one compactor can run at a time.
-    pub(crate) permit: CompactorPermit,
+    pub(crate) _permit: CompactorPermit,
 
     pub(crate) compacting_data: CompactingData,
     // pub(crate) immutable_levels: Arc<ImmutableLevels>,

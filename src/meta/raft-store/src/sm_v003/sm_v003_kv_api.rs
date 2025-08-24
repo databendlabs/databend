@@ -26,13 +26,10 @@ use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedViewReadonly;
-use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
-use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
 use crate::sm_v003::SMV003;
-use crate::state_machine_api_ext::StateMachineApiExt;
 use crate::testing::since_epoch_millis;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;

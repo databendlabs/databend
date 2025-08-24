@@ -29,8 +29,6 @@ use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
-use map_api::map_api::MapApi;
-use map_api::map_api_ro::MapApiRO;
 use map_api::mvcc::ScopedView;
 use map_api::mvcc::ScopedViewReadonly;
 use map_api::IOResultStream;
@@ -42,7 +40,6 @@ use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;

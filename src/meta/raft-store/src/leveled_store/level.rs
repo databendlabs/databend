@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -21,20 +20,15 @@ use std::sync::Mutex;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
 use log::warn;
-use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
-use map_api::map_key::MapKey;
 use map_api::mvcc;
-use map_api::BeforeAfter;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
-use crate::leveled_store::sys_data_api::SysDataApiRO;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Namespace {

@@ -33,8 +33,6 @@ use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
-use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;

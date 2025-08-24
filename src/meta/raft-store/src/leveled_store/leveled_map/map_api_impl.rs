@@ -16,15 +16,10 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
-use map_api::compact::compacted_get;
-use map_api::compact::compacted_range;
-use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
-use map_api::BeforeAfter;
 use seq_marked::SeqMarked;
 
 use crate::leveled_store::db_map_api_ro_impl::MapView;
-use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
@@ -33,7 +28,6 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::leveled_store::value_convert::ValueConvert;
 
 #[async_trait::async_trait]

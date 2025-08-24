@@ -15,10 +15,12 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::io;
+use std::io::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
@@ -27,7 +29,6 @@ use databend_common_meta_types::AppliedState;
 use log::info;
 use map_api::mvcc;
 use map_api::mvcc::ScopedViewReadonly;
-use map_api::mvcc::ViewReadonly;
 use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
@@ -35,15 +36,12 @@ use state_machine_api::UserKey;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
-use crate::leveled_store::level::Key;
-use crate::leveled_store::level::Namespace;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::leveled_map::LeveledMapData;
-use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
@@ -71,6 +69,7 @@ impl fmt::Debug for SMV003 {
     }
 }
 
+#[async_trait::async_trait]
 impl StateMachineApi<SysData> for ApplierData {
     type UserMap = ApplierData;
 
@@ -107,6 +106,11 @@ impl StateMachineApi<SysData> for ApplierData {
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
         self.view.base().with_sys_data(f)
+    }
+
+    async fn commit(self) -> Result<(), Error> {
+        self.view.commit().await?;
+        Ok(())
     }
 }
 
@@ -211,6 +215,13 @@ impl SMV003 {
                 .map_err(|e| StorageError::apply(log_id, &e))?;
             res.push(r);
         }
+
+        applier
+            .sm
+            .commit()
+            .await
+            .map_err(|e| StorageError::write(&e))?;
+
         Ok(res)
     }
 

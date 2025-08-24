@@ -40,7 +40,6 @@ use tokio::sync::Semaphore;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::GetTable;
-use crate::leveled_store::level::Key;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
@@ -88,7 +87,7 @@ pub struct LeveledMapData {
 
 impl LeveledMapData {
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        let mut writable = self.writable.lock().unwrap();
+        let writable = self.writable.lock().unwrap();
         let mut sys_data = writable.sys_data.lock().unwrap();
 
         f(&mut sys_data)
@@ -273,7 +272,7 @@ impl Default for LeveledMap {
 
 impl LeveledMap {
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        let mut writable = self.data.writable.lock().unwrap();
+        let writable = self.data.writable.lock().unwrap();
         let mut sys_data = writable.sys_data.lock().unwrap();
 
         f(&mut sys_data)
@@ -353,7 +352,7 @@ impl LeveledMap {
             "unexpected change to sm during compaction"
         );
 
-        let mut my_immutables = self.data.immutable_levels();
+        let my_immutables = self.data.immutable_levels();
         let mut levels = my_immutables.levels().clone();
 
         // Remove the levels already included in `persisted`
@@ -391,7 +390,7 @@ impl LeveledMap {
 
     pub(crate) fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
         Compactor {
-            permit,
+            _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
             since: self.immutable_level_index(),
         }

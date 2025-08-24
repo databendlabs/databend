@@ -14,13 +14,8 @@
 
 use std::future::ready;
 use std::io;
-use std::io::Error;
-use std::ops::RangeBounds;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
-use applier_data::ApplierData;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
@@ -63,25 +58,10 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use map_api::mvcc;
-use map_api::mvcc::ViewReadonly;
-use map_api::IOResultStream;
-use map_api::MapKey;
 use num::FromPrimitive;
-use seq_marked::InternalSeq;
-use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
-use state_machine_api::ExpireKey;
-use state_machine_api::MetaValue;
 use state_machine_api::StateMachineApi;
-use state_machine_api::UserKey;
 
-use crate::leveled_store::level::Key;
-use crate::leveled_store::level::Namespace;
-use crate::leveled_store::level::Value;
-use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
-use crate::leveled_store::leveled_map::LeveledMapData;
-use crate::sm_v003::OnChange;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 pub(crate) mod applier_data;
@@ -91,7 +71,7 @@ mod impl_leveled_map_data;
 pub struct Applier<SM>
 where SM: StateMachineApi<SysData> + 'static
 {
-    sm: SM,
+    pub(crate) sm: SM,
 
     /// The context of the current applying log.
     pub(crate) cmd_ctx: CmdContext,
