@@ -75,7 +75,6 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
-use tempfile::env::override_temp_dir;
 
 use crate::leveled_store::level::Key;
 use crate::leveled_store::level::NameSpace;
@@ -85,7 +84,7 @@ use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::sm_v003::OnChange;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
-mod applier_data;
+pub(crate) mod applier_data;
 mod impl_leveled_map_data;
 
 /// A helper that applies raft log `Entry` to the state machine.

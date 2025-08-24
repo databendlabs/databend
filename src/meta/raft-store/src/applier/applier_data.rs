@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc;
@@ -51,6 +52,7 @@ pub(crate) struct ApplierData {
     pub(crate) on_change_applied: Arc<Option<OnChange>>,
 }
 
+#[async_trait::async_trait]
 impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
     fn base_seq(&self) -> InternalSeq {
         self.view.base_seq()
@@ -87,6 +89,7 @@ impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
     }
 }
 
+#[async_trait::async_trait]
 impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
     fn base_seq(&self) -> InternalSeq {
         self.view.base_seq()

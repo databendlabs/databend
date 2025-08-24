@@ -36,13 +36,13 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NameSpace {
     User,
     Expire,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     User(UserKey),
     Expire(ExpireKey),
@@ -64,6 +64,7 @@ impl Key {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
     User(MetaValue),
     Expire(String),
@@ -127,6 +128,11 @@ impl Level {
             kv: Default::default(),
             expire: Default::default(),
         }
+    }
+
+    pub(crate) fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        let mut sys_data = self.sys_data.lock().unwrap();
+        f(&mut sys_data)
     }
 
     pub(crate) fn sys_data_ref(&self) -> &SysData {

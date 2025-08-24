@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io;
+use std::io::Error;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc;
+use map_api::mvcc::Table;
 use map_api::IOResultStream;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
@@ -28,6 +31,7 @@ use crate::leveled_store::level::NameSpace;
 use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::LeveledMapData;
 
+#[async_trait::async_trait]
 impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
     fn base_seq(&self) -> InternalSeq {
         let seq = self.with_sys_data(|sys_data| sys_data.curr_seq());
@@ -86,5 +90,48 @@ impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
                     .boxed())
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl mvcc::Commit<NameSpace, Key, Value> for Arc<LeveledMapData> {
+    async fn commit(
+        &mut self,
+        last_seq: InternalSeq,
+        mut changes: BTreeMap<NameSpace, Table<Key, Value>>,
+    ) -> Result<(), Error> {
+        let writable = self.writable.lock().unwrap();
+
+        // user map
+
+        let user_updates = changes.remove(&NameSpace::User);
+
+        if let Some(updates) = user_updates {
+            let it = updates.inner.into_iter().map(|((k, seq_marked), v)| {
+                ((k.into_user(), seq_marked), v.map(|x| x.into_user()))
+            });
+
+            writable.kv.apply_changes(updates.last_seq, it);
+        }
+
+        // expire map
+
+        let expire_updates = changes.remove(&NameSpace::Expire);
+
+        if let Some(updates) = expire_updates {
+            let it = updates.inner.into_iter().map(|((k, seq_marked), v)| {
+                ((k.into_expire(), seq_marked), v.map(|x| x.into_expire()))
+            });
+
+            writable.expire.apply_changes(updates.last_seq, it);
+        }
+
+        // seq
+
+        writable.with_sys_data(|sys_data| {
+            sys_data.update_seq(*last_seq);
+        });
+
+        Ok(())
     }
 }

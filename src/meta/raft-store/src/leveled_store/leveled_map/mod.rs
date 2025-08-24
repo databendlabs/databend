@@ -14,7 +14,7 @@
 
 use std::io;
 use std::io::Error;
-use std::range::RangeBounds;
+use std::ops::RangeBounds;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -40,6 +40,9 @@ use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::leveled_store::map_api::MapKeyDecode;
+use crate::leveled_store::map_api::MapKeyEncode;
+use crate::leveled_store::value_convert::ValueConvert;
 use crate::leveled_store::MapView;
 
 #[cfg(test)]
@@ -81,6 +84,10 @@ impl LeveledMapData {
     ) -> Result<SeqMarked<K::V>, io::Error>
     where
         K: MapKey,
+        K: MapKeyEncode,
+        K: MapKeyDecode,
+        SeqMarked<K::V>: ValueConvert<SeqMarked>,
+        Level: GetTable<K, K::V>,
     {
         // TODO: test it
 
@@ -117,6 +124,10 @@ impl LeveledMapData {
     where
         K: MapKey,
         R: RangeBounds<K> + Clone + Send + Sync + 'static,
+        K: MapKeyEncode,
+        K: MapKeyDecode,
+        SeqMarked<K::V>: ValueConvert<SeqMarked>,
+        Level: GetTable<K, K::V>,
     {
         // TODO: test it
 
@@ -206,10 +217,6 @@ impl Default for LeveledMap {
 }
 
 impl LeveledMap {
-    pub fn sys_data(&self) -> Arc<SysData> {
-        self.data.writable.lock().unwrap().sys_data.clone()
-    }
-
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
         let mut writable = self.data.writable.lock().unwrap();
         let mut sys_data = writable.sys_data.lock().unwrap();
