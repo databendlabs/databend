@@ -31,6 +31,7 @@ use log::info;
 use log::warn;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedView;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
@@ -55,7 +56,11 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
     ) -> Result<(SeqMarked<MetaValue>, SeqMarked<MetaValue>), io::Error> {
         let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
 
-        let prev = self.user_map().get(upsert_kv.key.as_ref()).await?.clone();
+        let prev = self
+            .user_map()
+            .get(UserKey::new(&upsert_kv.key))
+            .await?
+            .clone();
 
         if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
@@ -143,8 +148,8 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         let left = rng.start_bound().cloned();
         let right = rng.end_bound().cloned();
 
-        let leveled_map = self.user_map();
-        let strm = leveled_map.as_user_map().range(rng).await?;
+        let user_map = self.user_map();
+        let strm = user_map.range(rng).await?;
 
         let strm = add_cooperative_yielding(strm, format!("range_kv: {left:?} to {right:?}"))
             // Skip tombstone
@@ -236,7 +241,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
     ///
     /// It does not check expiration of the returned entry.
     async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
-        let got = self.user_map().get(key.as_ref()).await?;
+        let got = self.user_map().get(UserKey::new(key.clone())).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }

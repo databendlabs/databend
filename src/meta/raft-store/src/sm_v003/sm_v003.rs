@@ -29,8 +29,8 @@ use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 
+use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
-use crate::applier::ApplierData;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;

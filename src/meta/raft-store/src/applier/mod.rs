@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use applier_data::ApplierData;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
@@ -84,161 +85,14 @@ use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::sm_v003::OnChange;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
-type StateMachineView = mvcc::View<NameSpace, Key, Value, Arc<LeveledMapData>>;
-
-pub struct ApplierData {
-    /// Hold a unique permit to serialize all apply operations to the state machine.
-    _permit: ApplierPermit,
-
-    pub(crate) view: StateMachineView,
-
-    /// Since when to start cleaning expired keys.
-    pub(crate) cleanup_start_time: Arc<Mutex<Duration>>,
-
-    pub(crate) on_change_applied: Arc<Option<OnChange>>,
-}
-
-impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
-    fn base_seq(&self) -> InternalSeq {
-        self.view.base_seq()
-    }
-
-    fn set(&mut self, key: UserKey, value: Option<MetaValue>) {
-        self.view
-            .set(NameSpace::User, Key::User(key), value.map(Value::User));
-    }
-
-    async fn get(&self, key: UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
-        let got = self.view.get(NameSpace::User, Key::User(key)).await?;
-        Ok(got.map(|x| x.into_user()))
-    }
-
-    async fn range<R>(
-        &self,
-        range: R,
-    ) -> Result<IOResultStream<(UserKey, SeqMarked<MetaValue>)>, io::Error>
-    where
-        R: RangeBounds<UserKey> + Send + Sync + Clone + 'static,
-    {
-        let start = range.start_bound().cloned();
-        let end = range.end_bound().cloned();
-
-        let start = start.map(Key::User);
-        let end = end.map(Key::User);
-
-        let strm = self.view.range((start, end)).await?;
-
-        Ok(strm
-            .map_ok(|(k, v)| (k.into_user(), v.map(|x| x.into_user())))
-            .boxed())
-    }
-}
-
-impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
-    fn base_seq(&self) -> InternalSeq {
-        self.view.base_seq()
-    }
-
-    fn set(&mut self, key: ExpireKey, value: Option<String>) {
-        self.view.set(
-            NameSpace::Expire,
-            Key::Expire(key),
-            value.map(Value::Expire),
-        );
-    }
-
-    async fn get(&self, key: ExpireKey) -> Result<SeqMarked<String>, io::Error> {
-        let got = self.view.get(NameSpace::Expire, Key::Expire(key)).await?;
-        Ok(got.map(|x| x.into_expire()))
-    }
-
-    async fn range<R>(
-        &self,
-        range: R,
-    ) -> Result<IOResultStream<(ExpireKey, SeqMarked<String>)>, Error>
-    where
-        R: RangeBounds<ExpireKey> + Send + Sync + Clone + 'static,
-    {
-        let start = range.start_bound().cloned();
-        let end = range.end_bound().cloned();
-
-        let start = start.map(Key::Expire);
-        let end = end.map(Key::Expire);
-
-        let strm = self.view.range((start, end)).await?;
-
-        Ok(strm
-            .map_ok(|(k, v)| (k.into_expire(), v.map(|x| x.into_expire())))
-            .boxed())
-    }
-}
-
-impl mvcc::ViewReadonly<NameSpace, Key, Value> for Arc<LeveledMapData> {
-    fn base_seq(&self) -> InternalSeq {
-        let seq = self.with_sys_data(|sys_data| sys_data.curr_seq());
-        InternalSeq::new(seq)
-    }
-
-    async fn get(&self, space: NameSpace, key: Key) -> Result<SeqMarked<Value>, io::Error> {
-        match space {
-            NameSpace::User => {
-                let key = key.into_user();
-                let got = self.compacted_view_get(key, *self.view_seq()).await?;
-                Ok(got.map(Value::User))
-            }
-            NameSpace::Expire => {
-                let key = key.into_expire();
-                let got = self.compacted_view_get(key, *self.view_seq()).await?;
-                Ok(got.map(Value::Expire))
-            }
-        }
-    }
-
-    async fn range<R>(
-        &self,
-        space: NameSpace,
-        range: R,
-    ) -> Result<IOResultStream<(Key, SeqMarked<Value>)>, io::Error>
-    where
-        R: RangeBounds<Key> + Send + Sync + Clone + 'static,
-    {
-        let start = range.start_bound().cloned();
-        let end = range.end_bound().cloned();
-
-        match space {
-            NameSpace::User => {
-                let start = start.map(|k| k.into_user());
-                let end = end.map(|k| k.into_user());
-
-                let strm = self
-                    .compacted_view_range((start, end), *self.view_seq())
-                    .await?;
-
-                Ok(strm
-                    .map_ok(|(k, v)| (Key::User(k), v.map(Value::User)))
-                    .boxed())
-            }
-            NameSpace::Expire => {
-                let start = start.map(|k| k.into_expire());
-                let end = end.map(|k| k.into_expire());
-
-                let strm = self
-                    .compacted_view_range((start, end), *self.view_seq())
-                    .await?;
-
-                Ok(strm
-                    .map_ok(|(k, v)| (Key::Expire(k), v.map(Value::Expire)))
-                    .boxed())
-            }
-        }
-    }
-}
+mod applier_data;
+mod impl_leveled_map_data;
 
 /// A helper that applies raft log `Entry` to the state machine.
-pub struct Applier<'a, SM>
+pub struct Applier<SM>
 where SM: StateMachineApi<SysData> + 'static
 {
-    sm: ApplierData,
+    sm: SM,
 
     /// The context of the current applying log.
     pub(crate) cmd_ctx: CmdContext,
@@ -248,10 +102,10 @@ where SM: StateMachineApi<SysData> + 'static
     changes: Vec<(String, Option<SeqV>, Option<SeqV>)>,
 }
 
-impl<'a, SM> Applier<'a, SM>
+impl<SM> Applier<SM>
 where SM: StateMachineApi<SysData> + 'static
 {
-    pub fn new(sm: &'a mut SM) -> Self {
+    pub fn new(sm: SM) -> Self {
         Self {
             sm,
             cmd_ctx: CmdContext::from_millis(0),
@@ -277,7 +131,7 @@ where SM: StateMachineApi<SysData> + 'static
 
         self.clean_expired_kvs(log_time_ms).await?;
 
-        self.sm.access_sys_data(move |sys_data| {
+        self.sm.with_sys_data(move |sys_data| {
             *sys_data.last_applied_mut() = Some(*log_id);
         });
 
@@ -297,7 +151,7 @@ where SM: StateMachineApi<SysData> + 'static
 
                 let membership = StoredMembership::new(Some(*log_id), mem.clone());
 
-                self.sm.access_sys_data(move |sys_data| {
+                self.sm.with_sys_data(move |sys_data| {
                     *sys_data.last_membership_mut() = membership;
                 });
 
@@ -349,11 +203,11 @@ where SM: StateMachineApi<SysData> + 'static
     fn apply_add_node(&mut self, node_id: &u64, node: &Node, overriding: bool) -> AppliedState {
         let prev = self
             .sm
-            .access_sys_data(|sys_data| sys_data.nodes_mut().get(node_id).cloned());
+            .with_sys_data(|sys_data| sys_data.nodes_mut().get(node_id).cloned());
 
         if prev.is_none() || overriding {
             self.sm
-                .access_sys_data(|sys_data| sys_data.nodes_mut().insert(*node_id, node.clone()));
+                .with_sys_data(|sys_data| sys_data.nodes_mut().insert(*node_id, node.clone()));
 
             if prev.is_none() {
                 info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
@@ -371,7 +225,7 @@ where SM: StateMachineApi<SysData> + 'static
     fn apply_remove_node(&mut self, node_id: &u64) -> AppliedState {
         let prev = self
             .sm
-            .access_sys_data(|sys_data| sys_data.nodes_mut().remove(node_id));
+            .with_sys_data(|sys_data| sys_data.nodes_mut().remove(node_id));
 
         info!("applied RemoveNode: {}={:?}", node_id, prev);
 
@@ -399,7 +253,7 @@ where SM: StateMachineApi<SysData> + 'static
     /// Toggle a state machine functional feature.
     #[fastrace::trace]
     fn apply_set_feature(&mut self, feature: &str, enable: bool) -> AppliedState {
-        let prev = self.sm.access_sys_data(|sys_data| {
+        let prev = self.sm.with_sys_data(|sys_data| {
             let prev = sys_data.feature_enabled(feature);
 
             if enable {
