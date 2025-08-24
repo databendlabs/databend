@@ -496,7 +496,7 @@ socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 state = "0.6.0"
-state-machine-api = { version = "0.1.1" }
+state-machine-api = { version = "0.2.1" }
 stream-more = "0.1.3"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
