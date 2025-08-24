@@ -395,6 +395,12 @@ impl<E> HTTPSessionEndpoint<E> {
 
         let credential = get_credential(req, self.kind, self.endpoint_kind)?;
         login_history.auth_type = credential.type_name();
+
+        // Extract and record username from credential before authenticate
+        // This ensures we log the username even if authentication failed
+        if let Some(user_name) = credential.user_name() {
+            login_history.user_name = user_name.clone();
+        }
         let session_manager = SessionManager::instance();
 
         let mut session = session_manager.create_session(SessionType::Dummy).await?;
