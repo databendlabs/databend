@@ -211,17 +211,17 @@ impl StorageConfig {
 impl SpillConfig {
     fn mask_display(&self) -> Self {
         let Self {
+            ref storage,
             ref spill_local_disk_path,
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
-            ref storage,
         } = *self;
 
         Self {
+            storage: storage.as_ref().map(|storage| storage.mask_display()),
             spill_local_disk_path: spill_local_disk_path.clone(),
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
-            storage: storage.as_ref().map(|storage| storage.mask_display()),
         }
     }
 }
