@@ -133,9 +133,9 @@ impl<T: ViewType + ?Sized> Clone for BinaryViewColumnGeneric<T> {
     }
 }
 
-unsafe impl<T: ViewType + ?Sized> Send for BinaryViewColumnGeneric<T> {}
+// impl<T: ViewType + ?Sized> Send for BinaryViewColumnGeneric<T> {}
 
-unsafe impl<T: ViewType + ?Sized> Sync for BinaryViewColumnGeneric<T> {}
+// unsafe impl<T: ViewType + ?Sized> Sync for BinaryViewColumnGeneric<T> {}
 
 impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     pub fn new_unchecked(
