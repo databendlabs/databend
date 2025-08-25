@@ -3557,7 +3557,7 @@ pub struct SpillConfig {
     /// - "s3": S3 remote spill  
     /// - "azblob": Azure blob remote spill
     /// - etc.
-    /// If not configured, uses main data storage with _spill prefix (default)
+    ///   If not configured, uses main data storage with _spill prefix (default)
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 
@@ -3802,7 +3802,7 @@ mod cache_config_converters {
                             .unwrap_or(OrderedFloat(30.0))
                             / 100.0;
                         let max_bytes = storage.fs.max_bytes.unwrap_or(u64::MAX);
-                        
+
                         // Validate fs configuration
                         if fs_path.is_empty() {
                             return Err(ErrorCode::InvalidConfig(

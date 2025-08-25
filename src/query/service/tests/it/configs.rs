@@ -1137,10 +1137,16 @@ data_path = ""
             vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
             || {
                 let result = InnerConfig::load_for_test();
-                assert!(result.is_err(), "Empty fs data_path should cause configuration error");
+                assert!(
+                    result.is_err(),
+                    "Empty fs data_path should cause configuration error"
+                );
                 let error = result.unwrap_err();
-                assert!(error.to_string().contains("data_path is empty"), 
-                       "Error should mention empty data_path: {}", error);
+                assert!(
+                    error.to_string().contains("data_path is empty"),
+                    "Error should mention empty data_path: {}",
+                    error
+                );
             },
         );
         fs::remove_file(file_path)?;
