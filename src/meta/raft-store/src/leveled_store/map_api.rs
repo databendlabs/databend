@@ -84,6 +84,7 @@ impl<T> AsMap for T {}
 pub(crate) struct MapApiHelper;
 
 impl MapApiHelper {
+    #[allow(dead_code)]
     pub(crate) async fn update_meta_on_leveled_map(
         s: &mut LeveledMap,
         key: UserKey,

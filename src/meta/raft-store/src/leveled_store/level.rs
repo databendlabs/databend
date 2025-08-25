@@ -160,7 +160,7 @@ impl Level {
     }
 
     pub fn last_applied(&self) -> Option<LogId> {
-        self.with_sys_data(|s| s.last_applied_mut().clone())
+        self.with_sys_data(|s| *s.last_applied_mut())
     }
 
     pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
