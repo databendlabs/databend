@@ -343,7 +343,7 @@ impl LeveledMap {
     }
 
     pub fn last_applied(&self) -> Option<LogId> {
-        self.data.with_sys_data(|s| s.last_applied_mut().clone())
+        self.data.with_sys_data(|s| *s.last_applied_mut())
     }
 
     pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
