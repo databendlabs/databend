@@ -18,8 +18,8 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedView;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -214,19 +214,18 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
     });
 
+    let mut view = lm.to_scoped_view();
+
     // internal_seq: 0
-    lm.as_user_map_mut()
-        .set(user_key("a"), Some((None, b("a0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("b"), Some((None, b("b0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("c"), Some((None, b("c0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("d"), Some((None, b("d0"))))
-        .await?;
+    view.set(user_key("a"), Some((None, b("a0"))));
+    view.set(user_key("b"), Some((None, b("b0"))));
+    view.set(user_key("c"), Some((None, b("c0"))));
+    view.set(user_key("d"), Some((None, b("d0"))));
+
+    view.set(user_key("b"), Some((None, b("b0"))));
+    view.set(user_key("c"), Some((None, b("c0"))));
+    view.set(user_key("d"), Some((None, b("d0"))));
+    view.commit().await?;
 
     lm.freeze_writable();
 
@@ -238,15 +237,13 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.last_applied_mut() = Some(log_id(2, 2, 2));
         *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
     });
+    let mut view = lm.to_scoped_view();
 
     // internal_seq: 4
-    lm.as_user_map_mut().set(user_key("b"), None).await?;
-    lm.as_user_map_mut()
-        .set(user_key("c"), Some((None, b("c1"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("e"), Some((None, b("e1"))))
-        .await?;
+    view.set(user_key("b"), None);
+    view.set(user_key("c"), Some((None, b("c1"))));
+    view.set(user_key("e"), Some((None, b("e1"))));
+    view.commit().await?;
 
     lm.freeze_writable();
 
@@ -259,11 +256,12 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
     });
 
+    let mut view = lm.to_scoped_view();
+
     // internal_seq: 6
-    lm.as_user_map_mut().set(user_key("c"), None).await?;
-    lm.as_user_map_mut()
-        .set(user_key("d"), Some((None, b("d2"))))
-        .await?;
+    view.set(user_key("c"), None);
+    view.set(user_key("d"), Some((None, b("d2"))));
+    view.commit().await?;
 
     Ok(lm)
 }

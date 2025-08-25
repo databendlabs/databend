@@ -36,7 +36,6 @@ use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 
 use crate::applier::applier_data::ApplierData;
-use crate::applier::applier_data::Scoped;
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
@@ -44,6 +43,7 @@ use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::leveled_map::LeveledMapData;
+use crate::scoped::Scoped;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
@@ -124,7 +124,7 @@ impl SMV003 {
     }
 
     pub fn expire_view_readonly(&self) -> impl mvcc::ScopedViewReadonly<ExpireKey, String> {
-        Scoped(mvcc::View::new(self.levels.data.clone()))
+        Scoped::new(mvcc::View::new(self.levels.data.clone()))
     }
 }
 

@@ -30,14 +30,10 @@ use futures_util::StreamExt;
 use log::info;
 use log::warn;
 use map_api::mvcc;
-use map_api::mvcc::ScopedViewReadonly;
 use map_api::util;
-use map_api::BeforeAfter;
 use map_api::IOResultStream;
-use map_api::MapApi;
 use map_api::MapApiRO;
 use map_api::MapKey;
-use map_api::SeqMarkedOf;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::MetaValue;
@@ -46,6 +42,7 @@ use stream_more::KMerge;
 use stream_more::StreamMore;
 use tokio::sync::Semaphore;
 
+use crate::applier::applier_data::StateMachineView;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::GetTable;
@@ -58,6 +55,7 @@ use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::value_convert::ValueConvert;
 use crate::leveled_store::MapView;
+use crate::scoped::Scoped;
 
 #[cfg(test)]
 mod acquire_compactor_test;
@@ -280,6 +278,14 @@ impl Default for LeveledMap {
 }
 
 impl LeveledMap {
+    pub fn to_view(&self) -> StateMachineView {
+        mvcc::View::new(self.data.clone())
+    }
+
+    pub fn to_scoped_view(&self) -> Scoped<StateMachineView> {
+        Scoped::new(self.to_view())
+    }
+
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
         let writable = self.data.writable.lock().unwrap();
         let mut sys_data = writable.sys_data.lock().unwrap();
@@ -460,35 +466,5 @@ impl mvcc::ScopedViewReadonly<UserKey, MetaValue> for ReadonlyView {
             .compacted_view_range(range, *self.base_seq)
             .await?;
         Ok(strm)
-    }
-}
-
-/// Naive impl, just for testing
-#[async_trait::async_trait]
-impl MapApi<UserKey> for LeveledMap {
-    async fn set(
-        &mut self,
-        key: UserKey,
-        value: Option<<UserKey as MapKey>::V>,
-    ) -> Result<BeforeAfter<SeqMarkedOf<UserKey>>, io::Error> {
-        let view = self.data.to_readonly_view();
-        let before = view.get(key.clone()).await?;
-
-        if before.is_not_found() && value.is_none() {
-            return Ok((before.clone(), before));
-        }
-
-        let mut w = {
-            let g = self.data.writable();
-            g.clone()
-        };
-        let (_, after) = w.set(key, value).await?;
-
-        {
-            let mut g = self.data.writable();
-            *g = w;
-        }
-
-        Ok((before, after))
     }
 }

@@ -31,8 +31,8 @@ use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::applier::applier_data::Scoped;
 use crate::leveled_store::leveled_map::LeveledMap;
+use crate::scoped::Scoped;
 
 pub type MapKeyPrefix = &'static str;
 
@@ -91,11 +91,11 @@ impl MapApiHelper {
         meta: Option<KVMeta>,
     ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error> {
         let view = mvcc::View::new(s.data.clone());
-        let mut scoped = Scoped(view);
+        let mut scoped = Scoped::new(view);
 
         let got = Self::update_meta(&mut scoped, key, meta).await?;
 
-        scoped.0.commit().await?;
+        scoped.inner.commit().await?;
 
         Ok(got)
     }
