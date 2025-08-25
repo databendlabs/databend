@@ -27,10 +27,10 @@ use map_api::IOResultStream;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 
-use crate::leveled_store::level::Key;
-use crate::leveled_store::level::Namespace;
-use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::LeveledMapData;
+use crate::leveled_store::types::Key;
+use crate::leveled_store::types::Namespace;
+use crate::leveled_store::types::Value;
 
 #[async_trait::async_trait]
 impl mvcc::ViewReadonly<Namespace, Key, Value> for Arc<LeveledMapData> {

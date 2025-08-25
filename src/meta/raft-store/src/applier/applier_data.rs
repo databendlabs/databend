@@ -30,11 +30,11 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::level::Key;
-use crate::leveled_store::level::Namespace;
-use crate::leveled_store::level::Value;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
 use crate::leveled_store::leveled_map::LeveledMapData;
+use crate::leveled_store::types::Key;
+use crate::leveled_store::types::Namespace;
+use crate::leveled_store::types::Value;
 use crate::sm_v003::OnChange;
 
 pub(crate) type StateMachineView = mvcc::View<Namespace, Key, Value, Arc<LeveledMapData>>;
