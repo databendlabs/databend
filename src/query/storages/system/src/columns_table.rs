@@ -19,14 +19,11 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -43,7 +40,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::Object;
@@ -90,9 +86,6 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
         let mut comments: Vec<String> = Vec::with_capacity(rows.len());
-        let mut row_count: Vec<Option<u64>> = Vec::with_capacity(rows.len());
-        let mut column_ndv: Vec<Option<u64>> = Vec::with_capacity(rows.len());
-        let mut column_null_count: Vec<Option<u64>> = Vec::with_capacity(rows.len());
         for column_info in rows.into_iter() {
             names.push(column_info.column.name().clone());
             tables.push(column_info.table_name);
@@ -120,9 +113,6 @@ impl AsyncSystemTable for ColumnsTable {
             }
 
             comments.push(column_info.column_comment);
-            row_count.push(column_info.column_rows);
-            column_ndv.push(column_info.column_ndv);
-            column_null_count.push(column_info.column_null_count);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -135,9 +125,6 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(default_exprs),
             StringType::from_data(is_nullables),
             StringType::from_data(comments),
-            UInt64Type::from_opt_data(row_count),
-            UInt64Type::from_opt_data(column_ndv),
-            UInt64Type::from_opt_data(column_null_count),
         ]))
     }
 }
@@ -148,9 +135,6 @@ struct TableColumnInfo {
 
     column: TableField,
     column_comment: String,
-    column_rows: Option<u64>,
-    column_ndv: Option<u64>,
-    column_null_count: Option<u64>,
 }
 
 impl ColumnsTable {
@@ -167,18 +151,6 @@ impl ColumnsTable {
             TableField::new("default_expression", TableDataType::String),
             TableField::new("is_nullable", TableDataType::String),
             TableField::new("comment", TableDataType::String),
-            TableField::new(
-                "row_count",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
-            TableField::new(
-                "ndv",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
-            TableField::new(
-                "null_count",
-                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
-            ),
         ]);
 
         let table_info = TableInfo {
@@ -240,9 +212,6 @@ impl ColumnsTable {
                                 table_name: table.name().into(),
                                 column: field.clone(),
                                 column_comment: "".to_string(),
-                                column_rows: None,
-                                column_ndv: None,
-                                column_null_count: None,
                             })
                         }
                     }
@@ -256,9 +225,6 @@ impl ColumnsTable {
                                         table_name: table.name().into(),
                                         column: field.clone(),
                                         column_comment: "".to_string(),
-                                        column_rows: None,
-                                        column_ndv: None,
-                                        column_null_count: None,
                                     })
                                 }
                             }
@@ -284,44 +250,11 @@ impl ColumnsTable {
                             } else {
                                 "".to_string()
                             };
-
-                            // attach table should not collect statistics, source table column already collect them.
-                            let columns_statistics = if ctx
-                                .get_settings()
-                                .get_enable_collect_column_statistics()?
-                                && !FuseTable::is_table_attached(
-                                    &table.get_table_info().meta.options,
-                                ) {
-                                table
-                                    .column_statistics_provider(ctx.clone())
-                                    .await
-                                    .unwrap_or_else(|e| {
-                                        let msg = format!(
-                                            "Collect {}.{}.{} column statistics with error: {}",
-                                            catalog.name(),
-                                            database,
-                                            table.name(),
-                                            e
-                                        );
-                                        warn!("{}", msg);
-                                        ctx.push_warning(msg);
-                                        Box::new(DummyColumnStatisticsProvider)
-                                    })
-                            } else {
-                                Box::new(DummyColumnStatisticsProvider)
-                            };
-
-                            let row_count = columns_statistics.num_rows();
-                            let column_statistics =
-                                columns_statistics.column_statistics(field.column_id);
                             rows.push(TableColumnInfo {
                                 database_name: database.clone(),
                                 table_name: table.name().into(),
                                 column: field.clone(),
                                 column_comment: comment,
-                                column_rows: row_count,
-                                column_ndv: column_statistics.and_then(|x| x.ndv),
-                                column_null_count: column_statistics.map(|x| x.null_count),
                             })
                         }
                     }

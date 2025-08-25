@@ -1058,3 +1058,25 @@ impl Display for ModifyColumnAction {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowStatisticsStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+}
+
+impl Display for ShowStatisticsStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW")?;
+        write!(f, " STATISTICS FROM {}", self.table)?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM ")?;
+            if let Some(catalog) = &self.catalog {
+                write!(f, "{catalog}.",)?;
+            }
+            write!(f, "{database}")?;
+        }
+        Ok(())
+    }
+}

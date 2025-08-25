@@ -191,12 +191,22 @@ impl ColumnStatisticsProvider for IcebergStatistics {
     fn num_rows(&self) -> Option<u64> {
         Some(self.record_count)
     }
+
+    fn stats_num_rows(&self) -> Option<u64> {
+        Some(self.record_count)
+    }
+
+    fn average_size(&self, column_id: ColumnId) -> Option<u64> {
+        self.computed_statistics
+            .get(&column_id)
+            .and_then(|v| v.in_memory_size.checked_div(self.record_count))
+    }
 }
 
 /// Try get [`ColumnStatistics`] for one column.
 fn get_column_stats(
     field: &TableField,
-    _column_size: &HashMap<i32, u64>,
+    column_size: &HashMap<i32, u64>,
     lower: &HashMap<i32, Datum>,
     upper: &HashMap<i32, Datum>,
     null_counts: &HashMap<i32, u64>,
@@ -213,6 +223,10 @@ fn get_column_stats(
             .and_then(DatabendDatum::from_scalar),
         ndv: None,
         null_count: null_counts
+            .get(&iceberg_col_id)
+            .copied()
+            .unwrap_or_default(),
+        in_memory_size: column_size
             .get(&iceberg_col_id)
             .copied()
             .unwrap_or_default(),

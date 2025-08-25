@@ -608,6 +608,10 @@ pub trait ColumnStatisticsProvider: Send {
     // returns the num rows of the table, if any.
     fn num_rows(&self) -> Option<u64>;
 
+    fn stats_num_rows(&self) -> Option<u64>;
+
+    fn average_size(&self, _column_id: ColumnId) -> Option<u64>;
+
     // return histogram if any
     fn histogram(&self, _column_id: ColumnId) -> Option<Histogram> {
         None
@@ -622,6 +626,14 @@ impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
     }
 
     fn num_rows(&self) -> Option<u64> {
+        None
+    }
+
+    fn average_size(&self, _column_id: ColumnId) -> Option<u64> {
+        None
+    }
+
+    fn stats_num_rows(&self) -> Option<u64> {
         None
     }
 }
@@ -656,6 +668,17 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
 
     fn num_rows(&self) -> Option<u64> {
         Some(self.num_rows)
+    }
+
+    fn stats_num_rows(&self) -> Option<u64> {
+        Some(self.num_rows)
+    }
+
+    fn average_size(&self, column_id: ColumnId) -> Option<u64> {
+        self.column_stats.get(&column_id).and_then(|v| {
+            v.as_ref()
+                .and_then(|s| s.in_memory_size.checked_div(self.num_rows))
+        })
     }
 }
 

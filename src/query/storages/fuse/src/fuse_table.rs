@@ -1016,6 +1016,7 @@ impl Table for FuseTable {
                     stats.clone(),
                     table_statistics.histograms.clone(),
                     Some(table_statistics.column_distinct_values()),
+                    table_statistics.row_count,
                     snapshot.summary.row_count,
                 )
             } else {
@@ -1023,6 +1024,7 @@ impl Table for FuseTable {
                     stats.clone(),
                     HashMap::new(),
                     None,
+                    0,
                     snapshot.summary.row_count,
                 )
             }
