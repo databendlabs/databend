@@ -39,12 +39,11 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let immutable_levels = lm.freeze_writable().clone();
 
-    {
+    let compacted = {
         let mut compacting_data = CompactingData::new(immutable_levels.clone(), None);
         compacting_data.compact_immutable_in_place().await?;
-    }
-
-    let compacted = immutable_levels;
+        compacting_data.immutable_levels.clone()
+    };
 
     let d = compacted.newest().unwrap().as_ref();
 
@@ -143,6 +142,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_compact_3_level() -> anyhow::Result<()> {
     let mut lm = build_3_levels().await?;
+    println!("{:#?}", lm);
 
     lm.freeze_writable();
 
@@ -222,9 +222,6 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("c"), Some((None, b("c0"))));
     view.set(user_key("d"), Some((None, b("d0"))));
 
-    view.set(user_key("b"), Some((None, b("b0"))));
-    view.set(user_key("c"), Some((None, b("c0"))));
-    view.set(user_key("d"), Some((None, b("d0"))));
     view.commit().await?;
 
     lm.freeze_writable();
@@ -282,6 +279,8 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
+    a.commit().await?;
+
     sm.map_mut().freeze_writable();
 
     let mut a = sm.new_applier().await;
@@ -289,6 +288,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
         .await?;
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
         .await?;
+    a.commit().await?;
 
     Ok(sm)
 }
