@@ -20,12 +20,15 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::Weak;
 
+use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroupResource;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::MEMORY_QUOTA_KEY;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
+use tokio::sync::Semaphore;
 
 use crate::workload::workload_mgr::WorkloadMgr;
 use crate::WorkloadApi;
@@ -150,6 +153,9 @@ impl WorkloadGroupResourceManagerInner {
                     resource_manager.remove_workload(id, mem_percentage);
                 }
             })),
+            permits: Semaphore::MAX_PERMITS,
+            mutex: Arc::new(TokioMutex::new(())),
+            semaphore: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
         });
 
         let old_workload_group = online_workload_group.insert(
@@ -158,44 +164,99 @@ impl WorkloadGroupResourceManagerInner {
         );
 
         let Some(old_workload_group) = old_workload_group else {
-            if let Some(QuotaValue::Percentage(v)) =
-                workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY)
-            {
-                self.percent_normalizer.update(*v);
+            let memory_quota = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY).cloned();
+            let concurrency_quota = workload_resource
+                .meta
+                .quotas
+                .get(MAX_CONCURRENCY_QUOTA_KEY)
+                .cloned();
+
+            if let Some(QuotaValue::Percentage(v)) = memory_quota {
+                self.percent_normalizer.update(v);
+            }
+
+            if let Some(QuotaValue::Number(v)) = concurrency_quota {
+                let mut_workload_resource =
+                    unsafe { Arc::get_mut_unchecked(&mut workload_resource) };
+                let permits = std::cmp::min(v, mut_workload_resource.permits);
+                let forget_permits = mut_workload_resource.permits - permits;
+                mut_workload_resource
+                    .semaphore
+                    .forget_permits(forget_permits);
+                mut_workload_resource.permits = permits;
             }
 
             self.update_mem_usage(&online_workload_group);
+
             return Ok(workload_resource);
         };
 
         if let Some(old_workload_group) = old_workload_group.upgrade() {
+            let new_memory_quota = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY).cloned();
+            let old_memory_quota = old_workload_group
+                .meta
+                .quotas
+                .get(MEMORY_QUOTA_KEY)
+                .cloned();
+            let concurrency_quota = workload_resource
+                .meta
+                .quotas
+                .get(MAX_CONCURRENCY_QUOTA_KEY)
+                .cloned();
+
             let mut_workload_resource = unsafe { Arc::get_mut_unchecked(&mut workload_resource) };
             mut_workload_resource.max_memory_usage = old_workload_group.max_memory_usage.clone();
 
-            let new_percentage = workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY);
-            let old_percentage = old_workload_group.meta.quotas.get(MEMORY_QUOTA_KEY);
-
-            match (old_percentage, new_percentage) {
+            match (old_memory_quota, new_memory_quota) {
                 (None, Some(QuotaValue::Percentage(v))) => {
-                    self.percent_normalizer.update(*v);
+                    self.percent_normalizer.update(v);
                 }
                 (Some(QuotaValue::Percentage(v)), None) => {
-                    self.percent_normalizer.remove(*v);
+                    self.percent_normalizer.remove(v);
                 }
                 (Some(QuotaValue::Percentage(v)), Some(QuotaValue::Bytes(_))) => {
-                    self.percent_normalizer.remove(*v);
+                    self.percent_normalizer.remove(v);
                 }
                 (Some(QuotaValue::Percentage(old)), Some(QuotaValue::Percentage(new))) => {
-                    self.percent_normalizer.remove(*old);
-                    self.percent_normalizer.update(*new);
+                    self.percent_normalizer.remove(old);
+                    self.percent_normalizer.update(new);
                 }
                 (Some(QuotaValue::Bytes(_)), Some(QuotaValue::Percentage(v))) => {
-                    self.percent_normalizer.update(*v);
+                    self.percent_normalizer.update(v);
                 }
                 _ => {}
             }
 
             self.update_mem_usage(&online_workload_group);
+
+            mut_workload_resource.permits = old_workload_group.permits;
+            mut_workload_resource.semaphore = old_workload_group.semaphore.clone();
+
+            match concurrency_quota {
+                None => {
+                    let old_permit =
+                        std::cmp::min(Semaphore::MAX_PERMITS, mut_workload_resource.permits);
+
+                    let add_permit = Semaphore::MAX_PERMITS - old_permit;
+                    mut_workload_resource.semaphore.add_permits(add_permit);
+                    mut_workload_resource.permits = Semaphore::MAX_PERMITS;
+                }
+                Some(QuotaValue::Number(v)) if v > mut_workload_resource.permits => {
+                    let new_permit = std::cmp::min(v, Semaphore::MAX_PERMITS);
+                    let add_permits = new_permit - mut_workload_resource.permits;
+                    mut_workload_resource.semaphore.add_permits(add_permits);
+                    mut_workload_resource.permits = new_permit;
+                }
+                Some(QuotaValue::Number(v)) if v < mut_workload_resource.permits => {
+                    let new_permit = std::cmp::min(v, Semaphore::MAX_PERMITS);
+                    let forget_permits = mut_workload_resource.permits - new_permit;
+                    mut_workload_resource
+                        .semaphore
+                        .forget_permits(forget_permits);
+                    mut_workload_resource.permits = new_permit;
+                }
+                _ => {}
+            }
         }
 
         Ok(workload_resource)
@@ -525,6 +586,273 @@ mod tests {
 
         // Should be removed
         assert_eq!(inner.online_workload_group.lock().unwrap().len(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_quota_basic() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Create workload with concurrency quota
+        let mut quotas = HashMap::new();
+        quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(5));
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "concurrency_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource = inner.get_workload(&created_workload.id).await?;
+
+        // Verify concurrency control is set up correctly
+        assert_eq!(resource.permits, 5);
+        assert_eq!(resource.semaphore.available_permits(), 5);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_quota_acquisition() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Create workload with limited concurrency
+        let mut quotas = HashMap::new();
+        quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(2));
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "concurrency_limit_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource = inner.get_workload(&created_workload.id).await?;
+
+        // Acquire permits up to limit
+        let permit1 = resource.semaphore.clone().try_acquire_owned();
+        let permit2 = resource.semaphore.clone().try_acquire_owned();
+        let permit3 = resource.semaphore.clone().try_acquire_owned();
+
+        assert!(
+            permit1.is_ok(),
+            "First permit should be acquired successfully"
+        );
+        assert!(
+            permit2.is_ok(),
+            "Second permit should be acquired successfully"
+        );
+        assert!(permit3.is_err(), "Third permit should fail due to limit");
+        assert_eq!(resource.semaphore.available_permits(), 0);
+
+        // Release one permit and try again
+        drop(permit1);
+        let permit4 = resource.semaphore.clone().try_acquire_owned();
+        assert!(permit4.is_ok(), "Should be able to acquire after release");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_quota_update() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Start with concurrency limit of 3
+        let mut quotas = HashMap::new();
+        quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(3));
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "concurrency_update_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource1 = inner.get_workload(&created_workload.id).await?;
+        assert_eq!(resource1.permits, 3);
+        assert_eq!(resource1.semaphore.available_permits(), 3);
+
+        // Update to increase concurrency limit to 5
+        let mut new_quotas = HashMap::new();
+        new_quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(5));
+
+        workload_mgr
+            .set_quotas("concurrency_update_test".to_string(), new_quotas)
+            .await?;
+        let resource2 = inner.get_workload(&created_workload.id).await?;
+
+        assert_eq!(resource2.permits, 5);
+        assert_eq!(resource2.semaphore.available_permits(), 5);
+
+        // Update to decrease concurrency limit to 2
+        let mut decreased_quotas = HashMap::new();
+        decreased_quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(2));
+
+        workload_mgr
+            .set_quotas("concurrency_update_test".to_string(), decreased_quotas)
+            .await?;
+        let resource3 = inner.get_workload(&created_workload.id).await?;
+
+        assert_eq!(resource3.permits, 2);
+        assert_eq!(resource3.semaphore.available_permits(), 2);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_quota_removal() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Start with concurrency limit
+        let mut quotas = HashMap::new();
+        quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(3));
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "concurrency_removal_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource1 = inner.get_workload(&created_workload.id).await?;
+        assert_eq!(resource1.permits, 3);
+
+        // Remove concurrency quota (should revert to unlimited)
+        workload_mgr
+            .unset_quotas("concurrency_removal_test".to_string(), vec![
+                MAX_CONCURRENCY_QUOTA_KEY.to_string(),
+            ])
+            .await?;
+        let resource2 = inner.get_workload(&created_workload.id).await?;
+
+        use tokio::sync::Semaphore;
+        assert_eq!(resource2.permits, Semaphore::MAX_PERMITS);
+        assert_eq!(
+            resource2.semaphore.available_permits(),
+            Semaphore::MAX_PERMITS
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_with_max_permits_boundary() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Test with value larger than MAX_PERMITS
+        let mut quotas = HashMap::new();
+        quotas.insert(
+            MAX_CONCURRENCY_QUOTA_KEY.to_string(),
+            QuotaValue::Number(usize::MAX),
+        );
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "max_permits_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource = inner.get_workload(&created_workload.id).await?;
+
+        // Should be clamped to MAX_PERMITS
+        use tokio::sync::Semaphore;
+        assert_eq!(resource.permits, Semaphore::MAX_PERMITS);
+        assert_eq!(
+            resource.semaphore.available_permits(),
+            Semaphore::MAX_PERMITS
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_workload_concurrency_zero_permits() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Test with zero concurrency (should block all)
+        let mut quotas = HashMap::new();
+        quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(0));
+
+        let workload = WorkloadGroup {
+            id: String::new(),
+            name: "zero_permits_test".to_string(),
+            quotas,
+        };
+
+        let created_workload = workload_mgr.create(workload).await?;
+        let resource = inner.get_workload(&created_workload.id).await?;
+
+        assert_eq!(resource.permits, 0);
+        assert_eq!(resource.semaphore.available_permits(), 0);
+
+        // Should not be able to acquire any permits
+        let permit_result = resource.semaphore.clone().try_acquire_owned();
+        assert!(
+            permit_result.is_err(),
+            "Should not be able to acquire with zero permits"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_multiple_workloads_concurrency_isolation() -> Result<()> {
+        let workload_mgr = Arc::new(create_workload_mgr().await);
+        let inner = WorkloadGroupResourceManagerInner::new(workload_mgr.clone(), &GLOBAL_MEM_STAT);
+
+        // Create workload 1 with limit 2
+        let mut quotas1 = HashMap::new();
+        quotas1.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(2));
+        let workload1 = WorkloadGroup {
+            id: String::new(),
+            name: "workload_1".to_string(),
+            quotas: quotas1,
+        };
+        let created1 = workload_mgr.create(workload1).await?;
+        let resource1 = inner.get_workload(&created1.id).await?;
+
+        // Create workload 2 with limit 3
+        let mut quotas2 = HashMap::new();
+        quotas2.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(3));
+        let workload2 = WorkloadGroup {
+            id: String::new(),
+            name: "workload_2".to_string(),
+            quotas: quotas2,
+        };
+        let created2 = workload_mgr.create(workload2).await?;
+        let resource2 = inner.get_workload(&created2.id).await?;
+
+        // Verify isolation - each workload has independent limits
+        assert_eq!(resource1.permits, 2);
+        assert_eq!(resource2.permits, 3);
+
+        // Exhaust permits in workload 1
+        let permit1_1 = resource1.semaphore.clone().try_acquire_owned().unwrap();
+        let permit1_2 = resource1.semaphore.clone().try_acquire_owned().unwrap();
+        let permit1_3 = resource1.semaphore.clone().try_acquire_owned();
+        assert!(permit1_3.is_err(), "Workload 1 should be exhausted");
+
+        // Workload 2 should still have permits available
+        let permit2_1 = resource2.semaphore.clone().try_acquire_owned().unwrap();
+        let permit2_2 = resource2.semaphore.clone().try_acquire_owned().unwrap();
+        let permit2_3 = resource2.semaphore.clone().try_acquire_owned().unwrap();
+        assert_eq!(resource2.semaphore.available_permits(), 0);
+
+        // Cleanup
+        drop(permit1_1);
+        drop(permit1_2);
+        drop(permit2_1);
+        drop(permit2_2);
+        drop(permit2_3);
 
         Ok(())
     }

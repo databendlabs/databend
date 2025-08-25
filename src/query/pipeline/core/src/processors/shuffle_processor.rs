@@ -131,7 +131,12 @@ impl Processor for ShuffleProcessor {
         }
 
         if input.has_data() {
-            output.push_data(input.pull_data().unwrap());
+            let data = input.pull_data().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Failed to pull data from input port in shuffle processor",
+                )
+            })?;
+            output.push_data(data);
             return Ok(Event::NeedConsume);
         }
 
@@ -230,7 +235,12 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
         }
 
         if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
+            let data = self.input.pull_data().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Failed to pull data from input port in partition processor",
+                )
+            })??;
+            self.input_data = Some(data);
             return Ok(Event::Sync);
         }
 
@@ -327,12 +337,22 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
                 match T::STRATEGY {
                     MultiwayStrategy::Random => {
                         if self.output.can_push() {
-                            self.output.push_data(Ok(input.pull_data().unwrap()?));
+                            let data = input.pull_data().ok_or_else(|| {
+                                databend_common_exception::ErrorCode::Internal(
+                                    "Failed to pull data from input port in multiway random strategy"
+                                )
+                            })??;
+                            self.output.push_data(Ok(data));
                         }
                     }
                     MultiwayStrategy::Custom => {
                         if self.inputs_data[index].is_none() {
-                            self.inputs_data[index] = Some(input.pull_data().unwrap()?);
+                            let data = input.pull_data().ok_or_else(|| {
+                                databend_common_exception::ErrorCode::Internal(
+                                    "Failed to pull data from input port in multiway custom strategy"
+                                )
+                            })??;
+                            self.inputs_data[index] = Some(data);
                         }
                     }
                 }

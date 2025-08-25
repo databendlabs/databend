@@ -70,6 +70,15 @@ impl Credential {
             Credential::NoNeed => CredentialType::NoNeed,
         }
     }
+
+    pub fn user_name(&self) -> Option<String> {
+        match self {
+            Credential::DatabendToken { .. } => None,
+            Credential::Jwt { .. } => None,
+            Credential::Password { name, .. } => Some(name.clone()),
+            Credential::NoNeed => None,
+        }
+    }
 }
 
 impl AuthMgr {

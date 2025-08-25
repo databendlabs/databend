@@ -138,7 +138,11 @@ impl<T: SyncMpscSink + 'static> Processor for SyncMpscSinker<T> {
                         Ok(Event::Sync)
                     }
                 } else {
-                    let block = input.pull_data().unwrap()?;
+                    let block = input.pull_data().ok_or_else(|| {
+                        databend_common_exception::ErrorCode::Internal(
+                            "Failed to pull data from input port in sync mpsc sink",
+                        )
+                    })??;
                     self.input_data = Some(block);
                     Ok(Event::Sync)
                 }

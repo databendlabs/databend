@@ -38,7 +38,12 @@ impl Sink for SyncSenderSink {
     const NAME: &'static str = "SyncSenderSink";
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.sender.blocking_send(Ok(data_block)).unwrap();
+        self.sender.blocking_send(Ok(data_block)).map_err(|e| {
+            databend_common_exception::ErrorCode::Internal(format!(
+                "Failed to send data block in sync sender sink: {}",
+                e
+            ))
+        })?;
         Ok(())
     }
 }

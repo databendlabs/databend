@@ -4975,6 +4975,31 @@ pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
 }
 
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
+    enum ReturnBody {
+        Scalar(TypeName),
+        Table(Vec<(Identifier, TypeName)>),
+    }
+
+    fn return_body(i: Input) -> IResult<ReturnBody> {
+        let scalar = map(
+            rule! {
+                #type_name
+            },
+            ReturnBody::Scalar,
+        );
+        let table = map(
+            rule! {
+                TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            },
+            |(_, _, arg_types, _)| ReturnBody::Table(arg_types),
+        );
+
+        rule!(
+            #scalar: "<return_type>"
+            | #table: "TABLE (<return_type>, ...)"
+        )(i)
+    }
+
     let lambda_udf = map(
         rule! {
             AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
@@ -5049,16 +5074,23 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udtf = map(
+    let scalar_udf_or_udtf = map(
         rule! {
             "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
-            ~ RETURNS ~ TABLE ~ "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+            ~ RETURNS ~ ^#return_body
             ~ AS ~ ^#code_string
         },
-        |(_, arg_types, _, _, _, _, return_types, _, _, sql)| UDFDefinition::UDTFSql {
-            arg_types,
-            return_types,
-            sql,
+        |(_, arg_types, _, _, return_body, _, sql)| match return_body {
+            ReturnBody::Scalar(return_type) => UDFDefinition::ScalarUDF {
+                arg_types,
+                definition: sql,
+                return_type,
+            },
+            ReturnBody::Table(return_types) => UDFDefinition::UDTFSql {
+                arg_types,
+                return_types,
+                sql,
+            },
         },
     );
 
@@ -5126,7 +5158,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
         | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #udtf: "(<arg_type>, ...) RETURNS TABLE (<return_type>, ...) AS <sql> }"
+        | #scalar_udf_or_udtf: "(<arg_type>, ...) RETURNS <return body> AS <sql> }"
     )(i)
 }
 

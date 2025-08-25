@@ -25855,6 +25855,46 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace (p STRING) RETURNS BOOL AS $$ not(is_null(p)) $$;
+---------- Output ---------
+CREATE OR REPLACE FUNCTION isnotempty_test_replace (p STRING) RETURNS BOOLEAN AS $$
+not(is_null(p))
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateOrReplace,
+        udf_name: Identifier {
+            span: Some(
+                27..50,
+            ),
+            name: "isnotempty_test_replace",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: ScalarUDF {
+            arg_types: [
+                (
+                    Identifier {
+                        span: Some(
+                            52..53,
+                        ),
+                        name: "p",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    String,
+                ),
+            ],
+            definition: "not(is_null(p))",
+            return_type: Boolean,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
 CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
@@ -26451,6 +26491,7 @@ Query(
                             },
                             columns: [],
                         },
+                        user_specified_materialized: false,
                         materialized: false,
                         query: Query {
                             span: Some(

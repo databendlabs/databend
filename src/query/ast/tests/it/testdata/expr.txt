@@ -1886,6 +1886,141 @@ DateTrunc {
 
 
 ---------- Input ----------
+TIME_SLICE(to_timestamp(1630812366), 4, 'MONTH', 'START')
+---------- Output ---------
+TIME_SLICE(to_timestamp(1630812366), 4, MONTH, 'START')
+---------- AST ------------
+TimeSlice {
+    span: Some(
+        0..57,
+    ),
+    date: FunctionCall {
+        span: Some(
+            11..35,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    11..23,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        24..34,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+    slice_length: 4,
+    unit: Month,
+    start_or_end: "START",
+}
+
+
+---------- Input ----------
+TIME_SLICE(to_timestamp(1630812366), 4, 'MONTH', 'end')
+---------- Output ---------
+TIME_SLICE(to_timestamp(1630812366), 4, MONTH, 'end')
+---------- AST ------------
+TimeSlice {
+    span: Some(
+        0..55,
+    ),
+    date: FunctionCall {
+        span: Some(
+            11..35,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    11..23,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        24..34,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+    slice_length: 4,
+    unit: Month,
+    start_or_end: "end",
+}
+
+
+---------- Input ----------
+TIME_SLICE(to_timestamp(1630812366), 4, 'WEEK')
+---------- Output ---------
+TIME_SLICE(to_timestamp(1630812366), 4, WEEK, 'start')
+---------- AST ------------
+TimeSlice {
+    span: Some(
+        0..47,
+    ),
+    date: FunctionCall {
+        span: Some(
+            11..35,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    11..23,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        24..34,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+    slice_length: 4,
+    unit: Week,
+    start_or_end: "start",
+}
+
+
+---------- Input ----------
 trunc(to_timestamp(1630812366), week)
 ---------- Output ---------
 DATE_TRUNC(WEEK, to_timestamp(1630812366))

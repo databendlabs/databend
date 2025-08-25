@@ -116,7 +116,11 @@ impl Processor for SequenceGroupProcessor {
                 }
             } else if input.port.has_data() {
                 if self.ignore_output {
-                    let _ignore = input.port.pull_data().unwrap()?;
+                    let _ignore = input.port.pull_data().ok_or_else(|| {
+                        databend_common_exception::ErrorCode::Internal(
+                            "Failed to pull data from input port when ignoring output",
+                        )
+                    })??;
                     input.status = PortStatus::Idle;
 
                     if input.port.is_finished() {
@@ -135,7 +139,11 @@ impl Processor for SequenceGroupProcessor {
         }
 
         while !self.waiting_outputs.is_empty() && !self.waiting_inputs.is_empty() {
-            let output_index = self.waiting_outputs.pop_front().unwrap();
+            let output_index = self.waiting_outputs.pop_front().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Waiting outputs queue should not be empty",
+                )
+            })?;
 
             // Port is finished when waiting.
             if self.outputs[output_index].port.is_finished() {
@@ -147,11 +155,18 @@ impl Processor for SequenceGroupProcessor {
                 continue;
             }
 
-            let input_index = self.waiting_inputs.pop_front().unwrap();
+            let input_index = self.waiting_inputs.pop_front().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Waiting inputs queue should not be empty",
+                )
+            })?;
 
-            self.outputs[output_index]
-                .port
-                .push_data(self.inputs[input_index].port.pull_data().unwrap());
+            let data = self.inputs[input_index].port.pull_data().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Failed to pull data from input port",
+                )
+            })?;
+            self.outputs[output_index].port.push_data(data);
             self.inputs[input_index].status = PortStatus::Idle;
             self.outputs[output_index].status = PortStatus::Idle;
 

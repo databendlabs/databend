@@ -7,14 +7,6 @@ output domain  : {NULL}
 output         : NULL
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | parse_json('nuLL')
-  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')` in expr `CAST('nuLL' AS Variant)`
-
-
-
 ast            : parse_json('null')
 raw expr       : parse_json('null')
 checked expr   : CAST<String>("null" AS Variant)
@@ -22,14 +14,6 @@ optimized expr : 0x2000000000000000
 output type    : Variant
 output domain  : Undefined
 output         : 'null'
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | parse_json('  ')
-  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')` in expr `CAST('  ' AS Variant)`
-
 
 
 ast            : parse_json('true')
@@ -146,6 +130,24 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : parse_json('  ')
+raw expr       : parse_json('  ')
+checked expr   : CAST<String>("  " AS Variant)
+optimized expr : 0x2000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : 'null'
+
+
+ast            : parse_json('nuLL')
+raw expr       : parse_json('nuLL')
+checked expr   : CAST<String>("nuLL" AS Variant)
+optimized expr : 0x2000000000000000
+output type    : Variant
+output domain  : Undefined
+output         : 'null'
+
+
 ast            : parse_json('+10')
 raw expr       : parse_json('+10')
 checked expr   : CAST<String>("+10" AS Variant)
@@ -182,6 +184,24 @@ output domain  : Undefined
 output         : '12'
 
 
+ast            : parse_json('0xabc')
+raw expr       : parse_json('0xabc')
+checked expr   : CAST<String>("0xabc" AS Variant)
+optimized expr : 0x2000000020000003500abc
+output type    : Variant
+output domain  : Undefined
+output         : '2748'
+
+
+ast            : parse_json('0x12abc.def')
+raw expr       : parse_json('0x12abc.def')
+checked expr   : CAST<String>("0x12abc.def" AS Variant)
+optimized expr : 0x20000000200000096040f2abcdef000000
+output type    : Variant
+output domain  : Undefined
+output         : '76476.87084960938'
+
+
 ast            : parse_json('99999999999999999999999999999999999999')
 raw expr       : parse_json('99999999999999999999999999999999999999')
 checked expr   : CAST<String>("99999999999999999999999999999999999999" AS Variant)
@@ -191,6 +211,15 @@ output domain  : Undefined
 output         : '99999999999999999999999999999999999999'
 
 
+ast            : parse_json('\'single quoted string\'')
+raw expr       : parse_json('\'single quoted string\'')
+checked expr   : CAST<String>("'single quoted string'" AS Variant)
+optimized expr : 0x200000001000001473696e676c652071756f74656420737472696e67
+output type    : Variant
+output domain  : Undefined
+output         : '"single quoted string"'
+
+
 ast            : parse_json('[1,2,,4]')
 raw expr       : parse_json('[1,2,,4]')
 checked expr   : CAST<String>("[1,2,,4]" AS Variant)
@@ -198,6 +227,23 @@ optimized expr : 0x8000000420000002200000020000000020000002500150025004
 output type    : Variant
 output domain  : Undefined
 output         : '[1,2,null,4]'
+
+
+ast            : parse_json('{ key :"val", key123_$测试 :"val" }')
+raw expr       : parse_json('{ key :"val", key123_$测试 :"val" }')
+checked expr   : CAST<String>("{ key :\"val\", key123_$测试 :\"val\" }" AS Variant)
+optimized expr : 0x40000002100000031000000e10000003100000036b65796b65793132335f24e6b58be8af9576616c76616c
+output type    : Variant
+output domain  : Undefined
+output         : '{"key":"val","key123_$测试":"val"}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | parse_json('{ 123 :"val" }')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ object attribute name cannot be a number, pos 3 while evaluating function `parse_json('{ 123 :"val" }')` in expr `CAST('{ 123 :"val" }' AS Variant)`
+
 
 
 ast            : try_parse_json(NULL)
@@ -212,10 +258,10 @@ output         : NULL
 ast            : try_parse_json('nuLL')
 raw expr       : try_parse_json('nuLL')
 checked expr   : try_parse_json<String>("nuLL")
-optimized expr : NULL
+optimized expr : 0x2000000000000000
 output type    : Variant NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : Undefined
+output         : 'null'
 
 
 ast            : try_parse_json('null')
@@ -363,10 +409,10 @@ output         : NULL
 ast            : check_json('nuLL')
 raw expr       : check_json('nuLL')
 checked expr   : check_json<String>("nuLL")
-optimized expr : "expected ident, pos 3"
+optimized expr : NULL
 output type    : String NULL
-output domain  : {"expected ident, pos 3"..="expected ident, pos 3"}
-output         : 'expected ident, pos 3'
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : check_json(s)

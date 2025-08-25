@@ -3934,6 +3934,10 @@ Functions overloads:
 3 subtract_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 0 tan(Float64) :: Float64
 1 tan(Float64 NULL) :: Float64 NULL
+0 time_slice(Date, UInt64, String, String) :: Date
+1 time_slice(Date NULL, UInt64 NULL, String NULL, String NULL) :: Date NULL
+2 time_slice(Timestamp, UInt64, String, String) :: Timestamp
+3 time_slice(Timestamp NULL, UInt64 NULL, String NULL, String NULL) :: Timestamp NULL
 0 time_slot(Timestamp) :: Timestamp
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 timestamp_diff(Timestamp, Timestamp) :: Interval

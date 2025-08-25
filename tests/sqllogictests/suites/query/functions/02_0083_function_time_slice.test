@@ -1,0 +1,69 @@
+query T
+SELECT '2019-02-28'::DATE AS "DATE",
+TIME_SLICE("DATE", 4, 'year', 'START') AS "START OF SLICE 1",
+       TIME_SLICE("DATE", 4, 'year', 'END') AS "END OF SLICE 2",
+       TIME_SLICE("DATE", 4, 'quarter', 'START') AS "START OF SLICE 3",
+       TIME_SLICE("DATE", 4, 'quarter', 'END') AS "END OF SLICE 4",
+       TIME_SLICE("DATE", 4, 'MONTH', 'START') AS "START OF SLICE 5",
+       TIME_SLICE("DATE", 4, 'MONTH', 'END') AS "END OF SLICE 6",
+       TIME_SLICE("DATE", 4, 'week', 'START') AS "START OF SLICE 7",
+       TIME_SLICE("DATE", 4, 'week', 'END') AS "END OF SLICE 8",
+       TIME_SLICE("DATE", 4, 'day', 'START') AS "START OF SLICE 9",
+       TIME_SLICE("DATE", 4, 'day', 'END') AS "END OF SLICE 10";
+----
+2019-02-28 2018-01-01 2022-01-01 2019-01-01 2020-01-01 2019-01-01 2019-05-01 2019-02-18 2019-03-18 2019-02-25 2019-03-01
+
+query T
+SELECT '2019-02-28T01:23:45.678'::timestamp AS "TIMESTAMP 1",
+TIME_SLICE("TIMESTAMP 1", 8, 'day') AS "SLICE FOR TIMESTAMP 11",
+       TIME_SLICE("TIMESTAMP 1", 8, 'day', 'end') AS "SLICE FOR TIMESTAMP 22",
+       TIME_SLICE("TIMESTAMP 1", 8, 'month') AS "SLICE FOR TIMESTAMP 33",
+       TIME_SLICE("TIMESTAMP 1", 8, 'month', 'end') AS "SLICE FOR TIMESTAMP 44",
+       TIME_SLICE("TIMESTAMP 1", 8, 'year') AS "SLICE FOR TIMESTAMP 55",
+       TIME_SLICE("TIMESTAMP 1", 8, 'year', 'end') AS "SLICE FOR TIMESTAMP 66",
+              TIME_SLICE("TIMESTAMP 1", 8, 'quarter') AS "SLICE FOR TIMESTAMP 77",
+       TIME_SLICE("TIMESTAMP 1", 8, 'quarter', 'end') AS "SLICE FOR TIMESTAMP 88",
+       TIME_SLICE("TIMESTAMP 1", 8, 'week') AS "SLICE FOR TIMESTAMP 10",
+       TIME_SLICE("TIMESTAMP 1", 8, 'week', 'end') AS "SLICE FOR TIMESTAMP 99",
+       TIME_SLICE("TIMESTAMP 1", 8, 'HOUR') AS "SLICE FOR TIMESTAMP 1",
+       TIME_SLICE("TIMESTAMP 1", 8, 'HOUR', 'end') AS "SLICE FOR TIMESTAMP 2",
+       TIME_SLICE("TIMESTAMP 1", 8, 'minute') AS "SLICE FOR TIMESTAMP 3",
+       TIME_SLICE("TIMESTAMP 1", 8, 'minute', 'end') AS "SLICE FOR TIMESTAMP 4",
+       TIME_SLICE("TIMESTAMP 1", 8, 'second') AS "SLICE FOR TIMESTAMP 5",
+       TIME_SLICE("TIMESTAMP 1", 8, 'second', 'end') AS "SLICE FOR TIMESTAMP 6";
+----
+2019-02-28 01:23:45.678000 2019-02-25 00:00:00.000000 2019-03-05 00:00:00.000000 2018-09-01 00:00:00.000000 2019-05-01 00:00:00.000000 2018-01-01 00:00:00.000000 2026-01-01 00:00:00.000000 2018-01-01 00:00:00.000000 2020-01-01 00:00:00.000000 2019-01-21 00:00:00.000000 2019-03-18 00:00:00.000000 2019-02-28 00:00:00.000000 2019-02-28 08:00:00.000000 2019-02-28 01:20:00.000000 2019-02-28 01:28:00.000000 2019-02-28 01:23:44.000000 2019-02-28 01:23:52.000000
+
+statement ok
+CREATE or replace TABLE accounts (ID INT, billing_date DATE, balance_due decimal(11, 2));
+
+statement ok
+INSERT INTO accounts (ID, billing_date, balance_due) VALUES
+    (1, '2018-07-31', 100.00),
+    (2, '2018-08-01', 200.00),
+    (3, '2018-08-25', 400.00);
+
+query T
+SELECT
+       TIME_SLICE(billing_date, 2, 'WEEK', 'START') AS "START OF SLICE",
+       TIME_SLICE(billing_date, 2, 'WEEK', 'END')   AS "END OF SLICE",
+       COUNT(*) AS "NUMBER OF LATE BILLS",
+       SUM(balance_due) AS "SUM OF MONEY OWED"
+    FROM accounts
+    WHERE balance_due > 0
+    GROUP BY "START OF SLICE", "END OF SLICE"
+    order by SUM(balance_due);
+----
+2018-07-23 2018-08-06 2 300.00
+2018-08-20 2018-09-03 1 400.00
+
+
+statement ok
+drop table if exists accounts
+
+statement error 1006
+select time_slice('2022-02-02'::date, 0, 'week');
+
+statement error 1006
+select time_slice('2022-02-02'::date, 1, 'week', 'err_string');
+

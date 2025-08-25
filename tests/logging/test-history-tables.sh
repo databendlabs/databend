@@ -25,7 +25,7 @@ echo "Cleaning up previous runs"
 killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
-rm -rf .databend
+rm -rf ./.databend
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
@@ -33,14 +33,14 @@ for node in 1 2; do
     CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
 
     echo "Appending history table config to query node-${node}"
-    cat ./tests/logging/history_table.toml >> "$CONFIG_FILE"
+    cat ./tests/logging/history_table/history_table.toml >> "$CONFIG_FILE"
 done
 
 for node in 1 2 3; do
     CONFIG_FILE="./scripts/ci/deploy/config/databend-meta-node-${node}.toml"
 
     echo "Appending history table config to meta node-${node}"
-    cat ./tests/logging/history_table_meta.toml >> "$CONFIG_FILE"
+    cat ./tests/logging/history_table/history_table_meta.toml >> "$CONFIG_FILE"
 done
 
 # Start meta cluster (3 nodes - needed for HA)
@@ -83,7 +83,7 @@ drop_query_id=$(echo $response | jq -r '.id')
 echo "Query ID: $drop_query_id"
 
 echo "Running test queries to test inner history tables"
-./tests/logging/check_logs_table.sh
+./tests/logging/history_table/run_all_tests.sh
 
 response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
 
@@ -98,13 +98,25 @@ else
     echo "✓ meta node logs are collected as expected"
 fi
 
+startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Ready for connections after%'\"}")
+startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
+if [[ "$startup_check_response_data" != *"2"* ]]; then
+    echo "ERROR: startup check failed"
+    debug_info=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where message like 'Ready for connections after%'\"}")
+    echo "$debug_info"
+    echo "startup_check_response_data: $startup_check_response_data"
+    exit 1
+else
+    echo "✓ node startup test passed"
+fi
+
 # **Internal -> External**: should reset
 
 echo "Add a node with external history table enabled"
 
 CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-3.toml"
 echo "Appending external history table config to node-3"
-cat ./tests/logging/history_table_external.toml >> "$CONFIG_FILE"
+cat ./tests/logging/history_table/history_table_external.toml >> "$CONFIG_FILE"
 
 echo 'Start databend-query node-3'
 env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml --internal-enable-sandbox-tenant >./.databend/query-3.out 2>&1 &
@@ -116,7 +128,7 @@ sleep 15
 
 
 echo "Running test queries to test external history tables"
-./tests/logging/check_logs_table.sh
+./tests/logging/history_table/run_all_tests.sh
 
 
 response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")

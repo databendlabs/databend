@@ -140,7 +140,11 @@ impl<T: AsyncMpscSink + 'static> Processor for AsyncMpscSinker<T> {
                         Ok(Event::Async)
                     }
                 } else {
-                    let block = input.pull_data().unwrap()?;
+                    let block = input.pull_data().ok_or_else(|| {
+                        databend_common_exception::ErrorCode::Internal(
+                            "Failed to pull data from input port in async mpsc sink",
+                        )
+                    })??;
                     self.input_data = Some(block);
                     Ok(Event::Async)
                 }

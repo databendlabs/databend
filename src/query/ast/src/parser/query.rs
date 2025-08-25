@@ -399,7 +399,8 @@ pub fn with(i: Input) -> IResult<With> {
         |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.tokens),
             alias: table_alias,
-            materialized: materialized.is_some(),
+            user_specified_materialized: materialized.is_some(),
+            materialized: false,
             query: Box::new(query),
         },
     );

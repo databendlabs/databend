@@ -417,7 +417,12 @@ pub trait TableContext: Send + Sync {
     fn session_state(&self) -> SessionState;
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
+
     fn get_shared_settings(&self) -> Arc<Settings>;
+
+    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()>;
 
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
         unimplemented!()
