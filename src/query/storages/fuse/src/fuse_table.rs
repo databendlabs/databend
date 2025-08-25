@@ -336,8 +336,16 @@ impl FuseTable {
                         ver,
                         put_cache: true,
                     };
-
-                    Ok(Some(reader.read(&load_params).await?))
+                    match reader.read(&load_params).await {
+                        Ok(v) => Ok(Some(v)),
+                        Err(e) => {
+                            warn!(
+                                "read table snapshot statistics at location {} error: {}",
+                                loc, e
+                            );
+                            Ok(None)
+                        }
+                    }
                 } else {
                     Ok(None)
                 }
