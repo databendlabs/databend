@@ -224,7 +224,6 @@ impl SMV003 {
         }
 
         applier
-            .sm
             .commit()
             .await
             .map_err(|e| StorageError::write(&e))?;

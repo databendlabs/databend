@@ -39,6 +39,8 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
         a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
             .await?;
 
+        a.commit().await?;
+
         sm.levels_mut().freeze_writable();
 
         let mut a = sm.new_applier().await;
@@ -48,6 +50,8 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
         a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
             .await?;
         a.upsert_kv(&UpsertKV::delete("b")).await?;
+
+        a.commit().await?;
 
         sm
     };

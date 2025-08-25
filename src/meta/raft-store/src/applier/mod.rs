@@ -92,6 +92,10 @@ where SM: StateMachineApi<SysData> + 'static
         }
     }
 
+    pub async fn commit(self) -> Result<(), io::Error> {
+        self.sm.commit().await
+    }
+
     /// Apply a log entry to state machine.
     ///
     /// And publish kv change events to subscriber.
