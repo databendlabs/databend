@@ -117,7 +117,7 @@ impl LeveledMapData {
         f: impl FnOnce(&mut Arc<ImmutableLevels>) -> T,
     ) -> T {
         let mut g = self.immutable_levels.lock().unwrap();
-        f(&mut *g)
+        f(&mut g)
     }
 
     pub(crate) fn persisted(&self) -> Option<Arc<DB>> {
@@ -127,7 +127,7 @@ impl LeveledMapData {
 
     pub fn with_persisted<T>(&self, f: impl FnOnce(&mut Option<Arc<DB>>) -> T) -> T {
         let mut g = self.persisted.lock().unwrap();
-        f(&mut *g)
+        f(&mut g)
     }
 
     pub(crate) async fn compacted_view_get<K>(
@@ -306,8 +306,7 @@ impl LeveledMap {
             let mut writable = self.data.writable();
             let new_writable = writable.new_level();
 
-            let immutable = std::mem::replace(&mut *writable, new_writable);
-            immutable
+            std::mem::replace(&mut *writable, new_writable)
         };
 
         let mut immutable_levels = self.data.immutable_levels().as_ref().clone();

@@ -103,7 +103,7 @@ impl StateMachineApi<SysData> for ApplierData {
 
     fn with_cleanup_start_timestamp<T>(&self, f: impl FnOnce(&mut Duration) -> T) -> T {
         let mut ts = self.cleanup_start_time.lock().unwrap();
-        f(&mut *ts)
+        f(&mut ts)
     }
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
@@ -180,9 +180,9 @@ impl SMV003 {
         &self.levels.data
     }
 
-    pub async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
+    pub async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
         let view = self.data().to_readonly_view();
-        let got = view.get(UserKey::new(key.clone())).await?;
+        let got = view.get(UserKey::new(key.to_string())).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }
