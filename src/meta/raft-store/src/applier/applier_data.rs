@@ -91,6 +91,80 @@ impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
     }
 }
 
+pub struct Scoped<T>(pub T);
+
+#[async_trait::async_trait]
+impl mvcc::ScopedViewReadonly<UserKey, MetaValue> for Scoped<StateMachineView> {
+    fn base_seq(&self) -> InternalSeq {
+        self.0.base_seq()
+    }
+
+    async fn get(&self, key: UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
+        let got = self.0.get(Namespace::User, Key::User(key)).await?;
+        Ok(got.map(|x| x.into_user()))
+    }
+
+    async fn range<R>(
+        &self,
+        range: R,
+    ) -> Result<IOResultStream<(UserKey, SeqMarked<MetaValue>)>, io::Error>
+    where
+        R: RangeBounds<UserKey> + Send + Sync + Clone + 'static,
+    {
+        let start = range.start_bound().cloned();
+        let end = range.end_bound().cloned();
+
+        let start = start.map(Key::User);
+        let end = end.map(Key::User);
+
+        let strm = self.0.range(Namespace::User, (start, end)).await?;
+
+        Ok(strm
+            .map_ok(|(k, v)| (k.into_user(), v.map(|x| x.into_user())))
+            .boxed())
+    }
+}
+
+#[async_trait::async_trait]
+impl mvcc::ScopedView<UserKey, MetaValue> for Scoped<StateMachineView> {
+    fn set(&mut self, key: UserKey, value: Option<MetaValue>) -> SeqMarked<()> {
+        self.0
+            .set(Namespace::User, Key::User(key), value.map(Value::User))
+    }
+}
+
+#[async_trait::async_trait]
+impl mvcc::ScopedViewReadonly<ExpireKey, String> for Scoped<StateMachineView> {
+    fn base_seq(&self) -> InternalSeq {
+        self.0.base_seq()
+    }
+
+    async fn get(&self, key: ExpireKey) -> Result<SeqMarked<String>, io::Error> {
+        let got = self.0.get(Namespace::Expire, Key::Expire(key)).await?;
+        Ok(got.map(|x| x.into_expire()))
+    }
+
+    async fn range<R>(
+        &self,
+        range: R,
+    ) -> Result<IOResultStream<(ExpireKey, SeqMarked<String>)>, io::Error>
+    where
+        R: RangeBounds<ExpireKey> + Send + Sync + Clone + 'static,
+    {
+        let start = range.start_bound().cloned();
+        let end = range.end_bound().cloned();
+
+        let start = start.map(Key::Expire);
+        let end = end.map(Key::Expire);
+
+        let strm = self.0.range(Namespace::Expire, (start, end)).await?;
+
+        Ok(strm
+            .map_ok(|(k, v)| (k.into_expire(), v.map(|x| x.into_expire())))
+            .boxed())
+    }
+}
+
 #[async_trait::async_trait]
 impl mvcc::ScopedViewReadonly<ExpireKey, String> for ApplierData {
     fn base_seq(&self) -> InternalSeq {

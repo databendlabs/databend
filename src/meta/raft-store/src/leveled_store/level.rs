@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::Node;
 use futures_util::StreamExt;
 use log::warn;
 use map_api::map_api_ro::MapApiRO;
 use map_api::mvcc;
+use map_api::BeforeAfter;
+use map_api::MapApi;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
@@ -92,7 +99,7 @@ impl Value {
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Level {
     /// System data(non-user data).
     pub(crate) sys_data: Arc<Mutex<SysData>>,
@@ -146,6 +153,18 @@ impl Level {
     /// Replace the expiry queue with a new one.
     pub(crate) fn replace_expire(&mut self, expire: mvcc::Table<ExpireKey, String>) {
         self.expire = expire;
+    }
+
+    pub fn last_membership(&self) -> StoredMembership {
+        self.with_sys_data(|s| s.last_membership_ref().clone())
+    }
+
+    pub fn last_applied(&self) -> Option<LogId> {
+        self.with_sys_data(|s| s.last_applied_mut().clone())
+    }
+
+    pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
+        self.with_sys_data(|s| s.nodes_mut().clone())
     }
 }
 
@@ -202,5 +221,33 @@ impl MapApiRO<ExpireKey> for Level {
 
         let strm = futures::stream::iter(vec).map(Ok).boxed();
         Ok(strm)
+    }
+}
+
+// Only used for tests
+#[async_trait::async_trait]
+impl MapApi<UserKey> for Level {
+    async fn set(
+        &mut self,
+        key: UserKey,
+        value: Option<MetaValue>,
+    ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error> {
+        // The chance it is the bottom level is very low in a loaded system.
+        // Thus, we always tombstone the key if it is None.
+
+        let prev = MapApiRO::get(self, &key).await?;
+
+        let marked = if let Some(meta_v) = value {
+            let seq = self.with_sys_data(|s| s.next_seq());
+            self.kv.insert(key, seq, meta_v.clone()).unwrap();
+            SeqMarked::new_normal(seq, meta_v)
+        } else {
+            // Do not increase the sequence number, just use the max seq for all tombstone.
+            let seq = self.with_sys_data(|s| s.curr_seq());
+            self.kv.insert_tombstone(key, seq).unwrap();
+            SeqMarked::new_tombstone(seq)
+        };
+
+        Ok((prev, marked))
     }
 }

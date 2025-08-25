@@ -37,6 +37,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     // Insert the same entry at level 1
     l.freeze_writable();
+    println!("{:#?}", l);
 
     let (prev, result) = l
         .as_user_map_mut()
@@ -60,7 +61,10 @@ async fn test_freeze() -> anyhow::Result<()> {
     // Listing from the base level sees the old value.
     let immutables = l.immutable_levels();
 
-    let got = immutables
+    let mut tmp = LeveledMap::default();
+    tmp.replace_immutable_levels(immutables.as_ref().clone());
+
+    let got = tmp
         .as_user_map()
         .range(user_key("")..)
         .await?
@@ -237,7 +241,10 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     let immutables = l.immutable_levels();
 
-    let strm = immutables.as_user_map().range(user_key("")..).await?;
+    let mut tmp = LeveledMap::default();
+    tmp.replace_immutable_levels(immutables.as_ref().clone());
+
+    let strm = tmp.as_user_map().range(user_key("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -547,9 +554,12 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) =
-            MapApiHelper::update_meta(&mut l, user_key("a"), Some(KVMeta::new_expires_at(2)))
-                .await?;
+        let (prev, result) = MapApiHelper::update_meta_on_leveled_map(
+            &mut l,
+            user_key("a"),
+            Some(KVMeta::new_expires_at(2)),
+        )
+        .await?;
 
         assert_eq!(
             prev,
@@ -571,7 +581,8 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) = MapApiHelper::update_meta(&mut l, user_key("b"), None).await?;
+        let (prev, result) =
+            MapApiHelper::update_meta_on_leveled_map(&mut l, user_key("b"), None).await?;
         assert_eq!(
             prev,
             SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(10)), b("b1"),))
@@ -586,9 +597,12 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) =
-            MapApiHelper::update_meta(&mut l, user_key("c"), Some(KVMeta::new_expires_at(20)))
-                .await?;
+        let (prev, result) = MapApiHelper::update_meta_on_leveled_map(
+            &mut l,
+            user_key("c"),
+            Some(KVMeta::new_expires_at(20)),
+        )
+        .await?;
         assert_eq!(prev, SeqMarked::new_normal(5, (None, b("c1"))));
         assert_eq!(
             result,
@@ -606,9 +620,12 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) =
-            MapApiHelper::update_meta(&mut l, user_key("d"), Some(KVMeta::new_expires_at(2)))
-                .await?;
+        let (prev, result) = MapApiHelper::update_meta_on_leveled_map(
+            &mut l,
+            user_key("d"),
+            Some(KVMeta::new_expires_at(2)),
+        )
+        .await?;
         assert_eq!(prev, SeqMarked::new_tombstone(0));
         assert_eq!(result, SeqMarked::new_tombstone(0));
 

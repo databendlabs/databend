@@ -31,6 +31,9 @@ use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
+use crate::applier::applier_data::Scoped;
+use crate::leveled_store::leveled_map::LeveledMap;
+
 pub type MapKeyPrefix = &'static str;
 
 pub trait MapKeyEncode {
@@ -81,6 +84,21 @@ impl<T> AsMap for T {}
 pub(crate) struct MapApiHelper;
 
 impl MapApiHelper {
+    pub(crate) async fn update_meta_on_leveled_map(
+        s: &mut LeveledMap,
+        key: UserKey,
+        meta: Option<KVMeta>,
+    ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error> {
+        let view = mvcc::View::new(s.data.clone());
+        let mut scoped = Scoped(view);
+
+        let got = Self::update_meta(&mut scoped, key, meta).await?;
+
+        scoped.0.commit().await?;
+
+        Ok(got)
+    }
+
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
     pub(crate) async fn update_meta<T>(

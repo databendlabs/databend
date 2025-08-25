@@ -21,6 +21,14 @@ impl StreamItem {
     pub fn new(key: String, value: Option<pb::SeqV>) -> Self {
         StreamItem { key, value }
     }
+
+    pub fn into_option_pair(self) -> (String, Option<SeqV>) {
+        (self.key, self.value.map(SeqV::from))
+    }
+
+    pub fn into_pair(self) -> (String, SeqV) {
+        (self.key, SeqV::from(self.value.unwrap()))
+    }
 }
 
 impl From<(String, Option<pb::SeqV>)> for StreamItem {

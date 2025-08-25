@@ -31,17 +31,16 @@ use state_machine_api::UserKey;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     let mut lm = build_3_levels().await?;
 
-    let mut immutable_levels = lm.freeze_writable().clone();
+    let immutable_levels = lm.freeze_writable().clone();
 
     {
-        let mut compacting_data = CompactingData::new(&mut immutable_levels, None);
+        let mut compacting_data = CompactingData::new(immutable_levels.clone(), None);
         compacting_data.compact_immutable_in_place().await?;
     }
 
@@ -51,16 +50,16 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     assert_eq!(compacted.iter_immutable_levels().count(), 1);
     assert_eq!(
-        d.last_membership_ref(),
-        &StoredMembership::new(
+        d.last_membership(),
+        StoredMembership::new(
             Some(log_id(3, 3, 3)),
             Membership::new_with_defaults(vec![], [])
         )
     );
-    assert_eq!(d.last_applied_ref(), &Some(log_id(3, 3, 3)));
+    assert_eq!(d.last_applied(), Some(log_id(3, 3, 3)));
     assert_eq!(
-        d.nodes_ref(),
-        &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
+        d.nodes(),
+        btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
     let got = d
@@ -206,14 +205,14 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 /// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     let mut lm = LeveledMap::default();
-    let sd = lm.writable_mut().sys_data_mut();
-
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(1, 1, 1)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(1, 1, 1));
-    *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(1, 1, 1)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(1, 1, 1));
+        *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    });
 
     // internal_seq: 0
     lm.as_user_map_mut()
@@ -230,14 +229,15 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         .await?;
 
     lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(2, 2, 2)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(2, 2, 2));
-    *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(2, 2, 2)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(2, 2, 2));
+        *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    });
 
     // internal_seq: 4
     lm.as_user_map_mut().set(user_key("b"), None).await?;
@@ -249,14 +249,15 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         .await?;
 
     lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(3, 3, 3)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(3, 3, 3));
-    *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(3, 3, 3));
+        *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    });
 
     // internal_seq: 6
     lm.as_user_map_mut().set(user_key("c"), None).await?;
@@ -277,7 +278,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     let mut sm = SMV003::default();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await?;
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
@@ -285,7 +286,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
 
     sm.map_mut().freeze_writable();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await?;
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
