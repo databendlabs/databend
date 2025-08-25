@@ -37,65 +37,6 @@ use state_machine_api::UserKey;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Namespace {
-    User,
-    Expire,
-}
-
-impl mvcc::ViewNameSpace for Namespace {
-    fn if_increase_seq(&self) -> bool {
-        match self {
-            Namespace::User => true,
-            Namespace::Expire => false,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Key {
-    User(UserKey),
-    Expire(ExpireKey),
-}
-
-impl Key {
-    pub fn into_user(self) -> UserKey {
-        match self {
-            Key::User(k) => k,
-            Key::Expire(_) => unreachable!("expect UserKey, got ExpireKey"),
-        }
-    }
-
-    pub fn into_expire(self) -> ExpireKey {
-        match self {
-            Key::User(_) => unreachable!("expect ExpireKey, got UserKey"),
-            Key::Expire(k) => k,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Value {
-    User(MetaValue),
-    Expire(String),
-}
-
-impl Value {
-    pub fn into_user(self) -> MetaValue {
-        match self {
-            Value::User(v) => v,
-            Value::Expire(_) => unreachable!("expect MetaValue, got String"),
-        }
-    }
-
-    pub fn into_expire(self) -> String {
-        match self {
-            Value::User(_) => unreachable!("expect String, got MetaValue"),
-            Value::Expire(v) => v,
-        }
-    }
-}
-
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
