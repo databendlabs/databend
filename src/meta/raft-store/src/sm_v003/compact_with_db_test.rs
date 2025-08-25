@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+use std::sync::Arc;
 
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
@@ -44,16 +45,16 @@ async fn test_leveled_query_with_db() -> anyhow::Result<()> {
 
     assert_eq!(lm.curr_seq(), 7);
     assert_eq!(
-        lm.last_membership_ref(),
-        &StoredMembership::new(
+        lm.last_membership(),
+        StoredMembership::new(
             Some(log_id(3, 3, 3)),
             Membership::new_with_defaults(vec![], [])
         )
     );
-    assert_eq!(lm.last_applied_ref(), &Some(log_id(3, 3, 3)));
+    assert_eq!(lm.last_applied(), Some(log_id(3, 3, 3)));
     assert_eq!(
-        lm.nodes_ref(),
-        &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
+        lm.nodes(),
+        btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
     let got = lm
@@ -99,11 +100,11 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
 
     assert_eq!(lm.curr_seq(), 4);
     assert_eq!(
-        lm.last_membership_ref(),
-        &StoredMembership::new(None, Membership::new_with_defaults(vec![], []))
+        lm.last_membership(),
+        StoredMembership::new(None, Membership::new_with_defaults(vec![], []))
     );
-    assert_eq!(lm.last_applied_ref(), &None);
-    assert_eq!(lm.nodes_ref(), &btreemap! {});
+    assert_eq!(lm.last_applied(), None);
+    assert_eq!(lm.nodes(), btreemap! {});
 
     let got = lm
         .as_user_map()
@@ -174,7 +175,7 @@ async fn test_compact() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapView(db)
+    let got = MapView(db.as_ref())
         .as_user_map()
         .range(..)
         .await?
@@ -187,7 +188,7 @@ async fn test_compact() -> anyhow::Result<()> {
         (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
     ]);
 
-    let got = MapView(db)
+    let got = MapView(db.as_ref())
         .as_expire_map()
         .range(..)
         .await?
@@ -224,7 +225,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(db.last_applied_ref(), &None);
     assert_eq!(db.nodes_ref(), &btreemap! {});
 
-    let got = MapView(db)
+    let got = MapView(db.as_ref())
         .as_user_map()
         .range(..)
         .await?
@@ -246,7 +247,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapView(db)
+    let got = MapView(db.as_ref())
         .as_expire_map()
         .range(..)
         .await?
@@ -306,14 +307,15 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
 /// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     let mut lm = LeveledMap::default();
-    let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(1, 1, 1)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(1, 1, 1));
-    *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(1, 1, 1)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(1, 1, 1));
+        *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    });
 
     // internal_seq: 0
     lm.as_user_map_mut()
@@ -330,14 +332,14 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
         .await?;
 
     lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
-
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(2, 2, 2)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(2, 2, 2));
-    *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(2, 2, 2)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(2, 2, 2));
+        *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    });
 
     // internal_seq: 4
     lm.as_user_map_mut().set(user_key("b"), None).await?;
@@ -349,14 +351,15 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
         .await?;
 
     lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(3, 3, 3)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(3, 3, 3));
-    *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(3, 3, 3));
+        *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    });
 
     // internal_seq: 6
     lm.as_user_map_mut().set(user_key("c"), None).await?;
@@ -382,7 +385,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
 async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
     let mut sm = SMV003::default();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await?;
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
@@ -390,7 +393,7 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
 
     sm.map_mut().freeze_writable();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await?;
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
@@ -410,7 +413,7 @@ async fn move_bottom_to_db(
     base_path: &str,
     rel_path: &str,
 ) -> Result<(), io::Error> {
-    let mut immutables = lm.immutable_levels().clone();
+    let mut immutables = lm.immutable_levels().as_ref().clone();
     let bottom = immutables.levels_mut().remove(0);
     lm.replace_immutable_levels(immutables);
 
@@ -420,7 +423,10 @@ async fn move_bottom_to_db(
 
     compact(&mut lm2, base_path, rel_path).await?;
 
-    *lm.persisted_mut() = lm2.persisted_mut().clone();
+    let persisted = lm2.with_persisted(|p| p.clone());
+    lm.with_persisted(|p| {
+        *p = persisted;
+    });
     Ok(())
 }
 
@@ -432,7 +438,9 @@ async fn compact(lm: &mut LeveledMap, base_path: &str, rel_path: &str) -> Result
         .await?;
 
     lm.replace_immutable_levels(ImmutableLevels::new([]));
-    *lm.persisted_mut() = Some(db);
+    lm.with_persisted(|p| {
+        *p = Some(Arc::new(db));
+    });
     Ok(())
 }
 

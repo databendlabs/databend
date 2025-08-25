@@ -30,11 +30,13 @@ use log::info;
 use map_api::mvcc;
 use map_api::mvcc::ScopedViewReadonly;
 use openraft::entry::RaftEntry;
+use state_machine_api::ExpireKey;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 
 use crate::applier::applier_data::ApplierData;
+use crate::applier::applier_data::Scoped;
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::applier_acquirer::ApplierAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
@@ -119,6 +121,10 @@ impl SMV003 {
     /// Return a mutable reference to the map that stores app data.
     pub(in crate::sm_v003) fn map_mut(&mut self) -> &mut LeveledMap {
         &mut self.levels
+    }
+
+    pub fn expire_view_readonly(&self) -> impl mvcc::ScopedViewReadonly<ExpireKey, String> {
+        Scoped(mvcc::View::new(self.levels.data.clone()))
     }
 }
 

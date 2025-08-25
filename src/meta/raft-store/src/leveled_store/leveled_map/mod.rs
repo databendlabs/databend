@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -19,16 +20,24 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 
 use compactor::Compactor;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::Node;
 use futures_util::StreamExt;
 use log::info;
 use log::warn;
 use map_api::mvcc;
+use map_api::mvcc::ScopedViewReadonly;
 use map_api::util;
+use map_api::BeforeAfter;
 use map_api::IOResultStream;
+use map_api::MapApi;
 use map_api::MapApiRO;
 use map_api::MapKey;
+use map_api::SeqMarkedOf;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::MetaValue;
@@ -326,6 +335,22 @@ impl LeveledMap {
         self.data.immutable_levels()
     }
 
+    pub fn curr_seq(&self) -> u64 {
+        self.data.with_sys_data(|s| s.curr_seq())
+    }
+
+    pub fn last_membership(&self) -> StoredMembership {
+        self.data.with_sys_data(|s| s.last_membership_ref().clone())
+    }
+
+    pub fn last_applied(&self) -> Option<LogId> {
+        self.data.with_sys_data(|s| s.last_applied_mut().clone())
+    }
+
+    pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
+        self.data.with_sys_data(|s| s.nodes_mut().clone())
+    }
+
     /// Replace all immutable levels with the given one.
     #[allow(dead_code)]
     pub(crate) fn replace_immutable_levels(&mut self, b: ImmutableLevels) {
@@ -436,5 +461,35 @@ impl mvcc::ScopedViewReadonly<UserKey, MetaValue> for ReadonlyView {
             .compacted_view_range(range, *self.base_seq)
             .await?;
         Ok(strm)
+    }
+}
+
+/// Naive impl, just for testing
+#[async_trait::async_trait]
+impl MapApi<UserKey> for LeveledMap {
+    async fn set(
+        &mut self,
+        key: UserKey,
+        value: Option<<UserKey as MapKey>::V>,
+    ) -> Result<BeforeAfter<SeqMarkedOf<UserKey>>, io::Error> {
+        let view = self.data.to_readonly_view();
+        let before = view.get(key.clone()).await?;
+
+        if before.is_not_found() && value.is_none() {
+            return Ok((before.clone(), before));
+        }
+
+        let mut w = {
+            let g = self.data.writable();
+            g.clone()
+        };
+        let (_, after) = w.set(key, value).await?;
+
+        {
+            let mut g = self.data.writable();
+            *g = w;
+        }
+
+        Ok((before, after))
     }
 }
