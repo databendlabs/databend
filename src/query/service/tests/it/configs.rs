@@ -825,7 +825,7 @@ data_cache_storage = "disk"
 [cache.disk]
 path = "_cache"
 "#
-            .as_bytes(),
+        .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -899,7 +899,7 @@ fn test_override_config_old_hive_catalog() -> Result<()> {
 address = "1.1.1.1:10000"
 protocol = "binary"
 "#
-            .as_bytes(),
+        .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -936,7 +936,7 @@ fn test_spill_config() -> Result<()> {
 [spill]
 spill_local_disk_path = "/data/spill"
 "#
-            .as_bytes(),
+        .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -982,11 +982,11 @@ fn test_spill_config_comprehensive() -> Result<()> {
         fs::remove_file(file_path)?;
     }
 
-    // Test case 2: Explicit default type
+    // Test case 2: Empty spill section (default behavior)
     {
-        let file_path = temp_dir().join("databend_test_spill_explicit_default.toml");
+        let file_path = temp_dir().join("databend_test_spill_empty_section.toml");
         let mut f = fs::File::create(&file_path)?;
-        f.write_all(b"[spill]\ntype = \"default\"")?;
+        f.write_all(b"[spill]\n# Empty section - should use default behavior")?;
         f.flush()?;
 
         temp_env::with_vars(
@@ -999,19 +999,20 @@ fn test_spill_config_comprehensive() -> Result<()> {
         fs::remove_file(file_path)?;
     }
 
-    // Test case 3: New local disk format
+    // Test case 3: New filesystem format
     {
-        let file_path = temp_dir().join("databend_test_spill_local_disk_new.toml");
+        let file_path = temp_dir().join("databend_test_spill_fs_new.toml");
         let mut f = fs::File::create(&file_path)?;
         f.write_all(
-            r#"[spill]
-type = "local_disk"
+            r#"[spill.storage]
+type = "fs"
 
-[spill.local_disk]
-path = "/tmp/databend_spill"
+[spill.storage.fs]
+data_path = "/tmp/databend_spill"
 reserved_space_percentage = 20.0
 max_bytes = 107374182400
-"#.as_bytes(),
+"#
+            .as_bytes(),
         )?;
         f.flush()?;
 
@@ -1027,15 +1028,12 @@ max_bytes = 107374182400
         fs::remove_file(file_path)?;
     }
 
-    // Test case 4: Remote S3 configuration
+    // Test case 4: S3 configuration
     {
-        let file_path = temp_dir().join("databend_test_spill_remote_s3.toml");
+        let file_path = temp_dir().join("databend_test_spill_s3.toml");
         let mut f = fs::File::create(&file_path)?;
         f.write_all(
-            r#"[spill]
-type = "remote"
-
-[spill.storage]
+            r#"[spill.storage]
 type = "s3"
 
 [spill.storage.s3]
@@ -1043,7 +1041,8 @@ bucket = "my-spill-bucket"
 region = "us-west-2"
 access_key_id = "test-key"
 secret_access_key = "test-secret"
-"#.as_bytes(),
+"#
+            .as_bytes(),
         )?;
         f.flush()?;
 
@@ -1067,7 +1066,8 @@ secret_access_key = "test-secret"
 spill_local_disk_path = "/legacy/spill/path"
 spill_local_disk_reserved_space_percentage = 25.0
 spill_local_disk_max_bytes = 53687091200
-"#.as_bytes(),
+"#
+            .as_bytes(),
         )?;
         f.flush()?;
 
@@ -1089,16 +1089,19 @@ spill_local_disk_max_bytes = 53687091200
         let mut f = fs::File::create(&file_path)?;
         f.write_all(
             r#"[spill]
-type = "local_disk"
 spill_local_disk_path = "/old/legacy/path"
 spill_local_disk_reserved_space_percentage = 50.0
 spill_local_disk_max_bytes = 1073741824
 
-[spill.local_disk]
-path = "/new/format/path"
+[spill.storage]
+type = "fs"
+
+[spill.storage.fs]
+data_path = "/new/format/path"
 reserved_space_percentage = 15.0
 max_bytes = 2147483648
-"#.as_bytes(),
+"#
+            .as_bytes(),
         )?;
         f.flush()?;
 
@@ -1115,27 +1118,29 @@ max_bytes = 2147483648
         fs::remove_file(file_path)?;
     }
 
-    // Test case 7: Empty sections with defaults
+    // Test case 7: Empty fs path should cause configuration error
     {
-        let file_path = temp_dir().join("databend_test_spill_empty.toml");
+        let file_path = temp_dir().join("databend_test_spill_empty_fs.toml");
         let mut f = fs::File::create(&file_path)?;
         f.write_all(
-            r#"[spill]
-type = "local_disk"
+            r#"[spill.storage]
+type = "fs"
 
-[spill.local_disk]
-path = ""
-"#.as_bytes(),
+[spill.storage.fs]
+data_path = ""
+"#
+            .as_bytes(),
         )?;
         f.flush()?;
 
         temp_env::with_vars(
             vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
             || {
-                let cfg = InnerConfig::load_for_test().expect("config load failed");
-                assert_eq!(cfg.spill.local_path(), None);
-                assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.3);
-                assert_eq!(cfg.spill.global_bytes_limit, 0);
+                let result = InnerConfig::load_for_test();
+                assert!(result.is_err(), "Empty fs data_path should cause configuration error");
+                let error = result.unwrap_err();
+                assert!(error.to_string().contains("data_path is empty"), 
+                       "Error should mention empty data_path: {}", error);
             },
         );
         fs::remove_file(file_path)?;
@@ -1175,7 +1180,7 @@ type = "hive"
 address = "1.1.1.1:12000"
 protocol = "binary"
 "#
-            .as_bytes(),
+        .as_bytes(),
     )?;
 
     // Make sure all data flushed.
