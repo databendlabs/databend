@@ -33,7 +33,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
     let mut sm = {
         let mut sm = SMV003::default();
 
-        let mut a = sm.new_applier();
+        let mut a = sm.new_applier().await;
         a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
             .await?;
         a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
@@ -41,7 +41,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
         sm.levels_mut().freeze_writable();
 
-        let mut a = sm.new_applier();
+        let mut a = sm.new_applier().await;
 
         a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
             .await?;
