@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -29,6 +29,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics_mut;
+use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct MutationGenerator {
@@ -58,12 +59,11 @@ impl SnapshotGenerator for MutationGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        schema: TableSchema,
+        table_info: &TableInfo,
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
-        _table_name: &str,
+        table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
@@ -89,13 +89,21 @@ impl SnapshotGenerator for MutationGenerator {
                         cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
+
+                    let table_statistics_location = table_stats_gen.table_statistics_location();
+                    for (id, ndv) in table_stats_gen.column_distinct_values() {
+                        if let Some(stats) = new_summary.col_stats.get_mut(&id) {
+                            stats.distinct_of_values = Some(ndv);
+                        }
+                    }
+                    new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
                     let new_snapshot = TableSnapshot::try_new(
-                        prev_table_seq,
+                        Some(table_info.ident.seq),
                         previous.clone(),
-                        schema,
+                        table_info.schema().as_ref().clone(),
                         new_summary,
                         new_segments,
-                        previous.table_statistics_location(),
+                        table_statistics_location,
                         table_meta_timestamps,
                     )?;
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -40,6 +41,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -58,6 +60,7 @@ use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
+use crate::statistics::TableStatsGenerator;
 use crate::FuseTable;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 
@@ -67,6 +70,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
+        table_stats_gen: TableStatsGenerator,
         cluster_key_id: Option<u32>,
         table_info: TableInfo,
     },
@@ -99,6 +103,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     new_segment_locs: Vec<Location>,
     new_virtual_schema: Option<VirtualDataSchema>,
+    insert_hll: BlockHLL,
+    insert_rows: u64,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
 
@@ -158,6 +164,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
             input,
             new_segment_locs: vec![],
             new_virtual_schema: None,
+            insert_hll: HashMap::new(),
+            insert_rows: 0,
             start_time: Instant::now(),
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
@@ -240,6 +248,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_segment_locs = meta.new_segment_locs;
 
         self.new_virtual_schema = meta.virtual_schema;
+
+        if !meta.hll.is_empty() {
+            let binding = self.ctx.get_mutation_status();
+            let status = binding.read();
+            self.insert_rows = status.insert_rows + status.update_rows;
+            self.insert_hll = meta.hll;
+        }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
 
@@ -345,6 +360,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
+                table_stats_gen,
                 cluster_key_id,
                 table_info,
             } => {
@@ -376,16 +392,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 //    in this case, we only need standard conflict resolution.
                 // therefore, we can safely proceed.
 
-                let schema = self.table.schema().as_ref().clone();
                 match self.snapshot_gen.generate_new_snapshot(
-                    schema,
+                    &table_info,
                     cluster_key_id,
                     previous,
-                    Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
-                    table_info.ident.table_id,
                     self.table_meta_timestamps,
-                    table_info.name.as_str(),
+                    table_stats_gen,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
@@ -460,9 +473,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     self.snapshot_gen
                         .fill_default_values(schema, &previous)
                         .await?;
-
+                    let table_stats_gen = fuse_table
+                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                        .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
+                        table_stats_gen,
                         cluster_key_id: fuse_table.cluster_key_id(),
                         table_info,
                     };
@@ -610,8 +626,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
+                let table_stats_gen = fuse_table
+                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                    .await?;
                 self.state = State::GenerateSnapshot {
                     previous,
+                    table_stats_gen,
                     cluster_key_id: fuse_table.cluster_key_id(),
                     table_info: fuse_table.table_info.clone(),
                 };

@@ -31,7 +31,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     let case_name = "analyze_statistic_optimize";
     do_insertions(&fixture).await?;
 
-    analyze_table(&fixture).await?;
+    fixture.analyze_table().await?;
     check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, 2, Some(()), None).await?;
 
     // Purge will keep at least two snapshots.
@@ -61,10 +61,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
 
     // analyze the table
     {
-        let qry = format!("Analyze table {}.{}", db, tbl);
-
-        fixture.execute_command(&qry).await?;
-
+        fixture.analyze_table().await?;
         check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, 2, None, Some(())).await?;
     }
 
@@ -100,11 +97,11 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let case_name = "analyze_statistic_purge";
     do_insertions(&fixture).await?;
 
-    analyze_table(&fixture).await?;
+    fixture.analyze_table().await?;
     check_data_dir(&fixture, case_name, 3, 1, 2, 2, 2, 2, Some(()), None).await?;
 
     append_sample_data(1, &fixture).await?;
-    analyze_table(&fixture).await?;
+    fixture.analyze_table().await?;
     check_data_dir(&fixture, case_name, 5, 2, 3, 3, 3, 3, Some(()), None).await?;
 
     // Purge will keep at least two snapshots.

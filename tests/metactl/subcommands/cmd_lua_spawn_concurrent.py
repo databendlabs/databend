@@ -53,9 +53,9 @@ print("All tasks completed!")
     ]
 
     for phrase in expected_phrases:
-        assert (
-            phrase in output
-        ), f"Expected phrase '{phrase}' not found in output:\n{output}"
+        assert phrase in output, (
+            f"Expected phrase '{phrase}' not found in output:\n{output}"
+        )
     print("✓ Basic spawn functionality test passed")
 
 

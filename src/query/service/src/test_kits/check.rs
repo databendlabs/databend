@@ -185,7 +185,7 @@ pub async fn check_data_dir(
         let snapshot_opt = fuse_table.read_table_snapshot().await?;
         assert!(snapshot_opt.is_some());
         let snapshot = snapshot_opt.unwrap();
-        let ts_location_opt = snapshot.table_statistics_location.clone();
+        let ts_location_opt = snapshot.table_statistics_location();
         assert!(ts_location_opt.is_some());
         let ts_location = ts_location_opt.unwrap();
         println!(

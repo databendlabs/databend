@@ -43,7 +43,7 @@ use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
-use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -402,7 +402,7 @@ impl StreamBlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
-            column_hlls: column_hlls.map(|v| encode_column_hll(&v)).transpose()?,
+            column_hlls: column_hlls.map(BlockHLLState::Deserialized),
         };
         Ok(serialized)
     }

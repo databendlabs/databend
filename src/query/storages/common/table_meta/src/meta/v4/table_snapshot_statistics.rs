@@ -37,6 +37,16 @@ pub struct TableSnapshotStatistics {
 }
 
 impl TableSnapshotStatistics {
+    pub fn empty_with_id(snapshot_id: SnapshotId) -> Self {
+        Self {
+            format_version: TableSnapshotStatistics::VERSION,
+            snapshot_id,
+            hll: HashMap::new(),
+            histograms: HashMap::new(),
+            row_count: 0,
+        }
+    }
+
     pub fn new(
         hll: HashMap<ColumnId, MetaHLL>,
         histograms: HashMap<ColumnId, Histogram>,

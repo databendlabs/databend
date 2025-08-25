@@ -47,11 +47,11 @@ use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
-use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -148,7 +148,7 @@ pub struct BlockSerialization {
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
-    pub column_hlls: Option<RawBlockHLL>,
+    pub column_hlls: Option<BlockHLLState>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -170,6 +170,10 @@ pub struct BlockBuilder {
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub vector_index_builder: Option<VectorIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
+    /// Indicates whether column_hlls should be serialized into RawBlockHLL
+    /// - true: Output as BlockHLLState::Serialized(RawBlockHLL)
+    /// - false: Output as BlockHLLState::Deserialized(BlockHLL)
+    pub serialize_hll: bool,
 }
 
 impl BlockBuilder {
@@ -281,6 +285,15 @@ impl BlockBuilder {
             create_on: Some(Utc::now()),
         };
 
+        let column_hlls = column_hlls
+            .map(|hlls| {
+                if self.serialize_hll {
+                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
+                } else {
+                    Ok(BlockHLLState::Deserialized(hlls))
+                }
+            })
+            .transpose()?;
         let serialized = BlockSerialization {
             block_raw_data: buffer,
             block_meta,
@@ -288,7 +301,7 @@ impl BlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
-            column_hlls: column_hlls.map(|v| encode_column_hll(&v)).transpose()?,
+            column_hlls,
         };
         Ok(serialized)
     }

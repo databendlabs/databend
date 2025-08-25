@@ -17,13 +17,13 @@ use std::sync::Arc;
 use std::vec;
 
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_session::TxnManager;
 use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::storages::fuse::utils::new_empty_snapshot;
@@ -60,15 +60,12 @@ fn test_unresolvable_delete_conflict() {
     let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
-    let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+    let result = generator.do_generate_new_snapshot(
+        &TableInfo::default(),
         None,
-        Some(Arc::new(latest_snapshot)),
-        None,
-        TxnManager::init(),
-        0,
+        &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        Default::default(),
     );
     assert!(result.is_err());
 }
@@ -181,15 +178,12 @@ fn test_resolvable_delete_conflict() {
     let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
-    let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+    let result = generator.do_generate_new_snapshot(
+        &TableInfo::default(),
         None,
-        Some(Arc::new(latest_snapshot)),
-        None,
-        TxnManager::init(),
-        0,
+        &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -325,15 +319,12 @@ fn test_resolvable_replace_conflict() {
         MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
-    let result = generator.generate_new_snapshot(
-        TableSchema::default(),
+    let result = generator.do_generate_new_snapshot(
+        &TableInfo::default(),
         None,
-        Some(Arc::new(latest_snapshot)),
-        None,
-        TxnManager::init(),
-        0,
+        &Some(Arc::new(latest_snapshot)),
         TestFixture::default_table_meta_timestamps(),
-        "test",
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![

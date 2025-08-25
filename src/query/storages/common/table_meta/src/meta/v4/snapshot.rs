@@ -90,6 +90,7 @@ pub struct TableSnapshot {
     /// The metadata of the cluster keys.
     /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
+    // TODO(zhyass): move table_statistics_location to additional_stats_meta.location.
     pub table_statistics_location: Option<String>,
 }
 
@@ -246,6 +247,11 @@ impl TableSnapshot {
     #[inline]
     pub fn encoding() -> MetaEncoding {
         MetaEncoding::MessagePack
+    }
+
+    #[inline]
+    pub fn table_statistics_location(&self) -> Option<String> {
+        self.table_statistics_location.clone()
     }
 }
 

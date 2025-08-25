@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -30,6 +31,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -56,11 +58,12 @@ enum State<B: SegmentBuilder> {
         location: String,
         segment: B::Segment,
 
-        stats: Option<(String, Vec<u8>)>,
+        stats: Option<(String, Vec<u8>, BlockHLL)>,
     },
     PreCommitSegment {
         location: String,
         segment: B::Segment,
+        hll: BlockHLL,
     },
     Finished,
 }
@@ -252,7 +255,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             }
 
             if let Some(hll) = extended_block_meta.column_hlls {
-                self.hll_accumulator.add_hll(hll);
+                self.hll_accumulator.add_hll(hll)?;
             }
             if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
                 self.state = State::GenerateSegment;
@@ -276,11 +279,16 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 if !self.hll_accumulator.is_empty() {
                     let segment_stats_location = TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(location.as_str());
                     let stats_data = self.hll_accumulator.build().to_bytes()?;
+                    let stats_summary = self.hll_accumulator.take_summary();
                     additional_stats_meta = Some(AdditionalStatsMeta {
                         size: stats_data.len() as u64,
-                        location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                        location: Some((
+                            segment_stats_location.clone(),
+                            SegmentStatistics::VERSION,
+                        )),
+                        ..Default::default()
                     });
-                    stats = Some((segment_stats_location, stats_data));
+                    stats = Some((segment_stats_location, stats_data, stats_summary));
                 }
 
                 let segment_info = self.segment_builder.build(
@@ -296,7 +304,11 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     stats,
                 }
             }
-            State::PreCommitSegment { location, segment } => {
+            State::PreCommitSegment {
+                location,
+                segment,
+                hll,
+            } => {
                 let format_version = SegmentInfo::VERSION;
 
                 // emit log entry.
@@ -306,6 +318,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                         segment_location: location,
                         format_version,
                         summary: segment.summary().clone(),
+                        hll,
                     }],
                 };
 
@@ -329,12 +342,18 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 stats,
             } => {
                 self.data_accessor.write(&location, data).await?;
-                if let Some((location, stats)) = stats {
+                let mut hll = HashMap::new();
+                if let Some((location, stats, summary)) = stats {
                     self.data_accessor.write(&location, stats).await?;
+                    hll = summary;
                 }
                 info!("fuse append wrote down segment {} ", location);
 
-                self.state = State::PreCommitSegment { location, segment };
+                self.state = State::PreCommitSegment {
+                    location,
+                    segment,
+                    hll,
+                };
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink."));

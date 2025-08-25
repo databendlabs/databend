@@ -49,13 +49,13 @@ pub struct AnalyzeLightMutator {
 }
 
 impl AnalyzeLightMutator {
-    pub fn create(
+    pub fn try_new(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_key_id: Option<u32>,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Self {
+    ) -> Option<Self> {
         let mut distinct_columns = HashSet::new();
         // Only track columns whose NDV is not yet computed.
         for (col_id, stats) in &base_snapshot.summary.col_stats {
@@ -63,7 +63,10 @@ impl AnalyzeLightMutator {
                 distinct_columns.insert(*col_id);
             }
         }
-        AnalyzeLightMutator {
+        if distinct_columns.is_empty() {
+            return None;
+        }
+        Some(AnalyzeLightMutator {
             ctx,
             operator,
             base_snapshot,
@@ -72,7 +75,7 @@ impl AnalyzeLightMutator {
             cluster_key_id,
             col_stats: HashMap::new(),
             cluster_stats: None,
-        }
+        })
     }
 
     #[async_backtrace::framed]
