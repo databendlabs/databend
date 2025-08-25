@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::future::Future;
 use std::pin::pin;
 use std::sync::Arc;
@@ -96,7 +97,7 @@ impl HeartbeatTask {
 
         let resp = meta_client.transaction(txn_req).await?;
 
-        if resp.execution_path == "else".to_string() {
+        if resp.execution_path == *"else" {
             return Ok(None);
         }
 
@@ -294,6 +295,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
     use tokio::time::timeout;
@@ -474,7 +476,7 @@ mod tests {
             let barrier_clone = barrier.clone();
             let results_clone = results.clone();
 
-            let handle = tokio::spawn(async move {
+            let handle = spawn(async move {
                 // Wait for all tasks to reach this point
                 barrier_clone.wait().await;
 

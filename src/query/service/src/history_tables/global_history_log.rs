@@ -35,7 +35,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_sql::Planner;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -60,7 +59,6 @@ use crate::history_tables::alter_table::get_log_table;
 use crate::history_tables::alter_table::should_reset;
 use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::external::ExternalStorageConnection;
-use crate::history_tables::meta::HeartbeatTaskGuard;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
@@ -507,7 +505,6 @@ pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
 /// We will use this to determine if we should retry the operation.
 fn is_temp_error(e: &ErrorCode) -> bool {
     let code = e.code();
-    let message = e.message();
     // Storage and I/O errors are considered temporary errors
     let storage = code == ErrorCode::STORAGE_NOT_FOUND
         || code == ErrorCode::STORAGE_PERMISSION_DENIED
