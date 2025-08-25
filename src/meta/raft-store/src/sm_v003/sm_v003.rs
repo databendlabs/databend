@@ -26,7 +26,6 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::debug;
-use log::info;
 use map_api::mvcc;
 use map_api::mvcc::ScopedViewReadonly;
 use openraft::entry::RaftEntry;
@@ -37,7 +36,7 @@ use state_machine_api::UserKey;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
-use crate::leveled_store::leveled_map::applier_acquirer::ApplierAcquirer;
+use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
@@ -56,7 +55,7 @@ pub struct SMV003 {
     cleanup_start_time: Arc<Mutex<Duration>>,
 
     /// Callback when a change is applied to state machine
-    pub(crate) on_change_applied: Arc<Option<OnChange>>,
+    pub(crate) on_change_applied: Arc<Mutex<Arc<Option<OnChange>>>>,
 }
 
 impl fmt::Debug for SMV003 {
@@ -65,7 +64,11 @@ impl fmt::Debug for SMV003 {
             .field("levels", &self.levels)
             .field(
                 "on_change_applied",
-                &self.on_change_applied.as_ref().as_ref().map(|_x| "is_set"),
+                &self
+                    .get_on_change_applied()
+                    .as_ref()
+                    .as_ref()
+                    .map(|_x| "is_set"),
             )
             .finish()
     }
@@ -134,42 +137,28 @@ impl SMV003 {
     }
 
     /// Install and replace state machine with the content of a snapshot.
-    pub async fn install_snapshot_v003(&mut self, db: DB) -> Result<(), io::Error> {
-        let data_size = db.inner().file_size();
+    pub fn install_snapshot_v003(&self, db: DB) -> SMV003 {
         let sys_data = db.sys_data().clone();
 
-        info!(
-            "SMV003::install_snapshot: data_size: {}; sys_data: {:?}",
-            data_size, sys_data
-        );
+        let new_sm = SMV003 {
+            levels: LeveledMap {
+                compaction_semaphore: self.levels.compaction_semaphore.clone(),
 
-        // Do not skip install if both self.last_applied and db.last_applied are None.
-        //
-        // The snapshot may contain data when its last_applied is None,
-        // when importing data with metactl:
-        // The snapshot is empty but contains Nodes data that are manually added.
-        //
-        // See: `databend_metactl::import`
-        let my_last_applied = *self.sys_data().last_applied_ref();
-        #[allow(clippy::collapsible_if)]
-        if my_last_applied.is_some() {
-            if &my_last_applied >= sys_data.last_applied_ref() {
-                info!(
-                    "SMV003 try to install a smaller snapshot({:?}), ignored, my last applied: {:?}",
-                    sys_data.last_applied_ref(),
-                    self.sys_data().last_applied_ref()
-                );
-                return Ok(());
-            }
-        }
+                write_semaphore: self.levels.write_semaphore.clone(),
 
-        self.levels.data = Arc::new(LeveledMapData {
-            writable: Default::default(),
-            immutable_levels: Default::default(),
-            persisted: Mutex::new(Some(Arc::new(db))),
-        });
-        self.levels.with_sys_data(|s| *s = sys_data);
-        Ok(())
+                data: Arc::new(LeveledMapData {
+                    writable: Default::default(),
+                    immutable_levels: Default::default(),
+                    persisted: Mutex::new(Some(Arc::new(db))),
+                }),
+            },
+            cleanup_start_time: self.cleanup_start_time.clone(),
+            on_change_applied: self.on_change_applied.clone(),
+        };
+
+        new_sm.levels.with_sys_data(|s| *s = sys_data);
+
+        new_sm
     }
 
     pub fn get_snapshot(&self) -> Option<DB> {
@@ -188,7 +177,7 @@ impl SMV003 {
     }
 
     pub(crate) async fn new_applier(&self) -> Applier<ApplierData> {
-        let acquirer = self.new_applier_acquirer();
+        let acquirer = self.new_writer_acquirer();
         let permit = acquirer.acquire().await;
 
         let view = mvcc::View::new(self.levels.data.clone());
@@ -196,14 +185,18 @@ impl SMV003 {
             _permit: permit,
             view,
             cleanup_start_time: self.cleanup_start_time.clone(),
-            on_change_applied: self.on_change_applied.clone(),
+            on_change_applied: self.get_on_change_applied(),
         };
 
         Applier::new(applier_data)
     }
 
-    pub fn new_applier_acquirer(&self) -> ApplierAcquirer {
-        self.levels.new_applier_acquirer()
+    pub fn get_on_change_applied(&self) -> Arc<Option<OnChange>> {
+        self.on_change_applied.lock().unwrap().clone()
+    }
+
+    pub fn new_writer_acquirer(&self) -> WriterAcquirer {
+        self.levels.new_writer_acquirer()
     }
 
     pub async fn apply_entries(
@@ -235,7 +228,7 @@ impl SMV003 {
         self.levels.with_sys_data(|x| x.clone())
     }
 
-    pub fn with_sys_data<T>(&mut self, f: impl FnOnce(&mut SysData) -> T) -> T {
+    pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
         self.levels.with_sys_data(f)
     }
 
@@ -251,12 +244,9 @@ impl SMV003 {
         self.map_mut()
     }
 
-    pub fn set_on_change_applied(&mut self, on_change_applied: OnChange) {
-        self.on_change_applied = Arc::new(Some(on_change_applied));
-    }
-
-    pub fn freeze_writable(&mut self) {
-        self.levels.freeze_writable();
+    pub fn set_on_change_applied(&self, on_change_applied: OnChange) {
+        let mut g = self.on_change_applied.lock().unwrap();
+        *g = Arc::new(Some(on_change_applied));
     }
 
     /// A shortcut

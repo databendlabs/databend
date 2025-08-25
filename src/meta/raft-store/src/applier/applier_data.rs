@@ -29,7 +29,7 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::leveled_map::applier_acquirer::ApplierPermit;
+use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::leveled_store::types::Key;
 use crate::leveled_store::types::Namespace;
@@ -40,7 +40,7 @@ pub(crate) type StateMachineView = mvcc::View<Namespace, Key, Value, Arc<Leveled
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.
-    pub(crate) _permit: ApplierPermit,
+    pub(crate) _permit: WriterPermit,
 
     pub(crate) view: StateMachineView,
 

@@ -35,9 +35,9 @@ use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let mut lm = build_3_levels().await?;
+    let lm = build_3_levels().await?;
 
-    let immutable_levels = lm.freeze_writable().clone();
+    let immutable_levels = lm.testing_freeze_writable().clone();
 
     let compacted = {
         let mut compacting_data = CompactingData::new(immutable_levels.clone(), None);
@@ -89,10 +89,10 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_compact_expire_index() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
+    let sm = build_sm_with_expire().await?;
 
     let compacted = {
-        sm.freeze_writable();
+        sm.levels().testing_freeze_writable();
         let mut compactor = sm.acquire_compactor().await;
         compactor.compact_immutable_in_place().await?;
         compactor.immutable_levels()
@@ -141,10 +141,10 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_compact_3_level() -> anyhow::Result<()> {
-    let mut lm = build_3_levels().await?;
+    let lm = build_3_levels().await?;
     println!("{:#?}", lm);
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     let mut compactor = lm.acquire_compactor().await;
 
@@ -170,8 +170,8 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
-    sm.freeze_writable();
+    let sm = build_sm_with_expire().await?;
+    sm.levels().testing_freeze_writable();
 
     let mut compactor = sm.acquire_compactor().await;
 
@@ -204,7 +204,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
-    let mut lm = LeveledMap::default();
+    let lm = LeveledMap::default();
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
             Some(log_id(1, 1, 1)),
@@ -224,7 +224,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 
     view.commit().await?;
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -242,7 +242,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -281,7 +281,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
 
     a.commit().await?;
 
-    sm.map_mut().freeze_writable();
+    sm.map_mut().testing_freeze_writable();
 
     let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))

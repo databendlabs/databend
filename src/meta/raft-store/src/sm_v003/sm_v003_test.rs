@@ -97,7 +97,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     a.upsert_kv(&UpsertKV::update("c", b"c0")).await?;
     a.commit().await?;
 
-    sm.map_mut().freeze_writable();
+    sm.map_mut().testing_freeze_writable();
     let mut a = sm.new_applier().await;
 
     // internal_seq = 3
@@ -180,7 +180,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
 
     a.commit().await?;
 
-    sm.map_mut().freeze_writable();
+    sm.map_mut().testing_freeze_writable();
     let mut a = sm.new_applier().await;
 
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))

@@ -461,10 +461,7 @@ impl MetaService for MetaServiceImpl {
         // This approach prevents race conditions and guarantees that no events will be
         // delivered out of order to the watcher.
         let stream = {
-            let sm = mn
-                .raft_store
-                .get_state_machine_read("new-watch-stream")
-                .await;
+            let sm = mn.raft_store.state_machine();
 
             let sender = mn.new_watch_sender(watch, tx.clone())?;
             let sender_str = sender.to_string();

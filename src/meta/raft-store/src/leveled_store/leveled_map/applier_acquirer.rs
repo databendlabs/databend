@@ -13,29 +13,43 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
+use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 /// Acquirer is used to acquire a permit for applying, without holding lock to the state machine.
-pub struct ApplierAcquirer {
+pub struct WriterAcquirer {
     sem: Arc<Semaphore>,
 }
 
-impl ApplierAcquirer {
+impl WriterAcquirer {
     pub fn new(sem: Arc<Semaphore>) -> Self {
-        ApplierAcquirer { sem }
+        WriterAcquirer { sem }
     }
 
-    pub async fn acquire(self) -> ApplierPermit {
+    pub async fn acquire(self) -> WriterPermit {
         // Safe unwrap: it returns error only when semaphore is closed.
         // This semaphore does not close.
+        let start = Instant::now();
         let permit = self.sem.acquire_owned().await.unwrap();
-        ApplierPermit { _permit: permit }
+        info!("WriterPermit-Acquire: total: {:?}", start.elapsed());
+        WriterPermit {
+            start: Instant::now(),
+            _permit: permit,
+        }
     }
 }
 
 /// ApplierPermit is used to acquire a permit for applying changes to the state machine.
-pub struct ApplierPermit {
+pub struct WriterPermit {
+    start: Instant,
     _permit: OwnedSemaphorePermit,
+}
+
+impl Drop for WriterPermit {
+    fn drop(&mut self) {
+        info!("WriterPermit-Drop: total: {:?}", self.start.elapsed());
+    }
 }

@@ -41,7 +41,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
         a.commit().await?;
 
-        sm.levels_mut().freeze_writable();
+        sm.levels_mut().testing_freeze_writable();
 
         let mut a = sm.new_applier().await;
 

@@ -26,7 +26,7 @@ use crate::leveled_store::map_api::MapApiHelper;
 
 #[tokio::test]
 async fn test_freeze() -> anyhow::Result<()> {
-    let mut l = LeveledMap::default();
+    let l = LeveledMap::default();
     let mut view = l.to_scoped_view();
 
     // Insert an entry at level 0
@@ -38,7 +38,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     view.commit().await?;
 
     // Insert the same entry at level 1
-    l.freeze_writable();
+    l.testing_freeze_writable();
     // println!("{:#?}", l);
     let mut view = l.to_scoped_view();
 
@@ -159,7 +159,7 @@ async fn test_single_level() -> anyhow::Result<()> {
 async fn test_two_levels() -> anyhow::Result<()> {
     // Create the first level
 
-    let mut l = LeveledMap::default();
+    let l = LeveledMap::default();
     let mut view = l.to_scoped_view();
 
     view.set(user_key("a1"), Some((None, b("b1"))));
@@ -181,7 +181,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Create a new level
 
-    l.freeze_writable();
+    l.testing_freeze_writable();
     let mut view = l.to_scoped_view();
 
     // Override
@@ -262,7 +262,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 /// l0 | a  b    c    d
 /// ```
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
-    let mut l = LeveledMap::default();
+    let l = LeveledMap::default();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 0
@@ -272,7 +272,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("d"), Some((None, b("d0"))));
     view.commit().await?;
 
-    l.freeze_writable();
+    l.testing_freeze_writable();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 4
@@ -281,7 +281,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    l.freeze_writable();
+    l.testing_freeze_writable();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 6
@@ -449,7 +449,7 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
 /// | a(m) b    c(m)
 /// ```
 async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
-    let mut l = LeveledMap::default();
+    let l = LeveledMap::default();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 0
@@ -464,7 +464,7 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     );
     view.commit().await?;
 
-    l.freeze_writable();
+    l.testing_freeze_writable();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 3
@@ -510,7 +510,7 @@ async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
 /// | a    b(D) c
 /// ```
 async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
-    let mut l = LeveledMap::default();
+    let l = LeveledMap::default();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 0
@@ -520,7 +520,7 @@ async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
     view.set(user_key("b"), None);
     view.commit().await?;
 
-    l.freeze_writable();
+    l.testing_freeze_writable();
     let mut view = l.to_scoped_view();
 
     // internal_seq: 3

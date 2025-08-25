@@ -50,7 +50,7 @@ pub async fn list(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResp
     let id = metrics.id;
     info!("id={} Received list_feature request", id);
 
-    let response = features_state(meta_node.0).await;
+    let response = features_state(meta_node.0);
 
     Ok(Json(response))
 }
@@ -107,17 +107,14 @@ pub async fn set(
         .await
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let response = features_state(meta_node.0).await;
+    let response = features_state(meta_node.0);
 
     Ok(Json(response))
 }
 
-pub async fn features_state(meta_node: &Arc<MetaNode>) -> FeatureResponse {
+pub fn features_state(meta_node: &Arc<MetaNode>) -> FeatureResponse {
     let enabled = {
-        let sm = meta_node
-            .raft_store
-            .get_state_machine_write("get-state-machine-features")
-            .await;
+        let sm = meta_node.raft_store.state_machine();
         let x = sm.sys_data().features().clone();
         x.into_iter().collect()
     };

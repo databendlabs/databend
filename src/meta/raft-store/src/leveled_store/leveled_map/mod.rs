@@ -27,6 +27,7 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Node;
 use futures_util::StreamExt;
+use log::debug;
 use log::info;
 use log::warn;
 use map_api::mvcc;
@@ -48,6 +49,7 @@ use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
+use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
@@ -253,14 +255,14 @@ impl LeveledMapData {
 #[derive(Debug)]
 pub struct LeveledMap {
     /// A semaphore that permits at most one compactor to run.
-    compaction_semaphore: Arc<Semaphore>,
+    pub(crate) compaction_semaphore: Arc<Semaphore>,
 
     /// Get a permit to write.
     ///
     /// Only one writer is allowed, to achieve serialization.
     /// For historical reason, inserting a tombstone does not increase the seq.
     /// Thus, mvcc isolation with the seq can not completely separate two concurrent writer.
-    write_semaphore: Arc<Semaphore>,
+    pub(crate) write_semaphore: Arc<Semaphore>,
 
     pub data: Arc<LeveledMapData>,
 }
@@ -293,8 +295,15 @@ impl LeveledMap {
         f(&mut sys_data)
     }
 
-    pub fn new_applier_acquirer(&self) -> applier_acquirer::ApplierAcquirer {
-        applier_acquirer::ApplierAcquirer::new(self.write_semaphore.clone())
+    pub async fn acquire_writer_permit(&self) -> WriterPermit {
+        let acquirer = self.new_writer_acquirer();
+        let permit = acquirer.acquire().await;
+        debug!("WriterPermit acquired");
+        permit
+    }
+
+    pub fn new_writer_acquirer(&self) -> applier_acquirer::WriterAcquirer {
+        applier_acquirer::WriterAcquirer::new(self.write_semaphore.clone())
     }
 
     /// Return the [`LevelIndex`] of the newest **immutable** data
@@ -306,8 +315,17 @@ impl LeveledMap {
 
     /// Freeze the current writable level and create a new empty writable level.
     ///
-    /// TODO: Need writer permit and compactor permit
-    pub fn freeze_writable(&mut self) -> Arc<ImmutableLevels> {
+    /// Need writer permit and compactor permit
+    pub fn freeze_writable(&self, _writer_permit: &mut WriterPermit) -> Arc<ImmutableLevels> {
+        self.do_freeze_writable()
+    }
+
+    /// For testing, requires no permit
+    pub fn testing_freeze_writable(&self) -> Arc<ImmutableLevels> {
+        self.do_freeze_writable()
+    }
+
+    pub fn do_freeze_writable(&self) -> Arc<ImmutableLevels> {
         let new_immutable = {
             let mut writable = self.data.writable();
             let new_writable = writable.new_level();
@@ -366,7 +384,7 @@ impl LeveledMap {
     ///
     /// **Important**: Do not drop the compactor within this function when called
     /// under a state machine lock, as dropping may take ~250ms.
-    pub fn replace_with_compacted(&mut self, compactor: &mut Compactor, db: DB) {
+    pub fn replace_with_compacted(&self, compactor: &mut Compactor, db: DB) {
         let len = compactor.immutable_levels().len();
 
         // Get the level index of the newest level.
@@ -418,7 +436,7 @@ impl LeveledMap {
         CompactorAcquirer::new(self.compaction_semaphore.clone())
     }
 
-    pub(crate) fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
         Compactor {
             _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),

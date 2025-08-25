@@ -148,7 +148,7 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_compact() -> anyhow::Result<()> {
     let (mut lm, _g) = build_3_levels().await?;
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
@@ -201,8 +201,11 @@ async fn test_compact() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_compact_expire_index() -> anyhow::Result<()> {
-    let (mut sm, _g) = build_sm_with_expire().await?;
-    sm.freeze_writable();
+    let (sm, _g) = build_sm_with_expire().await?;
+    {
+        let mut permit = sm.new_writer_acquirer().acquire().await;
+        sm.levels().freeze_writable(&mut permit);
+    }
 
     let mut lm = sm.into_levels();
 
@@ -265,8 +268,8 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_compact_output_3_level() -> anyhow::Result<()> {
-    let (mut lm, _g) = build_3_levels().await?;
-    lm.freeze_writable();
+    let (lm, _g) = build_3_levels().await?;
+    lm.testing_freeze_writable();
 
     let mut compactor = lm.acquire_compactor().await;
 
@@ -325,7 +328,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     view.set(user_key("d"), Some((None, b("d0"))));
     view.commit().await?;
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
             Some(log_id(2, 2, 2)),
@@ -342,7 +345,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -385,7 +388,7 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
         .await?;
     a.commit().await?;
 
-    sm.map_mut().freeze_writable();
+    sm.map_mut().testing_freeze_writable();
 
     let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))

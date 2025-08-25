@@ -90,35 +90,17 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
 
             ForwardRequestBody::GetKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
@@ -135,10 +117,7 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
         debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
 
-        let sm = self
-            .sto
-            .get_state_machine_read(format!("MetaLeader::handle(MetaGrpcReadReq: {:?})", req))
-            .await;
+        let sm = self.sto.state_machine();
         let kv_api = sm.kv_api();
 
         match req.body {
@@ -309,7 +288,7 @@ impl<'a> MetaLeader<'a> {
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
-            let sm = self.sto.get_state_machine_read("can_leave").await;
+            let sm = self.sto.state_machine();
             sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
