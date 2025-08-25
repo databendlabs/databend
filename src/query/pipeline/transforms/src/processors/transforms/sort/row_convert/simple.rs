@@ -19,6 +19,7 @@ use std::ops::Range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -156,6 +157,10 @@ where
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsAsc<T>> {
         self.convert_rows(columns, num_rows, true)
     }
+
+    fn support_data_type(d: &DataType) -> bool {
+        T::data_type() == *d
+    }
 }
 
 impl<T> RowConverter<SimpleRowsDesc<T>> for SimpleRowConverter<T>
@@ -174,6 +179,10 @@ where
 
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<SimpleRowsDesc<T>> {
         self.convert_rows(columns, num_rows, false)
+    }
+
+    fn support_data_type(d: &DataType) -> bool {
+        T::data_type() == *d
     }
 }
 

@@ -51,6 +51,7 @@ pub struct SortPipelineBuilder {
     remove_order_col_at_last: bool,
     enable_loser_tree: bool,
     broadcast_id: Option<u32>,
+    enable_fixed_rows: bool,
 }
 
 impl SortPipelineBuilder {
@@ -59,6 +60,7 @@ impl SortPipelineBuilder {
         output_schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         broadcast_id: Option<u32>,
+        enable_fixed_rows: bool,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
@@ -72,6 +74,7 @@ impl SortPipelineBuilder {
             remove_order_col_at_last: false,
             enable_loser_tree,
             broadcast_id,
+            enable_fixed_rows,
         })
     }
 
@@ -114,7 +117,11 @@ impl SortPipelineBuilder {
 
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let sort_merge_output_schema = match output_order_col {
-            true => add_order_field(self.output_schema.clone(), &self.sort_desc),
+            true => add_order_field(
+                self.output_schema.clone(),
+                &self.sort_desc,
+                self.enable_fixed_rows,
+            ),
             false => self.output_schema.clone(),
         };
 
@@ -146,6 +153,7 @@ impl SortPipelineBuilder {
                 sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
                 self.block_size,
+                self.enable_fixed_rows,
             )
             .with_spiller(spiller.clone())
             .with_limit(self.limit)
@@ -183,9 +191,10 @@ impl SortPipelineBuilder {
                 max_threads,
                 self.block_size,
                 self.limit,
-                self.sort_desc,
+                &self.sort_desc,
                 self.remove_order_col_at_last,
                 self.enable_loser_tree,
+                self.enable_fixed_rows,
             )
         } else {
             try_add_multi_sort_merge(
@@ -193,9 +202,10 @@ impl SortPipelineBuilder {
                 self.output_schema.clone(),
                 self.block_size,
                 self.limit,
-                self.sort_desc,
+                &self.sort_desc,
                 self.remove_order_col_at_last,
                 self.enable_loser_tree,
+                self.enable_fixed_rows,
             )
         }
     }
@@ -231,6 +241,7 @@ impl SortPipelineBuilder {
             self.output_schema.clone(),
             self.sort_desc.clone(),
             max_block_size,
+            self.enable_fixed_rows,
         )
         .with_spiller(spiller)
         .with_limit(self.limit)
@@ -272,6 +283,7 @@ impl SortPipelineBuilder {
             self.output_schema.clone(),
             self.sort_desc.clone(),
             self.block_size,
+            self.enable_fixed_rows,
         )
         .with_limit(self.limit)
         .with_order_column(true, !self.remove_order_col_at_last)

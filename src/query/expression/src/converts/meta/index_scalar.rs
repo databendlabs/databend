@@ -133,6 +133,7 @@ impl TryFrom<Scalar> for IndexScalar {
             | Scalar::Geometry(_)
             | Scalar::Geography(_)
             | Scalar::Vector(_)
+            | Scalar::Opaque(_)
             | Scalar::EmptyArray
             | Scalar::EmptyMap => return Err(ErrorCode::Unimplemented("Unsupported scalar type")),
         })

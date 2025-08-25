@@ -14,6 +14,7 @@
 
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
@@ -104,6 +105,7 @@ impl FieldEncoderJSON {
             | Column::Number(_)
             | Column::Decimal(_)
             | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false),
+            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
         }
     }
 
@@ -179,5 +181,11 @@ impl FieldEncoderJSON {
             self.write_field(inner, row_index, out_buf);
         }
         out_buf.push(b'}');
+    }
+
+    fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let scalar = unsafe { column.index_unchecked(row_index) };
+        let hex_string = hex::encode_upper(scalar.to_le_bytes());
+        self.write_string(hex_string.as_bytes(), out_buf);
     }
 }

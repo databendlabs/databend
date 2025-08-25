@@ -29,6 +29,7 @@ use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::opaque::OpaqueType;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -46,6 +47,7 @@ use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
+use crate::with_opaque_size;
 use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -164,6 +166,12 @@ impl Column {
                 );
                 Column::Interval(buffer)
             }
+            Column::Opaque(first) => {
+                with_opaque_size!(|N| match first.size() {
+                    N => Self::concat_opaque_column::<_, N>(columns, capacity),
+                    _ => unreachable!("Unsupported Opaque size: {}", first.size()),
+                })
+            }
             Column::Array(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
@@ -250,6 +258,15 @@ impl Column {
             builder.extend(col.iter());
         }
         builder.into()
+    }
+
+    fn concat_opaque_column<I, const N: usize>(columns: I, capacity: usize) -> Column
+    where I: Iterator<Item = Column> + TrustedLen + Clone {
+        let buffer = Self::concat_primitive_types(
+            columns.map(|col| OpaqueType::<N>::try_downcast_column(&col).unwrap()),
+            capacity,
+        );
+        OpaqueType::<N>::upcast_column_with_type(buffer, &DataType::Opaque(N))
     }
 
     pub fn concat_use_arrow(

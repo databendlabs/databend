@@ -43,14 +43,18 @@ pub fn has_order_field(schema: &DataSchema) -> bool {
         .is_some_and(|f| f.name() == ORDER_COL_NAME)
 }
 
-pub fn add_order_field(schema: DataSchemaRef, desc: &[SortColumnDescription]) -> DataSchemaRef {
+pub fn add_order_field(
+    schema: DataSchemaRef,
+    desc: &[SortColumnDescription],
+    enable_fixed_rows: bool,
+) -> DataSchemaRef {
     if has_order_field(&schema) {
         schema
     } else {
         let mut fields = schema.fields.clone();
         fields.push(DataField::new(
             ORDER_COL_NAME,
-            order_field_type(&schema, desc),
+            order_field_type(&schema, desc, enable_fixed_rows),
         ));
         DataSchemaRefExt::create(fields)
     }

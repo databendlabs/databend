@@ -208,6 +208,11 @@ impl From<std::io::Error> for ErrorCode {
         match error.kind() {
             ErrorKind::NotFound => ErrorCode::StorageNotFound(msg),
             ErrorKind::PermissionDenied => ErrorCode::StoragePermissionDenied(msg),
+            ErrorKind::InvalidData
+                if msg == "invalid data (invalid type: unit value, expected a tuple of size 2)" =>
+            {
+                panic!("{msg}");
+            }
             _ => ErrorCode::StorageOther(msg),
         }
     }

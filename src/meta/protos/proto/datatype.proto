@@ -68,6 +68,7 @@ message DataType {
     Empty    geography_t   = 48;
     Empty    interval_t    = 49;
     Vector   vector_t      = 50;
+    uint64   opaque_t      = 51;
   }
 }
 

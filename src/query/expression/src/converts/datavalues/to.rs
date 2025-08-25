@@ -35,10 +35,11 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             }
             crate::types::number::NumberScalar::Float64(x) => DataValue::Float64((*x).into()),
         },
-        Scalar::Decimal(_) => unimplemented!("decimal type is not supported"),
+        Scalar::Opaque(_) => unimplemented!("opaque type datavalues conversion not supported"),
+        Scalar::Decimal(_) => unimplemented!("decimal type datavalues conversion not supported"),
         Scalar::Timestamp(x) => DataValue::Int64(*x),
         Scalar::Date(x) => DataValue::Int64(*x as i64),
-        Scalar::Interval(_) => unimplemented!("Interval type is not supported"),
+        Scalar::Interval(_) => unimplemented!("Interval type datavalues conversion not supported"),
         Scalar::Boolean(x) => DataValue::Boolean(*x),
         Scalar::Variant(x) => DataValue::String(x.clone()),
         Scalar::Geometry(x) => DataValue::String(x.clone()),

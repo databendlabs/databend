@@ -297,6 +297,7 @@ pub enum TableDataType {
     Geography,
     Interval,
     Vector(VectorDataType),
+    Opaque(usize),
 }
 
 impl DataSchema {
@@ -1272,6 +1273,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Boolean => DataType::Boolean,
             TableDataType::Binary => DataType::Binary,
             TableDataType::String => DataType::String,
+            TableDataType::Opaque(size) => DataType::Opaque(*size),
             TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
             TableDataType::Decimal(ty) => DataType::Decimal(ty.size()),
@@ -1435,6 +1437,7 @@ impl TableDataType {
                 | TableDataType::String
                 | TableDataType::Boolean
                 | TableDataType::Binary
+                | TableDataType::Opaque(_)
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::Date
@@ -1580,6 +1583,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::EmptyMap => Ok(TableDataType::EmptyMap),
         DataType::Binary => Ok(TableDataType::Binary),
         DataType::String => Ok(TableDataType::String),
+        DataType::Opaque(size) => Ok(TableDataType::Opaque(*size)),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(size) => match size.data_kind() {
@@ -1622,8 +1626,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         }
         DataType::Vector(ty) => Ok(TableDataType::Vector(*ty)),
         DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
-            "Cannot create table with type: {}",
-            data_type
+            "Cannot create table with type: {data_type}",
         ))),
     }
 }

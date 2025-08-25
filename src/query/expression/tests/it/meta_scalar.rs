@@ -21,7 +21,7 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
 use crate::rand_block_for_all_types;
-use crate::rand_block_for_simple_types;
+use crate::DataTypeFilter;
 
 #[test]
 pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
@@ -32,7 +32,7 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
 
     for _ in 0..test_times {
         let rows = rng.gen_range(100..1024);
-        let random_block = rand_block_for_all_types(rows);
+        let random_block = rand_block_for_all_types(rows, DataTypeFilter::Legacy);
         for entry in random_block
             .columns()
             .iter()
@@ -79,12 +79,8 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
 
     for _ in 0..test_times {
         let rows = rng.gen_range(100..1024);
-        let random_block = rand_block_for_simple_types(rows);
-        for entry in random_block
-            .columns()
-            .iter()
-            .filter(|c| !c.data_type().remove_nullable().is_binary())
-        {
+        let random_block = rand_block_for_all_types(rows, DataTypeFilter::Simple);
+        for entry in random_block.columns() {
             let mut scalars = vec![];
             let mut simple_scalars = vec![];
 

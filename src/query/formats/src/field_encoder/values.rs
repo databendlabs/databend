@@ -21,6 +21,7 @@ use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::AnyType;
@@ -168,6 +169,7 @@ impl FieldEncoderValues {
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
             Column::Vector(c) => self.write_vector(c, row_index, out_buf),
+            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
         }
     }
     fn common_settings(&self) -> &OutputCommonSettings {
@@ -439,5 +441,11 @@ impl FieldEncoderValues {
             }
         }
         out_buf.push(b']');
+    }
+
+    fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let scalar = unsafe { column.index_unchecked(row_index) };
+        let hex_bytes = hex::encode_upper(scalar.to_le_bytes());
+        out_buf.extend_from_slice(hex_bytes.as_bytes());
     }
 }

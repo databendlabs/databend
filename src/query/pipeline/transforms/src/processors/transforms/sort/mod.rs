@@ -18,6 +18,7 @@ mod k_way_merge_sort_partition;
 mod list_domain;
 mod loser_tree;
 mod merger;
+mod row_convert;
 mod rows;
 pub mod utils;
 
@@ -25,4 +26,5 @@ pub use cursor::*;
 pub use k_way_merge_sort_partition::KWaySortPartitioner;
 pub use k_way_merge_sort_partition::SortTaskMeta;
 pub use merger::*;
+pub use row_convert::*;
 pub use rows::*;
