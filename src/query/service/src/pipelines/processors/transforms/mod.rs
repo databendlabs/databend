@@ -17,6 +17,7 @@ pub mod aggregator;
 mod broadcast;
 mod hash_join;
 mod materialized_cte;
+pub mod new_hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
 pub mod sort;
