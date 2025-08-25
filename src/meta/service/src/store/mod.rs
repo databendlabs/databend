@@ -18,7 +18,5 @@ mod raft_state_machine_impl;
 mod store;
 mod store_inner;
 
-pub mod lock_guards;
-
 pub use store::RaftStore;
 pub use store_inner::RaftStoreInner;

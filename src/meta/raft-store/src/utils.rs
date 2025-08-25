@@ -17,6 +17,10 @@ use std::fmt;
 use futures::Stream;
 use futures_util::StreamExt;
 use log::info;
+use seq_marked::SeqMarked;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
+use state_machine_api::UserKey;
 
 /// Add cooperative yielding to a stream to prevent task starvation.
 ///
@@ -72,6 +76,14 @@ pub fn prefix_right_bound(p: &str) -> Option<String> {
 
     // If all characters are \u{10FFFF} or the string is empty, return None
     None
+}
+
+/// Convert internal data format [`SeqMarked<T>`] containing tombstone to a public API format [`SeqV`] without tombstone.
+///
+/// A tombstone is converted to None.
+pub fn seq_marked_to_seqv(k: UserKey, marked: SeqMarked<MetaValue>) -> Option<(String, SeqV)> {
+    let seqv = Into::<Option<SeqV>>::into(marked);
+    seqv.map(|x| (k.to_string(), x))
 }
 
 #[cfg(test)]

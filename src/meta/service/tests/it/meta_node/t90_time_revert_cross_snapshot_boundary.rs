@@ -127,8 +127,7 @@ async fn write_two_logs(
     // Check final state
     let result = meta_node
         .raft_store
-        .get_state_machine_read("write_two_logs")
-        .await
+        .state_machine()
         .kv_api()
         .get_kv("k1")
         .await?;

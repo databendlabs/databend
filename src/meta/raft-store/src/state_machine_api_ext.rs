@@ -29,8 +29,8 @@ use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
-use map_api::map_api::MapApi;
-use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedView;
+use map_api::mvcc::ScopedViewReadonly;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
@@ -40,10 +40,10 @@ use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;
+use crate::utils::seq_marked_to_seqv;
 
 #[async_trait::async_trait]
 pub trait StateMachineApiExt: StateMachineApi<SysData> {
@@ -55,7 +55,11 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
     ) -> Result<(SeqMarked<MetaValue>, SeqMarked<MetaValue>), io::Error> {
         let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
 
-        let prev = self.user_map().get(upsert_kv.key.as_ref()).await?.clone();
+        let prev = self
+            .user_map()
+            .get(UserKey::new(&upsert_kv.key))
+            .await?
+            .clone();
 
         if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
@@ -64,7 +68,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
                 self.user_map_mut()
-                    .set(
+                    .fetch_and_set(
                         UserKey::new(&upsert_kv.key),
                         Some((kv_meta.clone(), v.clone())),
                     )
@@ -72,7 +76,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
             }
             Operation::Delete => {
                 self.user_map_mut()
-                    .set(UserKey::new(&upsert_kv.key), None)
+                    .fetch_and_set(UserKey::new(&upsert_kv.key), None)
                     .await?
             }
             #[allow(deprecated)]
@@ -103,7 +107,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
             // Old SM will just insert an expired record, and that causes the system seq increase by 1.
             let (_p, r) = self
                 .user_map_mut()
-                .set(UserKey::new(&upsert_kv.key), None)
+                .fetch_and_set(UserKey::new(&upsert_kv.key), None)
                 .await?;
             result = r;
         };
@@ -143,8 +147,8 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         let left = rng.start_bound().cloned();
         let right = rng.end_bound().cloned();
 
-        let leveled_map = self.user_map();
-        let strm = leveled_map.as_user_map().range(rng).await?;
+        let user_map = self.user_map();
+        let strm = user_map.range(rng).await?;
 
         let strm = add_cooperative_yielding(strm, format!("range_kv: {left:?} to {right:?}"))
             // Skip tombstone
@@ -171,14 +175,13 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
 
         if let Some(exp_ms) = removed.expires_at_ms_opt() {
             self.expire_map_mut()
-                .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None)
-                .await?;
+                .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None);
         }
 
         if let Some(exp_ms) = added.expires_at_ms_opt() {
             let k = ExpireKey::new(exp_ms, *added.internal_seq());
             let v = key.to_string();
-            self.expire_map_mut().set(k, Some(v)).await?;
+            self.expire_map_mut().set(k, Some(v));
         }
 
         Ok(())
@@ -235,19 +238,11 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
-        let got = self.user_map().get(key.as_ref()).await?;
+    async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+        let got = self.user_map().get(UserKey::new(key.to_string())).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }
 }
 
 impl<T> StateMachineApiExt for T where T: StateMachineApi<SysData> {}
-
-/// Convert internal data format [`SeqMarked<T>`] containing tombstone to a public API format [`SeqV`] without tombstone.
-///
-/// A tombstone is converted to None.
-fn seq_marked_to_seqv(k: UserKey, marked: SeqMarked<MetaValue>) -> Option<(String, SeqV)> {
-    let seqv = Into::<Option<SeqV>>::into(marked);
-    seqv.map(|x| (k.to_string(), x))
-}

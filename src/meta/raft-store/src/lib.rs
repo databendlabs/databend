@@ -24,6 +24,7 @@ pub mod key_spaces;
 pub mod leveled_store;
 pub mod ondisk;
 pub mod raft_log_v004;
+pub mod scoped;
 pub mod sm_v003;
 pub mod snapshot_config;
 pub mod state;

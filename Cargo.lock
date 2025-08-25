@@ -5102,6 +5102,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "logcall",
+ "map-api",
  "maplit",
  "poem",
  "pretty_assertions",
@@ -9975,8 +9976,8 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.7"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.7#f9b7ee4594f39e9e54e5afca9160e0bbb19d96aa"
+version = "0.3.1"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.3.1#a5bef778a89f03f85143025e118c568db84eae8f"
 dependencies = [
  "async-trait",
  "deepsize",
@@ -13604,9 +13605,9 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 
 [[package]]
 name = "seq-marked"
-version = "0.3.1"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d45380716df592d2c8393158bd0fd805dd95223d3abef08ebf4e3222f55550c"
+checksum = "835b34bd2bb988a2287b118e7a43054e6ad381a5cde3beb6ef27c4637c5aa828"
 dependencies = [
  "bincode 2.0.1",
  "serde",
@@ -14455,9 +14456,10 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.1.1"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.1#637437b7a78b07bf39adff8bebef270f17c678dc"
+version = "0.2.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.2.1#e26b56c01e6185b7afd5b1b58b9e19ce734ce08a"
 dependencies = [
+ "async-trait",
  "display-more",
  "map-api",
  "serde",

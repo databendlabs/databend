@@ -374,7 +374,7 @@ logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main
     'fastrace',
 ] }
 lz4 = "1.24.0"
-map-api = { version = "0.2.5" }
+map-api = { version = "0.3.1" }
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -470,7 +470,7 @@ rustyline = "14"
 scroll = "0.12.0"
 self_cell = "1.2.0"
 semver = "1.0.14"
-seq-marked = { version = "0.3.1", features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
+seq-marked = { version = "0.3.3", features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_derive = "1"
 serde_ignored = "0.1.10"
@@ -496,7 +496,7 @@ socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 state = "0.6.0"
-state-machine-api = { version = "0.1.1" }
+state-machine-api = { version = "0.2.1" }
 stream-more = "0.1.3"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
@@ -656,12 +656,12 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
-map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.7" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.3.1" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
-state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.1.1" }
+state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.2.1" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }

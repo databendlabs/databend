@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future;
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -29,7 +30,7 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
+use databend_common_meta_raft_store::utils::seq_marked_to_seqv;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -63,6 +64,7 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use map_api::mvcc::scoped_view_readonly::ScopedViewReadonly;
 use prost::Message;
 use state_machine_api::UserKey;
 use tokio_stream;
@@ -459,10 +461,7 @@ impl MetaService for MetaServiceImpl {
         // This approach prevents race conditions and guarantees that no events will be
         // delivered out of order to the watcher.
         let stream = {
-            let sm = mn
-                .raft_store
-                .get_state_machine_read("new-watch-stream")
-                .await;
+            let sm = mn.raft_store.state_machine();
 
             let sender = mn.new_watch_sender(watch, tx.clone())?;
             let sender_str = sender.to_string();
@@ -488,7 +487,9 @@ impl MetaService for MetaServiceImpl {
             if flush {
                 let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
-                let strm = sm.range_kv(key_range).await?;
+                let strm = sm.levels().data.to_readonly_view().range(key_range).await?;
+                let strm = strm
+                    .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));
 
                 info!("created initialization stream for {}", sender_str);
 

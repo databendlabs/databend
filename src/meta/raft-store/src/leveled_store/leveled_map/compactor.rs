@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
@@ -33,23 +34,20 @@ pub struct Compactor {
     /// This is used to ensure that only one compactor can run at a time.
     pub(crate) _permit: CompactorPermit,
 
-    /// In memory immutable levels.
-    pub(super) immutable_levels: ImmutableLevels,
-
-    /// Persisted data.
-    pub(super) db: Option<DB>,
-
+    pub(crate) compacting_data: CompactingData,
+    // pub(crate) immutable_levels: Arc<ImmutableLevels>,
+    // pub(crate) persisted: Option<Arc<DB>>,
     /// Remember the newest level included in this compactor.
     pub(super) since: Option<LevelIndex>,
 }
 
 impl Compactor {
-    pub fn immutable_levels(&self) -> &ImmutableLevels {
-        &self.immutable_levels
+    pub fn immutable_levels(&self) -> Arc<ImmutableLevels> {
+        self.compacting_data.immutable_levels.clone()
     }
 
-    pub fn db(&self) -> Option<&DB> {
-        self.db.as_ref()
+    pub fn db(&self) -> Option<Arc<DB>> {
+        self.compacting_data.persisted.clone()
     }
 
     /// Compact in-memory immutable levels(excluding on disk db)
@@ -58,8 +56,7 @@ impl Compactor {
     /// When compact mem levels, do not remove tombstone,
     /// because tombstones are still required when compacting with the underlying db.
     pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        let mut compacting_data = CompactingData::new(&mut self.immutable_levels, self.db.as_ref());
-        compacting_data.compact_immutable_in_place().await
+        self.compacting_data.compact_immutable_in_place().await
     }
 
     /// Compacted all data into a stream.
@@ -73,7 +70,6 @@ impl Compactor {
     pub async fn compact_into_stream(
         &mut self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
-        let compacting_data = CompactingData::new(&mut self.immutable_levels, self.db.as_ref());
-        compacting_data.compact_into_stream().await
+        self.compacting_data.compact_into_stream().await
     }
 }
