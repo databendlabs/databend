@@ -825,7 +825,7 @@ data_cache_storage = "disk"
 [cache.disk]
 path = "_cache"
 "#
-        .as_bytes(),
+            .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -899,7 +899,7 @@ fn test_override_config_old_hive_catalog() -> Result<()> {
 address = "1.1.1.1:10000"
 protocol = "binary"
 "#
-        .as_bytes(),
+            .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -936,7 +936,7 @@ fn test_spill_config() -> Result<()> {
 [spill]
 spill_local_disk_path = "/data/spill"
 "#
-        .as_bytes(),
+            .as_bytes(),
     )?;
 
     // Make sure all data flushed.
@@ -958,6 +958,210 @@ spill_local_disk_path = "/data/spill"
     Ok(())
 }
 
+// Comprehensive test for all spill configuration scenarios
+#[test]
+fn test_spill_config_comprehensive() -> Result<()> {
+    use std::fs;
+    use std::io::Write;
+
+    // Test case 1: Implicit default (no spill section)
+    {
+        let file_path = temp_dir().join("databend_test_spill_implicit_default.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(b"# No [spill] section - should use default behavior")?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                // Default behavior: no explicit local path, falls back to cache
+                assert_eq!(cfg.spill.local_path(), None);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 2: Explicit default type
+    {
+        let file_path = temp_dir().join("databend_test_spill_explicit_default.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(b"[spill]\ntype = \"default\"")?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                assert_eq!(cfg.spill.local_path(), None);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 3: New local disk format
+    {
+        let file_path = temp_dir().join("databend_test_spill_local_disk_new.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(
+            r#"[spill]
+type = "local_disk"
+
+[spill.local_disk]
+path = "/tmp/databend_spill"
+reserved_space_percentage = 20.0
+max_bytes = 107374182400
+"#.as_bytes(),
+        )?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                assert_eq!(cfg.spill.local_path(), Some("/tmp/databend_spill".into()));
+                assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.2);
+                assert_eq!(cfg.spill.global_bytes_limit, 107374182400);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 4: Remote S3 configuration
+    {
+        let file_path = temp_dir().join("databend_test_spill_remote_s3.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(
+            r#"[spill]
+type = "remote"
+
+[spill.storage]
+type = "s3"
+
+[spill.storage.s3]
+bucket = "my-spill-bucket"
+region = "us-west-2"
+access_key_id = "test-key"
+secret_access_key = "test-secret"
+"#.as_bytes(),
+        )?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                assert_eq!(cfg.spill.local_path(), None);
+                assert!(cfg.spill.storage_params.is_some());
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 5: Legacy compatibility
+    {
+        let file_path = temp_dir().join("databend_test_spill_legacy.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(
+            r#"[spill]
+spill_local_disk_path = "/legacy/spill/path"
+spill_local_disk_reserved_space_percentage = 25.0
+spill_local_disk_max_bytes = 53687091200
+"#.as_bytes(),
+        )?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                assert_eq!(cfg.spill.local_path(), Some("/legacy/spill/path".into()));
+                assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.25);
+                assert_eq!(cfg.spill.global_bytes_limit, 53687091200);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 6: Mixed legacy and new format (new should take precedence)
+    {
+        let file_path = temp_dir().join("databend_test_spill_mixed.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(
+            r#"[spill]
+type = "local_disk"
+spill_local_disk_path = "/old/legacy/path"
+spill_local_disk_reserved_space_percentage = 50.0
+spill_local_disk_max_bytes = 1073741824
+
+[spill.local_disk]
+path = "/new/format/path"
+reserved_space_percentage = 15.0
+max_bytes = 2147483648
+"#.as_bytes(),
+        )?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                // New format should take precedence
+                assert_eq!(cfg.spill.local_path(), Some("/new/format/path".into()));
+                assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.15);
+                assert_eq!(cfg.spill.global_bytes_limit, 2147483648);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 7: Empty sections with defaults
+    {
+        let file_path = temp_dir().join("databend_test_spill_empty.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(
+            r#"[spill]
+type = "local_disk"
+
+[spill.local_disk]
+path = ""
+"#.as_bytes(),
+        )?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                assert_eq!(cfg.spill.local_path(), None);
+                assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.3);
+                assert_eq!(cfg.spill.global_bytes_limit, 0);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    // Test case 8: Invalid type should fall back to default
+    {
+        let file_path = temp_dir().join("databend_test_spill_invalid.toml");
+        let mut f = fs::File::create(&file_path)?;
+        f.write_all(b"[spill]\ntype = \"invalid_type\"")?;
+        f.flush()?;
+
+        temp_env::with_vars(
+            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+            || {
+                let cfg = InnerConfig::load_for_test().expect("config load failed");
+                // Should fallback to default behavior
+                assert_eq!(cfg.spill.local_path(), None);
+            },
+        );
+        fs::remove_file(file_path)?;
+    }
+
+    Ok(())
+}
+
 /// Test new hive catalog
 #[test]
 fn test_override_config_new_hive_catalog() -> Result<()> {
@@ -971,7 +1175,7 @@ type = "hive"
 address = "1.1.1.1:12000"
 protocol = "binary"
 "#
-        .as_bytes(),
+            .as_bytes(),
     )?;
 
     // Make sure all data flushed.

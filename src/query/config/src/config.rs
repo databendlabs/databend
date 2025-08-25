@@ -3533,6 +3533,23 @@ impl Default for DiskCacheConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct SpillConfig {
+    /// Spill type: "default" | "local_disk" | "remote"
+    /// "default" uses main data storage with _spill prefix
+    /// "local_disk" uses local filesystem configured in [spill.local_disk]
+    /// "remote" uses the storage configured in [spill.storage] section
+    #[clap(long, value_name = "VALUE", default_value = "default")]
+    #[serde(rename = "type", default)]
+    pub spill_type: String,
+
+    /// Local disk spill configuration (when type = "local_disk")
+    #[clap(skip)]
+    pub local_disk: Option<SpillLocalDiskConfig>,
+
+    /// Remote storage spill configuration (when type = "remote")
+    #[clap(skip)]
+    pub storage: Option<StorageConfig>,
+
+    // Legacy fields for backward compatibility
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub spill_local_disk_path: String,
@@ -3544,15 +3561,37 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+}
 
-    // TODO: We need to fix StorageConfig so that it supports command line injections.
-    #[clap(skip)]
-    pub storage: Option<StorageConfig>,
+/// Local disk spill configuration
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpillLocalDiskConfig {
+    /// Path where spill files will be stored
+    pub path: String,
+    /// Percentage of disk space to reserve (0.0-100.0)
+    #[serde(default = "SpillLocalDiskConfig::default_reserved_space_percentage")]
+    pub reserved_space_percentage: OrderedFloat<f64>,
+    /// Maximum bytes allowed for spill (0 = unlimited)
+    #[serde(default)]
+    pub max_bytes: u64,
+}
+
+impl SpillLocalDiskConfig {
+    fn default_reserved_space_percentage() -> OrderedFloat<f64> {
+        OrderedFloat(30.0)
+    }
 }
 
 impl Default for SpillConfig {
     fn default() -> Self {
-        inner::SpillConfig::default().into()
+        Self {
+            spill_type: "default".to_string(),
+            local_disk: None,
+            storage: None,
+            spill_local_disk_path: String::new(),
+            spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
+            spill_local_disk_max_bytes: u64::MAX,
+        }
     }
 }
 
@@ -3727,28 +3766,82 @@ mod cache_config_converters {
         spill: SpillConfig,
         cache: &DiskCacheConfig,
     ) -> Result<inner::SpillConfig> {
-        // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
-        let local_writeable_root = if cache.path != DiskCacheConfig::default().path
-            && spill.spill_local_disk_path.is_empty()
-        {
-            Some(cache.path.clone())
-        } else {
-            None
-        };
+        // Determine configuration based on spill_type and available fields
+        let (local_writeable_root, path, reserved_disk_ratio, global_bytes_limit, storage_params) =
+            match spill.spill_type.as_str() {
+                "local_disk" => {
+                    // Use new local_disk configuration if available, otherwise fall back to legacy
+                    if let Some(local_disk_config) = spill.local_disk {
+                        (
+                            None,
+                            local_disk_config.path,
+                            local_disk_config.reserved_space_percentage / 100.0,
+                            local_disk_config.max_bytes,
+                            None,
+                        )
+                    } else {
+                        // Fall back to legacy fields
+                        (
+                            None,
+                            spill.spill_local_disk_path,
+                            spill.spill_local_disk_reserved_space_percentage / 100.0,
+                            spill.spill_local_disk_max_bytes,
+                            None,
+                        )
+                    }
+                }
+                "remote" => {
+                    // Use remote storage configuration
+                    let storage_params = spill
+                        .storage
+                        .map(|storage| {
+                            let storage: InnerStorageConfig = storage.try_into()?;
+                            Ok::<_, ErrorCode>(storage.params)
+                        })
+                        .transpose()?;
 
-        let storage_params = spill
-            .storage
-            .map(|storage| {
-                let storage: InnerStorageConfig = storage.try_into()?;
-                Ok::<_, ErrorCode>(storage.params)
-            })
-            .transpose()?;
+                    (
+                        None,
+                        String::new(),
+                        OrderedFloat(0.3),
+                        u64::MAX,
+                        storage_params,
+                    )
+                }
+                _ => {
+                    // Default behavior for "default" type and any unrecognized types
+                    // Default behavior with backward compatibility
+                    let local_writeable_root = if cache.path != DiskCacheConfig::default().path
+                        && spill.spill_local_disk_path.is_empty()
+                    {
+                        Some(cache.path.clone())
+                    } else {
+                        None
+                    };
+
+                    let storage_params = spill
+                        .storage
+                        .map(|storage| {
+                            let storage: InnerStorageConfig = storage.try_into()?;
+                            Ok::<_, ErrorCode>(storage.params)
+                        })
+                        .transpose()?;
+
+                    (
+                        local_writeable_root,
+                        spill.spill_local_disk_path,
+                        spill.spill_local_disk_reserved_space_percentage / 100.0,
+                        spill.spill_local_disk_max_bytes,
+                        storage_params,
+                    )
+                }
+            };
 
         Ok(inner::SpillConfig {
             local_writeable_root,
-            path: spill.spill_local_disk_path,
-            reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
-            global_bytes_limit: spill.spill_local_disk_max_bytes,
+            path,
+            reserved_disk_ratio,
+            global_bytes_limit,
             storage_params,
         })
     }
@@ -3764,10 +3857,12 @@ mod cache_config_converters {
             });
 
             Self {
+                spill_type: "default".to_string(),
+                local_disk: None,
+                storage,
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
-                storage,
             }
         }
     }

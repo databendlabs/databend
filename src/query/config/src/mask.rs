@@ -211,17 +211,21 @@ impl StorageConfig {
 impl SpillConfig {
     fn mask_display(&self) -> Self {
         let Self {
+            ref spill_type,
+            ref local_disk,
+            ref storage,
             ref spill_local_disk_path,
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
-            ref storage,
         } = *self;
 
         Self {
+            spill_type: spill_type.clone(),
+            local_disk: local_disk.clone(), // SpillLocalDiskConfig doesn't contain sensitive data
+            storage: storage.as_ref().map(|storage| storage.mask_display()),
             spill_local_disk_path: spill_local_disk_path.clone(),
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
-            storage: storage.as_ref().map(|storage| storage.mask_display()),
         }
     }
 }
@@ -372,6 +376,8 @@ mod tests {
     #[test]
     fn test_spill_config() {
         let config = SpillConfig {
+            spill_type: "default".to_string(),
+            local_disk: None,
             spill_local_disk_path: "".to_string(),
             spill_local_disk_reserved_space_percentage: 30.0.into(),
             spill_local_disk_max_bytes: 10,
