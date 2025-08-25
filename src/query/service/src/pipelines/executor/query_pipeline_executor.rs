@@ -84,7 +84,12 @@ impl QueryPipelineExecutor {
         let mut on_finished_chain = pipeline.take_on_finished();
         let lock_guards = pipeline.take_lock_guards();
 
-        match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
+        match RunningGraph::create(
+            pipeline,
+            settings.query_id.clone(),
+            None,
+            settings.block_limit.clone(),
+        ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
                 let _ = on_finished_chain.apply(info);
@@ -149,7 +154,12 @@ impl QueryPipelineExecutor {
             .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
-        match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
+        match RunningGraph::from_pipelines(
+            pipelines,
+            settings.query_id.clone(),
+            None,
+            settings.block_limit.clone(),
+        ) {
             Err(cause) => {
                 let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
                 let _ignore_res = finished_chain.apply(info);
