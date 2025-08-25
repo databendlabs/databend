@@ -23,6 +23,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
+use crate::pipelines::processors::transforms::new_hash_join::build_join_keys;
 use crate::pipelines::processors::transforms::new_hash_join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::JoinParams;
 use crate::pipelines::processors::transforms::new_hash_join::ProbeData;
@@ -45,6 +46,7 @@ pub struct TransformHashJoin<T: Join> {
     probe_input_data: Option<DataBlock>,
 
     build_finish: bool,
+    probe_finish: bool,
     build_stream: Option<HashJoinStream<Progress>>,
     probe_stream: Option<HashJoinStream<ProbeData>>,
 
@@ -127,7 +129,16 @@ impl<T: Join> Processor for TransformHashJoin<T> {
             return Ok(Event::Sync);
         }
 
-        // TODO: probe finish
+        if self.probe_input.is_finished() {
+            if !self.probe_finish {
+                self.probe_finish = true;
+                self.probe_stream = Some(HashJoinStream::Stream(self.join.finish_probe()?));
+                return Ok(Event::Sync);
+            }
+
+            self.joined_output.finish();
+            return Ok(Event::Finished);
+        }
 
         self.probe_input.set_need_data();
         Ok(Event::NeedData)
@@ -136,7 +147,8 @@ impl<T: Join> Processor for TransformHashJoin<T> {
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.build_input_data.take() {
             assert!(self.build_stream.is_none());
-            // TODO: build join key and projection datablock
+            let data_block = build_join_keys(data_block, &self.params)?;
+            // TODO: fast stream compact
             self.build_stream = Some(HashJoinStream::Stream(self.join.add_block(data_block)?));
         }
 

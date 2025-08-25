@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cell::SyncUnsafeCell;
 use std::collections::VecDeque;
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use std::sync::PoisonError;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -28,23 +30,24 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::pipelines::processors::transforms::new_hash_join::compact_blocks;
 use crate::pipelines::processors::transforms::new_hash_join::memory_hash_table::GlobalMemoryHashTable;
 use crate::pipelines::processors::transforms::new_hash_join::memory_hash_table::JoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::CStyleCell;
 use crate::pipelines::processors::transforms::new_hash_join::ITryCompleteFuture;
 use crate::pipelines::processors::transforms::new_hash_join::ITryCompleteStream;
+use crate::pipelines::processors::transforms::new_hash_join::IgnorePanicMutex;
 use crate::pipelines::processors::transforms::new_hash_join::Join;
+use crate::pipelines::processors::transforms::new_hash_join::JoinParams;
 use crate::pipelines::processors::transforms::new_hash_join::JoinSettings;
 use crate::pipelines::processors::transforms::new_hash_join::NoneTryCompleteStream;
 use crate::pipelines::processors::transforms::new_hash_join::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::Progress;
+use crate::pipelines::processors::transforms::new_hash_join::SequenceStream;
 use crate::pipelines::processors::transforms::new_hash_join::TryCompleteFuture;
 use crate::pipelines::processors::transforms::new_hash_join::TryCompleteStream;
-use crate::pipelines::processors::HashJoinDesc;
 
 pub struct MemoryHashJoin<Table: JoinHashTable> {
-    settings: JoinSettings,
+    state: Arc<MemoryHashJoinState>,
 
     table: Arc<GlobalMemoryHashTable<Table>>,
-    partial_blocks: Mutex<VecDeque<DataBlock>>,
-    build_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
 }
 
 impl<Table: JoinHashTable> Join for MemoryHashJoin<Table> {
@@ -53,108 +56,106 @@ impl<Table: JoinHashTable> Join for MemoryHashJoin<Table> {
     }
 
     fn add_block(&self, block: DataBlock) -> Result<TryCompleteStream<Progress>> {
-        if block.num_rows() >= self.settings.max_block_rows
-            || block.memory_size() >= self.settings.max_block_bytes
-        {
-            let locked_res = self.build_blocks.lock();
-            let mut build_blocks = locked_res.unwrap_or_else(PoisonError::into_inner);
-            build_blocks.push_back(block);
+        if self.state.settings.check_threshold(&block) {
+            let _guard = self.state.mutex.lock();
+
+            self.state.build_rows.as_mut() += block.num_rows();
+            self.state.chunks.as_mut().push(block);
             return Ok(NoneTryCompleteStream::create());
         }
 
         // compact for small blocks
-        let lock_res = self.partial_blocks.lock();
-        let partial_blocks = lock_res.unwrap_or_else(PoisonError::into_inner);
-        partial_blocks.push_back(block);
-
+        let _guard = self.state.mutex.lock();
+        self.state.build_rows.as_mut() += block.num_rows();
+        self.state.small_chunks.as_mut().push_back(block);
         Ok(NoneTryCompleteStream::create())
     }
 
     fn finish_build(&self) -> Result<TryCompleteStream<Progress>> {
         // The compact process may still OOM, but the probability is very low.
-        let lock_res = self.partial_blocks.lock();
-        let mut lock_guard = lock_res.unwrap_or_else(PoisonError::into_inner);
+        let _guard = self.state.mutex.lock();
 
-        if !lock_guard.is_empty() {
-            // Get partial blocks for compacting
-            let partial_blocks = std::mem::take(lock_guard.deref_mut());
-            let compacted_blocks = compact_blocks(
-                partial_blocks,
-                self.settings.max_block_rows,
-                self.settings.max_block_bytes,
-            )?;
+        // 1. Compact undersized blocks into uniformly-sized blocks.
+        self.state.compact_small_blocks()?;
 
-            let build_lock_res = self.build_blocks.lock();
-            let mut build_blocks_guard = build_lock_res.unwrap_or_else(PoisonError::into_inner);
-            build_blocks_guard.extend(compacted_blocks);
-        }
+        // 2. Initialize task queue for parallel building.
+        self.state.init_working_queue();
 
-        assert!(lock_guard.is_empty());
-
-        Ok(NoneTryCompleteStream::create())
+        // Large memory operations need to be performed under the protection of a stream.
+        Ok(SequenceStream::create(vec![
+            // 3. init hash table with fixed memory size
+            ReserverHashTableEntities::create(self.state.clone()),
+            // 4. Populate the hashtable with the collected data chunks.
+            BuildHashTableEntities::create(self.state.clone()),
+        ]))
     }
 
     fn probe(&self, block: DataBlock) -> Result<TryCompleteStream<ProbeData>> {
         todo!()
     }
 
-    fn finished_probe(&self) -> Result<TryCompleteStream<ProbeData>> {
+    fn finish_probe(&self) -> Result<TryCompleteStream<ProbeData>> {
         todo!()
     }
 }
 
-struct BuildTryCompleteStream {
-    build_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
+struct MemoryHashJoinState {
+    settings: JoinSettings,
+
+    mutex: IgnorePanicMutex<()>,
+    build_rows: CStyleCell<usize>,
+    chunks: CStyleCell<Vec<DataBlock>>,
+    small_chunks: CStyleCell<VecDeque<DataBlock>>,
+
+    working_queue: CStyleCell<VecDeque<usize>>,
 }
 
-impl BuildTryCompleteStream {
-    pub fn create() -> TryCompleteStream<Progress> {
-        Box::new(BuildTryCompleteStream {})
-    }
-}
-
-impl ITryCompleteStream<Progress> for BuildTryCompleteStream {
-    fn next_try_complete(&self) -> Result<Option<TryCompleteFuture<Progress>>> {
-        let lock_res = self.build_blocks.lock();
-        let build_blocks = lock_res.unwrap_or_else(PoisonError::into_inner);
-
-        match build_blocks.pop_front() {
-            None => Ok(None),
-            Some(data_block) => Ok(Some(BuildTryCompleteFuture::create(data_block))),
+impl MemoryHashJoinState {
+    pub fn compact_small_blocks(&self) -> Result<()> {
+        if self.small_chunks.is_empty() {
+            return Ok(());
         }
+
+        let small_blocks = std::mem::take(self.small_chunks.as_mut());
+        let compacted_blocks = compact_blocks(
+            small_blocks,
+            self.settings.max_block_rows,
+            self.settings.max_block_bytes,
+        )?;
+
+        let chunks = self.chunks.as_mut();
+        chunks.extend(compacted_blocks.into_iter());
+        Ok(())
+    }
+
+    pub fn init_working_queue(&self) {
+        let working_queue = self.working_queue.as_mut();
+        working_queue.extend(0..self.chunks.len());
     }
 }
 
-struct BuildTryCompleteFuture {
-    data_block: DataBlock,
-    hash_join_desc: HashJoinDesc,
+struct ReserverHashTableEntities {
+    state: Arc<MemoryHashJoinState>,
 }
 
-impl BuildTryCompleteFuture {
-    pub fn create(block: DataBlock) -> TryCompleteFuture<Progress> {
-        Box::pin(BuildTryCompleteFuture {})
+impl ReserverHashTableEntities {
+    pub fn create(state: Arc<MemoryHashJoinState>) -> TryCompleteStream<Progress> {
+        Box::new(ReserverHashTableEntities { state })
     }
 }
 
-impl ITryCompleteFuture<Progress> for BuildTryCompleteFuture {
-    fn try_complete(&self) -> Result<Option<Progress>> {
-        // TODO:
-        let evaluator = Evaluator::new(&self.data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-        let build_keys = &self.hash_join_desc.build_keys;
-        let mut keys_entries: Vec<BlockEntry> = build_keys
-            .iter()
-            .map(|expr| {
-                Ok(evaluator
-                    .run(expr)?
-                    .convert_to_full_column(expr.data_type(), self.data_block.num_rows())
-                    .into())
-            })
-            .collect::<Result<_>>()?;
-
-        let column_nums = self.data_block.num_columns();
-        let mut block_entries = Vec::with_capacity(self.build_projections.len());
-
+impl ITryCompleteStream<Progress> for ReserverHashTableEntities {
+    fn next_try_complete(&mut self) -> Result<Option<TryCompleteFuture<Progress>>> {
         todo!()
+    }
+}
+
+struct BuildHashTableEntities {
+    state: Arc<MemoryHashJoinState>,
+}
+
+impl BuildHashTableEntities {
+    pub fn create(state: Arc<MemoryHashJoinState>) -> TryCompleteStream<Progress> {
+        Box::new(BuildHashTableEntities { state })
     }
 }

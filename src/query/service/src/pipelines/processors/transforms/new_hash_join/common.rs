@@ -12,9 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::SyncUnsafeCell;
+use std::cell::UnsafeCell;
 use std::collections::VecDeque;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::MappedMutexGuard;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::PoisonError;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::arrow::and_validities;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -184,10 +196,10 @@ pub fn compact_blocks(
     Ok(compacted_blocks)
 }
 
-pub fn build_join_keys(block: &DataBlock, params: &JoinParams) {
-    let evaluator = Evaluator::new(block, &params.func_ctx, &BUILTIN_FUNCTIONS);
-
+pub fn build_join_keys(block: DataBlock, params: &JoinParams) -> Result<DataBlock> {
     let build_keys = &params.build_keys;
+
+    let evaluator = Evaluator::new(&block, &params.func_ctx, &BUILTIN_FUNCTIONS);
     let mut keys_entries: Vec<BlockEntry> = build_keys
         .iter()
         .map(|expr| {
@@ -198,4 +210,139 @@ pub fn build_join_keys(block: &DataBlock, params: &JoinParams) {
         })
         .collect::<Result<_>>()?;
 
+    // projection data blocks
+    let column_nums = block.num_columns();
+    let mut block_entries = Vec::with_capacity(params.build_projections.len());
+
+    for index in 0..column_nums {
+        if !params.build_projections.contains(&index) {
+            continue;
+        }
+
+        block_entries.push(block.get_by_offset(index).clone());
+    }
+
+    let projected_block = DataBlock::new(block_entries, block.num_rows());
+    // After computing complex join key expressions, we discard unnecessary columns as soon as possible to expect the release of memory.
+    drop(block);
+
+    let is_null_equal = &params.is_null_equals;
+    let mut valids = None;
+
+    for (entry, null_equals) in keys_entries.iter().zip(is_null_equal.iter()) {
+        if !null_equals {
+            let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
+
+            if is_all_null {
+                valids = Some(Bitmap::new_constant(false, projected_block.num_rows()));
+                break;
+            }
+
+            valids = and_validities(valids, column_valids.cloned());
+
+            if let Some(bitmap) = valids.as_ref() {
+                if bitmap.null_count() == bitmap.len() {
+                    break;
+                }
+
+                if bitmap.null_count() == 0 {
+                    valids = None;
+                }
+            }
+        }
+    }
+
+    for (entry, is_null) in keys_entries.into_iter().zip(is_null_equal.iter()) {
+        projected_block.add_entry(match !is_null && entry.data_type().is_nullable() {
+            true => entry.remove_nullable(),
+            false => entry,
+        });
+    }
+
+    if let Some(bitmap) = valids {
+        if bitmap.null_count() != bitmap.len() {
+            return projected_block.filter_with_bitmap(&bitmap);
+        }
+    }
+
+    Ok(projected_block)
+}
+
+pub struct IgnorePanicMutex<T: ?Sized> {
+    inner: Mutex<T>,
+}
+
+impl<T: ?Sized> IgnorePanicMutex<T> {
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner: Mutex::new(inner),
+        }
+    }
+
+    pub fn into_inner(self) -> T {
+        self.inner
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub fn get_mut(&mut self) -> &mut T {
+        self.inner.get_mut().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_, T> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// A C-style cell that provides interior mutability without runtime borrow checking.
+///
+/// This is a thin wrapper around `SyncUnsafeCell` that allows shared mutable access
+/// to the inner value without the overhead of `RefCell` or `Mutex`. It's designed
+/// for performance-critical scenarios where the caller can guarantee memory safety.
+///
+/// # Safety
+///
+/// - The caller must ensure that there are no data races when accessing the inner value
+/// - Multiple mutable references to the same data must not exist simultaneously
+/// - This should only be used when you can statically guarantee exclusive access
+///   or when protected by external synchronization mechanisms
+///
+/// # Use Cases
+///
+/// - High-performance hash join operations where contention is managed externally
+/// - Single-threaded contexts where `RefCell`'s runtime checks are unnecessary overhead
+/// - Data structures that implement their own synchronization protocols
+pub struct CStyleCell<T: ?Sized> {
+    inner: SyncUnsafeCell<T>,
+}
+
+impl<T: ?Sized> CStyleCell<T> {
+    pub const fn new(inner: T) -> Self {
+        Self {
+            inner: SyncUnsafeCell::new(inner),
+        }
+    }
+
+    pub const fn into_inner(self) -> T {
+        self.inner.into_inner()
+    }
+
+    /// Returns a mutable reference to the inner value.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that no other references (mutable or immutable)
+    /// to the inner value exist when this method is called, and that the
+    /// returned reference is not used concurrently with other accesses.
+    pub fn as_mut(&self) -> &mut T {
+        unsafe { &mut *self.inner.get() }
+    }
+}
+
+impl<T: ?Sized> Deref for CStyleCell<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.inner.get() }
+    }
 }

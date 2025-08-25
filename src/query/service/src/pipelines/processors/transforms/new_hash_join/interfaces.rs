@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_sql::ColumnSet;
 
 pub enum ProbeData {
     Next,
@@ -45,7 +47,7 @@ pub trait Join: Send + Sync {
 
     fn probe(&self, block: DataBlock) -> Result<TryCompleteStream<ProbeData>>;
 
-    fn finished_probe(&self) -> Result<TryCompleteStream<ProbeData>>;
+    fn finish_probe(&self) -> Result<TryCompleteStream<ProbeData>>;
 }
 
 // /// Convertible join trait for joins that can be converted from one type to another
@@ -70,16 +72,24 @@ pub struct JoinSettings {
     // pub max_block_size: usize,
 }
 
+impl JoinSettings {
+    pub fn check_threshold(&self, block: &DataBlock) -> bool {
+        block.num_rows() >= self.max_block_rows || block.memory_size() >= self.max_block_bytes
+    }
+}
+
 pub struct JoinParams {
     pub build_keys: Vec<Expr>,
     pub probe_keys: Vec<Expr>,
     pub is_null_equals: Vec<bool>,
 
+    pub build_projections: ColumnSet,
+
     pub func_ctx: Arc<FunctionContext>,
 }
 
 pub trait ITryCompleteStream<T>: Send + 'static {
-    fn next_try_complete(&self) -> Result<Option<TryCompleteFuture<T>>>;
+    fn next_try_complete(&mut self) -> Result<Option<TryCompleteFuture<T>>>;
 }
 
 pub trait ITryCompleteFuture<T>: Future<Output = Result<T>> + Send + 'static {
@@ -99,7 +109,43 @@ impl<T> NoneTryCompleteStream<T> {
 }
 
 impl<T> ITryCompleteStream<T> for NoneTryCompleteStream<T> {
-    fn next_try_complete(&self) -> Result<Option<TryCompleteFuture<T>>> {
+    fn next_try_complete(&mut self) -> Result<Option<TryCompleteFuture<T>>> {
         Ok(None)
+    }
+}
+
+pub struct SequenceStream<T> {
+    stream: VecDeque<TryCompleteStream<T>>,
+}
+
+impl<T> SequenceStream<T> {
+    pub fn create(stream: Vec<TryCompleteStream<T>>) -> TryCompleteStream<T> {
+        Box::new(SequenceStream {
+            stream: VecDeque::from(stream),
+        })
+    }
+}
+
+impl<T> ITryCompleteStream<T> for SequenceStream<T> {
+    fn next_try_complete(&mut self) -> Result<Option<TryCompleteFuture<T>>> {
+        while let Some(stream) = self.stream.front_mut() {
+            if let Some(v) = stream.next_try_complete()? {
+                return Ok(Some(v));
+            }
+
+            self.stream.pop_front();
+        }
+
+        Ok(None)
+    }
+}
+
+pub struct TryCompleteStreamPipelineBuilder<T> {
+    streams: Vec<TryCompleteStream<T>>,
+}
+
+impl<T> TryCompleteStreamPipelineBuilder<T> {
+    pub fn new() -> Self {
+        Self { streams: vec![] }
     }
 }
