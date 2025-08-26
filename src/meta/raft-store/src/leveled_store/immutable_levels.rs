@@ -71,8 +71,9 @@ impl ImmutableLevels {
 
         let last_key = self.newest_level_index().unwrap_or_default();
 
+        // The newly added must have greater data index or there are no data added.
         assert!(
-            key > last_key,
+            key > last_key || (key == LevelIndex::default() && key == last_key),
             "new level to insert {:?} must have greater index than the newest level {:?}",
             key,
             last_key

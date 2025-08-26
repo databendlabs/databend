@@ -41,6 +41,7 @@ use crate::utils::add_cooperative_yielding;
 /// The data to compact.
 ///
 /// Including several in-memory immutable levels and an optional persisted db.
+#[derive(Debug)]
 pub(crate) struct CompactingData {
     pub(crate) immutable_levels: Arc<ImmutableLevels>,
     pub(crate) persisted: Option<Arc<DB>>,

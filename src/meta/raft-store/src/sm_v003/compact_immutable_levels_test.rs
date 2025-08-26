@@ -93,7 +93,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let compacted = {
         sm.levels().testing_freeze_writable();
-        let mut compactor = sm.acquire_compactor().await.unwrap();
+        let mut compactor = sm.acquire_compactor().await;
         compactor.compact_immutable_in_place().await?;
         compactor.immutable_levels()
     };
@@ -146,7 +146,7 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
     lm.testing_freeze_writable();
 
-    let mut compactor = lm.acquire_compactor().await.unwrap();
+    let mut compactor = lm.acquire_compactor().await;
 
     let (sys_data, strm) = compactor.compact_into_stream().await?;
     assert_eq!(
@@ -173,7 +173,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     let sm = build_sm_with_expire().await?;
     sm.levels().testing_freeze_writable();
 
-    let mut compactor = sm.acquire_compactor().await.unwrap();
+    let mut compactor = sm.acquire_compactor().await;
 
     let (sys_data, strm) = compactor.compact_into_stream().await?;
     let got = strm
