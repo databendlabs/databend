@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use crate::meta::load_json;
+use crate::meta::AdditionalStatsMeta;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
@@ -60,6 +61,7 @@ pub trait TableSnapshotAccessor {
     fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
     fn snapshot_id(&self) -> Option<(SnapshotId, FormatVersion)>;
     fn table_statistics_location(&self) -> Option<String>;
+    fn additional_stats_meta(&self) -> Option<AdditionalStatsMeta>;
 }
 
 impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
@@ -86,6 +88,11 @@ impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
 
     fn table_statistics_location(&self) -> Option<String> {
         self.as_ref()
-            .and_then(|snapshot| snapshot.table_statistics_location.clone())
+            .and_then(|snapshot| snapshot.table_statistics_location())
+    }
+
+    fn additional_stats_meta(&self) -> Option<AdditionalStatsMeta> {
+        self.as_ref()
+            .and_then(|snapshot| snapshot.summary.additional_stats_meta.clone())
     }
 }

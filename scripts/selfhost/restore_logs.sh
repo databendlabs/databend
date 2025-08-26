@@ -64,12 +64,12 @@ EOF
 format_size() {
 	local size="$1"
 	if [[ "$size" =~ ^[0-9]+$ ]]; then
-		if (( size >= 1073741824 )); then
-			echo "$(( size / 1073741824 )).$(( (size % 1073741824) / 107374182 ))GB"
-		elif (( size >= 1048576 )); then
-			echo "$(( size / 1048576 )).$(( (size % 1048576) / 104857 ))MB"
-		elif (( size >= 1024 )); then
-			echo "$(( size / 1024 )).$(( (size % 1024) / 102 ))KB"
+		if ((size >= 1073741824)); then
+			echo "$((size / 1073741824)).$(((size % 1073741824) / 107374182))GB"
+		elif ((size >= 1048576)); then
+			echo "$((size / 1048576)).$(((size % 1048576) / 104857))MB"
+		elif ((size >= 1024)); then
+			echo "$((size / 1024)).$(((size % 1024) / 102))KB"
 		else
 			echo "${size}B"
 		fi
@@ -105,17 +105,17 @@ interactive_file_selector() {
 		[[ -z "$line" ]] && continue
 		[[ "$line" =~ ^[[:space:]]*name ]] && continue
 		[[ "$line" =~ ^[[:space:]]*-+ ]] && continue
-		
+
 		# Extract filename (first field) and size (second field)
 		local filename=$(echo "$line" | awk '{print $1}')
 		local size=$(echo "$line" | awk '{print $2}')
-		
+
 		# Only include tar.gz files
 		if [[ "$filename" =~ \.(tar\.gz|tgz)$ ]]; then
 			files+=("$filename")
 			sizes+=("$(format_size "$size")")
 		fi
-	done <<< "$raw_output"
+	done <<<"$raw_output"
 
 	if [[ ${#files[@]} -eq 0 ]]; then
 		log_error "No .tar.gz files found in stage @${stage}"
@@ -126,12 +126,12 @@ interactive_file_selector() {
 	local sorted_files=()
 	local sorted_sizes=()
 	local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2 | cut -d: -f1))
-	
+
 	for i in "${indices[@]}"; do
 		sorted_files+=("${files[$i]}")
 		sorted_sizes+=("${sizes[$i]}")
 	done
-	
+
 	files=("${sorted_files[@]}")
 	sizes=("${sorted_sizes[@]}")
 
@@ -161,7 +161,7 @@ interactive_file_selector() {
 		echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
 		echo ""
 		printf "%-${max_name_len}s %s\n" "Filename" "Size"
-		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len-1)) '' | tr ' ' '-')" "----"
+		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len - 1)) '' | tr ' ' '-')" "----"
 
 		for i in "${!files[@]}"; do
 			local display_line="$(printf "%-${max_name_len}s %s" "${files[$i]}" "${sizes[$i]}")"

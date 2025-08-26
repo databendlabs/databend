@@ -363,10 +363,13 @@ impl<'a> SegmentCompactor<'a> {
                 self.default_cluster_key_id,
             );
             blocks.append(&mut segment.blocks.clone());
-            if let Some(meta) = segment.summary.additional_stats_meta {
-                stats_locations.push(meta.location);
-            } else {
-                hlls_has_none = true;
+            match segment
+                .summary
+                .additional_stats_meta
+                .and_then(|m| m.location)
+            {
+                Some(loc) => stats_locations.push(loc),
+                None => hlls_has_none = true,
             }
         }
 
@@ -393,7 +396,8 @@ impl<'a> SegmentCompactor<'a> {
                 );
             let additional_stats_meta = AdditionalStatsMeta {
                 size: stats_data.len() as u64,
-                location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+                ..Default::default()
             };
             self.operator
                 .write(&segment_stats_location, stats_data)

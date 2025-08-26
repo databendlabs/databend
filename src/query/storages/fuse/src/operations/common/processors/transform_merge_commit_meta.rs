@@ -21,6 +21,7 @@ use databend_common_expression::VariantDataType;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
+use databend_storages_common_table_meta::meta::merge_column_hll;
 
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
@@ -185,6 +186,7 @@ impl TransformMergeCommitMeta {
                 .collect(),
             table_id: l.table_id,
             virtual_schema: Self::merge_virtual_schema(l.virtual_schema, r.virtual_schema),
+            hll: merge_column_hll(l.hll, r.hll),
         }
     }
 }

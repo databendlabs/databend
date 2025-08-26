@@ -266,7 +266,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
-        table_snapshot.table_statistics_location.clone(),
+        table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
     let location = fuse_table

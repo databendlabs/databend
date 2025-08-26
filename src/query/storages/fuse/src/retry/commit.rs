@@ -26,6 +26,9 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
@@ -73,6 +76,11 @@ async fn try_rebuild_req(
         "try_rebuild_req: update_failed_tbls={:?}",
         update_failed_tbls
     );
+    let insert_rows = {
+        let stats = ctx.get_multi_table_insert_status();
+        let status = stats.lock();
+        status.insert_rows.clone()
+    };
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
         if table_meta.engine == "STREAM" {
@@ -113,7 +121,31 @@ async fn try_rebuild_req(
             &latest_snapshot.summary(),
             default_cluster_key_id,
         );
-        let merged_summary = deduct_statistics(&s, &base_snapshot.summary());
+        let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
+        let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
+        let insert_row = insert_rows.get(&tid).cloned().unwrap_or(0);
+        let new_hll = new_snapshot
+            .as_ref()
+            .and_then(|v| v.summary.additional_stats_meta.as_ref())
+            .and_then(|m| m.hll.as_ref());
+        if insert_row > 0 && new_hll.is_some_and(|v| !v.is_empty()) {
+            if let Some(ref mut latest_metas) = additional_stats_meta {
+                let new_hll = decode_column_hll(new_hll.unwrap())?.unwrap();
+                let latest_hll = latest_metas
+                    .hll
+                    .as_ref()
+                    .map(decode_column_hll)
+                    .transpose()?
+                    .flatten()
+                    .unwrap_or_default();
+                let merged = merge_column_hll(new_hll, latest_hll);
+                if !merged.is_empty() {
+                    latest_metas.hll = Some(encode_column_hll(&merged)?);
+                    latest_metas.row_count += insert_row;
+                }
+            }
+        }
+        merged_summary.additional_stats_meta = additional_stats_meta;
 
         {
             let txn_mgr_ref = ctx.txn_mgr();

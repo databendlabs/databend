@@ -636,6 +636,11 @@ impl Settings {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
+    /// used for test
+    pub fn set_enable_analyze_histogram(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_analyze_histogram", val)
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
