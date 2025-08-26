@@ -225,7 +225,7 @@ impl GlobalHistoryLog {
 
     /// Create the stage, database and table if not exists
     pub async fn prepare(&self) -> Result<()> {
-        let prepare_key = format!("{}/history_log_prepare", self.tenant_id);
+        let prepare_key = format!("{}/history_log_prepare/lock", self.tenant_id);
         let _guard = self.meta_handle.acquire(&prepare_key, 0).await?;
 
         if should_reset(self.create_context().await?, &self.connection).await? {
