@@ -278,7 +278,10 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     let stats_data = self.hll_accumulator.build().to_bytes()?;
                     additional_stats_meta = Some(AdditionalStatsMeta {
                         size: stats_data.len() as u64,
-                        location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                        location: Some((
+                            segment_stats_location.clone(),
+                            SegmentStatistics::VERSION,
+                        )),
                     });
                     stats = Some((segment_stats_location, stats_data));
                 }
