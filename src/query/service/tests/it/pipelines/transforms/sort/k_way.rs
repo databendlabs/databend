@@ -77,7 +77,7 @@ async fn run_fuzz(ctx: Arc<QueryContext>, rng: &mut ThreadRng, with_limit: bool)
     //     }
     // }
 
-    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit, false)?;
+    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit, true)?;
     executor.execute()?;
 
     let mut got: Vec<DataBlock> = Vec::new();
