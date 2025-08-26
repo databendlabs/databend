@@ -89,47 +89,50 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
         display_name: probe_key.display_name.clone(),
     };
 
-    let mut scalars = inlist.iter();
+    let scalars: Vec<_> = inlist
+        .iter()
+        .map(|scalar_ref| scalar_ref.to_owned())
+        .collect();
 
-    let first_scalar = scalars.next().unwrap();
-    let first_constant = RawExpr::Constant {
-        span: None,
-        scalar: first_scalar.to_owned(),
-        data_type: None,
-    };
-    let mut or_expr = RawExpr::FunctionCall {
-        span: None,
-        name: "eq".to_string(),
-        params: vec![],
-        args: vec![raw_probe_key.clone(), first_constant],
-    };
+    let balanced_expr = build_balanced_or_tree(&raw_probe_key, &scalars);
 
-    for scalar in scalars {
-        let constant_expr = RawExpr::Constant {
-            span: None,
-            scalar: scalar.to_owned(),
-            data_type: None,
-        };
-
-        let eq_expr = RawExpr::FunctionCall {
-            span: None,
-            name: "eq".to_string(),
-            params: vec![],
-            args: vec![raw_probe_key.clone(), constant_expr],
-        };
-
-        or_expr = RawExpr::FunctionCall {
-            span: None,
-            name: "or".to_string(),
-            params: vec![],
-            args: vec![or_expr, eq_expr],
-        };
-    }
-
-    let final_expr = or_expr;
-
-    let expr = type_check::check(&final_expr, &BUILTIN_FUNCTIONS)?;
+    let expr = type_check::check(&balanced_expr, &BUILTIN_FUNCTIONS)?;
     Ok(expr)
+}
+
+fn build_balanced_or_tree(probe_key: &RawExpr<String>, scalars: &[Scalar]) -> RawExpr<String> {
+    match scalars.len() {
+        0 => RawExpr::Constant {
+            span: None,
+            scalar: Scalar::Boolean(false),
+            data_type: None,
+        },
+        1 => {
+            let constant_expr = RawExpr::Constant {
+                span: None,
+                scalar: scalars[0].clone(),
+                data_type: None,
+            };
+            RawExpr::FunctionCall {
+                span: None,
+                name: "eq".to_string(),
+                params: vec![],
+                args: vec![probe_key.clone(), constant_expr],
+            }
+        }
+        _ => {
+            let mid = scalars.len() / 2;
+            let left_subtree = build_balanced_or_tree(probe_key, &scalars[..mid]);
+            let right_subtree = build_balanced_or_tree(probe_key, &scalars[mid..]);
+
+            RawExpr::FunctionCall {
+                span: None,
+                name: "or".to_string(),
+                params: vec![],
+                args: vec![left_subtree, right_subtree],
+            }
+        }
+    }
 }
 
 fn build_min_max_filter(
