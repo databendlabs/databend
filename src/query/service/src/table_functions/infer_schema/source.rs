@@ -22,6 +22,7 @@ use arrow_csv::reader::Format;
 use arrow_json::reader::infer_json_schema_from_iterator;
 use arrow_json::reader::ValueIter;
 use arrow_schema::ArrowError;
+use arrow_schema::Schema;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::BufMut;
 use databend_common_ast::ast::FileLocation;
@@ -48,6 +49,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::Object;
+use futures_util::future::try_join_all;
 use opendal::Operator;
 use opendal::Scheme;
 
@@ -55,8 +57,6 @@ use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
 const DEFAULT_BYTES: u64 = 10;
-const MAX_ZIP_FILE_SIZE: u64 = 20 * 1024 * 1024;
-const MAX_COMPRESS_FILE_SIZE: u64 = 100 * 1024 * 1024;
 
 pub(crate) struct InferSchemaSource {
     is_finished: bool,
@@ -138,86 +138,82 @@ impl AsyncSource for InferSchemaSource {
         };
         let operator = init_stage_operator(&stage_info)?;
 
-        let first_file = files_info.first_file(&operator).await?;
-        let file_format_params = match &self.args_parsed.file_format {
-            Some(f) => self.ctx.get_file_format(f).await?,
-            None => stage_info.file_format_params.clone(),
-        };
-        let schema = match (first_file.as_ref(), file_format_params) {
-            (None, _) => return Ok(None),
-            (Some(first_file), FileFormatParams::Parquet(_)) => {
-                let arrow_schema = read_parquet_schema_async_rs(
-                    &operator,
-                    &first_file.path,
-                    Some(first_file.size),
-                )
-                .await?;
-                TableSchema::try_from(&arrow_schema)?
-            }
-            (Some(first_file), FileFormatParams::Csv(params)) => {
-                let escape = if params.escape.is_empty() {
-                    None
-                } else {
-                    Some(params.escape.as_bytes()[0])
-                };
+        let stage_file_infos = files_info.list(&operator, 1, None).await?;
+        let infer_schema_futures = stage_file_infos.iter().map(|file| async {
+            let file_format_params = match &self.args_parsed.file_format {
+                Some(f) => self.ctx.get_file_format(f).await?,
+                None => stage_info.file_format_params.clone(),
+            };
+            let schema = match file_format_params {
+                FileFormatParams::Csv(params) => {
+                    let escape = if params.escape.is_empty() {
+                        None
+                    } else {
+                        Some(params.escape.as_bytes()[0])
+                    };
 
-                let mut format = Format::default()
-                    .with_delimiter(params.field_delimiter.as_bytes()[0])
-                    .with_quote(params.quote.as_bytes()[0])
-                    .with_header(params.headers != 0);
-                if let Some(escape) = escape {
-                    format = format.with_escape(escape);
+                    let mut format = Format::default()
+                        .with_delimiter(params.field_delimiter.as_bytes()[0])
+                        .with_quote(params.quote.as_bytes()[0])
+                        .with_header(params.headers != 0);
+                    if let Some(escape) = escape {
+                        format = format.with_escape(escape);
+                    }
+
+                    read_metadata_async(
+                        &file.path,
+                        &operator,
+                        Some(file.size),
+                        self.args_parsed.max_records,
+                        |reader, max_record| format.infer_schema(reader, max_record).map_err(Some),
+                    )
+                    .await?
                 }
+                FileFormatParams::NdJson(_) => {
+                    read_metadata_async(
+                        &file.path,
+                        &operator,
+                        Some(file.size),
+                        self.args_parsed.max_records,
+                        |reader, max_record| {
+                            let mut records = ValueIter::new(reader, max_record);
 
-                let arrow_schema = read_metadata_async(
-                    &first_file.path,
-                    &operator,
-                    Some(first_file.size),
-                    self.args_parsed.max_records,
-                    |reader, max_record| format.infer_schema(reader, max_record).map_err(Some),
-                )
-                .await?;
-                TableSchema::try_from(&arrow_schema)?
-            }
-            (Some(first_file), FileFormatParams::NdJson(_)) => {
-                let arrow_schema = read_metadata_async(
-                    &first_file.path,
-                    &operator,
-                    Some(first_file.size),
-                    self.args_parsed.max_records,
-                    |reader, max_record| {
-                        let mut records = ValueIter::new(reader, max_record);
+                            let schema = if let Some(max_record) = max_record {
+                                let mut tmp: Vec<std::result::Result<_, ArrowError>> =
+                                    Vec::with_capacity(max_record);
 
-                        let schema = if let Some(max_record) = max_record {
-                            let mut tmp: Vec<std::result::Result<_, ArrowError>> =
-                                Vec::with_capacity(max_record);
+                                for result in records {
+                                    tmp.push(Ok(result.map_err(|_| None)?));
+                                }
+                                infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)?
+                            } else {
+                                infer_json_schema_from_iterator(&mut records).map_err(Some)?
+                            };
 
-                            for result in records {
-                                tmp.push(Ok(result.map_err(|_| None)?));
-                            }
-                            infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)?
-                        } else {
-                            infer_json_schema_from_iterator(&mut records).map_err(Some)?
-                        };
-
-                        Ok((schema, 0))
-                    },
-                )
-                .await?;
-                TableSchema::try_from(&arrow_schema)?
-            }
-            _ => {
-                return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet, CSV and NDJSON",
-                ));
-            }
-        };
+                            Ok((schema, 0))
+                        },
+                    )
+                    .await?
+                }
+                FileFormatParams::Parquet(_) => {
+                    read_parquet_schema_async_rs(&operator, &file.path, Some(file.size)).await?
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "infer_schema is currently limited to format Parquet, CSV and NDJSON",
+                    ));
+                }
+            };
+            Ok(schema)
+        });
+        let arrow_schema = Schema::try_merge(try_join_all(infer_schema_futures).await?)?;
+        let table_schema = TableSchema::try_from(&arrow_schema)?;
 
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         let mut nulls: Vec<bool> = vec![];
 
-        for field in schema.fields().iter() {
+        for field in table_schema.fields().iter() {
             names.push(field.name().to_string());
 
             let non_null_type = field.data_type().remove_recursive_nullable();
@@ -225,7 +221,7 @@ impl AsyncSource for InferSchemaSource {
             nulls.push(field.is_nullable());
         }
 
-        let order_ids = (0..schema.fields().len() as u64).collect::<Vec<_>>();
+        let order_ids = (0..table_schema.fields().len() as u64).collect::<Vec<_>>();
 
         let block = DataBlock::new_from_columns(vec![
             StringType::from_data(names),
@@ -254,18 +250,7 @@ pub async fn read_metadata_async<
         Some(n) => n,
     };
     let algo = CompressAlgorithm::from_path(path);
-    let fn_check_data_size = |size: u64| {
-        if (matches!(algo, Some(CompressAlgorithm::Zip)) && size > MAX_ZIP_FILE_SIZE)
-            || size > MAX_COMPRESS_FILE_SIZE
-        {
-            return Err(ErrorCode::InvalidCompressionData(
-                "Compression data is too large",
-            ));
-        }
-        Ok(())
-    };
 
-    fn_check_data_size(file_size)?;
     let mut buf = Vec::new();
     let mut offset: u64 = 0;
     let mut chunk_size: u64 =
@@ -293,7 +278,6 @@ pub async fn read_metadata_async<
         } else {
             Cow::Borrowed(&buf)
         };
-        fn_check_data_size(bytes.len() as u64)?;
 
         if !bytes.is_empty() || offset >= file_size {
             match func_infer_schema(Cursor::new(bytes.as_slice()), max_records) {
