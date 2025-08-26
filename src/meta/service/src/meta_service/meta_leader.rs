@@ -179,6 +179,7 @@ impl<'a> MetaLeader<'a> {
     /// If the node is already in cluster membership, it still returns Ok.
     #[fastrace::trace]
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
+        let role = req.role();
         let node_id = req.node_id;
         let endpoint = req.endpoint;
         let metrics = self.raft.metrics().borrow().clone();
@@ -198,12 +199,14 @@ impl<'a> MetaLeader<'a> {
         });
         self.write(ent).await?;
 
-        self.raft
-            .change_membership(
-                ChangeMembers::AddVoters(btreemap! {node_id=>MembershipNode{}}),
-                false,
-            )
-            .await?;
+        let msg = if role == "learner" {
+            ChangeMembers::AddNodes(btreemap! {node_id=>MembershipNode{}})
+        } else {
+            ChangeMembers::AddVoters(btreemap! {node_id=>MembershipNode{}})
+        };
+
+        self.raft.change_membership(msg, false).await?;
+
         Ok(())
     }
 
@@ -239,9 +242,19 @@ impl<'a> MetaLeader<'a> {
         }
 
         // 1. Remove it from membership if needed.
-        self.raft
-            .change_membership(ChangeMembers::RemoveVoters(btreeset! {node_id}), false)
-            .await?;
+
+        let membership = self
+            .sto
+            .state_machine()
+            .with_sys_data(|s| s.last_membership_ref().membership().clone());
+
+        let msg = if membership.voter_ids().any(|id| id == node_id) {
+            ChangeMembers::RemoveVoters(btreeset! {node_id})
+        } else {
+            ChangeMembers::RemoveNodes(btreeset! {node_id})
+        };
+
+        self.raft.change_membership(msg, false).await?;
 
         // 2. Remove node info
         let ent = LogEntry::new(Cmd::RemoveNode { node_id });

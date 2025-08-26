@@ -38,6 +38,10 @@ pub struct JoinRequest {
     pub grpc_api_addr: String,
 
     pub grpc_api_advertise_address: Option<String>,
+
+    /// Valid role: "voter", "learner".
+    /// A learner node does not participate in voting.
+    pub role: Option<String>,
 }
 
 impl JoinRequest {
@@ -52,6 +56,23 @@ impl JoinRequest {
             grpc_api_advertise_address: grpc_api_advertise_address.map(|x| x.to_string()),
             ..Default::default()
         }
+    }
+
+    pub fn with_role_voter(self) -> Self {
+        self.with_role("voter")
+    }
+
+    pub fn with_role_learner(self) -> Self {
+        self.with_role("learner")
+    }
+
+    fn with_role(mut self, role: impl ToString) -> Self {
+        self.role = Some(role.to_string());
+        self
+    }
+
+    pub fn role(&self) -> String {
+        self.role.clone().unwrap_or_else(|| "voter".to_string())
     }
 }
 
