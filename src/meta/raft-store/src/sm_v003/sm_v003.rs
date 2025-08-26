@@ -250,9 +250,7 @@ impl SMV003 {
     }
 
     /// A shortcut
-    ///
-    /// If there is no new data to compact, it returns None.
-    pub async fn acquire_compactor(&self) -> Option<Compactor> {
+    pub async fn acquire_compactor(&self) -> Compactor {
         let permit = self.new_compactor_acquirer().acquire().await;
         self.new_compactor(permit)
     }
@@ -261,8 +259,7 @@ impl SMV003 {
         self.levels.new_compactor_acquirer()
     }
 
-    /// If there is no new data to compact, it returns None.
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Option<Compactor> {
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
         self.levels.new_compactor(permit)
     }
 }

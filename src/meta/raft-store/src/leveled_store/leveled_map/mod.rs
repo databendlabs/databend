@@ -387,7 +387,11 @@ impl LeveledMap {
         );
 
         let mut immutables = self.data.immutable_levels().as_ref().clone();
-        immutables.remove_levels_upto(compactor.upto);
+
+        // If there is immutable levels compacted, remove them.
+        if let Some(upto) = compactor.upto {
+            immutables.remove_levels_upto(upto);
+        }
 
         // NOTE: Replace data from bottom to top.
         // replace the db first, db contains more data.
@@ -411,7 +415,7 @@ impl LeveledMap {
     /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
     ///
     /// If there is no new data, it returns None.
-    pub(crate) async fn acquire_compactor(&self) -> Option<Compactor> {
+    pub(crate) async fn acquire_compactor(&self) -> Compactor {
         let acquirer = self.new_compactor_acquirer();
 
         let permit = acquirer.acquire().await;
@@ -424,15 +428,14 @@ impl LeveledMap {
     }
 
     /// If there is no new data, it returns None.
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Option<Compactor> {
-        let level_index = self.immutable_level_index()?;
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        let level_index = self.immutable_level_index();
 
-        let c = Compactor {
+        Compactor {
             _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
             upto: level_index,
-        };
-        Some(c)
+        }
     }
 }
 

@@ -154,6 +154,8 @@ impl RaftStoreInner {
             Default::default()
         };
 
+        info!("State machine built: {:?}", sm);
+
         let store = Self {
             id,
             config: config.clone(),
@@ -195,8 +197,7 @@ impl RaftStoreInner {
         }
 
         let permit = self.new_compactor_acquirer().acquire().await;
-        // Safe unwrap(): freeze writable create at least one immutable
-        let mut compactor = self.state_machine().levels().new_compactor(permit).unwrap();
+        let mut compactor = self.state_machine().levels().new_compactor(permit);
 
         let (mut sys_data, mut strm) = compactor
             .compact_into_stream()
@@ -396,8 +397,6 @@ impl RaftStoreInner {
 
         let permit = self.new_compactor_acquirer().acquire().await;
 
-        let compactor = self.state_machine().new_compactor(permit);
-
         let mut dump = {
             let log = self.log.read().await;
             log.dump_data()
@@ -405,7 +404,8 @@ impl RaftStoreInner {
 
         // Log is dumped thus there won't be a gap between sm and log.
         // It is now safe to release the compactor.
-        let db = compactor.and_then(|x| x.db());
+        let db = self.state_machine().get_snapshot();
+        drop(permit);
 
         // Export data header first
         {
