@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -185,6 +186,7 @@ impl LeveledMapData {
         K: MapKeyDecode,
         SeqMarked<K::V>: ValueConvert<SeqMarked>,
         Level: GetTable<K, K::V>,
+        <K as MapKey>::V: fmt::Debug,
     {
         // TODO: test it
 
@@ -207,7 +209,13 @@ impl LeveledMapData {
             );
         }
 
-        let strm = futures::stream::iter(vec).map(Ok).boxed();
+        let strm = futures::stream::iter(vec)
+            // .map(|x| {
+            //     debug!("range-item from writable: {:?}", x);
+            //     x
+            // })
+            .map(Ok)
+            .boxed();
         kmerge = kmerge.merge(strm);
 
         // Immutable levels
@@ -215,10 +223,18 @@ impl LeveledMapData {
         let immutable_levels = self.immutable_levels();
 
         for level in immutable_levels.iter_levels() {
+            let index = level.with_sys_data(|s| s.curr_seq());
+            let _ = index;
             let it = level.get_table().range(range.clone(), upto_seq);
 
             let vec = it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>();
-            let strm = futures::stream::iter(vec).map(Ok).boxed();
+            let strm = futures::stream::iter(vec)
+                // .map(move |x| {
+                //     debug!("range-item from immutable seq={}: {:?}", index, x);
+                //     x
+                // })
+                .map(Ok)
+                .boxed();
             kmerge = kmerge.merge(strm);
         }
 
@@ -227,6 +243,10 @@ impl LeveledMapData {
         if let Some(db) = self.persisted() {
             let map_view = MapView(&db);
             let strm = map_view.range(range.clone()).await?;
+            // let strm = strm.map(|x| {
+            //     debug!("range-item from db: {:?}", x);
+            //     x
+            // });
             kmerge = kmerge.merge(strm);
         };
 
@@ -336,6 +356,12 @@ impl LeveledMap {
 
         *immutables = Arc::new(immutable_levels);
 
+        info!(
+            "do_freeze_writable: after writable: {:?}, immutables: {:?}",
+            writable,
+            immutables.indexes().collect::<Vec<_>>()
+        );
+
         immutables.clone()
     }
 
@@ -387,7 +413,11 @@ impl LeveledMap {
         );
 
         let mut immutables = self.data.immutable_levels().as_ref().clone();
-        immutables.remove_levels_upto(compactor.upto);
+
+        // If there is immutable levels compacted, remove them.
+        if let Some(upto) = compactor.upto {
+            immutables.remove_levels_upto(upto);
+        }
 
         // NOTE: Replace data from bottom to top.
         // replace the db first, db contains more data.
@@ -409,9 +439,7 @@ impl LeveledMap {
     ///
     /// This method requires a mutable reference to prevent concurrent access to shared data,
     /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
-    ///
-    /// If there is no new data, it returns None.
-    pub(crate) async fn acquire_compactor(&self) -> Option<Compactor> {
+    pub(crate) async fn acquire_compactor(&self) -> Compactor {
         let acquirer = self.new_compactor_acquirer();
 
         let permit = acquirer.acquire().await;
@@ -423,16 +451,14 @@ impl LeveledMap {
         CompactorAcquirer::new(self.compaction_semaphore.clone())
     }
 
-    /// If there is no new data, it returns None.
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Option<Compactor> {
-        let level_index = self.immutable_level_index()?;
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        let level_index = self.immutable_level_index();
 
-        let c = Compactor {
+        Compactor {
             _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
             upto: level_index,
-        };
-        Some(c)
+        }
     }
 }
 

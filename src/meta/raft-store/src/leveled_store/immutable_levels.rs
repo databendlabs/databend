@@ -71,8 +71,9 @@ impl ImmutableLevels {
 
         let last_key = self.newest_level_index().unwrap_or_default();
 
+        // The newly added must have greater data index or there are no data added.
         assert!(
-            key > last_key,
+            key > last_key || (key == LevelIndex::default() && key == last_key),
             "new level to insert {:?} must have greater index than the newest level {:?}",
             key,
             last_key
@@ -88,7 +89,10 @@ impl ImmutableLevels {
             "level_index to remove {:?} must exist",
             level_index
         );
-        let left = self.immutables.split_off(&level_index);
+
+        let mut left = self.immutables.split_off(&level_index);
+        // split_off() also returns the given key, remove it.
+        left.pop_first();
         self.immutables = left;
     }
 
@@ -114,5 +118,30 @@ where
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let levels = self.iter_immutable_levels();
         compacted_range::<_, _, Level, _, Level>(range, None, levels, []).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::leveled_store::immutable::Immutable;
+    use crate::leveled_store::immutable_levels::ImmutableLevels;
+    use crate::leveled_store::level::Level;
+
+    #[test]
+    fn test_remove_levels_upto() {
+        let mut immutables = ImmutableLevels::new_form_iter(vec![
+            Immutable::new(Arc::new(Level::default())),
+            Immutable::new(Arc::new(Level::default())),
+            Immutable::new(Arc::new(Level::default())),
+        ]);
+
+        let index = immutables.indexes().collect::<Vec<_>>()[1];
+        let left_index = immutables.indexes().collect::<Vec<_>>()[2];
+
+        immutables.remove_levels_upto(index);
+
+        assert_eq!(immutables.indexes().collect::<Vec<_>>(), vec![left_index]);
     }
 }

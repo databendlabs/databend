@@ -142,7 +142,7 @@ impl DBBuilder {
             lm.freeze_writable(&mut writer_permit);
         }
 
-        let mut compacter = lm.acquire_compactor().await.unwrap();
+        let mut compacter = lm.acquire_compactor().await;
         let (sys_data, strm) = compacter.compact_into_stream().await?;
 
         self.append_kv_stream(strm).await?;

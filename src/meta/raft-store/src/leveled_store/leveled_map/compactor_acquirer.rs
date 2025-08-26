@@ -35,6 +35,7 @@ impl CompactorAcquirer {
     }
 }
 
+#[derive(Debug)]
 pub struct CompactorPermit {
     _permit: OwnedSemaphorePermit,
 }
