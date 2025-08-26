@@ -515,7 +515,7 @@ impl Scalar {
         }
     }
 
-    pub fn get_slice(&self) -> Option<&[u8]> {
+    pub fn as_bytes(&self) -> Option<&[u8]> {
         match self {
             Scalar::String(val) => Some(val.as_bytes()),
             Scalar::Geography(val) => Some(val.0.as_slice()),

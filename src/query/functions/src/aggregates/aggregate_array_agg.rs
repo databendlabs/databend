@@ -402,7 +402,7 @@ where T: ArgType + Debug + std::marker::Send
     fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
         if let Some(scalar) = other {
             let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-            self.builder.put_slice(val.get_slice().unwrap());
+            self.builder.put_slice(val.as_bytes().unwrap());
             self.builder.commit_row();
         }
     }
@@ -417,14 +417,14 @@ where T: ArgType + Debug + std::marker::Send
             for (scalar, valid) in T::iter_column(column).zip(validity) {
                 if valid {
                     let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-                    self.builder.put_slice(val.get_slice().unwrap());
+                    self.builder.put_slice(val.as_bytes().unwrap());
                     self.builder.commit_row();
                 }
             }
         } else {
             for scalar in T::iter_column(column) {
                 let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-                self.builder.put_slice(val.get_slice().unwrap());
+                self.builder.put_slice(val.as_bytes().unwrap());
                 self.builder.commit_row();
             }
         }
