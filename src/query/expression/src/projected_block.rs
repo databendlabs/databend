@@ -48,6 +48,16 @@ impl<'a> ProjectedBlock<'a> {
         }
     }
 
+    pub fn num_rows(&self) -> usize {
+        if self.entries.is_empty() {
+            return 0;
+        }
+
+        let num_rows = self.entries[0].len();
+        debug_assert!(self.entries.iter().all(|c| c.len() == num_rows));
+        num_rows
+    }
+
     pub fn slice<I>(&self, index: I) -> ProjectedBlock<'_>
     where I: SliceIndex<[usize], Output = [usize]> + SliceIndex<[BlockEntry], Output = [BlockEntry]>
     {

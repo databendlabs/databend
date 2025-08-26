@@ -78,7 +78,9 @@ where T: Clone + Default
     }
 }
 
-trait FixedKey: FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send {
+pub trait FixedKey:
+    FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send
+{
     fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>>;
 
     fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>>;

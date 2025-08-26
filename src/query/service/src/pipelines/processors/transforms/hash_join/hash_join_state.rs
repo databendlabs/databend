@@ -67,7 +67,9 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable> {
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
+#[derive(Default)]
 pub enum HashJoinHashTable {
+    #[default]
     Null,
     Serializer(SerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),

@@ -13,13 +13,8 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
-use std::cell::UnsafeCell;
 use std::collections::VecDeque;
 use std::ops::Deref;
-use std::ops::DerefMut;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::MappedMutexGuard;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::PoisonError;
@@ -46,6 +41,7 @@ impl PartialBlock {
     }
 }
 
+#[derive(Default)]
 pub struct PartialBlocks {
     pub current_rows: usize,
     pub current_bytes: usize,
@@ -200,7 +196,7 @@ pub fn build_join_keys(block: DataBlock, params: &JoinParams) -> Result<DataBloc
     let build_keys = &params.build_keys;
 
     let evaluator = Evaluator::new(&block, &params.func_ctx, &BUILTIN_FUNCTIONS);
-    let mut keys_entries: Vec<BlockEntry> = build_keys
+    let keys_entries: Vec<BlockEntry> = build_keys
         .iter()
         .map(|expr| {
             Ok(evaluator
@@ -222,7 +218,7 @@ pub fn build_join_keys(block: DataBlock, params: &JoinParams) -> Result<DataBloc
         block_entries.push(block.get_by_offset(index).clone());
     }
 
-    let projected_block = DataBlock::new(block_entries, block.num_rows());
+    let mut projected_block = DataBlock::new(block_entries, block.num_rows());
     // After computing complex join key expressions, we discard unnecessary columns as soon as possible to expect the release of memory.
     drop(block);
 
@@ -272,7 +268,7 @@ pub struct IgnorePanicMutex<T: ?Sized> {
     inner: Mutex<T>,
 }
 
-impl<T: ?Sized> IgnorePanicMutex<T> {
+impl<T> IgnorePanicMutex<T> {
     pub fn new(inner: T) -> Self {
         Self {
             inner: Mutex::new(inner),
@@ -316,14 +312,14 @@ pub struct CStyleCell<T: ?Sized> {
     inner: SyncUnsafeCell<T>,
 }
 
-impl<T: ?Sized> CStyleCell<T> {
-    pub const fn new(inner: T) -> Self {
+impl<T> CStyleCell<T> {
+    pub fn new(inner: T) -> Self {
         Self {
             inner: SyncUnsafeCell::new(inner),
         }
     }
 
-    pub const fn into_inner(self) -> T {
+    pub fn into_inner(self) -> T {
         self.inner.into_inner()
     }
 
@@ -334,6 +330,7 @@ impl<T: ?Sized> CStyleCell<T> {
     /// The caller must ensure that no other references (mutable or immutable)
     /// to the inner value exist when this method is called, and that the
     /// returned reference is not used concurrently with other accesses.
+    #[allow(clippy::mut_from_ref)]
     pub fn as_mut(&self) -> &mut T {
         unsafe { &mut *self.inner.get() }
     }

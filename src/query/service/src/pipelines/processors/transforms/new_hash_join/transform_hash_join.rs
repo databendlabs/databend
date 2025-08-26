@@ -152,12 +152,12 @@ impl<T: Join> Processor for TransformHashJoin<T> {
             self.build_stream = Some(HashJoinStream::Stream(self.join.add_block(data_block)?));
         }
 
-        if let Some(mut build_stream) = self.build_stream.take() {
+        if let Some(build_stream) = self.build_stream.take() {
             let HashJoinStream::Stream(mut stream) = build_stream else {
                 return Err(ErrorCode::Internal("Expect build stream"));
             };
 
-            while let Some(try_future) = stream.next_try_complete()? {
+            while let Some(mut try_future) = stream.next_try_complete()? {
                 if let Some(_build_progress) = try_future.try_complete()? {
                     continue;
                 }
@@ -179,7 +179,7 @@ impl<T: Join> Processor for TransformHashJoin<T> {
                 return Err(ErrorCode::Internal("Expect probe stream"));
             };
 
-            while let Some(try_future) = stream.next_try_complete()? {
+            while let Some(mut try_future) = stream.next_try_complete()? {
                 if let Some(probe_data) = try_future.try_complete()? {
                     match probe_data {
                         ProbeData::Next => {
@@ -202,7 +202,7 @@ impl<T: Join> Processor for TransformHashJoin<T> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(mut build_stream) = self.build_stream.take() {
+        if let Some(build_stream) = self.build_stream.take() {
             let HashJoinStream::Future((try_future, stream)) = build_stream else {
                 return Err(ErrorCode::Internal("Expect build future"));
             };

@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod interfaces;
-
-mod memory;
-mod transform_hash_join;
-
-pub use common::*;
-pub use interfaces::*;
+mod memory_hash_join;
+mod memory_hash_table;
+mod memory_hash_table_allocator;
+mod memory_hash_table_append;

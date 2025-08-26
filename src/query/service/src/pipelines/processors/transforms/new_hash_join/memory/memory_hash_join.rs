@@ -13,26 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cell::SyncUnsafeCell;
 use std::collections::VecDeque;
-use std::ops::DerefMut;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::PoisonError;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::new_hash_join::compact_blocks;
-use crate::pipelines::processors::transforms::new_hash_join::memory_hash_table::GlobalMemoryHashTable;
-use crate::pipelines::processors::transforms::new_hash_join::memory_hash_table::JoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::memory::memory_hash_table_allocator::MemoryHashTableAllocator;
+use crate::pipelines::processors::transforms::new_hash_join::memory::memory_hash_table_append::HashTableAppendScheduler;
 use crate::pipelines::processors::transforms::new_hash_join::CStyleCell;
-use crate::pipelines::processors::transforms::new_hash_join::ITryCompleteFuture;
-use crate::pipelines::processors::transforms::new_hash_join::ITryCompleteStream;
+use crate::pipelines::processors::transforms::new_hash_join::FlattenTryCompleteStream;
 use crate::pipelines::processors::transforms::new_hash_join::IgnorePanicMutex;
 use crate::pipelines::processors::transforms::new_hash_join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::JoinParams;
@@ -40,17 +31,14 @@ use crate::pipelines::processors::transforms::new_hash_join::JoinSettings;
 use crate::pipelines::processors::transforms::new_hash_join::NoneTryCompleteStream;
 use crate::pipelines::processors::transforms::new_hash_join::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::Progress;
-use crate::pipelines::processors::transforms::new_hash_join::SequenceStream;
-use crate::pipelines::processors::transforms::new_hash_join::TryCompleteFuture;
 use crate::pipelines::processors::transforms::new_hash_join::TryCompleteStream;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
 
-pub struct MemoryHashJoin<Table: JoinHashTable> {
+pub struct MemoryHashJoin {
     state: Arc<MemoryHashJoinState>,
-
-    table: Arc<GlobalMemoryHashTable<Table>>,
 }
 
-impl<Table: JoinHashTable> Join for MemoryHashJoin<Table> {
+impl Join for MemoryHashJoin {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -59,14 +47,14 @@ impl<Table: JoinHashTable> Join for MemoryHashJoin<Table> {
         if self.state.settings.check_threshold(&block) {
             let _guard = self.state.mutex.lock();
 
-            self.state.build_rows.as_mut() += block.num_rows();
+            *self.state.build_rows.as_mut() += block.num_rows();
             self.state.chunks.as_mut().push(block);
             return Ok(NoneTryCompleteStream::create());
         }
 
         // compact for small blocks
         let _guard = self.state.mutex.lock();
-        self.state.build_rows.as_mut() += block.num_rows();
+        *self.state.build_rows.as_mut() += block.num_rows();
         self.state.small_chunks.as_mut().push_back(block);
         Ok(NoneTryCompleteStream::create())
     }
@@ -82,32 +70,36 @@ impl<Table: JoinHashTable> Join for MemoryHashJoin<Table> {
         self.state.init_working_queue();
 
         // Large memory operations need to be performed under the protection of a stream.
-        Ok(SequenceStream::create(vec![
+        Ok(FlattenTryCompleteStream::create(vec![
             // 3. init hash table with fixed memory size
-            ReserverHashTableEntities::create(self.state.clone()),
+            MemoryHashTableAllocator::create(self.state.clone()),
             // 4. Populate the hashtable with the collected data chunks.
-            BuildHashTableEntities::create(self.state.clone()),
+            HashTableAppendScheduler::create(self.state.clone()),
         ]))
     }
 
-    fn probe(&self, block: DataBlock) -> Result<TryCompleteStream<ProbeData>> {
+    fn probe(&self, _block: DataBlock) -> Result<TryCompleteStream<ProbeData>> {
         todo!()
     }
 
     fn finish_probe(&self) -> Result<TryCompleteStream<ProbeData>> {
-        todo!()
+        Ok(NoneTryCompleteStream::create())
     }
 }
 
-struct MemoryHashJoinState {
-    settings: JoinSettings,
+pub struct MemoryHashJoinState {
+    pub params: JoinParams,
+    pub settings: JoinSettings,
 
-    mutex: IgnorePanicMutex<()>,
-    build_rows: CStyleCell<usize>,
-    chunks: CStyleCell<Vec<DataBlock>>,
-    small_chunks: CStyleCell<VecDeque<DataBlock>>,
+    pub mutex: IgnorePanicMutex<()>,
+    pub build_rows: CStyleCell<usize>,
+    pub chunks: CStyleCell<Vec<DataBlock>>,
+    pub small_chunks: CStyleCell<VecDeque<DataBlock>>,
 
-    working_queue: CStyleCell<VecDeque<usize>>,
+    pub working_queue: CStyleCell<VecDeque<usize>>,
+
+    pub hash_table: CStyleCell<HashJoinHashTable>,
+    pub arenas: CStyleCell<Vec<Vec<u8>>>,
 }
 
 impl MemoryHashJoinState {
@@ -124,38 +116,7 @@ impl MemoryHashJoinState {
         )?;
 
         let chunks = self.chunks.as_mut();
-        chunks.extend(compacted_blocks.into_iter());
+        chunks.extend(compacted_blocks);
         Ok(())
-    }
-
-    pub fn init_working_queue(&self) {
-        let working_queue = self.working_queue.as_mut();
-        working_queue.extend(0..self.chunks.len());
-    }
-}
-
-struct ReserverHashTableEntities {
-    state: Arc<MemoryHashJoinState>,
-}
-
-impl ReserverHashTableEntities {
-    pub fn create(state: Arc<MemoryHashJoinState>) -> TryCompleteStream<Progress> {
-        Box::new(ReserverHashTableEntities { state })
-    }
-}
-
-impl ITryCompleteStream<Progress> for ReserverHashTableEntities {
-    fn next_try_complete(&mut self) -> Result<Option<TryCompleteFuture<Progress>>> {
-        todo!()
-    }
-}
-
-struct BuildHashTableEntities {
-    state: Arc<MemoryHashJoinState>,
-}
-
-impl BuildHashTableEntities {
-    pub fn create(state: Arc<MemoryHashJoinState>) -> TryCompleteStream<Progress> {
-        Box::new(BuildHashTableEntities { state })
     }
 }
