@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_exception::Result;
 use databend_common_expression::types::date::CoreDate;
 use databend_common_expression::types::decimal::*;
@@ -32,6 +33,7 @@ use databend_common_expression::types::null::CoreNull;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::simple_type::SimpleType;
 use databend_common_expression::types::simple_type::SimpleValueType;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::CoreTimestamp;
 use databend_common_expression::types::zero_size_type::ZeroSizeType;
 use databend_common_expression::types::zero_size_type::ZeroSizeValueType;
@@ -167,153 +169,20 @@ where
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
-struct NullableArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
+#[derive(Debug)]
+struct ArrayAggStateSimple<T>
+where T: SimpleType
 {
-    values: Vec<Option<T::Scalar>>,
+    values: Vec<T::Scalar>,
 }
 
-impl<T> Default for NullableArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-{
+impl<T: Debug + SimpleType> Default for ArrayAggStateSimple<T> {
     fn default() -> Self {
         Self { values: Vec::new() }
     }
 }
 
-impl<T> ScalarStateFunc<T> for NullableArrayAggStateAny<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-{
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
-        match other {
-            Some(other) => {
-                self.values.push(Some(T::to_owned_scalar(other)));
-            }
-            None => {
-                self.values.push(None);
-            }
-        }
-    }
-
-    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
-        let column_len = T::column_len(column);
-        if column_len == 0 {
-            return Ok(());
-        }
-        let column_iter = T::iter_column(column);
-        if let Some(validity) = validity {
-            for (val, valid) in column_iter.zip(validity.iter()) {
-                if valid {
-                    self.values.push(Some(T::to_owned_scalar(val)));
-                } else {
-                    self.values.push(None);
-                }
-            }
-        } else {
-            for val in column_iter {
-                self.values.push(Some(T::to_owned_scalar(val)));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.values.extend_from_slice(&rhs.values);
-        Ok(())
-    }
-
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let data_type = builder.data_type();
-        let inner_type = data_type.as_array().unwrap();
-
-        let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
-        for value in &self.values {
-            match value {
-                Some(value) => {
-                    let val =
-                        T::upcast_scalar_with_type(value.clone(), &inner_type.remove_nullable());
-                    inner_builder.push(val.as_ref());
-                }
-                None => {
-                    inner_builder.push(ScalarRef::Null);
-                }
-            }
-        }
-
-        let array_value = ScalarRef::Array(inner_builder.build());
-        builder.push(array_value);
-        Ok(())
-    }
-}
-
-impl<T> StateSerde for NullableArrayAggStateAny<T>
-where
-    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-{
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
-    }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
-    }
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
-        })
-    }
-}
-
-#[derive(Debug)]
-struct ArrayAggStateSimple<T, const NULLABLE: bool>
-where T: SimpleType
-{
-    values: Vec<T::Scalar>,
-    validity: MutableBitmap,
-}
-
-impl<T: Debug + SimpleType, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE> {
-    fn default() -> Self {
-        Self {
-            values: Vec::new(),
-            validity: MutableBitmap::new(),
-        }
-    }
-}
-
-impl<T, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<T>>
-    for ArrayAggStateSimple<T, NULLABLE>
+impl<T> ScalarStateFunc<SimpleValueType<T>> for ArrayAggStateSimple<T>
 where T: SimpleType + Debug
 {
     fn new() -> Self {
@@ -321,18 +190,8 @@ where T: SimpleType + Debug
     }
 
     fn add(&mut self, other: Option<T::Scalar>) {
-        match other {
-            Some(scalar) => {
-                self.values.push(scalar);
-                if NULLABLE {
-                    self.validity.push(true);
-                }
-            }
-            None if NULLABLE => {
-                self.values.push(T::Scalar::default());
-                self.validity.push(false);
-            }
-            _ => unreachable!(),
+        if let Some(scalar) = other {
+            self.values.push(scalar);
         }
     }
 
@@ -346,25 +205,16 @@ where T: SimpleType + Debug
             for (value, valid) in column.iter().zip(validity) {
                 if valid {
                     self.values.push(*value);
-                    self.validity.push(true);
-                } else {
-                    self.values.push(T::Scalar::default());
-                    self.validity.push(false);
                 }
             }
         } else {
             self.values.extend(column.iter().copied());
-            if NULLABLE {
-                self.validity.extend_constant(length, true);
-            }
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         self.values.extend_from_slice(&rhs.values);
-        self.validity
-            .extend_from_slice(rhs.validity.as_slice(), 0, rhs.validity.len());
 
         Ok(())
     }
@@ -374,25 +224,14 @@ where T: SimpleType + Debug
         let inner_type = data_type.as_array().unwrap();
 
         let column = mem::take(&mut self.values).into();
-        let item = if !NULLABLE {
-            SimpleValueType::<T>::upcast_column_with_type(column, inner_type)
-        } else {
-            let column = SimpleValueType::<T>::upcast_column_with_type(
-                column,
-                &inner_type.remove_nullable(),
-            );
-            Column::Nullable(Box::new(NullableColumn::new(
-                column,
-                mem::take(&mut self.validity).freeze(),
-            )))
-        };
+        let item = SimpleValueType::<T>::upcast_column_with_type(column, inner_type);
 
         builder.push(ScalarRef::Array(item));
         Ok(())
     }
 }
 
-impl<T, const NULLABLE: bool> StateSerde for ArrayAggStateSimple<T, NULLABLE>
+impl<T> StateSerde for ArrayAggStateSimple<T>
 where T: SimpleType
 {
     fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
@@ -402,15 +241,7 @@ where T: SimpleType
             .unwrap()
             .remove_nullable();
 
-        if NULLABLE {
-            vec![DataType::Array(Box::new(DataType::Tuple(vec![
-                DataType::Boolean,
-                data_type,
-            ])))
-            .into()]
-        } else {
-            vec![DataType::Array(Box::new(data_type)).into()]
-        }
+        vec![DataType::Array(Box::new(data_type)).into()]
     }
 
     fn batch_serialize(
@@ -418,40 +249,18 @@ where T: SimpleType
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        if NULLABLE {
-            // ArrayType<PairType<BooleanType, SimpleValueType<T>>>
-            let [builder] = builders else { unreachable!() };
-            let array_builder = builder.as_array_mut().unwrap();
-            let [bool_builder, value_builder] =
-                array_builder.builder.as_tuple_mut().unwrap().as_mut_slice()
-            else {
-                unreachable!()
-            };
-
-            let bool_builder = bool_builder.as_boolean_mut().unwrap();
-            let mut value_builder = SimpleValueType::<T>::downcast_builder(value_builder);
-
-            for place in places {
-                let state = AggrState::new(*place, loc).get::<Self>();
-                bool_builder.extend_from_slice(state.validity.as_slice(), 0, state.validity.len());
-                value_builder.extend_from_slice(&state.values);
-                array_builder.offsets.push(value_builder.len() as u64);
-            }
-            Ok(())
-        } else {
-            batch_serialize1::<ArrayType<SimpleValueType<T>>, Self, _>(
-                places,
-                loc,
-                builders,
-                |state, builder| {
-                    for value in &state.values {
-                        builder.put_item(*value)
-                    }
-                    builder.commit_row();
-                    Ok(())
-                },
-            )
-        }
+        batch_serialize1::<ArrayType<SimpleValueType<T>>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for value in &state.values {
+                    builder.put_item(*value)
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -460,44 +269,27 @@ where T: SimpleType
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        if NULLABLE {
-            batch_merge1::<ArrayType<PairType<BooleanType, SimpleValueType<T>>>, Self, _>(
-                places,
-                loc,
-                state,
-                filter,
-                |state, (validity, values)| {
-                    let rhs = Self {
-                        values: SimpleValueType::<T>::column_to_builder(values),
-                        validity: validity.make_mut(),
-                    };
-                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
-                },
-            )
-        } else {
-            batch_merge1::<ArrayType<SimpleValueType<T>>, Self, _>(
-                places,
-                loc,
-                state,
-                filter,
-                |state, data| {
-                    let rhs = Self {
-                        values: SimpleValueType::<T>::column_to_builder(data),
-                        validity: MutableBitmap::new(),
-                    };
-                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
-                },
-            )
-        }
+        batch_merge1::<ArrayType<SimpleValueType<T>>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, data| {
+                let rhs = Self {
+                    values: SimpleValueType::<T>::column_to_builder(data),
+                };
+                <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
+            },
+        )
     }
 }
 
 #[derive(Debug)]
-struct ArrayAggStateZST<const NULLABLE: bool> {
+struct ArrayAggStateZST<const IS_NULL: bool> {
     validity: MutableBitmap,
 }
 
-impl<V, const NULLABLE: bool> ScalarStateFunc<ZeroSizeValueType<V>> for ArrayAggStateZST<NULLABLE>
+impl<V, const IS_NULL: bool> ScalarStateFunc<ZeroSizeValueType<V>> for ArrayAggStateZST<IS_NULL>
 where V: ZeroSizeType
 {
     fn new() -> Self {
@@ -507,17 +299,13 @@ where V: ZeroSizeType
     }
 
     fn add(&mut self, other: Option<()>) {
-        if other.is_some() {
+        if !IS_NULL && other.is_some() {
             self.validity.push(true);
-        } else if !NULLABLE {
-            unreachable!()
-        } else {
-            self.validity.push(false);
         }
     }
 
     fn add_batch(&mut self, length: &usize, validity: Option<&Bitmap>) -> Result<()> {
-        if *length == 0 {
+        if IS_NULL || *length == 0 {
             return Ok(());
         }
 
@@ -525,10 +313,6 @@ where V: ZeroSizeType
             for valid in validity {
                 if valid {
                     self.validity.push(true);
-                } else if !NULLABLE {
-                    unreachable!()
-                } else {
-                    self.validity.push(false);
                 }
             }
         } else {
@@ -545,21 +329,13 @@ where V: ZeroSizeType
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let item = if !NULLABLE {
-            V::upcast_column(self.validity.len())
-        } else {
-            Column::Nullable(Box::new(NullableColumn::new(
-                V::upcast_column(self.validity.len()),
-                mem::take(&mut self.validity).freeze(),
-            )))
-        };
-
+        let item = V::upcast_column(self.validity.len());
         builder.push(ScalarRef::Array(item));
         Ok(())
     }
 }
 
-impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
+impl<const IS_NULL: bool> StateSerde for ArrayAggStateZST<IS_NULL> {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
         vec![ArrayType::<BooleanType>::data_type().into()]
     }
@@ -596,6 +372,174 @@ impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
                 Ok(())
             },
         )
+    }
+}
+
+#[derive(Debug)]
+struct ArrayAggStateBinary<T>
+where T: ArgType
+{
+    builder: BinaryColumnBuilder,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Debug + ArgType> Default for ArrayAggStateBinary<T> {
+    fn default() -> Self {
+        Self {
+            builder: BinaryColumnBuilder::with_capacity(0, 0),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> ScalarStateFunc<T> for ArrayAggStateBinary<T>
+where T: ArgType + Debug + std::marker::Send
+{
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
+        if let Some(scalar) = other {
+            let val = T::upcast_scalar(T::to_owned_scalar(scalar));
+            self.builder.put_slice(val.get_slice().unwrap());
+            self.builder.commit_row();
+        }
+    }
+
+    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
+        let length = T::column_len(column);
+        if length == 0 {
+            return Ok(());
+        }
+
+        if let Some(validity) = validity {
+            for (scalar, valid) in T::iter_column(column).zip(validity) {
+                if valid {
+                    let val = T::upcast_scalar(T::to_owned_scalar(scalar));
+                    self.builder.put_slice(val.get_slice().unwrap());
+                    self.builder.commit_row();
+                }
+            }
+        } else {
+            for scalar in T::iter_column(column) {
+                let val = T::upcast_scalar(T::to_owned_scalar(scalar));
+                self.builder.put_slice(val.get_slice().unwrap());
+                self.builder.commit_row();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.builder.append_column(&rhs.builder.clone().build());
+
+        Ok(())
+    }
+
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        let data_type = builder.data_type();
+        let inner_type = data_type.as_array().unwrap();
+
+        let binary_column = self.builder.clone().build();
+        let item = match &**inner_type {
+            DataType::String => {
+                let builder = StringColumnBuilder::try_from_bin_column(binary_column)?;
+                Column::String(builder.build())
+            }
+            DataType::Binary => Column::Binary(binary_column),
+            DataType::Bitmap => Column::Bitmap(binary_column),
+            DataType::Variant => Column::Variant(binary_column),
+            DataType::Geometry => Column::Geometry(binary_column),
+            DataType::Geography => Column::Geography(GeographyColumn(binary_column)),
+            _ => unreachable!(),
+        };
+
+        builder.push(ScalarRef::Array(item));
+        Ok(())
+    }
+}
+
+impl<T> StateSerde for ArrayAggStateBinary<T>
+where T: ArgType + std::marker::Send
+{
+    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        let data_type = function_data
+            .and_then(|data| data.as_any().downcast_ref::<DataType>())
+            .and_then(|ty| ty.as_array())
+            .unwrap()
+            .remove_nullable();
+
+        vec![DataType::Array(Box::new(data_type)).into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<ArrayType<T>, Self, _>(places, loc, builders, |state, builder| {
+            let binary_column = state.builder.clone().build();
+            let offsets = vec![0, binary_column.len() as u64];
+
+            let column = match T::data_type() {
+                DataType::String => {
+                    let builder = StringColumnBuilder::try_from_bin_column(binary_column)?;
+                    Column::String(builder.build())
+                }
+                DataType::Binary => Column::Binary(binary_column),
+                DataType::Bitmap => Column::Bitmap(binary_column),
+                DataType::Variant => Column::Variant(binary_column),
+                DataType::Geometry => Column::Geometry(binary_column),
+                DataType::Geography => Column::Geography(GeographyColumn(binary_column)),
+                _ => unreachable!(),
+            };
+            let column = T::try_downcast_column(&column).unwrap();
+            let array_column = ArrayColumn::new(column, offsets.into());
+            builder.append_column(&array_column);
+
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<ArrayType<T>, Self, _>(places, loc, state, filter, |state, data| {
+            let builder = T::column_to_builder(data);
+            let column_builder = T::try_upcast_column_builder(builder, &T::data_type()).unwrap();
+            let binary_builder = match column_builder {
+                ColumnBuilder::String(string_builder) => {
+                    let mut builder = BinaryColumnBuilder::with_capacity(
+                        string_builder.len(),
+                        string_builder.memory_size(),
+                    );
+                    for i in 0..string_builder.len() {
+                        let s = unsafe { string_builder.index_unchecked(i) };
+                        builder.put_str(s);
+                        builder.commit_row();
+                    }
+                    builder
+                }
+                ColumnBuilder::Binary(builder)
+                | ColumnBuilder::Bitmap(builder)
+                | ColumnBuilder::Variant(builder)
+                | ColumnBuilder::Geometry(builder)
+                | ColumnBuilder::Geography(builder) => builder,
+                _ => unreachable!(),
+            };
+
+            let rhs = Self {
+                builder: binary_builder,
+                _phantom: PhantomData,
+            };
+
+            state.merge(&rhs)
+        })
     }
 }
 
@@ -783,30 +727,18 @@ fn try_create_aggregate_array_agg_function(
     assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
-    let is_nullable = data_type.is_nullable_or_null();
-    let return_type = DataType::Array(Box::new(data_type.clone()));
     let not_null_type = data_type.remove_nullable();
+    let return_type = DataType::Array(Box::new(not_null_type.clone()));
 
-    fn simple<V>(
-        display_name: &str,
-        return_type: DataType,
-        nullable: bool,
-    ) -> Result<Arc<dyn AggregateFunction>>
+    fn simple<V>(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>>
     where
         V: SimpleType,
         V::Scalar: BorshSerialize + BorshDeserialize,
     {
-        if nullable {
-            AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V, true>>::create(
-                display_name,
-                return_type,
-            )
-        } else {
-            AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V, false>>::create(
-                display_name,
-                return_type,
-            )
-        }
+        AggregateArrayAggFunction::<SimpleValueType<V>, ArrayAggStateSimple<V>>::create(
+            display_name,
+            return_type,
+        )
     }
 
     type ArrayAggrZST<V, const N: bool> =
@@ -816,111 +748,62 @@ fn try_create_aggregate_array_agg_function(
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
-                    simple::<CoreNumber<NUM>>(display_name, return_type, is_nullable)
+                    simple::<CoreNumber<NUM>>(display_name, return_type)
                 }
             })
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    simple::<CoreDecimal<DECIMAL>>(display_name, return_type, is_nullable)
+                    simple::<CoreDecimal<DECIMAL>>(display_name, return_type)
                 }
             })
         }
-        DataType::Date => simple::<CoreDate>(display_name, return_type, is_nullable),
-        DataType::Timestamp => simple::<CoreTimestamp>(display_name, return_type, is_nullable),
-        DataType::Interval => simple::<CoreInterval>(display_name, return_type, is_nullable),
+        DataType::Date => simple::<CoreDate>(display_name, return_type),
+        DataType::Timestamp => simple::<CoreTimestamp>(display_name, return_type),
+        DataType::Interval => simple::<CoreInterval>(display_name, return_type),
 
-        DataType::Null => ArrayAggrZST::<CoreNull, false>::create(display_name, return_type),
+        DataType::Null => ArrayAggrZST::<CoreNull, true>::create(display_name, return_type),
         DataType::EmptyArray => {
-            if is_nullable {
-                ArrayAggrZST::<CoreEmptyArray, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrZST::<CoreEmptyArray, false>::create(display_name, return_type)
-            }
+            ArrayAggrZST::<CoreEmptyArray, false>::create(display_name, return_type)
         }
         DataType::EmptyMap => {
-            if is_nullable {
-                ArrayAggrZST::<CoreEmptyMap, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrZST::<CoreEmptyMap, false>::create(display_name, return_type)
-            }
+            ArrayAggrZST::<CoreEmptyMap, false>::create(display_name, return_type)
         }
 
-        DataType::String => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<StringType>;
-                AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<StringType>;
-                AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
-            }
-        }
         DataType::Boolean => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<BooleanType>;
-                AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<BooleanType>;
-                AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateAny<BooleanType>;
+            AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
         }
-
+        DataType::String => {
+            type State = ArrayAggStateBinary<StringType>;
+            AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
+        }
         DataType::Binary => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<BinaryType>;
-                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<BinaryType>;
-                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateBinary<BinaryType>;
+            AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
         }
         DataType::Bitmap => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<BitmapType>;
-                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<BitmapType>;
-                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateBinary<BitmapType>;
+            AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
         }
         DataType::Variant => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<VariantType>;
-                AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<VariantType>;
-                AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateBinary<VariantType>;
+            AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
         }
         DataType::Geometry => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<GeometryType>;
-                AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<GeometryType>;
-                AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateBinary<GeometryType>;
+            AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
         }
         DataType::Geography => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<GeographyType>;
-                AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<GeographyType>;
-                AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateBinary<GeographyType>;
+            AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
         }
 
         DataType::Nullable(_) | DataType::Generic(_) => unreachable!(),
         _ => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<AnyType>;
-                AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<AnyType>;
-                AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
-            }
+            type State = ArrayAggStateAny<AnyType>;
+            AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
         }
     }
 }
