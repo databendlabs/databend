@@ -241,6 +241,7 @@ impl TableSnapshot {
         let snapshot_size: u64 = r.read_scalar::<u64>()?;
 
         read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+            .map_err(|x| x.add_message("fail to deserialize table snapshot"))
     }
 
     #[inline]
