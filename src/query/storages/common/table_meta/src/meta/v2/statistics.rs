@@ -75,6 +75,7 @@ pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
     pub size: u64,
     /// The file location of the stats data.
+    #[serde(deserialize_with = "deserialize_location")]
     pub location: Location,
 }
 
@@ -267,6 +268,12 @@ impl Statistics {
             additional_stats_meta: None,
         }
     }
+}
+
+fn deserialize_location<'de, D>(deserializer: D) -> Result<Location, D::Error>
+where D: serde::Deserializer<'de> {
+    let opt = <Option<Location> as serde::Deserialize>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or(("".to_string(), 0)))
 }
 
 /// Serializes a `Scalar` value by first converting it to `IndexScalar`.
