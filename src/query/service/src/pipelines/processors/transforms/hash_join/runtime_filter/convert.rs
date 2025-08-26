@@ -316,4 +316,93 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_build_inlist_filter_large() {
+        let func_ctx = FunctionContext::default();
+
+        // Create test column with 1024 elements: {0, 1, 2, ..., 1023}
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
+        for i in 0..1024 {
+            builder.push(Scalar::Number((i).into()).as_ref());
+        }
+        let inlist = builder.build();
+
+        // Create probe key expression: column_b
+        let probe_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "column_b".to_string(),
+            data_type: data_type.clone(),
+            display_name: "column_b".to_string(),
+        });
+
+        // Build the filter expression - this should create a balanced binary tree
+        let filter_expr = build_inlist_filter(inlist, &probe_key).unwrap();
+
+        // Verify the expression was built successfully
+        assert!(
+            filter_expr.as_constant().is_none(),
+            "Filter expression should not be a constant"
+        );
+
+        // Test with ConstantFolder - case where column_b in [500, 600]
+        // (should intersect with our range [0, 1023])
+        let mut input_domains = HashMap::new();
+        let domain_value_500_600 = Domain::from_min_max(
+            Scalar::Number(500i32.into()),
+            Scalar::Number(600i32.into()),
+            &data_type,
+        );
+        input_domains.insert("column_b".to_string(), domain_value_500_600);
+
+        let (folded_expr, _) = ConstantFolder::fold_with_domain(
+            &filter_expr,
+            &input_domains,
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+
+        // Should not fold to constant since there's intersection
+        assert!(
+            folded_expr.as_constant().is_none(),
+            "Expression should not fold to constant when there's intersection"
+        );
+
+        // Test with ConstantFolder - case where column_b in [2000, 3000]
+        // (should NOT intersect with our range [0, 1023])
+        let mut input_domains_no_intersect = HashMap::new();
+        let domain_value_2000_3000 = Domain::from_min_max(
+            Scalar::Number(2000i32.into()),
+            Scalar::Number(3000i32.into()),
+            &data_type,
+        );
+        input_domains_no_intersect.insert("column_b".to_string(), domain_value_2000_3000);
+
+        let (folded_expr_false, _) = ConstantFolder::fold_with_domain(
+            &filter_expr,
+            &input_domains_no_intersect,
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
+
+        // Range [2000, 3000] does not intersect with {0, 1, 2, ..., 1023},
+        // so it should fold to constant false
+        match folded_expr_false {
+            Expr::Constant(Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            }) => {
+                println!("✓ Test passed: column_b in [2000,3000] correctly evaluated to false for 1024 elements");
+            }
+            _ => {
+                panic!(
+                    "Expected constant false for non-intersecting range, got: {:?}",
+                    folded_expr_false
+                );
+            }
+        }
+
+        println!("✓ Large inlist filter test (1024 elements) passed - balanced binary tree working correctly");
+    }
 }
