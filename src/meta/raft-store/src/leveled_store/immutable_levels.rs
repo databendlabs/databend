@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
@@ -22,52 +23,78 @@ use seq_marked::SeqMarked;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
+use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
 pub struct ImmutableLevels {
-    /// From oldest to newest, i.e., levels[0] is the oldest
-    levels: Vec<Immutable>,
+    /// From oldest to newest, i.e., first is the oldest
+    immutables: BTreeMap<LevelIndex, Immutable>,
 }
 
 impl ImmutableLevels {
-    pub(crate) fn new(levels: impl IntoIterator<Item = Immutable>) -> Self {
+    pub(crate) fn new_form_iter(immutables: impl IntoIterator<Item = Immutable>) -> Self {
         Self {
-            levels: levels.into_iter().collect(),
+            immutables: immutables
+                .into_iter()
+                .map(|immu| (*immu.level_index(), immu))
+                .collect(),
         }
+    }
+
+    pub(crate) fn indexes(&self) -> impl Iterator<Item = LevelIndex> + use<'_> {
+        self.immutables.keys().cloned()
     }
 
     /// Return an iterator of all Arc of levels from newest to oldest.
     pub(crate) fn iter_immutable_levels(&self) -> impl Iterator<Item = &Immutable> {
-        self.levels.iter().rev()
+        self.immutables.values().rev()
     }
 
     /// Return an iterator of all levels from newest to oldest.
     pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
-        self.levels.iter().map(|x| x.as_ref()).rev()
+        self.immutables.values().map(|x| x.as_ref()).rev()
     }
 
     pub(crate) fn newest(&self) -> Option<&Immutable> {
-        self.levels.last()
+        self.immutables.values().next_back()
     }
 
-    pub(crate) fn push(&mut self, level: Immutable) {
-        self.levels.push(level);
+    pub(crate) fn newest_level_index(&self) -> Option<LevelIndex> {
+        self.newest().map(|x| *x.level_index())
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.levels.len()
+    pub(crate) fn insert(&mut self, level: Immutable) {
+        let key = *level.level_index();
+
+        let last_key = self.newest_level_index().unwrap_or_default();
+
+        assert!(
+            key > last_key,
+            "new level to insert {:?} must have greater index than the newest level {:?}",
+            key,
+            last_key
+        );
+
+        self.immutables.insert(key, level);
     }
 
-    pub(crate) fn levels(&self) -> &Vec<Immutable> {
-        &self.levels
+    /// Remove all levels up to and including the given level index.
+    pub(crate) fn remove_levels_upto(&mut self, level_index: LevelIndex) {
+        assert!(
+            self.immutables.contains_key(&level_index),
+            "level_index to remove {:?} must exist",
+            level_index
+        );
+        let left = self.immutables.split_off(&level_index);
+        self.immutables = left;
     }
 
     #[allow(dead_code)]
-    pub(crate) fn levels_mut(&mut self) -> &mut Vec<Immutable> {
-        &mut self.levels
+    pub(crate) fn levels_mut(&mut self) -> &mut BTreeMap<LevelIndex, Immutable> {
+        &mut self.immutables
     }
 }
 
