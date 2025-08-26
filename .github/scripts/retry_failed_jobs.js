@@ -26,18 +26,6 @@ async function analyzeJob(github, context, core, job) {
 
         core.info(`  Job status: ${jobDetails.status}, conclusion: ${jobDetails.conclusion}`);
 
-        // Check if job was cancelled by user based on conclusion
-        if (jobDetails.conclusion === 'cancelled') {
-            core.info(`  ⛔️ Job "${job.name}" is NOT retryable - cancelled (likely by user)`);
-            return {
-                job,
-                retryable: false,
-                annotationCount: 0,
-                reason: 'Cancelled by user',
-                priorityCancelled: false
-            };
-        }
-
         const { data: annotations } = await github.rest.checks.listAnnotations({
             owner: context.repo.owner,
             repo: context.repo.repo,
