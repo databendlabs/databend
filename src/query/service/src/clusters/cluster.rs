@@ -810,6 +810,7 @@ impl ClusterDiscovery {
                 "meta_embedded": cfg.meta.embedded_dir.is_empty(),
                 "meta_client_timeout": cfg.meta.client_timeout_in_second,
                 "rpc_client_timeout_secs": cfg.query.rpc_client_timeout_secs,
+                "endpoints": cfg.meta.endpoints,
             },
             "license": license_info,
             "cluster_nodes": {

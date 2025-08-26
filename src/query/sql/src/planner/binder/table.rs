@@ -142,6 +142,7 @@ impl Binder {
             false,
             false,
             true,
+            None,
             bind_context.allow_virtual_column,
         );
 

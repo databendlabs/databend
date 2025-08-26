@@ -42,6 +42,7 @@ use ethnum::I256;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
+use Expr::TimeSlice;
 
 const BAD_INT64_VALUES: [i64; 31] = [
     -2,
@@ -521,6 +522,19 @@ impl QueryVisitor {
                 span: *span,
                 unit: *unit,
                 date: Box::new(self.fuzz_expr(date)),
+            },
+            TimeSlice {
+                span,
+                slice_length,
+                unit,
+                date,
+                start_or_end,
+            } => TimeSlice {
+                span: *span,
+                unit: *unit,
+                date: Box::new(self.fuzz_expr(date)),
+                slice_length: *slice_length,
+                start_or_end: start_or_end.to_string(),
             },
             Expr::PreviousDay { span, unit, date } => Expr::PreviousDay {
                 span: *span,

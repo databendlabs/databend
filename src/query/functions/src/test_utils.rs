@@ -14,9 +14,11 @@
 
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::IntervalKind;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Literal as ASTLiteral;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::UnaryOperator;
@@ -511,6 +513,37 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     unimplemented!("{kind:?} is not supported")
                 }
             })
+        }
+        AExpr::TimeSlice {
+            span,
+            slice_length,
+            unit,
+            date,
+            start_or_end,
+        } => {
+            let slice_length = Expr::Literal {
+                span: None,
+                value: Literal::UInt64(slice_length),
+            };
+            let start_or_end = Expr::Literal {
+                span: None,
+                value: Literal::String(start_or_end),
+            };
+            let unit = Expr::Literal {
+                span: None,
+                value: Literal::String(unit.to_string()),
+            };
+            RawExpr::FunctionCall {
+                span,
+                name: "time_slice".to_string(),
+                params: vec![],
+                args: vec![
+                    transform_expr(*date, columns),
+                    transform_expr(slice_length, columns),
+                    transform_expr(unit, columns),
+                    transform_expr(start_or_end, columns),
+                ],
+            }
         }
         AExpr::LastDay { span, unit, date } => {
             with_interval_mapped_name!(|INTERVAL| match unit {

@@ -114,6 +114,7 @@ impl Display for With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
+    pub user_specified_materialized: bool,
     pub materialized: bool,
     pub query: Box<Query>,
 }
@@ -122,7 +123,7 @@ impl Display for CTE {
     #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS ", self.alias)?;
-        if self.materialized {
+        if self.user_specified_materialized {
             write!(f, "MATERIALIZED ")?;
         }
         write!(f, "({})", self.query)?;

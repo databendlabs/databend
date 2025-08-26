@@ -32,19 +32,15 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::display::scalar_ref_to_string;
-use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_meta_app::principal::UDTF;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
 use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
-use itertools::Itertools;
 
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
@@ -63,6 +59,7 @@ use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::Planner;
 use crate::ScalarExpr;
+use crate::UDFArgVisitor;
 
 impl Binder {
     /// Bind a table function.
@@ -76,43 +73,6 @@ impl Binder {
         alias: &Option<TableAlias>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter))]
-        struct UDTFArgVisitor<'a> {
-            udtf: &'a UDTF,
-            table_args: &'a TableArgs,
-        }
-
-        impl UDTFArgVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                if let Expr::ColumnRef { span, column } = expr {
-                    if column.database.is_some() || column.table.is_some() {
-                        return;
-                    }
-                    assert_eq!(self.udtf.arg_types.len(), self.table_args.positioned.len());
-                    let Some((pos, (_, ty))) = self
-                        .udtf
-                        .arg_types
-                        .iter()
-                        .find_position(|(name, _)| name == column.column.name())
-                    else {
-                        return;
-                    };
-                    *expr = Expr::Cast {
-                        span: *span,
-                        expr: Box::new(Expr::Literal {
-                            span: *span,
-                            value: Literal::String(scalar_ref_to_string(
-                                &self.table_args.positioned[pos].as_ref(),
-                            )),
-                        }),
-                        target_type: convert_to_type_name(ty),
-                        pg_style: false,
-                    };
-                }
-            }
-        }
-
         let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
         if BUILTIN_FUNCTIONS
@@ -190,17 +150,23 @@ impl Binder {
                     .statement;
 
                 if udtf.arg_types.len() != table_args.positioned.len() {
-                    return Err(ErrorCode::UDFSchemaMismatch(format!(
+                    return Err(ErrorCode::SyntaxException(format!(
                         "UDTF '{}' argument types length {} does not match input arguments length {}",
                         func_name,
                         udtf.arg_types.len(),
                         table_args.positioned.len()
                     )));
                 }
-                let mut visitor = UDTFArgVisitor {
-                    udtf: &udtf,
-                    table_args: &table_args,
-                };
+
+                let args_expr = table_args
+                    .positioned
+                    .iter()
+                    .map(|scalar| Expr::Literal {
+                        span: None,
+                        value: Literal::String(scalar_ref_to_string(&scalar.as_ref())),
+                    })
+                    .collect::<Vec<_>>();
+                let mut visitor = UDFArgVisitor::new(&udtf.arg_types, &args_expr);
                 stmt.drive_mut(&mut visitor);
 
                 let binder = Binder::new(
@@ -309,6 +275,7 @@ impl Binder {
                 false,
                 false,
                 false,
+                None,
                 false,
             );
 
@@ -371,6 +338,7 @@ impl Binder {
                 false,
                 false,
                 false,
+                None,
                 false,
             );
 

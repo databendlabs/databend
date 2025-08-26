@@ -105,6 +105,7 @@ use databend_common_proto_conv::FromToProto;
 use crate::errors::TableError;
 use crate::kv_app_error::KVAppError;
 use crate::meta_txn_error::MetaTxnError;
+use crate::util::IdempotentKVTxnSender;
 
 /// SchemaApi defines APIs that provides schema storage, such as database, table.
 #[async_trait::async_trait]
@@ -276,10 +277,10 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
-    async fn update_multi_table_meta_with_txn_id(
+    async fn update_multi_table_meta_with_sender(
         &self,
         req: UpdateMultiTableMetaReq,
-        txn_id: String,
+        kv_txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError>;
 
     async fn set_table_column_mask_policy(

@@ -256,3 +256,63 @@ query T
 select * from filter_t2('hello');
 ----
 hello
+
+statement ok
+CREATE OR REPLACE FUNCTION reverse_str(s STRING) RETURNS STRING AS $$ REVERSE(s) $$;
+
+query T
+SELECT reverse_str('hello');
+----
+olleh
+
+query T
+SELECT reverse_str('he' || 'llo');
+----
+olleh
+
+statement ok
+CREATE OR REPLACE FUNCTION str_to_int(s STRING) RETURNS INT32 AS $$ s $$;
+
+statement error
+SELECT str_to_int('hello');
+
+query I
+SELECT str_to_int('10');
+----
+10
+
+statement ok
+CREATE OR REPLACE FUNCTION str_len(s STRING) RETURNS INT AS $$ LENGTH(s) $$;
+
+query I
+SELECT str_len('hello');
+----
+5
+
+query I
+SELECT str_len('he' || 'llo');
+----
+5
+
+statement ok
+CREATE OR REPLACE FUNCTION bool_not(b BOOLEAN) RETURNS BOOLEAN AS $$ NOT b $$;
+
+query B
+SELECT bool_not(TRUE);
+----
+0
+
+query B
+SELECT bool_not(FALSE);
+----
+1
+
+query B
+SELECT bool_not(NULL);
+----
+NULL
+
+query B
+SELECT bool_not(1 = 0);
+----
+1

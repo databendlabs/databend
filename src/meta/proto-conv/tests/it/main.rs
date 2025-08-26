@@ -135,3 +135,4 @@ mod v140_task_message;
 mod v141_row_access_policy;
 mod v142_table_row_access_policy;
 mod v143_udtf;
+mod v144_scalar_udf;

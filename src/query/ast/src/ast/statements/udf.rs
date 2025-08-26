@@ -76,6 +76,11 @@ pub enum UDFDefinition {
         return_types: Vec<(Identifier, TypeName)>,
         sql: String,
     },
+    ScalarUDF {
+        arg_types: Vec<(Identifier, TypeName)>,
+        definition: String,
+        return_type: TypeName,
+    },
 }
 
 impl Display for UDFDefinition {
@@ -197,6 +202,18 @@ impl Display for UDFDefinition {
                     return_types.iter().map(|(name, ty)| format!("{name} {ty}")),
                 )?;
                 write!(f, ") AS $$\n{sql}\n$$")?;
+            }
+            UDFDefinition::ScalarUDF {
+                arg_types,
+                definition,
+                return_type,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(
+                    f,
+                    arg_types.iter().map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+                write!(f, ") RETURNS {return_type} AS $$\n{definition}\n$$")?;
             }
             UDFDefinition::UDAFScript {
                 arg_types,

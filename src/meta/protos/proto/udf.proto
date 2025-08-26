@@ -85,6 +85,19 @@ message UDTF {
   string sql = 3;
 }
 
+message ScalarUDF {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // arg name with data type
+  repeated UDTFArg arg_types = 1;
+  // return data type
+  DataType return_type = 2;
+  // typically including the code or expression implementing the function logic
+  string definition = 3;
+}
+
+
 message UserDefinedFunction {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -97,6 +110,7 @@ message UserDefinedFunction {
     UDFScript udf_script = 6;
     UDAFScript udaf_script = 7;
     UDTF udtf = 8;
+    ScalarUDF scalar_udf = 9;
   }
   // The time udf created.
   optional string created_on = 5;

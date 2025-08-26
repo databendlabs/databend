@@ -573,7 +573,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 let interval_expr = self.gen_expr(&interval_ty);
                 let date_expr = self.gen_expr(&date_ty);
 
-                match self.rng.gen_range(0..=2) {
+                match self.rng.gen_range(0..=3) {
                     0 => Expr::DateAdd {
                         span: None,
                         unit,
@@ -590,6 +590,17 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         span: None,
                         unit,
                         date: Box::new(date_expr),
+                    },
+                    3 => Expr::TimeSlice {
+                        span: None,
+                        unit,
+                        date: Box::new(date_expr),
+                        slice_length: self.rng.gen_range(0..=12),
+                        start_or_end: match self.rng.gen_range(0..=1) {
+                            0 => "start".to_string(),
+                            1 => "end".to_string(),
+                            _ => unreachable!(),
+                        },
                     },
                     _ => unreachable!(),
                 }

@@ -20,6 +20,7 @@ use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::Weak;
 
+use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
@@ -153,6 +154,7 @@ impl WorkloadGroupResourceManagerInner {
                 }
             })),
             permits: Semaphore::MAX_PERMITS,
+            mutex: Arc::new(TokioMutex::new(())),
             semaphore: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
         });
 

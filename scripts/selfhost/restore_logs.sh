@@ -416,7 +416,7 @@ log "Extracted ${EXTRACTED_FILES} files from ${LOCAL_TAR_FILE}"
 
 # Step 4: Detect path prefix
 log_step "4" "6" "Analyzing directory structure for path prefix"
-TARGET_DIRS=("columns" "user_functions" "query_raw_logs" "query_logs" "query_profile_logs")
+TARGET_DIRS=("settings" "columns" "user_functions" "query_raw_logs" "query_logs" "login_history" "query_profile_logs")
 PREFIX=""
 
 for target_dir in "${TARGET_DIRS[@]}"; do
@@ -494,10 +494,12 @@ log "Created database: ${RESTORE_DATABASE}"
 
 # Restore tables
 declare -A TABLE_MAP=(
+	["settings"]="system.settings:settings"
 	["columns"]="system.columns:columns"
 	["user_functions"]="system.user_functions:user_functions"
 	["log_history"]="system_history.log_history:query_raw_logs"
 	["query_history"]="system_history.query_history:query_logs"
+	["login_history"]="system_history.login_history:login_history"
 	["profile_history"]="system_history.profile_history:query_profile_logs"
 )
 
@@ -515,4 +517,4 @@ done
 
 log "Log restoration completed successfully"
 log "Restored database: ${RESTORE_DATABASE}"
-log "Tables available: columns, user_functions, log_history, query_history, profile_history"
+log "Tables available: settings, columns, user_functions, log_history, query_history, login_history, profile_history"

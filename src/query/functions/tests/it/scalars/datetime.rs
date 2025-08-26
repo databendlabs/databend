@@ -64,6 +64,11 @@ fn test_to_timestamp(file: &mut impl Write) {
         ]),
     )]);
 
+    run_ast(file, "to_timestamp(a) > '2020-01-01'", &[(
+        "a",
+        Int64Type::from_data(vec![i64::MIN, i64::MAX]),
+    )]);
+
     run_ast(file, "to_timestamp(b)", &[(
         "b",
         StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),

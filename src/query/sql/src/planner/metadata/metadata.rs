@@ -331,6 +331,15 @@ impl Metadata {
         !self.agg_indexes.is_empty()
     }
 
+    fn remove_cte_suffix(mut table_name: String, cte_suffix_name: Option<String>) -> String {
+        if let Some(suffix) = cte_suffix_name {
+            if table_name.ends_with(&suffix) {
+                table_name.truncate(table_name.len() - suffix.len() - 1);
+            }
+        }
+        table_name
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn add_table(
         &mut self,
@@ -341,9 +350,11 @@ impl Metadata {
         source_of_view: bool,
         source_of_index: bool,
         source_of_stage: bool,
+        cte_suffix_name: Option<String>,
         allow_virtual_column: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
+        let table_name = Self::remove_cte_suffix(table_name, cte_suffix_name);
 
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name

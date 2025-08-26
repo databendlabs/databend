@@ -19,6 +19,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
@@ -680,6 +681,7 @@ async fn test_workload_group_concurrency_control() -> Result<()> {
         },
         queue_key: "test_concurrency_queue".to_string(),
         permits: 2,
+        mutex: Arc::new(Mutex::new(())),
         semaphore: Arc::new(Semaphore::new(2)),
         mem_stat: MemStat::create(String::new()),
         max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -736,6 +738,7 @@ async fn test_workload_group_concurrent_queue_acquisition() -> Result<()> {
         },
         queue_key: "test_concurrent_acquisition".to_string(),
         permits: 1,
+        mutex: Arc::new(Default::default()),
         semaphore: Arc::new(Semaphore::new(1)),
         mem_stat: MemStat::create(String::new()),
         max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -798,6 +801,7 @@ async fn test_workload_group_multilevel_queue_guards() -> Result<()> {
         },
         queue_key: "test_multilevel_queue".to_string(),
         permits: 3,
+        mutex: Arc::new(Default::default()),
         semaphore: Arc::new(Semaphore::new(3)),
         mem_stat: MemStat::create(String::new()),
         max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -849,6 +853,7 @@ async fn test_workload_group_zero_concurrency() -> Result<()> {
         },
         queue_key: "test_zero_queue".to_string(),
         permits: 0,
+        mutex: Arc::new(Default::default()),
         semaphore: Arc::new(Semaphore::new(0)),
         mem_stat: MemStat::create(String::new()),
         max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -897,6 +902,7 @@ async fn test_workload_group_with_timeout() -> Result<()> {
         },
         queue_key: "test_timeout_queue".to_string(),
         permits: 1,
+        mutex: Arc::new(Default::default()),
         semaphore: Arc::new(Semaphore::new(1)),
         mem_stat: MemStat::create(String::new()),
         max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),

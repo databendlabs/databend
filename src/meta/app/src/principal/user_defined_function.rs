@@ -64,6 +64,19 @@ pub struct UDTF {
     pub sql: String,
 }
 
+/// User Defined Scalar Function (ScalarUDF)
+///
+/// # Fields
+/// - `arg_types`: arg name with data type
+/// - `return_type`: return data type
+/// - `definition`: typically including the code or expression implementing the function logic
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScalarUDF {
+    pub arg_types: Vec<(String, DataType)>,
+    pub return_type: DataType,
+    pub definition: String,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDAFScript {
     pub code: String,
@@ -85,6 +98,7 @@ pub enum UDFDefinition {
     UDFScript(UDFScript),
     UDAFScript(UDAFScript),
     UDTF(UDTF),
+    ScalarUDF(ScalarUDF),
 }
 
 impl UDFDefinition {
@@ -95,6 +109,7 @@ impl UDFDefinition {
             Self::UDFScript(_) => "UDFScript",
             Self::UDAFScript(_) => "UDAFScript",
             Self::UDTF(_) => "UDTF",
+            UDFDefinition::ScalarUDF(_) => "ScalarUDF",
         }
     }
 
@@ -104,6 +119,7 @@ impl UDFDefinition {
             Self::UDFServer(_) => false,
             Self::UDFScript(_) => false,
             Self::UDTF(_) => false,
+            Self::ScalarUDF(_) => false,
             Self::UDAFScript(_) => true,
         }
     }
@@ -112,6 +128,7 @@ impl UDFDefinition {
         match self {
             Self::LambdaUDF(_) => "SQL",
             Self::UDTF(_) => "SQL",
+            Self::ScalarUDF(_) => "SQL",
             Self::UDFServer(x) => x.language.as_str(),
             Self::UDFScript(x) => x.language.as_str(),
             Self::UDAFScript(x) => x.language.as_str(),
@@ -328,6 +345,19 @@ impl Display for UDFDefinition {
                     write!(f, "{name} {ty}")?;
                 }
                 write!(f, ") AS $${sql}$$")?;
+            }
+            UDFDefinition::ScalarUDF(ScalarUDF {
+                arg_types,
+                return_type,
+                definition,
+            }) => {
+                for (i, (name, ty)) in arg_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name} {ty}")?;
+                }
+                write!(f, ") RETURNS {return_type} AS $${definition}$$")?;
             }
         }
         Ok(())

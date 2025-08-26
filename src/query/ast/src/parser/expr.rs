@@ -329,6 +329,12 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    TimeSlice {
+        unit: IntervalKind,
+        date: Expr,
+        slice_length: u64,
+        start_or_end: Option<String>,
+    },
     LastDay {
         unit: IntervalKind,
         date: Expr,
@@ -458,6 +464,7 @@ impl ExprElement {
             ExprElement::DateBetween { .. } => Affix::Nilfix,
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
+            ExprElement::TimeSlice { .. } => Affix::Nilfix,
             ExprElement::LastDay { .. } => Affix::Nilfix,
             ExprElement::PreviousDay { .. } => Affix::Nilfix,
             ExprElement::NextDay { .. } => Affix::Nilfix,
@@ -509,6 +516,7 @@ impl Expr {
             Expr::DateBetween { .. } => Affix::Nilfix,
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
+            Expr::TimeSlice { .. } => Affix::Nilfix,
             Expr::LastDay { .. } => Affix::Nilfix,
             Expr::PreviousDay { .. } => Affix::Nilfix,
             Expr::NextDay { .. } => Affix::Nilfix,
@@ -723,6 +731,18 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 unit,
                 date: Box::new(date),
+            },
+            ExprElement::TimeSlice {
+                unit,
+                date,
+                slice_length,
+                start_or_end,
+            } => Expr::TimeSlice {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+                slice_length,
+                start_or_end: start_or_end.unwrap_or("start".to_string()),
             },
             ExprElement::LastDay { unit, date } => Expr::LastDay {
                 span: transform_span(elem.span.tokens),
@@ -1329,6 +1349,18 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
 
+    let time_slice = map(
+        rule! {
+            TIME_SLICE ~ "(" ~ #subexpr(0) ~ "," ~ ^#literal_u64 ~ "," ~ #interval_kind ~ ("," ~ ^#literal_string)? ~ ")"
+        },
+        |(_, _, date, _, slice_length, _, unit, opt_start_or_end, _)| ExprElement::TimeSlice {
+            unit,
+            date,
+            slice_length,
+            start_or_end: opt_start_or_end.map(|(_, start_or_end)| start_or_end),
+        },
+    );
+
     let trunc = map(
         rule! {
             TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
@@ -1482,6 +1514,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
                 | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #time_slice : "`TIME_SLICE(<date_or_time_expr>, <slice_length>, (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) [ , <start_or_end> ] )`"
                 | #trunc : "`TRUNC(..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK))`"
                 | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
                 | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"

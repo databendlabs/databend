@@ -77,6 +77,8 @@ impl Binder {
             (false, None, String::new())
         };
 
+        // Check and bind common table expression
+        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
@@ -87,6 +89,8 @@ impl Binder {
                     cte_info,
                     &materialized_cte_info.bound_context.columns,
                 );
+            } else if cte_info.user_specified_materialized {
+                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
                 if self
                     .metadata
@@ -116,6 +120,11 @@ impl Binder {
 
         // Resolve table with catalog
         let table_meta = {
+            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
+                format!("{}${}", &table_name, cte_suffix_name)
+            } else {
+                table_name.clone()
+            };
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
@@ -168,6 +177,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
+                    cte_suffix_name,
                     false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -253,6 +263,7 @@ impl Binder {
                         false,
                         false,
                         false,
+                        None,
                         bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -285,6 +296,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
+                    cte_suffix_name,
                     bind_context.allow_virtual_column,
                 );
 

@@ -116,6 +116,7 @@ mod interpreter_show_online_nodes;
 mod interpreter_show_warehouses;
 mod interpreter_show_workload_groups;
 mod interpreter_stream_create;
+pub use hook::vacuum_hook::hook_clear_m_cte_temp_table;
 mod interpreter_stream_drop;
 mod interpreter_suspend_warehouse;
 mod interpreter_system_action;

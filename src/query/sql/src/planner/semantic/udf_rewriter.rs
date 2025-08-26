@@ -16,8 +16,13 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::convert_to_type_name;
+use databend_common_expression::types::DataType;
+use derive_visitor::VisitorMut as StatementVisitorMut;
+use itertools::Itertools;
 
 use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
@@ -236,5 +241,41 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         }]);
 
         Ok(())
+    }
+}
+
+#[derive(StatementVisitorMut)]
+#[visitor(Expr(enter))]
+pub struct UDFArgVisitor<'a> {
+    arg_types: &'a [(String, DataType)],
+    args: &'a [Expr],
+}
+
+impl<'a> UDFArgVisitor<'a> {
+    pub fn new(arg_types: &'a [(String, DataType)], args: &'a [Expr]) -> Self {
+        Self { arg_types, args }
+    }
+
+    fn enter_expr(&mut self, expr: &mut Expr) {
+        if let Expr::ColumnRef { span, column } = expr {
+            if column.database.is_some() || column.table.is_some() {
+                return;
+            }
+            assert_eq!(self.arg_types.len(), self.args.len());
+            let Some((pos, (_, ty))) = self
+                .arg_types
+                .iter()
+                .find_position(|(name, _)| name == column.column.name())
+            else {
+                return;
+            };
+
+            *expr = Expr::Cast {
+                span: *span,
+                expr: Box::new(self.args[pos].clone()),
+                target_type: convert_to_type_name(ty),
+                pg_style: false,
+            }
+        }
     }
 }

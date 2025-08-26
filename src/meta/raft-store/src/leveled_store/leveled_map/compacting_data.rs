@@ -14,6 +14,7 @@
 
 use std::fmt;
 use std::io;
+use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
@@ -21,6 +22,7 @@ use futures_util::future;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc;
 use map_api::IOResultStream;
 use map_api::MapKV;
 use rotbl::v001::SeqMarked;
@@ -39,19 +41,16 @@ use crate::utils::add_cooperative_yielding;
 /// The data to compact.
 ///
 /// Including several in-memory immutable levels and an optional persisted db.
-pub(crate) struct CompactingData<'a> {
-    /// In memory immutable levels.
-    pub(crate) immutable_levels: &'a mut ImmutableLevels,
-
-    /// Persisted data.
-    pub(crate) db: Option<&'a DB>,
+pub(crate) struct CompactingData {
+    pub(crate) immutable_levels: Arc<ImmutableLevels>,
+    pub(crate) persisted: Option<Arc<DB>>,
 }
 
-impl<'a> CompactingData<'a> {
-    pub fn new(immutable_levels: &'a mut ImmutableLevels, db: Option<&'a DB>) -> Self {
+impl CompactingData {
+    pub fn new(immutable_levels: Arc<ImmutableLevels>, persisted: Option<Arc<DB>>) -> Self {
         Self {
             immutable_levels,
-            db,
+            persisted,
         }
     }
 
@@ -60,8 +59,10 @@ impl<'a> CompactingData<'a> {
     ///
     /// When compact mem levels, do not remove tombstone,
     /// because tombstones are still required when compacting with the underlying db.
+    ///
+    /// This is only used for test
     pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        let immutable_levels = &mut *self.immutable_levels;
+        let immutable_levels = self.immutable_levels.clone();
 
         let Some(newest) = immutable_levels.newest() else {
             return Ok(());
@@ -71,16 +72,16 @@ impl<'a> CompactingData<'a> {
         let mut data = newest.new_level();
 
         // Copy all expire data and keep tombstone.
-        let strm = (*immutable_levels).as_expire_map().range(..).await?;
-        let bt = strm.try_collect().await?;
-        data.replace_expire(bt);
+        let strm = immutable_levels.as_ref().as_expire_map().range(..).await?;
+        let table = mvcc::Table::from_stream(strm).await?;
+        data.replace_expire(table);
 
         // Copy all kv data and keep tombstone.
-        let strm = (*immutable_levels).as_user_map().range(..).await?;
-        let bt = strm.try_collect().await?;
-        data.replace_kv(bt);
+        let strm = immutable_levels.as_ref().as_user_map().range(..).await?;
+        let table = mvcc::Table::from_stream(strm).await?;
+        data.replace_kv(table);
 
-        *immutable_levels = ImmutableLevels::new([Immutable::new_from_level(data)]);
+        self.immutable_levels = Arc::new(ImmutableLevels::new([Immutable::new_from_level(data)]));
         Ok(())
     }
 
@@ -104,13 +105,14 @@ impl<'a> CompactingData<'a> {
         }
 
         // TODO(rotbl): unwrap()???
-        let d = self.immutable_levels.newest().unwrap();
+        let immutable_levels = self.immutable_levels.clone();
+        let d = immutable_levels.newest().unwrap();
 
-        let sys_data = d.sys_data_ref().clone();
+        let sys_data = d.with_sys_data(|s| s.clone());
 
         // expire index: prefix `exp-/`.
 
-        let strm = (*self.immutable_levels).as_expire_map().range(..).await?;
+        let strm = immutable_levels.as_ref().as_expire_map().range(..).await?;
         let expire_strm = strm.map(|item: Result<(ExpireKey, SeqMarked<String>), io::Error>| {
             let (expire_key, marked_string) = item?;
 
@@ -120,7 +122,7 @@ impl<'a> CompactingData<'a> {
 
         // kv: prefix: `kv--/`
 
-        let strm = (*self.immutable_levels).as_user_map().range(..).await?;
+        let strm = immutable_levels.as_ref().as_user_map().range(..).await?;
         let kv_strm = strm.map(|item: Result<MapKV<UserKey>, io::Error>| {
             let (k, v) = item?;
 
@@ -133,7 +135,7 @@ impl<'a> CompactingData<'a> {
         let mut kmerge = KMerge::by(util::rotbl_by_key_seq);
         kmerge = kmerge.merge(strm);
 
-        if let Some(db) = self.db {
+        if let Some(db) = self.persisted.clone() {
             let db_strm = db.inner_range();
             kmerge = kmerge.merge(db_strm);
         }

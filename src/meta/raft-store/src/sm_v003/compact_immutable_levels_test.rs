@@ -18,8 +18,8 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedView;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -31,36 +31,34 @@ use state_machine_api::UserKey;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let mut lm = build_3_levels().await?;
+    let lm = build_3_levels().await?;
 
-    let mut immutable_levels = lm.freeze_writable().clone();
+    let immutable_levels = lm.testing_freeze_writable().clone();
 
-    {
-        let mut compacting_data = CompactingData::new(&mut immutable_levels, None);
+    let compacted = {
+        let mut compacting_data = CompactingData::new(immutable_levels.clone(), None);
         compacting_data.compact_immutable_in_place().await?;
-    }
-
-    let compacted = immutable_levels;
+        compacting_data.immutable_levels.clone()
+    };
 
     let d = compacted.newest().unwrap().as_ref();
 
     assert_eq!(compacted.iter_immutable_levels().count(), 1);
     assert_eq!(
-        d.last_membership_ref(),
-        &StoredMembership::new(
+        d.last_membership(),
+        StoredMembership::new(
             Some(log_id(3, 3, 3)),
             Membership::new_with_defaults(vec![], [])
         )
     );
-    assert_eq!(d.last_applied_ref(), &Some(log_id(3, 3, 3)));
+    assert_eq!(d.last_applied(), Some(log_id(3, 3, 3)));
     assert_eq!(
-        d.nodes_ref(),
-        &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
+        d.nodes(),
+        btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
     let got = d
@@ -91,13 +89,13 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_compact_expire_index() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
+    let sm = build_sm_with_expire().await?;
 
     let compacted = {
-        sm.freeze_writable();
+        sm.levels().testing_freeze_writable();
         let mut compactor = sm.acquire_compactor().await;
         compactor.compact_immutable_in_place().await?;
-        compactor.immutable_levels().clone()
+        compactor.immutable_levels()
     };
 
     let d = compacted.newest().unwrap().as_ref();
@@ -143,9 +141,10 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_compact_3_level() -> anyhow::Result<()> {
-    let mut lm = build_3_levels().await?;
+    let lm = build_3_levels().await?;
+    println!("{:#?}", lm);
 
-    lm.freeze_writable();
+    lm.testing_freeze_writable();
 
     let mut compactor = lm.acquire_compactor().await;
 
@@ -171,8 +170,8 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
-    sm.freeze_writable();
+    let sm = build_sm_with_expire().await?;
+    sm.levels().testing_freeze_writable();
 
     let mut compactor = sm.acquire_compactor().await;
 
@@ -205,64 +204,61 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
-    let mut lm = LeveledMap::default();
-    let sd = lm.writable_mut().sys_data_mut();
+    let lm = LeveledMap::default();
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(1, 1, 1)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(1, 1, 1));
+        *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    });
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(1, 1, 1)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(1, 1, 1));
-    *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    let mut view = lm.to_scoped_view();
 
     // internal_seq: 0
-    lm.as_user_map_mut()
-        .set(user_key("a"), Some((None, b("a0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("b"), Some((None, b("b0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("c"), Some((None, b("c0"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("d"), Some((None, b("d0"))))
-        .await?;
+    view.set(user_key("a"), Some((None, b("a0"))));
+    view.set(user_key("b"), Some((None, b("b0"))));
+    view.set(user_key("c"), Some((None, b("c0"))));
+    view.set(user_key("d"), Some((None, b("d0"))));
 
-    lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
+    view.commit().await?;
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(2, 2, 2)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(2, 2, 2));
-    *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    lm.testing_freeze_writable();
+
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(2, 2, 2)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(2, 2, 2));
+        *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    });
+    let mut view = lm.to_scoped_view();
 
     // internal_seq: 4
-    lm.as_user_map_mut().set(user_key("b"), None).await?;
-    lm.as_user_map_mut()
-        .set(user_key("c"), Some((None, b("c1"))))
-        .await?;
-    lm.as_user_map_mut()
-        .set(user_key("e"), Some((None, b("e1"))))
-        .await?;
+    view.set(user_key("b"), None);
+    view.set(user_key("c"), Some((None, b("c1"))));
+    view.set(user_key("e"), Some((None, b("e1"))));
+    view.commit().await?;
 
-    lm.freeze_writable();
-    let sd = lm.writable_mut().sys_data_mut();
+    lm.testing_freeze_writable();
 
-    *sd.last_membership_mut() = StoredMembership::new(
-        Some(log_id(3, 3, 3)),
-        Membership::new_with_defaults(vec![], []),
-    );
-    *sd.last_applied_mut() = Some(log_id(3, 3, 3));
-    *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    lm.with_sys_data(|sd| {
+        *sd.last_membership_mut() = StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], []),
+        );
+        *sd.last_applied_mut() = Some(log_id(3, 3, 3));
+        *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    });
+
+    let mut view = lm.to_scoped_view();
 
     // internal_seq: 6
-    lm.as_user_map_mut().set(user_key("c"), None).await?;
-    lm.as_user_map_mut()
-        .set(user_key("d"), Some((None, b("d2"))))
-        .await?;
+    view.set(user_key("c"), None);
+    view.set(user_key("d"), Some((None, b("d2"))));
+    view.commit().await?;
 
     Ok(lm)
 }
@@ -277,19 +273,22 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     let mut sm = SMV003::default();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await?;
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
-    sm.map_mut().freeze_writable();
+    a.commit().await?;
 
-    let mut a = sm.new_applier();
+    sm.map_mut().testing_freeze_writable();
+
+    let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await?;
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
         .await?;
+    a.commit().await?;
 
     Ok(sm)
 }

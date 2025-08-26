@@ -107,6 +107,7 @@ use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
+use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -191,6 +192,7 @@ use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::UDFArgVisitor;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -1159,6 +1161,15 @@ impl<'a> TypeChecker<'a> {
             Expr::DateTrunc {
                 span, unit, date, ..
             } => self.resolve_date_trunc(*span, date, unit)?,
+            Expr::TimeSlice {
+                span,
+                unit,
+                date,
+                slice_length,
+                start_or_end,
+            } => {
+                self.resolve_time_slice(*span, date, *slice_length, unit, start_or_end.to_string())?
+            }
             Expr::LastDay {
                 span, unit, date, ..
             } => self.resolve_last_day(*span, date, unit)?,
@@ -3456,6 +3467,56 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    pub fn resolve_time_slice(
+        &mut self,
+        span: Span,
+        date: &Expr,
+        slice_length: u64,
+        kind: &ASTIntervalKind,
+        start_or_end: String,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if slice_length < 1 {
+            return Err(ErrorCode::BadArguments(
+                "slice_length must be greater than or equal to 1",
+            ));
+        }
+        let slice_length = &Expr::Literal {
+            span: None,
+            value: Literal::UInt64(slice_length),
+        };
+        let start_or_end = if start_or_end.eq_ignore_ascii_case("start")
+            || start_or_end.eq_ignore_ascii_case("end")
+        {
+            &Expr::Literal {
+                span: None,
+                value: Literal::String(start_or_end),
+            }
+        } else {
+            return Err(ErrorCode::BadArguments(
+                "time_slice only support start or end",
+            ));
+        };
+
+        let kind = match kind {
+            ASTIntervalKind::Year |
+            ASTIntervalKind::Quarter |
+            ASTIntervalKind::Month|
+            ASTIntervalKind::Week| ASTIntervalKind::ISOWeek | ASTIntervalKind::Day | ASTIntervalKind::Hour | ASTIntervalKind::Minute | ASTIntervalKind::Second => {
+                    &Expr::Literal {
+                    span: None,
+                    value: Literal::String(kind.to_string())
+                }
+            }
+            _ => return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
+        };
+        self.resolve_function(span, "time_slice", vec![], &[
+            date,
+            slice_length,
+            start_or_end,
+            kind,
+        ])
+    }
+
     pub fn resolve_last_day(
         &mut self,
         span: Span,
@@ -4794,6 +4855,9 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
+            UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
+                self.resolve_scalar_udf(span, name, arguments, udf_def)?,
+            )),
         }
     }
 
@@ -5185,6 +5249,57 @@ impl<'a> TypeChecker<'a> {
             }
             .into(),
             scalar.1,
+        )))
+    }
+
+    fn resolve_scalar_udf(
+        &mut self,
+        span: Span,
+        func_name: String,
+        arguments: &[Expr],
+        udf_definition: ScalarUDF,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let arg_types = udf_definition.arg_types;
+        if arg_types.len() != arguments.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                arg_types.len(),
+                arguments.len()
+            ))
+            .set_span(span));
+        }
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
+        let mut udf_expr = parse_expr(&sql_tokens, sql_dialect)?;
+        let mut visitor = UDFArgVisitor::new(&arg_types, arguments);
+        udf_expr.drive_mut(&mut visitor);
+
+        // independent context
+        let box (expr, _) = TypeChecker::try_create(
+            &mut BindContext::new(),
+            self.ctx.clone(),
+            &NameResolutionContext::default(),
+            MetadataRef::default(),
+            &[],
+            self.forbid_udf,
+        )?
+        .resolve(&udf_expr)?;
+        let return_ty = udf_definition.return_type;
+        let expr = CastExpr {
+            span,
+            is_try: false,
+            argument: Box::new(expr),
+            target_type: Box::new(return_ty.clone()),
+        };
+        Ok(Box::new((
+            UDFLambdaCall {
+                span,
+                func_name,
+                scalar: Box::new(expr.into()),
+            }
+            .into(),
+            return_ty,
         )))
     }
 

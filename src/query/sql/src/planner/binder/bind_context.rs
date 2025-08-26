@@ -201,6 +201,7 @@ pub struct CteInfo {
     pub recursive: bool,
     pub columns: Vec<ColumnBinding>,
     pub materialized_cte_info: Option<MaterializedCTEInfo>,
+    pub user_specified_materialized: bool,
 }
 
 #[derive(Clone, Debug)]

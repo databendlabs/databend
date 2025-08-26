@@ -205,7 +205,8 @@ impl<R: Rng> SqlGenerator<'_, R> {
         CTE {
             span: None,
             alias,
-            materialized,
+            user_specified_materialized: materialized,
+            materialized: false,
             query: Box::new(subquery),
         }
     }

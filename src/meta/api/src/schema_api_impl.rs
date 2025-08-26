@@ -193,7 +193,6 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -240,6 +239,8 @@ use crate::util::txn_op_put_pb;
 use crate::util::txn_put_pb;
 use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
+use crate::util::IdempotentKVTxnResponse;
+use crate::util::IdempotentKVTxnSender;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -1783,6 +1784,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let tenant_dbname_tbname = &req.name_ident;
 
+        let txn_sender = IdempotentKVTxnSender::new();
+
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -1917,7 +1920,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     ],
                 );
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+                let txn_response = txn_sender.send_txn(self, txn_req).await?;
+                let succ = match txn_response {
+                    IdempotentKVTxnResponse::Success(_) => true,
+                    IdempotentKVTxnResponse::AlreadyCommitted => {
+                        info!( "Transaction ID {} exists, the corresponding commit_table_meta transaction has been executed successfully", txn_sender.get_txn_id() );
+                        true
+                    }
+                    IdempotentKVTxnResponse::Failed(_) => false,
+                };
 
                 debug!(
                     name :? =(tenant_dbname_tbname),
@@ -2113,20 +2124,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
-        // Generate a random transaction ID for idempotency
-        let txn_id = Uuid::new_v4().to_string();
-        self.update_multi_table_meta_with_txn_id(req, txn_id).await
+        let kv_txn_sender = IdempotentKVTxnSender::new();
+        self.update_multi_table_meta_with_sender(req, &kv_txn_sender)
+            .await
     }
 
-    /// This function is ONLY for testing purposes.
-    /// In production environment, use `update_multi_table_meta` instead.
-    ///
-    /// `retry_times` is used to simulate the retry of the transaction.
-    /// It is only for test.
-    async fn update_multi_table_meta_with_txn_id(
+    async fn update_multi_table_meta_with_sender(
         &self,
         req: UpdateMultiTableMetaReq,
-        txn_id: String,
+        txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
@@ -2303,47 +2309,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 .push(build_upsert_table_deduplicated_label(deduplicated_label));
         }
 
-        // Add transaction ID to the transaction with 5-minute expiration
-        let txn_id_key = format!("_txn_id/{}", txn_id);
+        let txn_response = txn_sender.send_txn(self, txn).await?;
 
-        // Add condition to check that transaction ID does not exist (empty)
-        txn.condition
-            .push(TxnCondition::eq_seq(txn_id_key.clone(), 0));
-
-        txn.if_then.push(TxnOp::put_with_ttl(
-            txn_id_key.clone(),
-            vec![],
-            Some(Duration::from_secs(300)),
-        ));
-
-        // Add get operation to check if transaction ID exists in else branch
-        // NOTE: Orders of operations matter, please keep this as the last operation of else branch
-        txn.else_then.push(TxnOp::get(txn_id_key.clone()));
-
-        let (succ, responses) = send_txn(self, txn).await?;
-
-        if succ {
-            return Ok(Ok(UpdateTableMetaReply {}));
-        }
-
-        // Check if transaction ID exists in else branch response (idempotency check)
-        //
-        // Please note that this is a best effort check: the "idempotency check" is only guaranteed
-        // roughly within 300 secs, please DO NOT use it for any safety properties.
-        if let Some(Response::Get(get_resp)) = responses.last().and_then(|r| r.response.as_ref()) {
-            // Defensive check, make sure the get(tx_id_key) is the last operation
-            assert_eq!(get_resp.key, txn_id_key, "Transaction ID key mismatch");
-            if get_resp.value.is_some() {
+        let else_branch_op_responses = match txn_response {
+            IdempotentKVTxnResponse::Success(_) => {
+                return Ok(Ok(UpdateTableMetaReply {}));
+            }
+            IdempotentKVTxnResponse::AlreadyCommitted => {
                 info!(
-                    "Transaction ID {} exists, the corresponding transaction has been executed successfully",
-                    txn_id_key
+                    "Transaction ID {} exists, the corresponding update_multi_table_meta transaction has been executed successfully",
+                    txn_sender.get_txn_id()
                 );
                 return Ok(Ok(UpdateTableMetaReply {}));
             }
-        }
+            IdempotentKVTxnResponse::Failed(op_responses) => op_responses,
+        };
 
         let mut mismatched_tbs = vec![];
-        for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
+        for (resp, req) in else_branch_op_responses
+            .iter()
+            .zip(update_table_metas.iter())
+        {
             let Some(Response::Get(get_resp)) = &resp.response else {
                 unreachable!(
                     "internal error: expect some TxnGetResponseGet, but got {:?}",
@@ -2957,11 +2943,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let lock_key = &req.lock_key;
         let id_generator = IdGenerator::table_lock_id();
 
-        // ensure idempotent, reference from update_multi_table_meta.
-        let txn_id = Uuid::new_v4().to_string();
-        let txn_id_key = format!("_txn_id/{}", txn_id);
-
         let mut trials = txn_backoff(None, ctx);
+        let txn_sender = IdempotentKVTxnSender::with_ttl(req.ttl);
         loop {
             trials.next().unwrap()?.await;
 
@@ -2982,33 +2965,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_cond_seq(&id_generator, Eq, current_rev),
                 // assumes lock are absent.
                 txn_cond_seq(&key, Eq, 0),
-                TxnCondition::eq_seq(txn_id_key.clone(), 0),
             ];
             let if_then = vec![
                 txn_op_put(&id_generator, b"".to_vec()),
                 txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
-                TxnOp::put_with_ttl(txn_id_key.clone(), vec![], Some(req.ttl)),
             ];
-            let else_then = vec![TxnOp::get(txn_id_key.clone())];
-            let txn_req = TxnRequest::new(condition, if_then).with_else(else_then);
-            let (succ, responses) = send_txn(self, txn_req).await?;
-
-            if succ {
-                return Ok(CreateLockRevReply { revision });
-            }
-
-            // Check if transaction ID exists in else branch response (idempotency check).
-            if let Some(Response::Get(get_resp)) =
-                responses.last().and_then(|r| r.response.as_ref())
-            {
-                // Defensive check, make sure the get(tx_id_key) is the last operation
-                assert_eq!(get_resp.key, txn_id_key, "Transaction ID key mismatch");
-                if get_resp.value.is_some() {
+            let txn_req = TxnRequest::new(condition, if_then);
+            let txn_response = txn_sender.send_txn(self, txn_req).await?;
+            match txn_response {
+                IdempotentKVTxnResponse::Success(_) => {
+                    return Ok(CreateLockRevReply { revision });
+                }
+                IdempotentKVTxnResponse::AlreadyCommitted => {
                     info!(
                         "Transaction ID {} exists, the lock revision has been created successfully",
-                        txn_id_key
+                        txn_sender.get_txn_id()
                     );
                     return Ok(CreateLockRevReply { revision });
+                }
+                _ => {
+                    // continue looping
                 }
             }
         }

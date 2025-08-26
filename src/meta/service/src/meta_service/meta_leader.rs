@@ -90,35 +90,17 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
 
             ForwardRequestBody::GetKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
-                let sm = self
-                    .sto
-                    .get_state_machine_read(format!(
-                        "MetaLeader::handle(ForwardRequestBody: {:?})",
-                        req
-                    ))
-                    .await;
+                let sm = self.sto.state_machine();
                 let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
@@ -135,10 +117,7 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
         debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
 
-        let sm = self
-            .sto
-            .get_state_machine_read(format!("MetaLeader::handle(MetaGrpcReadReq: {:?})", req))
-            .await;
+        let sm = self.sto.state_machine();
         let kv_api = sm.kv_api();
 
         match req.body {
@@ -200,6 +179,7 @@ impl<'a> MetaLeader<'a> {
     /// If the node is already in cluster membership, it still returns Ok.
     #[fastrace::trace]
     pub async fn join(&self, req: JoinRequest) -> Result<(), RaftError<ClientWriteError>> {
+        let role = req.role();
         let node_id = req.node_id;
         let endpoint = req.endpoint;
         let metrics = self.raft.metrics().borrow().clone();
@@ -219,12 +199,14 @@ impl<'a> MetaLeader<'a> {
         });
         self.write(ent).await?;
 
-        self.raft
-            .change_membership(
-                ChangeMembers::AddVoters(btreemap! {node_id=>MembershipNode{}}),
-                false,
-            )
-            .await?;
+        let msg = if role == "learner" {
+            ChangeMembers::AddNodes(btreemap! {node_id=>MembershipNode{}})
+        } else {
+            ChangeMembers::AddVoters(btreemap! {node_id=>MembershipNode{}})
+        };
+
+        self.raft.change_membership(msg, false).await?;
+
         Ok(())
     }
 
@@ -260,9 +242,19 @@ impl<'a> MetaLeader<'a> {
         }
 
         // 1. Remove it from membership if needed.
-        self.raft
-            .change_membership(ChangeMembers::RemoveVoters(btreeset! {node_id}), false)
-            .await?;
+
+        let membership = self
+            .sto
+            .state_machine()
+            .with_sys_data(|s| s.last_membership_ref().membership().clone());
+
+        let msg = if membership.voter_ids().any(|id| id == node_id) {
+            ChangeMembers::RemoveVoters(btreeset! {node_id})
+        } else {
+            ChangeMembers::RemoveNodes(btreeset! {node_id})
+        };
+
+        self.raft.change_membership(msg, false).await?;
 
         // 2. Remove node info
         let ent = LogEntry::new(Cmd::RemoveNode { node_id });
@@ -309,8 +301,8 @@ impl<'a> MetaLeader<'a> {
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
-            let sm = self.sto.get_state_machine_read("can_leave").await;
-            sm.sys_data_ref().last_membership_ref().membership().clone()
+            let sm = self.sto.state_machine();
+            sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
 

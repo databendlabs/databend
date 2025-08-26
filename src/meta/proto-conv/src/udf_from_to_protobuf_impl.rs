@@ -357,6 +357,75 @@ impl FromToProto for mt::UDTF {
     }
 }
 
+impl FromToProto for mt::ScalarUDF {
+    type PB = pb::ScalarUdf;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = Vec::new();
+        for arg_ty in p.arg_types {
+            let ty_pb = arg_ty.ty.ok_or_else(|| {
+                Incompatible::new("ScalarUDF.arg_types.ty can not be None".to_string())
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
+
+            arg_types.push((arg_ty.name, (&ty).into()));
+        }
+
+        let return_type_pb = p.return_type.ok_or_else(|| {
+            Incompatible::new("ScalarUDF.return_type can not be None".to_string())
+        })?;
+        let return_type = TableDataType::from_pb(return_type_pb)?;
+
+        Ok(Self {
+            arg_types,
+            return_type: (&return_type).into(),
+            definition: p.definition,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for (arg_name, arg_type) in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            arg_types.push(UdtfArg {
+                name: arg_name.clone(),
+                ty: Some(arg_type),
+            });
+        }
+
+        let return_type = infer_schema_type(&self.return_type)
+            .map_err(|e| {
+                Incompatible::new(format!(
+                    "Convert DataType to TableDataType failed: {}",
+                    e.message()
+                ))
+            })?
+            .to_pb()?;
+
+        Ok(pb::ScalarUdf {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            arg_types,
+            return_type: Some(return_type),
+            definition: self.definition.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::UserDefinedFunction {
     type PB = pb::UserDefinedFunction;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -379,6 +448,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             Some(pb::user_defined_function::Definition::Udtf(udtf)) => {
                 mt::UDFDefinition::UDTF(mt::UDTF::from_pb(udtf)?)
+            }
+            Some(pb::user_defined_function::Definition::ScalarUdf(scalar_udf)) => {
+                mt::UDFDefinition::ScalarUDF(mt::ScalarUDF::from_pb(scalar_udf)?)
             }
             None => {
                 return Err(Incompatible::new(
@@ -414,6 +486,9 @@ impl FromToProto for mt::UserDefinedFunction {
             }
             mt::UDFDefinition::UDTF(udtf) => {
                 pb::user_defined_function::Definition::Udtf(udtf.to_pb()?)
+            }
+            mt::UDFDefinition::ScalarUDF(scalar_udf) => {
+                pb::user_defined_function::Definition::ScalarUdf(scalar_udf.to_pb()?)
             }
         };
 

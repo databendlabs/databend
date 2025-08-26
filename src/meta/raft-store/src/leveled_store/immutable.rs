@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::io;
 use std::ops::Deref;
 use std::ops::RangeBounds;
@@ -52,7 +51,7 @@ impl Immutable {
         static UNIQ: AtomicU64 = AtomicU64::new(0);
 
         let uniq = UNIQ.fetch_add(1, Ordering::Relaxed);
-        let internal_seq = level.sys_data_ref().curr_seq();
+        let internal_seq = level.with_sys_data(|s| s.curr_seq());
 
         let index = LevelIndex::new(internal_seq, uniq);
 
@@ -89,31 +88,23 @@ impl Deref for Immutable {
 impl Immutable {
     /// Build a static stream that yields key values for primary index
     #[futures_async_stream::try_stream(boxed, ok = MapKV<UserKey>, error = io::Error)]
-    async fn str_range<Q, R>(self: Immutable, range: R)
-    where
-        UserKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
-        let it = self.as_ref().kv.range(range);
+    async fn user_range<R>(self: Immutable, range: R)
+    where R: RangeBounds<UserKey> + Clone + Send + Sync + 'static {
+        let it = self.as_ref().kv.range(range, u64::MAX);
 
         for (k, v) in it {
-            yield (k.clone(), v.clone());
+            yield (k.clone(), v.cloned());
         }
     }
 
     /// Build a static stream that yields expire key and key for the secondary expiration index
     #[futures_async_stream::try_stream(boxed, ok = MapKV<ExpireKey>, error = io::Error)]
-    async fn expire_range<Q, R>(self: Immutable, range: R)
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync + 'static,
-    {
-        let it = self.as_ref().expire.range(range);
+    async fn expire_range<R>(self: Immutable, range: R)
+    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
+        let it = self.as_ref().expire.range(range, u64::MAX);
 
         for (k, v) in it {
-            yield (*k, v.clone());
+            yield (*k, v.cloned());
         }
     }
 }
@@ -127,7 +118,7 @@ impl MapApiRO<UserKey> for Immutable {
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<UserKey>, io::Error>
     where R: RangeBounds<UserKey> + Clone + Send + Sync + 'static {
-        let strm = self.clone().str_range(range);
+        let strm = self.clone().user_range(range);
         Ok(strm)
     }
 }

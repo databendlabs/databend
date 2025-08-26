@@ -41,7 +41,7 @@ impl Binder {
             return Ok(());
         };
 
-        for cte in with.ctes.iter() {
+        for (idx, cte) in with.ctes.iter().enumerate() {
             let cte_name = self.normalize_identifier(&cte.alias.name).name;
             if bind_context.cte_context.cte_map.contains_key(&cte_name) {
                 return Err(ErrorCode::SemanticError(format!(
@@ -77,7 +77,12 @@ impl Binder {
                 recursive: with.recursive,
                 columns: vec![],
                 materialized_cte_info,
+                user_specified_materialized: cte.user_specified_materialized,
             };
+            // If the CTE is materialized, we'll construct a temp table for it.
+            if cte.user_specified_materialized {
+                self.m_cte_to_temp_table(cte, idx, with.clone())?;
+            }
             bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
 
@@ -160,6 +165,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
+    #[recursive::recursive]
     pub fn bind_cte_definition(
         &mut self,
         cte_name: &str,

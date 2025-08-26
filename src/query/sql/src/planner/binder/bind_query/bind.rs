@@ -15,15 +15,28 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnDefinition;
+use databend_common_ast::ast::CreateOption;
+use databend_common_ast::ast::CreateTableSource;
+use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
+use databend_common_ast::ast::CTE;
+use databend_common_ast::Span;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::convert_to_type_name;
 use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -35,7 +48,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::NameResolutionContext;
-
 #[derive(Debug, Default, Visitor)]
 #[visitor(TableReference(enter))]
 struct CTERefCounter {
@@ -55,6 +67,7 @@ impl CTERefCounter {
 }
 
 impl Binder {
+    #[recursive::recursive]
     pub(crate) fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
@@ -100,13 +113,14 @@ impl Binder {
             if let Some(count) = cte_ref_count.get(&table_name) {
                 log::info!("[CTE]cte_ref_count: {table_name} {count}");
                 // Materialize if referenced more than once
-                cte.materialized |= *count > 1;
+                cte.materialized = !cte.user_specified_materialized && *count > 1;
             }
         }
 
         Ok(())
     }
 
+    #[recursive::recursive]
     pub fn compute_cte_ref_count(
         &self,
         with: &With,
@@ -195,5 +209,166 @@ impl Binder {
             Arc::new(sort_plan.into()),
             Arc::new(child),
         ))
+    }
+
+    #[recursive::recursive]
+    pub fn m_cte_to_temp_table(
+        &mut self,
+        cte: &CTE,
+        cte_index: usize,
+        mut with: With,
+    ) -> Result<()> {
+        let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
+            Engine::Fuse
+        } else {
+            Engine::Memory
+        };
+        let query_id = self.ctx.get_id();
+        let database = self.ctx.get_current_database();
+        let mut table_identifier = cte.alias.name.clone();
+        table_identifier.name = format!("{}${}", table_identifier.name, query_id.replace("-", ""));
+        let table_name = normalize_identifier(&table_identifier, &self.name_resolution_ctx).name;
+        self.m_cte_table_name.insert(
+            normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name,
+            table_name.clone(),
+        );
+        if self
+            .ctx
+            .is_temp_table(CATALOG_DEFAULT, &database, &table_name)
+        {
+            return Err(ErrorCode::Internal(format!(
+                "Temporary table {:?} already exists in current session, please change the materialized CTE name",
+                table_name
+            )));
+        }
+
+        let mut expr_replacer = TableNameReplacer::new(
+            database.clone(),
+            self.m_cte_table_name.clone(),
+            self.name_resolution_ctx.clone(),
+        );
+        let mut as_query = cte.query.clone();
+        with.ctes.truncate(cte_index);
+        with.ctes.retain(|cte| !cte.user_specified_materialized);
+        as_query.with = if !with.ctes.is_empty() {
+            Some(with)
+        } else {
+            None
+        };
+        as_query.drive_mut(&mut expr_replacer);
+
+        let source = if cte.alias.columns.is_empty() {
+            None
+        } else {
+            let mut bind_context = BindContext::new();
+            let (_, bind_context) = self.bind_query(&mut bind_context, &as_query)?;
+            let columns = &bind_context.columns;
+            if columns.len() != cte.alias.columns.len() {
+                return Err(ErrorCode::Internal("Number of columns does not match"));
+            }
+            Some(CreateTableSource::Columns(
+                columns
+                    .iter()
+                    .zip(cte.alias.columns.iter())
+                    .map(|(column, ident)| {
+                        let data_type = convert_to_type_name(&column.data_type);
+                        ColumnDefinition {
+                            name: ident.clone(),
+                            data_type,
+                            expr: None,
+                            comment: None,
+                        }
+                    })
+                    .collect(),
+                None,
+            ))
+        };
+
+        let catalog = self.ctx.get_current_catalog();
+        let create_table_stmt = CreateTableStmt {
+            create_option: CreateOption::Create,
+            catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
+            database: Some(Identifier::from_name(Span::None, database.clone())),
+            table: table_identifier,
+            source,
+            engine: Some(engine),
+            uri_location: None,
+            cluster_by: None,
+            table_options: Default::default(),
+            iceberg_table_partition: None,
+            table_properties: Default::default(),
+            as_query: Some(as_query),
+            table_type: TableType::Temporary,
+        };
+
+        let create_table_sql = create_table_stmt.to_string();
+        log::info!("[CTE]create_table_sql: {create_table_sql}");
+        if let Some(subquery_executor) = &self.subquery_executor {
+            let _ = databend_common_base::runtime::block_on(async move {
+                subquery_executor
+                    .execute_query_with_sql_string(&create_table_sql)
+                    .await
+            })?;
+        } else {
+            return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
+        };
+
+        self.ctx.add_m_cte_temp_table(&database, &table_name);
+
+        self.ctx
+            .evict_table_from_cache(&catalog, &database, &table_name)
+    }
+}
+
+#[derive(VisitorMut)]
+#[visitor(TableReference(enter), Expr(enter))]
+pub struct TableNameReplacer {
+    database: String,
+    new_name: HashMap<String, String>,
+    name_resolution_ctx: NameResolutionContext,
+}
+
+impl TableNameReplacer {
+    pub fn new(
+        database: String,
+        new_name: HashMap<String, String>,
+        name_resolution_ctx: NameResolutionContext,
+    ) -> Self {
+        Self {
+            database,
+            new_name,
+            name_resolution_ctx,
+        }
+    }
+
+    fn replace_identifier(&mut self, identifier: &mut Identifier) {
+        let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
+        if let Some(new_name) = self.new_name.get(&name) {
+            identifier.name = new_name.clone();
+        }
+    }
+
+    #[recursive::recursive]
+    fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
+        if let TableReference::Table {
+            database, table, ..
+        } = table_reference
+        {
+            if database.is_none() || database.as_ref().unwrap().name == self.database {
+                self.replace_identifier(table);
+            }
+        }
+    }
+
+    #[recursive::recursive]
+    fn enter_expr(&mut self, expr: &mut Expr) {
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
+            {
+                if let Some(table_identifier) = &mut column.table {
+                    self.replace_identifier(table_identifier);
+                }
+            }
+        }
     }
 }

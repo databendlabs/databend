@@ -433,7 +433,7 @@ main() {
 
 	# Initialize workspace
 	echo ""
-	echo "[0/6] Initializing workspace..."
+	echo "[0/8] Initializing workspace..."
 	execute_query "DROP STAGE IF EXISTS a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 	execute_query "CREATE STAGE a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 	echo "  ✓ Workspace initialized"
@@ -441,48 +441,64 @@ main() {
 	local total=0
 	local success=0
 
-	# Stage 1: Columns
+	# Stage 1: System Settings
+	process_stage "Fetch System Settings" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.settings;" \
+		"settings" "1" "8"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
+
+	# Stage 2: Columns
 	process_stage "Fetch System Columns" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.columns;" \
-		"columns" "1" "6"
+		"columns" "2" "8"
 	total=$((total + stage_total))
 	success=$((success + stage_success))
 
-	# Stage 2: User Functions
+	# Stage 3: User Functions
 	process_stage "Fetch User Functions" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions);" \
-		"user_functions" "2" "6"
+		"user_functions" "3" "8"
 	total=$((total + stage_total))
 	success=$((success + stage_success))
 
-	# Stage 3: Query History - uses query_logs directory to match restore script expectations
+	# Stage 4: Query History - uses query_logs directory to match restore script expectations
 	local event_condition
 	event_condition=$(get_event_time_condition)
 	process_stage "Fetch Query History" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE $event_condition);" \
-		"query_logs" "3" "6"
+		"query_logs" "4" "8"
 	total=$((total + stage_total))
 	success=$((success + stage_success))
 
-	# Stage 4: Raw Logs - uses query_raw_logs directory to match restore script expectations
+	# Stage 5: Raw Logs - uses query_raw_logs directory to match restore script expectations
 	local time_condition
 	time_condition=$(get_time_condition)
 	process_stage "Fetch Raw Logs" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history WHERE $time_condition);" \
-		"query_raw_logs" "4" "6"
+		"query_raw_logs" "5" "8"
 	total=$((total + stage_total))
 	success=$((success + stage_success))
 
-	# Stage 5: Profile Logs - uses query_profile_logs directory to match restore script expectations
+	# Stage 6: Login History - uses login_history directory to match restore script expectations
+	local login_event_condition
+	login_event_condition=$(get_event_time_condition)
+	process_stage "Fetch Login History" \
+		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.login_history WHERE $login_event_condition);" \
+		"login_history" "6" "8"
+	total=$((total + stage_total))
+	success=$((success + stage_success))
+
+	# Stage 7: Profile Logs - uses query_profile_logs directory to match restore script expectations
 	process_stage "Fetch Profile Logs" \
 		"COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history WHERE $time_condition);" \
-		"query_profile_logs" "5" "6"
+		"query_profile_logs" "7" "8"
 	total=$((total + stage_total))
 	success=$((success + stage_success))
 
-	# Stage 6: Create Archive
+	# Stage 8: Create Archive
 	echo ""
-	echo "[6/6] Creating archive and cleanup"
+	echo "[8/8] Creating archive and cleanup"
 
 	echo ""
 	echo "Summary:"
@@ -499,7 +515,7 @@ main() {
 	fi
 
 	if [[ $success -gt 0 ]]; then
-		if create_archive "$OUTPUT_DIR/columns" "$OUTPUT_DIR/user_functions" "$OUTPUT_DIR/query_logs" "$OUTPUT_DIR/query_raw_logs" "$OUTPUT_DIR/query_profile_logs"; then
+		if create_archive "$OUTPUT_DIR/settings" "$OUTPUT_DIR/columns" "$OUTPUT_DIR/user_functions" "$OUTPUT_DIR/query_logs" "$OUTPUT_DIR/query_raw_logs" "$OUTPUT_DIR/login_history" "$OUTPUT_DIR/query_profile_logs"; then
 			local end_time
 			end_time=$(date +%s)
 			local total_time

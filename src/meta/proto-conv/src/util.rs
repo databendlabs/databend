@@ -173,6 +173,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (141, "2025-08-06: Add: row_access.proto"),
     (142, "2025-08-15: Add: table_meta add row_access_policy"),
     (143, "2025-08-18: Add: add UDTF"),
+    (144, "2025-08-18: Add: add ScalarUDF"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

@@ -34,6 +34,7 @@ mod compact_with_db_test;
 #[cfg(test)]
 mod sm_v003_test;
 
+pub use sm_v003::OnChange;
 pub use sm_v003::SMV003;
 pub use snapshot_store_error::SnapshotStoreError;
 pub use snapshot_store_v003::SnapshotStoreV003;

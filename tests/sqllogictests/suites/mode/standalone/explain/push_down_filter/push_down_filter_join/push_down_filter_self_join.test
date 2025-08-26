@@ -12,49 +12,32 @@ D as (select * from C)
 select * from D;
 ----
 Sequence
-├── MaterializedCTE: a
-│   └── UnionAll
-│       ├── output columns: [a (#4), b (#5)]
-│       ├── estimated rows: 20.00
-│       ├── TableScan
-│       │   ├── table: default.default.t1
-│       │   ├── output columns: [a (#0), b (#1)]
-│       │   ├── read rows: 10
-│       │   ├── read size: < 1 KiB
-│       │   ├── partitions total: 1
-│       │   ├── partitions scanned: 1
-│       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       │   ├── push downs: [filters: [], limit: NONE]
-│       │   └── estimated rows: 10.00
-│       └── TableScan
-│           ├── table: default.default.t2
-│           ├── output columns: [a (#2), b (#3)]
-│           ├── read rows: 10
-│           ├── read size: < 1 KiB
-│           ├── partitions total: 1
-│           ├── partitions scanned: 1
-│           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│           ├── push downs: [filters: [], limit: NONE]
-│           └── estimated rows: 10.00
-└── Sequence
-    ├── MaterializedCTE: b
-    │   └── MaterializeCTERef
-    │       ├── cte_name: a
-    │       ├── cte_schema: [a (#10), b (#11)]
-    │       └── estimated rows: 20.00
-    └── HashJoin
-        ├── output columns: [a (#16), b (#17), b (#23), a (#22)]
-        ├── join type: INNER
-        ├── build keys: [b2.a (#22)]
-        ├── probe keys: [b1.a (#16)]
-        ├── keys is null equal: [false]
-        ├── filters: [d.b (#17) < d.b (#23)]
-        ├── estimated rows: 400.00
-        ├── MaterializeCTERef(Build)
-        │   ├── cte_name: b
-        │   ├── cte_schema: [a (#22), b (#23)]
-        │   └── estimated rows: 20.00
-        └── MaterializeCTERef(Probe)
-            ├── cte_name: b
-            ├── cte_schema: [a (#16), b (#17)]
-            └── estimated rows: 20.00
+├── MaterializedCTE: b
+│   └── TableScan
+│       ├── table: default.default.a
+│       ├── output columns: [a (#0), b (#1)]
+│       ├── read rows: 20
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 20.00
+└── HashJoin
+    ├── output columns: [a.a (#2), a.b (#3), a.b (#5), a.a (#4)]
+    ├── join type: INNER
+    ├── build keys: [b2.a (#4)]
+    ├── probe keys: [b1.a (#2)]
+    ├── keys is null equal: [false]
+    ├── filters: [d.b (#3) < d.b (#5)]
+    ├── build join filters:
+    │   └── filter id:0, build key:b2.a (#4), probe key:b1.a (#2), filter type:inlist,min_max
+    ├── estimated rows: 40.00
+    ├── MaterializeCTERef(Build)
+    │   ├── cte_name: b
+    │   ├── cte_schema: [a (#4), b (#5)]
+    │   └── estimated rows: 20.00
+    └── MaterializeCTERef(Probe)
+        ├── cte_name: b
+        ├── cte_schema: [a (#2), b (#3)]
+        └── estimated rows: 20.00
