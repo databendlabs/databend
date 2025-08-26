@@ -44,11 +44,9 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     type SnapshotBuilder = RaftStore;
 
     async fn applied_state(&mut self) -> Result<(Option<LogId>, StoredMembership), StorageError> {
-        let sm = self
-            .get_state_machine_read("RaftStateMachine::applied_state")
-            .await;
-        let last_applied = *sm.sys_data_ref().last_applied_ref();
-        let last_membership = sm.sys_data_ref().last_membership_ref().clone();
+        let sm = self.state_machine();
+        let last_applied = *sm.sys_data().last_applied_ref();
+        let last_membership = sm.sys_data().last_membership_ref().clone();
 
         debug!(
             "applied_state: applied: {:?}, membership: {:?}",
@@ -64,9 +62,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         I: IntoIterator<Item = Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
-        let mut sm = self
-            .get_state_machine_write("RaftStateMachine::apply")
-            .await;
+        let sm = self.state_machine();
         let res = sm.apply_entries(entries).await?;
 
         Ok(res)
@@ -131,10 +127,8 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
 
-        let r = self
-            .get_state_machine_read("RaftStateMachine::get_current_snapshot")
-            .await;
-        let db = r.levels().persisted().cloned();
+        let r = self.state_machine();
+        let db = r.levels().persisted().map(|x| x.as_ref().clone());
 
         let snapshot = db.map(|x| Snapshot {
             meta: x.snapshot_meta().clone(),

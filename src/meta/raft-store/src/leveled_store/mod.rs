@@ -23,6 +23,7 @@ pub mod map_api;
 pub mod rotbl_codec;
 pub mod sys_data;
 pub mod sys_data_api;
+pub mod types;
 pub mod util;
 pub mod value_convert;
 
