@@ -104,7 +104,9 @@ impl PredicateBuilder {
                 generics: _,
                 args,
                 return_type: _,
-            } if args.len() == 2 && ["and", "and_filters", "or"].contains(&id.name().as_ref()) => {
+            } if args.len() == 2
+                && ["and", "and_filters", "or", "or_filters"].contains(&id.name().as_ref()) =>
+            {
                 let (left_uncertain, left) = Self::build(&args[0]);
                 let (right_uncertain, right) = Self::build(&args[1]);
                 if left_uncertain || right_uncertain {
@@ -112,7 +114,7 @@ impl PredicateBuilder {
                 }
                 let predicate = match id.name().as_ref() {
                     "and" | "and_filters" => left.and(right),
-                    "or" => left.or(right),
+                    "or" | "or_filters" => left.or(right),
                     _ => unreachable!(),
                 };
 

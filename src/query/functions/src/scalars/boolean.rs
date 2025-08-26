@@ -46,34 +46,39 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 2 {
-            return None;
-        }
-        if args_type
-            .iter()
-            .any(|arg_type| arg_type.remove_nullable() != DataType::Boolean)
-        {
-            return None;
-        }
+    let fn_filters_factory = |func_name: &'static str| {
+        FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+            if args_type.len() < 2 {
+                return None;
+            }
+            if args_type
+                .iter()
+                .any(|arg_type| arg_type.remove_nullable() != DataType::Boolean)
+            {
+                return None;
+            }
 
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "and_filters".to_string(),
-                args_type: args_type.to_vec(),
-                return_type: DataType::Boolean,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| {
-                    unreachable!("cal_domain of `and_filters` should be handled by the `Evaluator`")
-                }),
-                eval: Box::new(|_, _| {
-                    unreachable!("`and_filters` should be handled by the `Evaluator`")
-                }),
-            },
+            Some(Arc::new(Function {
+                signature: FunctionSignature {
+                    name: func_name.to_string(),
+                    args_type: args_type.to_vec(),
+                    return_type: DataType::Boolean,
+                },
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(move |_, _| {
+                        unreachable!(
+                            "cal_domain of `{func_name}` should be handled by the `Evaluator`"
+                        )
+                    }),
+                    eval: Box::new(move |_, _| {
+                        unreachable!("`{func_name}` should be handled by the `Evaluator`")
+                    }),
+                },
+            }))
         }))
-    }));
-    registry.register_function_factory("and_filters", factory);
+    };
+    registry.register_function_factory("and_filters", fn_filters_factory("and_filters"));
+    registry.register_function_factory("or_filters", fn_filters_factory("or_filters"));
 
     registry.register_passthrough_nullable_1_arg::<BooleanType, BooleanType, _, _>(
         "not",

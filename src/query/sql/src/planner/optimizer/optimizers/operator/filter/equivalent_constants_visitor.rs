@@ -80,7 +80,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
 
     fn visit_function_call(&mut self, func: &'_ mut FunctionCall) -> Result<()> {
         match func.func_name.as_str() {
-            "or" => {
+            "or" | "or_filters" => {
                 for expr in &mut func.arguments {
                     let mut visitor = EquivalentConstantsVisitorInner::default()
                         .left_visit_order(self.left_visit_order);
