@@ -135,11 +135,11 @@ pub async fn do_refresh_virtual_column(
                 put_cache: false,
             })
             .await?;
-        let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
-            let stats = read_segment_stats(operator.clone(), meta.location.clone()).await?;
-            Some(stats)
-        } else {
-            None
+        let stats = match &segment_info.summary.additional_stats_meta {
+            Some(meta) if meta.location.is_some() => {
+                Some(read_segment_stats(operator.clone(), meta.location.clone().unwrap()).await?)
+            }
+            _ => None,
         };
 
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
