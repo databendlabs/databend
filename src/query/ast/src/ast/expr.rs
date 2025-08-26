@@ -530,6 +530,11 @@ impl Expr {
     }
 }
 
+impl Drop for Expr {
+    #[recursive::recursive]
+    fn drop(&mut self) {}
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         fn needs_parentheses(parent: Option<Affix>, child: Affix, is_left: bool) -> bool {
