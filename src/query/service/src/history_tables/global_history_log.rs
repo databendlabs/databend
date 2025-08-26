@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -44,6 +43,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
 use futures_util::future::join_all;
 use futures_util::TryStreamExt;
+use log::debug;
 use log::error;
 use log::info;
 use log::warn;
@@ -57,6 +57,8 @@ use crate::clusters::ClusterDiscovery;
 use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::alter_table::get_log_table;
 use crate::history_tables::alter_table::should_reset;
+use crate::history_tables::error_handling::is_temp_error;
+use crate::history_tables::error_handling::ErrorCounters;
 use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::history_tables::meta::HistoryMetaHandle;
@@ -170,17 +172,13 @@ impl GlobalHistoryLog {
     }
 
     async fn spawn_transform_tasks(&self, handles: &mut Vec<tokio::task::JoinHandle<()>>) {
-        let sleep_time =
-            Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
-
         for table in self.tables.iter() {
             let table_clone = table.clone();
             let meta_key = format!("{}/history_log_transform", self.tenant_id);
             let log = GlobalHistoryLog::instance();
 
             let handle = spawn(async move {
-                log.run_table_transform_loop(table_clone, meta_key, sleep_time)
-                    .await;
+                log.run_table_transform_loop(table_clone, meta_key).await;
             });
             handles.push(handle);
         }
@@ -371,83 +369,90 @@ impl GlobalHistoryLog {
         Ok(false)
     }
 
-    async fn run_table_transform_loop(
-        &self,
-        table: Arc<HistoryTable>,
-        meta_key: String,
-        sleep_time: Duration,
-    ) {
-        let mut persistent_error_cnt = 0;
-        let mut temp_error_cnt = 0;
+    fn transform_sleep_duration(&self) -> Duration {
+        Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000))
+    }
+
+    async fn run_table_transform_loop(&self, table: Arc<HistoryTable>, meta_key: String) {
+        let mut error_counters = ErrorCounters::new();
         loop {
+            // 1. Acquire heartbeat
             let heartbeat_key = format!("{}/{}", meta_key, table.name);
+            let heartbeat_guard = match self.meta_handle.create_heartbeat_task(&heartbeat_key).await
+            {
+                Ok(Some(guard)) => guard,
+                Ok(None) => {
+                    sleep(self.transform_sleep_duration()).await;
+                    continue;
+                }
+                Err(e) => {
+                    error!(
+                        "[HISTORY-TABLES] {} failed to create heartbeat, retry: {}",
+                        table.name, e
+                    );
+                    sleep(self.transform_sleep_duration()).await;
+                    continue;
+                }
+            };
 
-            let _heartbeat_guard =
-                match self.meta_handle.create_heartbeat_task(&heartbeat_key).await {
-                    Ok(Some(guard)) => guard,
-                    Ok(None) => {
-                        sleep(sleep_time).await;
-                        continue;
-                    }
-                    Err(e) => {
-                        error!(
-                            "[HISTORY-TABLES] {} failed to create heartbeat: {}",
-                            table.name, e
-                        );
-                        sleep(sleep_time).await;
-                        continue;
-                    }
-                };
-
-            info!(
+            debug!(
                 "[HISTORY-TABLES] {} acquired heartbeat, starting work loop",
                 table.name
             );
 
+            // 2. Start to work on the task, hold the heartbeat guard during the work
             let mut transform_cnt = 0;
             loop {
+                // Check if heartbeat is lost or cancelled, indicating another instance took over
+                // or the task should be terminated
+                if heartbeat_guard.exited() {
+                    info!(
+                        "[HISTORY-TABLES] {} lost heartbeat, releasing and retrying",
+                        table.name
+                    );
+                    break;
+                }
                 match self.transform(&table, &meta_key).await {
                     Ok(()) => {
-                        persistent_error_cnt = 0;
-                        temp_error_cnt = 0;
+                        error_counters.reset();
                         transform_cnt += 1;
-                        sleep(sleep_time).await;
+                        sleep(self.transform_sleep_duration()).await;
                     }
                     Err(e) => {
                         if is_temp_error(&e) {
-                            let backoff_second = min(2u64.saturating_pow(temp_error_cnt), 10 * 60);
-                            temp_error_cnt += 1;
+                            let temp_count = error_counters.increment_temporary();
+                            let backoff_second = error_counters.calculate_temp_backoff();
                             warn!(
                                 "[HISTORY-TABLES] {} log transform failed with temporary error {}, count {}, next retry in {} seconds",
-                                table.name, e, temp_error_cnt, backoff_second
+                                table.name, e, temp_count, backoff_second
                             );
                             sleep(Duration::from_secs(backoff_second)).await;
                         } else {
+                            let persistent_count = error_counters.increment_persistent();
                             error!(
                                 "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
-                                table.name, e, persistent_error_cnt
+                                table.name, e, persistent_count
                             );
-                            persistent_error_cnt += 1;
-                            if persistent_error_cnt > 3 {
+                            if error_counters.persistent_exceeded_limit() {
                                 error!(
                                     "[HISTORY-TABLES] {} log transform failed too many times, giving up",
                                     table.name
                                 );
                                 break;
                             }
-                            sleep(sleep_time).await;
+                            sleep(self.transform_sleep_duration()).await;
                         }
                     }
                 }
+                // Release heartbeat periodically to allow other nodes in the cluster
+                // to take over and ensure even task distribution across the cluster
                 if transform_cnt % 100 == 0 {
                     break;
                 }
             }
+            debug!("[HISTORY-TABLES] {} released heartbeat", table.name);
 
-            drop(_heartbeat_guard);
-            info!("[HISTORY-TABLES] {} released heartbeat", table.name);
-
-            if persistent_error_cnt > 3 {
+            if error_counters.persistent_exceeded_limit() {
                 return;
             }
         }
@@ -499,22 +504,4 @@ pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
     };
     GlobalLogger::instance().set_operator(op).await;
     Ok(())
-}
-
-/// Check if the error is a temporary error,
-/// We will use this to determine if we should retry the operation.
-fn is_temp_error(e: &ErrorCode) -> bool {
-    let code = e.code();
-    // Storage and I/O errors are considered temporary errors
-    let storage = code == ErrorCode::STORAGE_NOT_FOUND
-        || code == ErrorCode::STORAGE_PERMISSION_DENIED
-        || code == ErrorCode::STORAGE_UNAVAILABLE
-        || code == ErrorCode::STORAGE_UNSUPPORTED
-        || code == ErrorCode::STORAGE_INSECURE
-        || code == ErrorCode::INVALID_OPERATION
-        || code == ErrorCode::STORAGE_OTHER;
-    // If acquire semaphore failed, we consider it a temporary error
-    let meta = code == ErrorCode::META_SERVICE_ERROR;
-    let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;
-    storage || transaction || meta
 }

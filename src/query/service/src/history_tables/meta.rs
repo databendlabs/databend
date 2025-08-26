@@ -14,6 +14,7 @@
 
 use std::future::Future;
 use std::pin::pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,7 +34,8 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::FutureExt;
-use log::info;
+use log::debug;
+use log::warn;
 use tokio::sync::oneshot;
 
 /// RAII wrapper for Permit that automatically updates timestamp on drop
@@ -68,6 +70,13 @@ const DEAD_IN_SECS: u64 = 10;
 
 pub struct HeartbeatTaskGuard {
     _cancel: oneshot::Sender<()>,
+    exited: Arc<AtomicBool>,
+}
+
+impl HeartbeatTaskGuard {
+    pub fn exited(&self) -> bool {
+        self.exited.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 pub struct HeartbeatTask;
@@ -101,15 +110,34 @@ impl HeartbeatTask {
             return Ok(None);
         }
 
-        info!("[HISTORY-TABLE] Heartbeat key created: {}", &heartbeat_key);
+        debug!("[HISTORY-TABLES] Heartbeat key created: {}", &heartbeat_key);
 
         let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
         let loop_fut =
             HeartbeatTask::heartbeat_loop(meta_client, heartbeat_key, cancel_rx.map(|_| ()));
-        let task_name = format!("heartbeat_{}", &meta_key);
-        spawn_named(loop_fut, task_name);
 
-        Ok(Some(HeartbeatTaskGuard { _cancel: cancel_tx }))
+        let exited = Arc::new(AtomicBool::new(false));
+
+        let task_name = format!("heartbeat_{}", &meta_key);
+        let exited_clone = exited.clone();
+        spawn_named(
+            async move {
+                let result = loop_fut.await;
+                if result.is_err() {
+                    warn!(
+                        "[HISTORY-TABLES] Heartbeat loop exited with error: {:?}",
+                        result
+                    );
+                }
+                exited_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            },
+            task_name,
+        );
+
+        Ok(Some(HeartbeatTaskGuard {
+            _cancel: cancel_tx,
+            exited,
+        }))
     }
 
     pub async fn heartbeat_loop(
@@ -135,6 +163,8 @@ impl HeartbeatTask {
                 _ = &mut c =>{
                     let delete = UpsertKV::delete(&heartbeat_key);
                     meta_client.upsert_kv(delete).await?;
+
+                    debug!("[HISTORY-TABLES] Heartbeat key delete: {}", &heartbeat_key);
 
                     return Ok(())
                 }
