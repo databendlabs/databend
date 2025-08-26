@@ -35,10 +35,8 @@ pub struct Compactor {
     pub(crate) _permit: CompactorPermit,
 
     pub(crate) compacting_data: CompactingData,
-    // pub(crate) immutable_levels: Arc<ImmutableLevels>,
-    // pub(crate) persisted: Option<Arc<DB>>,
     /// Remember the newest level included in this compactor.
-    pub(super) since: Option<LevelIndex>,
+    pub(super) upto: LevelIndex,
 }
 
 impl Compactor {

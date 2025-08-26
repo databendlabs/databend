@@ -81,7 +81,10 @@ impl CompactingData {
         let table = mvcc::Table::from_stream(strm).await?;
         data.replace_kv(table);
 
-        self.immutable_levels = Arc::new(ImmutableLevels::new([Immutable::new_from_level(data)]));
+        self.immutable_levels =
+            Arc::new(ImmutableLevels::new_form_iter([Immutable::new_from_level(
+                data,
+            )]));
         Ok(())
     }
 

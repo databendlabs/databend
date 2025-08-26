@@ -309,8 +309,7 @@ impl LeveledMap {
     /// Return the [`LevelIndex`] of the newest **immutable** data
     pub(crate) fn immutable_level_index(&self) -> Option<LevelIndex> {
         let immutables = self.data.immutable_levels();
-        let newest = immutables.newest()?;
-        Some(*newest.level_index())
+        immutables.newest_level_index()
     }
 
     /// Freeze the current writable level and create a new empty writable level.
@@ -326,23 +325,18 @@ impl LeveledMap {
     }
 
     pub fn do_freeze_writable(&self) -> Arc<ImmutableLevels> {
-        let new_immutable = {
-            let mut writable = self.data.writable();
-            let new_writable = writable.new_level();
+        let mut writable = self.data.writable();
+        let mut immutables = self.data.immutable_levels.lock().unwrap();
 
-            std::mem::replace(&mut *writable, new_writable)
-        };
+        let new_writable = writable.new_level();
+        let new_immutable = std::mem::replace(&mut *writable, new_writable);
 
-        let mut immutable_levels = self.data.immutable_levels().as_ref().clone();
+        let mut immutable_levels = immutables.as_ref().clone();
+        immutable_levels.insert(Immutable::new_from_level(new_immutable));
 
-        immutable_levels.push(Immutable::new_from_level(new_immutable));
+        *immutables = Arc::new(immutable_levels);
 
-        {
-            let mut immutables = self.data.immutable_levels.lock().unwrap();
-            *immutables = Arc::new(immutable_levels)
-        }
-
-        self.data.immutable_levels()
+        immutables.clone()
     }
 
     pub fn persisted(&self) -> Option<Arc<DB>> {
@@ -385,37 +379,28 @@ impl LeveledMap {
     /// **Important**: Do not drop the compactor within this function when called
     /// under a state machine lock, as dropping may take ~250ms.
     pub fn replace_with_compacted(&self, compactor: &mut Compactor, db: DB) {
-        let len = compactor.immutable_levels().len();
-
-        // Get the level index of the newest level.
-        let corresponding_index = compactor
-            .immutable_levels()
-            .levels()
-            .get(len - 1)
-            .map(|l| l.level_index())
-            .copied();
-
-        assert_eq!(
-            compactor.since, corresponding_index,
-            "unexpected change to sm during compaction"
+        info!(
+            "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
+            compactor.upto,
+            self.data.immutable_levels().indexes().collect::<Vec<_>>(),
+            compactor.compacting_data.immutable_levels.indexes().collect::<Vec<_>>(),
         );
 
-        let my_immutables = self.data.immutable_levels();
-        let mut levels = my_immutables.levels().clone();
+        let mut immutables = self.data.immutable_levels().as_ref().clone();
+        immutables.remove_levels_upto(compactor.upto);
 
-        // Remove the levels already included in `persisted`
-        let uncompacted = levels.split_off(len);
-
-        let uncompacted_immutables = ImmutableLevels::new(uncompacted);
-
-        // replace the immutables
-        self.data
-            .with_immutable_levels(|x| *x = Arc::new(uncompacted_immutables));
+        // NOTE: Replace data from bottom to top.
+        // replace the db first, db contains more data.
+        // Otherwise, there is a chance some data is removed from immutables and the new db containing this data is not inserted.
 
         // replace the persisted
         self.data.with_persisted(|p| {
             *p = Some(Arc::new(db));
         });
+
+        // replace the immutables
+        self.data
+            .with_immutable_levels(|x| *x = Arc::new(immutables));
 
         info!("replace_with_compacted: finished replacing the db");
     }
@@ -424,7 +409,9 @@ impl LeveledMap {
     ///
     /// This method requires a mutable reference to prevent concurrent access to shared data,
     /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
-    pub(crate) async fn acquire_compactor(&self) -> Compactor {
+    ///
+    /// If there is no new data, it returns None.
+    pub(crate) async fn acquire_compactor(&self) -> Option<Compactor> {
         let acquirer = self.new_compactor_acquirer();
 
         let permit = acquirer.acquire().await;
@@ -436,12 +423,16 @@ impl LeveledMap {
         CompactorAcquirer::new(self.compaction_semaphore.clone())
     }
 
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
-        Compactor {
+    /// If there is no new data, it returns None.
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Option<Compactor> {
+        let level_index = self.immutable_level_index()?;
+
+        let c = Compactor {
             _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
-            since: self.immutable_level_index(),
-        }
+            upto: level_index,
+        };
+        Some(c)
     }
 }
 
