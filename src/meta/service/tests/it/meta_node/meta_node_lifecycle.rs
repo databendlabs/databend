@@ -34,6 +34,7 @@ use databend_meta::message::ForwardRequestBody;
 use databend_meta::message::JoinRequest;
 use databend_meta::message::LeaveRequest;
 use databend_meta::meta_service::MetaNode;
+use itertools::Itertools;
 use log::info;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -207,6 +208,106 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
                 format!("node-{} membership", mn.raft_store.id),
             )
             .await?;
+    }
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_meta_node_join_as_learner() -> anyhow::Result<()> {
+    // - Bring up a cluster
+    // - Join a new node as learner by sending a Join request to leader.
+
+    let (_nlog, tcs) = start_meta_node_cluster(btreeset![0], btreeset![1]).await?;
+    let mut all = test_context_nodes(&tcs);
+
+    info!("--- bring up non-voter 2");
+
+    let node_id = 2;
+    let tc2 = MetaSrvTestContext::new(node_id);
+    {
+        let mn2 = MetaNode::open(&tc2.config.raft_config, &BUILD_INFO).await?;
+        all.push(mn2);
+    }
+
+    info!("--- join learner 2 to cluster by leader");
+    {
+        let leader_id = all[0].get_leader().await?.unwrap();
+        let leader = all[leader_id as usize].clone();
+
+        let endpoint = tc2.config.raft_config.raft_api_addr().await?;
+        let grpc_api_advertise_address = tc2.config.grpc_api_advertise_address();
+
+        let admin_req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Join(
+                JoinRequest::new(node_id, endpoint, grpc_api_advertise_address).with_role_learner(),
+            ),
+        };
+
+        leader.handle_forwardable_request(admin_req).await?;
+    }
+
+    info!("--- check all nodes has node-2 joined");
+    {
+        for mn in all.iter() {
+            mn.raft
+                .wait(timeout())
+                .metrics(
+                    |m| {
+                        m.membership_config
+                            .membership()
+                            .nodes()
+                            .map(|(nid, _n)| *nid)
+                            .contains(&2)
+                    },
+                    format!("node-2 is joined: {}", mn.raft_store.id),
+                )
+                .await?;
+
+            mn.raft
+                .wait(timeout())
+                .metrics(
+                    |m| !m.membership_config.membership().voter_ids().contains(&2),
+                    format!("node-2 is joined but not a voter: {}", mn.raft_store.id),
+                )
+                .await?;
+        }
+    }
+
+    info!("--- remove learner node-2 ");
+    {
+        let leader_id = all[0].get_leader().await?.unwrap();
+        let leader = all[leader_id as usize].clone();
+
+        let admin_req = ForwardRequest {
+            forward_to_leader: 0,
+            body: ForwardRequestBody::Leave(LeaveRequest { node_id }),
+        };
+
+        leader.handle_forwardable_request(admin_req).await?;
+    }
+
+    all.remove(2);
+
+    info!("--- check all nodes has node-2 joined");
+    {
+        for mn in all.iter() {
+            mn.raft
+                .wait(timeout())
+                .metrics(
+                    |m| {
+                        !m.membership_config
+                            .membership()
+                            .nodes()
+                            .map(|(nid, _n)| *nid)
+                            .contains(&2)
+                    },
+                    format!("node-2 is removed: {}", mn.raft_store.id),
+                )
+                .await?;
+        }
     }
 
     Ok(())

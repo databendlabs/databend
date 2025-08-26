@@ -4,6 +4,11 @@ function isRetryableError(errorMessage) {
         errorMessage.includes('The operation was canceled.');
 }
 
+function isUserCancelled(errorMessage) {
+    if (!errorMessage) return false;
+    return errorMessage.includes('The run was canceled by @');
+}
+
 function isPriorityCancelled(errorMessage) {
     if (!errorMessage) return false;
     return errorMessage.includes('Canceling since a higher priority waiting request for');
@@ -58,6 +63,18 @@ async function analyzeJob(github, context, core, job) {
                 annotationCount: annotations.length,
                 reason: 'Cancelled by higher priority request',
                 priorityCancelled: true
+            };
+        }
+
+        const userCancelled = isUserCancelled(allFailureAnnotationMessages);
+        if (userCancelled) {
+            core.info(`  ⛔️ Job "${job.name}" is NOT retryable - cancelled by user`);
+            return {
+                job,
+                retryable: false,
+                annotationCount: annotations.length,
+                reason: 'Cancelled by user',
+                priorityCancelled: false
             };
         }
 
@@ -297,24 +314,37 @@ async function findExistingRetryComment(github, context, core, pr) {
     }
 }
 
-function getRetryCount(existingComment) {
-    if (!existingComment) return 0;
+async function getRetryCountFromAPI(github, context, core, workflowRun) {
+    try {
+        // Get workflow runs for the same branch/commit
+        const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: workflowRun.workflow_id,
+            branch: workflowRun.head_branch,
+            per_page: 100
+        });
 
-    // Try to extract retry count from the title
-    const titleMatch = existingComment.body.match(/## 🤖 Smart Auto-retry Analysis\s*(?:\(Retry (\d+)\))?/);
-    if (titleMatch && titleMatch[1]) {
-        return parseInt(titleMatch[1], 10);
+        // Count runs that were retries (have the same head_sha)
+        let retryCount = 0;
+        const currentSha = workflowRun.head_sha;
+
+        for (const run of workflowRuns.workflow_runs) {
+            if (run.head_sha === currentSha && run.id !== workflowRun.id) {
+                // This is a previous run with the same commit SHA
+                retryCount++;
+            }
+        }
+
+        core.info(`Found ${retryCount} previous workflow runs for the same commit`);
+        return retryCount;
+    } catch (error) {
+        core.warning(`Failed to get retry count from API: ${error.message}`);
+        return 0;
     }
-
-    // If no retry count in title, check if it's a retry by looking for retry indicators
-    if (existingComment.body.includes('### ✅ **AUTO-RETRY INITIATED**')) {
-        return 1; // This is likely the first retry
-    }
-
-    return 0;
 }
 
-async function addCommentToPR(github, context, core, runID, runURL, jobData, priorityCancelled) {
+async function addCommentToPR(github, context, core, runID, runURL, jobData, priorityCancelled, maxRetriesReached = false) {
     try {
         // Get workflow run to find the branch
         const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
@@ -334,8 +364,8 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
         // Try to find existing retry comment
         const existingComment = await findExistingRetryComment(github, context, core, pr);
 
-        // Get current retry count
-        const currentRetryCount = getRetryCount(existingComment);
+        // Get current retry count from API
+        const currentRetryCount = await getRetryCountFromAPI(github, context, core, workflowRun);
         const newRetryCount = jobData.retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
 
         // Build title with retry count
@@ -356,6 +386,53 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
 Higher priority request detected - retry cancelled to avoid conflicts.
 
 [View Workflow](${runURL})`;
+        } else if (maxRetriesReached) {
+            // Comment for when max retries reached
+            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+
+> **Workflow:** [\`${runID}\`](${runURL})
+
+### 📊 Summary
+- **Total Jobs:** ${jobData.totalJobs}
+- **Failed Jobs:** ${jobData.failedJobs.length}
+- **Retryable:** ${jobData.retryableJobsCount}
+- **Code Issues:** ${codeIssuesCount}
+
+### 🚫 **MAX RETRIES REACHED**
+Maximum retry count (3) has been reached. Manual intervention required.
+
+[View Workflow](${runURL})`;
+
+            comment += `
+
+### 🔍 Job Details
+${jobData.analyzedJobs.map(job => {
+                if (job.reason.includes('Analysis failed')) {
+                    return `- ❓ **${job.name}**: Analysis failed`;
+                }
+                if (job.reason.includes('Cancelled by higher priority')) {
+                    return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
+                }
+                if (job.reason.includes('Cancelled by user')) {
+                    return `- 🚫 **${job.name}**: Cancelled by user`;
+                }
+                if (job.reason.includes('No annotations found')) {
+                    return `- ❓ **${job.name}**: No annotations available`;
+                }
+                if (job.retryable) {
+                    return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
+                } else {
+                    return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
+                }
+            }).join('\n')}
+
+---
+
+<details>
+<summary>🤖 About</summary>
+
+Automated analysis using job annotations to distinguish infrastructure issues (auto-retried) from code/test issues (manual fixes needed).
+</details>`;
         } else {
             // Full comment for normal analysis
             comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
@@ -391,6 +468,9 @@ ${jobData.analyzedJobs.map(job => {
                 }
                 if (job.reason.includes('Cancelled by higher priority')) {
                     return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
+                }
+                if (job.reason.includes('Cancelled by user')) {
+                    return `- 🚫 **${job.name}**: Cancelled by user`;
                 }
                 if (job.reason.includes('No annotations found')) {
                     return `- ❓ **${job.name}**: No annotations available`;
@@ -497,6 +577,16 @@ module.exports = async ({ github, context, core }) => {
     if (priorityCancelled) {
         core.info('Cancelling retry since a higher priority request was made');
         await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, true);
+        return;
+    }
+
+    // Check retry count limit (max 3 retries)
+    const currentRetryCount = await getRetryCountFromAPI(github, context, core, workflowRun);
+    const maxRetries = 3;
+
+    if (currentRetryCount >= maxRetries) {
+        core.info(`Maximum retry count (${maxRetries}) reached. Skipping retry.`);
+        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false, true);
         return;
     }
 

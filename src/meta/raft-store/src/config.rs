@@ -107,6 +107,11 @@ pub struct RaftConfig {
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
     pub join: Vec<String>,
 
+    /// Whether this node is a learner.
+    ///
+    /// A learner does not vote in elections, and does not count towards quorum.
+    pub learner: bool,
+
     /// Do not run databend-meta, but just remove a node from its cluster.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `leave` request.
@@ -168,6 +173,7 @@ impl Default for RaftConfig {
 
             single: false,
             join: vec![],
+            learner: false,
             leave_via: vec![],
             leave_id: None,
             id: 0,

@@ -12,43 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedViewReadonly;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
 use state_machine_api::ExpireKey;
-use state_machine_api::StateMachineApi;
 
 use crate::sm_v003::SMV003;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 #[tokio::test]
 async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
-    let mut sm = SMV003::default();
+    let sm = SMV003::default();
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a0")).await?;
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(1, b("a0"))));
+    a.commit().await?;
 
     let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!(got, Some(SeqV::new(1, b("a0"))));
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("b", b"b0")).await?;
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(2, b("b0"))));
+    a.commit().await?;
+
     let got = sm.get_maybe_expired_kv(&s("b")).await?;
     assert_eq!(got, Some(SeqV::new(2, b("b0"))));
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a00")).await?;
     assert_eq!(prev, Some(SeqV::new(1, b("a0"))));
     assert_eq!(result, Some(SeqV::new(3, b("a00"))));
+    a.commit().await?;
+
     let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!(got, Some(SeqV::new(3, b("a00"))));
 
@@ -64,7 +69,13 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
 
-    let got = sm.list_kv("").await?.try_collect::<Vec<_>>().await?;
+    let got = sm
+        .kv_api()
+        .list_kv("")
+        .await?
+        .map_ok(|strm_item| strm_item.into_pair())
+        .try_collect::<Vec<_>>()
+        .await?;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(3, b("a00"))),
         (s("b"), SeqV::new(2, b("b0")))
@@ -78,20 +89,22 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     // | a a/b    c
 
     let mut sm = SMV003::default();
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
 
     // internal_seq = 0
     a.upsert_kv(&UpsertKV::update("a", b"a0")).await?;
     a.upsert_kv(&UpsertKV::update("a/b", b"b0")).await?;
     a.upsert_kv(&UpsertKV::update("c", b"c0")).await?;
+    a.commit().await?;
 
-    sm.map_mut().freeze_writable();
-    let mut a = sm.new_applier();
+    sm.map_mut().testing_freeze_writable();
+    let mut a = sm.new_applier().await;
 
     // internal_seq = 3
     a.upsert_kv(&UpsertKV::delete("a/b")).await?;
     a.upsert_kv(&UpsertKV::update("c", b"c1")).await?;
     a.upsert_kv(&UpsertKV::update("d", b"d1")).await?;
+    a.commit().await?;
 
     // get_kv_ref()
 
@@ -125,14 +138,26 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // prefix_list_kv()
 
-    let got = sm.list_kv("").await?.try_collect::<Vec<_>>().await?;
+    let got = sm
+        .kv_api()
+        .list_kv("")
+        .await?
+        .map_ok(|strm_item| strm_item.into_pair())
+        .try_collect::<Vec<_>>()
+        .await?;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(1, b("a0"))),
         (s("c"), SeqV::new(4, b("c1"))),
         (s("d"), SeqV::new(5, b("d1"))),
     ]);
 
-    let got = sm.list_kv("a").await?.try_collect::<Vec<_>>().await?;
+    let got = sm
+        .kv_api()
+        .list_kv("a")
+        .await?
+        .map_ok(|strm_item| strm_item.into_pair())
+        .try_collect::<Vec<_>>()
+        .await?;
     assert_eq!(got, vec![(s("a"), SeqV::new(1, b("a0"))),]);
     Ok(())
 }
@@ -146,20 +171,24 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
 async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     let mut sm = SMV003::default();
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
 
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await?;
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
-    sm.map_mut().freeze_writable();
-    let mut a = sm.new_applier();
+    a.commit().await?;
+
+    sm.map_mut().testing_freeze_writable();
+    let mut a = sm.new_applier().await;
 
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await?;
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
         .await?;
+
+    a.commit().await?;
 
     // let x: Vec<(&ExpireKey, &Marked<String>)> =
     //     sm.top.range::<ExpireKey, _>(..).collect::<Vec<_>>();
@@ -174,7 +203,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .expire_map()
+        .expire_view_readonly()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -193,8 +222,11 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 async fn test_list_expire_index() -> anyhow::Result<()> {
     let sm = build_sm_with_expire().await?;
 
+    let applier = sm.new_applier().await;
+
     let curr_time_ms = 5000;
-    let got = sm
+    let got = applier
+        .sm
         .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
@@ -202,7 +234,8 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
     assert!(got.is_empty());
 
     let curr_time_ms = 5001;
-    let got = sm
+    let got = applier
+        .sm
         .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
@@ -210,7 +243,8 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
     assert_eq!(got, vec![(ExpireKey::new(5000, 2), s("b")),]);
 
     let curr_time_ms = 20_001;
-    let got = sm
+    let got = applier
+        .sm
         .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
@@ -222,7 +256,8 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
     ]);
 
     let curr_time_ms = 20_001;
-    let got = sm
+    let got = applier
+        .sm
         .list_expire_index(curr_time_ms)
         .await?
         .try_collect::<Vec<_>>()
@@ -237,14 +272,16 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire().await?;
+    let sm = build_sm_with_expire().await?;
 
-    let mut a = sm.new_applier();
+    let mut a = sm.new_applier().await;
     a.cmd_ctx = CmdContext::from_millis(15_000);
 
     // Inserting an expired entry will delete it.
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(10))
         .await?;
+
+    a.commit().await?;
 
     assert_eq!(
         sm.get_maybe_expired_kv(&s("a")).await?,
@@ -252,19 +289,21 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
         "a is expired"
     );
 
+    let a = sm.new_applier().await;
+
     // List until 20_000 ms
-    let got = sm
-        .list_expire_index(20_000)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got =
+        a.sm.list_expire_index(20_000)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
     assert_eq!(got, vec![(ExpireKey::new(5_000, 2), s("b")),]);
 
-    let got = sm
-        .list_expire_index(20_001)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got =
+        a.sm.list_expire_index(20_001)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
     assert_eq!(got, vec![
         //
         (ExpireKey::new(5_000, 2), s("b")),
@@ -273,7 +312,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .expire_map()
+        .expire_view_readonly()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()

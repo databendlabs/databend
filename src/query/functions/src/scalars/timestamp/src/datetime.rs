@@ -141,18 +141,31 @@ pub fn int64_to_timestamp(mut n: i64) -> i64 {
     }
 }
 
+/// calc int64 domain to timestamp domain
 #[inline]
-pub fn int32_to_timestamp(n: i32) -> i64 {
+pub fn calc_int64_to_timestamp_domain(n: i64) -> i64 {
+    if -31536000000 < n && n < 31536000000 {
+        n * MICROS_PER_SEC
+    } else if -31536000000000 < n && n < 31536000000000 {
+        n * MICROS_PER_MILLI
+    } else {
+        n.clamp(TIMESTAMP_MIN, TIMESTAMP_MAX)
+    }
+}
+
+/// calc int32 domain to timestamp domain
+#[inline]
+pub fn calc_int32_to_timestamp_domain(n: i32) -> i64 {
     let n = n as i64 * 24 * 3600 * MICROS_PER_SEC;
-    int64_to_timestamp(n)
+    calc_int64_to_timestamp_domain(n)
 }
 
 fn int32_domain_to_timestamp_domain<T: AsPrimitive<i32>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: int32_to_timestamp(domain.min.as_()),
-        max: int32_to_timestamp(domain.max.as_()),
+        min: calc_int32_to_timestamp_domain(domain.min.as_()),
+        max: calc_int32_to_timestamp_domain(domain.max.as_()),
     })
 }
 
@@ -160,8 +173,8 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: int64_to_timestamp(domain.min.as_()),
-        max: int64_to_timestamp(domain.max.as_()),
+        min: calc_int64_to_timestamp_domain(domain.min.as_()),
+        max: calc_int64_to_timestamp_domain(domain.max.as_()),
     })
 }
 

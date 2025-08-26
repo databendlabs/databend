@@ -201,8 +201,8 @@ async fn init_new_cluster(
     let mut sto = RaftStore::open(&raft_config).await?;
 
     let last_applied = {
-        let sm2 = sto.get_state_machine_write("get-last-applied").await;
-        *sm2.sys_data_ref().last_applied_ref()
+        let sm2 = sto.state_machine();
+        *sm2.sys_data().last_applied_ref()
     };
 
     let last_log_id = std::cmp::max(last_applied, max_log_id);
@@ -213,17 +213,15 @@ async fn init_new_cluster(
 
     // Update snapshot: Replace nodes set and membership config.
     {
-        let mut sm2 = sto
-            .get_state_machine_write("init_new_cluster-get-last-membership")
-            .await;
-
-        *sm2.sys_data_mut().nodes_mut() = nodes.clone();
+        let sm2 = sto.state_machine();
 
         // It must set membership to state machine because
         // the snapshot may contain more logs than the last_log_id.
         // In which case, logs will be purged upon startup.
-        *sm2.sys_data_mut().last_membership_mut() =
-            StoredMembership::new(last_applied, membership.clone());
+        sm2.with_sys_data(|s| {
+            *s.nodes_mut() = nodes.clone();
+            *s.last_membership_mut() = StoredMembership::new(last_applied, membership.clone());
+        });
     }
 
     // Build snapshot to persist state machine.
