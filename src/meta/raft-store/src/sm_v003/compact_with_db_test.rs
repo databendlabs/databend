@@ -271,7 +271,7 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
     let (lm, _g) = build_3_levels().await?;
     lm.testing_freeze_writable();
 
-    let mut compactor = lm.acquire_compactor().await;
+    let mut compactor = lm.acquire_compactor().await.unwrap();
 
     let (sys_data, strm) = compactor.compact_into_stream().await?;
 
@@ -413,12 +413,17 @@ async fn move_bottom_to_db(
     rel_path: &str,
 ) -> Result<(), io::Error> {
     let mut immutables = lm.immutable_levels().as_ref().clone();
-    let bottom = immutables.levels_mut().remove(0);
+    let bottom = immutables.levels_mut().pop_first().unwrap().1;
     lm.replace_immutable_levels(immutables);
 
-    let bottom = ImmutableLevels::new([bottom]);
+    let bottom = ImmutableLevels::new_form_iter([bottom]);
     let mut lm2 = LeveledMap::default();
+    let writable = bottom.newest().unwrap().new_level();
     lm2.replace_immutable_levels(bottom);
+    {
+        let mut g = lm2.data.writable.lock().unwrap();
+        *g = writable;
+    }
 
     compact(&mut lm2, base_path, rel_path).await?;
 
@@ -436,7 +441,7 @@ async fn compact(lm: &mut LeveledMap, base_path: &str, rel_path: &str) -> Result
         .build_from_leveled_map(lm, |_sys_data| "1-1-1-1.snap".to_string())
         .await?;
 
-    lm.replace_immutable_levels(ImmutableLevels::new([]));
+    lm.replace_immutable_levels(ImmutableLevels::new_form_iter([]));
     lm.with_persisted(|p| {
         *p = Some(Arc::new(db));
     });
