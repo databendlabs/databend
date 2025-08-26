@@ -311,6 +311,7 @@ pub struct ConfigViaEnv {
 
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
+    pub metasrv_learner: bool,
     pub kvsrv_id: u64,
     pub cluster_name: String,
 }
@@ -368,6 +369,7 @@ impl From<Config> for ConfigViaEnv {
 
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
+            metasrv_learner: cfg.raft_config.learner,
             kvsrv_id: cfg.raft_config.id,
             cluster_name: cfg.raft_config.cluster_name,
         }
@@ -404,6 +406,7 @@ impl Into<Config> for ConfigViaEnv {
 
             single: self.kvsrv_single,
             join: self.metasrv_join,
+            learner: self.metasrv_learner,
             // Do not allow to leave via environment variable
             leave_via: vec![],
             // Do not allow to leave via environment variable
@@ -562,6 +565,14 @@ pub struct RaftConfig {
     #[clap(long)]
     pub join: Vec<String>,
 
+    /// Whether a node is joined the cluster as learner.
+    ///
+    /// It is only used when `join` is provided.
+    ///
+    /// A learner does not vote in elections and does not count towards quorum.
+    #[clap(long)]
+    pub learner: bool,
+
     /// Do not run databend-meta, but just remove a node from its cluster via the provided endpoints.
     ///
     /// This node will be removed by `id`.
@@ -623,6 +634,7 @@ impl From<RaftConfig> for InnerRaftConfig {
 
             single: x.single,
             join: x.join,
+            learner: x.learner,
             leave_via: x.leave_via,
             leave_id: x.leave_id,
             id: x.id,
@@ -659,6 +671,7 @@ impl From<InnerRaftConfig> for RaftConfig {
 
             single: inner.single,
             join: inner.join,
+            learner: inner.learner,
             leave_via: inner.leave_via,
             leave_id: inner.leave_id,
             id: inner.id,
