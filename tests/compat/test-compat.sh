@@ -227,12 +227,14 @@ run_test() {
 	rm -rf .databend/meta || echo " === no meta dir to rm"
 
 	rm nohup.out || echo "no nohup.out"
+	rm .databend/meta.log || echo "no meta.log"
+	rm .databend/query.log || echo "no query.log"
 
 	export RUST_BACKTRACE=1
 
 	echo ' === Start databend-meta...'
 
-	nohup "$metasrv" --single --log-level=DEBUG &
+	nohup "$metasrv" --single --log-level=DEBUG >meta.log 2>&1 &
 	python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 	echo ' === Start databend-query...'
@@ -246,7 +248,7 @@ run_test() {
 		config_path="old_config/$query_config_path"
 	fi
 
-	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log &
+	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log 2>&1 &
 	python3 scripts/ci/wait_tcp.py --timeout 10 --port 3307
 
 	echo " === Run metasrv related test: 05_ddl"
