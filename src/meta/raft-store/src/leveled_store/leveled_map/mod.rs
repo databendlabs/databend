@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
@@ -185,6 +186,7 @@ impl LeveledMapData {
         K: MapKeyDecode,
         SeqMarked<K::V>: ValueConvert<SeqMarked>,
         Level: GetTable<K, K::V>,
+        <K as MapKey>::V: fmt::Debug,
     {
         // TODO: test it
 
@@ -207,7 +209,13 @@ impl LeveledMapData {
             );
         }
 
-        let strm = futures::stream::iter(vec).map(Ok).boxed();
+        let strm = futures::stream::iter(vec)
+            // .map(|x| {
+            //     debug!("range-item from writable: {:?}", x);
+            //     x
+            // })
+            .map(Ok)
+            .boxed();
         kmerge = kmerge.merge(strm);
 
         // Immutable levels
@@ -215,10 +223,18 @@ impl LeveledMapData {
         let immutable_levels = self.immutable_levels();
 
         for level in immutable_levels.iter_levels() {
+            let index = level.with_sys_data(|s| s.curr_seq());
+            let _ = index;
             let it = level.get_table().range(range.clone(), upto_seq);
 
             let vec = it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>();
-            let strm = futures::stream::iter(vec).map(Ok).boxed();
+            let strm = futures::stream::iter(vec)
+                // .map(move |x| {
+                //     debug!("range-item from immutable seq={}: {:?}", index, x);
+                //     x
+                // })
+                .map(Ok)
+                .boxed();
             kmerge = kmerge.merge(strm);
         }
 
@@ -227,6 +243,10 @@ impl LeveledMapData {
         if let Some(db) = self.persisted() {
             let map_view = MapView(&db);
             let strm = map_view.range(range.clone()).await?;
+            // let strm = strm.map(|x| {
+            //     debug!("range-item from db: {:?}", x);
+            //     x
+            // });
             kmerge = kmerge.merge(strm);
         };
 
@@ -309,8 +329,7 @@ impl LeveledMap {
     /// Return the [`LevelIndex`] of the newest **immutable** data
     pub(crate) fn immutable_level_index(&self) -> Option<LevelIndex> {
         let immutables = self.data.immutable_levels();
-        let newest = immutables.newest()?;
-        Some(*newest.level_index())
+        immutables.newest_level_index()
     }
 
     /// Freeze the current writable level and create a new empty writable level.
@@ -326,23 +345,24 @@ impl LeveledMap {
     }
 
     pub fn do_freeze_writable(&self) -> Arc<ImmutableLevels> {
-        let new_immutable = {
-            let mut writable = self.data.writable();
-            let new_writable = writable.new_level();
+        let mut writable = self.data.writable();
+        let mut immutables = self.data.immutable_levels.lock().unwrap();
 
-            std::mem::replace(&mut *writable, new_writable)
-        };
+        let new_writable = writable.new_level();
+        let new_immutable = std::mem::replace(&mut *writable, new_writable);
 
-        let mut immutable_levels = self.data.immutable_levels().as_ref().clone();
+        let mut immutable_levels = immutables.as_ref().clone();
+        immutable_levels.insert(Immutable::new_from_level(new_immutable));
 
-        immutable_levels.push(Immutable::new_from_level(new_immutable));
+        *immutables = Arc::new(immutable_levels);
 
-        {
-            let mut immutables = self.data.immutable_levels.lock().unwrap();
-            *immutables = Arc::new(immutable_levels)
-        }
+        info!(
+            "do_freeze_writable: after writable: {:?}, immutables: {:?}",
+            writable,
+            immutables.indexes().collect::<Vec<_>>()
+        );
 
-        self.data.immutable_levels()
+        immutables.clone()
     }
 
     pub fn persisted(&self) -> Option<Arc<DB>> {
@@ -385,37 +405,32 @@ impl LeveledMap {
     /// **Important**: Do not drop the compactor within this function when called
     /// under a state machine lock, as dropping may take ~250ms.
     pub fn replace_with_compacted(&self, compactor: &mut Compactor, db: DB) {
-        let len = compactor.immutable_levels().len();
-
-        // Get the level index of the newest level.
-        let corresponding_index = compactor
-            .immutable_levels()
-            .levels()
-            .get(len - 1)
-            .map(|l| l.level_index())
-            .copied();
-
-        assert_eq!(
-            compactor.since, corresponding_index,
-            "unexpected change to sm during compaction"
+        info!(
+            "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
+            compactor.upto,
+            self.data.immutable_levels().indexes().collect::<Vec<_>>(),
+            compactor.compacting_data.immutable_levels.indexes().collect::<Vec<_>>(),
         );
 
-        let my_immutables = self.data.immutable_levels();
-        let mut levels = my_immutables.levels().clone();
+        let mut immutables = self.data.immutable_levels().as_ref().clone();
 
-        // Remove the levels already included in `persisted`
-        let uncompacted = levels.split_off(len);
+        // If there is immutable levels compacted, remove them.
+        if let Some(upto) = compactor.upto {
+            immutables.remove_levels_upto(upto);
+        }
 
-        let uncompacted_immutables = ImmutableLevels::new(uncompacted);
-
-        // replace the immutables
-        self.data
-            .with_immutable_levels(|x| *x = Arc::new(uncompacted_immutables));
+        // NOTE: Replace data from bottom to top.
+        // replace the db first, db contains more data.
+        // Otherwise, there is a chance some data is removed from immutables and the new db containing this data is not inserted.
 
         // replace the persisted
         self.data.with_persisted(|p| {
             *p = Some(Arc::new(db));
         });
+
+        // replace the immutables
+        self.data
+            .with_immutable_levels(|x| *x = Arc::new(immutables));
 
         info!("replace_with_compacted: finished replacing the db");
     }
@@ -437,10 +452,12 @@ impl LeveledMap {
     }
 
     pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        let level_index = self.immutable_level_index();
+
         Compactor {
             _permit: permit,
             compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
-            since: self.immutable_level_index(),
+            upto: level_index,
         }
     }
 }

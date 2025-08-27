@@ -38,6 +38,7 @@ where
     K: MapKeyDecode,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
     Level: GetTable<K, K::V>,
+    <K as MapKey>::V: fmt::Debug,
     for<'a> MapView<'a>: MapApiRO<K>,
 {
     async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
@@ -58,6 +59,7 @@ where
     K: MapKeyDecode,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
     Level: GetTable<K, K::V>,
+    <K as MapKey>::V: fmt::Debug,
     for<'a> MapView<'a>: MapApiRO<K>,
 {
     async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
