@@ -17,6 +17,23 @@ query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 query_test_path="tests/sqllogictests"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
+# Detect current architecture
+get_arch() {
+	local arch="$(uname -m)"
+	case "$arch" in
+		x86_64)
+			echo "x86_64-unknown-linux-gnu"
+			;;
+		aarch64|arm64)
+			echo "aarch64-unknown-linux-gnu"
+			;;
+		*)
+			echo "Unsupported architecture: $arch" >&2
+			exit 1
+			;;
+	esac
+}
+
 usage() {
 	echo " === test latest query being compatible with minimal compatible metasrv"
 	echo " === test latest metasrv being compatible with minimal compatible query"
@@ -26,12 +43,14 @@ usage() {
 
 binary_url() {
 	local ver="$1"
-	echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+	local arch="$(get_arch)"
+	echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-${arch}.tar.gz"
 }
 
 test_suite_url() {
 	local ver="$1"
-	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+	local arch="$(get_arch)"
+	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-${arch}.tar.gz"
 }
 
 # output: 0.7.58
