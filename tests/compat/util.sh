@@ -5,11 +5,28 @@
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
+# Detect current architecture
+get_arch() {
+	local arch="$(uname -m)"
+	case "$arch" in
+		x86_64)
+			echo "x86_64-unknown-linux-gnu"
+			;;
+		aarch64|arm64)
+			echo "aarch64-unknown-linux-gnu"
+			;;
+		*)
+			echo "Unsupported architecture: $arch" >&2
+			exit 1
+			;;
+	esac
+}
 
 # Build the url to download specified version of databend binaries.
 binary_url() {
     local ver="$1"
-    echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+    local arch="$(get_arch)"
+    echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-${arch}.tar.gz"
 }
 
 # Clone only specified dir or file in the specified commit
