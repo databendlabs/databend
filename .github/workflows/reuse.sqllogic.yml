@@ -13,6 +13,11 @@ on:
         type: string
         required: true
         default: "aws"
+      runner_arch:
+        description: "Runner architecture, X64 or ARM64"
+        type: string
+        required: true
+        default: "X64"
       license_type:
         description: "License type, enterprise or trial"
         type: string
@@ -27,7 +32,7 @@ jobs:
   management_mode:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -42,7 +47,7 @@ jobs:
   standalone:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - "${{ matrix.tests.runner }}"
       - "${{ inputs.runner_provider }}"
@@ -79,7 +84,7 @@ jobs:
   standalone_udf_server:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -106,7 +111,7 @@ jobs:
   standalone_cloud:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 4c16g
       - "${{ inputs.runner_provider }}"
@@ -132,7 +137,7 @@ jobs:
   standalone_minio:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -164,7 +169,7 @@ jobs:
   standalone_minio_with_bendsave:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -185,7 +190,7 @@ jobs:
   standalone_iceberg_tpch:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 4c16g
       - "${{ inputs.runner_provider }}"
@@ -209,7 +214,7 @@ jobs:
   cluster:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - "${{ matrix.tests.runner }}"
       - "${{ inputs.runner_provider }}"
@@ -249,7 +254,7 @@ jobs:
   stage:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -286,7 +291,7 @@ jobs:
   standalone_no_table_meta_cache:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -315,7 +320,7 @@ jobs:
   ee:
     runs-on:
       - self-hosted
-      - X64
+      - ${{ inputs.runner_arch }}
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"

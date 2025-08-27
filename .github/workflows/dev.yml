@@ -54,6 +54,7 @@ jobs:
     with:
       build_profile: ci
       runner_provider: aws
+      runner_arch: ARM64
       license_type: trial
 
   ready:

@@ -45,6 +45,7 @@ jobs:
     with:
       build_profile: release
       runner_provider: aws
+      runner_arch: ARM64
       license_type: enterprise
 
   # macos:
