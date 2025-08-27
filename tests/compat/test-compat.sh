@@ -49,7 +49,7 @@ binary_url() {
 
 test_suite_url() {
 	local ver="$1"
-	local arch="$(get_arch)"
+	local arch="x86_64-unknown-linux-gnu"
 	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-${arch}.tar.gz"
 }
 
