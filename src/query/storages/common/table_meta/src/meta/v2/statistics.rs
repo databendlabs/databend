@@ -90,8 +90,27 @@ pub struct AdditionalStatsMeta {
 
 fn deserialize_location<'de, D>(deserializer: D) -> Result<Location, D::Error>
 where D: serde::Deserializer<'de> {
-    let opt = <Option<Location> as serde::Deserialize>::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_else(default_location))
+    struct LocationVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for LocationVisitor {
+        type Value = Location;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a Location tuple or None")
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Location, D::Error>
+        where D: serde::Deserializer<'de> {
+            <Location as serde::Deserialize>::deserialize(deserializer)
+        }
+
+        fn visit_none<E>(self) -> Result<Location, E>
+        where E: serde::de::Error {
+            Ok(default_location())
+        }
+    }
+
+    deserializer.deserialize_option(LocationVisitor)
 }
 
 fn default_location() -> Location {
