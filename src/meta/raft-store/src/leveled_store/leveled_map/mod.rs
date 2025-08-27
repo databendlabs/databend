@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 
 use compactor::Compactor;
 use databend_common_meta_types::raft_types::LogId;
@@ -27,242 +24,39 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Node;
-use futures_util::StreamExt;
+use leveled_map_data::LeveledMapData;
 use log::debug;
 use log::info;
-use log::warn;
 use map_api::mvcc;
-use map_api::util;
 use map_api::IOResultStream;
-use map_api::MapApiRO;
-use map_api::MapKey;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 use tokio::sync::Semaphore;
 
 use crate::applier::applier_data::StateMachineView;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::level::GetTable;
-use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
-use crate::leveled_store::map_api::MapKeyDecode;
-use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::value_convert::ValueConvert;
-use crate::leveled_store::MapView;
 use crate::scoped::Scoped;
 
 #[cfg(test)]
 mod acquire_compactor_test;
+
 pub mod applier_acquirer;
 pub mod compacting_data;
 pub mod compactor;
 pub mod compactor_acquirer;
+pub mod leveled_map_data;
 #[cfg(test)]
 mod leveled_map_test;
 mod map_api_impl;
 
-/// The data of the leveled map.
-///
-/// The top level is the newest and writable and there is **at most one** candidate writer.
-///
-/// |                  | writer_semaphore | compactor_semaphore |
-/// | :--              | :--              | :--                 |
-/// | writable         | RW               |                     |
-/// | immutable_levels | R                | RW                  |
-/// | persisted        | R                | RW                  |
-#[derive(Debug, Default)]
-pub struct LeveledMapData {
-    /// The top level is the newest and writable.
-    ///
-    /// Protected by writer_semaphore
-    pub(crate) writable: Mutex<Level>,
-
-    /// The immutable levels.
-    ///
-    /// Protected by compactor_semaphore
-    pub(crate) immutable_levels: Mutex<Arc<ImmutableLevels>>,
-
-    /// Protected by compactor_semaphore
-    pub(crate) persisted: Mutex<Option<Arc<DB>>>,
-}
-
-impl LeveledMapData {
-    pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        let writable = self.writable.lock().unwrap();
-        let mut sys_data = writable.sys_data.lock().unwrap();
-
-        f(&mut sys_data)
-    }
-
-    pub(crate) fn writable(&self) -> MutexGuard<'_, Level> {
-        let x = self.writable.lock().unwrap();
-        x
-    }
-
-    pub(crate) fn immutable_levels(&self) -> Arc<ImmutableLevels> {
-        let immutable_levels = self.immutable_levels.lock().unwrap();
-        immutable_levels.clone()
-    }
-
-    pub(crate) fn with_immutable_levels<T>(
-        &self,
-        f: impl FnOnce(&mut Arc<ImmutableLevels>) -> T,
-    ) -> T {
-        let mut g = self.immutable_levels.lock().unwrap();
-        f(&mut g)
-    }
-
-    pub(crate) fn persisted(&self) -> Option<Arc<DB>> {
-        let p = self.persisted.lock().unwrap();
-        p.clone()
-    }
-
-    pub fn with_persisted<T>(&self, f: impl FnOnce(&mut Option<Arc<DB>>) -> T) -> T {
-        let mut g = self.persisted.lock().unwrap();
-        f(&mut g)
-    }
-
-    pub(crate) async fn compacted_view_get<K>(
-        &self,
-        key: K,
-        upto_seq: u64,
-    ) -> Result<SeqMarked<K::V>, io::Error>
-    where
-        K: MapKey,
-        K: MapKeyEncode,
-        K: MapKeyDecode,
-        SeqMarked<K::V>: ValueConvert<SeqMarked>,
-        Level: GetTable<K, K::V>,
-    {
-        // TODO: test it
-
-        {
-            let writable = self.writable.lock().unwrap();
-            let got = writable.get_table().get(key.clone(), upto_seq).cloned();
-            if !got.is_not_found() {
-                return Ok(got);
-            }
-        }
-
-        let immutable_levels = self.immutable_levels();
-
-        for level in immutable_levels.iter_levels() {
-            let base = level.get_table().get(key.clone(), upto_seq).cloned();
-
-            if !base.is_not_found() {
-                return Ok(base);
-            }
-        }
-
-        // persisted
-
-        let Some(db) = self.persisted() else {
-            return Ok(SeqMarked::new_not_found());
-        };
-
-        let map_view = MapView(&db);
-        let got = map_view.get(&key).await?;
-        Ok(got)
-    }
-
-    pub(crate) async fn compacted_view_range<K, R>(
-        &self,
-        range: R,
-        upto_seq: u64,
-    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, io::Error>
-    where
-        K: MapKey,
-        R: RangeBounds<K> + Clone + Send + Sync + 'static,
-        K: MapKeyEncode,
-        K: MapKeyDecode,
-        SeqMarked<K::V>: ValueConvert<SeqMarked>,
-        Level: GetTable<K, K::V>,
-        <K as MapKey>::V: fmt::Debug,
-    {
-        // TODO: test it
-
-        let mut kmerge = KMerge::by(util::by_key_seq);
-
-        // writable level
-
-        let vec = {
-            let writable = self.writable.lock().unwrap();
-            let it = writable.get_table().range(range.clone(), upto_seq);
-            it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>()
-        };
-
-        if vec.len() > 1000 {
-            warn!(
-                "Level.writable::range(start={:?}, end={:?}) returns big range of len={}",
-                range.start_bound(),
-                range.end_bound(),
-                vec.len()
-            );
-        }
-
-        let strm = futures::stream::iter(vec)
-            // .map(|x| {
-            //     debug!("range-item from writable: {:?}", x);
-            //     x
-            // })
-            .map(Ok)
-            .boxed();
-        kmerge = kmerge.merge(strm);
-
-        // Immutable levels
-
-        let immutable_levels = self.immutable_levels();
-
-        for level in immutable_levels.iter_levels() {
-            let index = level.with_sys_data(|s| s.curr_seq());
-            let _ = index;
-            let it = level.get_table().range(range.clone(), upto_seq);
-
-            let vec = it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>();
-            let strm = futures::stream::iter(vec)
-                // .map(move |x| {
-                //     debug!("range-item from immutable seq={}: {:?}", index, x);
-                //     x
-                // })
-                .map(Ok)
-                .boxed();
-            kmerge = kmerge.merge(strm);
-        }
-
-        // Bottom db level
-
-        if let Some(db) = self.persisted() {
-            let map_view = MapView(&db);
-            let strm = map_view.range(range.clone()).await?;
-            // let strm = strm.map(|x| {
-            //     debug!("range-item from db: {:?}", x);
-            //     x
-            // });
-            kmerge = kmerge.merge(strm);
-        };
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let coalesce = kmerge.coalesce(util::merge_kv_results);
-
-        Ok(coalesce.boxed())
-    }
-
-    pub fn to_readonly_view(self: &Arc<Self>) -> ReadonlyView {
-        ReadonlyView::new(self.clone())
-    }
-}
-
-/// State machine data organized in multiple levels.
-///
 /// Similar to leveldb.
 ///
 /// The top level is the newest and writable.
@@ -309,10 +103,7 @@ impl LeveledMap {
     }
 
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        let writable = self.data.writable.lock().unwrap();
-        let mut sys_data = writable.sys_data.lock().unwrap();
-
-        f(&mut sys_data)
+        self.data.with_sys_data(f)
     }
 
     pub async fn acquire_writer_permit(&self) -> WriterPermit {
@@ -345,24 +136,23 @@ impl LeveledMap {
     }
 
     pub fn do_freeze_writable(&self) -> Arc<ImmutableLevels> {
-        let mut writable = self.data.writable();
-        let mut immutables = self.data.immutable_levels.lock().unwrap();
+        let mut inner = self.data.inner();
 
-        let new_writable = writable.new_level();
-        let new_immutable = std::mem::replace(&mut *writable, new_writable);
+        let new_writable = inner.writable.new_level();
+        let new_immutable = std::mem::replace(&mut inner.writable, new_writable);
 
-        let mut immutable_levels = immutables.as_ref().clone();
+        let mut immutable_levels = inner.immutable_levels.as_ref().clone();
         immutable_levels.insert(Immutable::new_from_level(new_immutable));
 
-        *immutables = Arc::new(immutable_levels);
+        inner.immutable_levels = Arc::new(immutable_levels);
 
         info!(
             "do_freeze_writable: after writable: {:?}, immutables: {:?}",
-            writable,
-            immutables.indexes().collect::<Vec<_>>()
+            inner.writable,
+            inner.immutable_levels.indexes()
         );
 
-        immutables.clone()
+        inner.immutable_levels.clone()
     }
 
     pub fn persisted(&self) -> Option<Arc<DB>> {
@@ -408,8 +198,8 @@ impl LeveledMap {
         info!(
             "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
             compactor.upto,
-            self.data.immutable_levels().indexes().collect::<Vec<_>>(),
-            compactor.compacting_data.immutable_levels.indexes().collect::<Vec<_>>(),
+            self.data.immutable_levels().indexes(),
+            compactor.compacting_data.immutable_levels.indexes(),
         );
 
         let mut immutables = self.data.immutable_levels().as_ref().clone();

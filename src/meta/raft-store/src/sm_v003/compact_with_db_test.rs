@@ -421,8 +421,8 @@ async fn move_bottom_to_db(
     let writable = bottom.newest().unwrap().new_level();
     lm2.replace_immutable_levels(bottom);
     {
-        let mut g = lm2.data.writable.lock().unwrap();
-        *g = writable;
+        let mut inner = lm2.data.inner.lock().unwrap();
+        inner.writable = writable;
     }
 
     compact(&mut lm2, base_path, rel_path).await?;

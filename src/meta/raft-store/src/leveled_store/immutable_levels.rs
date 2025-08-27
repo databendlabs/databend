@@ -44,8 +44,8 @@ impl ImmutableLevels {
         }
     }
 
-    pub(crate) fn indexes(&self) -> impl Iterator<Item = LevelIndex> + use<'_> {
-        self.immutables.keys().cloned()
+    pub(crate) fn indexes(&self) -> Vec<LevelIndex> {
+        self.immutables.keys().cloned().collect()
     }
 
     /// Return an iterator of all Arc of levels from newest to oldest.
@@ -137,11 +137,11 @@ mod tests {
             Immutable::new(Arc::new(Level::default())),
         ]);
 
-        let index = immutables.indexes().collect::<Vec<_>>()[1];
-        let left_index = immutables.indexes().collect::<Vec<_>>()[2];
+        let index = immutables.indexes()[1];
+        let left_index = immutables.indexes()[2];
 
         immutables.remove_levels_upto(index);
 
-        assert_eq!(immutables.indexes().collect::<Vec<_>>(), vec![left_index]);
+        assert_eq!(immutables.indexes(), vec![left_index]);
     }
 }

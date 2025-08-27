@@ -65,7 +65,6 @@ use state_machine_api::StateMachineApi;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 pub(crate) mod applier_data;
-mod impl_leveled_map_data;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<SM>
