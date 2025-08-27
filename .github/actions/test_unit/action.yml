@@ -23,7 +23,8 @@ runs:
       env:
         RUST_TEST_THREADS: 4
         RUST_LOG: ERROR
-        RUST_MIN_STACK: 1048576000
+        # 1GiB
+        RUST_MIN_STACK: 1073741824
         # RUST_BACKTRACE: 1
 
     - name: Upload failure
