@@ -222,6 +222,7 @@ impl SinkAnalyzeState {
         new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
             hll: Some(encode_column_hll(&self.ndv_states)?),
             row_count: snapshot.summary.row_count,
+            location: Some(Location::default()),
             ..Default::default()
         });
 
