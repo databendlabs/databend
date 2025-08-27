@@ -23,7 +23,11 @@ use std::path::Path;
 use anyhow::Result;
 use gix::Repository;
 use log::error;
-use vergen::EmitBuilder;
+use vergen_gix::BuildBuilder;
+use vergen_gix::CargoBuilder;
+use vergen_gix::Emitter;
+use vergen_gix::GixBuilder;
+use vergen_gix::RustcBuilder;
 
 const VERSION_ERROR_MESSAGE: &str = "A valid version is required for MetaClient handshaking, you could either set the `DATABEND_RELEASE_VERSION` env var or use `git fetch` to get the latest tag";
 
@@ -53,7 +57,7 @@ pub fn setup_commit_authors() {
 }
 
 pub fn add_building_env_vars() {
-    set_env_config();
+    set_env_config().expect("Unable to generate build envs");
     add_env_credits_info();
     add_target_features();
     add_env_version();
@@ -62,15 +66,19 @@ pub fn add_building_env_vars() {
     add_env_telemetry();
 }
 
-pub fn set_env_config() {
-    EmitBuilder::builder()
+pub fn set_env_config() -> Result<()> {
+    let cargo = CargoBuilder::default().features(true).build()?;
+    let build = BuildBuilder::default().build_timestamp(true).build()?;
+    let rustc = RustcBuilder::default().semver(true).build()?;
+    let git = GixBuilder::default().sha(true).build()?;
+
+    Emitter::default()
         .fail_on_error()
-        .build_timestamp()
-        .cargo_features()
-        .rustc_semver()
-        .git_sha(true)
+        .add_instructions(&build)?
+        .add_instructions(&cargo)?
+        .add_instructions(&rustc)?
+        .add_instructions(&git)?
         .emit()
-        .expect("Unable to generate build envs");
 }
 
 pub fn add_env_version() {

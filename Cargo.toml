@@ -549,7 +549,7 @@ zstd = "0.12.3"
 cargo-license = "0.6.1"
 cargo_metadata = "0.18"
 fast-float2 = "0.2.3"
-gix = "0.63.0"
+gix = "0.71.0"
 indent = "0.1.1"
 logos = "0.12.1"
 nom = "7.1.1"
@@ -559,7 +559,7 @@ rspack-codespan-reporting = "0.11"
 rustc-demangle = "0.1"
 strsim = "0.10"
 strum_macros = "0.24"
-vergen = { version = "8.3.1", default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
+vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"

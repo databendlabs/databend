@@ -13,7 +13,7 @@ cargo-license = { workspace = true }
 cargo_metadata = { workspace = true }
 gix = { workspace = true }
 log = { workspace = true }
-vergen = { workspace = true }
+vergen-gix = { workspace = true }
 
 [lints]
 workspace = true
