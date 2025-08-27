@@ -41,6 +41,8 @@ use databend_common_ast::ast::RenameTableStmt;
 use databend_common_ast::ast::ShowCreateTableStmt;
 use databend_common_ast::ast::ShowDropTablesStmt;
 use databend_common_ast::ast::ShowLimit;
+use databend_common_ast::ast::ShowStatisticsStmt;
+use databend_common_ast::ast::ShowStatsTarget;
 use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
@@ -304,6 +306,72 @@ impl Binder {
             table,
             schema,
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_statistics(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowStatisticsStmt,
+    ) -> Result<Plan> {
+        let ShowStatisticsStmt {
+            catalog,
+            database,
+            target,
+        } = stmt;
+
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                self.ctx.get_catalog(&catalog).await?;
+                catalog
+            }
+        };
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        let mut select_builder = SelectBuilder::from(&format!("{catalog_name}.system.statistics"));
+
+        let database = match database {
+            None => self.ctx.get_current_database(),
+            Some(ident) => {
+                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                catalog
+                    .get_database(&self.ctx.get_tenant(), &database)
+                    .await?;
+                database
+            }
+        };
+        select_builder.with_filter(format!("database = '{database}'"));
+
+        if let ShowStatsTarget::Table(table) = target {
+            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+            catalog
+                .get_table(&self.ctx.get_tenant(), database.as_str(), &table_name)
+                .await?;
+            select_builder.with_filter(format!("table = '{table_name}'"));
+        }
+
+        select_builder
+            .with_column("database")
+            .with_column("table")
+            .with_column("column_name")
+            .with_column("stats_row_count")
+            .with_column("actual_row_count")
+            .with_column("distinct_count")
+            .with_column("null_count")
+            .with_column("avg_size")
+            .with_column("histogram");
+
+        select_builder
+            .with_order_by("database")
+            .with_order_by("table")
+            .with_order_by("column_name");
+
+        let query = select_builder.build();
+
+        debug!("show statistics rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowStatistics)
+            .await
     }
 
     #[async_backtrace::framed]

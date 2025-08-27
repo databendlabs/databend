@@ -27,6 +27,8 @@ pub struct BasicColumnStatistics {
     pub ndv: Option<u64>,
     // Count of null values
     pub null_count: u64,
+    // Memory size of the column
+    pub in_memory_size: u64,
 }
 
 impl From<ColumnStatistics> for BasicColumnStatistics {
@@ -36,6 +38,7 @@ impl From<ColumnStatistics> for BasicColumnStatistics {
             max: Datum::from_scalar(value.max),
             ndv: value.distinct_of_values,
             null_count: value.null_count,
+            in_memory_size: value.in_memory_size,
         }
     }
 }
@@ -47,6 +50,7 @@ impl BasicColumnStatistics {
             max: None,
             ndv: None,
             null_count: 0,
+            in_memory_size: 0,
         }
     }
 
@@ -59,6 +63,7 @@ impl BasicColumnStatistics {
             _ => None,
         };
         self.null_count += other.null_count;
+        self.in_memory_size += other.in_memory_size;
     }
 
     // If the data type is int and max - min + 1 < ndv, then adjust ndv to max - min + 1.
@@ -123,6 +128,7 @@ impl BasicColumnStatistics {
             max: self.max.clone(),
             ndv,
             null_count: self.null_count,
+            in_memory_size: self.in_memory_size,
         })
     }
 }
