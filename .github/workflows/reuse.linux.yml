@@ -116,6 +116,8 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
         timeout-minutes: 60
+        with:
+          target: ${{ needs.info.outputs.target }}
 
   test_metactl:
     needs: [ info, build, check ]
