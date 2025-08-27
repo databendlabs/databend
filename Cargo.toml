@@ -546,8 +546,7 @@ zip = "3.0.0"
 zstd = "0.12.3"
 
 # AST needed
-cargo-license = "0.6.1"
-cargo_metadata = "0.18"
+cargo_metadata = "0.19"
 fast-float2 = "0.2.3"
 gix = "0.71.0"
 indent = "0.1.1"

@@ -16,6 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod git;
+mod license;
 
 use std::env;
 use std::path::Path;
@@ -135,14 +136,8 @@ pub fn add_env_commit_authors(repo: &Repository) {
 pub fn add_env_credits_info() {
     let metadata_command = cargo_metadata::MetadataCommand::new();
 
-    let opt = cargo_license::GetDependenciesOpt {
-        avoid_dev_deps: false,
-        avoid_build_deps: false,
-        direct_deps_only: false,
-        root_only: false,
-    };
-
-    let deps = match cargo_license::get_dependencies_from_cargo_lock(metadata_command, opt) {
+    let deps = match license::get_dependencies_from_cargo_lock(metadata_command, Default::default())
+    {
         Ok(v) => v,
         Err(err) => {
             error!("{:?}", err);
@@ -150,7 +145,7 @@ pub fn add_env_credits_info() {
         }
     };
 
-    let names: Vec<String> = deps.iter().map(|x| (x.name).to_string()).collect();
+    let names: Vec<String> = deps.iter().map(|x| x.name.to_string()).collect();
     let versions: Vec<String> = deps.iter().map(|x| x.version.to_string()).collect();
     let licenses: Vec<String> = deps
         .iter()

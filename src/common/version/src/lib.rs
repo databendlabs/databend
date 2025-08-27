@@ -28,8 +28,6 @@ pub const VERGEN_BUILD_TIMESTAMP: Option<&'static str> = option_env!("VERGEN_BUI
 
 pub const VERGEN_CARGO_FEATURES: Option<&'static str> = option_env!("VERGEN_CARGO_FEATURES");
 
-pub const VERGEN_BUILD_SEMVER: Option<&'static str> = option_env!("VERGEN_BUILD_SEMVER");
-
 pub const DATABEND_GIT_SEMVER: &str = env!("DATABEND_GIT_SEMVER");
 
 pub const DATABEND_COMMIT_AUTHORS: &str = env!("DATABEND_COMMIT_AUTHORS");
