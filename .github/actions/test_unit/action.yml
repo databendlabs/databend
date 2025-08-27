@@ -1,19 +1,12 @@
 name: "Test Unite"
 description: "Running unit tests"
 
-inputs:
-  target:
-    description: "Build target to use"
-    required: true
-    default: x86_64-unknown-linux-gnu
-
 runs:
   using: "composite"
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
-        target: ${{ inputs.target }}
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash

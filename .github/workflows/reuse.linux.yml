@@ -98,10 +98,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sccache-build-${{ steps.target.outputs.target }}
+          name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
 
   test_unit:
+    needs: info
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -117,7 +118,7 @@ jobs:
         timeout-minutes: 60
 
   test_metactl:
-    needs: [ build, check ]
+    needs: [ info, build, check ]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
