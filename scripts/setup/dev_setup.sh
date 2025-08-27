@@ -670,11 +670,11 @@ fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ "$(uname)" == "Linux" ]]; then
+		# install musl target to avoid downloading the tools with incompatible GLIBC
 		export CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-musl"
 	fi
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		while read -r tool; do
-			# Use cargo install to prevent downloading the tools with incompatible GLIBC
 			cargo binstall -y "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
