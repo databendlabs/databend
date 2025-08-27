@@ -274,7 +274,7 @@ run_test() {
 chmod +x ./bins/current/*
 
 echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
-echo " === current   query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
+echo " === current query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
 
 old_query_ver=$(find_min_query_ver)
 old_metasrv_ver=$(find_min_metasrv_ver)
