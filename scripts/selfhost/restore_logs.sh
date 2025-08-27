@@ -492,29 +492,75 @@ bendsql --dsn "${DSN}" --query="DROP DATABASE IF EXISTS ${RESTORE_DATABASE}" >/d
 bendsql --dsn "${DSN}" --query="CREATE DATABASE ${RESTORE_DATABASE}" >/dev/null 2>&1
 log "Created database: ${RESTORE_DATABASE}"
 
-# Restore tables
-declare -A TABLE_MAP=(
-	["settings"]="system.settings:settings"
-	["columns"]="system.columns:columns"
-	["user_functions"]="system.user_functions:user_functions"
-	["log_history"]="system_history.log_history:query_raw_logs"
-	["query_history"]="system_history.query_history:query_logs"
-	["login_history"]="system_history.login_history:login_history"
-	["profile_history"]="system_history.profile_history:query_profile_logs"
+# Restore tables - only need stage path mapping now
+declare -A TABLE_PATHS=(
+	["settings"]="settings"
+	["columns"]="columns"
+	["user_functions"]="user_functions"
+	["log_history"]="query_raw_logs"
+	["query_history"]="query_logs"
+	["login_history"]="login_history"
+	["profile_history"]="query_profile_logs"
 )
 
-for table_name in "${!TABLE_MAP[@]}"; do
-	IFS=':' read -r source_table source_path <<<"${TABLE_MAP[$table_name]}"
-
+# Restore tables with proper error handling
+restore_table() {
+	local table_name="$1"
+	local source_path="$2"
+	
 	log "Restoring table: ${RESTORE_DATABASE}.${table_name} from @${UPLOAD_STAGE}/${source_path}"
+	
+	# Step 1: Create table by inferring schema from parquet files
+	local create_result
+	create_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="CREATE TABLE ${table_name} AS SELECT * FROM '@${UPLOAD_STAGE}/${source_path}' LIMIT 0;" 2>&1)
+	if [[ $? -ne 0 ]]; then
+		log_error "Failed to create table ${table_name}: ${create_result}"
+		return 1
+	fi
+	
+	# Step 2: Copy data with error checking
+	local copy_result
+	copy_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="COPY INTO ${table_name} FROM @${UPLOAD_STAGE}/${source_path};" 2>&1)
+	if [[ $? -ne 0 ]]; then
+		log_error "Failed to copy data into table ${table_name}: ${copy_result}"
+		return 1
+	fi
+	
+	# Step 3: Verify and report row count
+	local row_count
+	row_count=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="SELECT COUNT(*) FROM ${table_name};" 2>/dev/null | tail -1)
+	if [[ $? -eq 0 && -n "$row_count" ]]; then
+		log "Table ${table_name} restored: ${row_count} rows"
+	else
+		log "Table ${table_name} restored: unknown rows (count failed)"
+	fi
+	
+	return 0
+}
 
-	bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="CREATE TABLE ${table_name} LIKE ${source_table};" >/dev/null 2>&1
-	bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="COPY INTO ${table_name} FROM @${UPLOAD_STAGE}/${source_path};" >/dev/null 2>&1
+# Track restoration results
+SUCCESSFUL_TABLES=()
+FAILED_TABLES=()
 
-	ROW_COUNT=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="SELECT COUNT(*) FROM ${table_name};" | tail -1)
-	log "Table ${table_name} restored: ${ROW_COUNT} rows"
+for table_name in "${!TABLE_PATHS[@]}"; do
+	source_path="${TABLE_PATHS[$table_name]}"
+	
+	if restore_table "$table_name" "$source_path"; then
+		SUCCESSFUL_TABLES+=("$table_name")
+	else
+		FAILED_TABLES+=("$table_name")
+	fi
 done
 
-log "Log restoration completed successfully"
-log "Restored database: ${RESTORE_DATABASE}"
-log "Tables available: settings, columns, user_functions, log_history, query_history, login_history, profile_history"
+# Final restoration summary
+if [[ ${#FAILED_TABLES[@]} -eq 0 ]]; then
+	log "Log restoration completed successfully"
+	log "Restored database: ${RESTORE_DATABASE}"
+	log "Successfully restored tables: ${SUCCESSFUL_TABLES[*]}"
+else
+	log "Log restoration completed with errors"
+	log "Restored database: ${RESTORE_DATABASE}"
+	log "Successfully restored tables (${#SUCCESSFUL_TABLES[@]}): ${SUCCESSFUL_TABLES[*]}"
+	log_error "Failed tables (${#FAILED_TABLES[@]}): ${FAILED_TABLES[*]}"
+	exit 1
+fi
