@@ -1157,6 +1157,7 @@ pub struct ListDroppedTableResp {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcDroppedTableReq {
     pub tenant: Tenant,
+    pub catalog: String,
     pub drop_ids: Vec<DroppedId>,
 }
 
