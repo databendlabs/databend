@@ -31,6 +31,8 @@ echo "select * from table_test_02_0010 order by text;" | $BENDSQL_CLIENT_CONNECT
 
 # kill a node
 sudo lsof -i :9093 -t | xargs -r sudo kill -9
+# wait for the node to be killed
+sleep 5
 
 echo "select count(*) from system.clusters;" | $BENDSQL_CLIENT_CONNECT
 
