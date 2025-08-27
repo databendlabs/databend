@@ -268,7 +268,7 @@ fn try_bind() -> (u16, TcpListener) {
                 return (port, listener);
             }
             Err(e) => {
-                port += 1;
+                port += 500;
                 info!("bind to {address} failed: {e}; try next port: {}", port);
             }
         }
