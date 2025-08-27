@@ -503,10 +503,8 @@ impl TableMutationAggregator {
                         SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
-                    let stats = match &segment_info.summary.additional_stats_meta {
-                        Some(meta) if meta.location.is_some() => Some(
-                            read_segment_stats(op.clone(), meta.location.clone().unwrap()).await?,
-                        ),
+                    let stats = match segment_info.summary.additional_stats_loc() {
+                        Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
                         _ => None,
                     };
 
@@ -865,7 +863,7 @@ async fn write_segment(
             );
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
-            location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+            location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
             ..Default::default()
         };
         dal.write(&segment_stats_location, stats).await?;

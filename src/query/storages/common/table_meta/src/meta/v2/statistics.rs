@@ -76,12 +76,26 @@ pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
     pub size: u64,
     /// The file location of the stats data.
-    pub location: Option<Location>,
+    #[serde(
+        default = "default_location",
+        deserialize_with = "deserialize_location"
+    )]
+    pub location: Location,
     /// An optional HyperLogLog data structure.
     pub hll: Option<RawBlockHLL>,
     /// The count of the stats rows.
     #[serde(default)]
     pub row_count: u64,
+}
+
+fn deserialize_location<'de, D>(deserializer: D) -> Result<Location, D::Error>
+where D: serde::Deserializer<'de> {
+    let opt = <Option<Location> as serde::Deserialize>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_else(default_location))
+}
+
+fn default_location() -> Location {
+    ("".to_string(), 0)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -271,6 +285,13 @@ impl Statistics {
             cluster_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,
+        }
+    }
+
+    pub fn additional_stats_loc(&self) -> Option<Location> {
+        match &self.additional_stats_meta {
+            Some(meta) if !meta.location.0.is_empty() => Some(meta.location.clone()),
+            _ => None,
         }
     }
 }

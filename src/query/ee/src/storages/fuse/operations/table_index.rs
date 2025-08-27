@@ -145,10 +145,8 @@ pub async fn do_refresh_table_index(
                 put_cache: false,
             })
             .await?;
-        let stats = match &segment_info.summary.additional_stats_meta {
-            Some(meta) if meta.location.is_some() => {
-                Some(read_segment_stats(operator.clone(), meta.location.clone().unwrap()).await?)
-            }
+        let stats = match segment_info.summary.additional_stats_loc() {
+            Some(loc) => Some(read_segment_stats(operator.clone(), loc).await?),
             _ => None,
         };
 

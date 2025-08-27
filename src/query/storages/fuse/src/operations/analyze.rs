@@ -667,13 +667,12 @@ impl Processor for AnalyzeCollectNDVSource {
                 let compact_segment_info = self.segment_reader.read(&load_param).await?;
 
                 let block_count = compact_segment_info.summary.block_count as usize;
-                let block_hlls = match &compact_segment_info.summary.additional_stats_meta {
-                    Some(meta) if meta.location.is_some() => {
-                        let (path, ver) = meta.location.as_ref().unwrap();
+                let block_hlls = match compact_segment_info.summary.additional_stats_loc() {
+                    Some((path, ver)) => {
                         let load_param = LoadParams {
-                            location: path.clone(),
+                            location: path,
                             len_hint: None,
-                            ver: *ver,
+                            ver,
                             put_cache: true,
                         };
                         let stats = self.stats_reader.read(&load_param).await?;
@@ -744,7 +743,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     );
                 let additional_stats_meta = AdditionalStatsMeta {
                     size: data.len() as u64,
-                    location: Some((segment_stats_location.clone(), SegmentStatistics::VERSION)),
+                    location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
                     ..Default::default()
                 };
                 self.dal.write(&segment_stats_location, data).await?;
