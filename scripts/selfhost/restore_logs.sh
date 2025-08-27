@@ -507,9 +507,9 @@ declare -A TABLE_PATHS=(
 restore_table() {
 	local table_name="$1"
 	local source_path="$2"
-	
+
 	log "Restoring table: ${RESTORE_DATABASE}.${table_name} from @${UPLOAD_STAGE}/${source_path}"
-	
+
 	# Step 1: Create table by inferring schema from parquet files
 	local create_result
 	create_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="CREATE TABLE ${table_name} AS SELECT * FROM '@${UPLOAD_STAGE}/${source_path}' LIMIT 0;" 2>&1)
@@ -517,7 +517,7 @@ restore_table() {
 		log_error "Failed to create table ${table_name}: ${create_result}"
 		return 1
 	fi
-	
+
 	# Step 2: Copy data with error checking
 	local copy_result
 	copy_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="COPY INTO ${table_name} FROM @${UPLOAD_STAGE}/${source_path};" 2>&1)
@@ -525,7 +525,7 @@ restore_table() {
 		log_error "Failed to copy data into table ${table_name}: ${copy_result}"
 		return 1
 	fi
-	
+
 	# Step 3: Verify and report row count
 	local row_count
 	row_count=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="SELECT COUNT(*) FROM ${table_name};" 2>/dev/null | tail -1)
@@ -534,7 +534,7 @@ restore_table() {
 	else
 		log "Table ${table_name} restored: unknown rows (count failed)"
 	fi
-	
+
 	return 0
 }
 
@@ -544,7 +544,7 @@ FAILED_TABLES=()
 
 for table_name in "${!TABLE_PATHS[@]}"; do
 	source_path="${TABLE_PATHS[$table_name]}"
-	
+
 	if restore_table "$table_name" "$source_path"; then
 		SUCCESSFUL_TABLES+=("$table_name")
 	else

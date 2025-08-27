@@ -5,6 +5,9 @@ statement ok
 CREATE DATABASE showstatistics
 
 statement ok
+use showstatistics
+
+statement ok
 CREATE TABLE showstatistics.t1(c1 int not null) ENGINE = Null;
 
 query T
@@ -16,8 +19,9 @@ statement ok
 CREATE TABLE IF NOT EXISTS showstatistics.t2(c1 int);
 
 query T
-show statistics from table showstatistics.t2;
+show statistics;
 ----
+showstatistics t1 c1 NULL NULL NULL NULL NULL (empty)
 showstatistics t2 c1 0 0 NULL NULL NULL (empty)
 
 statement ok
@@ -44,7 +48,6 @@ query T
 show statistics from table showstatistics.t2;
 ----
 showstatistics t2 c1 2 2 2 0 4 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0]
-
 
 statement ok
 DROP DATABASE showstatistics
