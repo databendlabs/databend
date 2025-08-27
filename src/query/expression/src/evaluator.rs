@@ -1458,7 +1458,7 @@ impl<'a> Evaluator<'a> {
 
         match validity {
             Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
-            None => Ok(Value::Scalar(Scalar::Boolean(true))),
+            None => Ok(Value::Scalar(Scalar::Boolean(false))),
         }
     }
 
@@ -2256,7 +2256,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             return (
                                 Expr::Constant(Constant {
                                     span: *span,
-                                    scalar: Scalar::Boolean(false),
+                                    scalar: Scalar::Boolean(is_or),
                                     data_type: DataType::Boolean,
                                 }),
                                 None,

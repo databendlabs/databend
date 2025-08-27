@@ -3394,6 +3394,7 @@ Functions overloads:
 1 octet_length(String NULL) :: UInt64 NULL
 0 or(Boolean, Boolean) :: Boolean
 1 or(Boolean NULL, Boolean NULL) :: Boolean NULL
+0 or_filters FACTORY
 0 ord(String) :: UInt64
 1 ord(String NULL) :: UInt64 NULL
 0 parse_json(Variant) :: Variant

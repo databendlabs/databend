@@ -194,6 +194,21 @@ SELECT not 0
 ----
 1
 
+query B
+SELECT or_filters(false, false, false)
+----
+0
+
+query B
+SELECT or_filters(false, false, null)
+----
+0
+
+query B
+SELECT or_filters(true, false, null)
+----
+1
+
 
 
 query TT
