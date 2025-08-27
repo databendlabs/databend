@@ -76,11 +76,11 @@ query T
 explain select count(3), type, name, trim(name) as a from system.columns group by name, type, a, concat(name, trim(name)), concat(type, name), length(name);
 ----
 EvalScalar
-├── output columns: [count(3) (#16), columns.name (#0), columns.type (#3), a (#17)]
+├── output columns: [count(3) (#13), columns.name (#0), columns.type (#3), a (#14)]
 ├── expressions: [trim(columns.name (#0))]
 ├── estimated rows: 0.00
 └── AggregateFinal
-    ├── output columns: [count(3) (#16), columns.name (#0), columns.type (#3)]
+    ├── output columns: [count(3) (#13), columns.name (#0), columns.type (#3)]
     ├── group by: [name, type]
     ├── aggregate functions: [count()]
     ├── estimated rows: 0.00

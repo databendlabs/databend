@@ -875,7 +875,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    pub fn from_tables(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
+    fn from_tables(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
         let from_dot_table = map(
             rule! {
                ( FROM | IN ) ~ ^#dot_separated_idents_1_to_3
@@ -951,6 +951,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 database,
                 table,
             })
+        },
+    );
+
+    let show_statistics = map(
+        rule! {
+            SHOW ~ STATISTICS ~ ( FROM ~ #show_stats_stmt)?
+        },
+        |(_, _, opt_stmt)| {
+            Statement::ShowStatistics(opt_stmt.map_or(Default::default(), |(_, stmt)| stmt))
         },
     );
 
@@ -2695,6 +2704,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            | #show_statistics: "`SHOW STATISTICS [FROM DATABASE [<catalog>.]<database> | FROM TABLE [<catalog>.]<database>.<table>]`"
             | #sequence
         ),
         rule!(
@@ -4695,6 +4705,31 @@ pub fn show_options(i: Input) -> IResult<ShowOptions> {
             limit: opt_limit.map(|(_, limit)| limit),
         },
     )(i)
+}
+
+pub fn show_stats_stmt(i: Input) -> IResult<ShowStatisticsStmt> {
+    alt((
+        map(
+            rule! {
+                DATABASE ~ #dot_separated_idents_1_to_2
+            },
+            |(_, (catalog, database))| ShowStatisticsStmt {
+                catalog,
+                database: Some(database),
+                target: ShowStatsTarget::Database,
+            },
+        ),
+        map(
+            rule! {
+                TABLE ~ #dot_separated_idents_1_to_3
+            },
+            |(_, (catalog, database, table))| ShowStatisticsStmt {
+                catalog,
+                database,
+                target: ShowStatsTarget::Table(table),
+            },
+        ),
+    ))(i)
 }
 
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
