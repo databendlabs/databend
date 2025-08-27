@@ -18,6 +18,7 @@ use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::Location;
 
 #[derive(Clone, Default)]
 pub struct TableStatsGenerator {
@@ -55,6 +56,7 @@ impl TableStatsGenerator {
         Some(AdditionalStatsMeta {
             hll,
             row_count: self.row_count,
+            location: Some(Location::default()),
             ..Default::default()
         })
     }
