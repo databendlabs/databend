@@ -19,6 +19,8 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
@@ -214,6 +216,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
             if let ScalarExpr::AggregateFunction(agg) = &item.scalar {
                 // Only functions that support hierarchical aggregation
                 matches!(agg.func_name.as_str(), "sum" | "count" | "min" | "max")
+                    && !agg.distinct
+                    && agg.args.len() <= 1
             } else {
                 false
             }
@@ -564,8 +568,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
                         // COUNT(*) from pre-aggregated -> SUM(pre_computed_count)
                         func.func_name = "sum".to_string();
                         // Replace argument with BoundColumnRef to pre-aggregated result
-                        if !func.args.is_empty() {
-                            func.args[0] = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        if func.args.len() <= 1 {
+                            func.args = vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
                                 span: None,
                                 column: ColumnBindingBuilder::new(
                                     format!("agg_result_{}", agg_func.index),
@@ -574,24 +578,22 @@ impl RuleHierarchicalGroupingSetsToUnion {
                                     Visibility::Visible,
                                 )
                                 .build(),
-                            });
+                            })];
                         }
                     }
                     "sum" | "min" | "max" => {
                         // These functions are naturally associative
                         // Replace argument with BoundColumnRef to pre-aggregated result
-                        if !func.args.is_empty() {
-                            func.args[0] = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                span: None,
-                                column: ColumnBindingBuilder::new(
-                                    format!("agg_result_{}", agg_func.index),
-                                    agg_func.index,
-                                    original_data_type.into(),
-                                    Visibility::Visible,
-                                )
-                                .build(),
-                            });
-                        }
+                        func.args = vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ColumnBindingBuilder::new(
+                                format!("agg_result_{}", agg_func.index),
+                                agg_func.index,
+                                original_data_type.into(),
+                                Visibility::Visible,
+                            )
+                            .build(),
+                        })];
                     }
                     _ => {
                         // Other functions - keep as is for now
@@ -734,6 +736,33 @@ impl RuleHierarchicalGroupingSetsToUnion {
             visitor.visit(&mut scalar_item.scalar)?;
         }
 
+        let agg_count_indexs = agg
+            .aggregate_functions
+            .iter()
+            .filter_map(|f| {
+                if let ScalarExpr::AggregateFunction(crate::plans::AggregateFunction {
+                    func_name,
+                    ..
+                }) = &f.scalar
+                {
+                    if func_name.eq_ignore_ascii_case("count") {
+                        Some(f.index)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !agg_count_indexs.is_empty() {
+            let mut visitor = AggVisitor { agg_count_indexs };
+            for scalar_item in eval_scalar.items.iter_mut() {
+                visitor.visit(&mut scalar_item.scalar)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -868,6 +897,28 @@ fn is_proper_subset(subset: &[IndexType], superset: &[IndexType]) -> bool {
     subset.len() < superset.len() && subset.iter().all(|item| superset.contains(item))
 }
 
+struct AggVisitor {
+    agg_count_indexs: Vec<IndexType>,
+}
+
+impl VisitorMut<'_> for AggVisitor {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        let old = expr.clone();
+        if let ScalarExpr::BoundColumnRef(col) = expr {
+            // "count(xx)" should be always as UInt64 without nullable
+            if self.agg_count_indexs.contains(&col.column.index) {
+                *expr = ScalarExpr::CastExpr(CastExpr {
+                    argument: Box::new(old),
+                    is_try: false,
+                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                    span: col.span,
+                });
+                println!("agg_count_indexs: {:?}", self.agg_count_indexs);
+            }
+        }
+        Ok(())
+    }
+}
 // Set other columns to NULL and current group by columns to be nullable
 struct GroupingSetsNullVisitor {
     group_indexes: Vec<IndexType>,
