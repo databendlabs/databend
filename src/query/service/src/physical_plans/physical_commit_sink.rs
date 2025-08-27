@@ -30,6 +30,7 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::operations::TruncateGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -177,7 +178,7 @@ impl IPhysicalPlan for CommitSink {
                                     Arc::new(ExtendedBlockMeta {
                                         block_meta: Arc::unwrap_or_clone(block_meta),
                                         draft_virtual_block_meta: None,
-                                        column_hlls,
+                                        column_hlls: column_hlls.map(BlockHLLState::Serialized),
                                     })
                                 })
                                 .collect::<Vec<Arc<ExtendedBlockMeta>>>();

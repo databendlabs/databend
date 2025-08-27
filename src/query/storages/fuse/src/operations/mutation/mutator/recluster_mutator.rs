@@ -188,7 +188,7 @@ impl ReclusterMutator {
                     info.summary
                         .additional_stats_meta
                         .as_ref()
-                        .map(|v| v.location.clone()),
+                        .and_then(|v| v.location.clone()),
                 ));
                 (loc.segment_idx, info)
             })

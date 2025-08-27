@@ -55,6 +55,7 @@ use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
@@ -67,9 +68,9 @@ use opendal::Operator;
 //                             ┌────> │ VirtualColumnTransform1 │ ────┐
 //                             │      └─────────────────────────┘     │
 //                             │                  ...                 │
-// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌───────────────────────────┐       ┌─────────────────────────┐       ┌────────────┐
-// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ TransformSerializeSegment │ ────> │ TableMutationAggregator │ ────> │ CommitSink │
-// └─────────────────────┘     │      └─────────────────────────┘     │      └───────────────────────────┘       └─────────────────────────┘       └────────────┘
+// ┌─────────────────────┐     │      ┌─────────────────────────┐     │      ┌─────────────────────────┐       ┌────────────┐
+// │ VirtualColumnSource │ ────┼────> │ VirtualColumnTransformN │ ────┼────> │ TableMutationAggregator │ ────> │ CommitSink │
+// └─────────────────────┘     │      └─────────────────────────┘     │      └─────────────────────────┘       └────────────┘
 //                             │                  ...                 │
 //                             │      ┌─────────────────────────┐     │
 //                             └────> │ VirtualColumnTransformZ │ ────┘
@@ -135,11 +136,11 @@ pub async fn do_refresh_virtual_column(
                 put_cache: false,
             })
             .await?;
-        let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
-            let stats = read_segment_stats(operator.clone(), meta.location.clone()).await?;
-            Some(stats)
-        } else {
-            None
+        let stats = match &segment_info.summary.additional_stats_meta {
+            Some(meta) if meta.location.is_some() => {
+                Some(read_segment_stats(operator.clone(), meta.location.clone().unwrap()).await?)
+            }
+            _ => None,
         };
 
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
@@ -352,7 +353,7 @@ impl AsyncTransform for VirtualColumnTransform {
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: Arc::unwrap_or_clone(block_meta.clone()),
             draft_virtual_block_meta: Some(virtual_column_state.draft_virtual_block_meta),
-            column_hlls: column_hlls.clone(),
+            column_hlls: column_hlls.clone().map(BlockHLLState::Serialized),
         };
 
         let entry = MutationLogEntry::ReplacedBlock {

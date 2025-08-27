@@ -16,6 +16,7 @@ pub mod accumulator;
 mod cluster_statistics;
 mod column_statistic;
 pub mod reducers;
+mod table_statistics;
 mod traverse;
 
 pub use accumulator::ColumnHLLAccumulator;
@@ -33,4 +34,5 @@ pub use reducers::merge_statistics;
 pub use reducers::reduce_block_metas;
 pub use reducers::reduce_block_statistics;
 pub use reducers::reduce_cluster_statistics;
+pub use table_statistics::TableStatsGenerator;
 pub use traverse::traverse_values_dfs;

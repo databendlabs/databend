@@ -130,7 +130,8 @@ pub async fn generate_segments_v2(
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
-            location: (stats_location.clone(), SegmentStatistics::VERSION),
+            location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            ..Default::default()
         };
         dal.write(&stats_location, stats).await?;
         summary.additional_stats_meta = Some(additional_stats_meta);
@@ -172,7 +173,8 @@ pub async fn generate_segments(
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
-            location: (stats_location.clone(), SegmentStatistics::VERSION),
+            location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            ..Default::default()
         };
         dal.write(&stats_location, stats).await?;
         summary.additional_stats_meta = Some(additional_stats_meta);
@@ -338,15 +340,6 @@ pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> 
 
 pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     append_sample_data_overwrite(num_blocks, false, fixture).await
-}
-
-pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
-    let query = format!(
-        "analyze table {}.{}",
-        fixture.default_db_name(),
-        fixture.default_table_name()
-    );
-    fixture.execute_command(&query).await
 }
 
 pub async fn do_mutation(

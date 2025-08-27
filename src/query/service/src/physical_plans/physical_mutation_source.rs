@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
@@ -133,6 +134,7 @@ impl IPhysicalPlan for MutationSource {
                         new_segment_locs: vec![],
                         table_id: table.get_id(),
                         virtual_schema: None,
+                        hll: HashMap::new(),
                     };
                     let block = DataBlock::empty_with_meta(Box::new(meta));
                     OneBlockSource::create(output, block)
