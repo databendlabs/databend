@@ -40,6 +40,7 @@ use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_storage::STDIN_FD;
+use log::info;
 use log::LevelFilter;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
@@ -176,6 +177,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let in_history_table_scope = ThreadTracker::capture_log_settings()
         .is_some_and(|settings| settings.level == LevelFilter::Off);
     if in_history_table_scope {
+        info!("[HISTORY-TABLES] Enable credential loader for history tables");
         disable_credential_loader = false;
     }
 
