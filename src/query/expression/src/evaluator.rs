@@ -1438,7 +1438,7 @@ impl<'a> Evaluator<'a> {
                     let flag = match column {
                         Column::Nullable(box nullable_column) => {
                             let boolean_column = nullable_column.column.as_boolean().unwrap();
-                            boolean_column | (&nullable_column.validity)
+                            boolean_column & (&nullable_column.validity)
                         }
                         Column::Boolean(boolean_column) => boolean_column.clone(),
                         _ => unreachable!(),
