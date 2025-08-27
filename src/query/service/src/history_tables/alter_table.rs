@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use databend_common_sql::binder::parse_uri_location;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
@@ -29,6 +30,29 @@ use log::info;
 
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::sessions::QueryContext;
+
+pub async fn get_schemas(
+    ctx: Arc<QueryContext>,
+    new_create_sql: &str,
+    table_name: &str,
+) -> Result<(TableSchemaRef, TableSchemaRef)> {
+    let old_table_schema = ThreadTracker::tracking_future(ctx.get_table(
+        CATALOG_DEFAULT,
+        "system_history",
+        table_name,
+    ))
+    .await?
+    .schema();
+    let mut planner = Planner::new(ctx.clone());
+    let (create_plan, _) = ThreadTracker::tracking_future(planner.plan_sql(new_create_sql)).await?;
+    let new_table_schema = match create_plan {
+        Plan::CreateTable(plan) => plan.schema,
+        _ => {
+            unreachable!("logic error: expected CreateTable plan")
+        }
+    };
+    Ok((old_table_schema, new_table_schema))
+}
 
 pub async fn get_alter_table_sql(
     ctx: Arc<QueryContext>,
@@ -38,20 +62,8 @@ pub async fn get_alter_table_sql(
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
     let _guard = ThreadTracker::tracking(tracking_payload);
-    let old_table_schema = ThreadTracker::tracking_future(ctx.get_table(
-        CATALOG_DEFAULT,
-        "system_history",
-        table_name,
-    ))
-    .await?
-    .schema();
-    let (create_plan, _) = Planner::new(ctx.clone()).plan_sql(new_create_sql).await?;
-    let new_table_schema = match create_plan {
-        Plan::CreateTable(plan) => plan.schema,
-        _ => {
-            unreachable!("logic error: expected CreateTable plan")
-        }
-    };
+    let (old_table_schema, new_table_schema) =
+        ThreadTracker::tracking_future(get_schemas(ctx, new_create_sql, table_name)).await?;
     // The table schema change follow "open-closed principle", only accept adding new fields.
     // If the new table schema has less or equal fields than the old one, means older version
     // node restarted, we should not alter the table.
