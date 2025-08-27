@@ -127,6 +127,7 @@ impl IPhysicalPlan for ProjectSet {
             .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
         let max_block_size = builder.settings.get_max_block_size()? as usize;
+        let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
         builder.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformSRF::try_create(
@@ -136,6 +137,7 @@ impl IPhysicalPlan for ProjectSet {
                 self.projections.clone(),
                 srf_exprs.clone(),
                 max_block_size,
+                max_block_bytes,
             )))
         })
     }
