@@ -85,6 +85,11 @@ impl LeveledMapData {
         x
     }
 
+    pub(crate) fn with_inner<T>(&self, f: impl FnOnce(&mut LeveledMapDataInner) -> T) -> T {
+        let mut inner = self.inner.lock().unwrap();
+        f(&mut inner)
+    }
+
     pub(crate) fn immutable_levels(&self) -> Arc<ImmutableLevels> {
         let inner = self.inner.lock().unwrap();
         inner.immutable_levels.clone()

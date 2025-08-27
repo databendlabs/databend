@@ -15,11 +15,11 @@
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
-use crate::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v003::SMV003;
 
 #[tokio::test]
 async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
-    let lm = LeveledMap::default();
+    let lm = SMV003::default();
 
     let _c = lm.acquire_compactor().await;
 
@@ -41,7 +41,7 @@ async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_blocking_wait_ok() -> anyhow::Result<()> {
-    let lm = LeveledMap::default();
+    let lm = SMV003::default();
 
     let _c = lm.acquire_compactor().await;
 
