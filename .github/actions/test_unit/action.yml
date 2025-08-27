@@ -21,10 +21,9 @@ runs:
         cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps nextest run --no-fail-fast --hide-progress-bar
         grep ' Compiled in ' target/sccache.log || true
       env:
-        RUST_TEST_THREADS: 8
+        RUST_TEST_THREADS: 4
         RUST_LOG: ERROR
-        # 200MB
-        RUST_MIN_STACK: 209715200
+        RUST_MIN_STACK: 104857600
         # RUST_BACKTRACE: 1
 
     - name: Upload failure
