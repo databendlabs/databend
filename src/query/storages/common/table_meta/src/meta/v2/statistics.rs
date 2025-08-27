@@ -76,41 +76,13 @@ pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
     pub size: u64,
     /// The file location of the stats data.
-    #[serde(
-        default = "default_location",
-        deserialize_with = "deserialize_location"
-    )]
+    #[serde(default = "default_location")]
     pub location: Location,
     /// An optional HyperLogLog data structure.
     pub hll: Option<RawBlockHLL>,
     /// The count of the stats rows.
     #[serde(default)]
     pub row_count: u64,
-}
-
-fn deserialize_location<'de, D>(deserializer: D) -> Result<Location, D::Error>
-where D: serde::Deserializer<'de> {
-    struct LocationVisitor;
-
-    impl<'de> serde::de::Visitor<'de> for LocationVisitor {
-        type Value = Location;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a Location tuple or None")
-        }
-
-        fn visit_some<D>(self, deserializer: D) -> Result<Location, D::Error>
-        where D: serde::Deserializer<'de> {
-            <Location as serde::Deserialize>::deserialize(deserializer)
-        }
-
-        fn visit_none<E>(self) -> Result<Location, E>
-        where E: serde::de::Error {
-            Ok(default_location())
-        }
-    }
-
-    deserializer.deserialize_option(LocationVisitor)
 }
 
 fn default_location() -> Location {
