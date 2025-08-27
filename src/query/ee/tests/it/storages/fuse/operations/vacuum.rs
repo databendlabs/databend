@@ -616,14 +616,13 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
     // 6. Vacuum dropped tables
     fixture.execute_command("vacuum drop table").await?;
 
-    // 7. Vacuum dropped tables
+    // 7. Ensure that table ownership is cleaned up
     let table_ownership = OwnershipObject::Table {
         catalog_name,
         db_id: db.get_db_info().database_id.db_id,
         table_id: table.get_id(),
     };
 
-    // 8. Ensure that table ownership is cleaned up
     let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
     let v = meta.get(&table_ownership_key).await?;
     assert!(v.is_none());
