@@ -266,7 +266,8 @@ run_test() {
 		rm -rf "tests/sqllogictests/suites"
 		mv "./testsuite/$query_ver/suites" "tests/sqllogictests/suites"
 
-		./testsuite/$query_ver/bin/databend-sqllogictests --handlers http --run_dir 05_ddl
+		# ./testsuite/$query_ver/bin/databend-sqllogictests --handlers http --run_dir 05_ddl
+		$sqllogictests --handlers http --run_dir 05_ddl
 		cd -
 	fi
 }
