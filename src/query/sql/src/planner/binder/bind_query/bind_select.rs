@@ -34,6 +34,10 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnpivotName;
+use databend_common_ast::parser::expr::expr as parserexpr;
+use databend_common_ast::parser::run_parser;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,6 +45,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -159,12 +165,68 @@ impl Binder {
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
-        let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(&mut from_context, &aliases, expr, s_expr)?;
+        let mut expr_acc: Option<Expr> = None;
+        for t in self.metadata.read().tables() {
+            if let Some(policy) = &t.table().get_table_info().meta.row_access_policy {
+                LicenseManagerSwitch::instance().check_enterprise_enabled(
+                    self.ctx.get_license_key(),
+                    Feature::RowAccessPolicy,
+                )?;
+                let meta_api = UserApiProvider::instance().get_meta_store_client();
+                let handler = get_row_access_policy_handler();
+                let res = databend_common_base::runtime::block_on(handler.get_row_access(
+                    meta_api,
+                    &self.ctx.get_tenant(),
+                    policy.to_string(),
+                ))?;
+                let body = res.1.data.body;
+                let settings = self.ctx.get_settings();
+                let sql_dialect = settings.get_sql_dialect()?;
+                let tokens = tokenize_sql(&body)?;
+                let ast = run_parser(&tokens, sql_dialect, ParseMode::Template, false, parserexpr)?;
+                if expr_acc.is_none() {
+                    let first = Expr::BinaryOp {
+                        span: None,
+                        op: BinaryOperator::And,
+                        left: Box::new(ast),
+                        right: Box::new(Expr::Literal {
+                            span: None,
+                            value: Literal::Boolean(true),
+                        }),
+                    };
+                    expr_acc = Some(first);
+                } else {
+                    let prev = expr_acc.take().unwrap();
+                    let next = Expr::BinaryOp {
+                        span: None,
+                        op: BinaryOperator::And,
+                        left: Box::new(prev),
+                        right: Box::new(ast),
+                    };
+                    expr_acc = Some(next);
+                }
+            }
+        }
+
+        let where_scalar = if expr_acc.is_none() && stmt.selection.is_none() {
+            None
+        } else {
+            let expr_to_bind = match (expr_acc, stmt.selection.as_ref()) {
+                (Some(acc), Some(sel)) => Expr::BinaryOp {
+                    span: None,
+                    op: BinaryOperator::And,
+                    left: Box::new(acc),
+                    right: Box::new(sel.clone()),
+                },
+                (Some(acc), None) => acc,
+                (None, Some(sel)) => sel.clone(),
+                (None, None) => unreachable!(),
+            };
+
+            let (new_expr, scalar) =
+                self.bind_where(&mut from_context, &aliases, &expr_to_bind, s_expr)?;
             s_expr = new_expr;
             Some(scalar)
-        } else {
-            None
         };
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.

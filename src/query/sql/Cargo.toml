@@ -12,6 +12,7 @@ storage-hdfs = ["databend-common-config/storage-hdfs"]
 
 [dependencies]
 databend-common-ast = { workspace = true }
+databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-compress = { workspace = true }

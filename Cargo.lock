@@ -4169,6 +4169,7 @@ dependencies = [
  "databend-common-storages-basic",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-row-access-policy-feature",
  "databend-storages-common-cache",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",

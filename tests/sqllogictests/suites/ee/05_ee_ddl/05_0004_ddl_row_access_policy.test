@@ -16,6 +16,9 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
+set global enable_planner_cache = 0;
+
+statement ok
 drop row access policy if exists rap1;
 
 statement ok
@@ -38,7 +41,7 @@ create row access policy IF NOT EXISTS rap_it as (empl_id varchar) returns boole
 statement ok
 create or replace row access policy rap_it as (empl_id string null) returns boolean ->
   case
-      when 'it_admin' = current_role() then false
+      when 'account_admin' = current_role() then false
       else true
   end;
 
@@ -60,6 +63,14 @@ alter table t ADD ROW ACCESS POLICY rap_it ON (id);
 
 statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
+
+statement ok
+insert into t values(1,'x');
+
+query T
+select id from t;
+----
+
 
 statement error 1132
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
@@ -83,6 +94,11 @@ ALTER TABLE t drop row access policy p1;
 statement ok
 ALTER TABLE t drop row access policy rap_it;
 
+query T
+select id from t;
+----
+1
+
 statement ok
 ALTER TABLE t drop all row access policies;
 
@@ -96,4 +112,10 @@ statement ok
 drop row access policy if exists p1;
 
 statement ok
+drop table if exists t;
+
+statement ok
 unset global enable_experimental_row_access_policy;
+
+statement ok
+unset global enable_planner_cache;
