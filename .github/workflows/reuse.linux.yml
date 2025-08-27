@@ -29,7 +29,30 @@ env:
   RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
+  info:
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - name: Get build target
+        id: target
+        run: |
+          if [ "${{ inputs.runner_arch }}" == "X64" ]; then
+            echo "target=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.runner_arch }}" == "ARM64" ]; then
+            echo "target=aarch64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+          else
+            echo "Invalid runner architecture: ${{ inputs.runner_arch }}"
+            exit 1
+          fi
+
   check:
+    needs: info
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -47,6 +70,7 @@ jobs:
           github_token: ${{ github.token }}
 
   build:
+    needs: info
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -58,17 +82,6 @@ jobs:
         with:
           # fetch all tags, metasrv and meta client need tag as its version.
           fetch-depth: 0
-      - name: Get build target
-        id: target
-        run: |
-          if [ "${{ inputs.runner_arch }}" == "X64" ]; then
-            echo "target=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT
-          elif [ "${{ inputs.runner_arch }}" == "ARM64" ]; then
-            echo "target=aarch64-unknown-linux-gnu" >> $GITHUB_OUTPUT
-          else
-            echo "Invalid runner architecture: ${{ inputs.runner_arch }}"
-            exit 1
-          fi
       - uses: ./.github/actions/build_linux
         timeout-minutes: 60
         env:
@@ -77,7 +90,7 @@ jobs:
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
         with:
           sha: ${{ github.sha }}
-          target: ${{ steps.target.outputs.target }}
+          target: ${{ needs.info.outputs.target }}
           features: python-udf,storage-hdfs
           category: full
           artifacts: all
