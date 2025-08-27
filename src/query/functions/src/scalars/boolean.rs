@@ -51,10 +51,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             if args_type.len() < 2 {
                 return None;
             }
-            if args_type
-                .iter()
-                .any(|arg_type| !arg_type.is_null() && arg_type.remove_nullable() != DataType::Boolean)
-            {
+            if args_type.iter().any(|arg_type| {
+                !arg_type.is_null() && arg_type.remove_nullable() != DataType::Boolean
+            }) {
                 return None;
             }
 
