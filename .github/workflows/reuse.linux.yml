@@ -30,12 +30,7 @@ env:
 
 jobs:
   info:
-    runs-on:
-      - self-hosted
-      - "${{ inputs.runner_arch }}"
-      - Linux
-      - 2c8g
-      - "${{ inputs.runner_provider }}"
+    runs-on: ubuntu-latest
     outputs:
       target: ${{ steps.target.outputs.target }}
     steps:
