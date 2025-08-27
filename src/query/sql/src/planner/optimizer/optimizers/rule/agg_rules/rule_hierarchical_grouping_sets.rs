@@ -40,7 +40,6 @@ use crate::plans::EvalScalar;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sequence;
@@ -66,7 +65,7 @@ const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
 pub struct RuleHierarchicalGroupingSetsToUnion {
     id: RuleID,
     matchers: Vec<Matcher>,
-    ctx: Arc<OptimizerContext>,
+    _ctx: Arc<OptimizerContext>,
 }
 
 impl RuleHierarchicalGroupingSetsToUnion {
@@ -80,7 +79,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     children: vec![Matcher::Leaf],
                 }],
             }],
-            ctx,
+            _ctx: ctx,
         }
     }
 
@@ -229,6 +228,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg_input: &SExpr,
         hierarchy: HierarchyDAG,
         base_cte_name: String,
+        grouping_id_index: IndexType,
     ) -> Result<SExpr> {
         let mut all_ctes = Vec::new();
         let mut cte_name_mapping = HashMap::new();
@@ -268,19 +268,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         // Process levels by depth, creating parallel structures where possible
         for (depth, levels_at_depth) in levels_by_depth {
-            println!(
-                "Processing depth {}: {} levels",
-                depth,
-                levels_at_depth.len()
-            );
-
             if levels_at_depth.len() > 1 && depth == 1 {
                 // Multiple levels at depth 1 (depend only on original) - can be parallelized with UnionAll
-                println!(
-                    "Creating parallel CTEs for {} levels at depth {}",
-                    levels_at_depth.len(),
-                    depth
-                );
 
                 // Create individual CTEs for each level
                 for level in &levels_at_depth {
@@ -347,8 +336,13 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Step 3: Build final union branches
-        let union_branches =
-            self.build_final_union_branches_new(eval_scalar, &hierarchy, agg, &cte_name_mapping)?;
+        let union_branches = self.build_final_union_branches(
+            eval_scalar,
+            &hierarchy,
+            agg,
+            &cte_name_mapping,
+            grouping_id_index,
+        )?;
 
         // Step 4: Assemble the complete plan
         let union_result = self.create_union_all(&union_branches, eval_scalar)?;
@@ -366,20 +360,13 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
     /// Create original input CTE that just materializes raw data
     fn create_original_input_cte(&self, cte_name: &str, agg_input: &SExpr) -> Result<SExpr> {
-        let channel_size = self
-            .ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap_or(2);
-
         Ok(SExpr::create_unary(
             Arc::new(
                 MaterializedCTE {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: Some(channel_size as usize),
+                    channel_size: None,
                 }
                 .into(),
             ),
@@ -396,13 +383,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg: &Aggregate,
         agg_input_columns: &[IndexType],
     ) -> Result<SExpr> {
-        let channel_size = self
-            .ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap_or(2);
-
         // Create aggregate plan for this grouping set
         let mut group_agg = agg.clone();
         group_agg.grouping_sets = None;
@@ -437,7 +417,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: Some(channel_size as usize),
+                    channel_size: None,
                 }
                 .into(),
             ),
@@ -453,13 +433,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         level: &GroupingLevel,
         agg: &Aggregate,
     ) -> Result<SExpr> {
-        let channel_size = self
-            .ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap_or(2);
-
         // Create aggregate plan for this level
         let mut level_agg = agg.clone();
         level_agg.grouping_sets = None;
@@ -482,7 +455,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: Some(channel_size as usize),
+                    channel_size: None,
                 }
                 .into(),
             ),
@@ -491,12 +464,13 @@ impl RuleHierarchicalGroupingSetsToUnion {
     }
 
     /// Build final union branches using the new CTE mapping
-    fn build_final_union_branches_new(
+    fn build_final_union_branches(
         &self,
         eval_scalar: &EvalScalar,
         hierarchy: &HierarchyDAG,
         agg: &Aggregate,
         cte_name_mapping: &HashMap<usize, String>,
+        grouping_id_index: IndexType,
     ) -> Result<Vec<SExpr>> {
         let mut branches = Vec::new();
 
@@ -523,6 +497,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 &source_output_columns,
                 level.set_index,
                 agg,
+                grouping_id_index,
             )?;
 
             branches.push(branch);
@@ -539,13 +514,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         level: &GroupingLevel,
         agg: &Aggregate,
     ) -> Result<SExpr> {
-        let channel_size = self
-            .ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap_or(2);
-
         // Create aggregate plan for this specific grouping set
         let mut hierarchical_agg = agg.clone();
         hierarchical_agg.grouping_sets = None;
@@ -620,11 +588,10 @@ impl RuleHierarchicalGroupingSetsToUnion {
         // Create parent CTE consumer
         let parent_output_columns: Vec<IndexType> = {
             let mut output_cols = Vec::new();
-            // Add aggregate function output columns
+            // Then: aggregate function output columns
             for agg_item in &agg.aggregate_functions {
                 output_cols.push(agg_item.index);
             }
-            // Add current level's columns (subset of parent's columns)
             for &col_idx in &level.columns {
                 output_cols.push(col_idx);
             }
@@ -655,241 +622,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: Some(channel_size as usize),
+                    channel_size: None,
                 }
                 .into(),
             ),
             agg_plan,
         ))
-    }
-
-    /// Create the base CTE that materializes the most detailed aggregation
-    fn create_base_cte(
-        &self,
-        cte_name: &str,
-        agg_input: &SExpr,
-        hierarchy: &HierarchyDAG,
-        agg: &Aggregate,
-    ) -> Result<SExpr> {
-        let channel_size = self
-            .ctx
-            .get_table_ctx()
-            .get_settings()
-            .get_grouping_sets_channel_size()
-            .unwrap_or(2);
-
-        // Get the most detailed level (largest grouping set)
-        let most_detailed_level = hierarchy
-            .levels
-            .iter()
-            .max_by_key(|level| level.level)
-            .unwrap();
-
-        // Create aggregate plan for the most detailed level
-        let mut base_agg = agg.clone();
-        base_agg.grouping_sets = None;
-        base_agg
-            .group_items
-            .retain(|item| most_detailed_level.columns.contains(&item.index));
-
-        // IMPORTANT: Remove any grouping_id related aggregate functions
-        // Hierarchical optimization doesn't materialize grouping_id in CTEs
-        base_agg.aggregate_functions.retain(|func| {
-            // Only keep actual aggregate functions, not synthetic ones like grouping_id
-            if let ScalarExpr::AggregateFunction(agg_func) = &func.scalar {
-                matches!(
-                    agg_func.func_name.as_str(),
-                    "sum" | "count" | "min" | "max" | "avg"
-                )
-            } else {
-                true // Keep other expressions
-            }
-        });
-
-        let base_aggregation = SExpr::create_unary(base_agg, agg_input.clone());
-        Ok(SExpr::create_unary(
-            MaterializedCTE::new(cte_name.to_string(), None, Some(channel_size as usize)),
-            base_aggregation,
-        ))
-    }
-
-    /// Build intermediate CTEs that perform hierarchical aggregation
-    fn build_intermediate_ctes(
-        &self,
-        hierarchy: &HierarchyDAG,
-        agg: &Aggregate,
-        _base_cte: &SExpr,
-        base_cte_name: &str,
-    ) -> Result<Vec<SExpr>> {
-        let mut ctes = Vec::new();
-        let mut cte_names = Vec::new();
-        let mut level_to_cte_name = HashMap::new();
-
-        // Base level CTE name (most detailed level)
-        let most_detailed_idx = hierarchy.get_most_detailed_level();
-        level_to_cte_name.insert(most_detailed_idx, base_cte_name.to_string());
-
-        // Sort levels by decreasing specificity for proper topological order
-        let mut sorted_levels = hierarchy.levels.clone();
-        sorted_levels.sort_by(|a, b| b.level.cmp(&a.level));
-
-        // Build CTEs in topological order (most detailed first, excluding base level)
-        for level in sorted_levels.iter() {
-            println!("Processing level in build_intermediate_ctes: set_index={}, columns={:?}, chosen_parent={:?}",
-                     level.set_index, level.columns, level.chosen_parent);
-
-            // Skip the most detailed level (base CTE)
-            if level.set_index == most_detailed_idx {
-                continue;
-            }
-
-            // Get parent's set_index and find its CTE name
-            let parent_set_idx = level.chosen_parent.unwrap_or(most_detailed_idx);
-            let parent_cte_name = level_to_cte_name
-                .get(&parent_set_idx)
-                .cloned()
-                .unwrap_or_else(|| base_cte_name.to_string());
-
-            let current_cte_name = self.generate_unique_cte_name(base_cte_name, &level.columns);
-            let parent_group_level = hierarchy.get_by_set_index(parent_set_idx).unwrap();
-
-            // Build aggregation from parent CTE
-            let actual_output_columns: Vec<IndexType> = {
-                let mut columns = Vec::new();
-                for agg in &agg.aggregate_functions {
-                    columns.push(agg.index);
-                }
-                columns.extend_from_slice(&parent_group_level.columns);
-                columns
-            };
-
-            let aggregation_plan = self.build_hierarchical_aggregation(
-                agg,
-                &level.columns,
-                &parent_cte_name,
-                &actual_output_columns,
-            )?;
-
-            // Always create CTE for intermediate levels (not the final union branches)
-            let cte = SExpr::create_unary(
-                MaterializedCTE::new(current_cte_name.clone(), None, Some(2)),
-                aggregation_plan,
-            );
-            ctes.push(cte);
-            cte_names.push(current_cte_name.clone());
-            level_to_cte_name.insert(level.set_index, current_cte_name);
-        }
-
-        Ok(ctes)
-    }
-
-    /// Build hierarchical aggregation that consumes parent's pre-aggregated results
-    fn build_hierarchical_aggregation(
-        &self,
-        agg: &Aggregate,
-        group_columns: &[IndexType],
-        parent_cte_name: &str,
-        parent_output_columns: &[IndexType],
-    ) -> Result<SExpr> {
-        let mut column_mapping = HashMap::new();
-        for logical_index in parent_output_columns.iter() {
-            column_mapping.insert(*logical_index, *logical_index);
-        }
-        // Create consumer for parent CTE
-        let parent_consumer = SExpr::create_leaf(MaterializedCTERef {
-            cte_name: parent_cte_name.to_string(),
-            output_columns: parent_output_columns.to_vec(),
-            def: SExpr::create_leaf(Arc::new(DummyTableScan.into())),
-            column_mapping,
-        });
-
-        // Build re-aggregation plan
-        let mut reagg_plan = agg.clone();
-        reagg_plan.grouping_sets = None;
-        reagg_plan
-            .group_items
-            .retain(|x| group_columns.contains(&x.index));
-
-        // Replace column references in group items to point to parent CTE output positions
-        for group_item in &mut reagg_plan.group_items {
-            // For group items, if they exist in parent output, replace entirely with BoundColumnRef
-            if let Some(_pos) = parent_output_columns
-                .iter()
-                .position(|&idx| idx == group_item.index)
-            {
-                // Replace the entire scalar expression with a direct column reference
-                // Use the original data type but make it nullable to handle CTE output
-                let original_type = group_item.scalar.data_type()?;
-                group_item.scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ColumnBindingBuilder::new(
-                        format!("group_item_{}", group_item.index),
-                        group_item.index,
-                        original_type.into(),
-                        Visibility::Visible,
-                    )
-                    .build(),
-                });
-            }
-        }
-
-        // Transform aggregate functions for hierarchical aggregation
-        for (_, item) in reagg_plan.aggregate_functions.iter_mut().enumerate() {
-            if let ScalarExpr::AggregateFunction(ref mut agg_func) = item.scalar {
-                // Replace column references in aggregate function arguments
-                for arg in &mut agg_func.args {
-                    if let ScalarExpr::BoundColumnRef(col_ref) = arg {
-                        // For sum(number), we need to replace 'number' (#0) with the pre-aggregated sum (#6)
-                        // Find the corresponding aggregate function result in parent output
-                        for parent_agg in &agg.aggregate_functions {
-                            if let ScalarExpr::AggregateFunction(parent_agg_func) =
-                                &parent_agg.scalar
-                            {
-                                // Check if this aggregate function's arguments match
-                                if parent_agg_func.func_name == agg_func.func_name
-                                    && parent_agg_func.args.len() == 1
-                                {
-                                    if let ScalarExpr::BoundColumnRef(parent_arg) =
-                                        &parent_agg_func.args[0]
-                                    {
-                                        if parent_arg.column.index == col_ref.column.index {
-                                            // Replace with parent's aggregate result
-                                            col_ref.column.index = parent_agg.index;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // The key insight: we're now aggregating pre-aggregated values
-                match agg_func.func_name.as_str() {
-                    "sum" => {
-                        // SUM(pre_computed_sum) -> SUM
-                        // This works because sum is associative
-                    }
-                    "count" => {
-                        // COUNT(*) from pre-aggregated -> SUM(pre_computed_count)
-                        agg_func.func_name = "sum".to_string();
-                    }
-                    "min" => {
-                        // MIN(pre_computed_min) -> MIN
-                        // This works because min is associative
-                    }
-                    "max" => {
-                        // MAX(pre_computed_max) -> MAX
-                        // This works because max is associative
-                    }
-                    _ => {
-                        // Other functions - leave as is for now
-                    }
-                }
-            }
-        }
-
-        Ok(SExpr::create_unary(reagg_plan, parent_consumer))
     }
 
     /// Generate a unique CTE name based on the grouping columns
@@ -917,93 +655,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         format!("{}_cols_{}", base_name, columns_str)
     }
 
-    /// Build final union branches with proper grouping sets semantics
-    fn build_final_union_branches(
-        &self,
-        eval_scalar: &EvalScalar,
-        hierarchy: &HierarchyDAG,
-        agg: &Aggregate,
-        base_cte_name: &str,
-        base_cte: &SExpr,
-        intermediate_ctes: &[SExpr],
-    ) -> Result<Vec<SExpr>> {
-        let mut branches = Vec::new();
-        let mut level_to_cte_name = HashMap::new();
-        let mut level_to_cte_expr = HashMap::new();
-
-        // Map levels to their CTE names and CTE expressions
-        level_to_cte_name.insert(
-            hierarchy.get_most_detailed_level(),
-            base_cte_name.to_string(),
-        );
-        level_to_cte_expr.insert(hierarchy.get_most_detailed_level(), base_cte);
-
-        // Map intermediate CTEs
-        for level in &hierarchy.levels {
-            if level.chosen_parent.is_some() {
-                let cte_name = self.generate_unique_cte_name(base_cte_name, &level.columns);
-                level_to_cte_name.insert(level.set_index, cte_name.clone());
-
-                // Find the corresponding CTE expression
-                for cte in intermediate_ctes {
-                    if let RelOperator::MaterializedCTE(mat_cte) = cte.plan() {
-                        if mat_cte.cte_name == cte_name {
-                            level_to_cte_expr.insert(level.set_index, cte);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Build final branch for each grouping set
-        for level in &hierarchy.levels {
-            let (source_cte_name, _source_cte_expr) =
-                if level.set_index == hierarchy.get_most_detailed_level() {
-                    // Most detailed level - read from base CTE
-                    (base_cte_name.to_string(), base_cte)
-                } else {
-                    // Other levels - read from their own CTE if it exists
-                    if let Some(cte_name) = level_to_cte_name.get(&level.set_index).cloned() {
-                        let cte_expr = level_to_cte_expr.get(&level.set_index).unwrap();
-                        (cte_name, *cte_expr)
-                    } else {
-                        // If no CTE exists for this level, read from base CTE
-                        (base_cte_name.to_string(), base_cte)
-                    }
-                };
-
-            // Get actual output columns from the CTE expression
-            let actual_output_columns: Vec<IndexType> = {
-                // For intermediate CTE, calculate output columns based on what the hierarchical aggregation produces
-                let mut output_cols = Vec::new();
-                // Add aggregate function output columns
-                // For intermediate CTEs, these would be the aggregate results from the parent level
-                for agg_item in &agg.aggregate_functions {
-                    output_cols.push(agg_item.index);
-                }
-                // Add group columns (those that are in this level)
-                for &col_idx in &level.columns {
-                    output_cols.push(col_idx);
-                }
-                output_cols
-            };
-
-            let branch = self.build_final_branch(
-                eval_scalar,
-                &level.columns,
-                &source_cte_name,
-                &actual_output_columns,
-                level.set_index,
-                agg,
-            )?;
-
-            branches.push(branch);
-        }
-
-        Ok(branches)
-    }
-
     /// Build a final branch that applies grouping sets NULL semantics
     fn build_final_branch(
         &self,
@@ -1011,8 +662,9 @@ impl RuleHierarchicalGroupingSetsToUnion {
         group_columns: &[IndexType],
         source_cte_name: &str,
         source_output_columns: &[IndexType],
-        set_index: usize,
+        _set_index: usize,
         agg: &Aggregate,
+        grouping_id_index: IndexType,
     ) -> Result<SExpr> {
         let mut column_mapping = HashMap::new();
         for logical_index in source_output_columns.iter() {
@@ -1028,24 +680,11 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         // Apply grouping sets NULL semantics in EvalScalar
         let mut eval_scalar_plan = eval_scalar.clone();
-
-        // Check if this is an intermediate CTE (not the base CTE)
-        let is_intermediate_cte = source_cte_name != &self.generate_base_cte_name(&agg);
-
-        println!(
-            "DEBUG: source_cte_name = {}, base_cte_name = {}, is_intermediate_cte = {}",
-            source_cte_name,
-            self.generate_base_cte_name(&agg),
-            is_intermediate_cte
-        );
-
         self.apply_grouping_sets_semantics(
             &mut eval_scalar_plan,
             group_columns,
             agg,
-            set_index,
-            is_intermediate_cte,
-            source_output_columns,
+            grouping_id_index,
         )?;
 
         Ok(SExpr::create_unary(eval_scalar_plan, source_consumer))
@@ -1057,9 +696,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         eval_scalar: &mut EvalScalar,
         group_columns: &[IndexType],
         agg: &Aggregate,
-        _set_index: usize,
-        is_intermediate_cte: bool,
-        source_output_columns: &[IndexType],
+        grouping_id_index: IndexType,
     ) -> Result<()> {
         let grouping_id = self.calculate_grouping_id(group_columns, &agg.group_items);
 
@@ -1074,10 +711,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
             group_indexes: group_columns.to_vec(),
             exclude_group_indexes: null_group_ids,
             // Don't try to access grouping_id from CTE - it's not materialized there
-            grouping_id_index: IndexType::MAX, /* Use invalid index to disable grouping_id replacement */
+            grouping_id_index,
             grouping_id_value: grouping_id,
-            is_intermediate_cte,
-            source_output_columns: source_output_columns.to_vec(),
         };
 
         for scalar_item in eval_scalar.items.iter_mut() {
@@ -1132,46 +767,29 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        println!("HierarchicalGroupingSetsToUnion::apply called");
         let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
-        println!("EvalScalar: {:?}", eval_scalar);
         let agg: Aggregate = s_expr.child(0)?.plan().clone().try_into()?;
-        println!(
-            "Aggregate: mode={:?}, grouping_sets={:?}",
-            agg.mode, agg.grouping_sets
-        );
 
         if agg.mode != AggregateMode::Initial {
-            println!("Skipping: Aggregate mode is not Initial");
             return Ok(());
         }
 
         let Some(grouping_sets) = &agg.grouping_sets else {
-            println!("Skipping: No grouping sets found");
             return Ok(());
         };
 
         // Reduce the requirement to at least 2 grouping sets for meaningful hierarchy
         if grouping_sets.sets.len() < 2 {
-            println!(
-                "Skipping: Only {} grouping sets, need at least 2",
-                grouping_sets.sets.len()
-            );
             return Ok(());
         }
 
-        println!("Grouping sets: {:?}", grouping_sets.sets);
-
         // Check if aggregates support hierarchical optimization
         if !self.can_optimize_hierarchically(&agg.aggregate_functions) {
-            println!("Skipping: Aggregates don't support hierarchical optimization");
             return Ok(());
         }
 
         // Build hierarchy DAG
         let hierarchy = self.build_hierarchy_dag(&grouping_sets.sets);
-        println!("Built hierarchy with {} levels", hierarchy.levels.len());
-
         // Check if we have meaningful hierarchical structure
         let hierarchical_levels = hierarchy
             .levels
@@ -1179,26 +797,23 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
             .filter(|level| level.chosen_parent.is_some())
             .count();
 
-        println!("Hierarchical levels found: {}", hierarchical_levels);
-
         if hierarchical_levels <= 1 {
-            println!("Skipping: Not enough hierarchy to justify optimization");
             return Ok(()); // Not enough hierarchy to justify optimization
         }
-
-        println!("Applying hierarchical grouping sets optimization!");
 
         // Generate unique base CTE name
         let base_cte_name = self.generate_base_cte_name(&agg);
 
         // Build the true hierarchical plan
         let agg_input = s_expr.child(0)?.child(0)?;
+        let grouping_id_index = grouping_sets.grouping_id_index;
         let result = self.build_true_hierarchical_plan(
             &eval_scalar,
             &agg,
             agg_input,
             hierarchy,
             base_cte_name,
+            grouping_id_index,
         )?;
 
         state.add_result(result);
@@ -1225,22 +840,6 @@ struct HierarchyDAG {
     levels: Vec<GroupingLevel>,
 }
 
-impl HierarchyDAG {
-    fn get_most_detailed_level(&self) -> usize {
-        self.levels
-            .iter()
-            .max_by_key(|level| level.level)
-            .map(|level| level.set_index)
-            .unwrap_or(0)
-    }
-
-    fn get_by_set_index(&self, set_index: usize) -> Option<&GroupingLevel> {
-        self.levels
-            .iter()
-            .find(|level| level.set_index == set_index)
-    }
-}
-
 /// Check if subset is a proper subset of superset
 fn is_proper_subset(subset: &[IndexType], superset: &[IndexType]) -> bool {
     subset.len() < superset.len() && subset.iter().all(|item| superset.contains(item))
@@ -1252,8 +851,6 @@ struct GroupingSetsNullVisitor {
     exclude_group_indexes: Vec<IndexType>,
     grouping_id_index: IndexType,
     grouping_id_value: u32,
-    is_intermediate_cte: bool,
-    source_output_columns: Vec<IndexType>,
 }
 
 impl VisitorMut<'_> for GroupingSetsNullVisitor {
@@ -1261,7 +858,6 @@ impl VisitorMut<'_> for GroupingSetsNullVisitor {
         let old = expr.clone();
         if let ScalarExpr::BoundColumnRef(col) = expr {
             if self.group_indexes.contains(&col.column.index) {
-                println!("    Making column {} nullable (base CTE)", col.column.index);
                 // For base CTE, we need to cast to nullable, but use the correct target type
                 // The target type should be UInt64 to match the CTE's actual output type
                 *expr = ScalarExpr::CastExpr(CastExpr {
@@ -1271,10 +867,6 @@ impl VisitorMut<'_> for GroupingSetsNullVisitor {
                     span: col.span,
                 });
             } else if self.exclude_group_indexes.contains(&col.column.index) {
-                println!(
-                    "    Replacing column {} with NULL (in exclude_group_indexes)",
-                    col.column.index
-                );
                 // Replace with NULL for excluded grouping columns
                 *expr = ScalarExpr::TypedConstantExpr(
                     ConstantExpr {
@@ -1283,21 +875,13 @@ impl VisitorMut<'_> for GroupingSetsNullVisitor {
                     },
                     col.column.data_type.wrap_nullable(),
                 );
-            } else if self.grouping_id_index != IndexType::MAX
-                && self.grouping_id_index == col.column.index
-            {
-                println!(
-                    "    Replacing column {} with grouping_id value: {}",
-                    col.column.index, self.grouping_id_value
-                );
+            } else if self.grouping_id_index == col.column.index {
                 // Only replace grouping ID if we have a valid index
                 // (This case should not occur in hierarchical optimization since grouping_id is not materialized in CTEs)
                 *expr = ScalarExpr::ConstantExpr(ConstantExpr {
                     value: Scalar::Number(NumberScalar::UInt32(self.grouping_id_value)),
                     span: col.span,
                 });
-            } else {
-                println!("    Leaving column {} unchanged", col.column.index);
             }
             return Ok(());
         }
