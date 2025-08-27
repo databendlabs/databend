@@ -289,7 +289,14 @@ impl RuleHierarchicalGroupingSetsToUnion {
                         } else {
                             // Parent is another grouping set CTE
                             let parent_cte_name = cte_name_mapping.get(&parent_set_idx).unwrap();
-                            self.create_hierarchical_cte(&cte_name, parent_cte_name, level, agg)?
+                            let parent = hierarchy.get_by_set_index(parent_set_idx).unwrap();
+                            self.create_hierarchical_cte(
+                                &cte_name,
+                                parent_cte_name,
+                                parent,
+                                level,
+                                agg,
+                            )?
                         }
                     } else {
                         // No parent - this is a base level
@@ -322,7 +329,14 @@ impl RuleHierarchicalGroupingSetsToUnion {
                         } else {
                             // Parent is another grouping set CTE
                             let parent_cte_name = cte_name_mapping.get(&parent_set_idx).unwrap();
-                            self.create_hierarchical_cte(&cte_name, parent_cte_name, level, agg)?
+                            let parent = hierarchy.get_by_set_index(parent_set_idx).unwrap();
+                            self.create_hierarchical_cte(
+                                &cte_name,
+                                parent_cte_name,
+                                parent,
+                                level,
+                                agg,
+                            )?
                         }
                     } else {
                         // No parent - this is a base level
@@ -511,6 +525,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         &self,
         cte_name: &str,
         parent_cte_name: &str,
+        parent_level: &GroupingLevel,
         level: &GroupingLevel,
         agg: &Aggregate,
     ) -> Result<SExpr> {
@@ -592,7 +607,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
             for agg_item in &agg.aggregate_functions {
                 output_cols.push(agg_item.index);
             }
-            for &col_idx in &level.columns {
+            for &col_idx in &parent_level.columns {
                 output_cols.push(col_idx);
             }
             output_cols
@@ -838,6 +853,14 @@ struct GroupingLevel {
 #[derive(Debug)]
 struct HierarchyDAG {
     levels: Vec<GroupingLevel>,
+}
+
+impl HierarchyDAG {
+    fn get_by_set_index(&self, set_index: usize) -> Option<&GroupingLevel> {
+        self.levels
+            .iter()
+            .find(|level| level.set_index == set_index)
+    }
 }
 
 /// Check if subset is a proper subset of superset

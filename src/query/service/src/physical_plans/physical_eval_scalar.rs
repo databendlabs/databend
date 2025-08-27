@@ -173,6 +173,10 @@ impl IPhysicalPlan for EvalScalar {
             projections: Some(self.projections.clone()),
         };
 
+        println!("=== DEBUG ===");
+        println!("Op: {:#?}", op);
+        println!("=== END DEBUG ===");
+
         let num_input_columns = input_schema.num_fields();
 
         builder.main_pipeline.add_transformer(|| {

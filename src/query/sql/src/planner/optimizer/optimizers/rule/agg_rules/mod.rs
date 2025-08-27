@@ -17,8 +17,6 @@ mod rule_eager_aggregation;
 mod rule_fold_count_aggregate;
 mod rule_grouping_sets_to_union;
 mod rule_hierarchical_grouping_sets;
-#[cfg(test)]
-mod rule_hierarchical_grouping_sets_test;
 mod rule_push_down_filter_aggregate;
 mod rule_push_down_limit_aggregate;
 mod rule_split_aggregate;
