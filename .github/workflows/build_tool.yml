@@ -68,5 +68,6 @@ jobs:
             ${{ steps.login.outputs.dockerhub_repo }}:dev-${{ steps.toolchain.outputs.TOOLCHAIN }}
           context: ./scripts/setup
           file: ./docker/build-tool/dev/Dockerfile
+          platforms: linux/amd64,linux/arm64
           build-args: |
             RUST_TOOLCHAIN=${{ steps.toolchain.outputs.TOOLCHAIN }}
