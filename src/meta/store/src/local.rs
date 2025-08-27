@@ -240,32 +240,27 @@ fn next_port() -> u16 {
     let base = get_machine_unique_base_port();
     let sequence = GlobalSequence::next() as u16;
 
-    // Prevent port overflow by wrapping around within a reasonable range
-    let port_offset = sequence % 10_000; // Use modulo to keep within 10k range
-    let mut candidate_port = base + port_offset;
+    let port_offset = sequence % 10_000;
+    let candidate_port = base.saturating_add(port_offset).max(19_000);
 
-    // Port overflow is handled by u16 wraparound, but ensure reasonable range
-    if candidate_port < 19_000 {
-        candidate_port = 19_000 + (candidate_port % 10_000);
-    }
-
-    // Verify the port is actually available, if not find an alternative
-    if TcpListener::bind(format!("127.0.0.1:{candidate_port}")).is_ok() {
+    if is_port_available(candidate_port) {
         candidate_port
     } else {
-        // If the calculated port is not available, find any available port
         match find_available_port() {
             Ok(port) => {
                 warn!("Calculated port {candidate_port} not available, using {port} instead");
                 port
             }
             Err(_) => {
-                // Last resort: return calculated port anyway and let caller handle the error
                 warn!("No available ports found, returning calculated port {candidate_port}");
                 candidate_port
             }
         }
     }
+}
+
+fn is_port_available(port: u16) -> bool {
+    TcpListener::bind(format!("127.0.0.1:{port}")).is_ok()
 }
 
 fn get_machine_unique_base_port() -> u16 {
@@ -289,9 +284,7 @@ fn get_machine_unique_base_port() -> u16 {
     }
 }
 
-/// Try to bind to an available port with fallback options
 fn try_bind() -> Result<(u16, TcpListener), std::io::Error> {
-    // First, try to find a port using OS assignment (port 0)
     if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
         if let Ok(addr) = listener.local_addr() {
             let port = addr.port();
@@ -300,62 +293,33 @@ fn try_bind() -> Result<(u16, TcpListener), std::io::Error> {
         }
     }
 
-    // Fallback to manual port search with optimized ranges
-    let mut port = 19_000u16;
-    let mut last_error = None;
-
-    // Try a larger range with smaller increments for better port availability
-    loop {
-        if port == 0 {
-            break; // Wrapped around, exhausted all ports
-        }
-
-        let address = format!("127.0.0.1:{port}");
-        let res = TcpListener::bind(&address);
-        match res {
-            Ok(listener) => {
-                info!("bind to {address} OK");
-                return Ok((port, listener));
-            }
-            Err(e) => {
-                last_error = Some(e);
-                // Use smaller increment for better coverage, but skip well-known ports
-                let increment = if port < 30_000 { 1 } else { 100 };
-                port = port.saturating_add(increment);
-                if port > 30_000 && port < 32_768 {
-                    port = 32_768; // Skip to ephemeral port range
-                }
-            }
-        }
-    }
-
-    Err(last_error.unwrap_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "No available ports")
-    }))
+    let port = find_port_in_range(19_000, 65535)?;
+    let address = format!("127.0.0.1:{port}");
+    let listener = TcpListener::bind(&address)?;
+    info!("bind to {address} OK");
+    Ok((port, listener))
 }
 
-/// Find an available port for immediate use (without keeping the listener)
 fn find_available_port() -> Result<u16, std::io::Error> {
-    // Try OS assignment first
     if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
         if let Ok(addr) = listener.local_addr() {
             let port = addr.port();
-            drop(listener); // Release immediately
+            drop(listener);
             return Ok(port);
         }
     }
+    find_port_in_range(19_000, 65535)
+}
 
-    // Manual search as fallback
-    for port in 19_000..=65535 {
+fn find_port_in_range(start: u16, end: u16) -> Result<u16, std::io::Error> {
+    for port in start..=end {
         if port > 30_000 && port < 32_768 {
-            continue; // Skip reserved range
+            continue;
         }
-
-        if TcpListener::bind(format!("127.0.0.1:{port}")).is_ok() {
+        if is_port_available(port) {
             return Ok(port);
         }
     }
-
     Err(std::io::Error::new(
         std::io::ErrorKind::AddrNotAvailable,
         "No available ports",
