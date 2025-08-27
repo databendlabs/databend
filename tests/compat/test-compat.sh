@@ -268,7 +268,7 @@ run_test() {
 
 		# NOTE: use current sqllogictests since we only release x86_64-unknown-linux-gnu binary
 		# ./testsuite/$query_ver/bin/databend-sqllogictests --handlers http --run_dir 05_ddl
-		$sqllogictests --handlers http --run_dir 05_ddl
+		./bins/current/databend-sqllogictests --handlers http --run_dir 05_ddl
 		cd -
 	fi
 }
