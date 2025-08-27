@@ -40,8 +40,9 @@ use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
+use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapDataInner;
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::scoped::Scoped;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
@@ -147,9 +148,11 @@ impl SMV003 {
                 write_semaphore: self.levels.write_semaphore.clone(),
 
                 data: Arc::new(LeveledMapData {
-                    writable: Default::default(),
-                    immutable_levels: Default::default(),
-                    persisted: Mutex::new(Some(Arc::new(db))),
+                    inner: Mutex::new(LeveledMapDataInner {
+                        writable: Default::default(),
+                        immutable_levels: Default::default(),
+                        persisted: Some(Arc::new(db)),
+                    }),
                 }),
             },
             cleanup_start_time: self.cleanup_start_time.clone(),
