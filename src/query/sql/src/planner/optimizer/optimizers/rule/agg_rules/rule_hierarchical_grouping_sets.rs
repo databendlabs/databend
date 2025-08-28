@@ -67,11 +67,10 @@ const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
 pub struct RuleHierarchicalGroupingSetsToUnion {
     id: RuleID,
     matchers: Vec<Matcher>,
-    _ctx: Arc<OptimizerContext>,
 }
 
 impl RuleHierarchicalGroupingSetsToUnion {
-    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
+    pub fn new(_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             id: ID,
             matchers: vec![Matcher::MatchOp {
@@ -81,7 +80,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     children: vec![Matcher::Leaf],
                 }],
             }],
-            _ctx: ctx,
         }
     }
 
@@ -175,7 +173,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     /// Depth 0 = no dependencies (base level)
     /// Depth 1 = depends on base level
     /// Depth N = depends on level with depth N-1
-    fn calculate_dependency_depth(&self, level: &GroupingLevel, hierarchy: &HierarchyDAG) -> usize {
+    fn calculate_dependency_depth(level: &GroupingLevel, hierarchy: &HierarchyDAG) -> usize {
         match level.chosen_parent {
             None => 0,             // Base level
             Some(usize::MAX) => 1, // Depends on original input
@@ -186,7 +184,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     .iter()
                     .find(|l| l.set_index == parent_set_idx)
                     .unwrap();
-                self.calculate_dependency_depth(parent_level, hierarchy) + 1
+                Self::calculate_dependency_depth(parent_level, hierarchy) + 1
             }
         }
     }
@@ -215,8 +213,10 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg_functions.iter().all(|item| {
             if let ScalarExpr::AggregateFunction(agg) = &item.scalar {
                 // Only functions that support hierarchical aggregation
-                matches!(agg.func_name.as_str(), "sum" | "count" | "min" | "max")
-                    && !agg.distinct
+                matches!(
+                    agg.func_name.as_str(),
+                    "sum" | "count" | "min" | "max" | "sum0"
+                ) && !agg.distinct
                     && agg.args.len() <= 1
             } else {
                 false
@@ -266,7 +266,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         let mut levels_by_depth: std::collections::BTreeMap<usize, Vec<&GroupingLevel>> =
             std::collections::BTreeMap::new();
         for level in &sorted_levels {
-            let depth = self.calculate_dependency_depth(level, &hierarchy);
+            let depth = Self::calculate_dependency_depth(level, &hierarchy);
             levels_by_depth.entry(depth).or_default().push(level);
         }
 
@@ -277,7 +277,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
                 // Create individual CTEs for each level
                 for level in &levels_at_depth {
-                    let cte_name = self.generate_unique_cte_name(&base_cte_name, &level.columns);
+                    let cte_name = Self::generate_unique_cte_name(&base_cte_name, &level.columns);
 
                     let cte = if let Some(parent_set_idx) = level.chosen_parent {
                         if parent_set_idx == usize::MAX {
@@ -316,7 +316,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     let cte_name = if level.columns.is_empty() {
                         format!("{}_empty", base_cte_name)
                     } else {
-                        self.generate_unique_cte_name(&base_cte_name, &level.columns)
+                        Self::generate_unique_cte_name(&base_cte_name, &level.columns)
                     };
 
                     let cte = if let Some(parent_set_idx) = level.chosen_parent {
@@ -466,6 +466,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         });
 
         let agg_plan = SExpr::create_unary(Arc::new(level_agg.into()), agg_input.clone());
+        let final_plan = agg_plan;
 
         Ok(SExpr::create_unary(
             Arc::new(
@@ -477,7 +478,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 }
                 .into(),
             ),
-            agg_plan,
+            final_plan,
         ))
     }
 
@@ -561,12 +562,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
         for agg_func in hierarchical_agg.aggregate_functions.iter_mut() {
             // Get the original data type before modifying the function
             let original_data_type = agg_func.scalar.data_type()?;
-
             if let ScalarExpr::AggregateFunction(ref mut func) = &mut agg_func.scalar {
                 match func.func_name.as_str() {
                     "count" => {
-                        // COUNT(*) from pre-aggregated -> SUM(pre_computed_count)
-                        func.func_name = "sum".to_string();
+                        // COUNT(*) from pre-aggregated -> sum0(pre_computed_count)
+                        // Important: Keep the original UInt64 return type to maintain type compatibility
+                        func.func_name = "sum0".to_string();
                         // Replace argument with BoundColumnRef to pre-aggregated result
                         if func.args.len() <= 1 {
                             func.args = vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -574,14 +575,14 @@ impl RuleHierarchicalGroupingSetsToUnion {
                                 column: ColumnBindingBuilder::new(
                                     format!("agg_result_{}", agg_func.index),
                                     agg_func.index,
-                                    original_data_type.into(),
+                                    original_data_type.clone().into(), // Keep original UInt64 type, not nullable
                                     Visibility::Visible,
                                 )
                                 .build(),
                             })];
                         }
                     }
-                    "sum" | "min" | "max" => {
+                    "sum0" | "sum" | "min" | "max" => {
                         // These functions are naturally associative
                         // Replace argument with BoundColumnRef to pre-aggregated result
                         func.args = vec![ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -655,7 +656,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         format!("cte_hierarchical_groupingsets_{}", hash)
     }
 
-    fn generate_unique_cte_name(&self, base_name: &str, columns: &[IndexType]) -> String {
+    fn generate_unique_cte_name(base_name: &str, columns: &[IndexType]) -> String {
         if columns.is_empty() {
             return format!("{}_empty", base_name);
         }
@@ -684,9 +685,23 @@ impl RuleHierarchicalGroupingSetsToUnion {
         grouping_id_index: IndexType,
     ) -> Result<SExpr> {
         let mut column_mapping = HashMap::new();
-        for logical_index in source_output_columns.iter() {
-            column_mapping.insert(*logical_index, *logical_index);
+
+        // Create modified output columns with proper types for count functions
+        let mut modified_output_columns = Vec::new();
+        for &logical_index in source_output_columns.iter() {
+            // For other columns, use a dummy binding (will be filled by actual schema)
+            modified_output_columns.push(
+                ColumnBindingBuilder::new(
+                    format!("col_{}", logical_index),
+                    logical_index,
+                    DataType::Number(NumberDataType::UInt64).into(), // Placeholder
+                    Visibility::Visible,
+                )
+                .build(),
+            );
+            column_mapping.insert(logical_index, logical_index);
         }
+
         // Create consumer for source CTE
         let source_consumer = SExpr::create_leaf(MaterializedCTERef {
             cte_name: source_cte_name.to_string(),
@@ -699,6 +714,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         let mut eval_scalar_plan = eval_scalar.clone();
         self.apply_grouping_sets_semantics(
             &mut eval_scalar_plan,
+            source_cte_name,
             group_columns,
             agg,
             grouping_id_index,
@@ -711,6 +727,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     fn apply_grouping_sets_semantics(
         &self,
         eval_scalar: &mut EvalScalar,
+        _source_cte_name: &str,
         group_columns: &[IndexType],
         agg: &Aggregate,
         grouping_id_index: IndexType,
@@ -734,33 +751,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         for scalar_item in eval_scalar.items.iter_mut() {
             visitor.visit(&mut scalar_item.scalar)?;
-        }
-
-        let agg_count_indexs = agg
-            .aggregate_functions
-            .iter()
-            .filter_map(|f| {
-                if let ScalarExpr::AggregateFunction(crate::plans::AggregateFunction {
-                    func_name,
-                    ..
-                }) = &f.scalar
-                {
-                    if func_name.eq_ignore_ascii_case("count") {
-                        Some(f.index)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if !agg_count_indexs.is_empty() {
-            let mut visitor = AggVisitor { agg_count_indexs };
-            for scalar_item in eval_scalar.items.iter_mut() {
-                visitor.visit(&mut scalar_item.scalar)?;
-            }
         }
 
         Ok(())
@@ -828,12 +818,14 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Check if aggregates support hierarchical optimization
-        if !self.can_optimize_hierarchically(&agg.aggregate_functions) {
+        let can_optimize = self.can_optimize_hierarchically(&agg.aggregate_functions);
+        if !can_optimize {
             return Ok(());
         }
 
         // Build hierarchy DAG
         let hierarchy = self.build_hierarchy_dag(&grouping_sets.sets);
+
         // Check if we have meaningful hierarchical structure
         let hierarchical_levels = hierarchy
             .levels
@@ -897,29 +889,7 @@ fn is_proper_subset(subset: &[IndexType], superset: &[IndexType]) -> bool {
     subset.len() < superset.len() && subset.iter().all(|item| superset.contains(item))
 }
 
-struct AggVisitor {
-    agg_count_indexs: Vec<IndexType>,
-}
-
-impl VisitorMut<'_> for AggVisitor {
-    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        let old = expr.clone();
-        if let ScalarExpr::BoundColumnRef(col) = expr {
-            // "count(xx)" should be always as UInt64 without nullable
-            if self.agg_count_indexs.contains(&col.column.index) {
-                *expr = ScalarExpr::CastExpr(CastExpr {
-                    argument: Box::new(old),
-                    is_try: false,
-                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                    span: col.span,
-                });
-                println!("agg_count_indexs: {:?}", self.agg_count_indexs);
-            }
-        }
-        Ok(())
-    }
-}
-// Set other columns to NULL and current group by columns to be nullable
+/// Set other columns to NULL and current group by columns to be nullable
 struct GroupingSetsNullVisitor {
     group_indexes: Vec<IndexType>,
     exclude_group_indexes: Vec<IndexType>,

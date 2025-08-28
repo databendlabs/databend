@@ -365,6 +365,13 @@ fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
     );
     run_agg_ast(
         file,
+        "sum0(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
         "count(all_null)",
         get_example().as_slice(),
         simulator,

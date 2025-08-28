@@ -107,7 +107,9 @@ impl RuleFactory {
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
             RuleID::GroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new(ctx.clone()))),
-            RuleID::HierarchicalGroupingSetsToUnion => Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx))),
+            RuleID::HierarchicalGroupingSetsToUnion => {
+                Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
+            }
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

@@ -85,6 +85,7 @@ mod aggregate_st_collect;
 mod aggregate_stddev;
 mod aggregate_string_agg;
 mod aggregate_sum;
+mod aggregate_sum_zero;
 mod aggregate_unary;
 mod aggregate_window_funnel;
 mod aggregator;
