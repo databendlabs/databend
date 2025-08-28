@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod rule_merge_limit;
 mod rule_push_down_limit;
 mod rule_push_down_limit_expression;
 mod rule_push_down_limit_join;
@@ -20,6 +21,7 @@ mod rule_push_down_limit_sort;
 mod rule_push_down_limit_union;
 mod rule_push_down_limit_window;
 
+pub use rule_merge_limit::RuleMergeLimit;
 pub use rule_push_down_limit::RulePushDownLimit;
 pub use rule_push_down_limit_expression::RulePushDownLimitEvalScalar;
 pub use rule_push_down_limit_join::RulePushDownLimitOuterJoin;
