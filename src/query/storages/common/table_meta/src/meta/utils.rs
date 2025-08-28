@@ -189,6 +189,7 @@ mod tests {
     use std::io::Error;
     use std::io::ErrorKind;
 
+    // crate used
     use chrono::Duration;
     use databend_common_base::base::uuid::Uuid;
     use databend_common_exception::Result;
