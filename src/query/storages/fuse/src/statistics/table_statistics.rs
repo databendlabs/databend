@@ -49,7 +49,11 @@ impl TableStatsGenerator {
 
     pub fn additional_stats_meta(self) -> Option<AdditionalStatsMeta> {
         if self.hll.is_empty() {
-            return self.prev_stats_meta;
+            let mut stats_meta = self.prev_stats_meta;
+            if let Some(v) = stats_meta.as_mut() {
+                v.location = Some(Location::default());
+            }
+            return stats_meta;
         }
 
         let hll = encode_column_hll(&self.hll).ok();
