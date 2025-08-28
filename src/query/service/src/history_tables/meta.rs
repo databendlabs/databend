@@ -337,13 +337,6 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    pub async fn test_history_table_permit_guard_debug() -> databend_common_exception::Result<()> {
-        for _i in 0..50 {
-            test_history_table_permit_guard().await?;
-        }
-        Ok(())
-    }
-
     pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
         let meta_store = setup_meta_client().await;
         let meta_client = meta_store.deref().clone();
@@ -351,9 +344,8 @@ mod tests {
         let node_id = "test_node_123".to_string();
         let meta_handle = HistoryMetaHandle::new(meta_client, node_id);
 
-        let meta_key = "test/history_table/permit_guard";
-
         // Test 1: Basic permit acquisition with interval 0 (no rate limiting)
+        let meta_key = "test/history_table/permit_guard";
         let guard_result = meta_handle.acquire_with_guard(meta_key, 0).await?;
         assert!(
             guard_result.is_some(),
