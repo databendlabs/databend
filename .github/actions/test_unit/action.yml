@@ -24,7 +24,7 @@ runs:
         RUST_TEST_THREADS: 4
         RUST_LOG: ERROR
         # 1GiB
-        RUST_MIN_STACK: 1073741824
+        # RUST_MIN_STACK: 1073741824
         # RUST_BACKTRACE: 1
 
     - name: Upload failure
