@@ -40,8 +40,13 @@
 //!
 //! - Field names, types, order
 //! - Visibility modifiers  
-//! - Nested structure changes
+//! - Type names (including nested types)
 //! - Generic parameters
+//!
+//! ## Nested Dependencies
+//!
+//! For comprehensive protection, also apply `#[frozen_api]` to all nested types.
+//! Changes to nested types will only be detected if they're also protected.
 //!
 //! Use on structs that are serialized, part of network protocols, or must maintain compatibility.
 
@@ -52,7 +57,63 @@ use sha2::Digest;
 use sha2::Sha256;
 use syn::parse_macro_input;
 use syn::DeriveInput;
+use syn::Fields;
 use syn::LitStr;
+use syn::Type;
+
+/// Extract type names from struct fields for deep hashing
+fn extract_field_types(input: &DeriveInput) -> Vec<String> {
+    let mut types = Vec::new();
+
+    if let syn::Data::Struct(data_struct) = &input.data {
+        match &data_struct.fields {
+            Fields::Named(fields) => {
+                for field in &fields.named {
+                    types.push(type_to_string(&field.ty));
+                }
+            }
+            Fields::Unnamed(fields) => {
+                for field in &fields.unnamed {
+                    types.push(type_to_string(&field.ty));
+                }
+            }
+            Fields::Unit => {}
+        }
+    }
+
+    types
+}
+
+/// Convert a Type to string representation
+fn type_to_string(ty: &Type) -> String {
+    match ty {
+        Type::Path(type_path) => type_path
+            .path
+            .segments
+            .iter()
+            .map(|seg| seg.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("::"),
+        _ => ty.to_token_stream().to_string(),
+    }
+}
+
+/// Compute deep hash including nested type information
+fn compute_deep_hash(input: &DeriveInput) -> String {
+    let mut hasher = Sha256::new();
+
+    // Hash the main structure definition
+    hasher.update(input.to_token_stream().to_string());
+
+    // Hash the types of all fields for deeper analysis
+    let field_types = extract_field_types(input);
+    for field_type in field_types {
+        hasher.update(field_type);
+        hasher.update(b"|"); // separator
+    }
+
+    hex::encode(&hasher.finalize()[..4])
+}
 
 /// Compile-time API freezing macro that prevents accidental breaking changes.
 #[proc_macro_attribute]
@@ -60,8 +121,8 @@ pub fn frozen_api(args: TokenStream, input: TokenStream) -> TokenStream {
     let expected = parse_macro_input!(args as LitStr).value();
     let input_struct = parse_macro_input!(input as DeriveInput);
 
-    // Compute actual hash directly from TokenStream
-    let actual = hex::encode(&Sha256::digest(input_struct.to_token_stream().to_string())[..4]);
+    // Compute deep hash including nested type information
+    let actual = compute_deep_hash(&input_struct);
 
     if actual != expected {
         syn::Error::new_spanned(
