@@ -24,6 +24,7 @@ use crate::optimizer::optimizers::rule::RuleEliminateEvalScalar;
 use crate::optimizer::optimizers::rule::RuleEliminateFilter;
 use crate::optimizer::optimizers::rule::RuleEliminateSort;
 use crate::optimizer::optimizers::rule::RuleEliminateUnion;
+use crate::optimizer::optimizers::rule::RuleFilterFlattenOr;
 use crate::optimizer::optimizers::rule::RuleFilterNulls;
 use crate::optimizer::optimizers::rule::RuleFoldCountAggregate;
 use crate::optimizer::optimizers::rule::RuleGroupingSetsToUnion;
@@ -71,6 +72,7 @@ impl RuleFactory {
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
             ))),
+            RuleID::FilterFlattenOr => Ok(Box::new(RuleFilterFlattenOr::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),

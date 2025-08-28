@@ -32,6 +32,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::MergeEvalScalar,
         // Filter
         RuleID::FilterNulls,
+        RuleID::FilterFlattenOr,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::NormalizeScalarFilter,
@@ -92,6 +93,7 @@ pub enum RuleID {
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     FilterNulls,
+    FilterFlattenOr,
     PushDownFilterUnion,
     PushDownFilterJoin,
     PushDownFilterScan,
@@ -137,6 +139,7 @@ impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             RuleID::FilterNulls => write!(f, "FilterNulls"),
+            RuleID::FilterFlattenOr => write!(f, "FilterFlattenOr"),
             RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),

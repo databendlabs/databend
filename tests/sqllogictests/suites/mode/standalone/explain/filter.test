@@ -102,3 +102,20 @@ Filter
     ├── pruning stats: [segments: <range pruning: 2 to 0>]
     ├── push downs: [filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)], limit: NONE]
     └── estimated rows: 200.00
+
+query T
+explain select number from numbers(6) where number = 1 or number = 5 or number = 3;
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [or_filters(numbers.number (#0) = 1, numbers.number (#0) = 5, numbers.number (#0) = 3)]
+├── estimated rows: 1.20
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [or_filters(numbers.number (#0) = 1, numbers.number (#0) = 5, numbers.number (#0) = 3)], limit: NONE]
+    └── estimated rows: 6.00
