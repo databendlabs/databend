@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_frozen_api::frozen_api;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -38,6 +39,7 @@ use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
+#[frozen_api("46df658f")]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version of SegmentInfo table meta data

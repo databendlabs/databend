@@ -25,6 +25,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::VariantDataType;
+use databend_common_frozen_api::frozen_api;
 use databend_common_native::ColumnMeta as NativeColumnMeta;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -42,6 +43,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
+#[frozen_api("a9bf1ae5")]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
@@ -66,6 +68,7 @@ impl SegmentInfo {
 /// The column meta of virtual columns.
 /// Virtual column is the internal field values extracted from variant type values,
 /// used to speed up the reading of internal fields of variant data.
+#[frozen_api("c894abf6")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualColumnMeta {
     /// where the data of column start
@@ -121,6 +124,7 @@ impl VirtualColumnMeta {
 }
 
 /// The block meta of virtual columns.
+#[frozen_api("1e3def76")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualBlockMeta {
     /// key is virtual columnId, value is VirtualColumnMeta
@@ -153,6 +157,7 @@ pub struct DraftVirtualBlockMeta {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
+#[frozen_api("33f1e8ff")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
     pub row_count: u64,
@@ -240,6 +245,7 @@ impl BlockMeta {
     }
 }
 
+#[frozen_api("be8eaa03")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
