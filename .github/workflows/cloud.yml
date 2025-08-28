@@ -6,6 +6,7 @@ on:
       - labeled
     branches:
       - main
+      - backport/*
 
 permissions:
   id-token: write
