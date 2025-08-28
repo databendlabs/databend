@@ -95,9 +95,11 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut fields = Vec::new();
         let metadata = self.metadata.read();
+
         for index in &cte_consumer.output_columns {
             let column = metadata.column(*index);
-            fields.push(DataField::new(&index.to_string(), column.data_type()));
+            let data_type = column.data_type();
+            fields.push(DataField::new(&index.to_string(), data_type));
         }
         let cte_schema = DataSchemaRefExt::create(fields);
         Ok(PhysicalPlan::new(MaterializeCTERef {

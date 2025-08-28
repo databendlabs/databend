@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,7 +28,7 @@ use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
-use databend_common_sql::plans::DummyTableScan;
+use databend_common_sql::plans::ConstantTableScan;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
@@ -219,8 +218,12 @@ impl PhysicalPlanBuilder {
             required.insert(i.index);
         });
 
+        // single key without aggregation
         if agg.group_items.is_empty() && used.is_empty() {
-            let expr = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
+            let mut s =
+                ConstantTableScan::new_empty_scan(DataSchemaRef::default(), ColumnSet::new());
+            s.num_rows = 1;
+            let expr = SExpr::create_leaf(s);
             return self.build(&expr, required).await;
         }
 

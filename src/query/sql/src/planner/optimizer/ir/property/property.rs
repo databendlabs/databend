@@ -58,6 +58,9 @@ pub struct StatInfo {
 #[derive(Default, Clone, Debug)]
 pub struct RelationalProperty {
     /// Output columns of a relational expression
+    /// Note that:
+    /// - this is just to identify the output column sets, and it is not the same order as the output columns of the plan.
+    /// - So it can't construct the output schema
     pub output_columns: ColumnSet,
 
     /// Outer references of a relational expression

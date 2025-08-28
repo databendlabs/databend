@@ -60,6 +60,7 @@ use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
 use super::AggregateStateCombinator;
+use crate::aggregates::aggregate_sum_zero::AggregateSumZeroFunction;
 
 pub struct Aggregators;
 
@@ -68,6 +69,8 @@ impl Aggregators {
         // DatabendQuery always uses lowercase function names to get functions.
         factory.register("sum", aggregate_sum_function_desc());
         factory.register("count", AggregateCountFunction::desc());
+        factory.register("sum0", AggregateSumZeroFunction::desc());
+        factory.register("sum_zero", AggregateSumZeroFunction::desc());
         factory.register("avg", aggregate_avg_function_desc());
         factory.register("uniq", aggregate_combinator_uniq_desc());
 
