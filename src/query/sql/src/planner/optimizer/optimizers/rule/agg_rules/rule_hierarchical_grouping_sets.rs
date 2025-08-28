@@ -234,7 +234,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         grouping_id_index: IndexType,
     ) -> Result<SExpr> {
         let mut all_ctes = Vec::new();
-        let mut cte_name_mapping = HashMap::new();
 
         // Step 1: Check if we need an original input CTE
         let has_original_input = hierarchy
@@ -246,8 +245,11 @@ impl RuleHierarchicalGroupingSetsToUnion {
             // Create original input CTE (just materializes the raw data)
             let original_cte_name = format!("{}_original", base_cte_name);
             let original_cte = self.create_original_input_cte(&original_cte_name, agg_input)?;
-            all_ctes.push((original_cte_name.clone(), original_cte));
-            cte_name_mapping.insert(usize::MAX, original_cte_name);
+            all_ctes.push(CteInfo {
+                name: original_cte_name,
+                set_index: usize::MAX,
+                cte: original_cte,
+            });
         }
 
         // Step 2: Create CTEs for grouping sets, organizing by dependency levels for parallelization
@@ -281,22 +283,27 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     let cte = if let Some(parent_set_idx) = level.chosen_parent {
                         if parent_set_idx == usize::MAX {
                             // Parent is original input
-                            let original_cte_name = cte_name_mapping.get(&usize::MAX).unwrap();
+                            let original_cte_name = all_ctes
+                                .iter()
+                                .find(|cte| cte.set_index == usize::MAX)
+                                .unwrap()
+                                .name
+                                .clone();
+
                             self.create_cte_from_original(
                                 agg_input,
                                 &cte_name,
-                                original_cte_name,
+                                &original_cte_name,
                                 level,
                                 agg,
                                 &agg_input_columns,
                             )?
                         } else {
                             // Parent is another grouping set CTE
-                            let parent_cte_name = cte_name_mapping.get(&parent_set_idx).unwrap();
                             let parent = hierarchy.get_by_set_index(parent_set_idx).unwrap();
                             let parent_cte = all_ctes
                                 .iter()
-                                .find(|(name, _)| name == parent_cte_name)
+                                .find(|cte| cte.set_index == parent_set_idx)
                                 .unwrap();
 
                             self.create_hierarchical_cte(&cte_name, parent_cte, parent, level, agg)?
@@ -306,8 +313,11 @@ impl RuleHierarchicalGroupingSetsToUnion {
                         self.create_base_cte_for_level(&cte_name, agg_input, level, agg)?
                     };
 
-                    cte_name_mapping.insert(level.set_index, cte_name.clone());
-                    all_ctes.push((cte_name, cte));
+                    all_ctes.push(CteInfo {
+                        name: cte_name,
+                        set_index: level.set_index,
+                        cte,
+                    });
                 }
             } else {
                 // Single level or higher depth - process normally
@@ -321,32 +331,46 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     let cte = if let Some(parent_set_idx) = level.chosen_parent {
                         if parent_set_idx == usize::MAX {
                             // Parent is original input
-                            let original_cte_name = cte_name_mapping.get(&usize::MAX).unwrap();
+                            let original_cte_name = all_ctes
+                                .iter()
+                                .find(|cte| cte.set_index == usize::MAX)
+                                .unwrap()
+                                .name
+                                .clone();
+
                             self.create_cte_from_original(
                                 agg_input,
                                 &cte_name,
-                                original_cte_name,
+                                &original_cte_name,
                                 level,
                                 agg,
                                 &agg_input_columns,
                             )?
                         } else {
                             // Parent is another grouping set CTE
-                            let parent_cte_name = cte_name_mapping.get(&parent_set_idx).unwrap();
-                            let parent = hierarchy.get_by_set_index(parent_set_idx).unwrap();
+                            let parent_level = hierarchy.get_by_set_index(parent_set_idx).unwrap();
                             let parent_cte = all_ctes
                                 .iter()
-                                .find(|(name, _)| name == parent_cte_name)
+                                .find(|cte| cte.set_index == parent_set_idx)
                                 .unwrap();
-                            self.create_hierarchical_cte(&cte_name, parent_cte, parent, level, agg)?
+                            self.create_hierarchical_cte(
+                                &cte_name,
+                                parent_cte,
+                                parent_level,
+                                level,
+                                agg,
+                            )?
                         }
                     } else {
                         // No parent - this is a base level
                         self.create_base_cte_for_level(&cte_name, agg_input, level, agg)?
                     };
 
-                    cte_name_mapping.insert(level.set_index, cte_name.clone());
-                    all_ctes.push((cte_name, cte));
+                    all_ctes.push(CteInfo {
+                        name: cte_name.clone(),
+                        set_index: level.set_index,
+                        cte,
+                    });
                 }
             }
         }
@@ -357,7 +381,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
             eval_scalar,
             &hierarchy,
             agg,
-            &cte_name_mapping,
             grouping_id_index,
         )?;
 
@@ -368,8 +391,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
         // Sequence semantics: left executes first, right executes after
         // Dependencies must execute before dependents
         let mut result = union_result;
-        for (_, cte) in all_ctes.into_iter().rev() {
-            result = SExpr::create_binary(Sequence, cte, result);
+        for cte in all_ctes.into_iter().rev() {
+            result = SExpr::create_binary(Sequence, cte.cte, result);
         }
 
         Ok(result)
@@ -428,7 +451,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         ));
 
         let agg_plan = SExpr::create_unary(Arc::new(group_agg.into()), original_consumer);
-
         Ok(SExpr::create_unary(
             Arc::new(
                 MaterializedCTE {
@@ -486,11 +508,10 @@ impl RuleHierarchicalGroupingSetsToUnion {
     /// Build final union branches using the new CTE mapping
     fn build_final_union_branches(
         &self,
-        all_ctes: &[(String, SExpr)],
+        all_ctes: &[CteInfo],
         eval_scalar: &EvalScalar,
         hierarchy: &HierarchyDAG,
         agg: &Aggregate,
-        cte_name_mapping: &HashMap<usize, String>,
         grouping_id_index: IndexType,
     ) -> Result<Vec<SExpr>> {
         let mut branches = Vec::new();
@@ -500,8 +521,10 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 continue; // Skip original input level
             }
 
-            let cte_name = cte_name_mapping.get(&level.set_index).unwrap();
-            let source_cte = &all_ctes.iter().find(|(name, _)| name == cte_name).unwrap();
+            let source_cte = all_ctes
+                .iter()
+                .find(|cte| cte.set_index == level.set_index)
+                .unwrap();
 
             // Calculate output columns for this CTE
             let mut source_output_columns = Vec::new();
@@ -532,7 +555,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     fn create_hierarchical_cte(
         &self,
         cte_name: &str,
-        parent_cte: &(String, SExpr),
+        parent_cte: &CteInfo,
         parent_level: &GroupingLevel,
         level: &GroupingLevel,
         agg: &Aggregate,
@@ -626,9 +649,9 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         let parent_consumer = SExpr::create_leaf(Arc::new(
             MaterializedCTERef {
-                cte_name: parent_cte.0.to_string(),
+                cte_name: parent_cte.name.clone(),
                 output_columns: parent_output_columns,
-                def: parent_cte.1.child(0)?.clone(),
+                def: parent_cte.cte.child(0)?.clone(),
                 column_mapping,
             }
             .into(),
@@ -681,7 +704,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         &self,
         eval_scalar: &EvalScalar,
         group_columns: &[IndexType],
-        source_cte: &(String, SExpr),
+        source_cte: &CteInfo,
         source_output_columns: &[IndexType],
         _set_index: usize,
         agg: &Aggregate,
@@ -707,9 +730,9 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
         // Create consumer for source CTE
         let source_consumer = SExpr::create_leaf(MaterializedCTERef {
-            cte_name: source_cte.0.to_string(),
+            cte_name: source_cte.name.clone(),
             output_columns: source_output_columns.to_vec(),
-            def: source_cte.1.child(0)?.clone(),
+            def: source_cte.cte.child(0)?.clone(),
             column_mapping,
         });
 
@@ -717,7 +740,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         let mut eval_scalar_plan = eval_scalar.clone();
         self.apply_grouping_sets_semantics(
             &mut eval_scalar_plan,
-            &source_cte.0,
+            &source_cte.name,
             group_columns,
             agg,
             grouping_id_index,
@@ -871,6 +894,12 @@ struct GroupingLevel {
     possible_parents: Vec<usize>,
     chosen_parent: Option<usize>,
     level: usize,
+}
+
+struct CteInfo {
+    name: String,
+    set_index: usize,
+    cte: SExpr,
 }
 
 #[derive(Debug)]
