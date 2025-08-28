@@ -1391,6 +1391,7 @@ fn test_expr() {
 }
 
 // FIXME: this test cause stack overflow
+// https://github.com/databendlabs/databend/issues/18625
 #[test]
 #[ignore]
 fn test_expr_stack() {
