@@ -3681,6 +3681,7 @@ impl SchemaApiTestSuite {
 
             let req = GcDroppedTableReq {
                 tenant: tenant.clone(),
+                catalog: "default".to_string(),
                 drop_ids: resp.drop_ids.clone(),
             };
             mt.gc_drop_tables(req).await?;
@@ -3882,6 +3883,7 @@ impl SchemaApiTestSuite {
 
             let req = GcDroppedTableReq {
                 tenant: tenant.clone(),
+                catalog: "default".to_string(),
                 drop_ids: resp.drop_ids.clone(),
             };
             mt.gc_drop_tables(req).await?;
@@ -4054,6 +4056,7 @@ impl SchemaApiTestSuite {
 
             let req = GcDroppedTableReq {
                 tenant: tenant.clone(),
+                catalog: "default".to_string(),
                 drop_ids: resp.drop_ids.clone(),
             };
             mt.gc_drop_tables(req).await?;
@@ -5247,6 +5250,7 @@ impl SchemaApiTestSuite {
 
             let req = GcDroppedTableReq {
                 tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                catalog: "default".to_string(),
                 drop_ids: resp.drop_ids.clone(),
             };
             mt.gc_drop_tables(req).await?;
@@ -6895,6 +6899,7 @@ impl SchemaApiTestSuite {
 
         let req = GcDroppedTableReq {
             tenant: tenant.clone(),
+            catalog: "default".to_string(),
             drop_ids,
         };
 

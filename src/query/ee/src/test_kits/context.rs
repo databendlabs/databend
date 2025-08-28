@@ -62,6 +62,10 @@ impl EESetup {
             pk: public_key,
         }
     }
+
+    pub fn config_mut(&mut self) -> &mut InnerConfig {
+        &mut self.config
+    }
 }
 
 impl Default for EESetup {
