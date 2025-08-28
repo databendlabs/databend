@@ -132,8 +132,8 @@ databend-common-datavalues = { path = "src/query/datavalues" }
 databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
 databend-common-formats = { path = "src/query/formats" }
-databend-common-functions = { path = "src/query/functions" }
 databend-common-frozen-api = { path = "src/common/frozen_api" }
+databend-common-functions = { path = "src/query/functions" }
 databend-common-grpc = { path = "src/common/grpc" }
 databend-common-hashtable = { path = "src/common/hashtable" }
 databend-common-http = { path = "src/common/http" }

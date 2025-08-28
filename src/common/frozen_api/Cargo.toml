@@ -12,7 +12,7 @@ test = false
 proc-macro = true
 
 [dependencies]
-quote = "1.0"
-syn = { version = "2.0", features = ["full"] }
-sha2 = { workspace = true }
 hex = { workspace = true }
+quote = "1.0"
+sha2 = { workspace = true }
+syn = { version = "2.0", features = ["full"] }
