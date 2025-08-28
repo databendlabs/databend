@@ -63,7 +63,7 @@ fn format_error(value: serde_json::Value) -> String {
     }
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize)]
 struct TokenInfo {
     session_token: String,
 }
@@ -111,7 +111,7 @@ impl HttpClient {
                 println!("fail to decode json when call {}: {:?}", url, e);
             })?
             .tokens
-            .unwrap_or_default()
+            .unwrap()
             .session_token;
 
         Ok(Self {

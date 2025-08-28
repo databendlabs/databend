@@ -254,8 +254,8 @@ run_test() {
 	echo " === Run metasrv related test: 05_ddl"
 
 	if [ "$query_ver" = "current" ]; then
-		# Only run test on http handler
-		$sqllogictests --handlers http --run_dir 05_ddl
+		# Only run test on mysql handler
+		$sqllogictests --handlers mysql --run_dir 05_ddl
 	else
 		(
 			# download suites into ./testsuite/$query_ver/{bin/,suites/}
@@ -267,8 +267,8 @@ run_test() {
 		mv "./testsuite/$query_ver/suites" "tests/sqllogictests/suites"
 
 		# NOTE: use current sqllogictests since we only release x86_64-unknown-linux-gnu binary
-		# ./testsuite/$query_ver/bin/databend-sqllogictests --handlers http --run_dir 05_ddl
-		./bins/current/databend-sqllogictests --handlers http --run_dir 05_ddl
+		# ./testsuite/$query_ver/bin/databend-sqllogictests --handlers mysql --run_dir 05_ddl
+		./bins/current/databend-sqllogictests --handlers mysql --run_dir 05_ddl
 		cd -
 	fi
 }
