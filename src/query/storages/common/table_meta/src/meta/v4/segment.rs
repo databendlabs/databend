@@ -203,6 +203,7 @@ impl SegmentInfo {
     }
 }
 
+#[frozen_api("24f70472")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
@@ -210,6 +211,7 @@ pub struct RawBlockMeta {
     pub compression: MetaCompression,
 }
 
+#[frozen_api("d6771e43")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,

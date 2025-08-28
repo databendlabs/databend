@@ -136,6 +136,7 @@ pub struct VirtualBlockMeta {
 }
 
 /// The draft column meta of virtual columns, virtual ColumnId is not set.
+#[frozen_api("32bc27d8")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualColumnMeta {
     pub source_column_id: ColumnId,
@@ -145,6 +146,7 @@ pub struct DraftVirtualColumnMeta {
 }
 
 /// The draft block meta of virtual columns.
+#[frozen_api("b3cfe277")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualBlockMeta {
     /// The draft virtual oclumn metas, virtual ColumnId needs to be set.
