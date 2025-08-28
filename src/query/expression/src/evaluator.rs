@@ -221,6 +221,12 @@ impl<'a> Evaluator<'a> {
                 self.eval_and_filters(args, validity, options)?
             }
 
+            Expr::FunctionCall(FunctionCall { function, args, .. })
+                if function.signature.name == "or_filters" =>
+            {
+                self.eval_or_filters(args, validity, options)?
+            }
+
             Expr::FunctionCall(call) => {
                 self.eval_common_call(call, validity, &|| expr.sql_display(), options)?
             }
@@ -1410,6 +1416,52 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    // `or_filters` is the or version of `and_filters`
+    fn eval_or_filters(
+        &self,
+        args: &[Expr],
+        mut validity: Option<Bitmap>,
+        options: &mut EvaluateOptions,
+    ) -> Result<Value<AnyType>> {
+        assert!(args.len() >= 2);
+
+        for arg in args {
+            let cond = self.partial_run(arg, validity.clone(), options)?;
+            match &cond {
+                Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => {
+                    continue;
+                }
+                Value::Scalar(Scalar::Boolean(true)) => {
+                    return Ok(Value::Scalar(Scalar::Boolean(true)));
+                }
+                Value::Column(column) => {
+                    let flag = match column {
+                        Column::Nullable(box nullable_column) => {
+                            let boolean_column = nullable_column.column.as_boolean().unwrap();
+                            boolean_column & (&nullable_column.validity)
+                        }
+                        Column::Boolean(boolean_column) => boolean_column.clone(),
+                        _ => unreachable!(),
+                    };
+                    match &validity {
+                        Some(v) => {
+                            validity = Some(v | (&flag));
+                        }
+                        None => {
+                            validity = Some(flag);
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        match validity {
+            Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
+            None => Ok(Value::Scalar(Scalar::Boolean(false))),
+        }
+    }
+
     /// Evaluate a set-returning-function. Return multiple sets of results
     /// for each input row, along with the number of rows in each set.
     pub fn run_srf(
@@ -1905,6 +1957,18 @@ impl<'a> Evaluator<'a> {
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
+
+            Expr::FunctionCall(FunctionCall {
+                function,
+                args,
+                generics,
+                ..
+            }) if function.signature.name == "or_filters" => {
+                let return_type =
+                    self.remove_generics_data_type(generics, &function.signature.return_type);
+                Ok((self.eval_or_filters(args, None, options)?, return_type))
+            }
+
             Expr::FunctionCall(FunctionCall {
                 span,
                 id,
@@ -2162,7 +2226,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 generics,
                 args,
                 return_type,
-            }) if function.signature.name == "and_filters" => {
+            }) if matches!(
+                function.signature.name.as_str(),
+                "and_filters" | "or_filters"
+            ) =>
+            {
+                let is_or = function.signature.name.starts_with("or_");
+
                 if args.len() > MAX_FUNCTION_ARGS_TO_FOLD {
                     return (expr.clone(), None);
                 }
@@ -2178,18 +2248,20 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
                     if let Expr::Constant(Constant {
-                        scalar: Scalar::Boolean(false),
+                        scalar: Scalar::Boolean(result),
                         ..
                     }) = &expr
                     {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar: Scalar::Boolean(false),
-                                data_type: DataType::Boolean,
-                            }),
-                            None,
-                        );
+                        if is_or == *result {
+                            return (
+                                Expr::Constant(Constant {
+                                    span: *span,
+                                    scalar: Scalar::Boolean(is_or),
+                                    data_type: DataType::Boolean,
+                                }),
+                                None,
+                            );
+                        }
                     }
                     args_expr.push(expr);
 
@@ -2210,24 +2282,37 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             },
                             _ => unreachable!(),
                         };
+                        let (has_true, has_false) = if is_or {
+                            (
+                                func_domain.has_true || domain_has_true,
+                                func_domain.has_false && domain_has_false,
+                            )
+                        } else {
+                            (
+                                func_domain.has_true && domain_has_true,
+                                func_domain.has_false || domain_has_false,
+                            )
+                        };
                         BooleanDomain {
-                            has_true: func_domain.has_true && domain_has_true,
-                            has_false: func_domain.has_false || domain_has_false,
+                            has_true,
+                            has_false,
                         }
                     });
 
-                    if let Some(Scalar::Boolean(false)) = result_domain
+                    if let Some(Scalar::Boolean(result)) = result_domain
                         .as_ref()
                         .and_then(|domain| Domain::Boolean(*domain).as_singleton())
                     {
-                        return (
-                            Expr::Constant(Constant {
-                                span: *span,
-                                scalar: Scalar::Boolean(false),
-                                data_type: DataType::Boolean,
-                            }),
-                            None,
-                        );
+                        if is_or == result {
+                            return (
+                                Expr::Constant(Constant {
+                                    span: *span,
+                                    scalar: Scalar::Boolean(result),
+                                    data_type: DataType::Boolean,
+                                }),
+                                None,
+                            );
+                        }
                     }
                 }
 

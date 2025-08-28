@@ -130,7 +130,7 @@ pub async fn generate_segments_v2(
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
-            location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
             ..Default::default()
         };
         dal.write(&stats_location, stats).await?;
@@ -173,7 +173,7 @@ pub async fn generate_segments(
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
-            location: Some((stats_location.clone(), SegmentStatistics::VERSION)),
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
             ..Default::default()
         };
         dal.write(&stats_location, stats).await?;
