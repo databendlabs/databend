@@ -103,11 +103,15 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
         })
         .collect();
 
-    let or_filters_expr = RawExpr::FunctionCall {
-        span: None,
-        name: "or_filters".to_string(),
-        params: vec![],
-        args: eq_exprs,
+    let or_filters_expr = if eq_exprs.len() == 1 {
+        eq_exprs[0].clone()
+    } else {
+        RawExpr::FunctionCall {
+            span: None,
+            name: "or_filters".to_string(),
+            params: vec![],
+            args: eq_exprs,
+        }
     };
 
     let expr = type_check::check(&or_filters_expr, &BUILTIN_FUNCTIONS)?;
