@@ -13,30 +13,28 @@
 // limitations under the License.
 
 use std::io;
+use std::io::Error;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc;
+use map_api::mvcc::ScopedSnapshotIntoRange;
+use map_api::mvcc::ViewKey;
+use map_api::mvcc::ViewValue;
+use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
+use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
-use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapKV;
-use crate::leveled_store::map_api::SeqMarkedOf;
 
 /// A single **immutable** level of state machine data.
-///
-/// Immutable level implement only [`MapApiRO`], but not [`MapApi`].
-///
-/// [`MapApi`]: crate::sm_v003::leveled_store::map_api::MapApi
 #[derive(Debug, Clone)]
 pub struct Immutable {
     /// An in-process unique to identify this immutable level.
@@ -77,6 +75,18 @@ impl AsRef<Level> for Immutable {
     }
 }
 
+impl AsRef<mvcc::Table<UserKey, MetaValue>> for Immutable {
+    fn as_ref(&self) -> &mvcc::Table<UserKey, MetaValue> {
+        self.level.as_ref().as_ref()
+    }
+}
+
+impl AsRef<mvcc::Table<ExpireKey, String>> for Immutable {
+    fn as_ref(&self) -> &mvcc::Table<ExpireKey, String> {
+        self.level.as_ref().as_ref()
+    }
+}
+
 impl Deref for Immutable {
     type Target = Level;
 
@@ -85,54 +95,57 @@ impl Deref for Immutable {
     }
 }
 
-impl Immutable {
-    /// Build a static stream that yields key values for primary index
-    #[futures_async_stream::try_stream(boxed, ok = MapKV<UserKey>, error = io::Error)]
-    async fn user_range<R>(self: Immutable, range: R)
-    where R: RangeBounds<UserKey> + Clone + Send + Sync + 'static {
-        let it = self.as_ref().kv.range(range, u64::MAX);
-
-        for (k, v) in it {
-            yield (k.clone(), v.cloned());
-        }
-    }
-
-    /// Build a static stream that yields expire key and key for the secondary expiration index
-    #[futures_async_stream::try_stream(boxed, ok = MapKV<ExpireKey>, error = io::Error)]
-    async fn expire_range<R>(self: Immutable, range: R)
-    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
-        let it = self.as_ref().expire.range(range, u64::MAX);
-
-        for (k, v) in it {
-            yield (*k, v.cloned());
-        }
+// TODO: Test
+#[async_trait::async_trait]
+impl<K, V> mvcc::ScopedSeqBoundedGet<K, V> for Immutable
+where
+    K: ViewKey,
+    V: ViewValue,
+    Level: GetTable<K, V>,
+{
+    async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<V>, io::Error> {
+        let seq_marked = self.level.get_table().get(key, snapshot_seq).cloned();
+        Ok(seq_marked)
     }
 }
 
+// TODO: Test
 #[async_trait::async_trait]
-impl MapApiRO<UserKey> for Immutable {
-    async fn get(&self, key: &UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
-        // get() is just delegated
-        self.as_ref().as_user_map().get(key).await
-    }
-
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<UserKey>, io::Error>
-    where R: RangeBounds<UserKey> + Clone + Send + Sync + 'static {
-        let strm = self.clone().user_range(range);
-        Ok(strm)
+impl<K, V> mvcc::ScopedSeqBoundedRange<K, V> for Immutable
+where
+    K: ViewKey,
+    V: ViewValue,
+    Immutable: AsRef<mvcc::Table<K, V>>,
+{
+    async fn range<R>(
+        &self,
+        range: R,
+        snapshot_seq: u64,
+    ) -> Result<IOResultStream<(K, SeqMarked<V>)>, Error>
+    where
+        R: RangeBounds<K> + Send + Sync + Clone + 'static,
+    {
+        self.clone().into_range(range, snapshot_seq).await
     }
 }
 
-#[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for Immutable {
-    async fn get(&self, key: &ExpireKey) -> Result<SeqMarkedOf<ExpireKey>, io::Error> {
-        // get() is just delegated
-        self.as_ref().as_expire_map().get(key).await
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_scoped_snapshot_range_traits<T>()
+    where
+        T: mvcc::ScopedSeqBoundedRangeIter<UserKey, MetaValue>,
+        T: mvcc::ScopedSeqBoundedRangeIter<ExpireKey, String>,
+        T: mvcc::ScopedSnapshotIntoRange<UserKey, MetaValue>,
+        T: mvcc::ScopedSnapshotIntoRange<ExpireKey, String>,
+        T: mvcc::ScopedSeqBoundedRange<UserKey, MetaValue>,
+        T: mvcc::ScopedSeqBoundedRange<ExpireKey, String>,
+    {
     }
 
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>
-    where R: RangeBounds<ExpireKey> + Clone + Send + Sync + 'static {
-        let strm = self.clone().expire_range(range);
-        Ok(strm)
+    #[test]
+    fn test_scoped_snapshot_range_iter() {
+        assert_scoped_snapshot_range_traits::<Immutable>();
     }
 }

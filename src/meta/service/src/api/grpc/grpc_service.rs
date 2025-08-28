@@ -66,7 +66,7 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
-use map_api::mvcc::scoped_view_readonly::ScopedViewReadonly;
+use map_api::mvcc::ScopedRange;
 use prost::Message;
 use state_machine_api::UserKey;
 use tokio_stream;
@@ -511,7 +511,7 @@ impl MetaService for MetaServiceImpl {
             if flush {
                 let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
-                let strm = sm.levels().data.to_readonly_view().range(key_range).await?;
+                let strm = sm.to_state_machine_snapshot().range(key_range).await?;
                 let strm = strm
                     .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));
 

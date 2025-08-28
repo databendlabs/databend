@@ -25,8 +25,8 @@ pub enum Namespace {
     Expire,
 }
 
-impl mvcc::ViewNameSpace for Namespace {
-    fn if_increase_seq(&self) -> bool {
+impl mvcc::ViewNamespace for Namespace {
+    fn increments_seq(&self) -> bool {
         match self {
             Namespace::User => true,
             // Backward compatibility: when inserting an expiry index as the secondary index, do not increase seq.

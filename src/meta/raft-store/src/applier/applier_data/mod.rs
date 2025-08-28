@@ -16,21 +16,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use map_api::mvcc;
-
 use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
-use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
-use crate::leveled_store::types::Key;
-use crate::leveled_store::types::Namespace;
-use crate::leveled_store::types::Value;
+use crate::leveled_store::view::StateMachineView;
 use crate::sm_v003::OnChange;
-
-mod impl_expire_scoped_view;
-mod impl_expire_scoped_view_readonly;
-mod impl_user_scoped_view;
-mod impl_user_scoped_view_readonly;
-
-pub(crate) type StateMachineView = mvcc::View<Namespace, Key, Value, Arc<LeveledMapData>>;
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.

@@ -21,11 +21,13 @@ pub mod level_index;
 pub mod leveled_map;
 pub mod map_api;
 pub mod rotbl_codec;
+pub(crate) mod snapshot;
 pub mod sys_data;
 pub mod sys_data_api;
 pub mod types;
 pub mod util;
 pub mod value_convert;
+pub mod view;
 
 mod db_map_api_ro_impl;
 #[cfg(test)]

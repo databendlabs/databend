@@ -144,6 +144,10 @@ impl DB {
     pub fn sys_data(&self) -> &SysData {
         &self.sys_data
     }
+
+    pub fn last_seq(&self) -> u64 {
+        self.sys_data.curr_seq()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

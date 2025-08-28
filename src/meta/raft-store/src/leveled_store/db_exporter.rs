@@ -23,13 +23,14 @@ use databend_common_meta_types::SeqV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
-use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::IOResultStream;
+use state_machine_api::ExpireKey;
 use state_machine_api::ExpireValue;
+use state_machine_api::UserKey;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::db_map_api_ro_impl::MapView;
-use crate::leveled_store::map_api::AsMap;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
@@ -92,7 +93,9 @@ impl<'a> DBExporter<'a> {
 
         // expire index
 
-        let strm = MapView(self.db).as_expire_map().range(..).await?;
+        let strm = MapView(self.db)
+            .range(ExpireKey::default().., u64::MAX)
+            .await?;
         let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
             // Tombstone will be converted to None and be ignored.
             let exp_val = ExpireValue::from_marked(marked);
@@ -102,7 +105,9 @@ impl<'a> DBExporter<'a> {
 
         // kv
 
-        let strm = MapView(self.db).as_user_map().range(..).await?;
+        let strm = MapView(self.db)
+            .range(UserKey::default().., u64::MAX)
+            .await?;
         let kv_strm = strm.try_filter_map(|(user_key, seq_marked)| {
             // Tombstone will be converted to None and be ignored.
             let seqv: Option<SeqV<_>> = seq_marked.into();
