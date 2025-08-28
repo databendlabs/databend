@@ -18,6 +18,7 @@ members = [
     "src/common/native",
     "src/common/compress",
     "src/common/exception",
+    "src/common/frozen_api",
     "src/common/grpc",
     "src/common/hashtable",
     "src/common/http",
@@ -110,7 +111,6 @@ members = [
     "src/bendpy",
     "src/meta/app-storage",
     "src/common/telemetry",
-    "src/common/frozen_api",
 ]
 
 # Workspace dependencies
@@ -133,6 +133,7 @@ databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
 databend-common-formats = { path = "src/query/formats" }
 databend-common-functions = { path = "src/query/functions" }
+databend-common-frozen-api = { path = "src/common/frozen_api" }
 databend-common-grpc = { path = "src/common/grpc" }
 databend-common-hashtable = { path = "src/common/hashtable" }
 databend-common-http = { path = "src/common/http" }
@@ -181,7 +182,6 @@ databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
 databend-common-telemetry = { path = "src/common/telemetry" }
-databend-common-frozen-api = { path = "src/common/frozen_api" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
