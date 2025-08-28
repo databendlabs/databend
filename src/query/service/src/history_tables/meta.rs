@@ -328,7 +328,6 @@ mod tests {
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
-    use tokio::time::timeout;
 
     use crate::history_tables::meta::HeartbeatTask;
     use crate::history_tables::meta::HistoryMetaHandle;
@@ -338,6 +337,13 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_permit_guard_debug() -> databend_common_exception::Result<()> {
+        for _i in 0..50 {
+            test_history_table_permit_guard().await?;
+        }
+        Ok(())
+    }
+
     pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
         let meta_store = setup_meta_client().await;
         let meta_client = meta_store.deref().clone();
@@ -345,8 +351,9 @@ mod tests {
         let node_id = "test_node_123".to_string();
         let meta_handle = HistoryMetaHandle::new(meta_client, node_id);
 
-        // Test 1: Basic permit acquisition with interval 0 (no rate limiting)
         let meta_key = "test/history_table/permit_guard";
+
+        // Test 1: Basic permit acquisition with interval 0 (no rate limiting)
         let guard_result = meta_handle.acquire_with_guard(meta_key, 0).await?;
         assert!(
             guard_result.is_some(),
@@ -359,16 +366,14 @@ mod tests {
         }
 
         // Same meta key, because we set the interval to 0, it should not block
-        let guard_result2 = timeout(
-            Duration::from_secs(1),
-            meta_handle.acquire_with_guard(meta_key, 0),
-        )
-        .await;
+        let guard_result2 = meta_handle.acquire_with_guard(meta_key, 0).await?;
+
         assert!(
-            guard_result2.is_ok(),
+            guard_result2.is_some(),
             "Should acquire permit again when interval is 0"
         );
-        if let Some(guard) = guard_result2.unwrap()? {
+
+        if let Some(guard) = guard_result2 {
             // Verify that the guard contains the correct meta key
             assert_eq!(guard.meta_key, meta_key);
         }
