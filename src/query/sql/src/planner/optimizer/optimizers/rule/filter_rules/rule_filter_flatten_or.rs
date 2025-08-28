@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::RelOp;
@@ -99,6 +101,16 @@ fn flatten_or_expr(expr: &ScalarExpr, or_exprs: &mut Vec<ScalarExpr>) {
             for argument in func.arguments.iter() {
                 flatten_or_expr(argument, or_exprs);
             }
+        }
+        ScalarExpr::ConstantExpr(ConstantExpr { value, span }) if value.is_null() => {
+            // predicates cannot directly pass null
+            or_exprs.push(
+                ConstantExpr {
+                    span: *span,
+                    value: Scalar::Boolean(false),
+                }
+                .into(),
+            )
         }
         _ => or_exprs.push(expr.clone()),
     }
