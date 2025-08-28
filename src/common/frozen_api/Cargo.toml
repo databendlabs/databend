@@ -1,0 +1,19 @@
+[package]
+name = "databend-common-frozen-api"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+
+[lib]
+doctest = false
+test = false
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+sha2 = { workspace = true }
+hex = { workspace = true }
