@@ -316,6 +316,12 @@ impl Settings {
     pub fn get_inlist_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("inlist_runtime_filter_threshold")
     }
+    pub fn get_bloom_runtime_filter_threshold(&self) -> Result<u64> {
+        self.try_get_u64("bloom_runtime_filter_threshold")
+    }
+    pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
+        self.try_get_u64("min_max_runtime_filter_threshold")
+    }
 
     pub fn get_unquoted_ident_case_sensitive(&self) -> Result<bool> {
         Ok(self.try_get_u64("unquoted_ident_case_sensitive")? != 0)

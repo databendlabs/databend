@@ -26,13 +26,26 @@ pub async fn build_and_push_down_runtime_filter(
     build_num_rows: usize,
     join: &HashJoinBuildState,
 ) -> Result<()> {
-    let inlist_threshold = join.ctx.get_settings().get_inlist_runtime_filter_threshold()? as usize;
+    let inlist_threshold = join
+        .ctx
+        .get_settings()
+        .get_inlist_runtime_filter_threshold()? as usize;
+    let bloom_threshold = join
+        .ctx
+        .get_settings()
+        .get_bloom_runtime_filter_threshold()? as usize;
+    let min_max_threshold = join
+        .ctx
+        .get_settings()
+        .get_min_max_runtime_filter_threshold()? as usize;
     let mut packet = build_runtime_filter_packet(
         build_chunks,
         build_num_rows,
         join.runtime_filter_desc(),
         &join.func_ctx,
         inlist_threshold,
+        bloom_threshold,
+        min_max_threshold,
     )?;
     log::info!("[RUNTIME-FILTER] build runtime filter packet: {:?}, build_num_rows: {}, runtime_filter_desc: {:?}", packet, build_num_rows, join.runtime_filter_desc());
     if let Some(broadcast_id) = join.broadcast_id {
