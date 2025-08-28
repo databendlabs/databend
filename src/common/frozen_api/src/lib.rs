@@ -67,9 +67,11 @@ pub fn frozen_api(args: TokenStream, input: TokenStream) -> TokenStream {
         syn::Error::new_spanned(
             &input_struct.ident,
             format!(
-                "API hash mismatch for '{}'! Expected: {expected}, Actual: {actual}\n\
-                 Update hash to '{actual}' if change is intentional.",
-                input_struct.ident
+                "⚠️  FROZEN API VIOLATION: Struct '{}' is locked and cannot be modified!\n\
+                 Expected: {expected}, Actual: {actual}\n\
+                 ⚠️  This API is frozen for compatibility. Changes require explicit approval.\n\
+                 Update hash to '{}' ONLY if breaking change is approved.",
+                input_struct.ident, actual
             ),
         )
         .to_compile_error()
