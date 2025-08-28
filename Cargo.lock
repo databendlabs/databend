@@ -12729,7 +12729,7 @@ dependencies = [
 [[package]]
 name = "recursive"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=16e433a#16e433ab3f291512b437206f7ce7b8d078e84195"
 dependencies = [
  "recursive-proc-macro-impl",
  "stacker",
@@ -12738,7 +12738,7 @@ dependencies = [
 [[package]]
 name = "recursive-proc-macro-impl"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+source = "git+https://github.com/datafuse-extras/recursive.git?rev=16e433a#16e433ab3f291512b437206f7ce7b8d078e84195"
 dependencies = [
  "quote",
  "syn 2.0.101",
