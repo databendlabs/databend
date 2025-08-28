@@ -3,50 +3,10 @@ ignore = [
     # rio: v0.9.4 https://rustsec.org/advisories/RUSTSEC-2020-0021
     # allows a use-after-free buffer access when a future is leaked
     "RUSTSEC-2020-0021",
-    # time: Potential segfault in the time crate
-    # We are not affected by this CVE.
-    # And there is no actions we can take, waiting for upstream.
-    "RUSTSEC-2020-0071",
-    # hyper
-    # Lenient `hyper` header parsing of `Content-Length` could allow request smuggling
-    "RUSTSEC-2021-0078",
-    # hyper
-    # Integer overflow in `hyper`'s parsing of the `Transfer-Encoding` header leads to data loss
-    "RUSTSEC-2021-0079",
-    # ansi_term
-    # ansi_term is Unmaintained
-    "RUSTSEC-2021-0139",
-    # buf_redux
-    # buf_redux is Unmaintained
-    "RUSTSEC-2023-0028",
     # rsa
     # Marvin Attack: potential key recovery through timing sidechannels
     "RUSTSEC-2023-0071",
-    # mach
-    # mach is Unmaintained
-    "RUSTSEC-2020-0168",
     # atty
     # Potential unaligned read
     "RUSTSEC-2021-0145",
-    # borsh
-    # Parsing borsh messages with ZST which are not-copy/clone is unsound
-    "RUSTSEC-2023-0033",
-    # yaml-rust is unmaintained.
-    "RUSTSEC-2024-0320",
-    # Degradation of service in h2 servers with CONTINUATION Flood(Wait for tonic to fix)
-    "RUSTSEC-2024-0332",
-    # `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network input
-    "RUSTSEC-2024-0336",
-    # gix-fs: Traversal outside working tree enables arbitrary code execution
-    "RUSTSEC-2024-0350",
-    # gix-index: Traversal outside working tree enables arbitrary code execution
-    "RUSTSEC-2024-0348",
-    # gix-index: Refs and paths with reserved Windows device names access the devices
-    "RUSTSEC-2024-0352",
-    # gix-ref: Refs and paths with reserved Windows device names access the devices
-    "RUSTSEC-2024-0351",
-    # gix-path: improperly resolves configuration path reported by Git
-    "RUSTSEC-2024-0371",
-    # Borsh serialization of HashMap is non-canonical
-    "RUSTSEC-2024-0402",
 ]
