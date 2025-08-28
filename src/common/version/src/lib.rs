@@ -96,3 +96,35 @@ pub static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(|| BuildInfo {
     commit_detail: DATABEND_COMMIT_VERSION.clone(),
     embedded_license: DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string(),
 });
+
+#[cfg(test)]
+mod tests {
+    use regex::Regex;
+
+    use super::*;
+
+    #[test]
+    fn test_basic_version() -> Result<(), regex::Error> {
+        assert_eq!(VERGEN_GIT_SHA.unwrap().len(), 10);
+
+        assert!(Regex::new(r"^1.\d+\.")?.is_match(VERGEN_RUSTC_SEMVER.unwrap()));
+        assert!(Regex::new(r"^20\d{2}-\d{2}-\d{2}T")?.is_match(VERGEN_BUILD_TIMESTAMP.unwrap()));
+
+        assert!(DATABEND_COMMIT_AUTHORS.split_terminator(',').count() > 200);
+
+        let names = DATABEND_CREDITS_NAMES.split_terminator(',').count();
+        assert!(names > 100);
+
+        let versions = DATABEND_CREDITS_VERSIONS.split_terminator(',').count();
+        assert_eq!(names, versions);
+
+        let licenses = DATABEND_CREDITS_LICENSES.split_terminator(',').count();
+        assert_eq!(names, licenses);
+
+        let _ = &*DATABEND_SEMVER;
+        let _ = &*DATABEND_COMMIT_VERSION;
+        let _ = &*METASRV_COMMIT_VERSION;
+
+        Ok(())
+    }
+}

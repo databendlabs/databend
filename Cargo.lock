@@ -4764,6 +4764,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-building",
+ "regex",
  "semver",
 ]
 
