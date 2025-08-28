@@ -98,7 +98,7 @@ impl PhysicalPlanBuilder {
 
         for index in &cte_consumer.output_columns {
             let column = metadata.column(*index);
-            let mut data_type = column.data_type();
+            let data_type = column.data_type();
             fields.push(DataField::new(&index.to_string(), data_type));
         }
         let cte_schema = DataSchemaRefExt::create(fields);
