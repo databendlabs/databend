@@ -45,7 +45,7 @@ use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
-#[frozen_api("632d4be6")]
+#[frozen_api("373c59f6")]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata

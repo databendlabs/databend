@@ -39,7 +39,7 @@ use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
-#[frozen_api("46df658f")]
+#[frozen_api("78add0af")]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version of SegmentInfo table meta data
@@ -203,7 +203,7 @@ impl SegmentInfo {
     }
 }
 
-#[frozen_api("24f70472")]
+#[frozen_api("13d3d7f6")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
@@ -211,7 +211,7 @@ pub struct RawBlockMeta {
     pub compression: MetaCompression,
 }
 
-#[frozen_api("d6771e43")]
+#[frozen_api("cfb9105f")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,

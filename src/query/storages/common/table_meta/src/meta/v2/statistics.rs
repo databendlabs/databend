@@ -32,7 +32,7 @@ use crate::meta::v0;
 use crate::meta::Location;
 use crate::meta::RawBlockHLL;
 
-#[frozen_api("7731ad45")]
+#[frozen_api("c3dd8201")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
     #[serde(
@@ -51,7 +51,7 @@ pub struct ColumnStatistics {
     pub distinct_of_values: Option<u64>,
 }
 
-#[frozen_api("de510c92")]
+#[frozen_api("aff7ff7f")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
@@ -74,7 +74,7 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
-#[frozen_api("a2f68edd")]
+#[frozen_api("f3fd77fb")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
@@ -93,7 +93,7 @@ fn default_location() -> Location {
     ("".to_string(), 0)
 }
 
-#[frozen_api("a40b473c")]
+#[frozen_api("c200240d")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
