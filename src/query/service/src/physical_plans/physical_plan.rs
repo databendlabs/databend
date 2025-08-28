@@ -276,6 +276,7 @@ pub struct PhysicalPlan {
 dyn_clone::clone_trait_object!(IPhysicalPlan);
 
 impl Clone for PhysicalPlan {
+    #[recursive::recursive]
     fn clone(&self) -> Self {
         PhysicalPlan {
             inner: self.inner.clone(),
