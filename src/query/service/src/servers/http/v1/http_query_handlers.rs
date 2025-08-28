@@ -280,7 +280,7 @@ async fn query_final_handler(
                 &query_id,
                 &ctx.client_session_id,
                 RemoveReason::Finished,
-                ErrorCode::ClosedQuery("closed by client"),
+                ErrorCode::ClosedQuery("Query closed by client"),
             )
             .await?
         {
