@@ -95,24 +95,10 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let mut fields = Vec::new();
         let metadata = self.metadata.read();
-        
-        // Check if this is a hierarchical grouping sets CTE that might have transformed count columns
-        let is_hierarchical_cte = cte_consumer.cte_name.starts_with("cte_hierarchical_groupingsets_");
-        
+
         for index in &cte_consumer.output_columns {
             let column = metadata.column(*index);
             let mut data_type = column.data_type();
-            
-            // For hierarchical grouping sets CTEs, make all UInt64 columns nullable
-            // since they represent aggregate function results that become nullable through hierarchical aggregation
-            if is_hierarchical_cte {
-                if let databend_common_expression::types::DataType::Number(
-                    databend_common_expression::types::number::NumberDataType::UInt64
-                ) = data_type {
-                    data_type = data_type.wrap_nullable();
-                }
-            }
-            
             fields.push(DataField::new(&index.to_string(), data_type));
         }
         let cte_schema = DataSchemaRefExt::create(fields);
