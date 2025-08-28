@@ -18,17 +18,25 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::CheckAbort;
+use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::SchemaApi;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
+use databend_common_version::BUILD_INFO;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
+use databend_enterprise_query::test_kits::context::EESetup;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
@@ -532,6 +540,92 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
+    // 1. Prepare local meta service
+    let version = &BUILD_INFO;
+    let meta_config = MetaConfig::default();
+    let meta = {
+        let config = meta_config.to_meta_grpc_client_conf(version);
+        let provider = Arc::new(MetaStoreProvider::new(config));
+        provider.create_meta_store().await.map_err(|e| {
+            ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+        })?
+    };
+
+    // Extracts endpoints to comunicate with meta service
+    let MetaStore::L(local) = &meta else {
+        panic!("MetaStore should not be local");
+    };
+    let endpoints = local.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_ownership";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(format!("create table {db_name}.{tbl_name} (a int)").as_str())
+        .await?;
+
+    // 4. Ensure that table ownership exist right after table is created
+    let tenant = ctx.get_tenant();
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+
+    let db = ctx
+        .get_default_catalog()?
+        .get_database(&tenant, db_name)
+        .await?;
+
+    let catalog_name = fixture.default_catalog_name();
+    let table_ownership = OwnershipObject::Table {
+        catalog_name: catalog_name.clone(),
+        db_id: db.get_db_info().database_id.db_id,
+        table_id: table.get_id(),
+    };
+    let table_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
+    let v = meta.get(&table_ownership_key).await?;
+    assert!(v.is_some());
+
+    // 5. Drop test database
+    fixture
+        .execute_command(format!("drop database {db_name}").as_str())
+        .await?;
+
+    // 6. Vacuum dropped tables
+    fixture.execute_command("vacuum drop table").await?;
+
+    // 7. Ensure that table ownership is cleaned up
+    let table_ownership = OwnershipObject::Table {
+        catalog_name,
+        db_id: db.get_db_info().database_id.db_id,
+        table_id: table.get_id(),
+    };
+
+    let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
+    let v = meta.get(&table_ownership_key).await?;
+    assert!(v.is_none());
 
     Ok(())
 }

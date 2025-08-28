@@ -82,6 +82,7 @@ impl VacuumDropTablesInterpreter {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
                 tenant: self.ctx.get_tenant(),
+                catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
             catalog.gc_drop_tables(req).await?;
@@ -92,6 +93,7 @@ impl VacuumDropTablesInterpreter {
             info!("vacuum drop {} db ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
                 tenant: self.ctx.get_tenant(),
+                catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
             catalog.gc_drop_tables(req).await?;
