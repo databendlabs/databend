@@ -10,4 +10,4 @@ def python_client(session, driver_version):
 
     session.install("pytest")
     session.install(f"databend-driver=={driver_version}")
-    session.run("pytest", "-vv", "python_client")
+    session.run("pytest", "python_client")
