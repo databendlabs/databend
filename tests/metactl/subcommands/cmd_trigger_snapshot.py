@@ -38,15 +38,15 @@ def test_trigger_snapshot():
     time.sleep(2)
 
     # Verify snapshot file is generated
-    assert os.path.exists(
-        snapshot_dir
-    ), f"Snapshot directory does not exist: {snapshot_dir}"
+    assert os.path.exists(snapshot_dir), (
+        f"Snapshot directory does not exist: {snapshot_dir}"
+    )
 
     current_snapshots = glob.glob(f"{snapshot_dir}/*.snap")
     print("Current_snapshots:", current_snapshots)
-    assert (
-        len(current_snapshots) > len(initial_snapshots)
-    ), f"No new snapshot file created. Before: {len(initial_snapshots)}, After: {len(current_snapshots)}"
+    assert len(current_snapshots) > len(initial_snapshots), (
+        f"No new snapshot file created. Before: {len(initial_snapshots)}, After: {len(current_snapshots)}"
+    )
 
     print(f"✓ Snapshot file created: {len(current_snapshots)} total snapshot(s)")
     print("✓ Trigger snapshot test passed")

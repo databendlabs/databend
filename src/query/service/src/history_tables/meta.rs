@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
+use std::pin::pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime::block_on;
+use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -26,8 +29,14 @@ use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
-use futures_util::future;
+use futures::FutureExt;
+use log::debug;
+use log::warn;
+use tokio::sync::oneshot;
 
 /// RAII wrapper for Permit that automatically updates timestamp on drop
 pub struct PermitGuard {
@@ -54,6 +63,113 @@ impl Drop for PermitGuard {
         block_on(async move {
             let _ = meta_handle.update_last_execution_timestamp(&meta_key).await;
         });
+    }
+}
+
+const DEAD_IN_SECS: u64 = 10;
+
+pub struct HeartbeatTaskGuard {
+    _cancel: oneshot::Sender<()>,
+    exited: Arc<AtomicBool>,
+}
+
+impl HeartbeatTaskGuard {
+    pub fn exited(&self) -> bool {
+        self.exited.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+pub struct HeartbeatTask;
+
+impl HeartbeatTask {
+    pub async fn new_task(
+        meta_client: Arc<ClientHandle>,
+        meta_key: &str,
+    ) -> Result<Option<HeartbeatTaskGuard>> {
+        let heartbeat_key = format!("{}/heartbeat", meta_key);
+
+        let txn_req = {
+            let timestamp_bytes = serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?;
+            // Condition: Check if the key does not exist
+            let condition = vec![TxnCondition::eq_seq(&heartbeat_key, 0)];
+
+            // If-Then: If the key does not exist, put the new value.
+            let if_then = vec![TxnOp::put_with_ttl(
+                &heartbeat_key,
+                timestamp_bytes,
+                Some(Duration::from_secs(DEAD_IN_SECS)),
+            )];
+
+            // Else: If the key already exists, do nothing.
+            TxnRequest::new(condition, if_then)
+        };
+
+        let resp = meta_client.transaction(txn_req).await?;
+
+        if resp.execution_path == *"else" {
+            return Ok(None);
+        }
+
+        debug!("[HISTORY-TABLES] Heartbeat key created: {}", &heartbeat_key);
+
+        let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+        let loop_fut =
+            HeartbeatTask::heartbeat_loop(meta_client, heartbeat_key, cancel_rx.map(|_| ()));
+
+        let exited = Arc::new(AtomicBool::new(false));
+
+        let task_name = format!("heartbeat_{}", &meta_key);
+        let exited_clone = exited.clone();
+        spawn_named(
+            async move {
+                let result = loop_fut.await;
+                if result.is_err() {
+                    warn!(
+                        "[HISTORY-TABLES] Heartbeat loop exited with error: {:?}",
+                        result
+                    );
+                }
+                exited_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            },
+            task_name,
+        );
+
+        Ok(Some(HeartbeatTaskGuard {
+            _cancel: cancel_tx,
+            exited,
+        }))
+    }
+
+    pub async fn heartbeat_loop(
+        meta_client: Arc<ClientHandle>,
+        heartbeat_key: String,
+        cancel: impl Future<Output = ()> + Send + 'static,
+    ) -> Result<()> {
+        let sleep_time = Duration::from_secs(DEAD_IN_SECS / 2);
+
+        let mut c = pin!(cancel);
+
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(sleep_time) => {
+
+                    let timestamp = chrono::Utc::now().timestamp_millis();
+
+                    let upsert = UpsertKV::update(&heartbeat_key, &serde_json::to_vec(&timestamp)?)
+                        .with_ttl(Duration::from_secs(DEAD_IN_SECS));
+
+                    meta_client.upsert_kv(upsert).await?;
+                }
+                _ = &mut c =>{
+                    let delete = UpsertKV::delete(&heartbeat_key);
+                    meta_client.upsert_kv(delete).await?;
+
+                    debug!("[HISTORY-TABLES] Heartbeat key delete: {}", &heartbeat_key);
+
+                    return Ok(())
+                }
+            }
+        }
     }
 }
 
@@ -136,33 +252,6 @@ impl HistoryMetaHandle {
         }
     }
 
-    pub async fn acquire_all(
-        &self,
-        prepare_key: &str,
-        transform_keys: &[String],
-    ) -> Result<Vec<Permit>> {
-        // To avoid deadlock of acquiring multiple semaphores,
-        // we first acquire the prepare semaphore, then acquire others
-        let prepare_permit = self.acquire(prepare_key, 0).await?;
-        if let Some(prepare_permit) = prepare_permit {
-            let futures = transform_keys
-                .iter()
-                .map(|meta_key| self.acquire(meta_key, 0));
-
-            let results = future::join_all(futures).await;
-
-            let mut permits = Vec::with_capacity(transform_keys.len());
-            for result in results {
-                if let Some(permit) = result? {
-                    permits.push(permit);
-                }
-            }
-            permits.push(prepare_permit);
-            return Ok(permits);
-        }
-        Err(ErrorCode::Internal("Cannot acquire prepare semaphore"))
-    }
-
     /// Updating the last execution timestamp in the metadata.
     pub async fn update_last_execution_timestamp(&self, meta_key: &str) -> Result<()> {
         self.meta_client
@@ -197,26 +286,60 @@ impl HistoryMetaHandle {
             .await?;
         Ok(())
     }
+
+    pub async fn create_heartbeat_task(
+        &self,
+        meta_key: &str,
+    ) -> Result<Option<HeartbeatTaskGuard>> {
+        let expire_duration = Duration::from_secs(DEAD_IN_SECS);
+
+        if !self.is_heartbeat_expired(meta_key, expire_duration).await? {
+            return Ok(None);
+        }
+
+        HeartbeatTask::new_task(self.meta_client.clone(), meta_key).await
+    }
+
+    pub async fn is_heartbeat_expired(
+        &self,
+        meta_key: &str,
+        expire_duration: Duration,
+    ) -> Result<bool> {
+        let heartbeat_key = format!("{}/heartbeat", meta_key);
+
+        match self.get_u64_from_meta(&heartbeat_key).await? {
+            Some(last_heartbeat_millis) => {
+                let current_millis = chrono::Utc::now().timestamp_millis() as u64;
+                let expire_millis = expire_duration.as_millis() as u64;
+
+                Ok(current_millis.saturating_sub(last_heartbeat_millis) > expire_millis)
+            }
+            None => Ok(true),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::ops::Deref;
+    use std::sync::Arc;
     use std::time::Duration;
 
-    use databend_common_grpc::RpcClientConf;
-    use databend_common_meta_store::MetaStoreProvider;
+    use databend_common_base::runtime::spawn;
+    use databend_common_exception::Result;
+    use databend_common_meta_store::MetaStore;
     use tokio::time::timeout;
 
+    use crate::history_tables::meta::HeartbeatTask;
     use crate::history_tables::meta::HistoryMetaHandle;
+
+    pub async fn setup_meta_client() -> MetaStore {
+        MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
-        let conf = RpcClientConf::empty(&databend_common_version::BUILD_INFO);
-        let meta_store = MetaStoreProvider::new(conf)
-            .create_meta_store()
-            .await
-            .unwrap();
+        let meta_store = setup_meta_client().await;
         let meta_client = meta_store.deref().clone();
 
         let node_id = "test_node_123".to_string();
@@ -304,6 +427,130 @@ mod tests {
             updated_timestamp.is_some(),
             "Timestamp should be updated after guard drop"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_heartbeat_basic() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let heartbeat_guard =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard.is_some());
+
+        let heartbeat_guard_none =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard_none.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_heartbeat_extend() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let heartbeat_guard =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard.is_some());
+
+        tokio::time::sleep(Duration::from_secs(15)).await;
+
+        let heartbeat_guard_none =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard_none.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_heartbeat_drop() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let heartbeat_guard =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard.is_some());
+
+        drop(heartbeat_guard);
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let heartbeat_guard_none =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+
+        assert!(heartbeat_guard_none.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_heartbeat_concurrent() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let barrier = Arc::new(tokio::sync::Barrier::new(5));
+        let results = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+
+        let mut handles = Vec::new();
+
+        for i in 0..5 {
+            let meta_client_clone = meta_client.clone();
+            let barrier_clone = barrier.clone();
+            let results_clone = results.clone();
+
+            let handle = spawn(async move {
+                // Wait for all tasks to reach this point
+                barrier_clone.wait().await;
+
+                // All tasks try to create heartbeat for the same key simultaneously
+                let heartbeat_guard =
+                    HeartbeatTask::new_task(meta_client_clone, "test_heartbeat_key")
+                        .await
+                        .unwrap();
+
+                // Store result
+                let mut results_guard = results_clone.lock().await;
+                results_guard.push((i, heartbeat_guard.is_some()));
+
+                heartbeat_guard
+            });
+
+            handles.push(handle);
+        }
+
+        let mut guards = Vec::new();
+        for handle in handles {
+            guards.push(handle.await.unwrap());
+        }
+
+        // Verify results: exactly one should succeed, two should fail
+        let results_guard = results.lock().await;
+        let successful_count = results_guard.iter().filter(|(_, success)| *success).count();
+        let failed_count = results_guard
+            .iter()
+            .filter(|(_, success)| !*success)
+            .count();
+
+        assert_eq!(
+            successful_count, 1,
+            "Exactly one heartbeat creation should succeed"
+        );
+        assert_eq!(
+            failed_count, 4,
+            "Two heartbeat creation attempts should fail"
+        );
+
+        // Clean up: drop the successful guard to allow cleanup
+        drop(guards);
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
         Ok(())
     }

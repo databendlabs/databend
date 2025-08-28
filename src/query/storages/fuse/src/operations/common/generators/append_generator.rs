@@ -24,6 +24,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -36,6 +37,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::operations::common::SnapshotMerged;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct AppendGenerator {
@@ -115,13 +117,14 @@ impl SnapshotGenerator for AppendGenerator {
 
     fn do_generate_new_snapshot(
         &self,
-        schema: TableSchema,
+        table_info: &TableInfo,
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
-        prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
-        table_name: &str,
+        table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
+        let schema = table_info.schema().as_ref().clone();
+
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
             return Err(ErrorCode::UnresolvableConflict(format!(
@@ -129,13 +132,10 @@ impl SnapshotGenerator for AppendGenerator {
                 expected_schema, schema
             )));
         }
-        let mut table_statistics_location = None;
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
         if let Some(snapshot) = previous {
-            table_statistics_location = snapshot.table_statistics_location.clone();
-
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
 
@@ -217,11 +217,20 @@ impl SnapshotGenerator for AppendGenerator {
             ) + 1;
             info!("set compact_num_block_hint to {compact_num_block_hint }");
             self.ctx
-                .set_compaction_num_block_hint(table_name, compact_num_block_hint);
+                .set_compaction_num_block_hint(table_info.name.as_str(), compact_num_block_hint);
         }
 
+        // merge statistics will set the additional_stats_meta to none,
+        // so reset additional_stats_meta here.
+        let table_statistics_location = table_stats_gen.table_statistics_location();
+        for (id, ndv) in table_stats_gen.column_distinct_values() {
+            if let Some(stats) = new_summary.col_stats.get_mut(&id) {
+                stats.distinct_of_values = Some(ndv);
+            }
+        }
+        new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
         TableSnapshot::try_new(
-            prev_table_seq,
+            Some(table_info.ident.seq),
             previous.clone(),
             schema,
             new_summary,

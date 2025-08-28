@@ -461,6 +461,7 @@ pub enum RewriteKind {
     ShowTablesStatus,
     ShowVirtualColumns,
     ShowDictionaries(String),
+    ShowStatistics,
 
     ShowStreams(String),
 

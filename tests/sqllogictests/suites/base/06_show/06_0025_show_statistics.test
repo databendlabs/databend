@@ -1,0 +1,53 @@
+statement ok
+DROP DATABASE IF EXISTS showstatistics
+
+statement ok
+CREATE DATABASE showstatistics
+
+statement ok
+use showstatistics
+
+statement ok
+CREATE TABLE showstatistics.t1(c1 int not null) ENGINE = Null;
+
+query T
+show statistics from table showstatistics.t1;
+----
+showstatistics t1 c1 NULL NULL NULL NULL NULL (empty)
+
+statement ok
+CREATE TABLE IF NOT EXISTS showstatistics.t2(c1 int);
+
+query T
+show statistics;
+----
+showstatistics t1 c1 NULL NULL NULL NULL NULL (empty)
+showstatistics t2 c1 0 0 NULL NULL NULL (empty)
+
+statement ok
+insert into showstatistics.t2 values(1),(2);
+
+query T
+show statistics from table showstatistics.t2;
+----
+showstatistics t2 c1 2 2 2 0 4 (empty)
+
+query T
+show statistics from database showstatistics;
+----
+showstatistics t1 c1 NULL NULL NULL NULL NULL (empty)
+showstatistics t2 c1 2 2 2 0 4 (empty)
+
+statement ok
+set enable_analyze_histogram=1;
+
+statement ok
+analyze table showstatistics.t2;
+
+query T
+show statistics from table showstatistics.t2;
+----
+showstatistics t2 c1 2 2 2 0 4 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0]
+
+statement ok
+DROP DATABASE showstatistics

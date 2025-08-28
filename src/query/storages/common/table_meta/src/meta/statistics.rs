@@ -20,6 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_storage::MetaHLL;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
@@ -77,4 +79,39 @@ pub fn decode_column_hll(data: &RawBlockHLL) -> Result<Option<BlockHLL>> {
     let mut reader = Cursor::new(&data);
     let res = read_and_deserialize(&mut reader, data.len() as u64, &encoding, &compression)?;
     Ok(Some(res))
+}
+
+pub fn merge_column_hll(mut lhs: BlockHLL, rhs: BlockHLL) -> BlockHLL {
+    merge_column_hll_mut(&mut lhs, &rhs);
+    lhs
+}
+
+pub fn merge_column_hll_mut(lhs: &mut BlockHLL, rhs: &BlockHLL) {
+    for (column_id, column_hll) in rhs.iter() {
+        lhs.entry(*column_id)
+            .and_modify(|hll| hll.merge(column_hll))
+            .or_insert_with(|| column_hll.clone());
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum BlockHLLState {
+    Serialized(RawBlockHLL),
+    Deserialized(BlockHLL),
+}
+
+impl BlockHLLState {
+    pub fn merge_column_hll(lhs: &mut BlockHLL, rhs: &Option<BlockHLLState>) {
+        if let Some(BlockHLLState::Deserialized(v)) = rhs {
+            merge_column_hll_mut(lhs, v);
+        }
+    }
+
+    pub fn encode_column_hll(hll: Option<BlockHLLState>) -> Result<Option<RawBlockHLL>> {
+        hll.map(|h| match h {
+            BlockHLLState::Deserialized(v) => encode_column_hll(&v),
+            BlockHLLState::Serialized(v) => Ok(v),
+        })
+        .transpose()
+    }
 }

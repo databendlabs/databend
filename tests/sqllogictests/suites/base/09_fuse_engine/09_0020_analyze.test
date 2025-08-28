@@ -43,18 +43,10 @@ select * from t order by a
 6
 7
 
-query TI
+query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-
-
-statement ok
-analyze table `t`
-
-query TI
-select * from fuse_statistic('db_09_0020', 't')
-----
-a 3 (empty)
+a 3 0 9 (empty)
 
 statement ok
 insert into t values (5)
@@ -81,18 +73,10 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 ----
 6 6
 
-query TI
+query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 (empty)
-
-statement ok
-analyze table `t`
-
-query TI
-select * from fuse_statistic('db_09_0020', 't')
-----
-a 3 (empty)
+a 3 0 9 (empty)
 
 statement ok
 optimize table t compact
@@ -102,34 +86,26 @@ select segment_count,block_count from fuse_snapshot('db_09_0020', 't') limit 1
 ----
 1 1
 
-query TI
+query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 (empty)
-
-statement ok
-analyze table `t`
-
-query TI
-select * from fuse_statistic('db_09_0020', 't')
-----
-a 3 (empty)
+a 3 0 8 (empty)
 
 statement ok
 delete from t where a=5
 
-query TI
+query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 (empty)
+a 3 0 8 (empty)
 
 statement ok
 analyze table `t`
 
-query TI
+query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 2 (empty)
+a 2 0 8 (empty)
 
 statement ok
 create or replace table t1 as select number as a from numbers(10);
@@ -140,10 +116,10 @@ set enable_analyze_histogram=1;
 statement ok
 analyze table t1;
 
-query IIT
+query T
 select * from fuse_statistic('db_09_0020', 't1');
 ----
-a 10 [bucket id: 0, min: "0", max: "0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9", max: "9", ndv: 1.0, count: 1.0]
+a 10 0 8 [bucket id: 0, min: "0", max: "0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9", max: "9", ndv: 1.0, count: 1.0]
 
 statement ok
 set enable_analyze_histogram=0;
@@ -178,11 +154,11 @@ statement ok
 analyze table t_string;
 
 # Verify that histogram was created for string column
-query IIT
+query T
 select * from fuse_statistic('db_09_0020', 't_string') order by column_name asc;
 ----
-id 10 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 3, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 4, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 5, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 6, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 7, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 8, min: "9", max: "9", ndv: 1.0, count: 1.0], [bucket id: 9, min: "10", max: "10", ndv: 1.0, count: 1.0]
-str_val 10 [bucket id: 0, min: "1.0", max: "1.0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "10.0", max: "10.0", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2.0", max: "2.0", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3.0", max: "3.0", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4.0", max: "4.0", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5.0", max: "5.0", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6.0", max: "6.0", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7.0", max: "7.0", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8.0", max: "8.0", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9.0", max: "9.0", ndv: 1.0, count: 1.0]
+id 10 0 4 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0], [bucket id: 3, min: "4", max: "4", ndv: 1.0, count: 1.0], [bucket id: 4, min: "5", max: "5", ndv: 1.0, count: 1.0], [bucket id: 5, min: "6", max: "6", ndv: 1.0, count: 1.0], [bucket id: 6, min: "7", max: "7", ndv: 1.0, count: 1.0], [bucket id: 7, min: "8", max: "8", ndv: 1.0, count: 1.0], [bucket id: 8, min: "9", max: "9", ndv: 1.0, count: 1.0], [bucket id: 9, min: "10", max: "10", ndv: 1.0, count: 1.0]
+str_val 10 0 15 [bucket id: 0, min: "1.0", max: "1.0", ndv: 1.0, count: 1.0], [bucket id: 1, min: "10.0", max: "10.0", ndv: 1.0, count: 1.0], [bucket id: 2, min: "2.0", max: "2.0", ndv: 1.0, count: 1.0], [bucket id: 3, min: "3.0", max: "3.0", ndv: 1.0, count: 1.0], [bucket id: 4, min: "4.0", max: "4.0", ndv: 1.0, count: 1.0], [bucket id: 5, min: "5.0", max: "5.0", ndv: 1.0, count: 1.0], [bucket id: 6, min: "6.0", max: "6.0", ndv: 1.0, count: 1.0], [bucket id: 7, min: "7.0", max: "7.0", ndv: 1.0, count: 1.0], [bucket id: 8, min: "8.0", max: "8.0", ndv: 1.0, count: 1.0], [bucket id: 9, min: "9.0", max: "9.0", ndv: 1.0, count: 1.0]
 
 # Test string comparison with histogram
 query I
@@ -200,7 +176,7 @@ statement ok
 DROP TABLE t_string
 
 statement ok
-create or replace table t2(a int, b int);
+create or replace table t2(a int, b int) approx_distinct_columns = 'a';
 
 query I
 insert into t2 values(1,1),(2,2);
@@ -217,28 +193,25 @@ delete from t2 where a=1;
 ----
 1
 
-statement ok
-analyze table t2 noscan;
-
-query TII
-select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
+query T
+show statistics from table db_09_0020.t2;
 ----
-a 3 3
-b 3 3
+db_09_0020 t2 a 4 3 3 0 4 (empty)
+db_09_0020 t2 b 4 3 3 0 4 (empty)
 
 statement ok
 analyze table t2;
 
-query TII
-select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
+query T
+show statistics from table db_09_0020.t2;
 ----
-a 3 2
-b 3 2
+db_09_0020 t2 a 3 3 2 0 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
+db_09_0020 t2 b 3 3 3 0 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
 
 query I
 select count() from fuse_snapshot('db_09_0020','t2');
 ----
-5
+4
 
 statement ok
 DROP TABLE t2;

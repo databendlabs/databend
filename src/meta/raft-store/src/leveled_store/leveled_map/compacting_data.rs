@@ -41,6 +41,7 @@ use crate::utils::add_cooperative_yielding;
 /// The data to compact.
 ///
 /// Including several in-memory immutable levels and an optional persisted db.
+#[derive(Debug)]
 pub(crate) struct CompactingData {
     pub(crate) immutable_levels: Arc<ImmutableLevels>,
     pub(crate) persisted: Option<Arc<DB>>,
@@ -81,7 +82,10 @@ impl CompactingData {
         let table = mvcc::Table::from_stream(strm).await?;
         data.replace_kv(table);
 
-        self.immutable_levels = Arc::new(ImmutableLevels::new([Immutable::new_from_level(data)]));
+        self.immutable_levels =
+            Arc::new(ImmutableLevels::new_form_iter([Immutable::new_from_level(
+                data,
+            )]));
         Ok(())
     }
 

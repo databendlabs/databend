@@ -131,6 +131,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let id_stats = base_summary.col_stats.get(&0).unwrap();
     assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
+    assert!(base_summary.additional_stats_meta.is_some());
+    assert_eq!(base_summary.additional_stats_meta.unwrap().row_count, 4);
 
     // get segments summary
     let mut segment_summary = Statistics::default();
@@ -155,7 +157,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     }
 
     // analyze
-    analyze_table(&fixture).await?;
+    fixture.analyze_table().await?;
 
     // check summary after analyze
     let table = fixture.latest_default_table().await?;
@@ -165,7 +167,16 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let id_stats = last_summary.col_stats.get(&0).unwrap();
     assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert!(last_summary.additional_stats_meta.is_some());
+    assert_eq!(
+        last_summary
+            .additional_stats_meta
+            .as_ref()
+            .map(|v| v.row_count),
+        Some(3)
+    );
 
+    segment_summary.additional_stats_meta = last_summary.additional_stats_meta.clone();
     assert_eq!(segment_summary, last_summary);
 
     Ok(())

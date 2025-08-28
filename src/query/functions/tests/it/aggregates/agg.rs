@@ -213,6 +213,15 @@ fn get_example() -> Vec<(&'static str, Column)> {
                 Some(DecimalSize::new_unchecked(15, 2)),
             ),
         ),
+        (
+            "json",
+            StringType::from_data(vec![
+                r#"{"k1":"v1","k2":"v2"}"#,
+                r#"[1,2,3,"abc"]"#,
+                r#"99999"#,
+                r#""xyz""#,
+            ]),
+        ),
     ]
 }
 
@@ -983,6 +992,20 @@ fn test_agg_array_agg(file: &mut impl Write, simulator: impl AggregationSimulato
     run_agg_ast(
         file,
         "array_agg(dec)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(s)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(parse_json(json))",
         get_example().as_slice(),
         simulator,
         vec![],

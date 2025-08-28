@@ -15,7 +15,7 @@
 /// Represents a unique identifier for a level.
 ///
 /// The magnitude of the index indicates the relative freshness of the level.
-#[derive(Clone, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LevelIndex {
     /// The internal sequence number of the level.
     internal_seq: u64,

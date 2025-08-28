@@ -572,10 +572,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_sequence_privilege_check")? != 0)
     }
 
-    pub fn get_enable_collect_column_statistics(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_collect_column_statistics")? != 0)
-    }
-
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_expand_roles")? != 0)
     }
@@ -634,6 +630,11 @@ impl Settings {
 
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
+    }
+
+    /// used for test
+    pub fn set_enable_analyze_histogram(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_analyze_histogram", val)
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {

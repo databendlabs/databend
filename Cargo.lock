@@ -4200,7 +4200,6 @@ dependencies = [
  "sha2",
  "similar",
  "simsearch",
- "tokio",
  "unicase",
  "url",
 ]

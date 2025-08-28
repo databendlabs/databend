@@ -18,7 +18,7 @@ explain select * from t where c = 99;
 Filter
 ├── output columns: [t.c (#0)]
 ├── filters: [is_true(t.c (#0) = 99)]
-├── estimated rows: 1.00
+├── estimated rows: 1.04
 └── TableScan
     ├── table: default.test_15669.t
     ├── output columns: [c (#0)]

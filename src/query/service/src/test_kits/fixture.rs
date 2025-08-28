@@ -935,6 +935,22 @@ impl TestFixture {
     pub fn default_table_meta_timestamps() -> TableMetaTimestamps {
         TableMetaTimestamps::new(None, Duration::hours(1))
     }
+
+    pub async fn analyze_table(&self) -> Result<()> {
+        let query = format!(
+            "analyze table {}.{}",
+            self.default_db_name(),
+            self.default_table_name()
+        );
+        let ctx = self.new_query_ctx().await?;
+        ctx.get_settings().set_enable_analyze_histogram(1)?;
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(&query).await?;
+        let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let res = executor.execute(ctx).await?;
+        res.try_collect::<Vec<DataBlock>>().await?;
+        Ok(())
+    }
 }
 
 fn gen_db_name(prefix: &str) -> String {

@@ -28,7 +28,11 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
@@ -188,11 +192,20 @@ impl VirtualColumnAccumulator {
 #[derive(Default)]
 pub struct ColumnHLLAccumulator {
     pub hlls: Vec<RawBlockHLL>,
+    pub summary: BlockHLL,
 }
 
 impl ColumnHLLAccumulator {
-    pub fn add_hll(&mut self, hll: RawBlockHLL) {
-        self.hlls.push(hll);
+    pub fn add_hll(&mut self, hll: BlockHLLState) -> Result<()> {
+        match hll {
+            BlockHLLState::Deserialized(v) => {
+                let data = encode_column_hll(&v)?;
+                self.hlls.push(data);
+                merge_column_hll_mut(&mut self.summary, &v);
+            }
+            BlockHLLState::Serialized(v) => self.hlls.push(v),
+        }
+        Ok(())
     }
 
     pub fn build(&mut self) -> SegmentStatistics {
@@ -201,5 +214,9 @@ impl ColumnHLLAccumulator {
 
     pub fn is_empty(&self) -> bool {
         self.hlls.is_empty()
+    }
+
+    pub fn take_summary(&mut self) -> BlockHLL {
+        std::mem::take(&mut self.summary)
     }
 }

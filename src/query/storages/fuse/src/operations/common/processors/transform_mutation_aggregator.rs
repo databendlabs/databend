@@ -31,7 +31,10 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
@@ -87,6 +90,7 @@ pub struct TableMutationAggregator {
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
+    hll: BlockHLL,
 
     kind: MutationKind,
     start_time: Instant,
@@ -161,6 +165,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             new_segment_locs,
             self.table_id,
             self.virtual_schema.clone(),
+            std::mem::take(&mut self.hll),
         );
         debug!("mutations {:?}", meta);
         let block_meta: BlockMetaInfoPtr = Box::new(meta);
@@ -209,6 +214,7 @@ impl TableMutationAggregator {
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
+            hll: HashMap::new(),
             kind,
             finished_tasks: 0,
             start_time: Instant::now(),
@@ -235,6 +241,7 @@ impl TableMutationAggregator {
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
             MutationLogEntry::ReplacedBlock { index, block_meta } => {
+                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
                 match self.extended_mutations.entry(index.segment_idx) {
                     Entry::Occupied(mut v) => {
                         v.get_mut().push_replaced(index.block_idx, block_meta);
@@ -248,6 +255,7 @@ impl TableMutationAggregator {
                 }
             }
             MutationLogEntry::AppendBlock { block_meta } => {
+                BlockHLLState::merge_column_hll(&mut self.hll, &block_meta.column_hlls);
                 self.merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
@@ -268,12 +276,14 @@ impl TableMutationAggregator {
                 segment_location,
                 format_version,
                 summary,
+                hll,
             } => {
                 merge_statistics_mut(
                     &mut self.appended_statistics,
                     &summary,
                     self.default_cluster_key_id,
                 );
+                merge_column_hll_mut(&mut self.hll, &hll);
 
                 self.appended_segments
                     .push((segment_location, format_version));
@@ -317,7 +327,7 @@ impl TableMutationAggregator {
             return Ok(());
         }
 
-        let mut merged_blocks = self.accumulate_merged_blocks();
+        let mut merged_blocks = self.accumulate_merged_blocks()?;
 
         if let Some(id) = self.default_cluster_key_id {
             // sort ascending.
@@ -397,7 +407,7 @@ impl TableMutationAggregator {
         let start = Instant::now();
         let mut count = 0;
 
-        self.accumulate_extended_mutations();
+        self.accumulate_extended_mutations()?;
 
         let appended_segments = std::mem::take(&mut self.appended_segments);
         let appended_statistics = std::mem::take(&mut self.appended_statistics);
@@ -493,11 +503,9 @@ impl TableMutationAggregator {
                         SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
-                    let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
-                        let stats = read_segment_stats(op.clone(), meta.location.clone()).await?;
-                        Some(stats)
-                    } else {
-                        None
+                    let stats = match segment_info.summary.additional_stats_loc() {
+                        Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
+                        _ => None,
                     };
 
                     // take away the blocks, they are being mutated
@@ -590,9 +598,9 @@ impl TableMutationAggregator {
     }
 
     // Assign columnId to the virtual column in the mutation blocks and generate a new virtual schema.
-    fn accumulate_extended_mutations(&mut self) {
+    fn accumulate_extended_mutations(&mut self) -> Result<()> {
         if self.extended_mutations.is_empty() {
-            return;
+            return Ok(());
         }
 
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
@@ -628,19 +636,18 @@ impl TableMutationAggregator {
                     Arc::new(extended_block_meta.block_meta.clone())
                 };
 
+                let column_hlls =
+                    BlockHLLState::encode_column_hll(extended_block_meta.column_hlls.clone())?;
                 match self.mutations.entry(segment_idx) {
                     Entry::Occupied(mut v) => {
-                        v.get_mut().push_replaced(
-                            block_idx,
-                            new_block_meta,
-                            extended_block_meta.column_hlls.clone(),
-                        );
+                        v.get_mut()
+                            .push_replaced(block_idx, new_block_meta, column_hlls);
                     }
                     Entry::Vacant(v) => {
                         v.insert(BlockMutations::new_replacement(
                             block_idx,
                             new_block_meta,
-                            extended_block_meta.column_hlls.clone(),
+                            column_hlls,
                         ));
                     }
                 }
@@ -659,10 +666,12 @@ impl TableMutationAggregator {
         } else {
             None
         };
+
+        Ok(())
     }
 
     // Assign columnId to the virtual column in the merged blocks and generate a new virtual schema.
-    fn accumulate_merged_blocks(&mut self) -> Vec<BlockMetaWithHLL> {
+    fn accumulate_merged_blocks(&mut self) -> Result<Vec<BlockMetaWithHLL>> {
         let mut virtual_column_accumulator = VirtualColumnAccumulator::try_create(
             self.ctx.clone(),
             &self.schema,
@@ -692,7 +701,9 @@ impl TableMutationAggregator {
             } else {
                 Arc::new(extended_block_meta.block_meta.clone())
             };
-            new_merged_blocks.push((new_block_meta, extended_block_meta.column_hlls.clone()));
+            let column_hlls =
+                BlockHLLState::encode_column_hll(extended_block_meta.column_hlls.clone())?;
+            new_merged_blocks.push((new_block_meta, column_hlls));
         }
 
         self.virtual_schema = if let Some(virtual_column_accumulator) = virtual_column_accumulator {
@@ -701,7 +712,7 @@ impl TableMutationAggregator {
             None
         };
 
-        new_merged_blocks
+        Ok(new_merged_blocks)
     }
 
     fn update_virtual_schema_block_number(&mut self, merged_statistics: &Statistics) {
@@ -853,6 +864,7 @@ async fn write_segment(
         let additional_stats_meta = AdditionalStatsMeta {
             size: stats.len() as u64,
             location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+            ..Default::default()
         };
         dal.write(&segment_stats_location, stats).await?;
         new_summary.additional_stats_meta = Some(additional_stats_meta);

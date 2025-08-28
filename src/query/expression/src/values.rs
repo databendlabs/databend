@@ -533,6 +533,18 @@ impl Scalar {
             _ => None,
         }
     }
+
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Scalar::String(val) => Some(val.as_bytes()),
+            Scalar::Geography(val) => Some(val.0.as_slice()),
+            Scalar::Binary(val)
+            | Scalar::Bitmap(val)
+            | Scalar::Variant(val)
+            | Scalar::Geometry(val) => Some(val.as_slice()),
+            _ => None,
+        }
+    }
 }
 
 impl ScalarRef<'_> {

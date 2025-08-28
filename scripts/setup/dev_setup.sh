@@ -656,19 +656,26 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
+
 	## install cargo-binstall
 	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+	if [[ "$(uname)" == "Linux" ]]; then
+		export CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-musl"
+	fi
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
 	cargo binstall -y cargo-nextest
-
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
+	if [[ "$(uname)" == "Linux" ]]; then
+		# install musl target to avoid downloading the tools with incompatible GLIBC
+		export CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-musl"
+	fi
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		while read -r tool; do
-			# Use cargo install to prevent downloading the tools with incompatible GLIBC
-			cargo install "$tool"
+			cargo binstall -y "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
 

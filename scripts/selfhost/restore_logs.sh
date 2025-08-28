@@ -64,12 +64,12 @@ EOF
 format_size() {
 	local size="$1"
 	if [[ "$size" =~ ^[0-9]+$ ]]; then
-		if (( size >= 1073741824 )); then
-			echo "$(( size / 1073741824 )).$(( (size % 1073741824) / 107374182 ))GB"
-		elif (( size >= 1048576 )); then
-			echo "$(( size / 1048576 )).$(( (size % 1048576) / 104857 ))MB"
-		elif (( size >= 1024 )); then
-			echo "$(( size / 1024 )).$(( (size % 1024) / 102 ))KB"
+		if ((size >= 1073741824)); then
+			echo "$((size / 1073741824)).$(((size % 1073741824) / 107374182))GB"
+		elif ((size >= 1048576)); then
+			echo "$((size / 1048576)).$(((size % 1048576) / 104857))MB"
+		elif ((size >= 1024)); then
+			echo "$((size / 1024)).$(((size % 1024) / 102))KB"
 		else
 			echo "${size}B"
 		fi
@@ -105,17 +105,17 @@ interactive_file_selector() {
 		[[ -z "$line" ]] && continue
 		[[ "$line" =~ ^[[:space:]]*name ]] && continue
 		[[ "$line" =~ ^[[:space:]]*-+ ]] && continue
-		
+
 		# Extract filename (first field) and size (second field)
 		local filename=$(echo "$line" | awk '{print $1}')
 		local size=$(echo "$line" | awk '{print $2}')
-		
+
 		# Only include tar.gz files
 		if [[ "$filename" =~ \.(tar\.gz|tgz)$ ]]; then
 			files+=("$filename")
 			sizes+=("$(format_size "$size")")
 		fi
-	done <<< "$raw_output"
+	done <<<"$raw_output"
 
 	if [[ ${#files[@]} -eq 0 ]]; then
 		log_error "No .tar.gz files found in stage @${stage}"
@@ -126,12 +126,12 @@ interactive_file_selector() {
 	local sorted_files=()
 	local sorted_sizes=()
 	local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2 | cut -d: -f1))
-	
+
 	for i in "${indices[@]}"; do
 		sorted_files+=("${files[$i]}")
 		sorted_sizes+=("${sizes[$i]}")
 	done
-	
+
 	files=("${sorted_files[@]}")
 	sizes=("${sorted_sizes[@]}")
 
@@ -161,7 +161,7 @@ interactive_file_selector() {
 		echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
 		echo ""
 		printf "%-${max_name_len}s %s\n" "Filename" "Size"
-		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len-1)) '' | tr ' ' '-')" "----"
+		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len - 1)) '' | tr ' ' '-')" "----"
 
 		for i in "${!files[@]}"; do
 			local display_line="$(printf "%-${max_name_len}s %s" "${files[$i]}" "${sizes[$i]}")"
@@ -492,29 +492,75 @@ bendsql --dsn "${DSN}" --query="DROP DATABASE IF EXISTS ${RESTORE_DATABASE}" >/d
 bendsql --dsn "${DSN}" --query="CREATE DATABASE ${RESTORE_DATABASE}" >/dev/null 2>&1
 log "Created database: ${RESTORE_DATABASE}"
 
-# Restore tables
-declare -A TABLE_MAP=(
-	["settings"]="system.settings:settings"
-	["columns"]="system.columns:columns"
-	["user_functions"]="system.user_functions:user_functions"
-	["log_history"]="system_history.log_history:query_raw_logs"
-	["query_history"]="system_history.query_history:query_logs"
-	["login_history"]="system_history.login_history:login_history"
-	["profile_history"]="system_history.profile_history:query_profile_logs"
+# Restore tables - only need stage path mapping now
+declare -A TABLE_PATHS=(
+	["settings"]="settings"
+	["columns"]="columns"
+	["user_functions"]="user_functions"
+	["log_history"]="query_raw_logs"
+	["query_history"]="query_logs"
+	["login_history"]="login_history"
+	["profile_history"]="query_profile_logs"
 )
 
-for table_name in "${!TABLE_MAP[@]}"; do
-	IFS=':' read -r source_table source_path <<<"${TABLE_MAP[$table_name]}"
+# Restore tables with proper error handling
+restore_table() {
+	local table_name="$1"
+	local source_path="$2"
 
 	log "Restoring table: ${RESTORE_DATABASE}.${table_name} from @${UPLOAD_STAGE}/${source_path}"
 
-	bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="CREATE TABLE ${table_name} LIKE ${source_table};" >/dev/null 2>&1
-	bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="COPY INTO ${table_name} FROM @${UPLOAD_STAGE}/${source_path};" >/dev/null 2>&1
+	# Step 1: Create table by inferring schema from parquet files
+	local create_result
+	create_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="CREATE TABLE ${table_name} AS SELECT * FROM '@${UPLOAD_STAGE}/${source_path}' LIMIT 0;" 2>&1)
+	if [[ $? -ne 0 ]]; then
+		log_error "Failed to create table ${table_name}: ${create_result}"
+		return 1
+	fi
 
-	ROW_COUNT=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="SELECT COUNT(*) FROM ${table_name};" | tail -1)
-	log "Table ${table_name} restored: ${ROW_COUNT} rows"
+	# Step 2: Copy data with error checking
+	local copy_result
+	copy_result=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="COPY INTO ${table_name} FROM @${UPLOAD_STAGE}/${source_path};" 2>&1)
+	if [[ $? -ne 0 ]]; then
+		log_error "Failed to copy data into table ${table_name}: ${copy_result}"
+		return 1
+	fi
+
+	# Step 3: Verify and report row count
+	local row_count
+	row_count=$(bendsql --dsn "${DSN}" --database "${RESTORE_DATABASE}" --query="SELECT COUNT(*) FROM ${table_name};" 2>/dev/null | tail -1)
+	if [[ $? -eq 0 && -n "$row_count" ]]; then
+		log "Table ${table_name} restored: ${row_count} rows"
+	else
+		log "Table ${table_name} restored: unknown rows (count failed)"
+	fi
+
+	return 0
+}
+
+# Track restoration results
+SUCCESSFUL_TABLES=()
+FAILED_TABLES=()
+
+for table_name in "${!TABLE_PATHS[@]}"; do
+	source_path="${TABLE_PATHS[$table_name]}"
+
+	if restore_table "$table_name" "$source_path"; then
+		SUCCESSFUL_TABLES+=("$table_name")
+	else
+		FAILED_TABLES+=("$table_name")
+	fi
 done
 
-log "Log restoration completed successfully"
-log "Restored database: ${RESTORE_DATABASE}"
-log "Tables available: settings, columns, user_functions, log_history, query_history, login_history, profile_history"
+# Final restoration summary
+if [[ ${#FAILED_TABLES[@]} -eq 0 ]]; then
+	log "Log restoration completed successfully"
+	log "Restored database: ${RESTORE_DATABASE}"
+	log "Successfully restored tables: ${SUCCESSFUL_TABLES[*]}"
+else
+	log "Log restoration completed with errors"
+	log "Restored database: ${RESTORE_DATABASE}"
+	log "Successfully restored tables (${#SUCCESSFUL_TABLES[@]}): ${SUCCESSFUL_TABLES[*]}"
+	log_error "Failed tables (${#FAILED_TABLES[@]}): ${FAILED_TABLES[*]}"
+	exit 1
+fi

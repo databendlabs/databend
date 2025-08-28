@@ -22,8 +22,8 @@ use seq_marked::SeqMarked;
 use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
+use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::leveled_store::leveled_map::LeveledMapData;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
@@ -38,6 +38,7 @@ where
     K: MapKeyDecode,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
     Level: GetTable<K, K::V>,
+    <K as MapKey>::V: fmt::Debug,
     for<'a> MapView<'a>: MapApiRO<K>,
 {
     async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
@@ -58,6 +59,7 @@ where
     K: MapKeyDecode,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
     Level: GetTable<K, K::V>,
+    <K as MapKey>::V: fmt::Debug,
     for<'a> MapView<'a>: MapApiRO<K>,
 {
     async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {

@@ -97,7 +97,6 @@ enum AnalyzeStep {
 }
 
 impl FuseTable {
-    #[allow(clippy::too_many_arguments)]
     pub fn do_analyze(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -212,32 +211,40 @@ impl SinkAnalyzeState {
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         self.ndv_states.retain(|k, _| column_ids.contains(k));
 
-        // 3. Generate new table statistics
-        let table_statistics = TableSnapshotStatistics::new(
-            self.ndv_states.clone(),
-            self.histograms.clone(),
-            self.snapshot_id,
-            snapshot.summary.row_count,
-        );
-        let table_statistics_location = table
-            .meta_location_generator
-            .snapshot_statistics_location_from_uuid(
-                &table_statistics.snapshot_id,
-                table_statistics.format_version(),
-            )?;
-
-        let (col_stats, cluster_stats) =
-            regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
-        // 4. Save table statistics
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
             Some(table.get_table_info().ident.seq),
             self.ctx
                 .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
         )?;
+
+        // 3. Generate new table statistics
+        new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
+            hll: Some(encode_column_hll(&self.ndv_states)?),
+            row_count: snapshot.summary.row_count,
+            ..Default::default()
+        });
+
+        let table_statistics = TableSnapshotStatistics::new(
+            self.ndv_states.clone(),
+            self.histograms.clone(),
+            self.snapshot_id,
+            snapshot.summary.row_count,
+        );
+        new_snapshot.table_statistics_location = Some(
+            table
+                .meta_location_generator
+                .snapshot_statistics_location_from_uuid(
+                    &table_statistics.snapshot_id,
+                    table_statistics.format_version(),
+                )?,
+        );
+
+        let (col_stats, cluster_stats) =
+            self.regenerate_statistics(table, snapshot.as_ref()).await?;
+        // 4. Save table statistics
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
-        new_snapshot.table_statistics_location = Some(table_statistics_location);
         table
             .commit_to_meta_server(
                 self.ctx.as_ref(),
@@ -249,6 +256,68 @@ impl SinkAnalyzeState {
                 &table.operator,
             )
             .await
+    }
+
+    async fn regenerate_statistics(
+        &self,
+        table: &FuseTable,
+        snapshot: &TableSnapshot,
+    ) -> Result<(StatisticsOfColumns, Option<ClusterStatistics>)> {
+        // 1. Read table snapshot.
+        let default_cluster_key_id = table.cluster_key_id();
+
+        // 2. Iterator segments and blocks to estimate statistics.
+        let mut read_segment_count = 0;
+        let mut col_stats = HashMap::new();
+        let mut cluster_stats = None;
+
+        let start = Instant::now();
+        let segments_io =
+            SegmentsIO::create(self.ctx.clone(), table.operator.clone(), table.schema());
+        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
+        let number_segments = snapshot.segments.len();
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let mut stats_of_columns = Vec::new();
+            let mut blocks_cluster_stats = Vec::new();
+            if !col_stats.is_empty() {
+                stats_of_columns.push(col_stats.clone());
+                blocks_cluster_stats.push(cluster_stats.clone());
+            }
+
+            let segments = segments_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?;
+            for segment in segments {
+                let segment = segment?;
+                stats_of_columns.push(segment.summary.col_stats.clone());
+                blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
+            }
+
+            // Generate new column statistics for snapshot
+            col_stats = reduce_block_statistics(&stats_of_columns);
+            cluster_stats =
+                reduce_cluster_statistics(&blocks_cluster_stats, default_cluster_key_id);
+
+            // Status.
+            {
+                read_segment_count += chunk.len();
+                let status = format!(
+                    "analyze: read segment files:{}/{}, cost:{:?}",
+                    read_segment_count,
+                    number_segments,
+                    start.elapsed()
+                );
+                self.ctx.set_status_info(&status);
+            }
+        }
+
+        for (id, hll) in &self.ndv_states {
+            if let Some(stats) = col_stats.get_mut(id) {
+                let ndv = hll.count() as u64;
+                stats.distinct_of_values = Some(ndv);
+            }
+        }
+        Ok((col_stats, cluster_stats))
     }
 }
 
@@ -360,60 +429,6 @@ impl Processor for SinkAnalyzeState {
         }
         Ok(())
     }
-}
-
-pub async fn regenerate_statistics(
-    table: &FuseTable,
-    snapshot: &TableSnapshot,
-    ctx: &Arc<dyn TableContext>,
-) -> Result<(StatisticsOfColumns, Option<ClusterStatistics>)> {
-    // 1. Read table snapshot.
-    let default_cluster_key_id = table.cluster_key_id();
-
-    // 2. Iterator segments and blocks to estimate statistics.
-    let mut read_segment_count = 0;
-    let mut col_stats = HashMap::new();
-    let mut cluster_stats = None;
-
-    let start = Instant::now();
-    let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema());
-    let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
-    let number_segments = snapshot.segments.len();
-    for chunk in snapshot.segments.chunks(chunk_size) {
-        let mut stats_of_columns = Vec::new();
-        let mut blocks_cluster_stats = Vec::new();
-        if !col_stats.is_empty() {
-            stats_of_columns.push(col_stats.clone());
-            blocks_cluster_stats.push(cluster_stats.clone());
-        }
-
-        let segments = segments_io
-            .read_segments::<SegmentInfo>(chunk, true)
-            .await?;
-        for segment in segments {
-            let segment = segment?;
-            stats_of_columns.push(segment.summary.col_stats.clone());
-            blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
-        }
-
-        // Generate new column statistics for snapshot
-        col_stats = reduce_block_statistics(&stats_of_columns);
-        cluster_stats = reduce_cluster_statistics(&blocks_cluster_stats, default_cluster_key_id);
-
-        // Status.
-        {
-            read_segment_count += chunk.len();
-            let status = format!(
-                "analyze: read segment files:{}/{}, cost:{:?}",
-                read_segment_count,
-                number_segments,
-                start.elapsed()
-            );
-            ctx.set_status_info(&status);
-        }
-    }
-
-    Ok((col_stats, cluster_stats))
 }
 
 pub struct HistogramInfoSink {
@@ -652,20 +667,19 @@ impl Processor for AnalyzeCollectNDVSource {
                 let compact_segment_info = self.segment_reader.read(&load_param).await?;
 
                 let block_count = compact_segment_info.summary.block_count as usize;
-                let block_hlls =
-                    if let Some(meta) = &compact_segment_info.summary.additional_stats_meta {
-                        let (path, ver) = &meta.location;
+                let block_hlls = match compact_segment_info.summary.additional_stats_loc() {
+                    Some((path, ver)) => {
                         let load_param = LoadParams {
-                            location: path.clone(),
+                            location: path,
                             len_hint: None,
-                            ver: *ver,
+                            ver,
                             put_cache: true,
                         };
                         let stats = self.stats_reader.read(&load_param).await?;
                         stats.block_hlls.clone()
-                    } else {
-                        vec![vec![]; block_count]
-                    };
+                    }
+                    _ => vec![vec![]; block_count],
+                };
                 self.state = State::CollectNDV {
                     segment_location: part.segment_location.clone(),
                     segment_info: compact_segment_info,
@@ -730,6 +744,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 let additional_stats_meta = AdditionalStatsMeta {
                     size: data.len() as u64,
                     location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                    ..Default::default()
                 };
                 self.dal.write(&segment_stats_location, data).await?;
                 origin_summary.additional_stats_meta = Some(additional_stats_meta);

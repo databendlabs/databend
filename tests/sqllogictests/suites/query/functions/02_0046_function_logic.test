@@ -194,6 +194,21 @@ SELECT not 0
 ----
 1
 
+query B
+SELECT or_filters(false, false, false)
+----
+0
+
+query B
+SELECT or_filters(false, false, null)
+----
+0
+
+query B
+SELECT or_filters(true, false, null)
+----
+1
+
 
 
 query TT
@@ -306,6 +321,27 @@ SELECT (0 < 1) AND (0 < 1), (0 < 1) OR (0 < 1) FROM t_logic
 ----
 1 1
 
+# for nullable column
+statement ok
+CREATE OR REPLACE TABLE t_logic_1 (a INT NULL)
+
+statement ok
+INSERT INTO t_logic_1 VALUES (NULL),(0),(1)
+
+query B rowsort
+SELECT or_filters(a < 1, a < 1, a < 1) FROM t_logic_1
+----
+0
+0
+1
+
+query B rowsort
+SELECT or_filters(a > 2, a > 2, a > 2) FROM t_logic_1
+----
+0
+0
+0
+
 query TT
 select number, and_filters(number > 1, number > 2 , number > 3) from numbers(6) order by number;
 ----
@@ -314,6 +350,16 @@ select number, and_filters(number > 1, number > 2 , number > 3) from numbers(6) 
 2 0
 3 0
 4 1
+5 1
+
+query TT
+select number, or_filters(number = 1, number = 5 , number = 3) from numbers(6) order by number;
+----
+0 0
+1 1
+2 0
+3 1
+4 0
 5 1
 
 statement ok

@@ -570,11 +570,9 @@ impl CompactTaskBuilder {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let op = self.dal.clone();
             let handler = runtime.spawn(async move {
-                let stats = if let Some(meta) = &segment.summary.additional_stats_meta {
-                    let stats = read_segment_stats(op.clone(), meta.location.clone()).await?;
-                    Some(stats)
-                } else {
-                    None
+                let stats = match segment.summary.additional_stats_loc() {
+                    Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
+                    _ => None,
                 };
                 let blocks = segment.block_metas()?;
                 drop(permit);
