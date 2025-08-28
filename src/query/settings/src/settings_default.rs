@@ -1185,6 +1185,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_fixed_rows_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable fixed rows sort serialize",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_last_snapshot_location_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables writing last_snapshot_location_hint object",

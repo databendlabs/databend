@@ -22,6 +22,7 @@ fn create_pipeline(
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
+    enable_fixed_rows_sort: bool,
 ) -> Result<(Arc<QueryPipelineExecutor>, Receiver<Result<DataBlock>>)> {
     let mut pipeline = Pipeline::create();
 
@@ -41,9 +42,10 @@ fn create_pipeline(
         worker,
         block_size,
         limit,
-        sort_desc.into(),
+        &sort_desc,
         false,
         true,
+        enable_fixed_rows_sort,
     )?;
 
     let (mut rx, sink_pipe) = create_sink_pipe(1)?;
@@ -75,7 +77,7 @@ async fn run_fuzz(ctx: Arc<QueryContext>, rng: &mut ThreadRng, with_limit: bool)
     //     }
     // }
 
-    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit)?;
+    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit, true)?;
     executor.execute()?;
 
     let mut got: Vec<DataBlock> = Vec::new();
@@ -141,7 +143,7 @@ async fn test_k_way_merge_sort() -> Result<()> {
     let block_size = 4;
     let limit = None;
     let (data, expected) = basic_test_data(None);
-    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit)?;
+    let (executor, mut rx) = create_pipeline(ctx, data, worker, block_size, limit, false)?;
 
     executor.execute()?;
 

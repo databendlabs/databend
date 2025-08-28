@@ -11,6 +11,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytesize = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
@@ -22,7 +23,11 @@ tokio = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]
+arrow-array = { workspace = true }
+arrow-ord = { workspace = true }
+arrow-schema = { workspace = true }
 itertools = { workspace = true }
+proptest = { workspace = true }
 rand = { workspace = true }
 
 [lints]

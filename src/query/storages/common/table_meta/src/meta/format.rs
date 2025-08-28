@@ -24,7 +24,6 @@ use databend_common_io::prelude::BinaryRead;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::from_slice;
 #[cfg(feature = "dev")]
 use snap::raw::Decoder as SnapDecoder;
 #[cfg(feature = "dev")]
@@ -146,15 +145,17 @@ pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>
 }
 
 pub fn decode<'a, T: Deserialize<'a>>(encoding: &MetaEncoding, data: &'a [u8]) -> Result<T> {
-    match encoding {
+    Ok(match encoding {
         MetaEncoding::Bincode => {
-            Ok(bincode_v1::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            bincode_v1::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))
         }
         MetaEncoding::MessagePack => {
-            Ok(rmp_serde::from_slice(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            rmp_serde::from_slice(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))
         }
-        MetaEncoding::Json => Ok(from_slice::<T>(data)?),
-    }
+        MetaEncoding::Json => {
+            serde_json::from_slice::<T>(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))
+        }
+    }?)
 }
 
 pub fn read_and_deserialize<R, T>(

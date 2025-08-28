@@ -375,3 +375,17 @@ pub fn buffer_to_array_data<T: NativeType>(value: (Buffer<T>, DataType)) -> Arra
     let builder = ArrayDataBuilder::new(value.1).len(l).buffers(vec![buffer]);
     unsafe { builder.build_unchecked() }
 }
+
+impl<const N: usize> From<arrow_buffer::Buffer> for Buffer<[u64; N]> {
+    fn from(value: arrow_buffer::Buffer) -> Self {
+        Self::from_bytes(crate::buffer::to_bytes(value))
+    }
+}
+
+impl<const N: usize> From<Buffer<[u64; N]>> for arrow_buffer::Buffer {
+    fn from(value: Buffer<[u64; N]>) -> Self {
+        let offset = value.offset();
+        let size = std::mem::size_of::<u64>() * N;
+        crate::buffer::to_buffer(value.data).slice_with_length(offset * size, value.length * size)
+    }
+}

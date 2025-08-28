@@ -24,6 +24,7 @@ use jiff::tz::TimeZone;
 
 use crate::get_all_test_data_types;
 use crate::rand_block_for_all_types;
+use crate::DataTypeFilter;
 
 #[test]
 fn test_timestamp_to_string_formats() {
@@ -63,7 +64,7 @@ fn test_parse_jiff() {
 
 #[test]
 fn test_convert_types() {
-    let all_types = get_all_test_data_types();
+    let all_types = get_all_test_data_types(DataTypeFilter::All);
     let all_fields = all_types
         .iter()
         .enumerate()
@@ -75,7 +76,7 @@ fn test_convert_types() {
     let schema2 = DataSchema::try_from(&arrow_schema).unwrap();
     assert_eq!(schema, schema2);
 
-    let random_block = rand_block_for_all_types(1024);
+    let random_block = rand_block_for_all_types(1024, DataTypeFilter::All);
     for (idx, c) in random_block.columns().iter().enumerate() {
         let c = c.as_column().unwrap().clone();
 

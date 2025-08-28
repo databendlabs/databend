@@ -4042,10 +4042,14 @@ dependencies = [
 name = "databend-common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
+ "arrow-ord",
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "bytesize 2.0.1",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
@@ -4053,6 +4057,7 @@ dependencies = [
  "jsonb",
  "log",
  "match-template",
+ "proptest",
  "rand 0.8.5",
  "serde",
  "tokio",

@@ -188,6 +188,7 @@ impl From<Scalar> for LegacyScalar {
             Scalar::Bitmap(bitmap) => LegacyScalar::Bitmap(bitmap),
             Scalar::Tuple(tuple) => LegacyScalar::Tuple(tuple),
             Scalar::Variant(variant) => LegacyScalar::Variant(variant),
+            Scalar::Opaque(_) => unimplemented!("Opaque scalar bincode conversion not implemented"),
         }
     }
 }
@@ -229,6 +230,7 @@ impl From<Column> for LegacyColumn {
                 LegacyColumn::Tuple(tuple.into_iter().map(|c| c.into()).collect())
             }
             Column::Variant(variant) => LegacyColumn::Variant(LegacyBinaryColumn::from(variant)),
+            Column::Opaque(_) => unimplemented!("Opaque type bincode conversion not implemented"),
         }
     }
 }
