@@ -29,7 +29,9 @@ pub fn rewrite_predicates(s_expr: &SExpr) -> Result<Vec<ScalarExpr>> {
     let mut origin_predicates = filter.predicates.clone();
     for predicate in filter.predicates.iter() {
         match predicate {
-            ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+            {
                 for join_child in join.children() {
                     let rel_expr = RelExpr::with_s_expr(join_child);
                     let prop = rel_expr.derive_relational_prop()?;
@@ -64,7 +66,9 @@ fn extract_or_predicate(
                 let and_args = flatten_and(&func.arguments);
                 for and_arg in and_args.iter() {
                     match and_arg {
-                        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+                        ScalarExpr::FunctionCall(func)
+                            if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+                        {
                             if let Some(scalar) =
                                 extract_or_predicate(&func.arguments, required_columns)?
                             {
@@ -107,7 +111,9 @@ fn flatten_ors(or_args: &[ScalarExpr]) -> Vec<ScalarExpr> {
     let mut flattened_ors = Vec::new();
     for or_arg in or_args.iter() {
         match or_arg {
-            ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+            {
                 flattened_ors.extend(flatten_ors(&func.arguments))
             }
             _ => flattened_ors.push(or_arg.clone()),
@@ -149,16 +155,10 @@ fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
 
 // Merge predicates to OR scalar
 fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    scalars
-        .iter()
-        .cloned()
-        .reduce(|lhs, rhs| {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "or".to_string(),
-                params: vec![],
-                arguments: vec![lhs, rhs],
-            })
-        })
-        .unwrap()
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "or_filters".to_string(),
+        params: vec![],
+        arguments: scalars.to_vec(),
+    })
 }

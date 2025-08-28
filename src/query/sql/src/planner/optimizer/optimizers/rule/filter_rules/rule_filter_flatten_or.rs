@@ -68,13 +68,17 @@ impl Rule for RuleFilterFlattenOr {
             flatten_or_expr(predicate, &mut or_exprs);
 
             if or_exprs.len() > 2 {
-                *predicate = FunctionCall {
+                let replace_expr = FunctionCall {
                     span: None,
                     func_name: "or_filters".to_string(),
                     params: vec![],
                     arguments: or_exprs,
                 }
                 .into();
+                if predicate == &replace_expr {
+                    continue;
+                }
+                *predicate = replace_expr;
                 has_replace = true
             }
         }
@@ -97,7 +101,9 @@ impl Rule for RuleFilterFlattenOr {
 
 fn flatten_or_expr(expr: &ScalarExpr, or_exprs: &mut Vec<ScalarExpr>) {
     match expr {
-        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+        ScalarExpr::FunctionCall(func)
+            if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+        {
             for argument in func.arguments.iter() {
                 flatten_or_expr(argument, or_exprs);
             }
