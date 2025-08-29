@@ -398,7 +398,11 @@ impl<'a> SegmentCompactor<'a> {
             self.operator
                 .write(&segment_stats_location, stats_data)
                 .await?;
-            new_statistics.additional_stats_meta = Some(additional_stats_meta);
+            if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+                new_statistics.additional_stats_meta = Some(additional_stats_meta);
+            } else {
+                new_statistics.additional_stats_meta = None;
+            }
         }
 
         // 2.3 write down new segment

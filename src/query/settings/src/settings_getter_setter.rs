@@ -1064,4 +1064,8 @@ impl Settings {
     pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
     }
+
+    pub fn get_enable_table_hll_statistics(&self) -> Result<u64> {
+        self.try_get_u64("enable_table_hll_statistics")
+    }
 }

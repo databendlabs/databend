@@ -219,11 +219,15 @@ impl SinkAnalyzeState {
         )?;
 
         // 3. Generate new table statistics
-        new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
-            hll: Some(encode_column_hll(&self.ndv_states)?),
-            row_count: snapshot.summary.row_count,
-            ..Default::default()
-        });
+        if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+            new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
+                hll: Some(encode_column_hll(&self.ndv_states)?),
+                row_count: snapshot.summary.row_count,
+                ..Default::default()
+            });
+        } else {
+            new_snapshot.summary.additional_stats_meta = None;
+        }
 
         let table_statistics = TableSnapshotStatistics::new(
             self.ndv_states.clone(),
@@ -747,7 +751,11 @@ impl Processor for AnalyzeCollectNDVSource {
                     ..Default::default()
                 };
                 self.dal.write(&segment_stats_location, data).await?;
-                origin_summary.additional_stats_meta = Some(additional_stats_meta);
+                if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+                    origin_summary.additional_stats_meta = Some(additional_stats_meta);
+                } else {
+                    origin_summary.additional_stats_meta = None;
+                }
                 let new_segment = SegmentInfo::new(block_metas, origin_summary);
                 new_segment
                     .write_meta_through_cache(&self.dal, segment_loc)

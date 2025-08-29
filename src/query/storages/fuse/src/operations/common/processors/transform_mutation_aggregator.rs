@@ -359,6 +359,7 @@ impl TableMutationAggregator {
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
             let table_meta_timestamps = self.table_meta_timestamps;
+            let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
             tasks.push(async move {
                 write_segment(
                     op,
@@ -371,6 +372,7 @@ impl TableMutationAggregator {
                     kind,
                     set_hilbert_level,
                     table_meta_timestamps,
+                    enable_hll_statistics,
                 )
                 .await
             });
@@ -483,6 +485,7 @@ impl TableMutationAggregator {
     ) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
+        let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
         let kind = self.kind;
         let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
@@ -573,6 +576,7 @@ impl TableMutationAggregator {
                     kind,
                     set_level,
                     table_meta_timestamps,
+                    enable_hll_statistics,
                 )
                 .await?;
 
@@ -822,6 +826,7 @@ async fn write_segment(
     kind: MutationKind,
     set_hilbert_level: bool,
     table_meta_timestamps: TableMetaTimestamps,
+    enable_hll_statistics: bool,
 ) -> Result<(String, Statistics)> {
     let location = location_gen.gen_segment_info_location(table_meta_timestamps, false);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
@@ -857,17 +862,21 @@ async fn write_segment(
     }
 
     if let Some(stats) = stats {
-        let segment_stats_location =
-            TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
-                location.as_str(),
-            );
-        let additional_stats_meta = AdditionalStatsMeta {
-            size: stats.len() as u64,
-            location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
-            ..Default::default()
-        };
-        dal.write(&segment_stats_location, stats).await?;
-        new_summary.additional_stats_meta = Some(additional_stats_meta);
+        if enable_hll_statistics {
+            let segment_stats_location =
+                TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+                    location.as_str(),
+                );
+            let additional_stats_meta = AdditionalStatsMeta {
+                size: stats.len() as u64,
+                location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                ..Default::default()
+            };
+            dal.write(&segment_stats_location, stats).await?;
+            new_summary.additional_stats_meta = Some(additional_stats_meta);
+        } else {
+            new_summary.additional_stats_meta = None;
+        }
     }
 
     // create new segment info

@@ -276,7 +276,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 let mut additional_stats_meta = None;
                 let mut stats = None;
-                if !self.hll_accumulator.is_empty() {
+                if !self.hll_accumulator.is_empty() && self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
                     let segment_stats_location = TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(location.as_str());
                     let stats_data = self.hll_accumulator.build().to_bytes()?;
                     let stats_summary = self.hll_accumulator.take_summary();
