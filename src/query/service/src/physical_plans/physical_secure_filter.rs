@@ -81,6 +81,7 @@ impl IPhysicalPlan for SecureFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    #[recursive::recursive]
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(SecureFilterFormatter::create(self))
     }
