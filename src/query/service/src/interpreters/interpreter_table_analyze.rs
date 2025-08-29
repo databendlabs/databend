@@ -114,7 +114,9 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         };
 
-        if self.plan.no_scan {
+        let no_scan =
+            !self.ctx.get_settings().get_enable_analyze_table_stats()? || self.plan.no_scan;
+        if no_scan {
             let operator = table.get_operator();
             let cluster_key_id = table.cluster_key_id();
             let table_meta_timestamps = self
