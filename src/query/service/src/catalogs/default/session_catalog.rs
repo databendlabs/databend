@@ -108,8 +108,6 @@ use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
-use databend_storages_common_session::TempTblMgrRef;
-use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
@@ -121,21 +119,12 @@ use crate::servers::http::v1::ClientSessionManager;
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
     inner: MutableCatalog,
-    txn_mgr: TxnManagerRef,
-    temp_tbl_mgr: TempTblMgrRef,
 }
 
 impl SessionCatalog {
     pub fn create(inner: MutableCatalog, session_state: SessionState) -> Self {
-        let SessionState {
-            txn_mgr,
-            temp_tbl_mgr,
-        } = session_state;
-        SessionCatalog {
-            inner,
-            txn_mgr,
-            temp_tbl_mgr,
-        }
+        inner.set_session_state(session_state);
+        SessionCatalog { inner }
     }
 }
 
@@ -291,7 +280,7 @@ impl Catalog for SessionCatalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         if let Some(t) = {
-            let guard = self.txn_mgr.lock();
+            let guard = self.inner.txn_mgr().lock();
             if guard.is_active() {
                 guard.get_table_from_buffer_by_id(table_id)
             } else {
@@ -301,7 +290,10 @@ impl Catalog for SessionCatalog {
             return Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())));
         }
         if is_temp_table_id(table_id) {
-            self.temp_tbl_mgr.lock().get_table_meta_by_id(table_id)
+            self.inner
+                .temp_tbl_mgr()
+                .lock()
+                .get_table_meta_by_id(table_id)
         } else {
             self.inner.get_table_meta_by_id(table_id).await
         }
@@ -319,7 +311,12 @@ impl Catalog for SessionCatalog {
     }
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
-        if let Some(name) = self.temp_tbl_mgr.lock().get_table_name_by_id(table_id) {
+        if let Some(name) = self
+            .inner
+            .temp_tbl_mgr()
+            .lock()
+            .get_table_name_by_id(table_id)
+        {
             return Ok(Some(name));
         }
         self.inner.get_table_name_by_id(table_id).await
@@ -355,7 +352,7 @@ impl Catalog for SessionCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let (table_in_txn, is_active) = {
-            let guard = self.txn_mgr.lock();
+            let guard = self.inner.txn_mgr().lock();
             if guard.is_active() {
                 (
                     guard
@@ -370,12 +367,18 @@ impl Catalog for SessionCatalog {
         if let Some(table) = table_in_txn {
             return table;
         }
-        if let Some(table) = self.temp_tbl_mgr.lock().get_table(db_name, table_name)? {
+        if let Some(table) = self
+            .inner
+            .temp_tbl_mgr()
+            .lock()
+            .get_table(db_name, table_name)?
+        {
             return self.get_table_by_info(&table);
         }
         let table = self.inner.get_table(tenant, db_name, table_name).await?;
         if table.is_stream() && is_active {
-            self.txn_mgr
+            self.inner
+                .txn_mgr()
                 .lock()
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
@@ -391,7 +394,7 @@ impl Catalog for SessionCatalog {
     }
 
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
-        self.temp_tbl_mgr.lock().list_tables()
+        self.inner.list_temporary_tables()
     }
 
     // Get one table identified as dropped by db and table name.
@@ -427,20 +430,24 @@ impl Catalog for SessionCatalog {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix.clone()),
+            Some(prefix) => self
+                .inner
+                .temp_tbl_mgr()
+                .lock()
+                .create_table(req, prefix.clone()),
             None => self.inner.create_table(req).await,
         }
     }
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         if let Some(reply) = databend_storages_common_session::drop_table_by_id(
-            self.temp_tbl_mgr.clone(),
+            self.inner.temp_tbl_mgr().clone(),
             req.clone(),
         )
         .await?
         {
             ClientSessionManager::instance()
-                .remove_temp_tbl_mgr(req.temp_prefix, &self.temp_tbl_mgr);
+                .remove_temp_tbl_mgr(req.temp_prefix, self.inner.temp_tbl_mgr());
             return Ok(reply);
         }
         self.inner.drop_table_by_id(req).await
@@ -456,14 +463,14 @@ impl Catalog for SessionCatalog {
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         if is_temp_table_id(req.table_id) {
-            self.temp_tbl_mgr.lock().commit_table_meta(&req)
+            self.inner.temp_tbl_mgr().lock().commit_table_meta(&req)
         } else {
             self.inner.commit_table_meta(req).await
         }
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        let reply = self.temp_tbl_mgr.lock().rename_table(&req)?;
+        let reply = self.inner.temp_tbl_mgr().lock().rename_table(&req)?;
         match reply {
             Some(r) => Ok(r),
             None => self.inner.rename_table(req).await,
@@ -477,7 +484,7 @@ impl Catalog for SessionCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         if is_temp_table_id(req.table_id) {
-            self.temp_tbl_mgr.lock().upsert_table_option(req)
+            self.inner.temp_tbl_mgr().lock().upsert_table_option(req)
         } else {
             self.inner.upsert_table_option(tenant, db_name, req).await
         }
@@ -487,7 +494,7 @@ impl Catalog for SessionCatalog {
         &self,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        let state = self.txn_mgr.lock().state();
+        let state = self.inner.txn_mgr().lock().state();
         match state {
             TxnState::AutoCommit => {
                 let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
@@ -496,13 +503,14 @@ impl Catalog for SessionCatalog {
                 } else {
                     self.inner.retryable_update_multi_table_meta(req).await?
                 };
-                self.temp_tbl_mgr
+                self.inner
+                    .temp_tbl_mgr()
                     .lock()
                     .update_multi_table_meta(update_temp_tables);
                 Ok(reply)
             }
             TxnState::Active => {
-                self.txn_mgr.lock().update_multi_table_meta(req);
+                self.inner.txn_mgr().lock().update_multi_table_meta(req);
                 Ok(Ok(Default::default()))
             }
             TxnState::Fail => unreachable!(),
@@ -563,7 +571,8 @@ impl Catalog for SessionCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         let table_id = req.table_id;
         let mut reply = if is_temp_table_id(table_id) {
-            self.temp_tbl_mgr
+            self.inner
+                .temp_tbl_mgr()
                 .lock()
                 .get_table_copied_file_info(req.clone())?
         } else {
@@ -571,9 +580,12 @@ impl Catalog for SessionCatalog {
                 .get_table_copied_file_info(tenant, db_name, req)
                 .await?
         };
-        reply
-            .file_info
-            .extend(self.txn_mgr.lock().get_table_copied_file_info(table_id));
+        reply.file_info.extend(
+            self.inner
+                .txn_mgr()
+                .lock()
+                .get_table_copied_file_info(table_id),
+        );
         Ok(reply)
     }
 
@@ -583,7 +595,10 @@ impl Catalog for SessionCatalog {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         if is_temp_table_id(req.table_id) {
-            self.temp_tbl_mgr.lock().truncate_table(req.table_id)
+            self.inner
+                .temp_tbl_mgr()
+                .lock()
+                .truncate_table(req.table_id)
         } else {
             self.inner.truncate_table(table_info, req).await
         }
@@ -663,9 +678,9 @@ impl Catalog for SessionCatalog {
         stream_desc: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Option<Arc<dyn Table>>> {
-        let is_active = self.txn_mgr.lock().is_active();
+        let is_active = self.inner.txn_mgr().lock().is_active();
         if is_active {
-            self.txn_mgr
+            self.inner.txn_mgr()
                 .lock()
                 .get_stream_table(stream_desc)
                 .map(|stream| {
@@ -690,9 +705,10 @@ impl Catalog for SessionCatalog {
         source: TableInfo,
         max_batch_size: Option<u64>,
     ) {
-        let is_active = self.txn_mgr.lock().is_active();
+        let is_active = self.inner.txn_mgr().lock().is_active();
         if is_active {
-            self.txn_mgr
+            self.inner
+                .txn_mgr()
                 .lock()
                 .upsert_stream_table(stream, source, max_batch_size);
         }

@@ -124,6 +124,10 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::TempTblMgr;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManager;
+use databend_storages_common_session::TxnManagerRef;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -146,6 +150,8 @@ pub struct MutableCatalog {
     ctx: CatalogContext,
     tenant: Tenant,
     disable_table_info_refresh: bool,
+    txn_mgr: TxnManagerRef,
+    temp_tbl_mgr: TempTblMgrRef,
 }
 
 impl Debug for MutableCatalog {
@@ -208,6 +214,8 @@ impl MutableCatalog {
             ctx,
             tenant,
             disable_table_info_refresh: false,
+            txn_mgr: TxnManager::init(),
+            temp_tbl_mgr: TempTblMgr::init(),
         })
     }
 
@@ -225,6 +233,26 @@ impl MutableCatalog {
 
     pub(crate) fn disable_table_info_refresh(&mut self) {
         self.disable_table_info_refresh = true;
+    }
+
+    pub fn set_session_state(
+        &mut self,
+        session_state: databend_storages_common_session::SessionState,
+    ) {
+        self.txn_mgr = session_state.txn_mgr;
+        self.temp_tbl_mgr = session_state.temp_tbl_mgr;
+    }
+
+    pub fn txn_mgr(&self) -> &TxnManagerRef {
+        &self.txn_mgr
+    }
+
+    pub fn temp_tbl_mgr(&self) -> &TempTblMgrRef {
+        &self.temp_tbl_mgr
+    }
+
+    pub fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
+        self.temp_tbl_mgr.lock().list_tables()
     }
 }
 
