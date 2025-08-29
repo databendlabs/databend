@@ -376,17 +376,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     {
                         match arg.index(row).unwrap() {
                             ScalarRef::Null => {
-                                results.push((
-                                    Value::Scalar(Scalar::Tuple(vec![
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                    ])),
-                                    0,
-                                ));
+                                results
+                                    .push((Value::Scalar(Scalar::Tuple(vec![Scalar::Null; 6])), 0));
                             }
                             ScalarRef::Variant(val) => {
                                 let columns = match json_path {
@@ -698,7 +689,6 @@ impl FlattenGenerator {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten(
         &mut self,
         input: &RawJsonb,
@@ -707,7 +697,6 @@ impl FlattenGenerator {
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
         value_builder: &mut Option<BinaryColumnBuilder>,
-        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         match self.mode {
@@ -719,7 +708,6 @@ impl FlattenGenerator {
                     path_builder,
                     index_builder,
                     value_builder,
-                    this_builder,
                     rows,
                 );
             }
@@ -731,7 +719,6 @@ impl FlattenGenerator {
                     path_builder,
                     index_builder,
                     value_builder,
-                    this_builder,
                     rows,
                 );
             }
@@ -743,7 +730,6 @@ impl FlattenGenerator {
                     path_builder,
                     index_builder,
                     value_builder,
-                    this_builder,
                     rows,
                 );
                 self.flatten_object(
@@ -753,14 +739,12 @@ impl FlattenGenerator {
                     path_builder,
                     index_builder,
                     value_builder,
-                    this_builder,
                     rows,
                 );
             }
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten_array(
         &mut self,
         input: &RawJsonb,
@@ -769,7 +753,6 @@ impl FlattenGenerator {
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
         value_builder: &mut Option<BinaryColumnBuilder>,
-        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         if let Ok(Some(vals)) = input.array_values() {
@@ -793,10 +776,6 @@ impl FlattenGenerator {
                     value_builder.put_slice(val.as_ref());
                     value_builder.commit_row();
                 }
-                if let Some(this_builder) = this_builder {
-                    this_builder.put_slice(input.as_ref());
-                    this_builder.commit_row();
-                }
                 *rows += 1;
 
                 if self.recursive {
@@ -807,7 +786,6 @@ impl FlattenGenerator {
                         path_builder,
                         index_builder,
                         value_builder,
-                        this_builder,
                         rows,
                     );
                 }
@@ -815,7 +793,6 @@ impl FlattenGenerator {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten_object(
         &mut self,
         input: &RawJsonb,
@@ -824,7 +801,6 @@ impl FlattenGenerator {
         path_builder: &mut Option<StringColumnBuilder>,
         index_builder: &mut Option<NullableColumnBuilder<UInt64Type>>,
         value_builder: &mut Option<BinaryColumnBuilder>,
-        this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
         if let Ok(Some(key_vals)) = input.object_each() {
@@ -851,10 +827,6 @@ impl FlattenGenerator {
                     value_builder.put_slice(val.as_ref());
                     value_builder.commit_row();
                 }
-                if let Some(this_builder) = this_builder {
-                    this_builder.put_slice(input.as_ref());
-                    this_builder.commit_row();
-                }
                 *rows += 1;
 
                 if self.recursive {
@@ -865,7 +837,6 @@ impl FlattenGenerator {
                         path_builder,
                         index_builder,
                         value_builder,
-                        this_builder,
                         rows,
                     );
                 }
@@ -901,11 +872,6 @@ impl FlattenGenerator {
         } else {
             None
         };
-        let mut this_builder = if params.is_empty() || params.contains(&6) {
-            Some(BinaryColumnBuilder::with_capacity(0, 0))
-        } else {
-            None
-        };
         let mut rows = 0;
 
         if let Some(input) = input {
@@ -916,7 +882,6 @@ impl FlattenGenerator {
                 &mut path_builder,
                 &mut index_builder,
                 &mut value_builder,
-                &mut this_builder,
                 &mut rows,
             );
         }
@@ -961,8 +926,13 @@ impl FlattenGenerator {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
                 .wrap_nullable(validity.clone())
         };
-        let this_column = if let Some(this_builder) = this_builder {
-            VariantType::upcast_column(this_builder.build()).wrap_nullable(validity.clone())
+        let this_column = if (params.is_empty() || params.contains(&6))
+            && input.is_some()
+            && rows > 0
+        {
+            let input = input.unwrap();
+            VariantType::upcast_column(BinaryColumnBuilder::repeat(input.as_ref(), rows).build())
+                .wrap_nullable(validity.clone())
         } else {
             VariantType::upcast_column(BinaryColumnBuilder::repeat(&[], rows).build())
                 .wrap_nullable(validity.clone())
