@@ -3292,6 +3292,7 @@ dependencies = [
  "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
+ "databend-common-frozen-api",
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
@@ -3367,6 +3368,17 @@ dependencies = [
  "roaring",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "databend-common-frozen-api"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "proc-macro2",
+ "quote",
+ "sha2",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -5533,6 +5545,7 @@ dependencies = [
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-frozen-api",
  "databend-common-functions",
  "databend-common-io",
  "databend-common-native",

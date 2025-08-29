@@ -20,6 +20,7 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_frozen_api::frozen_api;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -223,6 +224,7 @@ impl VirtualDataSchema {
     }
 }
 
+#[frozen_api("4c79997f")]
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ComputedExpr {
     Virtual(String),
@@ -251,6 +253,7 @@ fn uninit_column_id() -> ColumnId {
     0
 }
 
+#[frozen_api("37e32a7b")]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TableSchema {
     pub fields: Vec<TableField>,
@@ -260,6 +263,7 @@ pub struct TableSchema {
     pub next_column_id: ColumnId,
 }
 
+#[frozen_api("92566e3d")]
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TableField {
     pub name: String,
@@ -272,6 +276,7 @@ pub struct TableField {
 
 /// DataType with more information that is only available for table field, e.g, the
 /// tuple field name, or the scale of decimal.
+#[frozen_api("5f675717")]
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TableDataType {
     Null,

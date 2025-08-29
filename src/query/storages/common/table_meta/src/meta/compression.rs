@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_frozen_api::frozen_api;
+
+#[frozen_api("cf7e7dcc")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Compression {
     // Lz4 will be deprecated.
