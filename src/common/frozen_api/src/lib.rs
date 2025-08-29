@@ -187,22 +187,17 @@ fn is_builtin_type(type_name: &str) -> bool {
             | "DateTime"
             | "Utc"
             | "Uuid"
-        // Databend stable foundation types
-            | "TableSchema"
-            | "TableDataType" 
-            | "TableField"
-            | "ColumnId"
-            | "FormatVersion"
-            | "SnapshotId"
-            | "NativeColumnMeta"
-            | "MetaEncoding"
-            | "MetaCompression"
-            | "RawBlockHLL"
-            | "Histogram"
-            | "MetaHLL"
-            | "VariantDataType"
-            | "Location"
-            | "ClusterKey"
+        // Databend stable foundation types (simple type aliases only)
+            | "ColumnId"           // u32 - simple column identifier
+            | "FormatVersion"      // u64 - version number
+            | "SnapshotId"         // Uuid - snapshot identifier
+            | "RawBlockHLL"        // Vec<u8> - raw HLL data
+            | "ClusterKey"         // (u32, String) - cluster key tuple
+            | "NativeColumnMeta"   // External crate type - complex but stable
+            | "Histogram"          // Complex struct - statistical data
+            | "MetaHLL"            // Complex struct - HyperLogLog implementation
+            | "VariantDataType"    // Recursive enum - variant type definition
+            | "Location" // (String, FormatVersion) - storage location tuple
     )
 }
 
@@ -239,14 +234,19 @@ pub fn frozen_api(args: TokenStream, input: TokenStream) -> TokenStream {
     let actual = compute_struct_hash(&input_struct);
 
     if actual != expected {
+        let custom_dependencies = extract_custom_dependencies(&input_struct);
+        let dependency_info = if custom_dependencies.is_empty() {
+            String::new()
+        } else {
+            format!("\nDependencies: {}", custom_dependencies.join(" → "))
+        };
+
         let error_msg = format!(
-            "FROZEN API CHANGED: '{}' structure modified\n\
-             Expected hash: {expected}\n\
-             Actual hash:   {actual}\n\
-             \n\
-             To fix: Update hash to '{}' if change is intentional\n\
-             Note: Other structs using '{}' may also need hash updates",
-            struct_name, actual, struct_name
+            "⚠️  BREAKING CHANGE DETECTED: '{}' modified{}\n\
+             Expected: {expected} | Actual: {actual}\n\
+             Fix: Update hash to '{}' if change is intentional\n\
+             Impact: Serialization compatibility may break",
+            struct_name, dependency_info, actual
         );
 
         return syn::Error::new_spanned(&input_struct.ident, error_msg)
