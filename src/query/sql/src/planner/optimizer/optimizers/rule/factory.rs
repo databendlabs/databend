@@ -33,6 +33,7 @@ use crate::optimizer::optimizers::rule::RuleLeftExchangeJoin;
 use crate::optimizer::optimizers::rule::RuleMergeEvalScalar;
 use crate::optimizer::optimizers::rule::RuleMergeFilter;
 use crate::optimizer::optimizers::rule::RuleMergeFilterIntoMutation;
+use crate::optimizer::optimizers::rule::RuleMergeLimit;
 use crate::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::RulePushDownFilterAggregate;
@@ -78,6 +79,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
+            RuleID::MergeLimit => Ok(Box::new(RuleMergeLimit::new())),
             RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
