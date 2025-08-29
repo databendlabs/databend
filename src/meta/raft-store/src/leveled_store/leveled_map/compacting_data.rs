@@ -33,6 +33,7 @@ use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
@@ -43,13 +44,18 @@ use crate::utils::add_cooperative_yielding;
 /// Including several in-memory immutable levels and an optional persisted db.
 #[derive(Debug)]
 pub(crate) struct CompactingData {
+    /// Remember the newest level included in this compactor.
+    pub(crate) upto: Option<LevelIndex>,
     pub(crate) immutable_levels: Arc<ImmutableLevels>,
     pub(crate) persisted: Option<Arc<DB>>,
 }
 
 impl CompactingData {
     pub fn new(immutable_levels: Arc<ImmutableLevels>, persisted: Option<Arc<DB>>) -> Self {
+        let level_index = immutable_levels.newest_level_index();
+
         Self {
+            upto: level_index,
             immutable_levels,
             persisted,
         }

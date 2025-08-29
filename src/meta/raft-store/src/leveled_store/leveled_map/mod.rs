@@ -25,7 +25,6 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Node;
 use leveled_map_data::LeveledMapData;
-use log::debug;
 use log::info;
 use map_api::mvcc;
 use map_api::IOResultStream;
@@ -33,16 +32,12 @@ use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
-use tokio::sync::Semaphore;
 
 use crate::applier::applier_data::StateMachineView;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::scoped::Scoped;
 
 #[cfg(test)]
@@ -68,26 +63,12 @@ mod map_api_impl;
 ///   - then acquire `write_semaphore` to move `writeable` to `immutable_levels`,
 #[derive(Debug)]
 pub struct LeveledMap {
-    /// A semaphore that permits at most one compactor to run.
-    pub(crate) compaction_semaphore: Arc<Semaphore>,
-
-    /// Get a permit to write.
-    ///
-    /// Only one writer is allowed, to achieve serialization.
-    /// For historical reason, inserting a tombstone does not increase the seq.
-    /// Thus, mvcc isolation with the seq can not completely separate two concurrent writer.
-    pub(crate) write_semaphore: Arc<Semaphore>,
-
     pub data: Arc<LeveledMapData>,
 }
 
 impl Default for LeveledMap {
     fn default() -> Self {
         Self {
-            // Only one compactor is allowed a time.
-            compaction_semaphore: Arc::new(Semaphore::new(1)),
-            // Only one writer is allowed a time.
-            write_semaphore: Arc::new(Semaphore::new(1)),
             data: Arc::new(LeveledMapData::default()),
         }
     }
@@ -104,23 +85,6 @@ impl LeveledMap {
 
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
         self.data.with_sys_data(f)
-    }
-
-    pub async fn acquire_writer_permit(&self) -> WriterPermit {
-        let acquirer = self.new_writer_acquirer();
-        let permit = acquirer.acquire().await;
-        debug!("WriterPermit acquired");
-        permit
-    }
-
-    pub fn new_writer_acquirer(&self) -> applier_acquirer::WriterAcquirer {
-        applier_acquirer::WriterAcquirer::new(self.write_semaphore.clone())
-    }
-
-    /// Return the [`LevelIndex`] of the newest **immutable** data
-    pub(crate) fn immutable_level_index(&self) -> Option<LevelIndex> {
-        let immutables = self.data.immutable_levels();
-        immutables.newest_level_index()
     }
 
     /// Freeze the current writable level and create a new empty writable level.
@@ -195,60 +159,31 @@ impl LeveledMap {
     /// **Important**: Do not drop the compactor within this function when called
     /// under a state machine lock, as dropping may take ~250ms.
     pub fn replace_with_compacted(&self, compactor: &mut Compactor, db: DB) {
+        let upto = compactor.compacting_data.upto;
+        let mut immutables = self.data.immutable_levels().as_ref().clone();
+
         info!(
             "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
-            compactor.upto,
-            self.data.immutable_levels().indexes(),
+            upto,
+            immutables.indexes(),
             compactor.compacting_data.immutable_levels.indexes(),
         );
 
-        let mut immutables = self.data.immutable_levels().as_ref().clone();
-
         // If there is immutable levels compacted, remove them.
-        if let Some(upto) = compactor.upto {
+        if let Some(upto) = upto {
             immutables.remove_levels_upto(upto);
         }
 
-        // NOTE: Replace data from bottom to top.
-        // replace the db first, db contains more data.
-        // Otherwise, there is a chance some data is removed from immutables and the new db containing this data is not inserted.
-
-        // replace the persisted
-        self.data.with_persisted(|p| {
-            *p = Some(Arc::new(db));
+        self.data.with_inner(|inner| {
+            inner.immutable_levels = Arc::new(immutables);
+            inner.persisted = Some(Arc::new(db));
         });
-
-        // replace the immutables
-        self.data
-            .with_immutable_levels(|x| *x = Arc::new(immutables));
 
         info!("replace_with_compacted: finished replacing the db");
     }
 
-    /// Get a singleton `Compactor` instance specific to `self`.
-    ///
-    /// This method requires a mutable reference to prevent concurrent access to shared data,
-    /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
-    pub(crate) async fn acquire_compactor(&self) -> Compactor {
-        let acquirer = self.new_compactor_acquirer();
-
-        let permit = acquirer.acquire().await;
-
-        self.new_compactor(permit)
-    }
-
-    pub(crate) fn new_compactor_acquirer(&self) -> CompactorAcquirer {
-        CompactorAcquirer::new(self.compaction_semaphore.clone())
-    }
-
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
-        let level_index = self.immutable_level_index();
-
-        Compactor {
-            _permit: permit,
-            compacting_data: CompactingData::new(self.immutable_levels(), self.persisted()),
-            upto: level_index,
-        }
+    pub(crate) fn new_compacting_data(&self) -> CompactingData {
+        CompactingData::new(self.immutable_levels(), self.persisted())
     }
 }
 
