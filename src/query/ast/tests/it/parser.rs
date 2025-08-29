@@ -1393,7 +1393,6 @@ fn test_expr() {
 // FIXME: this test cause stack overflow
 // https://github.com/databendlabs/databend/issues/18625
 #[test]
-#[ignore]
 fn test_expr_stack() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("expr-stack.txt").unwrap();
