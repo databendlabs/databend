@@ -109,7 +109,7 @@ impl SegmentCompactMutator {
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
-        let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
+        let enable_hll_statistics = self.ctx.get_settings().get_enable_additional_table_stats()?;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
             self.default_cluster_key_id,

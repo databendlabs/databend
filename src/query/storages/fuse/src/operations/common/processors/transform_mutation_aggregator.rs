@@ -359,7 +359,7 @@ impl TableMutationAggregator {
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
             let table_meta_timestamps = self.table_meta_timestamps;
-            let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
+            let enable_hll_statistics = self.ctx.get_settings().get_enable_additional_table_stats()?;
             tasks.push(async move {
                 write_segment(
                     op,
@@ -485,7 +485,7 @@ impl TableMutationAggregator {
     ) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
-        let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
+        let enable_hll_statistics = self.ctx.get_settings().get_enable_additional_table_stats()?;
         let kind = self.kind;
         let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());

@@ -219,7 +219,7 @@ impl SinkAnalyzeState {
         )?;
 
         // 3. Generate new table statistics
-        if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+        if self.ctx.get_settings().get_enable_additional_table_stats()? {
             new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
                 hll: Some(encode_column_hll(&self.ndv_states)?),
                 row_count: snapshot.summary.row_count,
@@ -751,7 +751,7 @@ impl Processor for AnalyzeCollectNDVSource {
                     ..Default::default()
                 };
                 self.dal.write(&segment_stats_location, data).await?;
-                if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+                if self.ctx.get_settings().get_enable_additional_table_stats()? {
                     origin_summary.additional_stats_meta = Some(additional_stats_meta);
                 } else {
                     origin_summary.additional_stats_meta = None;

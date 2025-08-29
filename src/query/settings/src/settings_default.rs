@@ -995,9 +995,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_table_hll_statistics", DefaultSettingValue {
+                ("enable_additional_table_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable HLL-based NDV statistics generation for table snapshots",
+                    desc: "Enable additional statistics generation for table snapshots",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
