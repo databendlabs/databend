@@ -13,6 +13,11 @@ on:
         type: string
         required: true
         default: "aws"
+      runner_arch:
+        description: "Runner architecture, X64 or ARM64"
+        type: string
+        required: true
+        default: "X64"
       license_type:
         description: "License type, enterprise or trial"
         type: string
@@ -24,10 +29,28 @@ env:
   RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
+  info:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+    steps:
+      - name: Get build target
+        id: target
+        run: |
+          if [ "${{ inputs.runner_arch }}" == "X64" ]; then
+            echo "target=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.runner_arch }}" == "ARM64" ]; then
+            echo "target=aarch64-unknown-linux-gnu" >> $GITHUB_OUTPUT
+          else
+            echo "Invalid runner architecture: ${{ inputs.runner_arch }}"
+            exit 1
+          fi
+
   check:
+    needs: info
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 8c32g
       - "${{ inputs.runner_provider }}"
@@ -42,18 +65,13 @@ jobs:
           github_token: ${{ github.token }}
 
   build:
+    needs: info
     runs-on:
       - self-hosted
-      - "${{ matrix.runner }}"
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 16c64g
       - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: x86_64, runner: X64 }
-          # - { arch: aarch64, runner: ARM64 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,7 +85,7 @@ jobs:
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
         with:
           sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-gnu
+          target: ${{ needs.info.outputs.target }}
           features: python-udf,storage-hdfs
           category: full
           artifacts: all
@@ -75,36 +93,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sccache-build-${{ matrix.arch }}
+          name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
 
-  # build_address_sanitizer:
-  #   runs-on:
-  #     - self-hosted
-  #     - "${{ matrix.runner }}"
-  #     - Linux
-  #     - 8c32g
-  #     - "${{ inputs.runner_provider }}"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - { arch: aarch64, runner: ARM64 }
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         # fetch all tags, metasrv and metaclient need tag as its version.
-  #         fetch-depth: 0
-  #     - uses: ./.github/actions/build_linux_sanitizer
-  #       timeout-minutes: 60
-  #       with:
-  #         target: ${{ matrix.arch }}-unknown-linux-gnu
-  #         artifacts: query
-
   test_unit:
+    needs: info
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 16c64g
       - "${{ inputs.runner_provider }}"
@@ -115,12 +111,14 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
         timeout-minutes: 60
+        with:
+          target: ${{ needs.info.outputs.target }}
 
   test_metactl:
-    needs: [ build, check ]
+    needs: [ info, build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -133,7 +131,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -146,7 +144,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -159,7 +157,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -172,7 +170,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -189,7 +187,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 8c32g
       - "${{ inputs.runner_provider }}"
@@ -206,7 +204,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -219,7 +217,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -232,7 +230,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -249,7 +247,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -267,7 +265,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -290,7 +288,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -303,7 +301,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -317,29 +315,30 @@ jobs:
         with:
           name: test-stateful-iceberg-catalogs-standalone
 
-  test_stateful_hive_standalone:
-    needs: [ build, check ]
-    runs-on:
-      - self-hosted
-      - X64
-      - Linux
-      - 2c8g
-      - "${{ inputs.runner_provider }}"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_stateful_hive_standalone
-        timeout-minutes: 10
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test_stateful_hive_standalone
+  # TODO: tmp disable since hive image not running on arm64
+  # test_stateful_hive_standalone:
+  #   needs: [ build, check ]
+  #   runs-on:
+  #     - self-hosted
+  #     - "${{ inputs.runner_arch }}"
+  #     - Linux
+  #     - 2c8g
+  #     - "${{ inputs.runner_provider }}"
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/test_stateful_hive_standalone
+  #       timeout-minutes: 10
+  #     - name: Upload failure
+  #       if: failure()
+  #       uses: ./.github/actions/artifact_failure
+  #       with:
+  #         name: test_stateful_hive_standalone
 
   # test_fuzz_standalone:
   #   needs: [build, check]
   #   runs-on:
   #     - self-hosted
-  #     - X64
+  #     - "${{ inputs.runner_arch }}"
   #     - Linux
   #     - 2c8g
   #     - "${{ inputs.runner_provider }}"
@@ -353,7 +352,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -380,7 +379,7 @@ jobs:
   #    needs: [build, check]
   #    runs-on:
   #      - self-hosted
-  #      - X64
+  #      - "${{ inputs.runner_arch }}"
   #      - Linux
   #      - 2c8g
   #      - "${{ inputs.runner_provider }}"
@@ -402,7 +401,7 @@ jobs:
     needs: [ build, check ]
     runs-on:
       - self-hosted
-      - X64
+      - "${{ inputs.runner_arch }}"
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
@@ -428,4 +427,5 @@ jobs:
     with:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
+      runner_arch: ${{ inputs.runner_arch }}
       license_type: ${{ inputs.license_type }}

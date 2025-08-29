@@ -1,11 +1,3 @@
-HUB ?= datafuselabs
-TAG ?= latest
-PLATFORM ?= linux/amd64,linux/arm64
-VERSION ?= latest
-ADD_NODES ?= 0
-NUM_CPUS ?= 2
-TENANT_ID ?= "tenant"
-CLUSTER_ID ?= "test"
 TARGET ?= x86_64-unknown-linux-gnu
 CARGO_TARGET_DIR ?= $(CURDIR)/target
 

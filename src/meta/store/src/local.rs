@@ -238,8 +238,29 @@ impl LocalMetaService {
 
 fn next_port() -> u16 {
     let base = get_machine_unique_base_port();
+    let sequence = GlobalSequence::next() as u16;
 
-    base + (GlobalSequence::next() as u16)
+    let port_offset = sequence % 10_000;
+    let candidate_port = base.saturating_add(port_offset).max(19_000);
+
+    if is_port_available(candidate_port) {
+        candidate_port
+    } else {
+        match find_available_port() {
+            Ok(port) => {
+                warn!("Calculated port {candidate_port} not available, using {port} instead");
+                port
+            }
+            Err(_) => {
+                warn!("No available ports found, returning calculated port {candidate_port}");
+                candidate_port
+            }
+        }
+    }
+}
+
+fn is_port_available(port: u16) -> bool {
+    TcpListener::bind(format!("127.0.0.1:{port}")).is_ok()
 }
 
 fn get_machine_unique_base_port() -> u16 {
@@ -247,41 +268,102 @@ fn get_machine_unique_base_port() -> u16 {
     static BASE_ONCE: std::sync::Once = std::sync::Once::new();
     unsafe {
         BASE_ONCE.call_once(|| {
-            let (port, listener) = try_bind();
-            Box::leak(Box::new(listener));
-            BASE = port;
+            match try_bind() {
+                Ok((port, listener)) => {
+                    Box::leak(Box::new(listener));
+                    BASE = port;
+                }
+                Err(e) => {
+                    // Fall back to a reasonable default if binding fails
+                    warn!("Failed to find available port during initialization: {e}; using default base port");
+                    BASE = 19_000;
+                }
+            }
         });
         BASE
     }
 }
 
-/// Occupy a port
-fn try_bind() -> (u16, TcpListener) {
-    let mut port = 19_000u16;
-
-    while port < 30_000 {
-        let address = format!("127.0.0.1:{port}");
-        let res = TcpListener::bind(&address);
-        match res {
-            Ok(listener) => {
-                info!("bind to {address} OK");
-                return (port, listener);
-            }
-            Err(e) => {
-                port += 500;
-                info!("bind to {address} failed: {e}; try next port: {}", port);
-            }
+fn try_bind() -> Result<(u16, TcpListener), std::io::Error> {
+    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
+        if let Ok(addr) = listener.local_addr() {
+            let port = addr.port();
+            info!("bind to 127.0.0.1:{port} OK (OS assigned)");
+            return Ok((port, listener));
         }
     }
 
-    unreachable!("can not find available port")
+    let port = find_port_in_range(19_000, 65535)?;
+    let address = format!("127.0.0.1:{port}");
+    let listener = TcpListener::bind(&address)?;
+    info!("bind to {address} OK");
+    Ok((port, listener))
+}
+
+fn find_available_port() -> Result<u16, std::io::Error> {
+    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
+        if let Ok(addr) = listener.local_addr() {
+            let port = addr.port();
+            drop(listener);
+            return Ok(port);
+        }
+    }
+    find_port_in_range(19_000, 65535)
+}
+
+fn find_port_in_range(start: u16, end: u16) -> Result<u16, std::io::Error> {
+    for port in start..=end {
+        if port > 30_000 && port < 32_768 {
+            continue;
+        }
+        if is_port_available(port) {
+            return Ok(port);
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AddrNotAvailable,
+        "No available ports",
+    ))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_local_meta_service() -> anyhow::Result<()> {
         Ok(())
+    }
+
+    #[test]
+    fn test_port_allocation_functions() -> anyhow::Result<()> {
+        // Test find_available_port function
+        let port = find_available_port();
+        assert!(port.is_ok(), "Should be able to find an available port");
+
+        let port_num = port.unwrap();
+        assert!(port_num >= 19_000, "Port should be in valid range");
+
+        // Test try_bind function
+        let bind_result = try_bind();
+        assert!(bind_result.is_ok(), "Should be able to bind to a port");
+
+        let (_port, _listener) = bind_result.unwrap();
+        // Listener is dropped automatically, releasing the port
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_next_port_no_panic() {
+        // This test ensures next_port doesn't panic even under stress
+        for _ in 0..100 {
+            let port = next_port();
+            assert!(
+                port >= 19_000,
+                "Port should be in reasonable range: {}",
+                port
+            );
+        }
     }
 }
