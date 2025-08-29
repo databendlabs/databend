@@ -14,6 +14,7 @@
 
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::NetworkPolicy;
@@ -134,16 +135,11 @@ impl UserApiProvider {
     // Check whether a network policy is exist.
     #[async_backtrace::framed]
     pub async fn exists_network_policy(&self, tenant: &Tenant, name: &str) -> Result<bool> {
-        match self.get_network_policy(tenant, name).await {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_NETWORK_POLICY {
-                    Ok(false)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        Ok(self
+            .get_network_policy(tenant, name)
+            .await
+            .or_unknown_network_policy()?
+            .is_some())
     }
 
     // Get a network_policy by tenant.

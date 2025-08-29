@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
@@ -43,16 +44,11 @@ impl UserApiProvider {
 
     #[async_backtrace::framed]
     pub async fn exists_stage(&self, tenant: &Tenant, stage_name: &str) -> Result<bool> {
-        match self.get_stage(tenant, stage_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UNKNOWN_STAGE {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Ok(self
+            .get_stage(tenant, stage_name)
+            .await
+            .or_unknown_stage()?
+            .is_some())
     }
 
     // Get the tenant all stage list.
