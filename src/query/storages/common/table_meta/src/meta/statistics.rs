@@ -19,6 +19,7 @@ use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
+use databend_common_frozen_api::frozen_api;
 use databend_common_storage::MetaHLL;
 use serde::Deserialize;
 use serde::Serialize;
@@ -94,6 +95,7 @@ pub fn merge_column_hll_mut(lhs: &mut BlockHLL, rhs: &BlockHLL) {
     }
 }
 
+#[frozen_api("0cdef3b5")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum BlockHLLState {
     Serialized(RawBlockHLL),

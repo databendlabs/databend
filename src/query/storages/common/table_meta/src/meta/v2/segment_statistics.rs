@@ -29,7 +29,7 @@ use crate::meta::MetaEncoding;
 use crate::meta::RawBlockHLL;
 use crate::meta::Versioned;
 
-#[frozen_api("db4a7033")]
+#[frozen_api("ad124b06")]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SegmentStatistics {
     pub format_version: FormatVersion,

@@ -26,7 +26,7 @@ use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 
-#[frozen_api("82e9bfc7")]
+#[frozen_api("f5dfa304")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot

@@ -43,7 +43,7 @@ use crate::meta::Statistics;
 use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
-#[frozen_api("e2c2eec7")]
+#[frozen_api("a9bf1ae5")]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
@@ -68,7 +68,7 @@ impl SegmentInfo {
 /// The column meta of virtual columns.
 /// Virtual column is the internal field values extracted from variant type values,
 /// used to speed up the reading of internal fields of variant data.
-#[frozen_api("6241777a")]
+#[frozen_api("c894abf6")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualColumnMeta {
     /// where the data of column start
@@ -124,7 +124,7 @@ impl VirtualColumnMeta {
 }
 
 /// The block meta of virtual columns.
-#[frozen_api("76335064")]
+#[frozen_api("1e3def76")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualBlockMeta {
     /// key is virtual columnId, value is VirtualColumnMeta
@@ -136,7 +136,7 @@ pub struct VirtualBlockMeta {
 }
 
 /// The draft column meta of virtual columns, virtual ColumnId is not set.
-#[frozen_api("0eb6ac3a")]
+#[frozen_api("32bc27d8")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualColumnMeta {
     pub source_column_id: ColumnId,
@@ -146,7 +146,7 @@ pub struct DraftVirtualColumnMeta {
 }
 
 /// The draft block meta of virtual columns.
-#[frozen_api("643dda4d")]
+#[frozen_api("b3cfe277")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualBlockMeta {
     /// The draft virtual oclumn metas, virtual ColumnId needs to be set.
@@ -159,7 +159,7 @@ pub struct DraftVirtualBlockMeta {
 
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
-#[frozen_api("b8d883c6")]
+#[frozen_api("33f1e8ff")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
     pub row_count: u64,
@@ -247,7 +247,7 @@ impl BlockMeta {
     }
 }
 
-#[frozen_api("e08ed419")]
+#[frozen_api("be8eaa03")]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedBlockMeta {
     pub block_meta: BlockMeta,
@@ -308,6 +308,7 @@ impl SegmentInfo {
     }
 }
 
+#[frozen_api("4d53eceb")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, EnumAsInner)]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),

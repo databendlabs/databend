@@ -3323,6 +3323,7 @@ dependencies = [
  "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
+ "databend-common-frozen-api",
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
@@ -3405,6 +3406,7 @@ name = "databend-common-frozen-api"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "proc-macro2",
  "quote",
  "sha2",
  "syn 2.0.101",
