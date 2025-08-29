@@ -1,0 +1,23 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.1.dtd" >
+<suite name="DatabendJdbcTests" verbose="10">
+  <test name="AllTests">
+    <groups>
+      <run>
+        <exclude name="FLAKY"/>
+      </run>
+    </groups>
+    <classes>
+      <class name="com.databend.jdbc.TestBasicDriver"/>
+      <class name="com.databend.jdbc.TestDatabendDatabaseMetaData"/>
+      <class name="com.databend.jdbc.TestDatabendDriverUri"/>
+      <class name="com.databend.jdbc.TestDatabendParameterMetaData"/>
+      <class name="com.databend.jdbc.TestFileTransfer"/>
+      <class name="com.databend.jdbc.TestHeartbeat"/>
+      <class name="com.databend.jdbc.TestMultiHost"/>
+      <class name="com.databend.jdbc.TestPrepareStatement"/>
+      <class name="com.databend.jdbc.TestPresignContext"/>
+      <class name="com.databend.jdbc.TestTempTable"/>
+      <class name="com.databend.jdbc.TestTransaction"/>
+    </classes>
+  </test>
+</suite>
