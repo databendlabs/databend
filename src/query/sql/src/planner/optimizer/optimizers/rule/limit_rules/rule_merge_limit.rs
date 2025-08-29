@@ -123,3 +123,9 @@ impl Rule for RuleMergeLimit {
         &self.matchers
     }
 }
+
+impl Default for RuleMergeLimit {
+    fn default() -> Self {
+        Self::new()
+    }
+}
