@@ -144,6 +144,20 @@ fn test_error_code_groups() {
     assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_CATALOG));
     assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_VIEW));
     assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_COLUMN));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_DICTIONARY));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_ROLE));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_NETWORK_POLICY));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_CONNECTION));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_FILE_FORMAT));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_USER));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_PASSWORD_POLICY));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_STAGE));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_WORKLOAD));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_VARIABLE));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_SESSION));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_QUERY));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_ROW_ACCESS_POLICY));
+    assert!(error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::UNKNOWN_DATAMASK));
 
     // Verify that it doesn't contain unrelated error codes
     assert!(!error_code_groups::UNKNOWN_RESOURCE.contains(&ErrorCode::INTERNAL));
