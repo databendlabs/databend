@@ -155,10 +155,16 @@ fn make_and_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
 
 // Merge predicates to OR scalar
 fn make_or_expr(scalars: &[ScalarExpr]) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
-        span: None,
-        func_name: "or_filters".to_string(),
-        params: vec![],
-        arguments: scalars.to_vec(),
-    })
+    scalars
+        .iter()
+        .cloned()
+        .reduce(|lhs, rhs| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "or".to_string(),
+                params: vec![],
+                arguments: vec![lhs, rhs],
+            })
+        })
+        .unwrap()
 }
