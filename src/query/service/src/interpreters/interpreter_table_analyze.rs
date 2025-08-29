@@ -114,9 +114,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         };
 
-        let no_scan =
-            !self.ctx.get_settings().get_enable_analyze_table_stats()? || self.plan.no_scan;
-        if no_scan {
+        if self.plan.no_scan {
             let operator = table.get_operator();
             let cluster_key_id = table.cluster_key_id();
             let table_meta_timestamps = self
@@ -152,7 +150,9 @@ impl Interpreter for AnalyzeTableInterpreter {
             .get_settings()
             .get_sql_dialect()?
             .default_ident_quote();
-        if self.ctx.get_settings().get_enable_analyze_histogram()? {
+        if self.ctx.get_settings().get_enable_analyze_histogram()?
+            && self.ctx.get_settings().get_enable_analyze_table_stats()?
+        {
             let histogram_sqls = table
                     .schema()
                     .fields()

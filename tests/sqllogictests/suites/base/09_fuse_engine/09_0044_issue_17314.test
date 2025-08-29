@@ -8,6 +8,9 @@ statement ok
 set enable_analyze_histogram=1;
 
 statement ok
+set enable_analyze_table_stats = 1;
+
+statement ok
 create or replace table t1(a string, biz_date1 string);
 
 statement ok
