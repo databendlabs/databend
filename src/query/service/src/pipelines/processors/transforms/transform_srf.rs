@@ -52,6 +52,7 @@ pub struct TransformSRF {
     /// The output number of rows for each input row.
     num_rows: VecDeque<usize>,
     max_block_size: usize,
+    max_block_bytes: usize,
 }
 
 impl TransformSRF {
@@ -62,6 +63,7 @@ impl TransformSRF {
         projections: ColumnSet,
         srf_exprs: Vec<Expr>,
         max_block_size: usize,
+        max_block_bytes: usize,
     ) -> Box<dyn Processor> {
         let srf_results = vec![VecDeque::new(); srf_exprs.len()];
         let srf_exprs = srf_exprs
@@ -83,6 +85,7 @@ impl TransformSRF {
             srf_results,
             num_rows: VecDeque::new(),
             max_block_size,
+            max_block_bytes,
         })
     }
 }
@@ -128,36 +131,59 @@ impl BlockingTransform for TransformSRF {
             return Ok(None);
         }
 
-        let mut result_size = 0;
         let mut used = 0;
-        for num_rows in self.num_rows.iter() {
-            if result_size + num_rows > self.max_block_size && used > 0 {
+        let mut result_rows = 0;
+        let mut total_memory_size = 0;
+
+        // Calculate the memory size per row for input columns
+        let memory_size_per_row: usize = input
+            .columns()
+            .iter()
+            .map(|col| col.memory_size() / input.num_rows())
+            .sum();
+
+        for (i, num_rows) in self.num_rows.iter().enumerate() {
+            let input_memory_size: usize = memory_size_per_row * num_rows;
+            let srf_memory_size: usize = self
+                .srf_results
+                .iter()
+                .map(|srf_result| {
+                    let (result, rows) = srf_result.get(i).unwrap();
+                    if *rows > 0 {
+                        result.memory_size()
+                    } else {
+                        0
+                    }
+                })
+                .sum();
+
+            // Check if adding this row would exceed either max_block_size or max_block_bytes
+            if (result_rows + num_rows > self.max_block_size
+                || total_memory_size + input_memory_size + srf_memory_size > self.max_block_bytes)
+                && used > 0
+            {
                 break;
             }
+
             used += 1;
-            result_size += num_rows;
+            result_rows += num_rows;
+            total_memory_size += input_memory_size + srf_memory_size;
         }
 
         // TODO: if there is only one row can be used, we can use `Value::Scalar` directly.
         // Condition: `used == 1` and the rows of all the `srf_results` is equal to `max_nums_per_row[0]`.
 
-        let mut result = DataBlock::empty();
-        let mut block_is_empty = true;
+        let mut result = DataBlock::empty_with_rows(result_rows);
         for column in input.columns() {
-            let mut builder = ColumnBuilder::with_capacity(&column.data_type(), result_size);
+            let mut builder = ColumnBuilder::with_capacity(&column.data_type(), result_rows);
             for (i, max_nums) in self.num_rows.iter().take(used).enumerate() {
-                let scalar_ref = unsafe { column.index_unchecked(i) };
-                for _ in 0..*max_nums {
-                    builder.push(scalar_ref.clone());
+                if *max_nums > 0 {
+                    let scalar_ref = unsafe { column.index_unchecked(i) };
+                    builder.push_repeat(&scalar_ref, *max_nums);
                 }
             }
             let column = builder.build();
-            if block_is_empty {
-                result = DataBlock::new(vec![column.into()], result_size);
-                block_is_empty = false;
-            } else {
-                result.add_column(column);
-            }
+            result.add_column(column);
         }
 
         for (srf_expr, srf_results) in self.srf_exprs.iter().zip(self.srf_results.iter_mut()) {
@@ -166,7 +192,7 @@ impl BlockingTransform for TransformSRF {
                     // The function return type:
                     // DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))])
                     let mut builder: NullableColumnBuilder<VariantType> =
-                        NullableColumnBuilder::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::with_capacity(result_rows, &[]);
 
                     for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
                         if let Value::Column(Column::Tuple(fields)) = row_result {
@@ -187,12 +213,7 @@ impl BlockingTransform for TransformSRF {
 
                     let column =
                         Column::Tuple(vec![Column::Nullable(Box::new(builder.build().upcast()))]);
-                    if block_is_empty {
-                        result = DataBlock::new(vec![column.into()], result_size);
-                        block_is_empty = false;
-                    } else {
-                        result.add_column(column);
-                    }
+                    result.add_column(column);
                 }
                 "json_each" => {
                     // The function return type:
@@ -201,9 +222,9 @@ impl BlockingTransform for TransformSRF {
                     //   DataType::Nullable(Box::new(DataType::Variant)),
                     // ]).
                     let mut key_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
                     let mut value_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
 
                     for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
                         if let Value::Column(Column::Tuple(fields)) = row_result {
@@ -231,12 +252,7 @@ impl BlockingTransform for TransformSRF {
                         Column::Nullable(Box::new(key_builder.build().upcast())),
                         Column::Nullable(Box::new(value_builder.build().upcast())),
                     ]);
-                    if block_is_empty {
-                        result = DataBlock::new(vec![column.into()], result_size);
-                        block_is_empty = false;
-                    } else {
-                        result.add_column(column);
-                    }
+                    result.add_column(column);
                 }
                 "flatten" => {
                     // The function return type:
@@ -249,17 +265,17 @@ impl BlockingTransform for TransformSRF {
                     //   DataType::Nullable(Box::new(DataType::Variant)),
                     // ]).
                     let mut seq_builder =
-                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_rows, &[]);
                     let mut key_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
                     let mut path_builder =
-                        NullableColumnBuilder::<StringType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<StringType>::with_capacity(result_rows, &[]);
                     let mut index_builder =
-                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<NumberType<u64>>::with_capacity(result_rows, &[]);
                     let mut value_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
                     let mut this_builder =
-                        NullableColumnBuilder::<VariantType>::with_capacity(result_size, &[]);
+                        NullableColumnBuilder::<VariantType>::with_capacity(result_rows, &[]);
 
                     for (i, (row_result, repeat_times)) in srf_results.drain(0..used).enumerate() {
                         if let Value::Column(Column::Tuple(fields)) = row_result {
@@ -316,12 +332,7 @@ impl BlockingTransform for TransformSRF {
                         Column::Nullable(Box::new(value_builder.build().upcast())),
                         Column::Nullable(Box::new(this_builder.build().upcast())),
                     ]);
-                    if block_is_empty {
-                        result = DataBlock::new(vec![column.into()], result_size);
-                        block_is_empty = false;
-                    } else {
-                        result.add_column(column);
-                    }
+                    result.add_column(column);
                 }
                 "unnest" | "regexp_split_to_table" => {
                     let mut result_data_blocks = Vec::with_capacity(used);
@@ -376,16 +387,11 @@ impl BlockingTransform for TransformSRF {
                         result_data_blocks.push(DataBlock::new(vec![block_entry], self.num_rows[i]))
                     }
                     let data_block = DataBlock::concat(&result_data_blocks)?;
-                    debug_assert!(data_block.num_rows() == result_size);
+                    debug_assert!(data_block.num_rows() == result_rows);
                     let block_entry = BlockEntry::new(data_block.get_by_offset(0).value(), || {
-                        (data_block.data_type(0), result_size)
+                        (data_block.data_type(0), result_rows)
                     });
-                    if block_is_empty {
-                        result = DataBlock::new(vec![block_entry], result_size);
-                        block_is_empty = false;
-                    } else {
-                        result.add_entry(block_entry);
-                    }
+                    result.add_entry(block_entry);
                 }
                 _ => todo!(
                     "unsupported set-returning function: {}",
