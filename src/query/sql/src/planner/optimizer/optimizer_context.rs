@@ -151,7 +151,8 @@ impl OptimizerContext {
         let settings = self.get_table_ctx().get_settings();
 
         if !settings.get_grouping_sets_to_union().unwrap_or_default()
-            && name == RuleID::GroupingSetsToUnion.to_string()
+            && (name == RuleID::GroupingSetsToUnion.to_string()
+                || name == RuleID::HierarchicalGroupingSetsToUnion.to_string())
         {
             return true;
         }

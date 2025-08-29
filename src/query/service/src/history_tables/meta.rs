@@ -328,7 +328,6 @@ mod tests {
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
-    use tokio::time::timeout;
 
     use crate::history_tables::meta::HeartbeatTask;
     use crate::history_tables::meta::HistoryMetaHandle;
@@ -359,16 +358,14 @@ mod tests {
         }
 
         // Same meta key, because we set the interval to 0, it should not block
-        let guard_result2 = timeout(
-            Duration::from_secs(1),
-            meta_handle.acquire_with_guard(meta_key, 0),
-        )
-        .await;
+        let guard_result2 = meta_handle.acquire_with_guard(meta_key, 0).await?;
+
         assert!(
-            guard_result2.is_ok(),
+            guard_result2.is_some(),
             "Should acquire permit again when interval is 0"
         );
-        if let Some(guard) = guard_result2.unwrap()? {
+
+        if let Some(guard) = guard_result2 {
             // Verify that the guard contains the correct meta key
             assert_eq!(guard.meta_key, meta_key);
         }

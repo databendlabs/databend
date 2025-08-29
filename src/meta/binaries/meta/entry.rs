@@ -157,10 +157,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // HTTP API service.
     {
-        server_metrics::set_version(
-            DATABEND_GIT_SEMVER.to_string(),
-            VERGEN_GIT_SHA.unwrap_or("unknown").to_string(),
-        );
+        server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
         let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");

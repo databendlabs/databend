@@ -48,6 +48,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         DataType::Array(ty) => contains_variant(ty.as_ref()),
         DataType::Map(ty) => contains_variant(ty.as_ref()),
         DataType::Tuple(types) => types.iter().any(contains_variant),
+        DataType::Opaque(_) => false,
     }
 }
 
@@ -82,6 +83,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Interval(_)
         | ScalarRef::Boolean(_)
         | ScalarRef::Binary(_)
+        | ScalarRef::Opaque(_)
         | ScalarRef::String(_)
         | ScalarRef::Bitmap(_)
         | ScalarRef::Geometry(_)

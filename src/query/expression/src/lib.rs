@@ -62,7 +62,7 @@ mod register_comparison;
 #[allow(dead_code)]
 mod register_vectorize;
 
-pub mod row;
+pub mod row_encoding;
 pub mod sampler;
 pub mod schema;
 pub mod type_check;
@@ -84,7 +84,7 @@ pub use crate::projected_block::*;
 pub use crate::property::*;
 pub use crate::register_comparison::*;
 pub use crate::register_vectorize::*;
-pub use crate::row::*;
+pub use crate::row_encoding::*;
 pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;

@@ -33,10 +33,12 @@ use state_machine_api::ExpireKey;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
+use tokio::sync::Semaphore;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
+use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
@@ -48,15 +50,38 @@ use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 
-#[derive(Default)]
 pub struct SMV003 {
     levels: LeveledMap,
+
+    /// A semaphore that permits at most one compactor to run.
+    pub(crate) compaction_semaphore: Arc<Semaphore>,
+
+    /// Get a permit to write.
+    ///
+    /// Only one writer is allowed, to achieve serialization.
+    /// For historical reason, inserting a tombstone does not increase the seq.
+    /// Thus, mvcc isolation with the seq can not completely separate two concurrent writer.
+    pub(crate) write_semaphore: Arc<Semaphore>,
 
     /// Since when to start cleaning expired keys.
     cleanup_start_time: Arc<Mutex<Duration>>,
 
     /// Callback when a change is applied to state machine
     pub(crate) on_change_applied: Arc<Mutex<Arc<Option<OnChange>>>>,
+}
+
+impl Default for SMV003 {
+    fn default() -> Self {
+        Self {
+            levels: Default::default(),
+            // Only one compactor is allowed a time.
+            compaction_semaphore: Arc::new(Semaphore::new(1)),
+            // Only one writer is allowed a time.
+            write_semaphore: Arc::new(Semaphore::new(1)),
+            cleanup_start_time: Arc::new(Mutex::new(Duration::ZERO)),
+            on_change_applied: Arc::new(Mutex::new(Arc::new(None))),
+        }
+    }
 }
 
 impl fmt::Debug for SMV003 {
@@ -143,10 +168,6 @@ impl SMV003 {
 
         let new_sm = SMV003 {
             levels: LeveledMap {
-                compaction_semaphore: self.levels.compaction_semaphore.clone(),
-
-                write_semaphore: self.levels.write_semaphore.clone(),
-
                 data: Arc::new(LeveledMapData {
                     inner: Mutex::new(LeveledMapDataInner {
                         writable: Default::default(),
@@ -155,6 +176,8 @@ impl SMV003 {
                     }),
                 }),
             },
+            compaction_semaphore: self.compaction_semaphore.clone(),
+            write_semaphore: self.write_semaphore.clone(),
             cleanup_start_time: self.cleanup_start_time.clone(),
             on_change_applied: self.on_change_applied.clone(),
         };
@@ -180,8 +203,7 @@ impl SMV003 {
     }
 
     pub(crate) async fn new_applier(&self) -> Applier<ApplierData> {
-        let acquirer = self.new_writer_acquirer();
-        let permit = acquirer.acquire().await;
+        let permit = self.acquire_writer_permit().await;
 
         let view = mvcc::View::new(self.levels.data.clone());
         let applier_data = ApplierData {
@@ -198,8 +220,15 @@ impl SMV003 {
         self.on_change_applied.lock().unwrap().clone()
     }
 
+    pub async fn acquire_writer_permit(&self) -> WriterPermit {
+        let acquirer = self.new_writer_acquirer();
+        let permit = acquirer.acquire().await;
+        debug!("WriterPermit acquired");
+        permit
+    }
+
     pub fn new_writer_acquirer(&self) -> WriterAcquirer {
-        self.levels.new_writer_acquirer()
+        WriterAcquirer::new(self.write_semaphore.clone())
     }
 
     pub async fn apply_entries(
@@ -252,17 +281,20 @@ impl SMV003 {
         *g = Arc::new(Some(on_change_applied));
     }
 
-    /// A shortcut
+    /// Get a singleton `Compactor` instance specific to `self`.
     pub async fn acquire_compactor(&self) -> Compactor {
         let permit = self.new_compactor_acquirer().acquire().await;
         self.new_compactor(permit)
     }
 
-    pub fn new_compactor_acquirer(&self) -> CompactorAcquirer {
-        self.levels.new_compactor_acquirer()
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        Compactor {
+            _permit: permit,
+            compacting_data: self.levels.new_compacting_data(),
+        }
     }
 
-    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
-        self.levels.new_compactor(permit)
+    pub fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+        CompactorAcquirer::new(self.compaction_semaphore.clone())
     }
 }

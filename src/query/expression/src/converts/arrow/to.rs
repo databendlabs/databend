@@ -35,6 +35,7 @@ use super::ARROW_EXT_TYPE_EMPTY_MAP;
 use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
+use super::ARROW_EXT_TYPE_OPAQUE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
@@ -111,6 +112,15 @@ impl From<&TableField> for Field {
             TableDataType::Boolean => ArrowDataType::Boolean,
             TableDataType::Binary => ArrowDataType::LargeBinary,
             TableDataType::String => ArrowDataType::Utf8View,
+
+            TableDataType::Opaque(size) => {
+                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_OPAQUE.to_string());
+                ArrowDataType::FixedSizeList(
+                    Field::new_list_field(ArrowDataType::UInt64, false).into(),
+                    *size as _,
+                )
+            }
+
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
@@ -389,6 +399,7 @@ impl From<&Column> for ArrayData {
             | Column::Variant(col)
             | Column::Geometry(col)
             | Column::Geography(GeographyColumn(col)) => col.clone().into(),
+            Column::Opaque(col) => col.arrow_data(),
         }
     }
 }

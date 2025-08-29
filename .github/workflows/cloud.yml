@@ -6,6 +6,7 @@ on:
       - labeled
     branches:
       - main
+      - backport/*
 
 permissions:
   id-token: write
@@ -81,7 +82,7 @@ jobs:
     timeout-minutes: 10
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws

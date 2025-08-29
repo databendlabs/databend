@@ -1,7 +1,8 @@
 function isRetryableError(errorMessage) {
     if (!errorMessage) return false;
     return errorMessage.includes('The self-hosted runner lost communication with the server.') ||
-        errorMessage.includes('The operation was canceled.');
+        errorMessage.includes('The operation was canceled.') ||
+        errorMessage.includes('Process completed with exit code 143.');
 }
 
 function isUserCancelled(errorMessage) {

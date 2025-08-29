@@ -61,6 +61,8 @@ use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
@@ -2905,10 +2907,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for drop_id in req.drop_ids {
             match drop_id {
                 DroppedId::Db { db_id, db_name } => {
-                    gc_dropped_db_by_id(self, db_id, &req.tenant, db_name).await?
+                    gc_dropped_db_by_id(self, db_id, &req.tenant, &req.catalog, db_name).await?
                 }
                 DroppedId::Table { name, id } => {
-                    gc_dropped_table_by_id(self, &req.tenant, &name, &id).await?
+                    gc_dropped_table_by_id(self, &req.tenant, &req.catalog, &name, &id).await?
                 }
             }
         }
@@ -3896,6 +3898,7 @@ async fn gc_dropped_db_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
     tenant: &Tenant,
+    catalog: &String,
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
@@ -3958,7 +3961,15 @@ async fn gc_dropped_db_by_id(
             // TODO: mark table as gc_in_progress
 
             remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
-            let _ = remove_data_for_dropped_table(kv_api, &table_id_ident, &mut txn).await?;
+            let _ = remove_data_for_dropped_table(
+                kv_api,
+                tenant,
+                catalog,
+                db_id,
+                &table_id_ident,
+                &mut txn,
+            )
+            .await?;
             remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn).await?;
         }
 
@@ -3997,6 +4008,7 @@ async fn gc_dropped_db_by_id(
 async fn gc_dropped_table_by_id(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
+    catalog: &String,
     db_id_table_name: &DBIdTableName,
     table_id_ident: &TableId,
 ) -> Result<(), KVAppError> {
@@ -4011,7 +4023,15 @@ async fn gc_dropped_table_by_id(
         let mut txn = TxnRequest::default();
 
         // 1)
-        let _ = remove_data_for_dropped_table(kv_api, table_id_ident, &mut txn).await?;
+        let _ = remove_data_for_dropped_table(
+            kv_api,
+            tenant,
+            catalog,
+            db_id_table_name.db_id,
+            table_id_ident,
+            &mut txn,
+        )
+        .await?;
 
         // 2)
         let table_id_history_ident = TableIdHistoryIdent {
@@ -4092,6 +4112,9 @@ async fn update_txn_to_remove_table_history(
 /// or Err of the reason in string if it can not proceed.
 async fn remove_data_for_dropped_table(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    catalog: &String,
+    db_id: u64,
     table_id: &TableId,
     txn: &mut TxnRequest,
 ) -> Result<Result<(), String>, MetaError> {
@@ -4121,6 +4144,33 @@ async fn remove_data_for_dropped_table(
     // consider only when TableIdToName exist
     if let Some(seq_name) = seq_name {
         txn_delete_exact(txn, &id_to_name, seq_name.seq);
+    }
+
+    // Remove table ownership
+    {
+        let table_ownership = OwnershipObject::Table {
+            // if catalog is default, encode_key is b.push_raw("table-by-id").push_u64(*table_id)
+            // else encode_key is b.push_raw("table-by-catalog-id").push_str(catalog_name).push_u64(*table_id)
+            catalog_name: catalog.to_string(),
+            db_id,
+            table_id: table_id.table_id,
+        };
+
+        let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
+        let table_ownership_seq_meta = {
+            let seq_meta = kv_api.get_pb(&table_ownership_key).await?;
+            let Some(seq_meta) = seq_meta else {
+                let err = format!(
+                    "cannot find OwnershipInfo of object: {:?}, ",
+                    table_ownership_key.to_string_key()
+                );
+                error!("{}", err);
+                return Ok(Err(err));
+            };
+            seq_meta
+        };
+
+        txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
     }
 
     Ok(Ok(()))

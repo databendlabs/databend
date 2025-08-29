@@ -162,6 +162,9 @@ impl FastFieldDecoderValues {
             ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
                 Err(ErrorCode::Unimplemented("empty array/map literal"))
             }
+            ColumnBuilder::Opaque(_) => Err(ErrorCode::Unimplemented(
+                "Opaque type not supported in fast_values",
+            )),
         }
     }
 

@@ -11,10 +11,22 @@ import argparse
 import urllib.request
 import tarfile
 import time
+import platform
 
 
 def dd(*args):
     print(" === ", *args)
+
+
+def get_arch() -> str:
+    """Detect current architecture and return the appropriate target string."""
+    arch = platform.machine()
+    if arch == "x86_64":
+        return "x86_64-unknown-linux-gnu"
+    elif arch in ["aarch64", "arm64"]:
+        return "aarch64-unknown-linux-gnu"
+    else:
+        raise ValueError(f"Unsupported architecture: {arch}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,7 +90,8 @@ def download_query_config(version: str) -> None:
 
 
 def binary_url(ver: str) -> str:
-    return f"https://github.com/datafuselabs/databend/releases/download/v{ver}-nightly/databend-v{ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+    arch = get_arch()
+    return f"https://github.com/datafuselabs/databend/releases/download/v{ver}-nightly/databend-v{ver}-nightly-{arch}.tar.gz"
 
 
 def bin_path(ver: str, bin_name: str) -> str:

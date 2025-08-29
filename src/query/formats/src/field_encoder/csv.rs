@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
@@ -132,6 +133,7 @@ impl FieldEncoderCSV {
                 let encoded = encode_binary(buf, self.simple.common_settings.binary_format);
                 out_buf.extend_from_slice(&encoded);
             }
+            Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf.as_bytes(), out_buf);
@@ -185,5 +187,14 @@ impl FieldEncoderCSV {
         } else {
             self.write_field(&column.column, row_index, out_buf)
         }
+    }
+
+    fn write_opaque(&self, column: &OpaqueColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let scalar = unsafe { column.index_unchecked(row_index) };
+        let encoded = encode_binary(
+            &scalar.to_le_bytes(),
+            self.simple.common_settings.binary_format,
+        );
+        out_buf.extend_from_slice(&encoded);
     }
 }

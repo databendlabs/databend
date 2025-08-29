@@ -24,13 +24,13 @@ runs:
       shell: bash
       run: make lint-yaml
 
-    - name: Format
-      shell: bash
-      run: cargo fmt --all -- --check
-
     - name: Check typos
       shell: bash
       run: typos
+
+    - name: Format
+      shell: bash
+      run: cargo fmt --all -- --check
 
     - name: Check unused deps
       shell: bash
@@ -41,8 +41,7 @@ runs:
       run: |
         taplo check
         taplo fmt --check
-        python --version || echo "no python"
-        which python || echo "no python"
+
     # - name: Audit dependencies
     #   shell: bash
     #   if: "!contains(github.event.head_commit.message, 'skip audit')"

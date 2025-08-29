@@ -231,7 +231,7 @@ jobs:
   publish_dbg:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws
@@ -274,7 +274,7 @@ jobs:
   publish_testsuite:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws
@@ -323,7 +323,7 @@ jobs:
   docker_all_in_one:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws
@@ -402,7 +402,7 @@ jobs:
   docker_service:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws
@@ -477,7 +477,7 @@ jobs:
   distribution:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws
@@ -567,7 +567,7 @@ jobs:
   sqlsmith:
     runs-on:
       - self-hosted
-      - X64
+      - ARM64
       - Linux
       - 2c8g
       - aws

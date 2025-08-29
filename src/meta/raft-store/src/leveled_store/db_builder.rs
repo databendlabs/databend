@@ -137,13 +137,10 @@ impl DBBuilder {
         lm: &mut LeveledMap,
         make_snapshot_id: impl FnOnce(&SysData) -> String + Send,
     ) -> Result<DB, io::Error> {
-        {
-            let mut writer_permit = lm.acquire_writer_permit().await;
-            lm.freeze_writable(&mut writer_permit);
-        }
+        lm.testing_freeze_writable();
 
-        let mut compacter = lm.acquire_compactor().await;
-        let (sys_data, strm) = compacter.compact_into_stream().await?;
+        let compacting_data = lm.new_compacting_data();
+        let (sys_data, strm) = compacting_data.compact_into_stream().await?;
 
         self.append_kv_stream(strm).await?;
 

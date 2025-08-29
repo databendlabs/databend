@@ -546,10 +546,9 @@ zip = "3.0.0"
 zstd = "0.12.3"
 
 # AST needed
-cargo-license = "0.6.1"
-cargo_metadata = "0.18"
+cargo_metadata = "0.19"
 fast-float2 = "0.2.3"
-gix = "0.63.0"
+gix = "0.71.0"
 indent = "0.1.1"
 logos = "0.12.1"
 nom = "7.1.1"
@@ -559,7 +558,7 @@ rspack-codespan-reporting = "0.11"
 rustc-demangle = "0.1"
 strsim = "0.10"
 strum_macros = "0.24"
-vergen = { version = "8.3.1", default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
+vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"
@@ -659,7 +658,7 @@ display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.3.1" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
-recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
+recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.2.1" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }

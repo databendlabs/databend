@@ -227,6 +227,7 @@ pub fn cast_scalar_to_variant(
     buf: &mut Vec<u8>,
     table_data_type: Option<&TableDataType>,
 ) {
+    let opaque_buf;
     let value = match scalar {
         ScalarRef::Null => jsonb::Value::Null,
         ScalarRef::EmptyArray => jsonb::Value::Array(vec![]),
@@ -268,6 +269,10 @@ pub fn cast_scalar_to_variant(
         },
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::Binary(s),
+        ScalarRef::Opaque(o) => {
+            opaque_buf = o.to_le_bytes();
+            jsonb::Value::Binary(&opaque_buf)
+        }
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
         ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp { value: ts }),
         ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date { value: d }),

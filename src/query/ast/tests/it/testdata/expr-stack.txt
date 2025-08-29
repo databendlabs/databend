@@ -1,0 +1,758 @@
+---------- Input ----------
+json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert('{}'::variant, 'email_address', 'gokul', true), 'home_phone', 12345, true), 'mobile_phone', 345678, true), 'race_code', 'M', true), 'race_desc', 'm', true), 'marital_status_code', 'y', true), 'marital_status_desc', 'yu', true), 'prefix', 'hj', true), 'first_name', 'g', true), 'last_name', 'p', true), 'deceased_date', '2085-05-07', true), 'birth_date', '6789', true), 'middle_name', '89', true), 'middle_initial', '0789', true), 'gender_code', '56789', true), 'gender_desc', 'm', true)
+---------- Output ---------
+json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert(json_object_insert('{}'::VARIANT, 'email_address', 'gokul', TRUE), 'home_phone', 12345, TRUE), 'mobile_phone', 345678, TRUE), 'race_code', 'M', TRUE), 'race_desc', 'm', TRUE), 'marital_status_code', 'y', TRUE), 'marital_status_desc', 'yu', TRUE), 'prefix', 'hj', TRUE), 'first_name', 'g', TRUE), 'last_name', 'p', TRUE), 'deceased_date', '2085-05-07', TRUE), 'birth_date', '6789', TRUE), 'middle_name', '89', TRUE), 'middle_initial', '0789', TRUE), 'gender_code', '56789', TRUE), 'gender_desc', 'm', TRUE)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..790,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..18,
+            ),
+            name: "json_object_insert",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            FunctionCall {
+                span: Some(
+                    19..763,
+                ),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier {
+                        span: Some(
+                            19..37,
+                        ),
+                        name: "json_object_insert",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    args: [
+                        FunctionCall {
+                            span: Some(
+                                38..732,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        38..56,
+                                    ),
+                                    name: "json_object_insert",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [
+                                    FunctionCall {
+                                        span: Some(
+                                            57..699,
+                                        ),
+                                        func: FunctionCall {
+                                            distinct: false,
+                                            name: Identifier {
+                                                span: Some(
+                                                    57..75,
+                                                ),
+                                                name: "json_object_insert",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                            args: [
+                                                FunctionCall {
+                                                    span: Some(
+                                                        76..671,
+                                                    ),
+                                                    func: FunctionCall {
+                                                        distinct: false,
+                                                        name: Identifier {
+                                                            span: Some(
+                                                                76..94,
+                                                            ),
+                                                            name: "json_object_insert",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        args: [
+                                                            FunctionCall {
+                                                                span: Some(
+                                                                    95..642,
+                                                                ),
+                                                                func: FunctionCall {
+                                                                    distinct: false,
+                                                                    name: Identifier {
+                                                                        span: Some(
+                                                                            95..113,
+                                                                        ),
+                                                                        name: "json_object_insert",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                    args: [
+                                                                        FunctionCall {
+                                                                            span: Some(
+                                                                                114..604,
+                                                                            ),
+                                                                            func: FunctionCall {
+                                                                                distinct: false,
+                                                                                name: Identifier {
+                                                                                    span: Some(
+                                                                                        114..132,
+                                                                                    ),
+                                                                                    name: "json_object_insert",
+                                                                                    quote: None,
+                                                                                    ident_type: None,
+                                                                                },
+                                                                                args: [
+                                                                                    FunctionCall {
+                                                                                        span: Some(
+                                                                                            133..579,
+                                                                                        ),
+                                                                                        func: FunctionCall {
+                                                                                            distinct: false,
+                                                                                            name: Identifier {
+                                                                                                span: Some(
+                                                                                                    133..151,
+                                                                                                ),
+                                                                                                name: "json_object_insert",
+                                                                                                quote: None,
+                                                                                                ident_type: None,
+                                                                                            },
+                                                                                            args: [
+                                                                                                FunctionCall {
+                                                                                                    span: Some(
+                                                                                                        152..553,
+                                                                                                    ),
+                                                                                                    func: FunctionCall {
+                                                                                                        distinct: false,
+                                                                                                        name: Identifier {
+                                                                                                            span: Some(
+                                                                                                                152..170,
+                                                                                                            ),
+                                                                                                            name: "json_object_insert",
+                                                                                                            quote: None,
+                                                                                                            ident_type: None,
+                                                                                                        },
+                                                                                                        args: [
+                                                                                                            FunctionCall {
+                                                                                                                span: Some(
+                                                                                                                    171..530,
+                                                                                                                ),
+                                                                                                                func: FunctionCall {
+                                                                                                                    distinct: false,
+                                                                                                                    name: Identifier {
+                                                                                                                        span: Some(
+                                                                                                                            171..189,
+                                                                                                                        ),
+                                                                                                                        name: "json_object_insert",
+                                                                                                                        quote: None,
+                                                                                                                        ident_type: None,
+                                                                                                                    },
+                                                                                                                    args: [
+                                                                                                                        FunctionCall {
+                                                                                                                            span: Some(
+                                                                                                                                190..494,
+                                                                                                                            ),
+                                                                                                                            func: FunctionCall {
+                                                                                                                                distinct: false,
+                                                                                                                                name: Identifier {
+                                                                                                                                    span: Some(
+                                                                                                                                        190..208,
+                                                                                                                                    ),
+                                                                                                                                    name: "json_object_insert",
+                                                                                                                                    quote: None,
+                                                                                                                                    ident_type: None,
+                                                                                                                                },
+                                                                                                                                args: [
+                                                                                                                                    FunctionCall {
+                                                                                                                                        span: Some(
+                                                                                                                                            209..459,
+                                                                                                                                        ),
+                                                                                                                                        func: FunctionCall {
+                                                                                                                                            distinct: false,
+                                                                                                                                            name: Identifier {
+                                                                                                                                                span: Some(
+                                                                                                                                                    209..227,
+                                                                                                                                                ),
+                                                                                                                                                name: "json_object_insert",
+                                                                                                                                                quote: None,
+                                                                                                                                                ident_type: None,
+                                                                                                                                            },
+                                                                                                                                            args: [
+                                                                                                                                                FunctionCall {
+                                                                                                                                                    span: Some(
+                                                                                                                                                        228..434,
+                                                                                                                                                    ),
+                                                                                                                                                    func: FunctionCall {
+                                                                                                                                                        distinct: false,
+                                                                                                                                                        name: Identifier {
+                                                                                                                                                            span: Some(
+                                                                                                                                                                228..246,
+                                                                                                                                                            ),
+                                                                                                                                                            name: "json_object_insert",
+                                                                                                                                                            quote: None,
+                                                                                                                                                            ident_type: None,
+                                                                                                                                                        },
+                                                                                                                                                        args: [
+                                                                                                                                                            FunctionCall {
+                                                                                                                                                                span: Some(
+                                                                                                                                                                    247..409,
+                                                                                                                                                                ),
+                                                                                                                                                                func: FunctionCall {
+                                                                                                                                                                    distinct: false,
+                                                                                                                                                                    name: Identifier {
+                                                                                                                                                                        span: Some(
+                                                                                                                                                                            247..265,
+                                                                                                                                                                        ),
+                                                                                                                                                                        name: "json_object_insert",
+                                                                                                                                                                        quote: None,
+                                                                                                                                                                        ident_type: None,
+                                                                                                                                                                    },
+                                                                                                                                                                    args: [
+                                                                                                                                                                        FunctionCall {
+                                                                                                                                                                            span: Some(
+                                                                                                                                                                                266..378,
+                                                                                                                                                                            ),
+                                                                                                                                                                            func: FunctionCall {
+                                                                                                                                                                                distinct: false,
+                                                                                                                                                                                name: Identifier {
+                                                                                                                                                                                    span: Some(
+                                                                                                                                                                                        266..284,
+                                                                                                                                                                                    ),
+                                                                                                                                                                                    name: "json_object_insert",
+                                                                                                                                                                                    quote: None,
+                                                                                                                                                                                    ident_type: None,
+                                                                                                                                                                                },
+                                                                                                                                                                                args: [
+                                                                                                                                                                                    FunctionCall {
+                                                                                                                                                                                        span: Some(
+                                                                                                                                                                                            285..350,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                        func: FunctionCall {
+                                                                                                                                                                                            distinct: false,
+                                                                                                                                                                                            name: Identifier {
+                                                                                                                                                                                                span: Some(
+                                                                                                                                                                                                    285..303,
+                                                                                                                                                                                                ),
+                                                                                                                                                                                                name: "json_object_insert",
+                                                                                                                                                                                                quote: None,
+                                                                                                                                                                                                ident_type: None,
+                                                                                                                                                                                            },
+                                                                                                                                                                                            args: [
+                                                                                                                                                                                                Cast {
+                                                                                                                                                                                                    span: Some(
+                                                                                                                                                                                                        308..317,
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                    expr: Literal {
+                                                                                                                                                                                                        span: Some(
+                                                                                                                                                                                                            304..308,
+                                                                                                                                                                                                        ),
+                                                                                                                                                                                                        value: String(
+                                                                                                                                                                                                            "{}",
+                                                                                                                                                                                                        ),
+                                                                                                                                                                                                    },
+                                                                                                                                                                                                    target_type: Variant,
+                                                                                                                                                                                                    pg_style: true,
+                                                                                                                                                                                                },
+                                                                                                                                                                                                Literal {
+                                                                                                                                                                                                    span: Some(
+                                                                                                                                                                                                        319..334,
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                    value: String(
+                                                                                                                                                                                                        "email_address",
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                },
+                                                                                                                                                                                                Literal {
+                                                                                                                                                                                                    span: Some(
+                                                                                                                                                                                                        336..343,
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                    value: String(
+                                                                                                                                                                                                        "gokul",
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                },
+                                                                                                                                                                                                Literal {
+                                                                                                                                                                                                    span: Some(
+                                                                                                                                                                                                        345..349,
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                    value: Boolean(
+                                                                                                                                                                                                        true,
+                                                                                                                                                                                                    ),
+                                                                                                                                                                                                },
+                                                                                                                                                                                            ],
+                                                                                                                                                                                            params: [],
+                                                                                                                                                                                            order_by: [],
+                                                                                                                                                                                            window: None,
+                                                                                                                                                                                            lambda: None,
+                                                                                                                                                                                        },
+                                                                                                                                                                                    },
+                                                                                                                                                                                    Literal {
+                                                                                                                                                                                        span: Some(
+                                                                                                                                                                                            352..364,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                        value: String(
+                                                                                                                                                                                            "home_phone",
+                                                                                                                                                                                        ),
+                                                                                                                                                                                    },
+                                                                                                                                                                                    Literal {
+                                                                                                                                                                                        span: Some(
+                                                                                                                                                                                            366..371,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                        value: UInt64(
+                                                                                                                                                                                            12345,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                    },
+                                                                                                                                                                                    Literal {
+                                                                                                                                                                                        span: Some(
+                                                                                                                                                                                            373..377,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                        value: Boolean(
+                                                                                                                                                                                            true,
+                                                                                                                                                                                        ),
+                                                                                                                                                                                    },
+                                                                                                                                                                                ],
+                                                                                                                                                                                params: [],
+                                                                                                                                                                                order_by: [],
+                                                                                                                                                                                window: None,
+                                                                                                                                                                                lambda: None,
+                                                                                                                                                                            },
+                                                                                                                                                                        },
+                                                                                                                                                                        Literal {
+                                                                                                                                                                            span: Some(
+                                                                                                                                                                                380..394,
+                                                                                                                                                                            ),
+                                                                                                                                                                            value: String(
+                                                                                                                                                                                "mobile_phone",
+                                                                                                                                                                            ),
+                                                                                                                                                                        },
+                                                                                                                                                                        Literal {
+                                                                                                                                                                            span: Some(
+                                                                                                                                                                                396..402,
+                                                                                                                                                                            ),
+                                                                                                                                                                            value: UInt64(
+                                                                                                                                                                                345678,
+                                                                                                                                                                            ),
+                                                                                                                                                                        },
+                                                                                                                                                                        Literal {
+                                                                                                                                                                            span: Some(
+                                                                                                                                                                                404..408,
+                                                                                                                                                                            ),
+                                                                                                                                                                            value: Boolean(
+                                                                                                                                                                                true,
+                                                                                                                                                                            ),
+                                                                                                                                                                        },
+                                                                                                                                                                    ],
+                                                                                                                                                                    params: [],
+                                                                                                                                                                    order_by: [],
+                                                                                                                                                                    window: None,
+                                                                                                                                                                    lambda: None,
+                                                                                                                                                                },
+                                                                                                                                                            },
+                                                                                                                                                            Literal {
+                                                                                                                                                                span: Some(
+                                                                                                                                                                    411..422,
+                                                                                                                                                                ),
+                                                                                                                                                                value: String(
+                                                                                                                                                                    "race_code",
+                                                                                                                                                                ),
+                                                                                                                                                            },
+                                                                                                                                                            Literal {
+                                                                                                                                                                span: Some(
+                                                                                                                                                                    424..427,
+                                                                                                                                                                ),
+                                                                                                                                                                value: String(
+                                                                                                                                                                    "M",
+                                                                                                                                                                ),
+                                                                                                                                                            },
+                                                                                                                                                            Literal {
+                                                                                                                                                                span: Some(
+                                                                                                                                                                    429..433,
+                                                                                                                                                                ),
+                                                                                                                                                                value: Boolean(
+                                                                                                                                                                    true,
+                                                                                                                                                                ),
+                                                                                                                                                            },
+                                                                                                                                                        ],
+                                                                                                                                                        params: [],
+                                                                                                                                                        order_by: [],
+                                                                                                                                                        window: None,
+                                                                                                                                                        lambda: None,
+                                                                                                                                                    },
+                                                                                                                                                },
+                                                                                                                                                Literal {
+                                                                                                                                                    span: Some(
+                                                                                                                                                        436..447,
+                                                                                                                                                    ),
+                                                                                                                                                    value: String(
+                                                                                                                                                        "race_desc",
+                                                                                                                                                    ),
+                                                                                                                                                },
+                                                                                                                                                Literal {
+                                                                                                                                                    span: Some(
+                                                                                                                                                        449..452,
+                                                                                                                                                    ),
+                                                                                                                                                    value: String(
+                                                                                                                                                        "m",
+                                                                                                                                                    ),
+                                                                                                                                                },
+                                                                                                                                                Literal {
+                                                                                                                                                    span: Some(
+                                                                                                                                                        454..458,
+                                                                                                                                                    ),
+                                                                                                                                                    value: Boolean(
+                                                                                                                                                        true,
+                                                                                                                                                    ),
+                                                                                                                                                },
+                                                                                                                                            ],
+                                                                                                                                            params: [],
+                                                                                                                                            order_by: [],
+                                                                                                                                            window: None,
+                                                                                                                                            lambda: None,
+                                                                                                                                        },
+                                                                                                                                    },
+                                                                                                                                    Literal {
+                                                                                                                                        span: Some(
+                                                                                                                                            461..482,
+                                                                                                                                        ),
+                                                                                                                                        value: String(
+                                                                                                                                            "marital_status_code",
+                                                                                                                                        ),
+                                                                                                                                    },
+                                                                                                                                    Literal {
+                                                                                                                                        span: Some(
+                                                                                                                                            484..487,
+                                                                                                                                        ),
+                                                                                                                                        value: String(
+                                                                                                                                            "y",
+                                                                                                                                        ),
+                                                                                                                                    },
+                                                                                                                                    Literal {
+                                                                                                                                        span: Some(
+                                                                                                                                            489..493,
+                                                                                                                                        ),
+                                                                                                                                        value: Boolean(
+                                                                                                                                            true,
+                                                                                                                                        ),
+                                                                                                                                    },
+                                                                                                                                ],
+                                                                                                                                params: [],
+                                                                                                                                order_by: [],
+                                                                                                                                window: None,
+                                                                                                                                lambda: None,
+                                                                                                                            },
+                                                                                                                        },
+                                                                                                                        Literal {
+                                                                                                                            span: Some(
+                                                                                                                                496..517,
+                                                                                                                            ),
+                                                                                                                            value: String(
+                                                                                                                                "marital_status_desc",
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                        Literal {
+                                                                                                                            span: Some(
+                                                                                                                                519..523,
+                                                                                                                            ),
+                                                                                                                            value: String(
+                                                                                                                                "yu",
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                        Literal {
+                                                                                                                            span: Some(
+                                                                                                                                525..529,
+                                                                                                                            ),
+                                                                                                                            value: Boolean(
+                                                                                                                                true,
+                                                                                                                            ),
+                                                                                                                        },
+                                                                                                                    ],
+                                                                                                                    params: [],
+                                                                                                                    order_by: [],
+                                                                                                                    window: None,
+                                                                                                                    lambda: None,
+                                                                                                                },
+                                                                                                            },
+                                                                                                            Literal {
+                                                                                                                span: Some(
+                                                                                                                    532..540,
+                                                                                                                ),
+                                                                                                                value: String(
+                                                                                                                    "prefix",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            Literal {
+                                                                                                                span: Some(
+                                                                                                                    542..546,
+                                                                                                                ),
+                                                                                                                value: String(
+                                                                                                                    "hj",
+                                                                                                                ),
+                                                                                                            },
+                                                                                                            Literal {
+                                                                                                                span: Some(
+                                                                                                                    548..552,
+                                                                                                                ),
+                                                                                                                value: Boolean(
+                                                                                                                    true,
+                                                                                                                ),
+                                                                                                            },
+                                                                                                        ],
+                                                                                                        params: [],
+                                                                                                        order_by: [],
+                                                                                                        window: None,
+                                                                                                        lambda: None,
+                                                                                                    },
+                                                                                                },
+                                                                                                Literal {
+                                                                                                    span: Some(
+                                                                                                        555..567,
+                                                                                                    ),
+                                                                                                    value: String(
+                                                                                                        "first_name",
+                                                                                                    ),
+                                                                                                },
+                                                                                                Literal {
+                                                                                                    span: Some(
+                                                                                                        569..572,
+                                                                                                    ),
+                                                                                                    value: String(
+                                                                                                        "g",
+                                                                                                    ),
+                                                                                                },
+                                                                                                Literal {
+                                                                                                    span: Some(
+                                                                                                        574..578,
+                                                                                                    ),
+                                                                                                    value: Boolean(
+                                                                                                        true,
+                                                                                                    ),
+                                                                                                },
+                                                                                            ],
+                                                                                            params: [],
+                                                                                            order_by: [],
+                                                                                            window: None,
+                                                                                            lambda: None,
+                                                                                        },
+                                                                                    },
+                                                                                    Literal {
+                                                                                        span: Some(
+                                                                                            581..592,
+                                                                                        ),
+                                                                                        value: String(
+                                                                                            "last_name",
+                                                                                        ),
+                                                                                    },
+                                                                                    Literal {
+                                                                                        span: Some(
+                                                                                            594..597,
+                                                                                        ),
+                                                                                        value: String(
+                                                                                            "p",
+                                                                                        ),
+                                                                                    },
+                                                                                    Literal {
+                                                                                        span: Some(
+                                                                                            599..603,
+                                                                                        ),
+                                                                                        value: Boolean(
+                                                                                            true,
+                                                                                        ),
+                                                                                    },
+                                                                                ],
+                                                                                params: [],
+                                                                                order_by: [],
+                                                                                window: None,
+                                                                                lambda: None,
+                                                                            },
+                                                                        },
+                                                                        Literal {
+                                                                            span: Some(
+                                                                                606..621,
+                                                                            ),
+                                                                            value: String(
+                                                                                "deceased_date",
+                                                                            ),
+                                                                        },
+                                                                        Literal {
+                                                                            span: Some(
+                                                                                623..635,
+                                                                            ),
+                                                                            value: String(
+                                                                                "2085-05-07",
+                                                                            ),
+                                                                        },
+                                                                        Literal {
+                                                                            span: Some(
+                                                                                637..641,
+                                                                            ),
+                                                                            value: Boolean(
+                                                                                true,
+                                                                            ),
+                                                                        },
+                                                                    ],
+                                                                    params: [],
+                                                                    order_by: [],
+                                                                    window: None,
+                                                                    lambda: None,
+                                                                },
+                                                            },
+                                                            Literal {
+                                                                span: Some(
+                                                                    644..656,
+                                                                ),
+                                                                value: String(
+                                                                    "birth_date",
+                                                                ),
+                                                            },
+                                                            Literal {
+                                                                span: Some(
+                                                                    658..664,
+                                                                ),
+                                                                value: String(
+                                                                    "6789",
+                                                                ),
+                                                            },
+                                                            Literal {
+                                                                span: Some(
+                                                                    666..670,
+                                                                ),
+                                                                value: Boolean(
+                                                                    true,
+                                                                ),
+                                                            },
+                                                        ],
+                                                        params: [],
+                                                        order_by: [],
+                                                        window: None,
+                                                        lambda: None,
+                                                    },
+                                                },
+                                                Literal {
+                                                    span: Some(
+                                                        673..686,
+                                                    ),
+                                                    value: String(
+                                                        "middle_name",
+                                                    ),
+                                                },
+                                                Literal {
+                                                    span: Some(
+                                                        688..692,
+                                                    ),
+                                                    value: String(
+                                                        "89",
+                                                    ),
+                                                },
+                                                Literal {
+                                                    span: Some(
+                                                        694..698,
+                                                    ),
+                                                    value: Boolean(
+                                                        true,
+                                                    ),
+                                                },
+                                            ],
+                                            params: [],
+                                            order_by: [],
+                                            window: None,
+                                            lambda: None,
+                                        },
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            701..717,
+                                        ),
+                                        value: String(
+                                            "middle_initial",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            719..725,
+                                        ),
+                                        value: String(
+                                            "0789",
+                                        ),
+                                    },
+                                    Literal {
+                                        span: Some(
+                                            727..731,
+                                        ),
+                                        value: Boolean(
+                                            true,
+                                        ),
+                                    },
+                                ],
+                                params: [],
+                                order_by: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        Literal {
+                            span: Some(
+                                734..747,
+                            ),
+                            value: String(
+                                "gender_code",
+                            ),
+                        },
+                        Literal {
+                            span: Some(
+                                749..756,
+                            ),
+                            value: String(
+                                "56789",
+                            ),
+                        },
+                        Literal {
+                            span: Some(
+                                758..762,
+                            ),
+                            value: Boolean(
+                                true,
+                            ),
+                        },
+                    ],
+                    params: [],
+                    order_by: [],
+                    window: None,
+                    lambda: None,
+                },
+            },
+            Literal {
+                span: Some(
+                    765..778,
+                ),
+                value: String(
+                    "gender_desc",
+                ),
+            },
+            Literal {
+                span: Some(
+                    780..783,
+                ),
+                value: String(
+                    "m",
+                ),
+            },
+            Literal {
+                span: Some(
+                    785..789,
+                ),
+                value: Boolean(
+                    true,
+                ),
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+

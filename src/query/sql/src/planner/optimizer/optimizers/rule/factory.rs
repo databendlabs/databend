@@ -27,11 +27,13 @@ use crate::optimizer::optimizers::rule::RuleEliminateUnion;
 use crate::optimizer::optimizers::rule::RuleFilterNulls;
 use crate::optimizer::optimizers::rule::RuleFoldCountAggregate;
 use crate::optimizer::optimizers::rule::RuleGroupingSetsToUnion;
+use crate::optimizer::optimizers::rule::RuleHierarchicalGroupingSetsToUnion;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::RuleLeftExchangeJoin;
 use crate::optimizer::optimizers::rule::RuleMergeEvalScalar;
 use crate::optimizer::optimizers::rule::RuleMergeFilter;
 use crate::optimizer::optimizers::rule::RuleMergeFilterIntoMutation;
+use crate::optimizer::optimizers::rule::RuleMergeLimit;
 use crate::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::RulePushDownFilterAggregate;
@@ -77,6 +79,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
+            RuleID::MergeLimit => Ok(Box::new(RuleMergeLimit::new())),
             RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
@@ -105,7 +108,10 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
-            RuleID::GroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new(ctx))),
+            RuleID::GroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new(ctx.clone()))),
+            RuleID::HierarchicalGroupingSetsToUnion => {
+                Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
+            }
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

@@ -44,6 +44,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterJoin,
         RuleID::PushDownFilterProjectSet,
         // Limit
+        RuleID::MergeLimit,
         RuleID::PushDownLimit,
         RuleID::PushDownLimitUnion,
         RuleID::PushDownSortEvalScalar,
@@ -60,7 +61,8 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
         RuleID::PushDownSortFilterScan, // PushDownSortFilterScan should be after PushDownFilterScan
-        RuleID::GroupingSetsToUnion,
+        RuleID::HierarchicalGroupingSetsToUnion, // Hierarchical grouping sets optimization
+        RuleID::GroupingSetsToUnion, // Fall back to union approach
     ]
 });
 
@@ -99,6 +101,7 @@ pub enum RuleID {
     PushDownFilterProjectSet,
     PushDownFilterWindow,
     PushDownFilterWindowTopN,
+    MergeLimit,
     PushDownLimit,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
@@ -118,6 +121,7 @@ pub enum RuleID {
     MergeEvalScalar,
     MergeFilter,
     GroupingSetsToUnion,
+    HierarchicalGroupingSetsToUnion,
     SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
@@ -143,6 +147,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownFilterSort => write!(f, "PushDownFilterSort"),
             RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
+            RuleID::MergeLimit => write!(f, "MergeLimit"),
             RuleID::PushDownLimit => write!(f, "PushDownLimit"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
@@ -165,6 +170,7 @@ impl Display for RuleID {
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::GroupingSetsToUnion => write!(f, "GroupingSetsToUnion"),
+            RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),

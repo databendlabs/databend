@@ -1,12 +1,19 @@
 name: "Test Unite"
 description: "Running unit tests"
 
+inputs:
+  target:
+    description: "Build target to use"
+    required: true
+    default: x86_64-unknown-linux-gnu
+
 runs:
   using: "composite"
   steps:
     - name: Setup Build Tool
       uses: ./.github/actions/setup_build_tool
       with:
+        target: ${{ inputs.target }}
         bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
 
     - shell: bash
@@ -14,9 +21,10 @@ runs:
         cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps nextest run --no-fail-fast --hide-progress-bar
         grep ' Compiled in ' target/sccache.log || true
       env:
-        RUST_TEST_THREADS: "8"
+        RUST_TEST_THREADS: 4
         RUST_LOG: ERROR
-        RUST_MIN_STACK: 104857600
+        # 1GiB
+        # RUST_MIN_STACK: 1073741824
         # RUST_BACKTRACE: 1
 
     - name: Upload failure

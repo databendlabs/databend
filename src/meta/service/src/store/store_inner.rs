@@ -190,14 +190,14 @@ impl RaftStoreInner {
         let _guard = SnapshotBuilding::guard();
 
         {
-            let mut writer_permit = self.state_machine().levels().acquire_writer_permit().await;
+            let mut writer_permit = self.state_machine().acquire_writer_permit().await;
             self.state_machine()
                 .levels()
                 .freeze_writable(&mut writer_permit);
         }
 
         let permit = self.new_compactor_acquirer().acquire().await;
-        let mut compactor = self.state_machine().levels().new_compactor(permit);
+        let mut compactor = self.state_machine().new_compactor(permit);
 
         info!("do_build_snapshot compactor created: {:?}", compactor);
 

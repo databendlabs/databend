@@ -66,6 +66,7 @@ pub struct TransformSortBuilder {
     spiller: Option<Arc<Spiller>>,
     enable_loser_tree: bool,
     limit: Option<usize>,
+    enable_fixed_rows: bool,
 }
 
 impl TransformSortBuilder {
@@ -73,6 +74,7 @@ impl TransformSortBuilder {
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
+        enable_fixed_rows: bool,
     ) -> Self {
         TransformSortBuilder {
             block_size,
@@ -84,6 +86,7 @@ impl TransformSortBuilder {
             enable_loser_tree: false,
             limit: None,
             memory_settings: MemorySettings::builder().build(),
+            enable_fixed_rows,
         }
     }
 
@@ -126,7 +129,7 @@ impl TransformSortBuilder {
             typ: Some(SortType::Sort(input)),
         };
 
-        select_row_type(&mut build)
+        select_row_type(&mut build, self.enable_fixed_rows)
     }
 
     pub fn build_collect(
@@ -146,7 +149,7 @@ impl TransformSortBuilder {
             }),
         };
 
-        select_row_type(&mut build)
+        select_row_type(&mut build, self.enable_fixed_rows)
     }
 
     pub fn build_bound_broadcast(
@@ -163,7 +166,7 @@ impl TransformSortBuilder {
             typ: Some(SortType::BoundBroadcast { input, state }),
         };
 
-        select_row_type(&mut build)
+        select_row_type(&mut build, self.enable_fixed_rows)
     }
 
     pub fn build_restore(
@@ -179,7 +182,7 @@ impl TransformSortBuilder {
             typ: Some(SortType::Restore(input)),
         };
 
-        select_row_type(&mut build)
+        select_row_type(&mut build, self.enable_fixed_rows)
     }
 
     pub fn build_bound_edge(
@@ -205,7 +208,7 @@ impl TransformSortBuilder {
             typ: Some(SortType::BoundedMergeSort(inputs)),
         };
 
-        select_row_type(&mut build)
+        select_row_type(&mut build, self.enable_fixed_rows)
     }
 
     fn should_use_sort_limit(&self) -> bool {
@@ -228,7 +231,7 @@ impl TransformSortBuilder {
     }
 
     fn inner_schema(&self) -> DataSchemaRef {
-        add_order_field(self.schema.clone(), &self.sort_desc)
+        add_order_field(self.schema.clone(), &self.sort_desc, self.enable_fixed_rows)
     }
 
     pub fn add_bound_broadcast(
@@ -295,7 +298,11 @@ impl Build<'_> {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
+        let schema = add_order_field(
+            self.params.schema.clone(),
+            &self.params.sort_desc,
+            self.params.enable_fixed_rows,
+        );
         Ok(Box::new(TransformSort::<A, C>::new(
             input,
             self.output.clone(),

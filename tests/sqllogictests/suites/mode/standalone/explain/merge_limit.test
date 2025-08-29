@@ -1,0 +1,156 @@
+# Test cases for RuleMergeLimit optimization rule
+# This rule merges consecutive LIMIT operators into a single LIMIT
+
+statement ok
+CREATE TABLE IF NOT EXISTS test_table (id INT, name STRING, value INT);
+
+
+query T
+EXPLAIN SELECT * FROM (SELECT * FROM test_table LIMIT 10) LIMIT 5;
+----
+Limit
+├── output columns: [test_table.id (#0), test_table.name (#1), test_table.value (#2)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.test_table
+    ├── output columns: [id (#0), name (#1), value (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 10]
+    └── estimated rows: 0.00
+
+
+query T
+EXPLAIN SELECT * FROM (SELECT * FROM test_table LIMIT 5) LIMIT 10;
+----
+Limit
+├── output columns: [test_table.id (#0), test_table.name (#1), test_table.value (#2)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.test_table
+    ├── output columns: [id (#0), name (#1), value (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 5]
+    └── estimated rows: 0.00
+
+
+query T
+EXPLAIN SELECT * FROM (SELECT * FROM test_table LIMIT 10 OFFSET 5) LIMIT 3 OFFSET 2;
+----
+Limit
+├── output columns: [test_table.id (#0), test_table.name (#1), test_table.value (#2)]
+├── limit: 3
+├── offset: 7
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.test_table
+    ├── output columns: [id (#0), name (#1), value (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 15]
+    └── estimated rows: 0.00
+
+
+query T
+EXPLAIN SELECT * FROM (
+    SELECT * FROM (
+        SELECT * FROM test_table LIMIT 20
+    ) LIMIT 10
+) LIMIT 5;
+----
+Limit
+├── output columns: [test_table.id (#0), test_table.name (#1), test_table.value (#2)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.test_table
+    ├── output columns: [id (#0), name (#1), value (#2)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: 20]
+    └── estimated rows: 0.00
+
+
+
+query T
+EXPLAIN SELECT * FROM (
+    SELECT * FROM test_table ORDER BY id LIMIT 10
+) ORDER BY name LIMIT 5;
+----
+Limit
+├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+├── limit: 5
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort(Single)
+    ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+    ├── sort keys: [name ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── RowFetch
+        ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+        ├── columns to fetch: [name, value]
+        ├── estimated rows: 0.00
+        └── Limit
+            ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+            ├── limit: 10
+            ├── offset: 0
+            ├── estimated rows: 0.00
+            └── Sort(Single)
+                ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+                ├── sort keys: [id ASC NULLS LAST]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.test_table
+                    ├── output columns: [id (#0), _row_id (#3)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: 10]
+                    └── estimated rows: 0.00
+
+
+query T
+EXPLAIN SELECT * FROM (
+    SELECT * FROM test_table WHERE id > 100 LIMIT 10
+) LIMIT 5;
+----
+RowFetch
+├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+├── columns to fetch: [name, value]
+├── estimated rows: 0.00
+└── Limit
+    ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+    ├── limit: 5
+    ├── offset: 0
+    ├── estimated rows: 0.00
+    └── Filter
+        ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+        ├── filters: [is_true(test_table.id (#0) > 100)]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.test_table
+            ├── output columns: [id (#0), _row_id (#3)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [is_true(test_table.id (#0) > 100)], limit: NONE]
+            └── estimated rows: 0.00
+
+statement ok
+DROP TABLE test_table;

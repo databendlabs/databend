@@ -18,13 +18,13 @@ use std::fmt::Display;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
+use databend_common_pipeline_transforms::sort::order_field_type;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
@@ -62,6 +62,7 @@ pub struct Sort {
     pub step: SortStep,
     pub pre_projection: Option<Vec<IndexType>>,
     pub broadcast_id: Option<u32>,
+    pub enable_fixed_rows: bool,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -119,7 +120,11 @@ impl IPhysicalPlan for Sort {
                 debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
                 debug_assert_eq!(
                     fields.last().unwrap().data_type(),
-                    &self.order_col_type(&input_schema)?
+                    &order_field_type(
+                        &input_schema,
+                        &self.sort_desc(&input_schema)?,
+                        self.enable_fixed_rows
+                    ),
                 );
                 fields.pop();
                 Ok(DataSchemaRefExt::create(fields))
@@ -152,7 +157,11 @@ impl IPhysicalPlan for Sort {
                     // the order column should be added to the output schema.
                     fields.push(DataField::new(
                         ORDER_COL_NAME,
-                        self.order_col_type(&input_schema)?,
+                        order_field_type(
+                            &input_schema,
+                            &self.sort_desc(&input_schema)?,
+                            self.enable_fixed_rows,
+                        ),
                     ));
                 }
                 Ok(DataSchemaRefExt::create(fields))
@@ -204,6 +213,7 @@ impl IPhysicalPlan for Sort {
             step: self.step,
             pre_projection: self.pre_projection.clone(),
             broadcast_id: self.broadcast_id,
+            enable_fixed_rows: self.enable_fixed_rows,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -257,6 +267,7 @@ impl IPhysicalPlan for Sort {
             output_schema,
             sort_desc,
             self.broadcast_id,
+            self.enable_fixed_rows,
         )?
         .with_limit(self.limit);
 
@@ -345,17 +356,17 @@ impl IPhysicalPlan for Sort {
 }
 
 impl Sort {
-    fn order_col_type(&self, schema: &DataSchema) -> Result<DataType> {
-        if self.order_by.len() == 1 {
-            let order_by_field = schema.field_with_name(&self.order_by[0].order_by.to_string())?;
-            if matches!(
-                order_by_field.data_type(),
-                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
-            ) {
-                return Ok(order_by_field.data_type().clone());
-            }
-        }
-        Ok(DataType::Binary)
+    fn sort_desc(&self, schema: &DataSchema) -> Result<Vec<SortColumnDescription>> {
+        self.order_by
+            .iter()
+            .map(|desc| {
+                Ok(SortColumnDescription {
+                    offset: schema.index_of(&desc.order_by.to_string())?,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                })
+            })
+            .collect()
     }
 }
 
@@ -426,6 +437,9 @@ impl PhysicalPlanBuilder {
         };
 
         // 2. Build physical plan.
+        let settings = self.ctx.get_settings();
+        let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
+
         let Some(after_exchange) = sort.after_exchange else {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return Ok(PhysicalPlan::new(Sort {
@@ -435,12 +449,12 @@ impl PhysicalPlanBuilder {
                 step: SortStep::Single,
                 pre_projection,
                 broadcast_id: None,
+                enable_fixed_rows,
                 stat_info: Some(stat_info),
                 meta: PhysicalPlanMeta::new("Sort"),
             }));
         };
 
-        let settings = self.ctx.get_settings();
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return if !after_exchange {
@@ -451,6 +465,7 @@ impl PhysicalPlanBuilder {
                     step: SortStep::Partial,
                     pre_projection,
                     broadcast_id: None,
+                    enable_fixed_rows,
                     stat_info: Some(stat_info),
                     meta: PhysicalPlanMeta::new("Sort"),
                 }))
@@ -462,6 +477,7 @@ impl PhysicalPlanBuilder {
                     step: SortStep::Final,
                     pre_projection: None,
                     broadcast_id: None,
+                    enable_fixed_rows,
                     stat_info: Some(stat_info),
                     meta: PhysicalPlanMeta::new("Sort"),
                 }))
@@ -477,6 +493,7 @@ impl PhysicalPlanBuilder {
                 step: SortStep::Route,
                 pre_projection: None,
                 broadcast_id: None,
+                enable_fixed_rows,
                 stat_info: Some(stat_info),
                 meta: PhysicalPlanMeta::new("Sort"),
             }));
@@ -490,6 +507,7 @@ impl PhysicalPlanBuilder {
             step: SortStep::Sample,
             pre_projection,
             broadcast_id: Some(self.ctx.get_next_broadcast_id()),
+            enable_fixed_rows,
             stat_info: Some(stat_info.clone()),
             meta: PhysicalPlanMeta::new("Sort"),
         });
@@ -509,6 +527,7 @@ impl PhysicalPlanBuilder {
             step: SortStep::Shuffled,
             pre_projection: None,
             broadcast_id: None,
+            enable_fixed_rows,
             stat_info: Some(stat_info),
             meta: PhysicalPlanMeta::new("Sort"),
         }))

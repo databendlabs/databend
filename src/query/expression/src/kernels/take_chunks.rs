@@ -33,11 +33,17 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
+use crate::types::opaque::OpaqueColumn;
+use crate::types::opaque::OpaqueColumnVec;
+use crate::types::opaque::OpaqueType;
 use crate::types::string::StringColumn;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
+use crate::with_opaque_mapped_type;
+use crate::with_opaque_size;
+use crate::with_opaque_type;
 use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -399,6 +405,17 @@ impl Column {
                     Column::Vector(builder.build())
                 }
             }),
+            Column::Opaque(first) => {
+                with_opaque_size!(|N| match first.size() {
+                    N => {
+                        let builder = Vec::with_capacity(result_size);
+                        Self::take_block_value_types::<OpaqueType<N>>(
+                            columns, &data_type, builder, indices,
+                        )
+                    }
+                    _ => unreachable!("Unsupported Opaque size: {}", first.size()),
+                })
+            }
         }
     }
 
@@ -620,6 +637,26 @@ impl Column {
                     ColumnVec::Vector(VectorColumnVec::NUM_TYPE((columns, *dimension)))
                 }
             }),
+            Column::Opaque(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| match col {
+                        Column::Opaque(col) => col.clone(),
+                        _ => unreachable!(),
+                    })
+                    .collect_vec();
+                with_opaque_type!(|T| match &columns[0] {
+                    OpaqueColumn::T(_) => ColumnVec::Opaque(OpaqueColumnVec::T(
+                        columns
+                            .into_iter()
+                            .map(|col| match col {
+                                OpaqueColumn::T(col) => col,
+                                _ => unreachable!(),
+                            })
+                            .collect(),
+                    )),
+                })
+            }
         }
     }
 
@@ -774,6 +811,14 @@ impl Column {
                     Column::Vector(builder.build())
                 }
             }),
+            ColumnVec::Opaque(columns) => {
+                with_opaque_mapped_type!(|T| match columns {
+                    OpaqueColumnVec::T(columns) => {
+                        let builder = Self::take_block_vec_primitive_types(columns, indices);
+                        OpaqueType::<T>::upcast_column_with_type(builder.into(), &data_type)
+                    }
+                })
+            }
         }
     }
 

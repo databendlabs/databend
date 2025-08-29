@@ -41,6 +41,7 @@ use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
+use crate::types::OpaqueScalarRef;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
@@ -292,6 +293,7 @@ where I: Index
             Scalar::Variant(v) => v.agg_hash(),
             Scalar::Geometry(v) => v.agg_hash(),
             Scalar::Geography(v) => v.0.agg_hash(),
+            Scalar::Opaque(v) => v.as_ref().agg_hash(),
             v => v.as_ref().agg_hash(),
         };
         self.visit_indices(|_| hash)
@@ -342,6 +344,13 @@ where I: Index
 
     fn visit_binary(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
         self.visit_indices(|i| column.index(i.to_usize()).unwrap().agg_hash())
+    }
+
+    fn visit_opaque(&mut self, column: crate::types::OpaqueColumn) -> Result<()> {
+        self.visit_indices(|i| {
+            let scalar = unsafe { column.index_unchecked(i.to_usize()) };
+            scalar.agg_hash()
+        })
     }
 
     fn visit_variant(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
@@ -545,6 +554,12 @@ impl AggHash for OrderedFloat<f64> {
         } else {
             self.to_bits().agg_hash()
         }
+    }
+}
+
+impl AggHash for OpaqueScalarRef<'_> {
+    fn agg_hash(&self) -> u64 {
+        self.to_le_bytes().agg_hash()
     }
 }
 

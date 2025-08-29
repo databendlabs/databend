@@ -29,8 +29,8 @@ use databend_common_tracing::set_panic_hook;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
-use databend_common_version::DATABEND_GIT_SHA;
 use databend_common_version::DATABEND_SEMVER;
+use databend_common_version::VERGEN_GIT_SHA;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
 use databend_query::servers::admin::AdminService;
@@ -213,7 +213,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Metric API service.
     {
-        set_system_version("query", DATABEND_GIT_SEMVER, DATABEND_GIT_SHA.as_str());
+        set_system_version("query", DATABEND_GIT_SEMVER, VERGEN_GIT_SHA);
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv

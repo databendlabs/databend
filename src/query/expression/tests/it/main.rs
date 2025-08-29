@@ -34,7 +34,7 @@ mod group_by;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
-mod row;
+
 mod schema;
 mod serde;
 mod sort;
@@ -42,8 +42,8 @@ mod types;
 
 mod like_pattern_escape;
 
-fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
-    let types = get_all_test_data_types();
+fn rand_block_for_all_types(num_rows: usize, filter: DataTypeFilter) -> DataBlock {
+    let types = get_all_test_data_types(filter);
     let mut columns = Vec::with_capacity(types.len());
     for data_type in types.iter() {
         columns.push(Column::random(data_type, num_rows, None));
@@ -55,53 +55,28 @@ fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
     block
 }
 
-fn rand_block_for_simple_types(num_rows: usize) -> DataBlock {
-    let types = get_simple_types();
-    let mut columns = Vec::with_capacity(types.len());
-    for data_type in types.iter() {
-        columns.push(Column::random(data_type, num_rows, None));
-    }
-
-    let block = DataBlock::new_from_columns(columns);
-    block.check_valid().unwrap();
-
-    block
+#[derive(Debug, Clone, Copy)]
+pub enum DataTypeFilter {
+    Simple,
+    Legacy,
+    All,
 }
 
-fn get_simple_types() -> Vec<DataType> {
-    vec![
-        DataType::Null,
-        DataType::Timestamp,
-        DataType::Date,
-        DataType::Number(NumberDataType::UInt8),
-        DataType::Number(NumberDataType::UInt16),
-        DataType::Number(NumberDataType::UInt32),
-        DataType::Number(NumberDataType::UInt64),
-        DataType::Number(NumberDataType::Int8),
-        DataType::Number(NumberDataType::Int16),
-        DataType::Number(NumberDataType::Int32),
-        DataType::Number(NumberDataType::Int64),
-        DataType::Number(NumberDataType::Float32),
-        DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
-        DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
-        DataType::Nullable(Box::new(DataType::String)),
-    ]
-}
+fn get_all_test_data_types(filter: DataTypeFilter) -> Vec<DataType> {
+    let mut result = Vec::new();
 
-fn get_all_test_data_types() -> Vec<DataType> {
-    vec![
-        DataType::Null,
-        DataType::EmptyArray,
-        DataType::EmptyMap,
+    let basic_types = [
         DataType::Boolean,
-        DataType::Binary,
         DataType::String,
-        DataType::Bitmap,
-        DataType::Variant,
         DataType::Timestamp,
         DataType::Date,
+    ];
+
+    let zero_size = [DataType::Null, DataType::EmptyArray, DataType::EmptyMap];
+
+    let binary_types = [DataType::Binary, DataType::Bitmap];
+
+    let numbers = [
         DataType::Number(NumberDataType::UInt8),
         DataType::Number(NumberDataType::UInt16),
         DataType::Number(NumberDataType::UInt32),
@@ -112,14 +87,65 @@ fn get_all_test_data_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
+    ];
+
+    let opaque_types = [
+        DataType::Opaque(1),
+        DataType::Opaque(2),
+        DataType::Opaque(3),
+    ];
+
+    let decimals = [
         DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
         DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+    ];
+
+    let nullable_types = [
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
+    ];
+
+    let complex_types = [
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Map(Box::new(DataType::Tuple(vec![
             DataType::Number(NumberDataType::UInt64),
             DataType::String,
         ]))),
-    ]
+    ];
+
+    match filter {
+        DataTypeFilter::Legacy => {
+            result.extend(zero_size);
+            result.extend(basic_types);
+            result.extend(numbers);
+            result.extend(decimals);
+            result.extend(binary_types);
+            result.extend([DataType::Variant]);
+            result.extend(nullable_types);
+            result.extend(complex_types);
+        }
+        DataTypeFilter::All => {
+            result.extend(zero_size);
+            result.extend(basic_types);
+            result.extend(numbers);
+            result.extend(decimals);
+            result.extend(binary_types);
+            result.extend([DataType::Variant]);
+            result.extend(nullable_types);
+            result.extend(complex_types);
+            result.extend(opaque_types);
+            result.extend([DataType::Geometry, DataType::Interval, DataType::Geography]);
+            // Tuple(Vec<DataType>),
+            // Vector(VectorDataType),
+        }
+        DataTypeFilter::Simple => {
+            result.extend([DataType::Null]);
+            result.extend(basic_types);
+            result.extend(numbers);
+            result.extend(decimals);
+            result.extend(nullable_types);
+        }
+    }
+
+    result
 }

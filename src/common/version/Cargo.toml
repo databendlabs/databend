@@ -10,6 +10,9 @@ edition = { workspace = true }
 databend-common-base = { workspace = true }
 semver = { workspace = true }
 
+[dev-dependencies]
+regex = { workspace = true }
+
 [build-dependencies]
 databend-common-building = { workspace = true }
 

@@ -20,9 +20,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::binary::BinaryColumn;
-use databend_common_expression::types::*;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -36,16 +33,16 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use match_template::match_template;
 
 use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
+use super::sort::select_row_type;
 use super::sort::KWaySortPartitioner;
 use super::sort::Merger;
+use super::sort::RowConverter;
 use super::sort::Rows;
-use super::sort::SimpleRowsAsc;
-use super::sort::SimpleRowsDesc;
+use super::sort::RowsTypeVisitor;
 use super::sort::SortTaskMeta;
 use super::sort::SortedStream;
 use super::transform_multi_sort_merge::InputBlockStream;
@@ -56,9 +53,10 @@ pub fn add_k_way_merge_sort(
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
-    sort_desc: Arc<[SortColumnDescription]>,
+    sort_desc: &[SortColumnDescription],
     remove_order_col: bool,
     enable_loser_tree: bool,
+    enable_fixed_rows: bool,
 ) -> Result<()> {
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
@@ -68,102 +66,106 @@ pub fn add_k_way_merge_sort(
         0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
         1 => Ok(()),
         stream_size => {
-            macro_rules! add {
-                ($algo: ty) => {{
-                    let b = Builder::<$algo> {
-                        schema,
-                        stream_size,
-                        worker,
-                        block_size,
-                        limit,
-                        remove_order_col,
-                        _a: Default::default(),
-                    };
-                    b.build(pipeline)
-                }};
-            }
-
-            if sort_desc.len() == 1 {
-                let sort_type = schema.field(sort_desc[0].offset).data_type();
-                let asc = sort_desc[0].asc;
-                match_template! {
-                    T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-                    match sort_type {
-                        DataType::T => return match (enable_loser_tree, asc) {
-                            (true, true) => add!(LoserTreeSort<SimpleRowsAsc<T>>),
-                            (true, false) => add!(LoserTreeSort<SimpleRowsDesc<T>>),
-                            (false, true) => add!(HeapSort<SimpleRowsAsc<T>>),
-                            (false, false) => add!(HeapSort<SimpleRowsDesc<T>>),
-                        },
-                        DataType::Number(num_ty) => {
-                            return with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                                NumberDataType::NUM_TYPE => match (enable_loser_tree, asc) {
-                                    (true, true) =>
-                                        add!(LoserTreeSort<SimpleRowsAsc<NumberType<NUM_TYPE>>>),
-                                    (true, false) =>
-                                        add!(LoserTreeSort<SimpleRowsDesc<NumberType<NUM_TYPE>>>),
-                                    (false, true) =>
-                                        add!(HeapSort<SimpleRowsAsc<NumberType<NUM_TYPE>>>),
-                                    (false, false) =>
-                                        add!(HeapSort<SimpleRowsDesc<NumberType<NUM_TYPE>>>),
-                                },
-                            })
-                        }
-                        _ => (),
-                    }
-                }
+            let mut builder = Builder {
+                schema,
+                stream_size,
+                worker,
+                block_size,
+                limit,
+                remove_order_col,
+                enable_loser_tree,
+                sort_desc,
+                pipeline,
             };
-            if enable_loser_tree {
-                add!(LoserTreeSort<BinaryColumn>)
-            } else {
-                add!(HeapSort<BinaryColumn>)
-            }
+            select_row_type(&mut builder, enable_fixed_rows)
         }
     }
 }
 
-struct Builder<A>
-where A: SortAlgorithm
-{
+struct Builder<'a> {
     schema: DataSchemaRef,
     stream_size: usize,
     worker: usize,
     block_size: usize,
     limit: Option<usize>,
     remove_order_col: bool,
-    _a: PhantomData<A>,
+    enable_loser_tree: bool,
+    sort_desc: &'a [SortColumnDescription],
+    pipeline: &'a mut Pipeline,
 }
 
-impl<A> Builder<A>
-where
-    A: SortAlgorithm + Send + 'static,
-    A::Rows: 'static,
-{
-    fn create_partitioner(&self, input: usize) -> Pipe {
-        create_partitioner_pipe::<A::Rows>(
-            (0..input).map(|_| InputPort::create()).collect(),
-            self.worker,
-            self.schema.clone(),
-            self.block_size,
-            self.limit,
-        )
+impl RowsTypeVisitor for Builder<'_> {
+    type Result = Result<()>;
+
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
     }
 
-    fn create_worker(
-        &self,
-        input: Arc<InputPort>,
-        stream_size: usize,
-        output: Arc<OutputPort>,
-        batch_rows: usize,
-    ) -> KWayMergeWorkerProcessor<A> {
-        KWayMergeWorkerProcessor::<A>::new(
-            input,
-            stream_size,
-            output,
-            self.schema.clone(),
-            batch_rows,
-            self.remove_order_col,
-        )
+    fn sort_desc(&self) -> &[SortColumnDescription] {
+        self.sort_desc
+    }
+
+    fn visit_type<R, C>(&mut self) -> Self::Result
+    where
+        R: Rows + 'static,
+        C: RowConverter<R> + Send + 'static,
+    {
+        if self.enable_loser_tree {
+            self.build::<LoserTreeSort<R>>()
+        } else {
+            self.build::<HeapSort<R>>()
+        }
+    }
+}
+
+impl Builder<'_> {
+    fn build<A>(&mut self) -> Result<()>
+    where
+        A: SortAlgorithm + Send + 'static,
+        A::Rows: 'static,
+    {
+        self.pipeline
+            .add_pipe(self.create_partitioner::<A>(self.stream_size));
+
+        self.pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(Box::new(
+                KWayMergeWorkerProcessor::<A>::new(
+                    input,
+                    self.stream_size,
+                    output,
+                    self.schema.clone(),
+                    self.block_size,
+                    self.remove_order_col,
+                ),
+            )))
+        })?;
+
+        self.pipeline.add_pipe(self.create_combiner());
+        Ok(())
+    }
+
+    fn create_partitioner<A>(&self, input: usize) -> Pipe
+    where
+        A: SortAlgorithm + Send + 'static,
+        A::Rows: 'static,
+    {
+        let inputs_port: Vec<_> = (0..input).map(|_| InputPort::create()).collect();
+        let outputs_port: Vec<_> = (0..self.worker).map(|_| OutputPort::create()).collect();
+
+        let processor =
+            ProcessorPtr::create(Box::new(KWayMergePartitionerProcessor::<A::Rows>::new(
+                inputs_port.clone(),
+                outputs_port.clone(),
+                self.schema.clone(),
+                self.block_size,
+                self.limit,
+            )));
+
+        Pipe::create(inputs_port.len(), self.worker, vec![PipeItem::create(
+            processor,
+            inputs_port,
+            outputs_port,
+        )])
     }
 
     fn create_combiner(&self) -> Pipe {
@@ -184,48 +186,6 @@ where
             vec![output],
         )])
     }
-
-    fn build(&self, pipeline: &mut Pipeline) -> Result<()> {
-        pipeline.add_pipe(self.create_partitioner(self.stream_size));
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Box::new(self.create_worker(
-                input,
-                self.stream_size,
-                output,
-                self.block_size,
-            ))))
-        })?;
-
-        pipeline.add_pipe(self.create_combiner());
-        Ok(())
-    }
-}
-
-fn create_partitioner_pipe<R>(
-    inputs_port: Vec<Arc<InputPort>>,
-    worker: usize,
-    schema: DataSchemaRef,
-    batch_rows: usize,
-    limit: Option<usize>,
-) -> Pipe
-where
-    R: Rows + 'static,
-{
-    let outputs_port: Vec<_> = (0..worker).map(|_| OutputPort::create()).collect();
-    let processor = ProcessorPtr::create(Box::new(KWayMergePartitionerProcessor::<R>::new(
-        inputs_port.clone(),
-        outputs_port.clone(),
-        schema,
-        batch_rows,
-        limit,
-    )));
-
-    Pipe::create(inputs_port.len(), worker, vec![PipeItem::create(
-        processor,
-        inputs_port,
-        outputs_port,
-    )])
 }
 
 pub struct KWayMergePartitionerProcessor<R: Rows> {

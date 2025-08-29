@@ -76,6 +76,12 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
+use crate::types::opaque::OpaqueColumn;
+use crate::types::opaque::OpaqueColumnBuilder;
+use crate::types::opaque::OpaqueColumnVec;
+use crate::types::opaque::OpaqueScalar;
+use crate::types::opaque::OpaqueScalarRef;
+use crate::types::opaque::OpaqueType;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::clamp_timestamp;
@@ -97,6 +103,9 @@ use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
+use crate::with_opaque_size;
+use crate::with_opaque_size_mapped;
+use crate::with_opaque_type;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: AccessType> {
@@ -129,6 +138,7 @@ pub enum Scalar {
     Geometry(Vec<u8>),
     Geography(Geography),
     Vector(VectorScalar),
+    Opaque(OpaqueScalar),
 }
 
 #[derive(Clone, Default, Eq, EnumAsInner)]
@@ -153,6 +163,7 @@ pub enum ScalarRef<'a> {
     Geometry(&'a [u8]),
     Geography(GeographyRef<'a>),
     Vector(VectorScalarRef<'a>),
+    Opaque(OpaqueScalarRef<'a>),
 }
 
 #[derive(Clone, EnumAsInner)]
@@ -177,6 +188,7 @@ pub enum Column {
     Geometry(BinaryColumn),
     Geography(GeographyColumn),
     Vector(VectorColumn),
+    Opaque(OpaqueColumn),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -220,6 +232,7 @@ pub enum ColumnVec {
     Geometry(Vec<BinaryColumn>),
     Geography(Vec<GeographyColumn>),
     Vector(VectorColumnVec),
+    Opaque(OpaqueColumnVec),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -244,6 +257,7 @@ pub enum ColumnBuilder {
     Geometry(BinaryColumnBuilder),
     Geography(BinaryColumnBuilder),
     Vector(VectorColumnBuilder),
+    Opaque(OpaqueColumnBuilder),
 }
 
 impl<T: AccessType> Value<T> {
@@ -410,6 +424,7 @@ impl Scalar {
             Scalar::Geometry(s) => ScalarRef::Geometry(s.as_slice()),
             Scalar::Geography(g) => ScalarRef::Geography(g.as_ref()),
             Scalar::Vector(v) => ScalarRef::Vector(v.as_ref()),
+            Scalar::Opaque(o) => ScalarRef::Opaque(o.as_ref()),
         }
     }
 
@@ -483,7 +498,11 @@ impl Scalar {
             | Scalar::Variant(_)
             | Scalar::Geometry(_)
             | Scalar::Geography(_) => false,
-            Scalar::Array(_) | Scalar::Map(_) | Scalar::Tuple(_) | Scalar::Vector(_) => true,
+            Scalar::Array(_)
+            | Scalar::Map(_)
+            | Scalar::Tuple(_)
+            | Scalar::Vector(_)
+            | Scalar::Opaque(_) => true,
         }
     }
 
@@ -552,6 +571,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(s) => Scalar::Geometry(s.to_vec()),
             ScalarRef::Geography(s) => Scalar::Geography(s.to_owned()),
             ScalarRef::Vector(s) => Scalar::Vector(s.to_owned()),
+            ScalarRef::Opaque(o) => Scalar::Opaque(o.to_owned()),
         }
     }
 
@@ -619,7 +639,8 @@ impl ScalarRef<'_> {
             | ScalarRef::Variant(_)
             | ScalarRef::Geometry(_)
             | ScalarRef::Geography(_)
-            | ScalarRef::Vector(_) => Domain::Undefined,
+            | ScalarRef::Vector(_)
+            | ScalarRef::Opaque(_) => Domain::Undefined,
         }
     }
 
@@ -653,6 +674,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(buf) => buf.len(),
             ScalarRef::Geography(s) => s.0.len(),
             ScalarRef::Vector(s) => s.memory_size(),
+            ScalarRef::Opaque(o) => o.memory_size(),
         }
     }
 
@@ -688,6 +710,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(_) => DataType::Geometry,
             ScalarRef::Geography(_) => DataType::Geography,
             ScalarRef::Vector(v) => DataType::Vector(v.data_type()),
+            ScalarRef::Opaque(o) => o.data_type(),
         }
     }
 
@@ -846,6 +869,7 @@ impl ScalarRef<'_> {
             ScalarRef::Geometry(s) => s.len() * n + (n + 1) * 8,
             ScalarRef::Geography(s) => s.0.len() * n + (n + 1) * 8,
             ScalarRef::Vector(s) => s.memory_size() * n,
+            ScalarRef::Opaque(o) => o.memory_size() * n,
         }
     }
 }
@@ -876,6 +900,12 @@ impl PartialOrd for Scalar {
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
             (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
             (Scalar::Vector(v1), Scalar::Vector(v2)) => v1.partial_cmp(v2),
+            (Scalar::Opaque(o1), Scalar::Opaque(o2)) => {
+                with_opaque_type!(|T| match (o1, o2) {
+                    (OpaqueScalar::T(v1), OpaqueScalar::T(v2)) => v1.partial_cmp(v2),
+                    _ => None,
+                })
+            }
             _ => None,
         }
     }
@@ -919,6 +949,12 @@ impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
             (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
             (ScalarRef::Interval(i1), ScalarRef::Interval(i2)) => i1.partial_cmp(i2),
             (ScalarRef::Vector(v1), ScalarRef::Vector(v2)) => v1.partial_cmp(v2),
+            (ScalarRef::Opaque(o1), ScalarRef::Opaque(o2)) => {
+                with_opaque_type!(|T| match (o1, o2) {
+                    (OpaqueScalarRef::T(v1), OpaqueScalarRef::T(v2)) => v1.partial_cmp(v2),
+                    _ => None,
+                })
+            }
 
             // By default, null is biggest in pgsql
             (ScalarRef::Null, _) => Some(Ordering::Greater),
@@ -976,6 +1012,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Geometry(v) => v.hash(state),
             ScalarRef::Geography(v) => v.hash(state),
             ScalarRef::Vector(v) => v.hash(state),
+            ScalarRef::Opaque(v) => v.hash(state),
         }
     }
 }
@@ -1078,6 +1115,7 @@ impl Column {
             Column::Nullable(col) => col.len(),
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
+            Column::Opaque(col) => col.len(),
             Column::Geometry(col) => col.len(),
             Column::Geography(col) => col.len(),
             Column::Vector(col) => col.len(),
@@ -1111,6 +1149,7 @@ impl Column {
             Column::Geometry(col) => Some(ScalarRef::Geometry(col.index(index)?)),
             Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
             Column::Vector(col) => Some(ScalarRef::Vector(col.index(index)?)),
+            Column::Opaque(col) => col.index(index).map(ScalarRef::Opaque),
         }
     }
 
@@ -1144,6 +1183,7 @@ impl Column {
             Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
             Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
             Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
+            Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
         }
     }
 
@@ -1202,6 +1242,7 @@ impl Column {
             Column::Geometry(col) => Column::Geometry(col.slice(range)),
             Column::Geography(col) => Column::Geography(col.slice(range)),
             Column::Vector(col) => Column::Vector(col.slice(range)),
+            Column::Opaque(col) => Column::Opaque(col.slice(range)),
         }
     }
 
@@ -1304,7 +1345,8 @@ impl Column {
             | Column::Variant(_)
             | Column::Geometry(_)
             | Column::Geography(_)
-            | Column::Vector(_) => Domain::Undefined,
+            | Column::Vector(_)
+            | Column::Opaque(_) => Domain::Undefined,
         }
     }
 
@@ -1346,6 +1388,7 @@ impl Column {
             Column::Geometry(_) => DataType::Geometry,
             Column::Geography(_) => DataType::Geography,
             Column::Vector(col) => DataType::Vector(col.data_type()),
+            Column::Opaque(col) => col.data_type(),
         }
     }
 
@@ -1595,6 +1638,22 @@ impl Column {
                 Column::Vector(builder.build())
             }
             DataType::Generic(_) => unreachable!(),
+            DataType::Opaque(size) => {
+                with_opaque_size!(|N| match *size {
+                    N => {
+                        let mut builder = Vec::with_capacity(len);
+                        for _ in 0..len {
+                            let mut value = [0u64; N];
+                            for i in 0..N {
+                                value[i] = rng.gen::<u64>();
+                            }
+                            builder.push(value);
+                        }
+                        OpaqueType::<N>::upcast_column_with_type(builder.into(), ty)
+                    }
+                    _ => unreachable!("Unsupported Opaque size: {}", size),
+                })
+            }
         }
     }
 
@@ -1655,6 +1714,7 @@ impl Column {
             Column::Geometry(col) => col.memory_size(),
             Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Vector(col) => col.memory_size(),
+            Column::Opaque(col) => col.memory_size(),
         }
     }
 
@@ -1689,6 +1749,7 @@ impl Column {
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
             Column::Vector(col) => col.memory_size(),
+            Column::Opaque(col) => col.memory_size(), // Same as memory size for opaque types
         }
     }
 
@@ -1815,6 +1876,9 @@ impl ColumnBuilder {
                 ColumnBuilder::Geography(GeographyType::column_to_builder(col))
             }
             Column::Vector(col) => ColumnBuilder::Vector(VectorColumnBuilder::from_column(col)),
+            Column::Opaque(col) => {
+                ColumnBuilder::Opaque(crate::types::opaque::OpaqueColumnBuilder::from_column(col))
+            }
         }
     }
 
@@ -1876,6 +1940,13 @@ impl ColumnBuilder {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat(s.0, n))
             }
             ScalarRef::Vector(s) => ColumnBuilder::Vector(VectorColumnBuilder::repeat(s, n)),
+            ScalarRef::Opaque(v) => {
+                with_opaque_type!(|T| match v {
+                    OpaqueScalarRef::T(arr) => {
+                        ColumnBuilder::Opaque(OpaqueColumnBuilder::T(vec![**arr; n]))
+                    }
+                })
+            }
         }
     }
 
@@ -1901,6 +1972,7 @@ impl ColumnBuilder {
             ColumnBuilder::Geometry(builder) => builder.len(),
             ColumnBuilder::Geography(builder) => builder.len(),
             ColumnBuilder::Vector(builder) => builder.len(),
+            ColumnBuilder::Opaque(builder) => builder.len(),
         }
     }
 
@@ -1943,6 +2015,7 @@ impl ColumnBuilder {
             ColumnBuilder::Geometry(b) => b.memory_size(),
             ColumnBuilder::Geography(b) => b.memory_size(),
             ColumnBuilder::Vector(b) => b.memory_size(),
+            ColumnBuilder::Opaque(b) => b.memory_size(),
         }
     }
 
@@ -1980,6 +2053,7 @@ impl ColumnBuilder {
             ColumnBuilder::Geometry(_) => DataType::Geometry,
             ColumnBuilder::Geography(_) => DataType::Geography,
             ColumnBuilder::Vector(col) => DataType::Vector(col.data_type()),
+            ColumnBuilder::Opaque(col) => col.data_type(),
         }
     }
 
@@ -2067,6 +2141,13 @@ impl ColumnBuilder {
             DataType::Vector(vector_ty) => {
                 ColumnBuilder::Vector(VectorColumnBuilder::with_capacity(vector_ty, capacity))
             }
+            DataType::Opaque(size) => {
+                with_opaque_size_mapped!(|N| match *size {
+                    N =>
+                        ColumnBuilder::Opaque(OpaqueColumnBuilder::N(Vec::with_capacity(capacity,))),
+                    _ => unreachable!("Unsupported Opaque size: {}", size),
+                })
+            }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
@@ -2107,6 +2188,18 @@ impl ColumnBuilder {
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geography => {
                 ColumnBuilder::Geography(BinaryColumnBuilder::repeat_default(len))
+            }
+
+            DataType::Opaque(size) => {
+                with_opaque_size_mapped!(|T| match *size {
+                    T => ColumnBuilder::Opaque(OpaqueColumnBuilder::T(vec![
+                        unsafe {
+                            std::mem::zeroed()
+                        };
+                        len
+                    ])),
+                    _ => unreachable!("Unsupported Opaque size: {}", size),
+                })
             }
 
             DataType::Array(ty) => ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
@@ -2192,6 +2285,14 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
                 builder.push(&value);
+            }
+            (ColumnBuilder::Opaque(builder), ScalarRef::Opaque(value)) => {
+                with_opaque_type!(|T| match (builder, value) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueScalarRef::T(value)) => {
+                        builder.push(*value);
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         }
@@ -2291,6 +2392,7 @@ impl ColumnBuilder {
             ColumnBuilder::Geometry(builder) => builder.commit_row(),
             ColumnBuilder::Geography(builder) => builder.commit_row(),
             ColumnBuilder::Vector(builder) => builder.push_default(),
+            ColumnBuilder::Opaque(builder) => builder.push_default(),
         }
     }
 
@@ -2402,6 +2504,11 @@ impl ColumnBuilder {
                     }
                 }
             },
+            ColumnBuilder::Opaque(_) => {
+                return Err(ErrorCode::Unimplemented(
+                    "Opaque types don't support push_value",
+                ));
+            }
         };
 
         Ok(())
@@ -2536,6 +2643,11 @@ impl ColumnBuilder {
                     }
                 }
             },
+            ColumnBuilder::Opaque(_) => {
+                return Err(ErrorCode::Unimplemented(
+                    "Opaque types don't support push_fix_len_binaries",
+                ));
+            }
         }
 
         Ok(())
@@ -2597,6 +2709,7 @@ impl ColumnBuilder {
                 builder.pop().map(Geography).map(Scalar::Geography)
             }
             ColumnBuilder::Vector(builder) => builder.pop().map(Scalar::Vector),
+            ColumnBuilder::Opaque(builder) => builder.pop().map(Scalar::Opaque),
         }
     }
 
@@ -2665,6 +2778,14 @@ impl ColumnBuilder {
             (ColumnBuilder::Vector(builder), Column::Vector(other)) => {
                 builder.append_column(other);
             }
+            (ColumnBuilder::Opaque(builder), Column::Opaque(other)) => {
+                with_opaque_type!(|T| match (builder, other) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueColumn::T(other)) => {
+                        builder.extend(other.iter().copied());
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
+            }
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
                 other.data_type(),
@@ -2705,6 +2826,7 @@ impl ColumnBuilder {
                     Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
                 }
                 ColumnBuilder::Vector(b) => Column::Vector(b.build()),
+                ColumnBuilder::Opaque(b) => Column::Opaque(b.build()),
             }
         }
     }
@@ -2738,6 +2860,7 @@ impl ColumnBuilder {
             ColumnBuilder::Geometry(b) => Scalar::Geometry(GeometryType::build_scalar(b)),
             ColumnBuilder::Geography(b) => Scalar::Geography(GeographyType::build_scalar(b)),
             ColumnBuilder::Vector(b) => Scalar::Vector(b.build_scalar()),
+            ColumnBuilder::Opaque(b) => Scalar::Opaque(b.build_scalar()),
         }
     }
 }

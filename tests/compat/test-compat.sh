@@ -17,6 +17,23 @@ query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 query_test_path="tests/sqllogictests"
 bend_repo_url="https://github.com/datafuselabs/databend"
 
+# Detect current architecture
+get_arch() {
+	local arch="$(uname -m)"
+	case "$arch" in
+		x86_64)
+			echo "x86_64-unknown-linux-gnu"
+			;;
+		aarch64|arm64)
+			echo "aarch64-unknown-linux-gnu"
+			;;
+		*)
+			echo "Unsupported architecture: $arch" >&2
+			exit 1
+			;;
+	esac
+}
+
 usage() {
 	echo " === test latest query being compatible with minimal compatible metasrv"
 	echo " === test latest metasrv being compatible with minimal compatible query"
@@ -26,12 +43,14 @@ usage() {
 
 binary_url() {
 	local ver="$1"
-	echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+	local arch="$(get_arch)"
+	echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-${arch}.tar.gz"
 }
 
 test_suite_url() {
 	local ver="$1"
-	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+	local arch="x86_64-unknown-linux-gnu"
+	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-${arch}.tar.gz"
 }
 
 # output: 0.7.58
@@ -201,19 +220,21 @@ run_test() {
 	kill_proc databend-query
 	kill_proc databend-meta
 
-  # Wait for killed process to cleanup resources
-  sleep 1
+	# Wait for killed process to cleanup resources
+	sleep 1
 
 	echo " === Clean old meta dir"
 	rm -rf .databend/meta || echo " === no meta dir to rm"
 
 	rm nohup.out || echo "no nohup.out"
+	rm .databend/meta.log || echo "no meta.log"
+	rm .databend/query.log || echo "no query.log"
 
 	export RUST_BACKTRACE=1
 
 	echo ' === Start databend-meta...'
 
-	nohup "$metasrv" --single --log-level=DEBUG &
+	nohup "$metasrv" --single --log-level=DEBUG >meta.log 2>&1 &
 	python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
 	echo ' === Start databend-query...'
@@ -227,7 +248,7 @@ run_test() {
 		config_path="old_config/$query_config_path"
 	fi
 
-	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log &
+	nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query.log 2>&1 &
 	python3 scripts/ci/wait_tcp.py --timeout 10 --port 3307
 
 	echo " === Run metasrv related test: 05_ddl"
@@ -245,7 +266,9 @@ run_test() {
 		rm -rf "tests/sqllogictests/suites"
 		mv "./testsuite/$query_ver/suites" "tests/sqllogictests/suites"
 
-    ./testsuite/$query_ver/bin/databend-sqllogictests --handlers mysql --run_dir 05_ddl
+		# NOTE: use current sqllogictests since we only release x86_64-unknown-linux-gnu binary
+		# ./testsuite/$query_ver/bin/databend-sqllogictests --handlers mysql --run_dir 05_ddl
+		./bins/current/databend-sqllogictests --handlers mysql --run_dir 05_ddl
 		cd -
 	fi
 }
@@ -255,7 +278,7 @@ run_test() {
 chmod +x ./bins/current/*
 
 echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
-echo " === current   query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
+echo " === current query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
 
 old_query_ver=$(find_min_query_ver)
 old_metasrv_ver=$(find_min_metasrv_ver)
