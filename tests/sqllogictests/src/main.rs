@@ -230,6 +230,7 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
     if args.debug {
         client.enable_debug();
     }
+    client.set_enable_analyze_table_stats().await?;
 
     println!("Running {} test for file: {} ...", client_type, filename);
     Ok(Databend::create(client))

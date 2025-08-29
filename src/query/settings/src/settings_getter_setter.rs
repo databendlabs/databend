@@ -1068,4 +1068,8 @@ impl Settings {
     pub fn get_enable_analyze_table_stats(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_analyze_table_stats")? != 0)
     }
+
+    pub fn set_enable_analyze_table_stats(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_analyze_table_stats", val)
+    }
 }

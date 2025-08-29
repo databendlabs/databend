@@ -91,6 +91,12 @@ impl Client {
             Client::Ttc(ttcclient) => ttcclient.image.as_str(),
         }
     }
+
+    pub async fn set_enable_analyze_table_stats(&mut self) -> Result<()> {
+        self.query("set global enable_analyze_table_stats = 1")
+            .await?;
+        Ok(())
+    }
 }
 
 fn replace_rand_values(input: &str) -> Cow<'_, str> {
