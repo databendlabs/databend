@@ -82,29 +82,29 @@ impl Rule for RuleMergeLimit {
         let inner_limit: Limit = inner_limit_expr.plan().clone().try_into()?;
         let input = inner_limit_expr.child(0)?;
 
-        // Calculate the effective limit by taking the minimum
-        // When we have Limit(A, Limit(B, input)), the result should be Limit(min(A, B), input)
-        let effective_limit = if let (Some(outer_count), Some(inner_count)) =
-            (outer_limit.limit, inner_limit.limit)
-        {
-            outer_count.min(inner_count)
-        } else {
-            // If either limit is None, use the other one
-            outer_limit.limit.or(inner_limit.limit).unwrap_or(0)
+        // Merge offset: the total offset is the sum of inner and outer offsets.
+        let merged_offset = inner_limit.offset + outer_limit.offset;
+
+        // Merge limit:
+        // - If both inner and outer have limits, apply inner limit first, then outer offset, then outer limit.
+        // - If only inner has limit, apply outer offset.
+        // - If only outer has limit, use it.
+        // - If neither has limit, result is unlimited.
+        let merged_limit = match (inner_limit.limit, outer_limit.limit) {
+            (Some(inner), Some(outer)) => {
+                let after_offset = inner.saturating_sub(outer_limit.offset);
+                Some(after_offset.min(outer))
+            }
+            (Some(inner), None) => Some(inner.saturating_sub(outer_limit.offset)),
+            (None, Some(outer)) => Some(outer),
+            (None, None) => None,
         };
 
-        // Calculate the effective offset
-        // When merging Limit(limit=A, offset=X, Limit(limit=B, offset=Y, input)):
-        // - The inner offset Y is applied first
-        // - Then the outer offset X is applied
-        // - The total offset is X + Y
-        let effective_offset = outer_limit.offset + inner_limit.offset;
-
         // Create the merged limit operator
-        let merged_limit = Limit {
+        let merged_limit_op = Limit {
             before_exchange: outer_limit.before_exchange || inner_limit.before_exchange,
-            limit: Some(effective_limit),
-            offset: effective_offset,
+            limit: merged_limit,
+            offset: merged_offset,
             lazy_columns: outer_limit
                 .lazy_columns
                 .union(&inner_limit.lazy_columns)
@@ -113,7 +113,7 @@ impl Rule for RuleMergeLimit {
         };
 
         let merged_expr =
-            SExpr::create_unary(Arc::new(merged_limit.into()), Arc::new(input.clone()));
+            SExpr::create_unary(Arc::new(merged_limit_op.into()), Arc::new(input.clone()));
 
         state.add_result(merged_expr);
         Ok(())
