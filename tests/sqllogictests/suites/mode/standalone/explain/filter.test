@@ -109,7 +109,7 @@ explain select number from numbers(6) where number = 1 or number = 5 or number =
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [or_filters(numbers.number (#0) = 1, numbers.number (#0) = 5, numbers.number (#0) = 3)]
-├── estimated rows: 1.20
+├── estimated rows: 0.01
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
