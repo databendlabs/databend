@@ -76,6 +76,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     hll_accumulator: ColumnHLLAccumulator,
     state: State<B>,
 
+    ctx: Arc<dyn TableContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -98,7 +99,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
     ) -> Self {
         let table_meta = &table.table_info.meta;
         let virtual_column_accumulator = VirtualColumnAccumulator::try_create(
-            ctx,
+            ctx.clone(),
             &table_meta.schema,
             &table_meta.virtual_schema,
         );
@@ -106,6 +107,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         let default_cluster_key_id = table.cluster_key_id();
 
         TransformSerializeSegment {
+            ctx,
             input,
             output,
             output_data: None,

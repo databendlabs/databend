@@ -109,6 +109,7 @@ impl SegmentCompactMutator {
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
+        let enable_hll_statistics = self.ctx.get_settings().get_enable_table_hll_statistics()? != 0;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
             self.default_cluster_key_id,
@@ -117,6 +118,7 @@ impl SegmentCompactMutator {
             &self.data_accessor,
             &self.location_generator,
             self.table_meta_timestamps,
+            enable_hll_statistics,
         );
 
         self.compaction = compactor
@@ -180,6 +182,7 @@ pub struct SegmentCompactor<'a> {
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
     table_meta_timestamps: TableMetaTimestamps,
+    enable_hll_statistics: bool,
 }
 
 impl<'a> SegmentCompactor<'a> {
@@ -191,6 +194,7 @@ impl<'a> SegmentCompactor<'a> {
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
+        enable_hll_statistics: bool,
     ) -> Self {
         Self {
             threshold,
@@ -203,6 +207,7 @@ impl<'a> SegmentCompactor<'a> {
             location_generator,
             compacted_state: Default::default(),
             table_meta_timestamps,
+            enable_hll_statistics,
         }
     }
 
@@ -398,7 +403,7 @@ impl<'a> SegmentCompactor<'a> {
             self.operator
                 .write(&segment_stats_location, stats_data)
                 .await?;
-            if self.ctx.get_settings().get_enable_table_hll_statistics()? != 0 {
+            if self.enable_hll_statistics {
                 new_statistics.additional_stats_meta = Some(additional_stats_meta);
             } else {
                 new_statistics.additional_stats_meta = None;
