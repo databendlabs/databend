@@ -85,7 +85,8 @@ impl Rule for RuleMergeLimit {
         // Calculate the effective limit by taking the minimum
         // When we have Limit(A, Limit(B, input)), the result should be Limit(min(A, B), input)
         let effective_limit = if let (Some(outer_count), Some(inner_count)) =
-            (outer_limit.limit, inner_limit.limit) {
+            (outer_limit.limit, inner_limit.limit)
+        {
             outer_count.min(inner_count)
         } else {
             // If either limit is None, use the other one
@@ -104,13 +105,15 @@ impl Rule for RuleMergeLimit {
             before_exchange: outer_limit.before_exchange || inner_limit.before_exchange,
             limit: Some(effective_limit),
             offset: effective_offset,
-            lazy_columns: outer_limit.lazy_columns.union(&inner_limit.lazy_columns).cloned().collect(),
+            lazy_columns: outer_limit
+                .lazy_columns
+                .union(&inner_limit.lazy_columns)
+                .cloned()
+                .collect(),
         };
 
-        let merged_expr = SExpr::create_unary(
-            Arc::new(merged_limit.into()),
-            Arc::new(input.clone()),
-        );
+        let merged_expr =
+            SExpr::create_unary(Arc::new(merged_limit.into()), Arc::new(input.clone()));
 
         state.add_result(merged_expr);
         Ok(())
