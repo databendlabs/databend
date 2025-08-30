@@ -267,8 +267,8 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             }
             JoinPredicate::Both { left, right, .. } => {
                 join.equi_conditions.push(JoinEquiCondition::new(
-                    left.clone(),
-                    right.clone(),
+                    left.into_owned(),
+                    right.into_owned(),
                     false,
                 ));
             }

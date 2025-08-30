@@ -97,10 +97,16 @@ impl<'a> SelectivityEstimator<'a> {
                 left_selectivity.min(right_selectivity)
             }
 
-            ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0], false)?;
-                let right_selectivity = self.compute_selectivity(&func.arguments[1], false)?;
-                left_selectivity + right_selectivity - left_selectivity * right_selectivity
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+            {
+                func.arguments
+                    .iter()
+                    .map(|arg| self.compute_selectivity(arg, false))
+                    .try_fold(0.0, |acc, p| {
+                        let p = p?;
+                        Result::Ok(acc + p - acc * p)
+                    })?
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "not" => {

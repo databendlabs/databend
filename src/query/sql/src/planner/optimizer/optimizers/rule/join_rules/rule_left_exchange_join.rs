@@ -152,8 +152,8 @@ impl Rule for RuleLeftExchangeJoin {
                 } => {
                     if is_equal_op {
                         join_3.equi_conditions.push(JoinEquiCondition::new(
-                            left.clone(),
-                            right.clone(),
+                            left.into_owned(),
+                            right.into_owned(),
                             false,
                         ));
                     } else {
@@ -188,8 +188,8 @@ impl Rule for RuleLeftExchangeJoin {
                 } => {
                     if is_equal_op {
                         join_4.equi_conditions.push(JoinEquiCondition::new(
-                            left.clone(),
-                            right.clone(),
+                            left.into_owned(),
+                            right.into_owned(),
                             false,
                         ));
                     } else {

@@ -79,7 +79,9 @@ fn predicate_scalar(scalar: &ScalarExpr) -> PredicateScalar {
             }
             PredicateScalar::And(and_args)
         }
-        ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
+        ScalarExpr::FunctionCall(func)
+            if matches!(func.func_name.as_str(), "or" | "or_filters") =>
+        {
             let mut or_args = vec![];
             for argument in func.arguments.iter() {
                 // Recursively flatten the OR expressions.

@@ -771,9 +771,9 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
     }
 
-    pub fn visit_func(&self, func_name: &str, visitor: &mut impl FnMut(&FunctionCall<Index>)) {
+    pub fn visit_func(&self, func_names: &[&str], visitor: &mut impl FnMut(&FunctionCall<Index>)) {
         struct Visitor<'a, Index: ColumnIndex, F: FnMut(&FunctionCall<Index>)> {
-            name: String,
+            names: &'a [&'a str],
             visitor: &'a mut F,
             _marker: std::marker::PhantomData<Index>,
         }
@@ -785,7 +785,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                 &mut self,
                 call: &FunctionCall<Index>,
             ) -> Result<Option<Expr<Index>>, Self::Error> {
-                if call.function.signature.name == self.name {
+                if self.names.contains(&call.function.signature.name.as_str()) {
                     (self.visitor)(call);
                 }
                 Self::visit_function_call(call, self)
@@ -793,7 +793,7 @@ impl<Index: ColumnIndex> Expr<Index> {
         }
 
         visit_expr(self, &mut Visitor {
-            name: func_name.to_string(),
+            names: func_names,
             visitor,
             _marker: std::marker::PhantomData,
         })

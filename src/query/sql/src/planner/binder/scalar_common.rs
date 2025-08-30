@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::RelationalProperty;
 use crate::plans::walk_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
+use crate::plans::ConstantExpr;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
@@ -111,11 +115,30 @@ pub enum JoinPredicate<'a> {
     Left(&'a ScalarExpr),
     Right(&'a ScalarExpr),
     Both {
-        left: &'a ScalarExpr,
-        right: &'a ScalarExpr,
+        left: Box<Cow<'a, ScalarExpr>>,
+        right: Box<Cow<'a, ScalarExpr>>,
         is_equal_op: bool,
     },
     Other(&'a ScalarExpr),
+}
+
+fn fold_or_arguments(iter: impl Iterator<Item = ScalarExpr>) -> ScalarExpr {
+    iter.fold(
+        ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(false),
+        }
+        .into(),
+        |acc, arg| {
+            FunctionCall {
+                span: None,
+                func_name: "or".to_string(),
+                params: vec![],
+                arguments: vec![acc, arg.clone()],
+            }
+            .into()
+        },
+    )
 }
 
 impl<'a> JoinPredicate<'a> {
@@ -128,7 +151,35 @@ impl<'a> JoinPredicate<'a> {
             return Self::ALL(scalar);
         }
 
+        if satisfied_by(scalar, left_prop) {
+            return Self::Left(scalar);
+        }
+
+        if satisfied_by(scalar, right_prop) {
+            return Self::Right(scalar);
+        }
+
         if let ScalarExpr::FunctionCall(func) = scalar {
+            if func.func_name == "or_filters" && func.arguments.len() > 1 {
+                let mut left_exprs = Vec::new();
+                let mut right_exprs = Vec::new();
+
+                for expr in func.arguments.iter() {
+                    if satisfied_by(expr, left_prop) {
+                        left_exprs.push(expr.clone());
+                    } else if satisfied_by(expr, right_prop) {
+                        right_exprs.push(expr.clone());
+                    } else {
+                        return Self::Other(scalar);
+                    }
+                }
+                return Self::Both {
+                    left: Box::new(Cow::Owned(fold_or_arguments(left_exprs.into_iter()))),
+                    right: Box::new(Cow::Owned(fold_or_arguments(right_exprs.into_iter()))),
+                    is_equal_op: false,
+                };
+            }
+
             if func.arguments.len() > 2 {
                 return Self::Other(scalar);
             }
@@ -140,28 +191,20 @@ impl<'a> JoinPredicate<'a> {
 
                 if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
                     return Self::Both {
-                        left,
-                        right,
+                        left: Box::new(Cow::Borrowed(left)),
+                        right: Box::new(Cow::Borrowed(right)),
                         is_equal_op,
                     };
                 }
 
                 if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
                     return Self::Both {
-                        left: right,
-                        right: left,
+                        left: Box::new(Cow::Borrowed(right)),
+                        right: Box::new(Cow::Borrowed(left)),
                         is_equal_op,
                     };
                 }
             }
-        }
-
-        if satisfied_by(scalar, left_prop) {
-            return Self::Left(scalar);
-        }
-
-        if satisfied_by(scalar, right_prop) {
-            return Self::Right(scalar);
         }
 
         Self::Other(scalar)

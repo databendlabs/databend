@@ -113,7 +113,7 @@ impl FilterHelpers {
                     // for the equality columns set,let's call `ecs`
                     // if any side of `or` of the name columns is not in `ecs`, it's valid
                     // otherwise, it's invalid
-                    expr.visit_func("or", &mut |call| {
+                    expr.visit_func(&["or", "or_filters"], &mut |call| {
                         for arg in call.args.iter() {
                             let mut ecs = HashSet::new();
                             arg.find_function_literals("eq", &mut |col_name, _scalar, _| {

@@ -156,8 +156,8 @@ impl SubqueryDecorrelatorOptimizer {
                     ..
                 } => {
                     if is_equal_op {
-                        left_conditions.push(left.clone());
-                        right_conditions.push(right.clone());
+                        left_conditions.push(left.into_owned());
+                        right_conditions.push(right.into_owned());
                     } else {
                         non_equi_conditions.push(pred.clone());
                     }
