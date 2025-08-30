@@ -1,0 +1,21 @@
+name: "Test compat client"
+description: "Running client compat tests in standalone mode"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: meta,query
+
+    - uses: wntrblm/nox@2025.05.01
+
+    - name: Run databend with Standalone mode
+      shell: bash
+      env:
+        STORAGE_ALLOW_INSECURE: true
+      run: bash ./scripts/ci/deploy/databend-query-standalone.sh
+
+    - name: Run test
+      shell: bash
+      run: nox -f tests/nox/noxfile.py
