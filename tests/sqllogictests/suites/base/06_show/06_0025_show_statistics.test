@@ -42,6 +42,9 @@ statement ok
 set enable_analyze_histogram=1;
 
 statement ok
+set enable_analyze_table_stats = 1;
+
+statement ok
 analyze table showstatistics.t2;
 
 query T
