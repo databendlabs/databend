@@ -32,6 +32,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 use geo::Geometry;
@@ -116,9 +117,17 @@ pub enum Value<T: AccessType> {
 
 /// Note:
 /// We must modify IndexScalar if we modify Scalar
-#[frozen_api("06814cf3")]
+#[frozen_api("15c9e299")]
 #[derive(
-    Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
+    Debug,
+    Clone,
+    EnumAsInner,
+    Eq,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    FrozenAPI,
 )]
 pub enum Scalar {
     Null,
