@@ -42,6 +42,8 @@ async fn test_metrics() -> anyhow::Result<()> {
     // record some metrics to make the registry get initialized
     server_metrics::incr_leader_change();
     network_metrics::incr_recv_bytes(1);
+    network_metrics::sample_rpc_read_delay(std::time::Duration::from_millis(10));
+    network_metrics::sample_rpc_write_delay(std::time::Duration::from_millis(20));
     raft_metrics::network::incr_recvfrom_bytes("addr".to_string(), 1);
     raft_metrics::storage::incr_raft_storage_fail("fun", true);
 
@@ -271,6 +273,16 @@ async fn test_metrics() -> anyhow::Result<()> {
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_bucket"));
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_count"));
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_sum"));
+
+    // Meta network RPC read delay metrics (milliseconds)
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_read_ms_bucket"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_read_ms_count"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_read_ms_sum"));
+
+    // Meta network RPC write delay metrics (milliseconds)
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_write_ms_bucket"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_write_ms_count"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_write_ms_sum"));
 
     // Raft network metrics
     assert!(metric_keys.contains("metasrv_raft_network_active_peers"));
