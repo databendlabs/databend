@@ -23,3 +23,8 @@ trybuild = "1.0"
 
 [package.metadata.cargo-machete]
 ignored = ["hex", "proc-macro2", "quote", "sha2", "syn"]
+
+# Nextest configuration to handle proc-macro crates properly
+[package.metadata.nextest]
+# Use single-threaded execution for proc-macro crates to avoid linking issues
+test-threads = 1
