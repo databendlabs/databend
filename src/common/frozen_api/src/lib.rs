@@ -20,60 +20,32 @@
 //!
 //! ```rust
 //! use databend_common_frozen_api::frozen_api;
+//! use databend_common_frozen_api::FrozenAPI;
 //!
-//! // First time: use dummy hash to get real one
-//! #[frozen_api("dummy")]
-//! struct CriticalStruct {
-//!     field: i32,
+//! // Child structs: must derive FrozenAPI
+//! #[derive(FrozenAPI)]
+//! struct TableMeta {
+//!     size: u64,
+//!     row_count: u64,
 //! }
-//! // Compile error shows: Update hash to 'a1b2c3d4' if change is intentional.
 //!
-//! // Apply protection with real hash
+//! // Root struct: frozen_api + derive FrozenAPI, all fields must be FrozenAPI too
 //! #[frozen_api("a1b2c3d4")]
-//! struct CriticalStruct {
-//!     field: i32,
-//! }
-//! // Now any changes require updating the hash!
-//! ```
-//!
-//! ## What Gets Detected
-//!
-//! - Field names, types, order
-//! - Visibility modifiers  
-//! - Type names (including nested types)
-//! - Generic parameters
-//!
-//! ## Dependency Chain Protection
-//!
-//! This implementation enforces **layered protection**: when you use `#[frozen_api]` on a struct,
-//! all custom types it references must also be protected with `#[frozen_api]`.
-//!
-//! ### How it works:
-//! - Each struct protects its own direct structure
-//! - Dependency validation ensures no "protection gaps"  
-//! - Changes anywhere in the chain require explicit approval
-//! - Smart error messages guide impact assessment
-//!
-//! ### Example workflow:
-//! ```rust
-//! #[frozen_api("hash1")]
-//! struct CoreData {
-//!     field: i32,
-//! }
-//! #[frozen_api("hash2")]
-//! struct Config {
-//!     core: CoreData,
-//! }
-//! #[frozen_api("hash3")]
-//! struct App {
-//!     config: Config,
+//! #[derive(FrozenAPI)]
+//! struct SnapshotFormat {
+//!     version: u32,
+//!     tables: Vec<TableMeta>, // TableMeta must derive FrozenAPI or compile error
 //! }
 //! ```
-//! When `CoreData` changes → update hash1 → check/update Config → check/update App
 //!
-//! This ensures comprehensive protection while maintaining clear responsibility boundaries.
-
-use std::collections::HashSet;
+//! ## Complete Protection Chain
+//!
+//! - Enforces that ALL custom types in a frozen_api struct derive FrozenAPI
+//! - Prevents accidental omission of protection on dependencies
+//! - Compile error if any field type lacks FrozenAPI derive
+//! - Automatic cascading: any change in the dependency tree breaks parent hash
+//!
+//! **Rule**: If struct uses `#[frozen_api]`, it and ALL its custom field types must `#[derive(FrozenAPI)]`.
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -81,75 +53,144 @@ use quote::ToTokens;
 use sha2::Digest;
 use sha2::Sha256;
 use syn::parse_macro_input;
+use syn::Data;
 use syn::DeriveInput;
 use syn::Fields;
 use syn::LitStr;
 use syn::Type;
 
-/// Extract custom type names that need frozen_api protection
-fn extract_custom_dependencies(input: &DeriveInput) -> Vec<String> {
-    let mut deps = HashSet::new();
+/// Compile-time API freezing macro that prevents accidental breaking changes.
+#[proc_macro_attribute]
+pub fn frozen_api(args: TokenStream, input: TokenStream) -> TokenStream {
+    let expected = parse_macro_input!(args as LitStr).value();
+    let input_struct = parse_macro_input!(input as DeriveInput);
 
-    if let syn::Data::Struct(data_struct) = &input.data {
-        match &data_struct.fields {
-            Fields::Named(fields) => {
-                for field in &fields.named {
-                    extract_custom_types(&field.ty, &mut deps);
-                }
-            }
-            Fields::Unnamed(fields) => {
-                for field in &fields.unnamed {
-                    extract_custom_types(&field.ty, &mut deps);
-                }
-            }
-            Fields::Unit => {}
+    let validation_code = generate_frozenapi_validation(&input_struct);
+    let actual = compute_struct_hash(&input_struct);
+
+    let mut const_body = validation_code;
+
+    if actual != expected {
+        let struct_name = &input_struct.ident;
+        let dependency_info = if has_frozen_api_dependencies(&input_struct) {
+            " (or its FrozenAPI dependencies)"
+        } else {
+            ""
+        };
+
+        let error_msg = format!(
+            "⚠️  BREAKING CHANGE DETECTED: '{}' modified{}\n\
+             Expected: {expected} | Actual: {actual}\n\
+             Fix: Update hash to '{}' if change is intentional\n\
+             Impact: Serialization compatibility may break",
+            struct_name, dependency_info, actual
+        );
+
+        const_body.extend(quote! {
+            compile_error!(#error_msg);
+        });
+    }
+
+    quote! {
+        #input_struct
+
+        const _: () = {
+            #const_body
+        };
+    }
+    .into()
+}
+
+/// Derive macro to mark structs as participating in frozen API hash calculation.
+#[proc_macro_derive(FrozenAPI)]
+pub fn derive_frozen_api(input: TokenStream) -> TokenStream {
+    let input_struct = parse_macro_input!(input as DeriveInput);
+    let struct_name = &input_struct.ident;
+
+    let hash_value = compute_struct_hash(&input_struct);
+
+    quote! {
+        impl #struct_name {
+            #[doc(hidden)]
+            pub const __FROZEN_API_HASH: &'static str = #hash_value;
+        }
+    }
+    .into()
+}
+
+/// Compute hash for structure definition
+fn compute_struct_hash(input: &DeriveInput) -> String {
+    let struct_repr = input.to_token_stream().to_string();
+    hex::encode(&Sha256::digest(struct_repr)[..4])
+}
+
+/// Generate compile-time validation that all custom field types have __FROZEN_API_HASH
+fn generate_frozenapi_validation(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let mut validations = Vec::new();
+
+    if let Data::Struct(data_struct) = &input.data {
+        let fields = match &data_struct.fields {
+            Fields::Named(f) => f.named.iter().collect(),
+            Fields::Unnamed(f) => f.unnamed.iter().collect(),
+            Fields::Unit => vec![],
+        };
+
+        for field in fields {
+            collect_custom_type_validations(&field.ty, &mut validations);
         }
     }
 
-    let mut result: Vec<String> = deps.into_iter().collect();
-    result.sort();
-    result
+    quote! { #(#validations)* }
 }
 
-/// Extract custom type names from field types (excluding built-in types)
-fn extract_custom_types(ty: &Type, deps: &mut HashSet<String>) {
+/// Recursively collect validation for custom types (handles Vec<T>, Option<T>, etc.)
+fn collect_custom_type_validations(ty: &Type, validations: &mut Vec<proc_macro2::TokenStream>) {
     match ty {
         Type::Path(type_path) => {
-            for segment in &type_path.path.segments {
+            if let Some(segment) = type_path.path.segments.last() {
                 let type_name = segment.ident.to_string();
-                if !is_builtin_type(&type_name) {
-                    deps.insert(type_name);
+
+                // Check if this is a custom type (not a generic container)
+                if is_custom_type(&type_name) {
+                    // Skip validation for tuple types in paths as they're handled separately
+                    let path_str = quote!(#type_path).to_string();
+                    if !path_str.starts_with('(') && !path_str.contains(',') {
+                        validations.push(quote! {
+                            let _: &'static str = #type_path::__FROZEN_API_HASH;
+                        });
+                    }
                 }
 
-                // Handle generic parameters
+                // Handle generic arguments recursively (Vec<CustomType>, Option<CustomType>, etc.)
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
-                        if let syn::GenericArgument::Type(inner_ty) = arg {
-                            extract_custom_types(inner_ty, deps);
+                        if let syn::GenericArgument::Type(inner_type) = arg {
+                            collect_custom_type_validations(inner_type, validations);
                         }
                     }
                 }
             }
         }
-        Type::Reference(type_ref) => {
-            extract_custom_types(&type_ref.elem, deps);
-        }
-        Type::Array(type_array) => {
-            extract_custom_types(&type_array.elem, deps);
-        }
-        Type::Tuple(type_tuple) => {
-            for elem in &type_tuple.elems {
-                extract_custom_types(elem, deps);
+        Type::Tuple(tuple) => {
+            // Skip validation for tuple types themselves as they are built-in composite types
+            for elem in &tuple.elems {
+                collect_custom_type_validations(elem, validations);
             }
         }
-        _ => {}
+        Type::Array(array) => {
+            collect_custom_type_validations(&array.elem, validations);
+        }
+        Type::Slice(slice) => {
+            collect_custom_type_validations(&slice.elem, validations);
+        }
+        _ => {} // Other types don't need validation
     }
 }
 
-/// Check if a type is a built-in Rust type that doesn't need frozen_api protection
-fn is_builtin_type(type_name: &str) -> bool {
-    matches!(
-        type_name,
+/// Check if a type name represents a custom (non-built-in) type
+fn is_custom_type(name: &str) -> bool {
+    !matches!(
+        name,
         "i8" | "i16"
             | "i32"
             | "i64"
@@ -170,106 +211,83 @@ fn is_builtin_type(type_name: &str) -> bool {
             | "Vec"
             | "Option"
             | "Result"
+            | "Box"
+            | "Rc"
+            | "Arc"
             | "HashMap"
             | "HashSet"
             | "BTreeMap"
             | "BTreeSet"
-            | "Box"
-            | "Rc"
-            | "Arc"
-            | "Cell"
-            | "RefCell"
-            | "Cow"
-            | "Path"
-            | "PathBuf"
-            | "OsString"
-            | "OsStr"
-            | "DateTime"
-            | "Utc"
+            | "VecDeque"
+            | "LinkedList"
+            | "ColumnId"
+            | "FieldIndex"
+            | "FormatVersion"
             | "Uuid"
-        // Databend stable foundation types (simple type aliases only)
-            | "ColumnId"           // u32 - simple column identifier
-            | "FormatVersion"      // u64 - version number
-            | "SnapshotId"         // Uuid - snapshot identifier
-            | "RawBlockHLL"        // Vec<u8> - raw HLL data
-            | "ClusterKey"         // (u32, String) - cluster key tuple
-            | "NativeColumnMeta"   // External crate type - complex but stable
-            | "Histogram"          // Complex struct - statistical data
-            | "MetaHLL"            // Complex struct - HyperLogLog implementation
-            | "VariantDataType"    // Recursive enum - variant type definition
-            | "Location" // (String, FormatVersion) - storage location tuple
+            | "Utc"
+            | "MetaHLL"
+            | "Histogram"
+            | "RawBlockHLL"
+            | "VariantDataType"
+            | "DateTime"
+            | "Location"
+            | "ClusterKey"
+            | "StatisticsOfColumns"
+            | "BlockHLL"
+            | "SnapshotId"
     )
 }
 
-/// Compute hash of the struct definition
-fn compute_struct_hash(input: &DeriveInput) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(input.to_token_stream().to_string());
-    hex::encode(&hasher.finalize()[..4])
-}
-
-/// Generate dependency validation code
-fn generate_dependency_checks(dependencies: &[String]) -> proc_macro2::TokenStream {
-    let dep_idents: Vec<_> = dependencies
-        .iter()
-        .map(|dep| syn::Ident::new(dep, proc_macro2::Span::call_site()))
-        .collect();
-
-    quote! {
-        const _: () = {
-            #(
-                const _: bool = #dep_idents::__FROZEN_API_PROTECTED;
-            )*
-        };
-    }
-}
-
-/// Compile-time API freezing macro that prevents accidental breaking changes.
-#[proc_macro_attribute]
-pub fn frozen_api(args: TokenStream, input: TokenStream) -> TokenStream {
-    let expected = parse_macro_input!(args as LitStr).value();
-    let input_struct = parse_macro_input!(input as DeriveInput);
-    let struct_name = &input_struct.ident;
-
-    let actual = compute_struct_hash(&input_struct);
-
-    if actual != expected {
-        let custom_dependencies = extract_custom_dependencies(&input_struct);
-        let dependency_info = if custom_dependencies.is_empty() {
-            String::new()
-        } else {
-            format!("\nDependencies: {}", custom_dependencies.join(" → "))
+/// Check if struct has any FrozenAPI dependencies
+fn has_frozen_api_dependencies(input: &DeriveInput) -> bool {
+    if let Data::Struct(data_struct) = &input.data {
+        let fields = match &data_struct.fields {
+            Fields::Named(f) => f.named.iter().collect(),
+            Fields::Unnamed(f) => f.unnamed.iter().collect(),
+            Fields::Unit => vec![],
         };
 
-        let error_msg = format!(
-            "⚠️  BREAKING CHANGE DETECTED: '{}' modified{}\n\
-             Expected: {expected} | Actual: {actual}\n\
-             Fix: Update hash to '{}' if change is intentional\n\
-             Impact: Serialization compatibility may break",
-            struct_name, dependency_info, actual
-        );
-
-        return syn::Error::new_spanned(&input_struct.ident, error_msg)
-            .to_compile_error()
-            .into();
-    }
-
-    let custom_dependencies = extract_custom_dependencies(&input_struct);
-    let dependency_checks = if !custom_dependencies.is_empty() {
-        generate_dependency_checks(&custom_dependencies)
-    } else {
-        quote! {}
-    };
-
-    quote! {
-        #input_struct
-
-        impl #struct_name {
-            #[doc(hidden)]
-            pub const __FROZEN_API_PROTECTED: bool = true;
+        for field in fields {
+            if has_custom_types_in_field(&field.ty) {
+                return true;
+            }
         }
-
-        #dependency_checks
     }
-    .into()
+    false
+}
+
+/// Check if a type contains custom types (potentially FrozenAPI)
+fn has_custom_types_in_field(ty: &Type) -> bool {
+    match ty {
+        Type::Path(type_path) => {
+            if let Some(segment) = type_path.path.segments.last() {
+                let type_name = segment.ident.to_string();
+                if is_custom_type(&type_name) {
+                    return true;
+                }
+
+                // Check generic arguments
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        if let syn::GenericArgument::Type(inner_type) = arg {
+                            if has_custom_types_in_field(inner_type) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Type::Tuple(tuple) => {
+            for elem in &tuple.elems {
+                if has_custom_types_in_field(elem) {
+                    return true;
+                }
+            }
+        }
+        Type::Array(array) => return has_custom_types_in_field(&array.elem),
+        Type::Slice(slice) => return has_custom_types_in_field(&slice.elem),
+        _ => {}
+    }
+    false
 }

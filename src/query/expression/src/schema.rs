@@ -21,6 +21,7 @@ use std::sync::LazyLock;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -224,8 +225,7 @@ impl VirtualDataSchema {
     }
 }
 
-#[frozen_api("4c79997f")]
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
 pub enum ComputedExpr {
     Virtual(String),
     Stored(String),
@@ -253,8 +253,8 @@ fn uninit_column_id() -> ColumnId {
     0
 }
 
-#[frozen_api("37e32a7b")]
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[frozen_api("5a8ceb3e")]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, FrozenAPI)]
 pub struct TableSchema {
     pub fields: Vec<TableField>,
     pub metadata: BTreeMap<String, String>,
@@ -263,8 +263,7 @@ pub struct TableSchema {
     pub next_column_id: ColumnId,
 }
 
-#[frozen_api("92566e3d")]
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
 pub struct TableField {
     pub name: String,
     pub default_expr: Option<String>,
@@ -276,8 +275,7 @@ pub struct TableField {
 
 /// DataType with more information that is only available for table field, e.g, the
 /// tuple field name, or the scale of decimal.
-#[frozen_api("5f675717")]
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
 pub enum TableDataType {
     Null,
     EmptyArray,
