@@ -88,6 +88,10 @@ impl PhysicalPlanBuilder {
             RelOperator::Filter(filter) => {
                 self.build_filter(s_expr, filter, required, stat_info).await
             }
+            RelOperator::SecureFilter(secure_filter) => {
+                self.build_secure_filter(s_expr, secure_filter, required, stat_info)
+                    .await
+            }
             RelOperator::Aggregate(agg) => {
                 self.build_aggregate(s_expr, agg, required, stat_info).await
             }

@@ -93,6 +93,7 @@ macro_rules! impl_match_rel_op {
             RelOperator::Join($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Filter($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::SecureFilter($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Limit($rel_op) => $rel_op.$method($($arg),*),

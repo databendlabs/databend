@@ -399,6 +399,7 @@ impl DPhpyOptimizer {
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
             | RelOperator::Filter(_)
+            | RelOperator::SecureFilter(_)
             | RelOperator::MaterializedCTE(_) => {
                 self.process_unary_node(s_expr, join_conditions, join_child, join_relation)
                     .await
