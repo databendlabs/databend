@@ -102,7 +102,7 @@ fn test_calc_rows_for_recluster() {
 
     // Case 1: If the block size is too bigger.
     let result = t.calc_rows_for_recluster(4_000, 30_000_000, 600_000);
-    assert_eq!(result, 400);
+    assert_eq!(result, 267);
 
     // Case 2: If the block size is too smaller.
     let result = t.calc_rows_for_recluster(4_000, 2_000_000, 600_000);

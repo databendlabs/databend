@@ -912,7 +912,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of table recluster.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
