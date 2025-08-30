@@ -85,22 +85,6 @@ async fn test_metrics() -> anyhow::Result<()> {
     // metasrv_meta_network_rpc_delay_ms_bucket{le="60000.0"} 0
     // metasrv_meta_network_rpc_delay_ms_count 0
     // metasrv_meta_network_rpc_delay_ms_sum 0.0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="+Inf"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="1.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="10.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="2.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="20.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="3.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="30.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="4.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="5.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="6.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="60.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="7.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="8.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_bucket{le="9.0"} 0
-    // metasrv_meta_network_rpc_delay_seconds_count 0
-    // metasrv_meta_network_rpc_delay_seconds_sum 0.0
     // metasrv_meta_network_sent_bytes_total 0
     // metasrv_meta_network_stream_get_item_sent_total 0
     // metasrv_meta_network_stream_list_item_sent_total 0
@@ -287,11 +271,6 @@ async fn test_metrics() -> anyhow::Result<()> {
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_bucket"));
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_count"));
     assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_sum"));
-
-    // Meta network RPC delay metrics (seconds)
-    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_bucket"));
-    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_count"));
-    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_sum"));
 
     // Raft network metrics
     assert!(metric_keys.contains("metasrv_raft_network_active_peers"));

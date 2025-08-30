@@ -807,7 +807,6 @@ pub mod network_metrics {
 
     #[derive(Debug)]
     struct NetworkMetrics {
-        rpc_delay_seconds: Histogram,
         rpc_delay_ms: Histogram,
         sent_bytes: Counter,
         recv_bytes: Counter,
@@ -834,12 +833,6 @@ pub mod network_metrics {
     impl NetworkMetrics {
         pub fn init() -> Self {
             let metrics = Self {
-                rpc_delay_seconds: Histogram::new(
-                    vec![
-                        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 60.0,
-                    ]
-                    .into_iter(),
-                ),
                 rpc_delay_ms: Histogram::new(
                     vec![
                         1.0, 2.0, 3.0, 4.0, 5.0, 7.0, //
@@ -865,11 +858,6 @@ pub mod network_metrics {
             };
 
             let mut registry = load_global_registry();
-            registry.register(
-                key!("rpc_delay_seconds"),
-                "rpc delay seconds",
-                metrics.rpc_delay_seconds.clone(),
-            );
             registry.register(
                 key!("rpc_delay_ms"),
                 "rpc delay milliseconds",
@@ -923,7 +911,6 @@ pub mod network_metrics {
     static NETWORK_METRICS: LazyLock<NetworkMetrics> = LazyLock::new(NetworkMetrics::init);
 
     pub fn sample_rpc_delay(d: Duration) {
-        NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());
         NETWORK_METRICS.rpc_delay_ms.observe(d.as_millis() as f64);
     }
 
