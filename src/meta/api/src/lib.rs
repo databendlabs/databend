@@ -28,7 +28,6 @@ pub mod name_id_value_api;
 pub mod name_value_api;
 pub mod reply;
 mod schema_api;
-mod schema_api_impl;
 mod schema_api_test_suite;
 mod sequence_api;
 pub(crate) mod testing;
