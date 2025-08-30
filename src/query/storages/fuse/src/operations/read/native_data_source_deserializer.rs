@@ -653,7 +653,7 @@ impl NativeDeserializeDataTransform {
                 let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
                 let probe_column = probe_block.get_last_column().clone();
                 // Apply the filter to the probe column.
-                ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+                ExprBloomFilter::new(filter).apply(probe_column, &mut bitmap)?;
 
                 let unset_bits = bitmap.null_count();
                 if unset_bits == bitmap.len() {
