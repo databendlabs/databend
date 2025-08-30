@@ -12,12 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+use std::cmp;
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::Arc;
 
+use arrow_csv::reader::Format;
+use arrow_json::reader::infer_json_schema_from_iterator;
+use arrow_json::reader::ValueIter;
+use arrow_schema::ArrowError;
+use arrow_schema::Schema as ArrowSchema;
+use bytes::BufMut;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
@@ -26,7 +37,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
-use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -37,24 +48,29 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::Object;
+use opendal::Operator;
 use opendal::Scheme;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
 
-pub(crate) struct ParquetInferSchemaSource {
+const DEFAULT_BYTES: u64 = 10;
+const MAX_ZIP_FILE_SIZE: u64 = 20 * 1024 * 1024;
+const MAX_COMPRESS_FILE_SIZE: u64 = 100 * 1024 * 1024;
+
+pub(crate) struct InferSchemaSource {
     is_finished: bool,
     ctx: Arc<dyn TableContext>,
     args_parsed: InferSchemaArgsParsed,
 }
 
-impl ParquetInferSchemaSource {
+impl InferSchemaSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         args_parsed: InferSchemaArgsParsed,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ParquetInferSchemaSource {
+        AsyncSourcer::create(ctx.clone(), output, InferSchemaSource {
             is_finished: false,
             ctx,
             args_parsed,
@@ -63,7 +79,7 @@ impl ParquetInferSchemaSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for ParquetInferSchemaSource {
+impl AsyncSource for InferSchemaSource {
     const NAME: &'static str = INFER_SCHEMA;
 
     #[async_backtrace::framed]
@@ -127,9 +143,9 @@ impl AsyncSource for ParquetInferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        let schema = match (first_file.as_ref(), file_format_params.get_type()) {
+        let schema = match (first_file.as_ref(), file_format_params) {
             (None, _) => return Ok(None),
-            (Some(first_file), StageFileFormatType::Parquet) => {
+            (Some(first_file), FileFormatParams::Parquet(_)) => {
                 let arrow_schema = read_parquet_schema_async_rs(
                     &operator,
                     &first_file.path,
@@ -138,9 +154,61 @@ impl AsyncSource for ParquetInferSchemaSource {
                 .await?;
                 TableSchema::try_from(&arrow_schema)?
             }
+            (Some(first_file), FileFormatParams::Csv(params)) => {
+                let escape = if params.escape.is_empty() {
+                    None
+                } else {
+                    Some(params.escape.as_bytes()[0])
+                };
+
+                let mut format = Format::default()
+                    .with_delimiter(params.field_delimiter.as_bytes()[0])
+                    .with_quote(params.quote.as_bytes()[0])
+                    .with_header(params.headers != 0);
+                if let Some(escape) = escape {
+                    format = format.with_escape(escape);
+                }
+
+                let arrow_schema = read_metadata_async(
+                    &first_file.path,
+                    &operator,
+                    Some(first_file.size),
+                    self.args_parsed.max_records,
+                    |reader, max_record| format.infer_schema(reader, max_record).map_err(Some),
+                )
+                .await?;
+                TableSchema::try_from(&arrow_schema)?
+            }
+            (Some(first_file), FileFormatParams::NdJson(_)) => {
+                let arrow_schema = read_metadata_async(
+                    &first_file.path,
+                    &operator,
+                    Some(first_file.size),
+                    self.args_parsed.max_records,
+                    |reader, max_record| {
+                        let mut records = ValueIter::new(reader, max_record);
+
+                        let schema = if let Some(max_record) = max_record {
+                            let mut tmp: Vec<std::result::Result<_, ArrowError>> =
+                                Vec::with_capacity(max_record);
+
+                            for result in records {
+                                tmp.push(Ok(result.map_err(|_| None)?));
+                            }
+                            infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)?
+                        } else {
+                            infer_json_schema_from_iterator(&mut records).map_err(Some)?
+                        };
+
+                        Ok((schema, 0))
+                    },
+                )
+                .await?;
+                TableSchema::try_from(&arrow_schema)?
+            }
             _ => {
                 return Err(ErrorCode::BadArguments(
-                    "infer_schema is currently limited to format Parquet",
+                    "infer_schema is currently limited to format Parquet, CSV and NDJSON",
                 ));
             }
         };
@@ -166,5 +234,81 @@ impl AsyncSource for ParquetInferSchemaSource {
             UInt64Type::from_data(order_ids),
         ]);
         Ok(Some(block))
+    }
+}
+
+pub async fn read_metadata_async<
+    F: Fn(
+        Cursor<&[u8]>,
+        Option<usize>,
+    ) -> std::result::Result<(ArrowSchema, usize), Option<ArrowError>>,
+>(
+    path: &str,
+    operator: &Operator,
+    file_size: Option<u64>,
+    max_records: Option<usize>,
+    func_infer_schema: F,
+) -> Result<ArrowSchema> {
+    let file_size = match file_size {
+        None => operator.stat(path).await?.content_length(),
+        Some(n) => n,
+    };
+    let algo = CompressAlgorithm::from_path(path);
+    let fn_check_data_size = |size: u64| {
+        if (matches!(algo, Some(CompressAlgorithm::Zip)) && size > MAX_ZIP_FILE_SIZE)
+            || size > MAX_COMPRESS_FILE_SIZE
+        {
+            return Err(ErrorCode::InvalidCompressionData(
+                "Compression data is too large",
+            ));
+        }
+        Ok(())
+    };
+
+    fn_check_data_size(file_size)?;
+    let mut buf = Vec::new();
+    let mut offset: u64 = 0;
+    let mut chunk_size: u64 =
+        if max_records.is_none() || matches!(algo, Some(CompressAlgorithm::Zip)) {
+            file_size
+        } else {
+            DEFAULT_BYTES
+        };
+
+    loop {
+        let end = cmp::min(offset + chunk_size, file_size);
+
+        let chunk = operator.read_with(path).range(offset..end).await?;
+        buf.put(chunk);
+
+        offset = end;
+
+        let bytes = if let Some(algo) = algo {
+            let decompress_bytes = if CompressAlgorithm::Zip == algo {
+                DecompressDecoder::decompress_all_zip(&buf)?
+            } else {
+                DecompressDecoder::new(algo).decompress_batch(&buf)?
+            };
+            Cow::Owned(decompress_bytes)
+        } else {
+            Cow::Borrowed(&buf)
+        };
+        fn_check_data_size(bytes.len() as u64)?;
+
+        if !bytes.is_empty() || offset >= file_size {
+            match func_infer_schema(Cursor::new(bytes.as_slice()), max_records) {
+                Ok((schema, _)) => {
+                    return Ok(schema);
+                }
+                Err(Some(err)) => {
+                    if matches!(err, ArrowError::CsvError(_)) && offset < file_size {
+                        continue;
+                    }
+                    return Err(ErrorCode::from(err));
+                }
+                Err(None) => (),
+            }
+        }
+        chunk_size = cmp::min(chunk_size * 2, file_size - offset);
     }
 }
