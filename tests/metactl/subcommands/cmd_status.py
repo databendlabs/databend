@@ -49,15 +49,15 @@ def verify_status_format(result):
 
     # Check if Node info exists with expected format
     node_pattern = r"Node: id=\d+ raft=.+:\d+"
-    assert re.search(node_pattern, result), (
-        "Node format should match 'id=X raft=host:port'"
-    )
+    assert re.search(
+        node_pattern, result
+    ), "Node format should match 'id=X raft=host:port'"
 
     # Check LastApplied format
     last_applied_pattern = r"LastApplied: T\d+-N\d+\.\d+"
-    assert re.search(last_applied_pattern, result), (
-        "LastApplied should match 'TX-NX.X' format"
-    )
+    assert re.search(
+        last_applied_pattern, result
+    ), "LastApplied should match 'TX-NX.X' format"
 
     print(
         f"✓ Status format verification passed: {len(found_fields)}/{len(expected_fields)} fields found"

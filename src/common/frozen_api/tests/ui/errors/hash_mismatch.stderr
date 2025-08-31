@@ -1,0 +1,10 @@
+error: ⚠️  BREAKING CHANGE DETECTED: 'Service' modified
+       Expected: wrong_hash | Actual: 6aac249e
+       Fix: Update hash to '6aac249e' if change is intentional
+       Impact: Serialization compatibility may break
+  --> tests/ui/errors/hash_mismatch.rs:18:1
+   |
+18 | #[frozen_api("wrong_hash")]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `frozen_api` (in Nightly builds, run with -Z macro-backtrace for more info)

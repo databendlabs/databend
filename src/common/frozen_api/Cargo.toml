@@ -8,7 +8,7 @@ edition.workspace = true
 
 [lib]
 doctest = false
-test = false
+test = true
 proc-macro = true
 
 [dependencies]
@@ -17,3 +17,9 @@ proc-macro2 = "1.0"
 quote = "1.0"
 sha2 = { workspace = true }
 syn = { version = "2.0", features = ["full"] }
+
+[dev-dependencies]
+trybuild = "1.0"
+
+[package.metadata.cargo-machete]
+ignored = ["hex", "proc-macro2", "quote", "sha2", "syn"]
