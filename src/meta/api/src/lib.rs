@@ -18,6 +18,7 @@
 #![feature(try_blocks)]
 
 extern crate databend_common_meta_types;
+pub mod catalog_api;
 mod data_mask_api;
 mod data_mask_api_impl;
 mod database_api;
@@ -45,6 +46,7 @@ mod row_access_policy_api_impl;
 mod sequence_api_impl;
 pub(crate) mod sequence_nextval_impl;
 
+pub use catalog_api::CatalogApi;
 pub use data_mask_api::DatamaskApi;
 pub use database_api::DatabaseApi;
 pub use index_api::IndexApi;

@@ -18,7 +18,6 @@ use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::ops::Range;
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
@@ -40,8 +39,6 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
-use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
@@ -54,10 +51,6 @@ use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedI
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::CatalogIdToNameIdent;
-use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CatalogMeta;
-use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
@@ -75,7 +68,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::LeastVisibleTime;
-use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -105,7 +97,6 @@ use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -127,6 +118,7 @@ use log::warn;
 use seq_marked::SeqValue;
 use ConditionResult::Eq;
 
+use crate::catalog_api::CatalogApi;
 use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
 use crate::errors::TableError;
@@ -162,6 +154,7 @@ impl<KV> SchemaApi for KV
 where
     KV: Send + Sync,
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
+    Self: CatalogApi,
     Self: DatabaseApi,
     Self: IndexApi,
     Self: TableApi,
@@ -178,7 +171,10 @@ pub trait SchemaApi
 where
     Self: Send + Sync,
     Self: kvapi::KVApi<Error = MetaError>,
+    Self: CatalogApi,
     Self: DatabaseApi,
+    Self: IndexApi,
+    Self: TableApi,
 {
     #[logcall::logcall]
     #[fastrace::trace]
@@ -515,91 +511,6 @@ where
             reply.extend(locks);
         }
         Ok(reply)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_catalog(
-        &self,
-        name_ident: &CatalogNameIdent,
-        meta: &CatalogMeta,
-    ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
-        debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
-
-        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
-
-        let res = self
-            .create_id_value(
-                name_ident,
-                meta,
-                false,
-                |id| {
-                    vec![(
-                        CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
-                        name_ident_raw.clone(),
-                    )]
-                },
-                |_, _| Ok(vec![]),
-            )
-            .await?;
-
-        Ok(res)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn get_catalog(
-        &self,
-        name_ident: &CatalogNameIdent,
-    ) -> Result<Arc<CatalogInfo>, KVAppError> {
-        debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
-
-        let (seq_id, seq_meta) = self
-            .get_id_and_value(name_ident)
-            .await?
-            .ok_or_else(|| AppError::unknown(name_ident, func_name!()))?;
-
-        let catalog = CatalogInfo::new(name_ident.clone(), seq_id.data, seq_meta.data);
-
-        Ok(Arc::new(catalog))
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_catalog(
-        &self,
-        name_ident: &CatalogNameIdent,
-    ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError> {
-        debug!(req :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let removed = self
-            .remove_id_value(name_ident, |id| {
-                vec![CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key()]
-            })
-            .await?;
-
-        Ok(removed)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_catalogs(
-        &self,
-        req: ListCatalogReq,
-    ) -> Result<Vec<Arc<CatalogInfo>>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tenant = req.tenant;
-        let name_key = CatalogNameIdent::new(&tenant, "dummy");
-        let dir = DirName::new(name_key);
-
-        let name_id_values = self.list_id_value(&dir).await?;
-
-        let catalog_infos = name_id_values
-            .map(|(name, id, seq_meta)| Arc::new(CatalogInfo::new(name, id, seq_meta.data)))
-            .collect::<Vec<_>>();
-
-        Ok(catalog_infos)
     }
 
     #[logcall::logcall]

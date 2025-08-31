@@ -22,7 +22,7 @@ use databend_common_config::CatalogConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::CatalogApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
