@@ -20,10 +20,10 @@ aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
 aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://spillbucket
 aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://backupbucket
 
-if [ "$TEST_MINIO_ENABLE_VERSION:-false" = "true" ]; then
+if [ "${TEST_MINIO_ENABLE_VERSION:-false}" = "true" ]; then
 	aws --endpoint-url http://127.0.0.1:9900/ s3api put-bucket-versioning --bucket testbucket --versioning-configuration Status=Enabled
 fi
 
-if [ "$TEST_MINIO_CP_DATA:-false" = "true" ]; then
+if [ "${TEST_MINIO_CP_DATA:-false}" = "true" ]; then
 	aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/data  --recursive --no-progress
 fi
