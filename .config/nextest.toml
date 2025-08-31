@@ -6,7 +6,3 @@ serial-integration = { max-threads = 1 }
 filter = 'package(databend-meta)'
 test-group = 'serial-integration'
 
-[[profile.default.overrides]]
-filter = 'package(databend-common-frozen-api)'
-test-group = 'serial-integration'
-
