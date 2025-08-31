@@ -1,0 +1,10 @@
+error: ⚠️  BREAKING CHANGE DETECTED: 'A' modified (or its FrozenAPI dependencies)
+       Expected: 567762e0 | Actual: eb7c00b7
+       Fix: Update hash to 'eb7c00b7' if change is intentional
+       Impact: Serialization compatibility may break
+  --> tests/ui/errors/transitive_change.rs:32:1
+   |
+32 | #[frozen_api("567762e0")] // Old hash - should fail due to C's change
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `frozen_api` (in Nightly builds, run with -Z macro-backtrace for more info)
