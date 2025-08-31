@@ -647,7 +647,7 @@ codegen-units = 16
 lto = false
 debug-assertions = true
 overflow-checks = true
-rpath = false
+rpath = true
 
 [patch.crates-io]
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343" }
