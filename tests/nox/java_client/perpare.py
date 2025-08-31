@@ -15,7 +15,6 @@ def main():
 
 
 def download_jdbc(version):
-
     files = [f"databend-jdbc-{version}.jar", f"databend-jdbc-{version}-tests.jar"]
 
     for filename in files:

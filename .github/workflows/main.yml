@@ -47,6 +47,7 @@ jobs:
       runner_provider: aws
       runner_arch: ARM64
       license_type: enterprise
+      telemetry_source: "ci-main"
 
   # macos:
   #   needs: linux
