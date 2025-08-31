@@ -191,6 +191,7 @@ impl IPhysicalPlan for AggregateFinal {
             &mut builder.main_pipeline,
             params.clone(),
             max_restore_worker,
+            builder.settings.get_max_threads()? as usize,
         )
     }
 }
