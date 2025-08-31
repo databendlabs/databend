@@ -20,6 +20,8 @@
 extern crate databend_common_meta_types;
 mod data_mask_api;
 mod data_mask_api_impl;
+mod database_api;
+pub mod database_util;
 pub mod kv_app_error;
 pub mod kv_pb_api;
 pub mod kv_pb_crud_api;
@@ -42,6 +44,7 @@ mod sequence_api_impl;
 pub(crate) mod sequence_nextval_impl;
 
 pub use data_mask_api::DatamaskApi;
+pub use database_api::DatabaseApi;
 pub use row_access_policy_api::RowAccessPolicyApi;
 pub use schema_api::SchemaApi;
 pub use schema_api_test_suite::SchemaApiTestSuite;

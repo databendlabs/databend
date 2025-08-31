@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
+use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::app_error::AppError;
