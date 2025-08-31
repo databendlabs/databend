@@ -1,0 +1,22 @@
+name: "Setup For Minio"
+description: "Setup For Minio"
+inputs:
+  versioning:
+    description: "whether to enable versioning on test_bucket"
+    type: boolean
+    required: false
+    default: false
+  data:
+    description: "whether to copy test data"
+    required: false
+    default: false
+runs:
+  using: "composite"
+  steps:
+    - name: Run Minio
+      shell: bash
+      run: |
+        ./scripts/ci/ci-run-ee-tests-standalone-fake-time-minio.sh
+      env:
+        TEST_MINIO_CP_DATA: ${{ inputs.data }}
+        TEST_MINIO_ENABLE_VERSION: ${{ inputs.versioning }}
