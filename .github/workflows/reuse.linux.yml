@@ -166,6 +166,19 @@ jobs:
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
+  test_compat_client_standalone:
+    needs: [ build, check ]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_compat_client_standalone
+        timeout-minutes: 20
+
   test_logs:
     needs: [ build, check ]
     runs-on:
