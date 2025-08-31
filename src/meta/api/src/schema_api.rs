@@ -40,9 +40,6 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
@@ -51,8 +48,6 @@ use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedI
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::CreateDictionaryReply;
-use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -61,14 +56,11 @@ use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::DictionaryIdentity;
-use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::LeastVisibleTime;
-use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
@@ -76,7 +68,6 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
-use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -93,10 +84,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -121,6 +109,7 @@ use ConditionResult::Eq;
 use crate::catalog_api::CatalogApi;
 use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
+use crate::dictionary_api::DictionaryApi;
 use crate::errors::TableError;
 use crate::get_u64_value;
 use crate::index_api::IndexApi;
@@ -128,7 +117,6 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::NameIdValueApi;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -156,6 +144,7 @@ where
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
     Self: CatalogApi,
     Self: DatabaseApi,
+    Self: DictionaryApi,
     Self: IndexApi,
     Self: TableApi,
 {
@@ -173,6 +162,7 @@ where
     Self: kvapi::KVApi<Error = MetaError>,
     Self: CatalogApi,
     Self: DatabaseApi,
+    Self: DictionaryApi,
     Self: IndexApi,
     Self: TableApi,
 {
@@ -553,139 +543,6 @@ where
         "SchemaApiImpl".to_string()
     }
 
-    // dictionary
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_dictionary(
-        &self,
-        req: CreateDictionaryReq,
-    ) -> Result<CreateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
-
-        let name_ident = &req.dictionary_ident;
-
-        let create_res = self
-            .create_id_value(
-                name_ident,
-                &req.dictionary_meta,
-                false,
-                |_| vec![],
-                |_, _| Ok(vec![]),
-            )
-            .await?;
-
-        match create_res {
-            Ok(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
-            Err(_existent) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn update_dictionary(
-        &self,
-        req: UpdateDictionaryReq,
-    ) -> Result<UpdateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
-
-        let res = self
-            .update_id_value(&req.dictionary_ident, req.dictionary_meta)
-            .await?;
-
-        if let Some((id, _meta)) = res {
-            Ok(UpdateDictionaryReply { dictionary_id: *id })
-        } else {
-            Err(AppError::from(req.dictionary_ident.unknown_error(func_name!())).into())
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_dictionary(
-        &self,
-        name_ident: DictionaryNameIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaTxnError> {
-        debug!(dict_ident :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let removed = self.remove_id_value(&name_ident, |_| vec![]).await?;
-        Ok(removed.map(|(_, meta)| meta))
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn get_dictionary(
-        &self,
-        name_ident: DictionaryNameIdent,
-    ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError> {
-        debug!(dict_ident :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let got = self.get_id_value(&name_ident).await?;
-        Ok(got)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_dictionaries(
-        &self,
-        req: ListDictionaryReq,
-    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let dictionary_ident = DictionaryNameIdent::new(
-            req.tenant.clone(),
-            DictionaryIdentity::new(req.db_id, "dummy".to_string()),
-        );
-        let dir = DirName::new(dictionary_ident);
-        let name_id_values = self.list_id_value(&dir).await?;
-        Ok(name_id_values
-            .map(|(name, _seq_id, seq_meta)| (name.dict_name(), seq_meta.data))
-            .collect())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let dict_id = self
-                .get_pb(&req.name_ident)
-                .await?
-                .ok_or_else(|| AppError::from(req.name_ident.unknown_error(func_name!())))?;
-
-            let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
-            let new_dict_id_seq = self.get_seq(&new_name_ident).await?;
-            let _ = dict_has_to_not_exist(new_dict_id_seq, &new_name_ident, "rename_dictionary")
-                .map_err(|_| AppError::from(new_name_ident.exist_error(func_name!())))?;
-
-            let condition = vec![
-                txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
-                txn_cond_seq(&new_name_ident, Eq, 0),
-            ];
-            let if_then = vec![
-                txn_op_del(&req.name_ident),                          // del old dict name
-                txn_op_put_pb(&new_name_ident, &dict_id.data, None)?, // put new dict name
-            ];
-
-            let txn_req = TxnRequest::new(condition, if_then);
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                name :? =(req.name_ident),
-                to :? =(&new_name_ident),
-                succ = succ;
-                "rename_dictionary"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
-    }
 
     #[logcall::logcall]
     #[fastrace::trace]
@@ -1021,21 +878,6 @@ pub fn table_has_to_not_exist(
     }
 }
 
-/// Return OK if a dictionary_id or dictionary_meta does not exist by checking the seq.
-///
-/// Otherwise returns DictionaryAlreadyExists error
-fn dict_has_to_not_exist(
-    seq: u64,
-    name_ident: &DictionaryNameIdent,
-    _ctx: impl Display,
-) -> Result<(), ExistError<DictionaryNameRsc, DictionaryIdentity>> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-        Err(name_ident.exist_error(func_name!()))
-    }
-}
 
 pub fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
