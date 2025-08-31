@@ -16,7 +16,7 @@ runs:
     - name: Run Minio
       shell: bash
       run: |
-        ./scripts/ci/ci-run-ee-tests-standalone-fake-time-minio.sh
+        ./scripts/ci/ci-setup-minio.sh
       env:
         TEST_MINIO_CP_DATA: ${{ inputs.data }}
         TEST_MINIO_ENABLE_VERSION: ${{ inputs.versioning }}

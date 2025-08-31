@@ -3352,7 +3352,7 @@ CreateTable(
             UriLocation {
                 protocol: "s3",
                 name: "testbucket",
-                path: "/admin/data/",
+                path: "/data/",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
