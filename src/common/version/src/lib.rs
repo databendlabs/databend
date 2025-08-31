@@ -49,6 +49,8 @@ pub const DATABEND_TELEMETRY_ENDPOINT: &str = env!("DATABEND_TELEMETRY_ENDPOINT"
 
 pub const DATABEND_TELEMETRY_API_KEY: &str = env!("DATABEND_TELEMETRY_API_KEY");
 
+pub const DATABEND_TELEMETRY_SOURCE: &str = env!("DATABEND_TELEMETRY_SOURCE");
+
 pub static DATABEND_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let semver = DATABEND_GIT_SEMVER
         .strip_prefix('v')

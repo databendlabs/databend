@@ -11,7 +11,6 @@ def test_version():
 
 
 def test_basic_select():
-
     client = BlockingDatabendClient(DATABEND_DSL)
 
     cursor = client.cursor()

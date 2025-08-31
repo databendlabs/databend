@@ -142,6 +142,7 @@ jobs:
           DATABEND_ENTERPRISE_LICENSE_EMBEDDED: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_RELEASE }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
+          DATABEND_TELEMETRY_SOURCE: "production"
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
@@ -183,6 +184,7 @@ jobs:
           DATABEND_ENTERPRISE_LICENSE_EMBEDDED: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_RELEASE }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
+          DATABEND_TELEMETRY_SOURCE: "docker-release"
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}

@@ -70,6 +70,7 @@ jobs:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
+          DATABEND_TELEMETRY_SOURCE: "pr-test"
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
