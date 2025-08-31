@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::TableApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::schema::CatalogInfo;
