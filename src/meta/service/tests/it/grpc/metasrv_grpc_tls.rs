@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::TableApi;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MetaClientError;

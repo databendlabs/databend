@@ -156,9 +156,11 @@ use crate::testing::get_kv_data;
 use crate::testing::get_kv_u64_data;
 use crate::util::IdempotentKVTxnSender;
 use crate::DatamaskApi;
+use crate::IndexApi;
 use crate::RowAccessPolicyApi;
 use crate::SchemaApi;
 use crate::SequenceApi;
+use crate::TableApi;
 use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
