@@ -70,8 +70,6 @@ use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHas
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
-pub(crate) const INLIST_RUNTIME_FILTER_THRESHOLD: usize = 1024;
-
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,

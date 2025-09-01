@@ -14,11 +14,24 @@ runs:
     - name: Install nfpm@latest
       shell: bash
       run: |
-        curl -sSLo nfpm.tar.gz https://github.com/goreleaser/nfpm/releases/download/v2.26.0/nfpm_2.26.0_Linux_x86_64.tar.gz
-        tar xf nfpm.tar.gz
-        sudo mv nfpm /usr/local/bin
-        sudo chmod a+x /usr/local/bin/nfpm
-        rm nfpm.tar.gz
+        version="2.43.1"
+        arch=$(uname -m)
+        url_base="https://github.com/goreleaser/nfpm/releases/download/v${version}"
+        case $arch in
+          x86_64)
+            curl -sSLo nfpm.deb ${url_base}/nfpm_${version}_amd64.deb
+            ;;
+          aarch64)
+            curl -sSLo nfpm.deb ${url_base}/nfpm_${version}_arm64.deb
+            ;;
+          *)
+            echo "Unsupported arch: $arch"
+            exit 1
+            ;;
+        esac
+        sudo dpkg -i nfpm.deb
+        rm nfpm.deb
+        nfpm --version
 
     - name: Get target
       id: target

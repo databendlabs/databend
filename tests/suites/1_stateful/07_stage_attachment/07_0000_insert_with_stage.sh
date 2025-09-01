@@ -17,7 +17,7 @@ CREATE TABLE sample_table
 );
 EOF
 
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
 
 ## Copy from internal stage
 echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $BENDSQL_CLIENT_CONNECT
@@ -34,13 +34,13 @@ echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
 
 # use placeholder (?, ?, ?)
 echo "truncate table sample_table" | $BENDSQL_CLIENT_CONNECT
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample1.csv >/dev/null
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample1.csv >/dev/null
 curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into sample_table (Id, City, Score) values (?,?,?)", "stage_attachment": {"location": "@s1/sample1.csv", "copy_options": {"purge": "true"}}, "pagination": { "wait_time_secs": 3}}' | jq -r '.state, .stats.scan_progress.bytes, .error'
 echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
 
 # use placeholder (?, ?, 1+1)
 echo "truncate table sample_table" | $BENDSQL_CLIENT_CONNECT
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/csv/sample_2_columns.csv s3://testbucket/admin/stage/internal/s1/sample2.csv  >/dev/null
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/data/csv/sample_2_columns.csv s3://testbucket/admin/stage/internal/s1/sample2.csv  >/dev/null
 
 curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into sample_table (Id, City, Score) values (?,?,1+1)", "stage_attachment": {"location": "@s1/sample2.csv", "copy_options": {"purge": "true"}}, "pagination": { "wait_time_secs": 3}}' | jq -r '.state, .stats.scan_progress.bytes, .error'
 echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT

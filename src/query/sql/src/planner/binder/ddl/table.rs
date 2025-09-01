@@ -876,13 +876,13 @@ impl Binder {
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
 
         let mut path = stmt.uri_location.path.clone();
-        // First, to make it easy for users to use, path = "/testbucket/admin/data/1/2" and path = "/testbucket/admin/data/1/2/" are both legal
+        // First, to make it easy for users to use, path = "/testbucket/data/1/2" and path = "/testbucket/data/1/2/" are both legal
         // So we need to remove the last "/"
         if path.ends_with('/') {
             path.pop();
         }
         // Then, split the path into two parts, the first part is the root, and the second part is the storage_prefix
-        // For example, path = "/testbucket/admin/data/1/2", then root = "/testbucket/admin/data/", storage_prefix = "1/2"
+        // For example, path = "/testbucket/data/1/2", then root = "/testbucket/data/", storage_prefix = "1/2"
         // root is used by OpenDAL operator, storage_prefix is used to specify the storage location of the table
         // Note that the root must end with "/", and the storage_prefix must not start or end with "/"
         let mut parts = path.split('/').collect::<Vec<_>>();
