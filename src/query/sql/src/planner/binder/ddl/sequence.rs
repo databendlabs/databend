@@ -37,6 +37,8 @@ impl Binder {
         let CreateSequenceStmt {
             create_option,
             sequence,
+            start,
+            increment,
             comment,
         } = stmt;
 
@@ -46,6 +48,8 @@ impl Binder {
         let plan = CreateSequencePlan {
             create_option: create_option.clone().into(),
             ident: SequenceIdent::new(tenant, sequence),
+            start: *start,
+            increment: *increment,
             comment: comment.clone(),
         };
         Ok(Plan::CreateSequence(plan.into()))

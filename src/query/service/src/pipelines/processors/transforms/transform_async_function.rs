@@ -23,6 +23,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
@@ -159,15 +160,6 @@ impl TransformAsyncFunction {
                         let remaining = max.saturating_sub(current);
                         let to_fetch = count.saturating_sub(remaining);
 
-                        let step_size = ctx.get_settings().get_sequence_step_size()?;
-                        let batch_size = to_fetch.max(step_size);
-
-                        // Calculate batch size - take the larger of count or step_size
-                        let req = GetSequenceNextValueReq {
-                            ident: SequenceIdent::new(&tenant, sequence_name),
-                            count: batch_size,
-                        };
-
                         let visibility_checker = if ctx
                             .get_settings()
                             .get_enable_experimental_sequence_privilege_check()?
@@ -177,8 +169,23 @@ impl TransformAsyncFunction {
                             None
                         };
 
+                        let req = GetSequenceReq {
+                            ident: SequenceIdent::new(&tenant, sequence_name),
+                        };
+                        let resp = catalog.get_sequence(req, &visibility_checker).await?;
+                        let step_size = resp.meta.step as u64;
+
+                        // Calculate batch size - take the larger of count or step_size
+                        let batch_size = to_fetch.max(step_size);
+
+                        // Calculate batch size - take the larger of count or step_size
+                        let req = GetSequenceNextValueReq {
+                            ident: SequenceIdent::new(&tenant, sequence_name),
+                            count: batch_size,
+                        };
+
                         let resp = catalog
-                            .get_sequence_next_value(req, visibility_checker)
+                            .get_sequence_next_value(req, &visibility_checker)
                             .await?;
                         let start = resp.start;
 

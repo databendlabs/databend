@@ -2,13 +2,10 @@ statement ok
 create or replace sequence seq
 
 statement ok
-create or replace sequence `seq1_测试`
+create or replace sequence `seq1_测试` start = 1 increment = 1
 
 statement ok
 create or replace table tmp (seq int default nextval(seq), a int, seq1 bigint not null default nextval(`seq1_测试`));
-
-statement ok
-set sequence_step_size = 1;
 
 statement ok
 INSERT INTO tmp(seq, a) values (-1, 11),(-2, 22);

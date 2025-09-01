@@ -5583,6 +5583,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq".to_string()),
                 storage_version,
             };
@@ -5605,6 +5607,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 ident: SequenceIdent::new(&tenant, "seq1"),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
             };
@@ -5654,6 +5658,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::CreateOrReplace,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
             };

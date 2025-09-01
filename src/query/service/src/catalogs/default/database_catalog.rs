@@ -771,7 +771,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -793,7 +793,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

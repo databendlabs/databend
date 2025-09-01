@@ -11,7 +11,7 @@ statement ok
 DROP SEQUENCE IF EXISTS seq
 
 statement ok
-CREATE SEQUENCE seq
+CREATE SEQUENCE seq start = 1 increment = 1
 
 statement ok
 DROP TABLE IF EXISTS tmp;
@@ -37,9 +37,6 @@ CREATE TABLE tmp2(a uint64);
 statement ok
 CREATE TABLE tmp3(a int, b uint64, c int);
 
-
-statement ok
-set sequence_step_size = 1;
 
 statement ok
 INSERT INTO tmp1 values(nextval(seq));
@@ -106,9 +103,6 @@ query I
 select sum(nextval(seq)) from numbers(10);
 ----
 205
-
-statement ok
-unset sequence_step_size;
 
 statement ok
 INSERT INTO tmp select nextval(seq) from numbers(1000000);
