@@ -335,7 +335,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }
