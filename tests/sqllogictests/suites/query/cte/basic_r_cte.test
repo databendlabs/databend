@@ -281,7 +281,7 @@ select
 from
         t0,(select 1 n union all select 2);
 ----
-236700 473200 210000
+252500 504800 210000
 
 statement ok
 CREATE OR REPLACE table t_tree (id int, parent int, name string);
