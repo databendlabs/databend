@@ -46,7 +46,7 @@ Filter
 └── TableScan
     ├── table: default.default.cte1
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
-    ├── read rows: 1
+    ├── read rows: 3
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
