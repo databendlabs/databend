@@ -27,6 +27,7 @@ use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
+use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi;
 use databend_common_meta_api::SchemaApi;
