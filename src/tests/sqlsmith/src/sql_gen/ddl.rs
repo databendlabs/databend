@@ -286,7 +286,9 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
         CreateTableSource::Columns {
             columns: column_defs,
-            ..Default::default()
+            opt_table_indexes: None,
+            opt_column_constraints: None,
+            opt_table_constraints: None,
         }
     }
 }
