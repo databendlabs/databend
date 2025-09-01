@@ -24,6 +24,9 @@ drop row access policy if exists rap1;
 statement ok
 drop row access policy if exists p1;
 
+statement error 2004
+create or replace row access policy rap_it as (empl_id varchar) returns boolean -> empl_id in (select * from t);
+
 statement ok
 create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
   case
