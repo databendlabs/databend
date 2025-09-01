@@ -22,6 +22,7 @@ use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -36,6 +37,8 @@ use databend_common_meta_types::UpsertKV;
 use futures::FutureExt;
 use log::debug;
 use log::warn;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::oneshot;
 
 /// RAII wrapper for Permit that automatically updates timestamp on drop
@@ -79,24 +82,34 @@ impl HeartbeatTaskGuard {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct HeartbeatMessage {
+    created_at: i64,
+    from_node: String,
+}
+
 pub struct HeartbeatTask;
 
 impl HeartbeatTask {
     pub async fn new_task(
         meta_client: Arc<ClientHandle>,
         meta_key: &str,
+        node_id: &str,
     ) -> Result<Option<HeartbeatTaskGuard>> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
         let txn_req = {
-            let timestamp_bytes = serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?;
+            let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
+                created_at: chrono::Utc::now().timestamp_millis(),
+                from_node: node_id.to_string(),
+            })?;
             // Condition: Check if the key does not exist
             let condition = vec![TxnCondition::eq_seq(&heartbeat_key, 0)];
 
             // If-Then: If the key does not exist, put the new value.
             let if_then = vec![TxnOp::put_with_ttl(
                 &heartbeat_key,
-                timestamp_bytes,
+                heartbeat_message,
                 Some(Duration::from_secs(DEAD_IN_SECS)),
             )];
 
@@ -113,8 +126,12 @@ impl HeartbeatTask {
         debug!("[HISTORY-TABLES] Heartbeat key created: {}", &heartbeat_key);
 
         let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
-        let loop_fut =
-            HeartbeatTask::heartbeat_loop(meta_client, heartbeat_key, cancel_rx.map(|_| ()));
+        let loop_fut = HeartbeatTask::heartbeat_loop(
+            meta_client,
+            heartbeat_key,
+            node_id.to_string(),
+            cancel_rx.map(|_| ()),
+        );
 
         let exited = Arc::new(AtomicBool::new(false));
 
@@ -143,6 +160,7 @@ impl HeartbeatTask {
     pub async fn heartbeat_loop(
         meta_client: Arc<ClientHandle>,
         heartbeat_key: String,
+        node_id: String,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) -> Result<()> {
         let sleep_time = Duration::from_secs(DEAD_IN_SECS / 2);
@@ -152,10 +170,20 @@ impl HeartbeatTask {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(sleep_time) => {
+                    let last_heartbeat = meta_client.get_kv(&heartbeat_key).await?;
 
-                    let timestamp = chrono::Utc::now().timestamp_millis();
+                    if let Some(v) = last_heartbeat {
+                        let data: HeartbeatMessage = serde_json::from_slice(&v.data)?;
+                        if data.from_node != node_id {
+                            return Err(ErrorCode::Internal("other node is sending heartbeat"));
+                        }
+                    }
 
-                    let upsert = UpsertKV::update(&heartbeat_key, &serde_json::to_vec(&timestamp)?)
+                    let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
+                        created_at: chrono::Utc::now().timestamp_millis(),
+                        from_node: node_id.to_string(),
+                    })?;
+                    let upsert = UpsertKV::update(&heartbeat_key, &serde_json::to_vec(&heartbeat_message)?)
                         .with_ttl(Duration::from_secs(DEAD_IN_SECS));
 
                     meta_client.upsert_kv(upsert).await?;
@@ -297,7 +325,7 @@ impl HistoryMetaHandle {
             return Ok(None);
         }
 
-        HeartbeatTask::new_task(self.meta_client.clone(), meta_key).await
+        HeartbeatTask::new_task(self.meta_client.clone(), meta_key, &self.node_id).await
     }
 
     pub async fn is_heartbeat_expired(
@@ -307,8 +335,11 @@ impl HistoryMetaHandle {
     ) -> Result<bool> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
-        match self.get_u64_from_meta(&heartbeat_key).await? {
-            Some(last_heartbeat_millis) => {
+        match self.meta_client.get_kv(&heartbeat_key).await? {
+            Some(v) => {
+                let message: HeartbeatMessage = serde_json::from_slice(&v.data)?;
+                let last_heartbeat_millis = message.created_at as u64;
+
                 let current_millis = chrono::Utc::now().timestamp_millis() as u64;
                 let expire_millis = expire_duration.as_millis() as u64;
 
@@ -322,13 +353,17 @@ impl HistoryMetaHandle {
 #[cfg(test)]
 mod tests {
     use std::ops::Deref;
+    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::time::Duration;
 
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
+    use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_store::MetaStore;
+    use databend_common_meta_types::UpsertKV;
 
+    use crate::history_tables::meta::HeartbeatMessage;
     use crate::history_tables::meta::HeartbeatTask;
     use crate::history_tables::meta::HistoryMetaHandle;
 
@@ -434,12 +469,12 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_1").await?;
 
         assert!(heartbeat_guard.is_some());
 
         let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_2").await?;
 
         assert!(heartbeat_guard_none.is_none());
 
@@ -452,14 +487,14 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
 
         assert!(heartbeat_guard.is_some());
 
         tokio::time::sleep(Duration::from_secs(15)).await;
 
         let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
 
         assert!(heartbeat_guard_none.is_none());
 
@@ -472,7 +507,7 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
 
         assert!(heartbeat_guard.is_some());
 
@@ -481,10 +516,40 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
 
         assert!(heartbeat_guard_none.is_some());
 
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_history_table_heartbeat_from_others() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let heartbeat_guard =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+
+        assert!(heartbeat_guard.is_some());
+
+        // other node override heartbeat
+        let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
+            created_at: chrono::Utc::now().timestamp_millis(),
+            from_node: "node_id2".to_string(),
+        })?;
+        let upsert = UpsertKV::update(
+            "test_heartbeat_key",
+            &serde_json::to_vec(&heartbeat_message)?,
+        )
+        .with_ttl(Duration::from_secs(10));
+
+        meta_client.upsert_kv(upsert).await?;
+
+        tokio::time::sleep(Duration::from_secs(20)).await;
+
+        let is_exited = heartbeat_guard.unwrap().exited.load(Ordering::SeqCst);
+        assert!(is_exited);
         Ok(())
     }
 
@@ -509,7 +574,7 @@ mod tests {
 
                 // All tasks try to create heartbeat for the same key simultaneously
                 let heartbeat_guard =
-                    HeartbeatTask::new_task(meta_client_clone, "test_heartbeat_key")
+                    HeartbeatTask::new_task(meta_client_clone, "test_heartbeat_key", "node_id1")
                         .await
                         .unwrap();
 
