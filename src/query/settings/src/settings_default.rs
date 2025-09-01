@@ -995,7 +995,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_table_snapshot_stats ", DefaultSettingValue {
+                ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable analyze table statistics for snapshots",
                     mode: SettingMode::Both,
