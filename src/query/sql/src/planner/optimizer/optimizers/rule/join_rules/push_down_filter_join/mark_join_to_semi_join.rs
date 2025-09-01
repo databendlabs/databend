@@ -27,7 +27,7 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
 
     let has_disjunction = filter.predicates.iter().any(
-        |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if func.func_name == "or"),
+        |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if matches!(func.func_name.as_str(), "or" | "or_filters")),
     );
 
     if !join.join_type.is_mark_join() || has_disjunction {
