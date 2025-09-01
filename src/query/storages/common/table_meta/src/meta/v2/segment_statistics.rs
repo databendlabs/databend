@@ -15,6 +15,8 @@
 use std::io::Read;
 
 use databend_common_exception::Result;
+use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
@@ -28,7 +30,8 @@ use crate::meta::MetaEncoding;
 use crate::meta::RawBlockHLL;
 use crate::meta::Versioned;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[frozen_api("99795401")]
+#[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct SegmentStatistics {
     pub format_version: FormatVersion,
 

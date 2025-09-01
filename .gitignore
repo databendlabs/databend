@@ -23,6 +23,8 @@ perf.*
 
 # tests
 *.stderr
+# Exception: frozen_api UI test golden files
+!src/common/frozen_api/tests/ui/errors/*.stderr
 *.stdout
 *.out
 *.err

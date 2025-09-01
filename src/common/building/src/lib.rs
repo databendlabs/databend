@@ -124,6 +124,10 @@ pub fn add_env_telemetry() {
     println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_API_KEY");
     let api_key = env::var("DATABEND_TELEMETRY_API_KEY").unwrap_or_default();
     println!("cargo:rustc-env=DATABEND_TELEMETRY_API_KEY={api_key}");
+
+    println!("cargo:rerun-if-env-changed=DATABEND_TELEMETRY_SOURCE");
+    let source = env::var("DATABEND_TELEMETRY_SOURCE").unwrap_or_default();
+    println!("cargo:rustc-env=DATABEND_TELEMETRY_SOURCE={source}");
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {

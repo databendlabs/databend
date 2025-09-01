@@ -22,6 +22,8 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
@@ -44,7 +46,8 @@ use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[frozen_api("dba4542b")]
+#[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
     ///

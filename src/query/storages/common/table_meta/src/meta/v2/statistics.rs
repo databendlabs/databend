@@ -23,6 +23,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_frozen_api::FrozenAPI;
 use log::info;
 use serde::de::Error;
 
@@ -31,7 +32,7 @@ use crate::meta::v0;
 use crate::meta::Location;
 use crate::meta::RawBlockHLL;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
 pub struct ColumnStatistics {
     #[serde(
         serialize_with = "serialize_index_scalar",
@@ -49,7 +50,7 @@ pub struct ColumnStatistics {
     pub distinct_of_values: Option<u64>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, FrozenAPI)]
 pub struct ClusterStatistics {
     pub cluster_key_id: u32,
     #[serde(
@@ -71,7 +72,7 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default, FrozenAPI)]
 pub struct AdditionalStatsMeta {
     /// The size of the stats data in bytes.
     pub size: u64,
@@ -89,7 +90,7 @@ fn default_location() -> Location {
     ("".to_string(), 0)
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default, FrozenAPI)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,

@@ -23,6 +23,11 @@ on:
         type: string
         required: true
         default: "trial"
+      telemetry_source:
+        description: "Telemetry source identifier"
+        type: string
+        required: false
+        default: "pr-test"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -83,6 +88,7 @@ jobs:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
+          DATABEND_TELEMETRY_SOURCE: ${{ inputs.telemetry_source }}
         with:
           sha: ${{ github.sha }}
           target: ${{ needs.info.outputs.target }}
@@ -164,6 +170,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_meta
+        timeout-minutes: 20
+
+  test_compat_client_standalone:
+    needs: [ build, check ]
+    runs-on:
+      - self-hosted
+      - "${{ inputs.runner_arch }}"
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_compat_client_standalone
         timeout-minutes: 20
 
   test_logs:

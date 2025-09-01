@@ -807,8 +807,9 @@ pub mod network_metrics {
 
     #[derive(Debug)]
     struct NetworkMetrics {
-        rpc_delay_seconds: Histogram,
         rpc_delay_ms: Histogram,
+        rpc_delay_read_ms: Histogram,
+        rpc_delay_write_ms: Histogram,
         sent_bytes: Counter,
         recv_bytes: Counter,
         req_inflights: Gauge,
@@ -833,23 +834,18 @@ pub mod network_metrics {
 
     impl NetworkMetrics {
         pub fn init() -> Self {
+            let rpc_delay_buckets = vec![
+                1.0, 2.0, 3.0, 4.0, 5.0, 7.0, //
+                10.0, 20.0, 30.0, 40.0, 50.0, 70.0, //
+                100.0, 200.0, 300.0, 400.0, 500.0, 700.0, //
+                1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 7000.0, //
+                10000.0, 20000.0, 30000.0, 40000.0, 50000.0, 70000.0,
+            ];
+
             let metrics = Self {
-                rpc_delay_seconds: Histogram::new(
-                    vec![
-                        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 20.0, 30.0, 60.0,
-                    ]
-                    .into_iter(),
-                ),
-                rpc_delay_ms: Histogram::new(
-                    vec![
-                        1.0, 2.0, 3.0, 4.0, 5.0, 7.0, //
-                        10.0, 20.0, 30.0, 40.0, 50.0, 70.0, //
-                        100.0, 200.0, 300.0, 400.0, 500.0, 700.0, //
-                        1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 7000.0, //
-                        10000.0, 20000.0, 30000.0, 40000.0, 50000.0, 70000.0,
-                    ]
-                    .into_iter(),
-                ),
+                rpc_delay_ms: Histogram::new(rpc_delay_buckets.clone().into_iter()),
+                rpc_delay_read_ms: Histogram::new(rpc_delay_buckets.clone().into_iter()),
+                rpc_delay_write_ms: Histogram::new(rpc_delay_buckets.into_iter()),
                 sent_bytes: Counter::default(),
                 recv_bytes: Counter::default(),
                 req_inflights: Gauge::default(),
@@ -866,14 +862,19 @@ pub mod network_metrics {
 
             let mut registry = load_global_registry();
             registry.register(
-                key!("rpc_delay_seconds"),
-                "rpc delay seconds",
-                metrics.rpc_delay_seconds.clone(),
-            );
-            registry.register(
                 key!("rpc_delay_ms"),
                 "rpc delay milliseconds",
                 metrics.rpc_delay_ms.clone(),
+            );
+            registry.register(
+                key!("rpc_delay_read_ms"),
+                "rpc delay milliseconds for read operations",
+                metrics.rpc_delay_read_ms.clone(),
+            );
+            registry.register(
+                key!("rpc_delay_write_ms"),
+                "rpc delay milliseconds for write operations",
+                metrics.rpc_delay_write_ms.clone(),
             );
             registry.register(key!("sent_bytes"), "sent bytes", metrics.sent_bytes.clone());
             registry.register(key!("recv_bytes"), "recv bytes", metrics.recv_bytes.clone());
@@ -922,9 +923,25 @@ pub mod network_metrics {
 
     static NETWORK_METRICS: LazyLock<NetworkMetrics> = LazyLock::new(NetworkMetrics::init);
 
+    /// Sample RPC delay for operations where read/write type is unknown.
+    /// Prefer using `sample_rpc_read_delay` or `sample_rpc_write_delay` when the operation type is known.
+    #[deprecated(
+        note = "Use sample_rpc_read_delay or sample_rpc_write_delay for better metrics granularity"
+    )]
     pub fn sample_rpc_delay(d: Duration) {
-        NETWORK_METRICS.rpc_delay_seconds.observe(d.as_secs_f64());
         NETWORK_METRICS.rpc_delay_ms.observe(d.as_millis() as f64);
+    }
+
+    pub fn sample_rpc_read_delay(d: Duration) {
+        let delay_ms = d.as_millis() as f64;
+        NETWORK_METRICS.rpc_delay_ms.observe(delay_ms);
+        NETWORK_METRICS.rpc_delay_read_ms.observe(delay_ms);
+    }
+
+    pub fn sample_rpc_write_delay(d: Duration) {
+        let delay_ms = d.as_millis() as f64;
+        NETWORK_METRICS.rpc_delay_ms.observe(delay_ms);
+        NETWORK_METRICS.rpc_delay_write_ms.observe(delay_ms);
     }
 
     pub fn incr_sent_bytes(bytes: u64) {
@@ -984,13 +1001,13 @@ pub mod network_metrics {
     }
 }
 
-/// RAII metrics counter of in-flight requests count and delay.
+/// RAII metrics counter for in-flight requests with const generic to distinguish read/write operations
 #[derive(Default)]
-pub(crate) struct RequestInFlight {
+pub(crate) struct InFlightMetrics<const IS_READ: bool> {
     start: Option<Instant>,
 }
 
-impl count::Count for RequestInFlight {
+impl<const IS_READ: bool> count::Count for InFlightMetrics<IS_READ> {
     fn incr_count(&mut self, n: i64) {
         network_metrics::incr_request_inflights(n);
 
@@ -999,11 +1016,22 @@ impl count::Count for RequestInFlight {
             self.start = Some(Instant::now());
         } else if n < 0 {
             if let Some(s) = self.start {
-                network_metrics::sample_rpc_delay(s.elapsed())
+                let elapsed = s.elapsed();
+                if IS_READ {
+                    network_metrics::sample_rpc_read_delay(elapsed);
+                } else {
+                    network_metrics::sample_rpc_write_delay(elapsed);
+                }
             }
         }
     }
 }
+
+/// Type alias for read request metrics
+pub(crate) type InFlightRead = InFlightMetrics<true>;
+
+/// Type alias for write request metrics
+pub(crate) type InFlightWrite = InFlightMetrics<false>;
 
 /// RAII metrics counter of pending raft proposals
 #[derive(Default)]

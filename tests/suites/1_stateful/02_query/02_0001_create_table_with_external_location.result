@@ -2,4 +2,4 @@
 1
 888
 1024
-true	s3 | bucket=testbucket,root=/admin/data/,endpoint=http://127.0.0.1:9900,ak=******min,iam_role=
+true	s3 | bucket=testbucket,root=/data/,endpoint=http://127.0.0.1:9900,ak=******min,iam_role=

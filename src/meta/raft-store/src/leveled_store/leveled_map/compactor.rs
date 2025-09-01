@@ -21,7 +21,6 @@ use map_api::IOResultStream;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 
@@ -34,10 +33,7 @@ pub struct Compactor {
     ///
     /// This is used to ensure that only one compactor can run at a time.
     pub(crate) _permit: CompactorPermit,
-
     pub(crate) compacting_data: CompactingData,
-    /// Remember the newest level included in this compactor.
-    pub(super) upto: Option<LevelIndex>,
 }
 
 impl Compactor {

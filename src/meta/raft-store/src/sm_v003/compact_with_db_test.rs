@@ -271,9 +271,9 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
     let (lm, _g) = build_3_levels().await?;
     lm.testing_freeze_writable();
 
-    let mut compactor = lm.acquire_compactor().await;
+    let compacting_data = lm.new_compacting_data();
 
-    let (sys_data, strm) = compactor.compact_into_stream().await?;
+    let (sys_data, strm) = compacting_data.compact_into_stream().await?;
 
     assert_eq!(sys_data.curr_seq(), 7);
     assert_eq!(

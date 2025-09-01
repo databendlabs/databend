@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -38,7 +40,8 @@ use crate::meta::Versioned;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[frozen_api("2c973019")]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, FrozenAPI)]
 pub struct SegmentInfo {
     /// format version of SegmentInfo table meta data
     ///
@@ -201,14 +204,15 @@ impl SegmentInfo {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, FrozenAPI)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
     pub encoding: MetaEncoding,
     pub compression: MetaCompression,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+#[frozen_api("1b3fc937")]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, FrozenAPI)]
 pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,

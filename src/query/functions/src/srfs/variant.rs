@@ -376,17 +376,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     {
                         match arg.index(row).unwrap() {
                             ScalarRef::Null => {
-                                results.push((
-                                    Value::Scalar(Scalar::Tuple(vec![
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                        Scalar::Null,
-                                    ])),
-                                    0,
-                                ));
+                                results
+                                    .push((Value::Scalar(Scalar::Tuple(vec![Scalar::Null; 6])), 0));
                             }
                             ScalarRef::Variant(val) => {
                                 let columns = match json_path {
@@ -628,7 +619,7 @@ pub(crate) fn unnest_variant_array(
     match RawJsonb::new(val).array_values() {
         Ok(Some(vals)) if !vals.is_empty() => {
             let len = vals.len();
-            let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
+            let mut builder = BinaryColumnBuilder::with_capacity(len, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
@@ -652,8 +643,8 @@ fn unnest_variant_obj(
     match RawJsonb::new(val).object_each() {
         Ok(Some(key_vals)) if !key_vals.is_empty() => {
             let len = key_vals.len();
-            let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
-            let mut key_builder = StringColumnBuilder::with_capacity(0);
+            let mut val_builder = BinaryColumnBuilder::with_capacity(len, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(len);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
@@ -698,7 +689,6 @@ impl FlattenGenerator {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten(
         &mut self,
         input: &RawJsonb,
@@ -760,7 +750,6 @@ impl FlattenGenerator {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten_array(
         &mut self,
         input: &RawJsonb,
@@ -815,7 +804,6 @@ impl FlattenGenerator {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn flatten_object(
         &mut self,
         input: &RawJsonb,

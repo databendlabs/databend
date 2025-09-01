@@ -58,6 +58,7 @@ use databend_common_settings::Settings;
 use databend_common_telemetry::report_node_telemetry;
 use databend_common_version::DATABEND_TELEMETRY_API_KEY;
 use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
+use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
@@ -832,7 +833,8 @@ impl ClusterDiscovery {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_secs())
                     .unwrap_or(0),
-                "schema_version": "1.0"
+                "source": DATABEND_TELEMETRY_SOURCE,
+                "schema_version": "1.1"
             }
         });
 

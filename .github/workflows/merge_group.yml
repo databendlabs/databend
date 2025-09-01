@@ -57,6 +57,7 @@ jobs:
       build_profile: ci
       runner_provider: aws
       license_type: enterprise
+      telemetry_source: "pr-test"
 
   ready:
     if: always()

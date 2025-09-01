@@ -19,6 +19,7 @@ pub use meta_metrics::meta_metrics_to_prometheus_string;
 pub use meta_metrics::network_metrics;
 pub use meta_metrics::raft_metrics;
 pub use meta_metrics::server_metrics;
+pub(crate) use meta_metrics::InFlightRead;
+pub(crate) use meta_metrics::InFlightWrite;
 pub(crate) use meta_metrics::ProposalPending;
-pub(crate) use meta_metrics::RequestInFlight;
 pub(crate) use meta_metrics::SnapshotBuilding;

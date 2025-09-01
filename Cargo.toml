@@ -18,6 +18,7 @@ members = [
     "src/common/native",
     "src/common/compress",
     "src/common/exception",
+    "src/common/frozen_api",
     "src/common/grpc",
     "src/common/hashtable",
     "src/common/http",
@@ -131,6 +132,7 @@ databend-common-datavalues = { path = "src/query/datavalues" }
 databend-common-exception = { path = "src/common/exception" }
 databend-common-expression = { path = "src/query/expression" }
 databend-common-formats = { path = "src/query/formats" }
+databend-common-frozen-api = { path = "src/common/frozen_api" }
 databend-common-functions = { path = "src/query/functions" }
 databend-common-grpc = { path = "src/common/grpc" }
 databend-common-hashtable = { path = "src/common/hashtable" }
@@ -645,7 +647,7 @@ codegen-units = 16
 lto = false
 debug-assertions = true
 overflow-checks = true
-rpath = false
+rpath = true
 
 [patch.crates-io]
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343" }

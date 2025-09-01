@@ -78,7 +78,7 @@ pub struct HttpQueryManager {
     pub(crate) server_info: ServerInfo,
     #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
-    pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
+    pub(crate) removed_queries: Arc<Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }

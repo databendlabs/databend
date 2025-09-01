@@ -20,6 +20,7 @@ use std::marker::PhantomData;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -38,7 +39,7 @@ pub const NUM_BLOCK_ID_BITS: usize = 11;
 pub const MAX_SEGMENT_BLOCK_NUMBER: usize = 1 << NUM_BLOCK_ID_BITS;
 
 #[repr(u8)]
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq, FrozenAPI)]
 pub enum MetaCompression {
     None = 0,
     #[default]
@@ -106,7 +107,7 @@ pub fn decompress(compression: &MetaCompression, data: Vec<u8>) -> Result<Vec<u8
 }
 
 #[repr(u8)]
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, FrozenAPI)]
 pub enum MetaEncoding {
     Bincode = 1,
     MessagePack = 2,

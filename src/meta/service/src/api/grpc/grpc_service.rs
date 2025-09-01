@@ -89,7 +89,8 @@ use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
-use crate::metrics::RequestInFlight;
+use crate::metrics::InFlightRead;
+use crate::metrics::InFlightWrite;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::MIN_METACLI_SEMVER;
@@ -298,7 +299,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = thread_tracking_guard(&request);
         ThreadTracker::tracking_future(async move {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+            let _guard = InFlightWrite::guard();
 
             let root = start_trace_for_remote_request(func_path!(), &request);
             let reply = self.handle_kv_api(request).in_span(root).await?;
@@ -328,6 +329,7 @@ impl MetaService for MetaServiceImpl {
         let req_typ = req.type_name();
 
         ThreadTracker::tracking_future(async move {
+            let _guard = InFlightRead::guard();
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
             let strm = strm
@@ -355,7 +357,7 @@ impl MetaService for MetaServiceImpl {
 
         ThreadTracker::tracking_future(async move {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+            let _guard = InFlightWrite::guard();
 
             let root = start_trace_for_remote_request(func_path!(), &request);
             let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
@@ -380,7 +382,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<databend_common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let _guard = RequestInFlight::guard();
+        let _guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -409,7 +411,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<pb::ExportRequest>,
     ) -> Result<Response<Self::ExportV1Stream>, Status> {
-        let _guard = RequestInFlight::guard();
+        let _guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -536,7 +538,7 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<MemberListReply>, Status> {
         self.check_token(request.metadata())?;
 
-        let _guard = RequestInFlight::guard();
+        let _guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -552,7 +554,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClusterStatus>, Status> {
-        let _guard = RequestInFlight::guard();
+        let _guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -607,7 +609,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
-        let _guard = RequestInFlight::guard();
+        let _guard = InFlightRead::guard();
 
         let r = request.remote_addr();
         if let Some(addr) = r {

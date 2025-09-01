@@ -3,23 +3,18 @@ explain select * from (select t.number from numbers(10) as t limit 8) limit 9
 ----
 Limit
 ├── output columns: [t.number (#0)]
-├── limit: 9
+├── limit: 8
 ├── offset: 0
 ├── estimated rows: 8.00
-└── Limit
-    ├── output columns: [t.number (#0)]
-    ├── limit: 8
-    ├── offset: 0
-    ├── estimated rows: 8.00
-    └── TableScan
-        ├── table: default.system.numbers
-        ├── output columns: [number (#0)]
-        ├── read rows: 8
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [], limit: 8]
-        └── estimated rows: 10.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 8
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [], limit: 8]
+    └── estimated rows: 10.00
 
 query T
 explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc

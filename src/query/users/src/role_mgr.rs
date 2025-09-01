@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantObject;
@@ -104,16 +105,11 @@ impl UserApiProvider {
 
     #[async_backtrace::framed]
     pub async fn exists_role(&self, tenant: &Tenant, role: String) -> Result<bool> {
-        match self.get_role(tenant, role).await {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_ROLE {
-                    Ok(false)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        Ok(self
+            .get_role(tenant, role)
+            .await
+            .or_unknown_role()?
+            .is_some())
     }
 
     // Add a new role info.

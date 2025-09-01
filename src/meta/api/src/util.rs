@@ -16,6 +16,8 @@ use std::any::type_name;
 use std::fmt::Display;
 use std::time::Duration;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownDatabase;
@@ -49,6 +51,7 @@ use crate::kv_app_error::KVAppError;
 use crate::reply::unpack_txn_reply;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
+const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 /// Get value that its type is `u64`.
 ///
@@ -330,6 +333,27 @@ pub fn txn_op_get(key: &impl kvapi::Key) -> TxnOp {
 /// Build a txn operation that deletes a record.
 pub fn txn_op_del(key: &impl kvapi::Key) -> TxnOp {
     TxnOp::delete(key.to_string_key())
+}
+
+/// Determines if an item is within the retention period based on its drop time.
+///
+/// # Arguments
+/// * `drop_on` - The optional timestamp when the item was marked for deletion.
+/// * `now` - The current timestamp used as a reference point.
+///
+/// Items without a drop time (`None`) are always considered retainable.
+/// The retention period is defined by `DATA_RETENTION_TIME_IN_DAYS`.
+pub(crate) fn is_drop_time_retainable(drop_on: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+    let retention_boundary = get_retention_boundary(now);
+
+    // If it is None, fill it with a very big time.
+    let drop_on = drop_on.unwrap_or(DateTime::<Utc>::MAX_UTC);
+    drop_on > retention_boundary
+}
+
+/// Get the retention boundary time before which the data can be permanently removed.
+pub(crate) fn get_retention_boundary(now: DateTime<Utc>) -> DateTime<Utc> {
+    now - Duration::from_secs(DEFAULT_DATA_RETENTION_SECONDS as u64)
 }
 
 /// Return OK if a db_id or db_meta exists by checking the seq.

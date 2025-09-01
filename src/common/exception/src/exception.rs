@@ -279,7 +279,7 @@ impl ErrorCode {
 ///     x.map_err_to_code(ErrorCode::UnknownException, || 123);
 ///
 /// assert_eq!(
-///     "Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
+///     "UnknownException. Code: 1067, Text = 123, cause: an error occurred when formatting an argument.",
 ///     y.unwrap_err().to_string()
 /// );
 /// ```
@@ -341,6 +341,20 @@ pub mod error_code_groups {
         ErrorCode::UNKNOWN_VIEW,
         ErrorCode::UNKNOWN_COLUMN,
         ErrorCode::UNKNOWN_SEQUENCE,
+        ErrorCode::UNKNOWN_DICTIONARY,
+        ErrorCode::UNKNOWN_ROLE,
+        ErrorCode::UNKNOWN_NETWORK_POLICY,
+        ErrorCode::UNKNOWN_CONNECTION,
+        ErrorCode::UNKNOWN_FILE_FORMAT,
+        ErrorCode::UNKNOWN_USER,
+        ErrorCode::UNKNOWN_PASSWORD_POLICY,
+        ErrorCode::UNKNOWN_STAGE,
+        ErrorCode::UNKNOWN_WORKLOAD,
+        ErrorCode::UNKNOWN_VARIABLE,
+        ErrorCode::UNKNOWN_SESSION,
+        ErrorCode::UNKNOWN_QUERY,
+        ErrorCode::UNKNOWN_ROW_ACCESS_POLICY,
+        ErrorCode::UNKNOWN_DATAMASK,
     ];
 }
 
@@ -354,6 +368,60 @@ pub trait ErrorCodeResultExt<T> {
 
     /// Converts UNKNOWN_TABLE errors to None, other errors propagate, success becomes Some(T)
     fn or_unknown_table(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_CATALOG errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_catalog(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_VIEW errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_view(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_COLUMN errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_column(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_SEQUENCE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_sequence(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_DICTIONARY errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_dictionary(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_ROLE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_role(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_NETWORK_POLICY errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_network_policy(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_CONNECTION errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_connection(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_FILE_FORMAT errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_file_format(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_USER errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_user(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_PASSWORD_POLICY errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_password_policy(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_STAGE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_stage(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_WORKLOAD errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_workload(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_VARIABLE errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_variable(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_SESSION errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_session(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_QUERY errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_query(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_ROW_ACCESS_POLICY errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_row_access_policy(self) -> Result<Option<T>>;
+
+    /// Converts UNKNOWN_DATAMASK errors to None, other errors propagate, success becomes Some(T)
+    fn or_unknown_datamask(self) -> Result<Option<T>>;
 
     /// Converts common "not found" errors to None (database, table, sequence, etc.)
     fn or_unknown_resource(self) -> Result<Option<T>>;
@@ -374,6 +442,78 @@ impl<T> ErrorCodeResultExt<T> for Result<T> {
 
     fn or_unknown_table(self) -> Result<Option<T>> {
         self.or_error_codes(&[ErrorCode::UNKNOWN_TABLE])
+    }
+
+    fn or_unknown_catalog(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_CATALOG])
+    }
+
+    fn or_unknown_view(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_VIEW])
+    }
+
+    fn or_unknown_column(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_COLUMN])
+    }
+
+    fn or_unknown_sequence(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_SEQUENCE])
+    }
+
+    fn or_unknown_dictionary(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_DICTIONARY])
+    }
+
+    fn or_unknown_role(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_ROLE])
+    }
+
+    fn or_unknown_network_policy(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_NETWORK_POLICY])
+    }
+
+    fn or_unknown_connection(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_CONNECTION])
+    }
+
+    fn or_unknown_file_format(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_FILE_FORMAT])
+    }
+
+    fn or_unknown_user(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_USER])
+    }
+
+    fn or_unknown_password_policy(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_PASSWORD_POLICY])
+    }
+
+    fn or_unknown_stage(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_STAGE])
+    }
+
+    fn or_unknown_workload(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_WORKLOAD])
+    }
+
+    fn or_unknown_variable(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_VARIABLE])
+    }
+
+    fn or_unknown_session(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_SESSION])
+    }
+
+    fn or_unknown_query(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_QUERY])
+    }
+
+    fn or_unknown_row_access_policy(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_ROW_ACCESS_POLICY])
+    }
+
+    fn or_unknown_datamask(self) -> Result<Option<T>> {
+        self.or_error_codes(&[ErrorCode::UNKNOWN_DATAMASK])
     }
 
     fn or_unknown_resource(self) -> Result<Option<T>> {

@@ -19,6 +19,7 @@ use std::unimplemented;
 
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
@@ -237,16 +238,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     #[async_backtrace::framed]
     async fn exists_database(&self, tenant: &Tenant, db_name: &str) -> Result<bool> {
-        match self.get_database(tenant, db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UNKNOWN_DATABASE {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Ok(self
+            .get_database(tenant, db_name)
+            .await
+            .or_unknown_database()?
+            .is_some())
     }
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply>;
@@ -351,16 +347,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
-        match self.get_table(tenant, db_name, table_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UNKNOWN_TABLE {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Ok(self
+            .get_table(tenant, db_name, table_name)
+            .await
+            .or_unknown_table()?
+            .is_some())
     }
 
     // Check a db.dictionary is exists or not.
@@ -381,16 +372,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        match self.get_dictionary(req).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UNKNOWN_DICTIONARY {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        Ok(self
+            .get_dictionary(req)
+            .await
+            .or_unknown_dictionary()?
+            .is_some())
     }
 
     async fn upsert_table_option(

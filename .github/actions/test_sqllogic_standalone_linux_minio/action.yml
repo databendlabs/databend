@@ -21,23 +21,7 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
-    - name: Minio Setup for (ubuntu-latest only)
-      shell: bash
-      run: |
-        docker run -d --network host --name minio \
-                -e "MINIO_ACCESS_KEY=minioadmin" \
-                -e "MINIO_SECRET_KEY=minioadmin" \
-                -e "MINIO_ADDRESS=:9900" \
-                -v /tmp/data:/data \
-                -v /tmp/config:/root/.minio \
-                minio/minio server /data
-
-        export AWS_ACCESS_KEY_ID=minioadmin
-        export AWS_SECRET_ACCESS_KEY=minioadmin
-        export AWS_EC2_METADATA_DISABLED=true
-
-        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
-        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://spillbucket
+    - uses: ./.github/actions/setup_minio
 
     - name: Run sqllogic Tests with Standalone mode
       if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'

@@ -18,6 +18,7 @@ use chrono::Duration;
 use chrono::Utc;
 use databend_common_ast::ast::AuthOption;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_app::principal::AuthInfo;
@@ -208,16 +209,11 @@ impl UserApiProvider {
     // Check whether a password policy is exist.
     #[async_backtrace::framed]
     pub async fn exists_password_policy(&self, tenant: &Tenant, name: &str) -> Result<bool> {
-        match self.get_password_policy(tenant, name).await {
-            Ok(_) => Ok(true),
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_PASSWORD_POLICY {
-                    Ok(false)
-                } else {
-                    Err(e)
-                }
-            }
-        }
+        Ok(self
+            .get_password_policy(tenant, name)
+            .await
+            .or_unknown_password_policy()?
+            .is_some())
     }
 
     // Get a password_policy by tenant.

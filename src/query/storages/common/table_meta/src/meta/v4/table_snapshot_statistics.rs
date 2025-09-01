@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
+use databend_common_frozen_api::frozen_api;
+use databend_common_frozen_api::FrozenAPI;
 use databend_common_storage::Histogram;
 use databend_common_storage::MetaHLL;
 
@@ -25,7 +27,8 @@ use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[frozen_api("446eb231")]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot
     pub format_version: FormatVersion,
