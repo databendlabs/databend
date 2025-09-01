@@ -55,6 +55,7 @@ mod util;
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
 const HANDLER_HYBRID: &str = "hybrid";
+const HANDLER_TTC_RUST: &str = "ttc_rust";
 const TTC_PORT_START: u16 = 9902;
 
 use std::sync::LazyLock;
@@ -133,6 +134,16 @@ pub async fn main() -> Result<()> {
             HANDLER_HYBRID => {
                 run_hybrid_client(args.clone(), &mut containers).await?;
             }
+            HANDLER_TTC_RUST => {}
+            handler if handler.starts_with("ttc") => {
+                let image = format!("ghcr.io/databendlabs/{handler}:latest");
+                run_ttc_container(&image, TTC_PORT_START, args.port, &mut containers).await?;
+                run_ttc_client(
+                    args.clone(),
+                    ClientType::Ttc(handler.to_string(), TTC_PORT_START),
+                )
+                .await?;
+            }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
             }
@@ -151,6 +162,11 @@ async fn run_mysql_client(args: SqlLogicTestArgs) -> Result<()> {
 async fn run_http_client(args: SqlLogicTestArgs) -> Result<()> {
     println!("Http client starts to run with: {:?}", args);
     run_suits(args, ClientType::Http).await?;
+    Ok(())
+}
+async fn run_ttc_client(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
+    println!("Http client starts to run with: {:?}", args);
+    run_suits(args, client_type).await?;
     Ok(())
 }
 
