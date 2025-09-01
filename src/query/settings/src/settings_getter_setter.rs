@@ -1060,11 +1060,11 @@ impl Settings {
         Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
     }
 
-    pub fn get_enable_analyze_table_stats(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_analyze_table_stats")? != 0)
+    pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_snapshot_stats ")? != 0)
     }
 
-    pub fn set_enable_analyze_table_stats(&self, val: u64) -> Result<()> {
-        self.try_set_u64("enable_analyze_table_stats", val)
+    pub fn set_enable_table_snapshot_stats(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_table_snapshot_stats ", val)
     }
 }

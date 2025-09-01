@@ -943,7 +943,7 @@ impl TestFixture {
             self.default_table_name()
         );
         let ctx = self.new_query_ctx().await?;
-        ctx.get_settings().set_enable_analyze_table_stats(1)?;
+        ctx.get_settings().set_enable_table_snapshot_stats(1)?;
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(&query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;

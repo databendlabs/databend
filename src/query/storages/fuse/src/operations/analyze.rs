@@ -225,7 +225,7 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
-        let table_statistics = if self.ctx.get_settings().get_enable_analyze_table_stats()? {
+        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()? {
             let stats = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
                 self.histograms.clone(),

@@ -151,7 +151,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             .get_sql_dialect()?
             .default_ident_quote();
         if self.ctx.get_settings().get_enable_analyze_histogram()?
-            && self.ctx.get_settings().get_enable_analyze_table_stats()?
+            && self.ctx.get_settings().get_enable_table_snapshot_stats()?
         {
             let histogram_sqls = table
                     .schema()
