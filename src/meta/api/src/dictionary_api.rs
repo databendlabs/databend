@@ -15,6 +15,7 @@
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -23,13 +24,11 @@ use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
-use crate::meta_txn_error::MetaTxnError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
@@ -37,6 +36,7 @@ use log::debug;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
@@ -191,7 +191,7 @@ where
 }
 
 /// Check dictionary does not exist by checking the seq number.
-/// 
+///
 /// seq == 0 means does not exist.
 /// seq > 0 means exist.
 ///

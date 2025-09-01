@@ -26,14 +26,12 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::TableAlreadyExists;
-use databend_common_meta_app::app_error::TableLockExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
-use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -48,24 +46,16 @@ use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedI
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::CreateLockRevReply;
-use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DroppedId;
-use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::ListLockRevReq;
-use databend_common_meta_app::schema::ListLocksReq;
-use databend_common_meta_app::schema::LockInfo;
-use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -116,6 +106,7 @@ use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
+use crate::lock_api::LockApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -133,8 +124,6 @@ use crate::util::txn_op_put_pb;
 use crate::util::txn_put_pb;
 use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
-use crate::util::IdempotentKVTxnResponse;
-use crate::util::IdempotentKVTxnSender;
 
 pub const ORPHAN_POSTFIX: &str = "orphan";
 
@@ -146,6 +135,7 @@ where
     Self: DatabaseApi,
     Self: DictionaryApi,
     Self: IndexApi,
+    Self: LockApi,
     Self: TableApi,
 {
 }
@@ -164,6 +154,7 @@ where
     Self: DatabaseApi,
     Self: DictionaryApi,
     Self: IndexApi,
+    Self: LockApi,
     Self: TableApi,
 {
     #[logcall::logcall]
@@ -360,149 +351,6 @@ where
         Ok(())
     }
 
-    #[fastrace::trace]
-    async fn list_lock_revisions(
-        &self,
-        req: ListLockRevReq,
-    ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let dir = req.lock_key.gen_prefix();
-        let strm = self.list_pb(&dir).await?;
-
-        let list = strm
-            .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        Ok(list)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_lock_revision(
-        &self,
-        req: CreateLockRevReq,
-    ) -> Result<CreateLockRevReply, KVAppError> {
-        let ctx = func_name!();
-        debug!(req :? =(&req); "SchemaApi: {}", ctx);
-
-        let lock_key = &req.lock_key;
-        let id_generator = IdGenerator::table_lock_id();
-
-        let mut trials = txn_backoff(None, ctx);
-        let txn_sender = IdempotentKVTxnSender::with_ttl(req.ttl);
-        loop {
-            trials.next().unwrap()?.await;
-
-            let current_rev = self.get_seq(&id_generator).await?;
-            let revision = current_rev + 1;
-            let key = lock_key.gen_key(revision);
-            let lock_meta = LockMeta {
-                user: req.user.clone(),
-                node: req.node.clone(),
-                query_id: req.query_id.clone(),
-                created_on: Utc::now(),
-                acquired_on: None,
-                lock_type: lock_key.lock_type(),
-                extra_info: lock_key.get_extra_info(),
-            };
-
-            let condition = vec![
-                txn_cond_seq(&id_generator, Eq, current_rev),
-                // assumes lock are absent.
-                txn_cond_seq(&key, Eq, 0),
-            ];
-            let if_then = vec![
-                txn_op_put(&id_generator, b"".to_vec()),
-                txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
-            ];
-            let txn_req = TxnRequest::new(condition, if_then);
-            let txn_response = txn_sender.send_txn(self, txn_req).await?;
-            match txn_response {
-                IdempotentKVTxnResponse::Success(_) => {
-                    return Ok(CreateLockRevReply { revision });
-                }
-                IdempotentKVTxnResponse::AlreadyCommitted => {
-                    info!(
-                        "Transaction ID {} exists, the lock revision has been created successfully",
-                        txn_sender.get_txn_id()
-                    );
-                    return Ok(CreateLockRevReply { revision });
-                }
-                _ => {
-                    // continue looping
-                }
-            }
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let ctx = func_name!();
-
-        let lock_key = &req.lock_key;
-        let table_id = lock_key.get_table_id();
-        let key = lock_key.gen_key(req.revision);
-
-        self.crud_update_existing(
-            &key,
-            |mut lock_meta| {
-                // Set `acquire_lock = true` to initialize `acquired_on` when the
-                // first time this lock is acquired. Before the lock is
-                // acquired(becoming the first in lock queue), or after being
-                // acquired, this argument is always `false`.
-                if req.acquire_lock {
-                    lock_meta.acquired_on = Some(Utc::now());
-                }
-                Some((lock_meta, Some(req.ttl)))
-            },
-            || {
-                Err(AppError::TableLockExpired(TableLockExpired::new(
-                    table_id, ctx,
-                )))
-            },
-        )
-        .await??;
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let lock_key = &req.lock_key;
-
-        let revision = req.revision;
-        let key = lock_key.gen_key(revision);
-
-        self.crud_remove(&key, || Ok::<(), ()>(())).await?.unwrap();
-
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
-        let mut reply = vec![];
-        for dir in &req.prefixes {
-            let strm = self.list_pb(dir).await?;
-            let locks = strm
-                .map_ok(|itm| LockInfo {
-                    table_id: itm.key.table_id(),
-                    revision: itm.key.revision(),
-                    meta: itm.seqv.data,
-                })
-                .try_collect::<Vec<_>>()
-                .await?;
-
-            reply.extend(locks);
-        }
-        Ok(reply)
-    }
-
     #[logcall::logcall]
     #[fastrace::trace]
     async fn set_table_lvt(
@@ -542,7 +390,6 @@ where
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
-
 
     #[logcall::logcall]
     #[fastrace::trace]
@@ -877,7 +724,6 @@ pub fn table_has_to_not_exist(
         )))
     }
 }
-
 
 pub fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
     TxnOp::put_with_ttl(
