@@ -1,0 +1,80 @@
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b INT CHECK (b > 0));
+
+statement ok
+INSERT INTO t1 VALUES (1, 10);
+
+statement error
+INSERT INTO t1 VALUES (2, 0);
+
+statement error
+INSERT INTO t1 VALUES (3, -5);
+
+statement ok
+CREATE OR REPLACE TABLE t2(x INT, y INT, CHECK (x < y));
+
+statement ok
+INSERT INTO t2 VALUES (1, 2);
+
+statement error
+INSERT INTO t2 VALUES (5, 5);
+
+statement error
+INSERT INTO t2 VALUES (10, 3);
+
+statement ok
+CREATE OR REPLACE TABLE t3(a INT CHECK (a % 2 = 0));
+
+statement ok
+INSERT INTO t3 VALUES (2);
+
+statement ok
+INSERT INTO t3 VALUES (4);
+
+statement error
+INSERT INTO t3 VALUES (3);
+
+statement ok
+CREATE OR REPLACE TABLE t4(
+    a INT CHECK (a > 0),
+    b INT CHECK (b < 100)
+);
+
+statement ok
+INSERT INTO t4 VALUES (10, 20);
+
+statement error
+INSERT INTO t4 VALUES (-1, 20);
+
+statement error
+INSERT INTO t4 VALUES (10, 200);
+
+statement ok
+CREATE OR REPLACE TABLE t5(a INT);
+
+statement ok
+INSERT INTO t5 VALUES (1);
+
+statement ok
+ALTER TABLE t5 ADD CONSTRAINT a_not_1 CHECK (a != 1);
+
+statement error
+INSERT INTO t5 VALUES (1);
+
+statement ok
+ALTER TABLE t5 DROP CONSTRAINT a_not_1;
+
+statement ok
+INSERT INTO t5 VALUES (1);
+
+statement error
+CREATE OR REPLACE TABLE t6(a INT CHECK (a != b));
+
+statement error
+CREATE OR REPLACE TABLE t6(a INT, CHECK (b != 1));
+
+statement ok
+CREATE OR REPLACE TABLE t6(a INT);
+
+statement error
+ALTER TABLE t5 ADD CONSTRAINT invalid_1 CHECK (b != 1);

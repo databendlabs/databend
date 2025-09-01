@@ -60,6 +60,15 @@ message TableIdent {
   uint64 seq = 2;
 }
 
+message Constraint {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  oneof constraint {
+    // Check Constraint Expression
+    string check = 2;
+  }
+}
 
 // TableMeta is a container of all non-identity information.
 message TableMeta {
@@ -128,6 +137,8 @@ message TableMeta {
   VirtualDataSchema virtual_schema = 32;
 
   optional string row_access_policy = 33;
+
+  map<string, Constraint> constraints = 34;
 }
 
 message TableIndex {

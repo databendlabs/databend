@@ -205,7 +205,10 @@ impl FromToProto for mt::TableMeta {
         } else {
             p.cluster_keys.len() as u32 - 1
         };
-
+        let mut constraints = BTreeMap::new();
+        for (constraint_name, constraint) in p.constraints {
+            constraints.insert(constraint_name, mt::Constraint::from_pb(constraint)?);
+        }
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
@@ -240,6 +243,7 @@ impl FromToProto for mt::TableMeta {
             row_access_policy: p.row_access_policy,
             indexes,
             virtual_schema,
+            constraints,
         };
         Ok(v)
     }
@@ -248,6 +252,10 @@ impl FromToProto for mt::TableMeta {
         let mut indexes = BTreeMap::new();
         for (name, index) in &self.indexes {
             indexes.insert(name.clone(), index.to_pb()?);
+        }
+        let mut constraints = BTreeMap::new();
+        for (constraint_name, constraint) in &self.constraints {
+            constraints.insert(constraint_name.clone(), constraint.to_pb()?);
         }
         let p = pb::TableMeta {
             ver: VER,
@@ -287,8 +295,40 @@ impl FromToProto for mt::TableMeta {
                 .as_ref()
                 .map(VirtualDataSchema::to_pb)
                 .transpose()?,
+            constraints,
         };
         Ok(p)
+    }
+}
+
+impl FromToProto for mt::Constraint {
+    type PB = pb::Constraint;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let constraint = p.constraint.ok_or_else(|| {
+            Incompatible::new("Invalid Constraint: .constraint can not be None".to_string())
+        })?;
+        Ok(match constraint {
+            pb::constraint::Constraint::Check(expr) => mt::Constraint::Check(expr),
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let constraint = match self {
+            mt::Constraint::Check(expr) => pb::constraint::Constraint::Check(expr.clone()),
+        };
+        Ok(pb::Constraint {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            constraint: Some(constraint),
+        })
     }
 }
 

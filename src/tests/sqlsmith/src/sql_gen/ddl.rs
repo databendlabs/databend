@@ -249,6 +249,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             name: new_column_name,
             data_type,
             expr: None,
+            check: None,
             comment: None,
         }
     }
@@ -261,6 +262,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             let name = format!("c{}", i);
             let data_type = self.gen_data_type_name(Some(i));
 
+            // TODO: check expr
             // TODO: computed expr
             // TODO: fix binary default value
             // TODO: fix interval default value
@@ -277,11 +279,12 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 name: Identifier::from_name(None, name),
                 data_type,
                 expr: default_expr,
+                check: None,
                 comment: None,
             };
             column_defs.push(column_def);
         }
-        CreateTableSource::Columns(column_defs, None)
+        CreateTableSource::Columns(column_defs, None, None)
     }
 }
 

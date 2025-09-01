@@ -251,7 +251,7 @@ build_exceptions! {
     UnsupportedClusterType(4013),
 }
 
-// Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130]
+// Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1133]
 build_exceptions! {
     /// Index out of bounds
     IndexOutOfBounds(1102),
@@ -287,6 +287,8 @@ build_exceptions! {
     UnknownRowAccessPolicy(1131),
     /// Alter Table error
     AlterTableError(1132),
+    /// Constraint error
+    ConstraintError(1133),
 }
 
 // Sequence Errors [1124-1126, 3101]

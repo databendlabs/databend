@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -58,6 +59,7 @@ pub struct CreateTablePlan {
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
     pub attached_columns: Option<Vec<Identifier>>,
 }

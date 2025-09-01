@@ -30,6 +30,7 @@ use databend_common_storages_system::ClusteringHistoryTable;
 use databend_common_storages_system::ClustersTable;
 use databend_common_storages_system::ColumnsTable;
 use databend_common_storages_system::ConfigsTable;
+use databend_common_storages_system::ConstraintsTable;
 use databend_common_storages_system::ContributorsTable;
 use databend_common_storages_system::CreditsTable;
 use databend_common_storages_system::DatabasesTableWithHistory;
@@ -174,6 +175,7 @@ impl SystemDatabase {
                     sys_db_meta.next_table_id(),
                     config.query.max_query_log_size,
                 ),
+                ConstraintsTable::create(sys_db_meta.next_table_id()),
             ]);
             if config.task.on {
                 table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));

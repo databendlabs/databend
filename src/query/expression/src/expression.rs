@@ -53,7 +53,7 @@ impl ColumnIndex for String {
 
 /// An unchecked expression that is directly discarded from SQL or constructed by the planner.
 /// It can be type-checked and then converted to an evaluable [`Expr`].
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 pub enum RawExpr<Index: ColumnIndex = usize> {
     Constant {
         span: Span,

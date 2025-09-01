@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::slice;
 use std::sync::Arc;
 
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
@@ -26,6 +27,8 @@ use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
+use databend_common_ast::ast::ConstraintDefinition;
+use databend_common_ast::ast::ConstraintType as AstConstraintType;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DescribeTableStmt;
@@ -81,6 +84,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
@@ -108,6 +112,7 @@ use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::ConstraintExprBinder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
@@ -116,6 +121,7 @@ use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -124,6 +130,7 @@ use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
+use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::ExistsTablePlan;
@@ -161,6 +168,7 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
 }
 
 impl Binder {
@@ -629,7 +637,7 @@ impl Binder {
         };
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, _)) = &source {
+        if let Some(CreateTableSource::Columns(cols, _, _)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
@@ -649,12 +657,13 @@ impl Binder {
                 schema,
                 field_comments,
                 table_indexes,
+                table_constraints,
             },
             as_query_plan,
         ) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
-                let result = self.analyze_create_table_schema(source).await?;
+                let result = self.analyze_create_table_schema(&table, source).await?;
                 (result, None)
             }
             (None, Some(query)) => {
@@ -681,13 +690,14 @@ impl Binder {
                         schema,
                         field_comments: vec![],
                         table_indexes: None,
+                        table_constraints: None,
                     },
                     Some(Box::new(as_query_plan)),
                 )
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let result = self.analyze_create_table_schema(source).await?;
+                let result = self.analyze_create_table_schema(&table, source).await?;
                 let as_query_plan = self.as_query_plan(query).await?;
                 let bind_context = as_query_plan.bind_context().unwrap();
                 let query_fields: Vec<TableField> = bind_context
@@ -727,6 +737,7 @@ impl Binder {
                             schema: Arc::new(table_schema),
                             field_comments: vec![],
                             table_indexes: None,
+                            table_constraints: None,
                         }, as_query_plan)
                     }
                     Engine::Delta => {
@@ -743,6 +754,7 @@ impl Binder {
                             schema: Arc::new(table_schema),
                             field_comments: vec![],
                             table_indexes: None,
+                            table_constraints: None,
                         }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -829,6 +841,11 @@ impl Binder {
                 "Table engine {} does not support create index",
                 engine
             )));
+        } else if table_constraints.is_some() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table engine {} does not support create constraints",
+                engine
+            )));
         }
 
         let mut cluster_key = None;
@@ -862,6 +879,7 @@ impl Binder {
             cluster_key,
             as_select: as_query_plan,
             table_indexes,
+            table_constraints,
             attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -930,6 +948,7 @@ impl Binder {
             cluster_key: None,
             as_select: None,
             table_indexes: None,
+            table_constraints: None,
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -1091,6 +1110,40 @@ impl Binder {
                     option,
                     is_deterministic,
                 })))
+            }
+            AlterTableAction::AddConstraint { constraint } => {
+                let schema = self
+                    .ctx
+                    .get_table(&catalog, &database, &table)
+                    .await?
+                    .schema();
+                let (constraint_name, constraint) = self
+                    .analyze_constraints(&table, schema, slice::from_ref(constraint))
+                    .await?
+                    .pop_first()
+                    .unwrap();
+
+                Ok(Plan::AddTableConstraint(Box::new(AddTableConstraintPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    constraint_name,
+                    constraint,
+                })))
+            }
+            AlterTableAction::DropConstraint { constraint_name } => {
+                let constraint_name = self.normalize_object_identifier(constraint_name);
+
+                Ok(Plan::DropTableConstraint(Box::new(
+                    DropTableConstraintPlan {
+                        tenant,
+                        catalog,
+                        database,
+                        table,
+                        constraint_name,
+                    },
+                )))
             }
             AlterTableAction::ModifyColumn { action } => {
                 let mut lock_guard = None;
@@ -1721,6 +1774,50 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    async fn analyze_constraints(
+        &self,
+        table_name: &str,
+        table_schema: TableSchemaRef,
+        constraint_defs: &[ConstraintDefinition],
+    ) -> Result<BTreeMap<String, Constraint>> {
+        let mut constraints = BTreeMap::new();
+        let mut binder =
+            ConstraintExprBinder::try_new(self.ctx.clone(), Arc::new(table_schema.clone().into()))?;
+
+        for constraint_def in constraint_defs {
+            let (constraint, used_columns) = match &constraint_def.constraint_type {
+                AstConstraintType::Check(expr) => {
+                    // test check expr bindable
+                    let scalar_expr = binder.bind(expr)?;
+
+                    (
+                        Constraint::Check(expr.to_string()),
+                        scalar_expr.used_columns(),
+                    )
+                }
+            };
+            let name = constraint_def
+                .name
+                .as_ref()
+                .map(|ident| self.normalize_object_identifier(ident))
+                .unwrap_or_else(|| {
+                    let base_name = binder.default_name(table_name, &used_columns, &constraint);
+                    let mut index = 0;
+
+                    let mut constraint_name = base_name.clone();
+                    while constraints.contains_key(&constraint_name) {
+                        index += 1;
+                        constraint_name = format!("{}{}", base_name, index);
+                    }
+                    constraint_name
+                });
+            constraints.insert(name, constraint);
+        }
+
+        Ok(constraints)
+    }
+
+    #[async_backtrace::framed]
     async fn analyze_table_indexes(
         &self,
         table_schema: TableSchemaRef,
@@ -1782,10 +1879,11 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_create_table_schema(
         &self,
+        table: &str,
         source: &CreateTableSource,
     ) -> Result<AnalyzeCreateTableResult> {
         match source {
-            CreateTableSource::Columns(columns, table_index_defs) => {
+            CreateTableSource::Columns(columns, table_index_defs, constraint_defs) => {
                 let (schema, comments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let table_indexes = if let Some(table_index_defs) = table_index_defs {
@@ -1796,10 +1894,19 @@ impl Binder {
                 } else {
                     None
                 };
+                let table_constraints = if let Some(constraints) = constraint_defs {
+                    let constraints = self
+                        .analyze_constraints(table, schema.clone(), constraints)
+                        .await?;
+                    Some(constraints)
+                } else {
+                    None
+                };
                 Ok(AnalyzeCreateTableResult {
                     schema,
                     field_comments: comments,
                     table_indexes,
+                    table_constraints,
                 })
             }
             CreateTableSource::Like {
@@ -1819,6 +1926,7 @@ impl Binder {
                             schema: infer_table_schema(&plan.schema())?,
                             field_comments: vec![],
                             table_indexes: None,
+                            table_constraints: None,
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -1830,6 +1938,7 @@ impl Binder {
                         schema: table.schema(),
                         field_comments: table.field_comments().clone(),
                         table_indexes: None,
+                        table_constraints: None,
                     })
                 }
             }

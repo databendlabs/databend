@@ -276,10 +276,12 @@ impl Binder {
                             name: ident.clone(),
                             data_type,
                             expr: None,
+                            check: None,
                             comment: None,
                         }
                     })
                     .collect(),
+                None,
                 None,
             ))
         };
