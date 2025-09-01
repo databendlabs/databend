@@ -118,7 +118,7 @@ impl Settings {
                         if DefaultSettings::check_setting_scope(&name, SettingScope::Global)
                             .is_err()
                         {
-                            // the settings is session only, ignore the global setting
+                            // the setting is session only, ignore the global setting
                             warn!(
                                 "[SETTINGS] Ignoring session-only setting at global scope: {} = {}",
                                 name, val

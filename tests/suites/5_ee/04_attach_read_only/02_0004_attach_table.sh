@@ -10,7 +10,7 @@ stmt "drop table if exists table_to2;"
 
 
 ## Create table
-stmt "create table table_from(a int) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
+stmt "create table table_from(a int) 's3://testbucket/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
 
 ## used self-defined connection
 stmt "drop connection if exists my_conn;"
@@ -29,10 +29,10 @@ done
 storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_options_in_show_create_table=0;show create table table_from" | grep -i snapshot_location | awk -F'SNAPSHOT_LOCATION='"'"'|_ss' '{print $2}')
 
 comment "attaching table"
-echo "attach table table_to 's3://testbucket/admin/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "attach table table_to 's3://testbucket/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
 # If failed will return err msg. Expect it success.
 echo "select * from system.columns where table='table_to' ignore_result;" | $BENDSQL_CLIENT_CONNECT
-echo "attach table table_to2 's3://testbucket/admin/data/$storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+echo "attach table table_to2 's3://testbucket/data/$storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 
 # ## Select table
@@ -59,7 +59,7 @@ echo "##############################"
 echo "# implicitly include columns #"
 echo "##############################"
 
-stmt "create or replace table base(c1 string, c2 string, c3 string, c4 string) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
+stmt "create or replace table base(c1 string, c2 string, c3 string, c4 string) 's3://testbucket/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');"
 
 stmt "insert into base values('c1', 'c2', 'c3', 'c4')"
 
@@ -68,7 +68,7 @@ base_storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_optio
 stmt "drop table if exists attach_tbl"
 
 echo "attaching base table"
-echo "attach table attach_tbl (c2, c4) 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+echo "attach table attach_tbl (c2, c4) 's3://testbucket/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 query "select * from attach_tbl"
 
@@ -80,7 +80,7 @@ stmt "drop table if exists attach_tbl"
 
 # include non-exist column should fail
 echo "attaching non-exists column"
-echo "attach table attach_tbl (c2, c_not_exist) 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+echo "attach table attach_tbl (c2, c_not_exist) 's3://testbucket/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 
 
@@ -90,13 +90,13 @@ echo "## access renamed columns ###"
 echo "#############################"
 
 stmt "drop table if exists attach_tbl"
-echo "attach table attach_tbl (c2, c4) 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+echo "attach table attach_tbl (c2, c4) 's3://testbucket/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 stmt "alter table base RENAME COLUMN c2 to c2_new"
 
 echo "'ATTACH' after 'ALTER TABLE RENAME COLUMN' should see the new name of column"
 stmt "drop table if exists attach_tbl2"
-echo "attach table attach_tbl2 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+echo "attach table attach_tbl2 's3://testbucket/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 query "desc attach_tbl2"
 
 stmt "insert into base values('c1', 'c2_new', 'c3', 'c4')"

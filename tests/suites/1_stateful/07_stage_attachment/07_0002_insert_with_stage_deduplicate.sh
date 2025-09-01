@@ -17,7 +17,7 @@ CREATE TABLE sample_table
 );
 EOF
 
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
 
 ## Copy from internal stage
 echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $BENDSQL_CLIENT_CONNECT

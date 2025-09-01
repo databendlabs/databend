@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "drop stage if exists presign_stage" | $BENDSQL_CLIENT_CONNECT
 
-aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/admin/data/ontime_200.csv s3://testbucket/admin/stage/internal/presign_stage/ontime_200.csv >/dev/null 2>&1
+aws --endpoint-url http://127.0.0.1:9900/ s3 cp s3://testbucket/data/ontime_200.csv s3://testbucket/admin/stage/internal/presign_stage/ontime_200.csv >/dev/null 2>&1
 
 echo "CREATE STAGE presign_stage;" | $BENDSQL_CLIENT_CONNECT
 
