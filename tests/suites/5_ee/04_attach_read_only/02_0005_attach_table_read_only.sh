@@ -113,7 +113,7 @@ echo "select * from attach_read_only order by number" | $BENDSQL_CLIENT_CONNECT
 # 4.2 show create table
 echo "show create attach table"
 # since db_id and table_id varies between executions, replace them with PLACE_HOLDER
-# e.g. s3://testbucket/admin/data/1/401/ to s3://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/
+# e.g. s3://testbucket/data/1/401/ to s3://testbucket/data/PLACE_HOLDER/PLACE_HOLDER/
 echo "show create table attach_read_only" | $BENDSQL_CLIENT_CONNECT | sed -E 's/[0-9]+/PLACE_HOLDER/g'
 
 # 4.2 copy into

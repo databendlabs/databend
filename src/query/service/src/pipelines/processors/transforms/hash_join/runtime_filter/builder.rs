@@ -31,12 +31,14 @@ use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
-use crate::pipelines::processors::transforms::hash_join::hash_join_build_state::INLIST_RUNTIME_FILTER_THRESHOLD;
 use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
 
 struct JoinRuntimeFilterPacketBuilder<'a> {
     build_key_column: Column,
     func_ctx: &'a FunctionContext,
+    inlist_threshold: usize,
+    bloom_threshold: usize,
+    min_max_threshold: usize,
 }
 
 impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
@@ -44,11 +46,17 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         data_blocks: &'a [DataBlock],
         func_ctx: &'a FunctionContext,
         build_key: &Expr,
+        inlist_threshold: usize,
+        bloom_threshold: usize,
+        min_max_threshold: usize,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
             func_ctx,
             build_key_column,
+            inlist_threshold,
+            bloom_threshold,
+            min_max_threshold,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
@@ -73,16 +81,15 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 
     fn enable_min_max(&self, desc: &RuntimeFilterDesc) -> bool {
-        desc.enable_min_max_runtime_filter
+        desc.enable_min_max_runtime_filter && self.build_key_column.len() < self.min_max_threshold
     }
 
     fn enable_inlist(&self, desc: &RuntimeFilterDesc) -> bool {
-        desc.enable_inlist_runtime_filter
-            && self.build_key_column.len() < INLIST_RUNTIME_FILTER_THRESHOLD
+        desc.enable_inlist_runtime_filter && self.build_key_column.len() < self.inlist_threshold
     }
 
     fn enable_bloom(&self, desc: &RuntimeFilterDesc) -> bool {
-        desc.enable_bloom_runtime_filter
+        desc.enable_bloom_runtime_filter && self.build_key_column.len() < self.bloom_threshold
     }
 
     fn build_min_max(&self) -> Result<SerializableDomain> {
@@ -147,6 +154,9 @@ pub fn build_runtime_filter_packet(
     build_num_rows: usize,
     runtime_filter_desc: &[RuntimeFilterDesc],
     func_ctx: &FunctionContext,
+    inlist_threshold: usize,
+    bloom_threshold: usize,
+    min_max_threshold: usize,
 ) -> Result<JoinRuntimeFilterPacket> {
     if build_num_rows == 0 {
         return Ok(JoinRuntimeFilterPacket::default());
@@ -155,8 +165,15 @@ pub fn build_runtime_filter_packet(
     for rf in runtime_filter_desc {
         runtime_filters.insert(
             rf.id,
-            JoinRuntimeFilterPacketBuilder::new(build_chunks, func_ctx, &rf.build_key)?
-                .build(rf)?,
+            JoinRuntimeFilterPacketBuilder::new(
+                build_chunks,
+                func_ctx,
+                &rf.build_key,
+                inlist_threshold,
+                bloom_threshold,
+                min_max_threshold,
+            )?
+            .build(rf)?,
         );
     }
     Ok(JoinRuntimeFilterPacket {

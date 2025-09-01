@@ -2,7 +2,7 @@
 >>>> drop table if exists table_from2;
 >>>> drop table if exists table_to;
 >>>> drop table if exists table_to2;
->>>> create table table_from(a int) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
+>>>> create table table_from(a int) 's3://testbucket/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
 >>>> drop connection if exists my_conn;
 >>>> create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
 >>>> insert into table_from(a) values(0)
@@ -47,7 +47,7 @@ Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'table_to'
 ##############################
 # implicitly include columns #
 ##############################
->>>> create or replace table base(c1 string, c2 string, c3 string, c4 string) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
+>>>> create or replace table base(c1 string, c2 string, c3 string, c4 string) 's3://testbucket/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
 >>>> insert into base values('c1', 'c2', 'c3', 'c4')
 1
 >>>> drop table if exists attach_tbl

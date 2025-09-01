@@ -370,7 +370,7 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
-├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t1.a (#0) = 2)]
+├── filters: [or_filters((t1.a (#0) > 1 AND t2.a (#2) > 2), (t1.b (#1) < 3 AND t2.b (#3) < 4), t1.a (#0) = 2)]
 ├── estimated rows: 4.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -382,7 +382,7 @@ Filter
     ├── estimated rows: 5.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
-    │   ├── filters: [((t1.a (#0) > 1 OR t1.b (#1) < 3) OR t1.a (#0) = 2)]
+    │   ├── filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 3, t1.a (#0) = 2)]
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
@@ -392,7 +392,7 @@ Filter
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-    │       ├── push downs: [filters: [((t1.a (#0) > 1 OR t1.b (#1) < 3) OR t1.a (#0) = 2)], limit: NONE]
+    │       ├── push downs: [filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 3, t1.a (#0) = 2)], limit: NONE]
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
@@ -420,7 +420,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── keys is null equal: []
-├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
+├── filters: [or_filters((t1.a (#0) > 1 AND t2.a (#2) > 2), (t1.b (#1) < 3 AND t2.b (#3) < 4), t3.a (#4) = 2)]
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
@@ -553,7 +553,7 @@ Limit
             ├── estimated rows: 4.40
             ├── Filter(Build)
             │   ├── output columns: [t1.a (#0), t1.b (#1)]
-            │   ├── filters: [((t1.a (#0) > 1 OR t1.b (#1) < 2) OR t1.b (#1) < 3)]
+            │   ├── filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 2, t1.b (#1) < 3)]
             │   ├── estimated rows: 1.00
             │   └── TableScan
             │       ├── table: default.default.t1
@@ -563,7 +563,7 @@ Limit
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
             │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │       ├── push downs: [filters: [((t1.a (#0) > 1 OR t1.b (#1) < 2) OR t1.b (#1) < 3)], limit: NONE]
+            │       ├── push downs: [filters: [or_filters(t1.a (#0) > 1, t1.b (#1) < 2, t1.b (#1) < 3)], limit: NONE]
             │       └── estimated rows: 1.00
             └── Filter(Probe)
                 ├── output columns: [t2.a (#2), t2.b (#3)]
