@@ -353,7 +353,35 @@ pub struct UpdateStreamMetasFailed {
     message: String,
 }
 
-impl crate::app_error::UpdateStreamMetasFailed {
+impl UpdateStreamMetasFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("MarkDatabaseMetaAsGCInProgressFailed : {message}")]
+pub struct MarkDatabaseMetaAsGCInProgressFailed {
+    message: String,
+}
+
+impl MarkDatabaseMetaAsGCInProgressFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("CleanDbIdTableNamesFailed : {message}")]
+pub struct CleanDbIdTableNamesFailed {
+    message: String,
+}
+
+impl CleanDbIdTableNamesFailed {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -1123,6 +1151,12 @@ pub enum AppError {
     #[error(transparent)]
     UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 
+    #[error(transparent)]
+    MarkDatabaseMetaAsGCInProgressFailed(#[from] MarkDatabaseMetaAsGCInProgressFailed),
+
+    #[error(transparent)]
+    CleanDbIdTableNamesFailed(#[from] CleanDbIdTableNamesFailed),
+
     // dictionary
     #[error(transparent)]
     DictionaryAlreadyExists(
@@ -1188,11 +1222,7 @@ impl AppErrorMessage for TenantIsEmpty {
     }
 }
 
-impl AppErrorMessage for UnknownDatabase {
-    fn message(&self) -> String {
-        format!("Unknown database '{}'", self.db_name)
-    }
-}
+impl AppErrorMessage for UnknownDatabase {}
 
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
@@ -1237,6 +1267,10 @@ impl AppErrorMessage for UnknownStreamId {}
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
 impl AppErrorMessage for UpdateStreamMetasFailed {}
+
+impl AppErrorMessage for MarkDatabaseMetaAsGCInProgressFailed {}
+
+impl AppErrorMessage for CleanDbIdTableNamesFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
@@ -1651,6 +1685,12 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::VirtualColumnIdOutBound(err.message())
             }
             AppError::VirtualColumnTooMany(err) => ErrorCode::VirtualColumnTooMany(err.message()),
+            AppError::MarkDatabaseMetaAsGCInProgressFailed(err) => {
+                ErrorCode::UndropDbGeneralFailure(err.message())
+            }
+            AppError::CleanDbIdTableNamesFailed(err) => {
+                ErrorCode::UndropDbGeneralFailure(err.message())
+            }
         }
     }
 }
