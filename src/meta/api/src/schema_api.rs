@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::any::type_name;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::ops::Range;
@@ -26,23 +24,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::TableAlreadyExists;
-use databend_common_meta_app::app_error::TableLockExpired;
-use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
-use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
-use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
-use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
@@ -51,38 +39,18 @@ use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedI
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::CreateDictionaryReply;
-use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::CreateLockRevReply;
-use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::DictionaryIdentity;
-use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DroppedId;
-use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::LeastVisibleTime;
-use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::ListLockRevReq;
-use databend_common_meta_app::schema::ListLocksReq;
-use databend_common_meta_app::schema::LockInfo;
-use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
-use databend_common_meta_app::schema::RenameDictionaryReq;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -93,15 +61,11 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::ConditionResult;
-use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
@@ -121,14 +85,15 @@ use ConditionResult::Eq;
 use crate::catalog_api::CatalogApi;
 use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
-use crate::errors::TableError;
+use crate::dictionary_api::DictionaryApi;
 use crate::get_u64_value;
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
+use crate::lock_api::LockApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::NameIdValueApi;
+use crate::security_api::SecurityApi;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -143,10 +108,7 @@ use crate::util::is_drop_time_retainable;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
 use crate::util::txn_put_pb;
-use crate::util::txn_replace_exact;
 use crate::util::unknown_database_error;
-use crate::util::IdempotentKVTxnResponse;
-use crate::util::IdempotentKVTxnSender;
 
 pub const ORPHAN_POSTFIX: &str = "orphan";
 
@@ -156,7 +118,10 @@ where
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
     Self: CatalogApi,
     Self: DatabaseApi,
+    Self: DictionaryApi,
     Self: IndexApi,
+    Self: LockApi,
+    Self: SecurityApi,
     Self: TableApi,
 {
 }
@@ -173,188 +138,12 @@ where
     Self: kvapi::KVApi<Error = MetaError>,
     Self: CatalogApi,
     Self: DatabaseApi,
+    Self: DictionaryApi,
     Self: IndexApi,
+    Self: LockApi,
+    Self: SecurityApi,
     Self: TableApi,
 {
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn set_table_column_mask_policy(
-        &self,
-        req: SetTableColumnMaskPolicyReq,
-    ) -> Result<SetTableColumnMaskPolicyReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let tbid = TableId {
-            table_id: req.table_id,
-        };
-        let req_seq = req.seq;
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let seq_meta = self.get_pb(&tbid).await?;
-
-            debug!(ident :% =(&tbid); "set_table_column_mask_policy");
-
-            let Some(seq_meta) = seq_meta else {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "set_table_column_mask_policy"),
-                )));
-            };
-
-            if req_seq.match_seq(&seq_meta.seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        seq_meta.seq,
-                        "set_table_column_mask_policy",
-                    ),
-                )));
-            }
-
-            // upsert column mask policy
-            let table_meta = seq_meta.data;
-
-            let mut new_table_meta = table_meta.clone();
-            if new_table_meta.column_mask_policy.is_none() {
-                let column_mask_policy = BTreeMap::default();
-                new_table_meta.column_mask_policy = Some(column_mask_policy);
-            }
-
-            match &req.action {
-                SetTableColumnMaskPolicyAction::Set(new_mask_name, _old_mask_name) => {
-                    new_table_meta
-                        .column_mask_policy
-                        .as_mut()
-                        .unwrap()
-                        .insert(req.column.clone(), new_mask_name.clone());
-                }
-                SetTableColumnMaskPolicyAction::Unset(_) => {
-                    new_table_meta
-                        .column_mask_policy
-                        .as_mut()
-                        .unwrap()
-                        .remove(&req.column);
-                }
-            }
-
-            let mut txn_req = TxnRequest::new(
-                vec![
-                    // table is not changed
-                    txn_cond_seq(&tbid, Eq, seq_meta.seq),
-                ],
-                vec![
-                    txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
-                ],
-            );
-
-            let _ = update_mask_policy(self, &req.action, &mut txn_req, &req.tenant, req.table_id)
-                .await;
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                id :? =(&tbid),
-                succ = succ;
-                "set_table_column_mask_policy"
-            );
-
-            if succ {
-                return Ok(SetTableColumnMaskPolicyReply {});
-            }
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn set_table_row_access_policy(
-        &self,
-        req: SetTableRowAccessPolicyReq,
-    ) -> Result<Result<SetTableRowAccessPolicyReply, TableError>, MetaTxnError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let tbid = TableId {
-            table_id: req.table_id,
-        };
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let seq_meta = self.get_pb(&tbid).await?;
-
-            debug!(ident :% =(&tbid); "set_table_row_access_policy");
-
-            let Some(seq_meta) = seq_meta else {
-                return Ok(Err(TableError::UnknownTableId {
-                    tenant: req.tenant.tenant_name().to_string(),
-                    table_id: req.table_id,
-                    context: "set_table_row_access_policy".to_string(),
-                }));
-            };
-
-            // upsert row access policy
-            let table_meta = seq_meta.data;
-            let mut new_table_meta = table_meta.clone();
-            let id = RowAccessPolicyIdTableId {
-                policy_id: req.policy_id,
-                table_id: req.table_id,
-            };
-            let ident = RowAccessPolicyTableIdIdent::new_generic(req.tenant.clone(), id);
-
-            let mut txn_req = TxnRequest::default();
-
-            txn_req
-                .condition
-                .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
-            match &req.action {
-                SetTableRowAccessPolicyAction::Set(new_mask_name) => {
-                    if table_meta.row_access_policy.is_some() {
-                        return Ok(Err(TableError::AlterTableError {
-                            tenant: req.tenant.tenant_name().to_string(),
-                            context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.".to_string(),
-                        }));
-                    }
-                    new_table_meta.row_access_policy = Some(new_mask_name.to_string());
-                    txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy Some */
-                        txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
-                    ];
-                }
-                SetTableRowAccessPolicyAction::Unset(old_policy) => {
-                    // drop row access policy and table does not have row access policy
-                    if let Some(policy) = &table_meta.row_access_policy {
-                        if policy != old_policy {
-                            return Ok(Err(TableError::AlterTableError {
-                                tenant: req.tenant.tenant_name().to_string(),
-                                context: format!("Unknown row access policy {} on table", policy),
-                            }));
-                        }
-                    } else {
-                        return Ok(Ok(SetTableRowAccessPolicyReply {}));
-                    }
-                    new_table_meta.row_access_policy = None;
-                    txn_req.if_then = vec![
-                        txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy None */
-                        txn_op_del(&ident), // table drop row access policy, del policy_tb_id
-                    ];
-                }
-            }
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                id :? =(&tbid),
-                succ = succ;
-                "set_table_row_access_policy"
-            );
-
-            if succ {
-                return Ok(Ok(SetTableRowAccessPolicyReply {}));
-            }
-        }
-    }
-
     #[fastrace::trace]
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
         for drop_id in req.drop_ids {
@@ -368,149 +157,6 @@ where
             }
         }
         Ok(())
-    }
-
-    #[fastrace::trace]
-    async fn list_lock_revisions(
-        &self,
-        req: ListLockRevReq,
-    ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let dir = req.lock_key.gen_prefix();
-        let strm = self.list_pb(&dir).await?;
-
-        let list = strm
-            .map_ok(|itm| (itm.key.revision(), itm.seqv.data))
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        Ok(list)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_lock_revision(
-        &self,
-        req: CreateLockRevReq,
-    ) -> Result<CreateLockRevReply, KVAppError> {
-        let ctx = func_name!();
-        debug!(req :? =(&req); "SchemaApi: {}", ctx);
-
-        let lock_key = &req.lock_key;
-        let id_generator = IdGenerator::table_lock_id();
-
-        let mut trials = txn_backoff(None, ctx);
-        let txn_sender = IdempotentKVTxnSender::with_ttl(req.ttl);
-        loop {
-            trials.next().unwrap()?.await;
-
-            let current_rev = self.get_seq(&id_generator).await?;
-            let revision = current_rev + 1;
-            let key = lock_key.gen_key(revision);
-            let lock_meta = LockMeta {
-                user: req.user.clone(),
-                node: req.node.clone(),
-                query_id: req.query_id.clone(),
-                created_on: Utc::now(),
-                acquired_on: None,
-                lock_type: lock_key.lock_type(),
-                extra_info: lock_key.get_extra_info(),
-            };
-
-            let condition = vec![
-                txn_cond_seq(&id_generator, Eq, current_rev),
-                // assumes lock are absent.
-                txn_cond_seq(&key, Eq, 0),
-            ];
-            let if_then = vec![
-                txn_op_put(&id_generator, b"".to_vec()),
-                txn_op_put_pb(&key, &lock_meta, Some(req.ttl))?,
-            ];
-            let txn_req = TxnRequest::new(condition, if_then);
-            let txn_response = txn_sender.send_txn(self, txn_req).await?;
-            match txn_response {
-                IdempotentKVTxnResponse::Success(_) => {
-                    return Ok(CreateLockRevReply { revision });
-                }
-                IdempotentKVTxnResponse::AlreadyCommitted => {
-                    info!(
-                        "Transaction ID {} exists, the lock revision has been created successfully",
-                        txn_sender.get_txn_id()
-                    );
-                    return Ok(CreateLockRevReply { revision });
-                }
-                _ => {
-                    // continue looping
-                }
-            }
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let ctx = func_name!();
-
-        let lock_key = &req.lock_key;
-        let table_id = lock_key.get_table_id();
-        let key = lock_key.gen_key(req.revision);
-
-        self.crud_update_existing(
-            &key,
-            |mut lock_meta| {
-                // Set `acquire_lock = true` to initialize `acquired_on` when the
-                // first time this lock is acquired. Before the lock is
-                // acquired(becoming the first in lock queue), or after being
-                // acquired, this argument is always `false`.
-                if req.acquire_lock {
-                    lock_meta.acquired_on = Some(Utc::now());
-                }
-                Some((lock_meta, Some(req.ttl)))
-            },
-            || {
-                Err(AppError::TableLockExpired(TableLockExpired::new(
-                    table_id, ctx,
-                )))
-            },
-        )
-        .await??;
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let lock_key = &req.lock_key;
-
-        let revision = req.revision;
-        let key = lock_key.gen_key(revision);
-
-        self.crud_remove(&key, || Ok::<(), ()>(())).await?.unwrap();
-
-        Ok(())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
-        let mut reply = vec![];
-        for dir in &req.prefixes {
-            let strm = self.list_pb(dir).await?;
-            let locks = strm
-                .map_ok(|itm| LockInfo {
-                    table_id: itm.key.table_id(),
-                    revision: itm.key.revision(),
-                    meta: itm.seqv.data,
-                })
-                .try_collect::<Vec<_>>()
-                .await?;
-
-            reply.extend(locks);
-        }
-        Ok(reply)
     }
 
     #[logcall::logcall]
@@ -551,140 +197,6 @@ where
 
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
-    }
-
-    // dictionary
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn create_dictionary(
-        &self,
-        req: CreateDictionaryReq,
-    ) -> Result<CreateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
-
-        let name_ident = &req.dictionary_ident;
-
-        let create_res = self
-            .create_id_value(
-                name_ident,
-                &req.dictionary_meta,
-                false,
-                |_| vec![],
-                |_, _| Ok(vec![]),
-            )
-            .await?;
-
-        match create_res {
-            Ok(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
-            Err(_existent) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn update_dictionary(
-        &self,
-        req: UpdateDictionaryReq,
-    ) -> Result<UpdateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
-
-        let res = self
-            .update_id_value(&req.dictionary_ident, req.dictionary_meta)
-            .await?;
-
-        if let Some((id, _meta)) = res {
-            Ok(UpdateDictionaryReply { dictionary_id: *id })
-        } else {
-            Err(AppError::from(req.dictionary_ident.unknown_error(func_name!())).into())
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn drop_dictionary(
-        &self,
-        name_ident: DictionaryNameIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaTxnError> {
-        debug!(dict_ident :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let removed = self.remove_id_value(&name_ident, |_| vec![]).await?;
-        Ok(removed.map(|(_, meta)| meta))
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn get_dictionary(
-        &self,
-        name_ident: DictionaryNameIdent,
-    ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError> {
-        debug!(dict_ident :? =(&name_ident); "SchemaApi: {}", func_name!());
-
-        let got = self.get_id_value(&name_ident).await?;
-        Ok(got)
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn list_dictionaries(
-        &self,
-        req: ListDictionaryReq,
-    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let dictionary_ident = DictionaryNameIdent::new(
-            req.tenant.clone(),
-            DictionaryIdentity::new(req.db_id, "dummy".to_string()),
-        );
-        let dir = DirName::new(dictionary_ident);
-        let name_id_values = self.list_id_value(&dir).await?;
-        Ok(name_id_values
-            .map(|(name, _seq_id, seq_meta)| (name.dict_name(), seq_meta.data))
-            .collect())
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let dict_id = self
-                .get_pb(&req.name_ident)
-                .await?
-                .ok_or_else(|| AppError::from(req.name_ident.unknown_error(func_name!())))?;
-
-            let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
-            let new_dict_id_seq = self.get_seq(&new_name_ident).await?;
-            let _ = dict_has_to_not_exist(new_dict_id_seq, &new_name_ident, "rename_dictionary")
-                .map_err(|_| AppError::from(new_name_ident.exist_error(func_name!())))?;
-
-            let condition = vec![
-                txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
-                txn_cond_seq(&new_name_ident, Eq, 0),
-            ];
-            let if_then = vec![
-                txn_op_del(&req.name_ident),                          // del old dict name
-                txn_op_put_pb(&new_name_ident, &dict_id.data, None)?, // put new dict name
-            ];
-
-            let txn_req = TxnRequest::new(condition, if_then);
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                name :? =(req.name_ident),
-                to :? =(&new_name_ident),
-                succ = succ;
-                "rename_dictionary"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
     }
 
     #[logcall::logcall]
@@ -1018,22 +530,6 @@ pub fn table_has_to_not_exist(
         Err(KVAppError::AppError(AppError::TableAlreadyExists(
             TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
         )))
-    }
-}
-
-/// Return OK if a dictionary_id or dictionary_meta does not exist by checking the seq.
-///
-/// Otherwise returns DictionaryAlreadyExists error
-fn dict_has_to_not_exist(
-    seq: u64,
-    name_ident: &DictionaryNameIdent,
-    _ctx: impl Display,
-) -> Result<(), ExistError<DictionaryNameRsc, DictionaryIdentity>> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-        Err(name_ident.exist_error(func_name!()))
     }
 }
 
@@ -1418,71 +914,6 @@ async fn remove_index_for_dropped_table(
         txn.if_then.push(txn_op_del(&name_ident)); // (tenant, index_name) -> index_id
         txn.if_then.push(txn_op_del(&id_ident)); // (index_id) -> index_meta
         txn.if_then.push(txn_op_del(&id_to_name_ident)); // __fd_index_id_to_name/<index_id> -> (tenant,index_name)
-    }
-
-    Ok(())
-}
-
-async fn update_mask_policy(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    action: &SetTableColumnMaskPolicyAction,
-    txn_req: &mut TxnRequest,
-    tenant: &Tenant,
-    table_id: u64,
-) -> Result<(), KVAppError> {
-    /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
-    async fn update_table_ids(
-        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-        txn_req: &mut TxnRequest,
-        key: MaskPolicyTableIdListIdent,
-        f: impl FnOnce(&mut BTreeSet<u64>),
-    ) -> Result<(), KVAppError> {
-        let Some(mut seq_list) = kv_api.get_pb(&key).await? else {
-            return Ok(());
-        };
-
-        f(&mut seq_list.data.id_list);
-
-        txn_replace_exact(txn_req, &key, seq_list.seq, &seq_list.data)?;
-
-        Ok(())
-    }
-
-    match action {
-        SetTableColumnMaskPolicyAction::Set(new_mask_name, old_mask_name_opt) => {
-            update_table_ids(
-                kv_api,
-                txn_req,
-                MaskPolicyTableIdListIdent::new(tenant.clone(), new_mask_name),
-                |list: &mut BTreeSet<u64>| {
-                    list.insert(table_id);
-                },
-            )
-            .await?;
-
-            if let Some(old) = old_mask_name_opt {
-                update_table_ids(
-                    kv_api,
-                    txn_req,
-                    MaskPolicyTableIdListIdent::new(tenant.clone(), old),
-                    |list: &mut BTreeSet<u64>| {
-                        list.remove(&table_id);
-                    },
-                )
-                .await?;
-            }
-        }
-        SetTableColumnMaskPolicyAction::Unset(mask_name) => {
-            update_table_ids(
-                kv_api,
-                txn_req,
-                MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name),
-                |list: &mut BTreeSet<u64>| {
-                    list.remove(&table_id);
-                },
-            )
-            .await?;
-        }
     }
 
     Ok(())
