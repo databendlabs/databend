@@ -266,8 +266,8 @@ impl Binder {
             if columns.len() != cte.alias.columns.len() {
                 return Err(ErrorCode::Internal("Number of columns does not match"));
             }
-            Some(CreateTableSource::Columns(
-                columns
+            Some(CreateTableSource::Columns {
+                columns: columns
                     .iter()
                     .zip(cte.alias.columns.iter())
                     .map(|(column, ident)| {
@@ -281,9 +281,10 @@ impl Binder {
                         }
                     })
                     .collect(),
-                None,
-                None,
-            ))
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            })
         };
 
         let catalog = self.ctx.get_current_catalog();

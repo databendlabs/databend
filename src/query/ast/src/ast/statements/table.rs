@@ -300,11 +300,12 @@ impl Display for AttachTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
-    Columns(
-        Vec<ColumnDefinition>,
-        Option<Vec<TableIndexDefinition>>,
-        Option<Vec<ConstraintDefinition>>,
-    ),
+    Columns {
+        columns: Vec<ColumnDefinition>,
+        opt_table_indexes: Option<Vec<TableIndexDefinition>>,
+        opt_column_constraints: Option<Vec<ConstraintDefinition>>,
+        opt_table_constraints: Option<Vec<ConstraintDefinition>>,
+    },
     Like {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -315,18 +316,22 @@ pub enum CreateTableSource {
 impl Display for CreateTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            CreateTableSource::Columns(columns, table_indexes, constraint) => {
+            // `column_constraints` are not displayed, but are displayed by column
+            CreateTableSource::Columns {
+                columns,
+                opt_table_indexes,
+                opt_column_constraints: _column_constraints,
+                opt_table_constraints: table_constraints,
+            } => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, columns)?;
-                if let Some(table_indexes) = table_indexes {
+                if let Some(table_indexes) = opt_table_indexes {
                     write!(f, ", ")?;
                     write_comma_separated_list(f, table_indexes)?;
                 }
-                if let Some(constraints) = constraint {
-                    if constraints.iter().any(|constraint| !constraint.from_column) {
-                        write!(f, ", ")?;
-                        write_comma_separated_list(f, constraints)?;
-                    }
+                if let Some(constraints) = table_constraints {
+                    write!(f, ", ")?;
+                    write_comma_separated_list(f, constraints)?;
                 }
                 write!(f, ")")
             }
@@ -1016,15 +1021,10 @@ impl Display for TableIndexDefinition {
 pub struct ConstraintDefinition {
     pub name: Option<Identifier>,
     pub constraint_type: ConstraintType,
-    // avoid printing the same contraint again after parse
-    pub from_column: bool,
 }
 
 impl Display for ConstraintDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.from_column {
-            return Ok(());
-        }
         if let Some(constraint_name) = &self.name {
             write!(f, "CONSTRAINT {} ", constraint_name)?;
         }

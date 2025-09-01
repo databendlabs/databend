@@ -284,7 +284,10 @@ impl<R: Rng> SqlGenerator<'_, R> {
             };
             column_defs.push(column_def);
         }
-        CreateTableSource::Columns(column_defs, None, None)
+        CreateTableSource::Columns {
+            columns: column_defs,
+            ..Default::default()
+        }
     }
 }
 

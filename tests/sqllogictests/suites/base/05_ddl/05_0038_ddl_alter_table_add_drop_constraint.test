@@ -53,19 +53,23 @@ statement ok
 CREATE OR REPLACE TABLE t5(a INT);
 
 statement ok
-INSERT INTO t5 VALUES (1);
+INSERT INTO t5 VALUES (2);
 
 statement ok
-ALTER TABLE t5 ADD CONSTRAINT a_not_1 CHECK (a != 1);
+ALTER TABLE t5 ADD CONSTRAINT a_lt_5 CHECK (a > 5);
+
+# for test `select * from system.constraints`
+statement ok
+ALTER TABLE t5 ADD CONSTRAINT a_lt_1 CHECK (a > 1);
 
 statement error
-INSERT INTO t5 VALUES (1);
+INSERT INTO t5 VALUES (2);
 
 statement ok
-ALTER TABLE t5 DROP CONSTRAINT a_not_1;
+ALTER TABLE t5 DROP CONSTRAINT a_lt_5;
 
 statement ok
-INSERT INTO t5 VALUES (1);
+INSERT INTO t5 VALUES (2);
 
 statement error
 CREATE OR REPLACE TABLE t6(a INT CHECK (a != b));
@@ -77,4 +81,19 @@ statement ok
 CREATE OR REPLACE TABLE t6(a INT);
 
 statement error
-ALTER TABLE t5 ADD CONSTRAINT invalid_1 CHECK (b != 1);
+ALTER TABLE t6 ADD CONSTRAINT invalid_1 CHECK (b != 1);
+
+statement ok
+CREATE OR REPLACE TABLE t7 (c0 int, c1 int CHECK (c1 > 10), CHECK (c1 != 11));
+
+query TTTTTTTTT
+select name, type, expression, constraint_column_indexes, constraint_column_names, database, table from system.constraints;
+----
+t1_b_check check b > 0 1 b default t1
+t2_x_y_check check x < y 0, 1 x, y default t2
+t3_a_check check a % 2 = 0 0 a default t3
+t4_a_check check a > 0 0 a default t4
+t4_b_check check b < 100 1 b default t4
+a_lt_1 check a > 1 0 a default t5
+t7_c1_check check c1 > 10 1 c1 default t7
+t7_c1_check1 check c1 <> 11 1 c1 default t7

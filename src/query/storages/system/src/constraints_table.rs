@@ -91,7 +91,7 @@ impl AsyncSystemTable for ConstraintsTable {
         let len = table_constraint_tables.len();
         let mut names = Vec::with_capacity(len);
         let mut types = Vec::with_capacity(len);
-        let mut exprs = Vec::with_capacity(len);
+        let mut expression = Vec::with_capacity(len);
         let mut constraint_column_indexes = Vec::with_capacity(len);
         let mut constraint_column_names = Vec::with_capacity(len);
         let mut databases = Vec::with_capacity(len);
@@ -131,14 +131,14 @@ impl AsyncSystemTable for ConstraintsTable {
                 constraint_column_names.push(columns.join(", "));
                 created_on.push(table.meta.created_on.timestamp_micros());
                 updated_on.push(None);
-                exprs.push(expr);
+                expression.push(expr);
             }
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(types),
-            StringType::from_data(exprs),
+            StringType::from_data(expression),
             StringType::from_data(constraint_column_indexes),
             StringType::from_data(constraint_column_names),
             StringType::from_data(databases),
@@ -154,7 +154,7 @@ impl ConstraintsTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("type", TableDataType::String),
-            TableField::new("expressions", TableDataType::String),
+            TableField::new("expression", TableDataType::String),
             TableField::new("constraint_column_indexes", TableDataType::String),
             TableField::new("constraint_column_names", TableDataType::String),
             TableField::new("database", TableDataType::String),

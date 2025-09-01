@@ -3360,7 +3360,6 @@ pub fn constraint_def(i: Input) -> IResult<ConstraintDefinition> {
             Ok(ConstraintDefinition {
                 name: opt_constraint_name.map(|(_, name)| name),
                 constraint_type: ConstraintType::Check(expr),
-                from_column: false,
             })
         },
     )(i)
@@ -3866,15 +3865,15 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         |(_, create_defs, _)| {
             let mut columns = Vec::with_capacity(create_defs.len());
             let mut table_indexes = Vec::new();
-            let mut constraints = Vec::new();
+            let mut column_constraints = Vec::new();
+            let mut table_constraints = Vec::new();
             for create_def in create_defs {
                 match create_def {
                     CreateDefinition::Column(column) => {
                         if let Some(expr) = &column.check {
-                            constraints.push(ConstraintDefinition {
+                            column_constraints.push(ConstraintDefinition {
                                 name: None,
                                 constraint_type: ConstraintType::Check(expr.clone()),
-                                from_column: true,
                             });
                         }
                         columns.push(column);
@@ -3883,7 +3882,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
                         table_indexes.push(table_index);
                     }
                     CreateDefinition::Constraint(constraint) => {
-                        constraints.push(constraint);
+                        table_constraints.push(constraint);
                     }
                 }
             }
@@ -3892,12 +3891,22 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
             } else {
                 None
             };
-            let opt_constraints = if !constraints.is_empty() {
-                Some(constraints)
+            let opt_column_constraints = if !column_constraints.is_empty() {
+                Some(column_constraints)
             } else {
                 None
             };
-            CreateTableSource::Columns(columns, opt_table_indexes, opt_constraints)
+            let opt_table_constraints = if !table_constraints.is_empty() {
+                Some(table_constraints)
+            } else {
+                None
+            };
+            CreateTableSource::Columns {
+                columns,
+                opt_table_indexes,
+                opt_column_constraints,
+                opt_table_constraints,
+            }
         },
     );
     let like = map(

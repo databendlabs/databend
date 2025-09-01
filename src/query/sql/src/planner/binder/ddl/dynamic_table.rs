@@ -124,8 +124,14 @@ impl Binder {
         }
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, table_indexes, constraints)) = &source {
-            if cols
+        if let Some(CreateTableSource::Columns {
+            columns,
+            opt_table_indexes,
+            opt_column_constraints,
+            opt_table_constraints,
+        }) = &source
+        {
+            if columns
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
@@ -136,12 +142,12 @@ impl Binder {
                     We do not guarantee its compatibility until we doc this feature.",
                 ));
             }
-            if table_indexes.is_some() {
+            if opt_table_indexes.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "dynamic table don't support indexes".to_string(),
                 ));
             }
-            if constraints.is_some() {
+            if opt_column_constraints.is_some() || opt_table_constraints.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "dynamic table don't support constraints".to_string(),
                 ));

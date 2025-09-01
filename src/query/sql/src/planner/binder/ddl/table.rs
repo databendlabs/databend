@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::slice;
+use std::iter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
@@ -637,8 +637,8 @@ impl Binder {
         };
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, _, _)) = &source {
-            if cols
+        if let Some(CreateTableSource::Columns { columns, .. }) = &source {
+            if columns
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
                 && !self.ctx.get_settings().get_enable_geo_create_table()?
@@ -1118,7 +1118,7 @@ impl Binder {
                     .await?
                     .schema();
                 let (constraint_name, constraint) = self
-                    .analyze_constraints(&table, schema, slice::from_ref(constraint))
+                    .analyze_constraints(&table, schema, iter::once(constraint))
                     .await?
                     .pop_first()
                     .unwrap();
@@ -1778,7 +1778,7 @@ impl Binder {
         &self,
         table_name: &str,
         table_schema: TableSchemaRef,
-        constraint_defs: &[ConstraintDefinition],
+        constraint_defs: impl Iterator<Item = &ConstraintDefinition> + Send,
     ) -> Result<BTreeMap<String, Constraint>> {
         let mut constraints = BTreeMap::new();
         let mut binder =
@@ -1883,10 +1883,15 @@ impl Binder {
         source: &CreateTableSource,
     ) -> Result<AnalyzeCreateTableResult> {
         match source {
-            CreateTableSource::Columns(columns, table_index_defs, constraint_defs) => {
+            CreateTableSource::Columns {
+                columns,
+                opt_table_indexes,
+                opt_table_constraints,
+                opt_column_constraints,
+            } => {
                 let (schema, comments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
-                let table_indexes = if let Some(table_index_defs) = table_index_defs {
+                let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
                     let table_indexes = self
                         .analyze_table_indexes(schema.clone(), table_index_defs)
                         .await?;
@@ -1894,7 +1899,18 @@ impl Binder {
                 } else {
                     None
                 };
-                let table_constraints = if let Some(constraints) = constraint_defs {
+
+                let constraints = match (opt_column_constraints, opt_table_constraints) {
+                    (Some(column_constraints), Some(table_constraints)) => Some(Box::new(
+                        column_constraints.iter().chain(table_constraints.iter()),
+                    )
+                        as Box<dyn Iterator<Item = &ConstraintDefinition> + Send>),
+                    (Some(constraints), None) | (None, Some(constraints)) => {
+                        Some(Box::new(constraints.iter()) as _)
+                    }
+                    (None, None) => None,
+                };
+                let table_constraints = if let Some(constraints) = constraints {
                     let constraints = self
                         .analyze_constraints(table, schema.clone(), constraints)
                         .await?;
