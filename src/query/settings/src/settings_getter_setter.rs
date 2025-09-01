@@ -1061,7 +1061,7 @@ impl Settings {
     }
 
     pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_table_snapshot_stats ")? != 0)
+        Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
     }
 
     pub fn set_enable_table_snapshot_stats(&self, val: u64) -> Result<()> {
