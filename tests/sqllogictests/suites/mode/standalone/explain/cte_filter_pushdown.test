@@ -32,7 +32,7 @@ Filter
 
 # Test 2: CTE with aggregation - filter on GROUP BY column should be pushed down
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt, sum(b) as sum_b
     from t 
     group by a
@@ -56,7 +56,7 @@ Filter
 
 # Test 3: CTE with aggregation - filter on aggregate result should NOT be pushed down
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt, sum(b) as sum_b
     from t 
     group by a
@@ -80,7 +80,7 @@ Filter
 
 # Test 4: Mixed filters - GROUP BY column filter should be pushed down, aggregate filter should remain
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt, sum(b) as sum_b
     from t 
     group by a
@@ -105,7 +105,7 @@ Filter
 # Test 5: Multiple CTE references with different filters
 # Should create OR condition in CTE definition
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt
     from t 
     group by a
@@ -149,7 +149,7 @@ UnionAll
 # Test 6: Multiple CTE references with three different filters
 # Should create complex OR condition in CTE definition
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt
     from t 
     group by a
@@ -233,7 +233,7 @@ Filter
 
 # Test 9: CTE with aggregation and HAVING clause
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt, sum(b) as sum_b
     from t 
     group by a
@@ -258,7 +258,7 @@ Filter
 
 # Test 10: Complex aggregation with multiple GROUP BY columns
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, b, count(*) as cnt
     from t 
     group by a, b
@@ -283,7 +283,7 @@ Filter
 # Test 11: Test case that demonstrates nested Filter issue
 # This should show merged filters, not nested Filter nodes
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt, sum(b) as sum_b
     from t 
     group by a
@@ -309,7 +309,7 @@ Filter
 
 # Test 12: Test filter pushdown with IN clause
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, count(*) as cnt
     from t 
     group by a
@@ -333,7 +333,7 @@ Filter
 
 # Test 13: Test filter pushdown with complex conditions
 query T
-explain settings(max_threads = 1) with cte1 as materialized (
+explain with cte1 as materialized (
     select a, b, count(*) as cnt
     from t 
     group by a, b
