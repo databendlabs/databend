@@ -225,20 +225,25 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
 
-        let table_statistics = TableSnapshotStatistics::new(
-            self.ndv_states.clone(),
-            self.histograms.clone(),
-            self.snapshot_id,
-            snapshot.summary.row_count,
-        );
-        new_snapshot.table_statistics_location = Some(
-            table
-                .meta_location_generator
-                .snapshot_statistics_location_from_uuid(
-                    &table_statistics.snapshot_id,
-                    table_statistics.format_version(),
-                )?,
-        );
+        let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()? {
+            let stats = TableSnapshotStatistics::new(
+                self.ndv_states.clone(),
+                self.histograms.clone(),
+                self.snapshot_id,
+                snapshot.summary.row_count,
+            );
+            new_snapshot.table_statistics_location = Some(
+                table
+                    .meta_location_generator
+                    .snapshot_statistics_location_from_uuid(
+                        &stats.snapshot_id,
+                        stats.format_version(),
+                    )?,
+            );
+            Some(stats)
+        } else {
+            None
+        };
 
         let (col_stats, cluster_stats) =
             self.regenerate_statistics(table, snapshot.as_ref()).await?;
@@ -251,7 +256,7 @@ impl SinkAnalyzeState {
                 &table.table_info,
                 &table.meta_location_generator,
                 new_snapshot,
-                Some(table_statistics),
+                table_statistics,
                 &None,
                 &table.operator,
             )

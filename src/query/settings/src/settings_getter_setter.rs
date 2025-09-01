@@ -641,11 +641,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
-    /// used for test
-    pub fn set_enable_analyze_histogram(&self, val: u64) -> Result<()> {
-        self.try_set_u64("enable_analyze_histogram", val)
-    }
-
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
@@ -1072,5 +1067,13 @@ impl Settings {
 
     pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
+    }
+
+    pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
+    }
+
+    pub fn set_enable_table_snapshot_stats(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_table_snapshot_stats", val)
     }
 }
