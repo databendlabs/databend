@@ -186,7 +186,7 @@ impl IPhysicalPlan for AggregateFinal {
 
         self.input.build_pipeline(builder)?;
 
-        // For distributed plans, since we are unaware of the data volume processed by other nodes,
+        // For distributed plans, since we are unaware of the data size processed by other nodes,
         // we estimate the parallelism based on the worst-case scenario.
         let after_group_parallel = match self.input.is_distributed_plan() {
             true => builder.settings.get_max_threads()? as usize,
