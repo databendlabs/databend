@@ -48,7 +48,9 @@ impl ExchangeTransform {
 
                 // exchange writer sink and resize and exchange reader
                 let len = params.destination_ids.len();
-                let local_pipe = if params.allow_adjust_parallelism {
+                let local_pipe = if params.allow_adjust_parallelism
+                    && params.exchange_injector.exchange_sorting().is_none()
+                {
                     ctx.get_settings().get_max_threads()? as usize
                 } else {
                     1
