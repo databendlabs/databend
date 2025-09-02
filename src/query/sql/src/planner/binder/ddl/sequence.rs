@@ -16,6 +16,7 @@ use databend_common_ast::ast::CreateSequenceStmt;
 use databend_common_ast::ast::DropSequenceStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SequenceIdent;
 
@@ -41,6 +42,12 @@ impl Binder {
             increment,
             comment,
         } = stmt;
+
+        if *increment == 0 {
+            return Err(ErrorCode::InvalidArgument(
+                "Increment is an invalid value '0'",
+            ));
+        }
 
         let tenant = self.ctx.get_tenant();
         let sequence = self.normalize_object_identifier(sequence);

@@ -10,6 +10,9 @@ USE seq_db
 statement ok
 DROP SEQUENCE IF EXISTS seq
 
+statement error 2004
+CREATE SEQUENCE seq start = 1 increment = 0
+
 statement ok
 CREATE SEQUENCE seq start = 1 increment = 1
 
