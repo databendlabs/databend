@@ -183,6 +183,17 @@ impl From<ParseIntError> for ErrorKind {
     }
 }
 
+/// Suggests corrections using intelligent syntax pattern matching
+fn suggest_keyword_correction(
+    _span_text: &str,
+    source: &str,
+    _expected_tokens: &[String],
+) -> Option<String> {
+    use crate::parser::error_suggestion::suggest_correction;
+
+    suggest_correction(source)
+}
+
 pub fn display_parser_error(error: Error, source: &str) -> String {
     let inner = &*error.backtrace.inner.borrow();
     let inner = match inner {
@@ -230,32 +241,43 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             ))
         });
 
-        let mut msg = if span_text.is_empty() {
-            "unexpected end of input".to_string()
-        } else {
-            format!("unexpected `{span_text}`")
-        };
-        let mut iter = expected_tokens.iter().enumerate().peekable();
-        while let Some((i, error)) = iter.next() {
-            if i == MAX_DISPLAY_ERROR_COUNT {
-                let more = expected_tokens
-                    .len()
-                    .saturating_sub(MAX_DISPLAY_ERROR_COUNT);
-                write!(msg, ", or {} more ...", more).unwrap();
-                break;
-            } else if i == 0 {
-                msg += ", expecting ";
-            } else if iter.peek().is_none() && i == 1 {
-                msg += " or ";
-            } else if iter.peek().is_none() {
-                msg += ", or ";
+        // Check for intelligent keyword suggestions first
+        if let Some(suggestion) = suggest_keyword_correction(span_text, source, &expected_tokens) {
+            let mut msg = if span_text.is_empty() {
+                "unexpected end of input".to_string()
             } else {
-                msg += ", ";
+                format!("unexpected `{span_text}`")
+            };
+            msg += &format!(". {}", suggestion);
+            labels = vec![(inner.span, msg)];
+        } else {
+            let mut msg = if span_text.is_empty() {
+                "unexpected end of input".to_string()
+            } else {
+                format!("unexpected `{span_text}`")
+            };
+            let mut iter = expected_tokens.iter().enumerate().peekable();
+            while let Some((i, error)) = iter.next() {
+                if i == MAX_DISPLAY_ERROR_COUNT {
+                    let more = expected_tokens
+                        .len()
+                        .saturating_sub(MAX_DISPLAY_ERROR_COUNT);
+                    write!(msg, ", or {} more ...", more).unwrap();
+                    break;
+                } else if i == 0 {
+                    msg += ", expecting ";
+                } else if iter.peek().is_none() && i == 1 {
+                    msg += " or ";
+                } else if iter.peek().is_none() {
+                    msg += ", or ";
+                } else {
+                    msg += ", ";
+                }
+                msg += error;
             }
-            msg += error;
-        }
 
-        labels = vec![(inner.span, msg)];
+            labels = vec![(inner.span, msg)];
+        }
     }
 
     // Append contexts as secondary labels.

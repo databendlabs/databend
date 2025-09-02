@@ -18,6 +18,13 @@
 # created_ons & updated_ons
 "ons" = "ons"
 
+# Intentional typos used in SQL error suggestion test cases
+"tabl" = "tabl"
+"optmize" = "optmize" 
+"vacum" = "vacum"
+"creat" = "creat"
+"crate" = "crate"
+
 [files]
 extend-exclude = [
     "**/Cargo.toml",
