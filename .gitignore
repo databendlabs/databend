@@ -79,3 +79,5 @@ benchmark/clickbench/results
 
 # lychee
 .lycheecache
+
+tests/nox/cache
