@@ -269,6 +269,8 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
+        let mut old_table_id = None;
+
         loop {
             trials.next().unwrap()?.await;
 
@@ -319,6 +321,7 @@ where
                                 spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
+                                old_table_id: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
@@ -330,6 +333,7 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
+                                old_table_id = Some(*id.data);
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
@@ -467,6 +471,7 @@ where
                         spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
+                        old_table_id,
                     });
                 } else {
                     // re-run txn with re-fetched data

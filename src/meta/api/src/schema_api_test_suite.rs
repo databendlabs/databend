@@ -4841,6 +4841,7 @@ impl SchemaApiTestSuite {
                 new_table: true,
                 orphan_table_name: None,
                 spec_vec: None,
+                old_table_id: None,
             };
             let cur_db = util.get_database().await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
