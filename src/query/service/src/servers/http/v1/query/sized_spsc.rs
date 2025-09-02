@@ -23,17 +23,18 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_base::base::tokio::sync::Notify;
+use databend_common_expression::DataBlock;
 
-struct SizedChannelInner<T> {
+struct SizedChannelInner {
     max_size: usize,
-    values: VecDeque<(T, usize)>,
+    values: VecDeque<DataBlock>,
     is_recv_stopped: bool,
     is_send_stopped: bool,
 }
 
 struct Stopped {}
 
-pub fn sized_spsc<T>(max_size: usize) -> (SizedChannelSender<T>, SizedChannelReceiver<T>) {
+pub fn sized_spsc(max_size: usize) -> (SizedChannelSender, SizedChannelReceiver) {
     let chan = Arc::new(SizedChannel::create(max_size));
     let cloned = chan.clone();
     (SizedChannelSender { chan }, SizedChannelReceiver {
@@ -41,7 +42,7 @@ pub fn sized_spsc<T>(max_size: usize) -> (SizedChannelSender<T>, SizedChannelRec
     })
 }
 
-impl<T> SizedChannelInner<T> {
+impl SizedChannelInner {
     pub fn create(max_size: usize) -> Self {
         SizedChannelInner {
             max_size,
@@ -52,23 +53,24 @@ impl<T> SizedChannelInner<T> {
     }
 
     pub fn size(&self) -> usize {
-        self.values.iter().map(|x| x.1).sum::<usize>()
+        self.values.iter().map(|x| x.num_rows()).sum::<usize>()
     }
 
-    pub fn try_send(&mut self, value: T, size: usize) -> Result<Option<T>, Stopped> {
+    pub fn try_send(&mut self, value: DataBlock) -> Result<Option<DataBlock>, Stopped> {
         let current_size = self.size();
+        let value_size = value.num_rows();
         if self.is_recv_stopped || self.is_send_stopped {
             Err(Stopped {})
-        } else if current_size + size <= self.max_size || current_size == 0 {
-            self.values.push_back((value, size));
+        } else if current_size + value_size <= self.max_size || current_size == 0 {
+            self.values.push_back(value);
             Ok(None)
         } else {
             Ok(Some(value))
         }
     }
 
-    pub fn try_recv(&mut self) -> Result<Option<T>, Stopped> {
-        let v = self.values.pop_front().map(|x| x.0);
+    pub fn try_recv(&mut self) -> Result<Option<DataBlock>, Stopped> {
+        let v = self.values.pop_front();
         if v.is_none() && self.is_send_stopped {
             Err(Stopped {})
         } else {
@@ -89,13 +91,13 @@ impl<T> SizedChannelInner<T> {
     }
 }
 
-struct SizedChannel<T> {
-    inner: Mutex<SizedChannelInner<T>>,
+struct SizedChannel {
+    inner: Mutex<SizedChannelInner>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
 }
 
-impl<T> SizedChannel<T> {
+impl SizedChannel {
     fn create(max_size: usize) -> Self {
         SizedChannel {
             inner: Mutex::new(SizedChannelInner::create(max_size)),
@@ -104,21 +106,21 @@ impl<T> SizedChannel<T> {
         }
     }
 
-    fn try_send(&self, value: T, size: usize) -> Result<Option<T>, Stopped> {
+    fn try_send(&self, value: DataBlock) -> Result<Option<DataBlock>, Stopped> {
         let mut guard = self.inner.lock().unwrap();
-        guard.try_send(value, size)
+        guard.try_send(value)
     }
 
-    pub fn try_recv(&self) -> Result<Option<T>, Stopped> {
+    pub fn try_recv(&self) -> Result<Option<DataBlock>, Stopped> {
         let mut guard = self.inner.lock().unwrap();
         guard.try_recv()
     }
 
     #[async_backtrace::framed]
-    pub async fn send(&self, value: T, size: usize) -> bool {
+    pub async fn send(&self, value: DataBlock) -> bool {
         let mut to_send = value;
         loop {
-            match self.try_send(to_send, size) {
+            match self.try_send(to_send) {
                 Ok(Some(v)) => {
                     to_send = v;
                     self.notify_on_recv.notified().await;
@@ -133,7 +135,7 @@ impl<T> SizedChannel<T> {
     }
 
     #[async_backtrace::framed]
-    pub async fn recv(&self) -> Option<T> {
+    pub async fn recv(&self) -> Option<DataBlock> {
         loop {
             match self.try_recv() {
                 Ok(Some(v)) => {
@@ -170,17 +172,17 @@ impl<T> SizedChannel<T> {
     }
 }
 
-pub struct SizedChannelReceiver<T> {
-    chan: Arc<SizedChannel<T>>,
+pub struct SizedChannelReceiver {
+    chan: Arc<SizedChannel>,
 }
 
-impl<T> SizedChannelReceiver<T> {
+impl SizedChannelReceiver {
     #[async_backtrace::framed]
-    pub async fn recv(&self) -> Option<T> {
+    pub async fn recv(&self) -> Option<DataBlock> {
         self.chan.recv().await
     }
 
-    pub fn try_recv(&self) -> Option<T> {
+    pub fn try_recv(&self) -> Option<DataBlock> {
         self.chan.try_recv().unwrap_or_default()
     }
 
@@ -194,32 +196,32 @@ impl<T> SizedChannelReceiver<T> {
 }
 
 #[derive(Clone)]
-pub struct SizedChannelSender<T> {
-    chan: Arc<SizedChannel<T>>,
+pub struct SizedChannelSender {
+    chan: Arc<SizedChannel>,
 }
 
-impl<T> SizedChannelSender<T> {
+impl SizedChannelSender {
     #[async_backtrace::framed]
-    pub async fn send(&self, value: T, size: usize) -> bool {
-        self.chan.send(value, size).await
+    pub async fn send(&self, value: DataBlock) -> bool {
+        self.chan.send(value).await
     }
 
     pub fn close(&self) {
         self.chan.stop_send()
     }
 
-    pub fn closer(&self) -> SizedChannelSenderCloser<T> {
+    pub fn closer(&self) -> SizedChannelSenderCloser {
         SizedChannelSenderCloser {
             chan: self.chan.clone(),
         }
     }
 }
 
-pub struct SizedChannelSenderCloser<T> {
-    chan: Arc<SizedChannel<T>>,
+pub struct SizedChannelSenderCloser {
+    chan: Arc<SizedChannel>,
 }
 
-impl<T> SizedChannelSenderCloser<T> {
+impl SizedChannelSenderCloser {
     pub fn close(&self) {
         self.chan.stop_send()
     }

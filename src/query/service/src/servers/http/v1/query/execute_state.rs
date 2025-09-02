@@ -436,7 +436,7 @@ impl ExecuteState {
         match data_stream.next().await {
             None => {
                 let block = DataBlock::empty_with_schema(schema);
-                block_sender.send(block, 0).await;
+                block_sender.send(block).await;
                 Executor::stop::<()>(&executor, Ok(()));
                 block_sender.close();
             }
@@ -445,12 +445,11 @@ impl ExecuteState {
                 block_sender.close();
             }
             Some(Ok(block)) => {
-                let size = block.num_rows();
-                block_sender.send(block, size).await;
+                block_sender.send(block).await;
                 while let Some(block_r) = data_stream.next().await {
                     match block_r {
                         Ok(block) => {
-                            block_sender.send(block.clone(), block.num_rows()).await;
+                            block_sender.send(block.clone()).await;
                         }
                         Err(err) => {
                             block_sender.close();
