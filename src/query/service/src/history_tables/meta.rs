@@ -118,7 +118,7 @@ impl HeartbeatTask {
         let resp = meta_client.transaction(txn_req).await?;
 
         // key already exits
-        if resp.success == false {
+        if !resp.success {
             return Ok(None);
         }
 
@@ -173,7 +173,6 @@ impl HeartbeatTask {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(sleep_time) => {
-                    info!("[HEARTBEAT] extend heartbeat");
                     let txn_req = {
                         let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
                             from_node_id: node_id.to_string(),
@@ -192,7 +191,7 @@ impl HeartbeatTask {
                     };
 
                     let resp = meta_client.transaction(txn_req).await?;
-                    if resp.success == false {
+                    if !resp.success {
                         return Err(ErrorCode::Internal("Heartbeat is from other node, stopping"))
                     }
 
