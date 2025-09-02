@@ -36,6 +36,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::FutureExt;
 use log::debug;
+use log::info;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
@@ -69,8 +70,6 @@ impl Drop for PermitGuard {
     }
 }
 
-const DEAD_IN_SECS: u64 = 10;
-
 pub struct HeartbeatTaskGuard {
     _cancel: oneshot::Sender<()>,
     exited: Arc<AtomicBool>,
@@ -84,8 +83,7 @@ impl HeartbeatTaskGuard {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HeartbeatMessage {
-    created_at: i64,
-    from_node: String,
+    from_node_id: String,
 }
 
 pub struct HeartbeatTask;
@@ -95,13 +93,13 @@ impl HeartbeatTask {
         meta_client: Arc<ClientHandle>,
         meta_key: &str,
         node_id: &str,
+        dead_in_secs: u64,
     ) -> Result<Option<HeartbeatTaskGuard>> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
         let txn_req = {
             let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
-                created_at: chrono::Utc::now().timestamp_millis(),
-                from_node: node_id.to_string(),
+                from_node_id: node_id.to_string(),
             })?;
             // Condition: Check if the key does not exist
             let condition = vec![TxnCondition::eq_seq(&heartbeat_key, 0)];
@@ -110,7 +108,7 @@ impl HeartbeatTask {
             let if_then = vec![TxnOp::put_with_ttl(
                 &heartbeat_key,
                 heartbeat_message,
-                Some(Duration::from_secs(DEAD_IN_SECS)),
+                Some(Duration::from_secs(dead_in_secs)),
             )];
 
             // Else: If the key already exists, do nothing.
@@ -119,7 +117,8 @@ impl HeartbeatTask {
 
         let resp = meta_client.transaction(txn_req).await?;
 
-        if resp.execution_path == *"else" {
+        // key already exits
+        if resp.success == false {
             return Ok(None);
         }
 
@@ -130,6 +129,7 @@ impl HeartbeatTask {
             meta_client,
             heartbeat_key,
             node_id.to_string(),
+            dead_in_secs,
             cancel_rx.map(|_| ()),
         );
 
@@ -161,36 +161,56 @@ impl HeartbeatTask {
         meta_client: Arc<ClientHandle>,
         heartbeat_key: String,
         node_id: String,
+        dead_in_secs: u64,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) -> Result<()> {
-        let sleep_time = Duration::from_secs(DEAD_IN_SECS / 2);
+        // sleep from dead_in_secs/3 ~ dead_in_secs*2/3
+        let jitter = rand::random::<u64>() % (dead_in_secs / 3);
+        let sleep_time = Duration::from_secs(dead_in_secs / 3 + jitter);
 
         let mut c = pin!(cancel);
 
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(sleep_time) => {
-                    let last_heartbeat = meta_client.get_kv(&heartbeat_key).await?;
+                    info!("[HEARTBEAT] extend heartbeat");
+                    let txn_req = {
+                        let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
+                            from_node_id: node_id.to_string(),
+                        })?;
+                        // Condition: Check if the heartbeat is from this node
+                        let condition = vec![TxnCondition::eq_value(&heartbeat_key, heartbeat_message.clone())];
 
-                    if let Some(v) = last_heartbeat {
-                        let data: HeartbeatMessage = serde_json::from_slice(&v.data)?;
-                        if data.from_node != node_id {
-                            return Err(ErrorCode::Internal("other node is sending heartbeat"));
-                        }
+                        // If-Then: if the heartbeat is from this node, refresh ttl
+                        let if_then = vec![TxnOp::put_with_ttl(
+                            &heartbeat_key,
+                            heartbeat_message,
+                            Some(Duration::from_secs(dead_in_secs)),
+                        )];
+
+                        TxnRequest::new(condition, if_then)
+                    };
+
+                    let resp = meta_client.transaction(txn_req).await?;
+                    if resp.success == false {
+                        return Err(ErrorCode::Internal("Heartbeat is from other node, stopping"))
                     }
 
-                    let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
-                        created_at: chrono::Utc::now().timestamp_millis(),
-                        from_node: node_id.to_string(),
-                    })?;
-                    let upsert = UpsertKV::update(&heartbeat_key, &serde_json::to_vec(&heartbeat_message)?)
-                        .with_ttl(Duration::from_secs(DEAD_IN_SECS));
-
-                    meta_client.upsert_kv(upsert).await?;
                 }
                 _ = &mut c =>{
-                    let delete = UpsertKV::delete(&heartbeat_key);
-                    meta_client.upsert_kv(delete).await?;
+                    let txn_req = {
+                        let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
+                            from_node_id: node_id.to_string(),
+                        })?;
+                        // Condition: Check if the heartbeat is from this node
+                        let condition = vec![TxnCondition::eq_value(&heartbeat_key, heartbeat_message)];
+
+                        // If-Then: if the heartbeat is from this node, delete it
+                        let if_then = vec![TxnOp::delete(&heartbeat_key)];
+
+                        TxnRequest::new(condition, if_then)
+                    };
+                    let _resp = meta_client.transaction(txn_req).await?;
 
                     debug!("[HISTORY-TABLES] Heartbeat key delete: {}", &heartbeat_key);
 
@@ -318,33 +338,26 @@ impl HistoryMetaHandle {
     pub async fn create_heartbeat_task(
         &self,
         meta_key: &str,
+        dead_in_secs: u64,
     ) -> Result<Option<HeartbeatTaskGuard>> {
-        let expire_duration = Duration::from_secs(DEAD_IN_SECS);
-
-        if !self.is_heartbeat_expired(meta_key, expire_duration).await? {
+        if !self.is_heartbeat_expired(meta_key).await? {
             return Ok(None);
         }
 
-        HeartbeatTask::new_task(self.meta_client.clone(), meta_key, &self.node_id).await
+        HeartbeatTask::new_task(
+            self.meta_client.clone(),
+            meta_key,
+            &self.node_id,
+            dead_in_secs,
+        )
+        .await
     }
 
-    pub async fn is_heartbeat_expired(
-        &self,
-        meta_key: &str,
-        expire_duration: Duration,
-    ) -> Result<bool> {
+    pub async fn is_heartbeat_expired(&self, meta_key: &str) -> Result<bool> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
         match self.meta_client.get_kv(&heartbeat_key).await? {
-            Some(v) => {
-                let message: HeartbeatMessage = serde_json::from_slice(&v.data)?;
-                let last_heartbeat_millis = message.created_at as u64;
-
-                let current_millis = chrono::Utc::now().timestamp_millis() as u64;
-                let expire_millis = expire_duration.as_millis() as u64;
-
-                Ok(current_millis.saturating_sub(last_heartbeat_millis) > expire_millis)
-            }
+            Some(_) => Ok(false),
             None => Ok(true),
         }
     }
@@ -469,12 +482,14 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_1").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_1", 4)
+                .await?;
 
         assert!(heartbeat_guard.is_some());
 
         let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_2").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id_2", 4)
+                .await?;
 
         assert!(heartbeat_guard_none.is_none());
 
@@ -487,14 +502,16 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
+                .await?;
 
         assert!(heartbeat_guard.is_some());
 
-        tokio::time::sleep(Duration::from_secs(15)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
 
         let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
+                .await?;
 
         assert!(heartbeat_guard_none.is_none());
 
@@ -507,18 +524,20 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
+                .await?;
 
         assert!(heartbeat_guard.is_some());
 
         drop(heartbeat_guard);
 
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let heartbeat_guard_none =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+        let heartbeat_guard_new =
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
+                .await?;
 
-        assert!(heartbeat_guard_none.is_some());
+        assert!(heartbeat_guard_new.is_some());
 
         Ok(())
     }
@@ -529,24 +548,21 @@ mod tests {
         let meta_client = meta_store.deref().clone();
 
         let heartbeat_guard =
-            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1").await?;
+            HeartbeatTask::new_task(meta_client.clone(), "test_heartbeat_key", "node_id1", 4)
+                .await?;
 
         assert!(heartbeat_guard.is_some());
 
         // other node override heartbeat
         let heartbeat_message = serde_json::to_vec(&HeartbeatMessage {
-            created_at: chrono::Utc::now().timestamp_millis(),
-            from_node: "node_id2".to_string(),
+            from_node_id: "node_id2".to_string(),
         })?;
-        let upsert = UpsertKV::update(
-            "test_heartbeat_key",
-            &serde_json::to_vec(&heartbeat_message)?,
-        )
-        .with_ttl(Duration::from_secs(10));
+        let upsert = UpsertKV::update("test_heartbeat_key/heartbeat", &heartbeat_message)
+            .with_ttl(Duration::from_secs(2));
 
         meta_client.upsert_kv(upsert).await?;
 
-        tokio::time::sleep(Duration::from_secs(20)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
 
         let is_exited = heartbeat_guard.unwrap().exited.load(Ordering::SeqCst);
         assert!(is_exited);
@@ -574,7 +590,7 @@ mod tests {
 
                 // All tasks try to create heartbeat for the same key simultaneously
                 let heartbeat_guard =
-                    HeartbeatTask::new_task(meta_client_clone, "test_heartbeat_key", "node_id1")
+                    HeartbeatTask::new_task(meta_client_clone, "test_heartbeat_key", "node_id1", 4)
                         .await
                         .unwrap();
 
@@ -593,7 +609,7 @@ mod tests {
             guards.push(handle.await.unwrap());
         }
 
-        // Verify results: exactly one should succeed, two should fail
+        // Verify results: exactly one should succeed, four should fail
         let results_guard = results.lock().await;
         let successful_count = results_guard.iter().filter(|(_, success)| *success).count();
         let failed_count = results_guard
@@ -607,7 +623,7 @@ mod tests {
         );
         assert_eq!(
             failed_count, 4,
-            "Two heartbeat creation attempts should fail"
+            "Four heartbeat creation attempts should fail"
         );
 
         // Clean up: drop the successful guard to allow cleanup

@@ -67,6 +67,8 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 
+const DEAD_IN_SECS: u64 = 60;
+
 pub struct GlobalHistoryLog {
     meta_handle: HistoryMetaHandle,
     interval: u64,
@@ -378,7 +380,10 @@ impl GlobalHistoryLog {
         loop {
             // 1. Acquire heartbeat
             let heartbeat_key = format!("{}/{}", meta_key, table.name);
-            let heartbeat_guard = match self.meta_handle.create_heartbeat_task(&heartbeat_key).await
+            let heartbeat_guard = match self
+                .meta_handle
+                .create_heartbeat_task(&heartbeat_key, DEAD_IN_SECS)
+                .await
             {
                 Ok(Some(guard)) => guard,
                 Ok(None) => {
@@ -446,7 +451,7 @@ impl GlobalHistoryLog {
                 }
                 // Release heartbeat periodically to allow other nodes in the cluster
                 // to take over and ensure even task distribution across the cluster
-                if transform_cnt % 100 == 0 {
+                if transform_cnt % 200 == 0 {
                     break;
                 }
             }
