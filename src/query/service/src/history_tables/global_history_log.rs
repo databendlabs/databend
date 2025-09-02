@@ -447,6 +447,21 @@ impl GlobalHistoryLog {
                             }
                             sleep(self.transform_sleep_duration()).await;
                         }
+
+                        // On error(e.g. DUPLICATED_UPSERT_FILES), verify that our heartbeat is still valid (from this node).
+                        // Purpose: avoid two nodes performing the same work concurrently.
+                        // The periodic heartbeat loop would also detect the conflict, but it runs
+                        // only around every 30 seconds; this check enables faster failover.
+                        if let Ok(valid) = self.meta_handle.is_heartbeat_valid(&heartbeat_key).await
+                        {
+                            if !valid {
+                                info!(
+                                    "[HISTORY-TABLES] {} heartbeat lost during transform",
+                                    table.name
+                                );
+                                break;
+                            }
+                        }
                     }
                 }
                 // Release heartbeat periodically to allow other nodes in the cluster

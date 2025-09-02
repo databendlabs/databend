@@ -338,10 +338,6 @@ impl HistoryMetaHandle {
         meta_key: &str,
         dead_in_secs: u64,
     ) -> Result<Option<HeartbeatTaskGuard>> {
-        if !self.is_heartbeat_expired(meta_key).await? {
-            return Ok(None);
-        }
-
         HeartbeatTask::new_task(
             self.meta_client.clone(),
             meta_key,
@@ -351,12 +347,16 @@ impl HistoryMetaHandle {
         .await
     }
 
-    pub async fn is_heartbeat_expired(&self, meta_key: &str) -> Result<bool> {
+    // Check if heartbeat key exists and is from this node
+    pub async fn is_heartbeat_valid(&self, meta_key: &str) -> Result<bool> {
         let heartbeat_key = format!("{}/heartbeat", meta_key);
 
         match self.meta_client.get_kv(&heartbeat_key).await? {
-            Some(_) => Ok(false),
-            None => Ok(true),
+            Some(v) => {
+                let msg: HeartbeatMessage = serde_json::from_slice(&v.data)?;
+                Ok(msg.from_node_id == self.node_id)
+            }
+            None => Ok(false),
         }
     }
 }
