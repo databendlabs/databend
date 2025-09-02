@@ -452,14 +452,21 @@ impl GlobalHistoryLog {
                         // Purpose: avoid two nodes performing the same work concurrently.
                         // The periodic heartbeat loop would also detect the conflict, but it runs
                         // only around every 30 seconds; this check enables faster failover.
-                        if let Ok(valid) = self.meta_handle.is_heartbeat_valid(&heartbeat_key).await
+                        if e.code() == ErrorCode::DUPLICATED_UPSERT_FILES
+                            || e.code() == ErrorCode::TABLE_ALREADY_LOCKED
+                            || e.code() == ErrorCode::TABLE_LOCK_EXPIRED
+                            || e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
                         {
-                            if !valid {
-                                info!(
-                                    "[HISTORY-TABLES] {} heartbeat lost during transform",
-                                    table.name
-                                );
-                                break;
+                            if let Ok(valid) =
+                                self.meta_handle.is_heartbeat_valid(&heartbeat_key).await
+                            {
+                                if !valid {
+                                    info!(
+                                        "[HISTORY-TABLES] {} heartbeat lost during transform",
+                                        table.name
+                                    );
+                                    break;
+                                }
                             }
                         }
                     }
