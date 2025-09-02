@@ -18,8 +18,7 @@ mod analyze;
 mod clustering;
 mod commit;
 
-// TODO comment out temporarily
-// mod create_or_replace_ownership_object;
+mod create_or_replace_ownership_object;
 mod gc;
 mod internal_column;
 mod mutation;

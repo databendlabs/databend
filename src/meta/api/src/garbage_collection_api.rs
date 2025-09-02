@@ -41,6 +41,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
@@ -57,6 +58,7 @@ use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_eq_seq;
 use crate::txn_op_del;
+use crate::txn_op_get;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
 use crate::util::txn_put_pb;
@@ -266,13 +268,16 @@ async fn gc_dropped_db_by_id(
         return Ok(());
     }
 
+    // Mark database meta as gc_in_progress if necessary
+    let mut db_meta_seq = seq_db_meta.seq;
     if !seq_db_meta.gc_in_progress {
         // Mark db_meta as gc_in_process, in which state that db can no longer be undropped.
-        let mut new_db_meta = seq_db_meta.clone();
+        let mut new_db_meta = seq_db_meta;
         new_db_meta.gc_in_progress = true;
         let mut txn = TxnRequest::default();
-        txn_replace_exact(&mut txn, &dbid, seq_db_meta.seq, &seq_db_meta.data)?;
-        let (success, _) = send_txn(kv_api, txn).await?;
+        txn_replace_exact(&mut txn, &dbid, new_db_meta.seq, &new_db_meta.data)?;
+        txn.if_then.push(txn_op_get(&dbid));
+        let (success, mut responses) = send_txn(kv_api, txn).await?;
         if !success {
             return Err(KVAppError::AppError(AppError::from(
                 MarkDatabaseMetaAsGCInProgressFailed::new(format!(
@@ -281,14 +286,27 @@ async fn gc_dropped_db_by_id(
                 )),
             )));
         }
-    }
+
+        // Grab the sequence number of new database meta key value pair
+        let resp = responses.pop().unwrap();
+        let Some(Response::Get(get_resp)) = resp.response else {
+            unreachable!(
+                "internal error: expect TxnGetResponseGet of get database meta by db_id, but got {:?}",
+                resp.response
+            )
+        };
+        db_meta_seq = get_resp
+            .value
+            .expect("txn op response of get(&dbid) should have value")
+            .seq
+    };
 
     // Cleaning up DbIdTableName keys
     {
         let db_id_table_name = DBIdTableName {
             db_id,
             // Going to use 1 level DirName as list prefix, thus the table_name field does not matter
-            table_name: "".to_string(),
+            table_name: "dummy".to_string(),
         };
         let dir_name = DirName::new_with_level(db_id_table_name, 1);
 
@@ -367,10 +385,10 @@ async fn gc_dropped_db_by_id(
             .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
     }
 
-    // Verify db_meta hasn't changed since we started this operation.
+    // Verify data_meta hasn't changed since the mark database meta as gc_in_progress phase
     // This establishes a condition for the transaction that will prevent it from committing
     // if the database metadata was modified by another concurrent operation (like un-dropping).
-    txn.condition.push(txn_cond_eq_seq(&dbid, seq_db_meta.seq));
+    txn.condition.push(txn_cond_eq_seq(&dbid, db_meta_seq));
     txn.if_then.push(txn_op_del(&dbid));
     txn.condition
         .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
