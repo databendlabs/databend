@@ -18,7 +18,7 @@ use databend_common_base::base::tokio;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_store::MetaStore;
@@ -87,7 +87,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
             table_id: old_tbl_id,
         };
         let table_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
-        let v = meta.get(&table_ownership_key).await?;
+        let v = meta.get_pb(&table_ownership_key).await?;
         assert!(v.is_some());
 
         fixture
@@ -96,7 +96,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
                 catalog_name, db_name, tbl_name
             ))
             .await?;
-        let v = meta.get(&table_ownership_key).await?;
+        let v = meta.get_pb(&table_ownership_key).await?;
         assert!(v.is_none());
 
         let tbl_name = "ownership_table_test";
@@ -115,7 +115,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
         };
         let table_ownership_key =
             TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership.clone());
-        let v = meta.get(&table_ownership_key).await?;
+        let v = meta.get_pb(&table_ownership_key).await?;
         assert!(v.is_some());
 
         fixture
@@ -128,7 +128,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
         let second_create_id = tbl.get_table_info().ident.table_id;
         assert_ne!(second_create_id, first_create_id);
         let db_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
-        let v = meta.get(&db_ownership_key).await?;
+        let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_none());
 
         let table_ownership = OwnershipObject::Table {
@@ -137,7 +137,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
             table_id: second_create_id,
         };
         let db_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
-        let v = meta.get(&db_ownership_key).await?;
+        let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_some());
     }
 
@@ -159,7 +159,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
         };
         let db_ownership_key =
             TenantOwnershipObjectIdent::new(tenant.clone(), db_ownership.clone());
-        let v = meta.get(&db_ownership_key).await?;
+        let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_some());
 
         fixture
@@ -173,7 +173,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
         assert_ne!(second_create_db_id, first_create_db_id);
 
         let db_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), db_ownership);
-        let v = meta.get(&db_ownership_key).await?;
+        let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_none());
 
         let db_ownership = OwnershipObject::Database {
@@ -181,7 +181,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
             db_id: *second_create_db_id,
         };
         let db_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), db_ownership);
-        let v = meta.get(&db_ownership_key).await?;
+        let v = meta.get_pb(&db_ownership_key).await?;
         assert!(v.is_some());
     }
 
