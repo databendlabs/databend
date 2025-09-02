@@ -16,6 +16,7 @@ use nom_rule::rule;
 
 use super::common::ident;
 use super::expr::literal_string;
+use super::expr::literal_u64;
 use super::statement::parse_create_option;
 use crate::ast::CreateSequenceStmt;
 use crate::ast::DropSequenceStmt;
@@ -29,7 +30,7 @@ use crate::parser::token::*;
 
 pub fn sequence(i: Input) -> IResult<Statement> {
     rule!(
-         #create_sequence: "`CREATE [OR REPLACE] SEQUENCE [IF NOT EXISTS] <sequence_name> [COMMENT = '<string_literal>']`"
+         #create_sequence: "`CREATE [OR REPLACE] SEQUENCE [IF NOT EXISTS] <sequence_name> [START = <initial_value>] [INCREMENT = <sequence_interval>] [COMMENT = '<string_literal>']`"
          | #drop_sequence: "`DROP [IF EXISTS] <sequence_name>`"
          | #show_sequences: "`SHOW SEQUENCES [<show_limit>]`"
          | #desc_sequence: "`DESCRIBE SEQUENCE <sequence_name>`"
@@ -41,14 +42,28 @@ fn create_sequence(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ SEQUENCE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
+            ~ ( START ~ ( WITH | "=" )? ~ #literal_u64 )?
+            ~ ( INCREMENT ~ ( BY | "=" )? ~ #literal_u64 )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, sequence, opt_comment)| {
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            sequence,
+            opt_start,
+            opt_increment,
+            opt_comment,
+        )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+
             Ok(Statement::CreateSequence(CreateSequenceStmt {
                 create_option,
                 sequence,
+                start: opt_start.map(|(_, _, start)| start),
+                increment: opt_increment.map(|(_, _, start)| start),
                 comment: opt_comment.map(|(_, _, comment)| comment),
             }))
         },

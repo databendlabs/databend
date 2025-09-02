@@ -1235,7 +1235,7 @@ impl AsyncFunctionCall {
                 };
                 // Call meta's api to generate an incremental value.
                 let reply = catalog
-                    .get_sequence_next_value(req, visibility_checker)
+                    .get_sequence_next_value(req, &visibility_checker)
                     .await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }

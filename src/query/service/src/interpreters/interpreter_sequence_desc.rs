@@ -57,7 +57,7 @@ impl Interpreter for DescSequenceInterpreter {
         };
         let catalog = self.ctx.get_default_catalog()?;
         // Already check seq privilege before interpreter
-        let reply = catalog.get_sequence(req, None).await?;
+        let reply = catalog.get_sequence(req, &None).await?;
 
         let name = vec![self.plan.ident.name().to_string()];
         let interval = vec![reply.meta.step];

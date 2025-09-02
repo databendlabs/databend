@@ -24,6 +24,8 @@ use databend_common_meta_app::schema::SequenceIdent;
 pub struct CreateSequencePlan {
     pub create_option: CreateOption,
     pub ident: SequenceIdent,
+    pub start: u64,
+    pub increment: u64,
     pub comment: Option<String>,
 }
 

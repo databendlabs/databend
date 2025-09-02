@@ -56,8 +56,8 @@ impl From<CreateSequenceReq> for SequenceMeta {
             comment: p.comment.clone(),
             create_on: p.create_on,
             update_on: p.create_on,
-            step: 1,
-            current: 1,
+            step: p.increment as i64,
+            current: p.start,
             storage_version: p.storage_version,
         }
     }
@@ -68,6 +68,8 @@ pub struct CreateSequenceReq {
     pub create_option: CreateOption,
     pub ident: SequenceIdent,
     pub create_on: DateTime<Utc>,
+    pub start: u64,
+    pub increment: u64,
     pub comment: Option<String>,
 
     /// See: [`SequenceMeta::storage_version`]

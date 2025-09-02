@@ -130,7 +130,7 @@ pub async fn validate_grant_object_exists(
             let req = GetSequenceReq {
                 ident: SequenceIdent::new(ctx.get_tenant(), c.to_string()),
             };
-            return match catalog.get_sequence(req, None).await {
+            return match catalog.get_sequence(req, &None).await {
                 Ok(_c) => Ok(()),
                 Err(e) => Err(e),
             };

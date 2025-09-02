@@ -27497,6 +27497,66 @@ CreateSequence(
             quote: None,
             ident_type: None,
         },
+        start: None,
+        increment: None,
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SEQUENCE seq start = 20 INCREMENT = 100 comment='test'
+---------- Output ---------
+CREATE SEQUENCE seq START = 20 INCREMENT = 100 COMMENT = 'test'
+---------- AST ------------
+CreateSequence(
+    CreateSequenceStmt {
+        create_option: Create,
+        sequence: Identifier {
+            span: Some(
+                16..19,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SEQUENCE seq start WITH 20 INCREMENT BY 100 comment='test'
+---------- Output ---------
+CREATE SEQUENCE seq START = 20 INCREMENT = 100 COMMENT = 'test'
+---------- AST ------------
+CreateSequence(
+    CreateSequenceStmt {
+        create_option: Create,
+        sequence: Identifier {
+            span: Some(
+                16..19,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
         comment: Some(
             "test",
         ),
