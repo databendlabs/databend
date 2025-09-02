@@ -692,14 +692,23 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
 
     assert!(success, "update gc_in_progress to true should work");
 
-    // 5. undrop database should fail
+    // 5. Undrop database should fail with UnknownDatabase error
     let res = fixture
         .execute_command(format!("undrop database {db_name}").as_str())
         .await;
     assert!(res.is_err());
-    let err = res.unwrap_err();
-    assert_eq!(err.code(), ErrorCode::UNKNOWN_DATABASE);
-    eprintln!("{}", err.message());
+    assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_DATABASE);
+
+    // Database should be inaccessible
+    let res = ctx
+        .get_default_catalog()?
+        .get_database(&tenant, db_name)
+        .await;
+
+    let Err(e) = res else {
+        panic!("get_database should fail")
+    };
+    assert_eq!(e.code(), ErrorCode::UNKNOWN_DATABASE);
 
     Ok(())
 }

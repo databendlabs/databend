@@ -1222,7 +1222,11 @@ impl AppErrorMessage for TenantIsEmpty {
     }
 }
 
-impl AppErrorMessage for UnknownDatabase {}
+impl AppErrorMessage for UnknownDatabase {
+    fn message(&self) -> String {
+        format!("Unknown database '{}'", self.db_name)
+    }
+}
 
 impl AppErrorMessage for DatabaseAlreadyExists {
     fn message(&self) -> String {
