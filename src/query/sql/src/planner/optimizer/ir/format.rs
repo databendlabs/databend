@@ -49,6 +49,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Join(_) => "Join".to_string(),
         RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
         RelOperator::Filter(_) => "Filter".to_string(),
+        RelOperator::SecureFilter(_) => "SecureFilter".to_string(),
         RelOperator::Aggregate(_) => "Aggregate".to_string(),
         RelOperator::Sort(_) => "Sort".to_string(),
         RelOperator::Limit(_) => "Limit".to_string(),

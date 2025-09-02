@@ -32,6 +32,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
@@ -51,6 +52,7 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
         RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
+        RelOperator::SecureFilter(op) => secure_filter_to_format_tree(id_humanizer, op),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
         RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
         RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
@@ -313,6 +315,20 @@ fn filter_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Filter) -> Forma
         "filters: [{}]",
         scalars
     ))])
+}
+
+fn secure_filter_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &SecureFilter,
+) -> FormatTreeNode {
+    let scalars = op
+        .predicates
+        .iter()
+        .map(|expr| format_scalar(id_humanizer, expr))
+        .join(", ");
+    FormatTreeNode::with_children("SecureFilter".to_string(), vec![FormatTreeNode::new(
+        format!("secure filters: [{}]", scalars),
+    )])
 }
 
 fn eval_scalar_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &EvalScalar) -> FormatTreeNode {
