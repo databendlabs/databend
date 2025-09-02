@@ -18,12 +18,77 @@
 //! 1. it is SPSC, enough for now.
 //! 2. receive can check status of channel with fn is_empty().
 
+use std::cmp::min;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Instant;
 
+use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
+use databend_common_base::base::WatchNotify;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
+use databend_common_io::prelude::FormatSettings;
+use fastrace::future::FutureExt;
+use fastrace::Span;
+use log::debug;
+use log::info;
+
+use super::blocks_serializer::BlocksCollector;
+use super::blocks_serializer::BlocksSerializer;
+
+pub struct PageBuilder {
+    pub collector: BlocksCollector,
+    pub remain_rows: usize,
+    pub remain_size: usize,
+}
+
+impl PageBuilder {
+    fn new(max_rows: usize) -> Self {
+        Self {
+            collector: BlocksCollector::new(),
+            remain_size: 10 * 1024 * 1024,
+            remain_rows: max_rows,
+        }
+    }
+
+    fn has_capacity(&self) -> bool {
+        self.remain_rows > 0 && self.remain_size > 0
+    }
+
+    fn append_full_block(&mut self, block: DataBlock) {
+        let memory_size = block.memory_size();
+        let num_rows = block.num_rows();
+
+        self.remain_size -= min(self.remain_size, memory_size);
+        self.remain_rows -= num_rows;
+
+        self.collector.append_block(block);
+    }
+
+    fn append_partial_block(&mut self, block: DataBlock, take_rows: usize) -> DataBlock {
+        self.collector.append_block(block.slice(0..take_rows));
+
+        block.slice(take_rows..block.num_rows())
+    }
+
+    fn calculate_take_rows(&self, block_rows: usize, memory_size: usize) -> usize {
+        min(
+            self.remain_rows,
+            if memory_size > self.remain_size {
+                (self.remain_size * block_rows) / memory_size
+            } else {
+                block_rows
+            },
+        )
+        .max(1)
+    }
+
+    fn into_serializer(self, format_settings: FormatSettings) -> BlocksSerializer {
+        self.collector.into_serializer(format_settings)
+    }
+}
 
 struct SizedChannelInner {
     max_size: usize,
@@ -31,8 +96,6 @@ struct SizedChannelInner {
     is_recv_stopped: bool,
     is_send_stopped: bool,
 }
-
-struct Stopped {}
 
 pub fn sized_spsc(max_size: usize) -> (SizedChannelSender, SizedChannelReceiver) {
     let chan = Arc::new(SizedChannel::create(max_size));
@@ -43,7 +106,7 @@ pub fn sized_spsc(max_size: usize) -> (SizedChannelSender, SizedChannelReceiver)
 }
 
 impl SizedChannelInner {
-    pub fn create(max_size: usize) -> Self {
+    fn create(max_size: usize) -> Self {
         SizedChannelInner {
             max_size,
             values: Default::default(),
@@ -52,42 +115,59 @@ impl SizedChannelInner {
         }
     }
 
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         self.values.iter().map(|x| x.num_rows()).sum::<usize>()
     }
 
-    pub fn try_send(&mut self, value: DataBlock) -> Result<Option<DataBlock>, Stopped> {
+    fn try_send(&mut self, value: DataBlock) -> Result<(), Option<DataBlock>> {
         let current_size = self.size();
         let value_size = value.num_rows();
         if self.is_recv_stopped || self.is_send_stopped {
-            Err(Stopped {})
+            Err(None)
         } else if current_size + value_size <= self.max_size || current_size == 0 {
             self.values.push_back(value);
-            Ok(None)
+            Ok(())
         } else {
-            Ok(Some(value))
+            Err(Some(value))
         }
     }
 
-    pub fn try_recv(&mut self) -> Result<Option<DataBlock>, Stopped> {
-        let v = self.values.pop_front();
-        if v.is_none() && self.is_send_stopped {
-            Err(Stopped {})
-        } else {
-            Ok(v)
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
+    fn is_close(&self) -> bool {
         self.values.is_empty() && self.is_send_stopped
     }
 
-    pub fn stop_send(&mut self) {
+    fn stop_send(&mut self) {
         self.is_send_stopped = true
     }
 
-    pub fn stop_recv(&mut self) {
+    fn stop_recv(&mut self) {
         self.is_recv_stopped = true
+    }
+
+    fn append_block_once(&mut self, builder: &mut PageBuilder) {
+        let Some(block) = self.values.pop_front() else {
+            return;
+        };
+
+        if block.is_empty() {
+            return;
+        }
+
+        let take_rows = builder.calculate_take_rows(block.num_rows(), block.memory_size());
+        if take_rows < block.num_rows() {
+            builder.remain_rows = 0;
+            let remaining_block = builder.append_partial_block(block, take_rows);
+            self.values.push_front(remaining_block);
+        } else {
+            builder.append_full_block(block);
+        }
+    }
+
+    fn append_block(&mut self, builder: &mut PageBuilder) -> bool {
+        while builder.has_capacity() && !self.values.is_empty() {
+            self.append_block_once(builder)
+        }
+        !self.values.is_empty()
     }
 }
 
@@ -95,6 +175,9 @@ struct SizedChannel {
     inner: Mutex<SizedChannelInner>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
+
+    is_plan_ready: WatchNotify,
+    format_settings: Mutex<Option<FormatSettings>>,
 }
 
 impl SizedChannel {
@@ -103,56 +186,60 @@ impl SizedChannel {
             inner: Mutex::new(SizedChannelInner::create(max_size)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
+            is_plan_ready: WatchNotify::new(),
+            format_settings: Mutex::new(None),
         }
     }
 
-    fn try_send(&self, value: DataBlock) -> Result<Option<DataBlock>, Stopped> {
+    fn try_send(&self, value: DataBlock) -> Result<(), Option<DataBlock>> {
         let mut guard = self.inner.lock().unwrap();
         guard.try_send(value)
     }
 
-    pub fn try_recv(&self) -> Result<Option<DataBlock>, Stopped> {
-        let mut guard = self.inner.lock().unwrap();
-        guard.try_recv()
+    #[fastrace::trace(name = "SizedChannel::try_append_block")]
+    fn try_append_block(&self, builder: &mut PageBuilder) -> bool {
+        let has_more = self.inner.lock().unwrap().append_block(builder);
+        self.notify_on_recv.notify_one();
+        has_more
     }
 
     #[async_backtrace::framed]
-    pub async fn send(&self, value: DataBlock) -> bool {
+    async fn send(&self, value: DataBlock) -> bool {
         let mut to_send = value;
         loop {
             match self.try_send(to_send) {
-                Ok(Some(v)) => {
-                    to_send = v;
-                    self.notify_on_recv.notified().await;
-                }
-                Ok(None) => {
+                Ok(_) => {
                     self.notify_on_sent.notify_one();
                     return true;
                 }
-                Err(_) => return false,
+                Err(None) => return false,
+                Err(Some(v)) => {
+                    to_send = v;
+                    self.notify_on_recv.notified().await;
+                }
             }
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn recv(&self) -> Option<DataBlock> {
+    async fn recv(&self) -> bool {
         loop {
-            match self.try_recv() {
-                Ok(Some(v)) => {
-                    self.notify_on_recv.notify_one();
-                    return Some(v);
+            {
+                let g = self.inner.lock().unwrap();
+                if !g.values.is_empty() {
+                    return true;
                 }
-                Ok(None) => {
-                    self.notify_on_sent.notified().await;
+                if g.is_send_stopped {
+                    return false;
                 }
-                Err(_) => return None,
             }
+            self.notify_on_sent.notified().await;
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_close(&self) -> bool {
         let guard = self.inner.lock().unwrap();
-        guard.is_empty()
+        guard.is_close()
     }
 
     pub fn stop_send(&self) {
@@ -172,26 +259,67 @@ impl SizedChannel {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum Wait {
+    Async,
+    Deadline(Instant),
+}
+
 pub struct SizedChannelReceiver {
     chan: Arc<SizedChannel>,
 }
 
 impl SizedChannelReceiver {
-    #[async_backtrace::framed]
-    pub async fn recv(&self) -> Option<DataBlock> {
-        self.chan.recv().await
-    }
-
-    pub fn try_recv(&self) -> Option<DataBlock> {
-        self.chan.try_recv().unwrap_or_default()
-    }
-
     pub fn close(&self) {
         self.chan.stop_recv()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.chan.is_empty()
+    #[async_backtrace::framed]
+    pub async fn collect_new_page(
+        &mut self,
+        max_rows_per_page: usize,
+        tp: &Wait,
+    ) -> Result<(BlocksSerializer, bool), ErrorCode> {
+        let mut builder = PageBuilder::new(max_rows_per_page);
+
+        while builder.has_capacity() {
+            match tp {
+                Wait::Async => match self.chan.try_append_block(&mut builder) {
+                    true => (),
+                    false => break,
+                },
+                Wait::Deadline(t) => {
+                    let d = match t.checked_duration_since(Instant::now()) {
+                        Some(d) if !d.is_zero() => d,
+                        _ => {
+                            // timeout() will return Ok if the future completes immediately
+                            break;
+                        }
+                    };
+                    match tokio::time::timeout(d, self.chan.recv()).await {
+                        Ok(true) => {
+                            self.chan.try_append_block(&mut builder);
+                            debug!("[HTTP-QUERY] Appended new data block");
+                        }
+                        Ok(false) => {
+                            info!("[HTTP-QUERY] Reached end of data blocks");
+                            break;
+                        }
+                        Err(_) => {
+                            debug!("[HTTP-QUERY] Long polling timeout reached");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // try to report 'no more data' earlier to client to avoid unnecessary http call
+        let block_end = self.chan.is_close();
+        Ok((
+            builder.into_serializer(self.chan.format_settings.lock().unwrap().clone().unwrap()),
+            block_end,
+        ))
     }
 }
 
@@ -214,6 +342,12 @@ impl SizedChannelSender {
         SizedChannelSenderCloser {
             chan: self.chan.clone(),
         }
+    }
+
+    pub fn plan_ready(&self, format_settings: FormatSettings) {
+        assert!(!self.chan.is_plan_ready.has_notified());
+        *self.chan.format_settings.lock().unwrap() = Some(format_settings);
+        self.chan.is_plan_ready.notify_waiters();
     }
 }
 

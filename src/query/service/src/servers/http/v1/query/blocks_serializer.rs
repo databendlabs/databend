@@ -18,7 +18,9 @@ use std::ops::DerefMut;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -40,11 +42,43 @@ fn data_is_null(column: &Column, row_index: usize) -> bool {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct BlocksCollector {
+    // Vec<Column> for a Block
+    columns: Vec<(Vec<Column>, usize)>,
+}
+
+impl BlocksCollector {
+    pub fn new() -> Self {
+        Self { columns: vec![] }
+    }
+
+    pub fn append_columns(&mut self, columns: Vec<Column>, num_rows: usize) {
+        self.columns.push((columns, num_rows));
+    }
+
+    pub fn append_block(&mut self, block: DataBlock) {
+        if block.is_empty() {
+            return;
+        }
+        let columns = block.columns().iter().map(BlockEntry::to_column).collect();
+        let num_rows = block.num_rows();
+        self.append_columns(columns, num_rows);
+    }
+
+    pub fn into_serializer(self, format: FormatSettings) -> BlocksSerializer {
+        BlocksSerializer {
+            columns: self.columns,
+            format: Some(format),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlocksSerializer {
     // Vec<Column> for a Block
     columns: Vec<(Vec<Column>, usize)>,
-    pub(crate) format: Option<FormatSettings>,
+    format: Option<FormatSettings>,
 }
 
 impl BlocksSerializer {
@@ -53,25 +87,6 @@ impl BlocksSerializer {
             columns: vec![],
             format: None,
         }
-    }
-
-    pub fn new(format: Option<FormatSettings>) -> Self {
-        Self {
-            columns: vec![],
-            format,
-        }
-    }
-
-    pub fn has_format(&self) -> bool {
-        self.format.is_some()
-    }
-
-    pub fn set_format(&mut self, format: FormatSettings) {
-        self.format = Some(format);
-    }
-
-    pub fn append(&mut self, columns: Vec<Column>, num_rows: usize) {
-        self.columns.push((columns, num_rows));
     }
 
     pub fn is_empty(&self) -> bool {

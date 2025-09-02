@@ -31,6 +31,7 @@ pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryResponseField;
 pub use http_query_handlers::QueryStats;
+pub use query::blocks_serializer::BlocksCollector;
 pub use query::blocks_serializer::BlocksSerializer;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;

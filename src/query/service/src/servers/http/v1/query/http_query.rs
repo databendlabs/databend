@@ -33,7 +33,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TempTblMgrRef;
@@ -624,12 +623,10 @@ impl HttpQuery {
 
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
             req.pagination.max_rows_per_page,
             block_receiver,
-            format_settings,
         )));
 
         Ok(HttpQuery {
@@ -802,11 +799,6 @@ impl HttpQuery {
 
         let query_state = self.executor.clone();
 
-        let query_format_settings = {
-            let page_manager = self.page_manager.lock().await;
-            page_manager.format_settings.clone()
-        };
-
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
                 if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
@@ -815,7 +807,6 @@ impl HttpQuery {
                     query_session,
                     query_context.clone(),
                     block_sender.clone(),
-                    query_format_settings,
                 ))
                 .await
                 .with_context(|| "failed to start query")
