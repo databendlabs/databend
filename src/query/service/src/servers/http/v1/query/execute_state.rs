@@ -25,7 +25,6 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
 use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
@@ -114,7 +113,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender<DataBlock>,
+    pub(crate) sender: SizedChannelSender,
 }
 
 pub struct ExecuteRunning {
@@ -355,8 +354,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<DataBlock>,
-        format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
+        block_sender: SizedChannelSender,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -367,11 +365,10 @@ impl ExecuteState {
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
-        {
-            // set_var may change settings
-            let mut guard = format_settings.write();
-            *guard = Some(ctx.get_format_settings().with_context(make_error)?);
-        }
+
+        // set_var may change settings
+        let format_settings = ctx.get_format_settings().with_context(make_error)?;
+        block_sender.plan_ready(format_settings);
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -424,7 +421,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<DataBlock>,
+        block_sender: SizedChannelSender,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
