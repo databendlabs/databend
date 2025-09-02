@@ -27484,7 +27484,7 @@ DropSequence(
 ---------- Input ----------
 CREATE SEQUENCE seq comment='test'
 ---------- Output ---------
-CREATE SEQUENCE seq START = 1 INCREMENT = 1 COMMENT = 'test'
+CREATE SEQUENCE seq COMMENT = 'test'
 ---------- AST ------------
 CreateSequence(
     CreateSequenceStmt {
@@ -27497,8 +27497,8 @@ CreateSequence(
             quote: None,
             ident_type: None,
         },
-        start: 1,
-        increment: 1,
+        start: None,
+        increment: None,
         comment: Some(
             "test",
         ),
@@ -27522,8 +27522,12 @@ CreateSequence(
             quote: None,
             ident_type: None,
         },
-        start: 20,
-        increment: 100,
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
         comment: Some(
             "test",
         ),
@@ -27547,8 +27551,12 @@ CreateSequence(
             quote: None,
             ident_type: None,
         },
-        start: 20,
-        increment: 100,
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
         comment: Some(
             "test",
         ),

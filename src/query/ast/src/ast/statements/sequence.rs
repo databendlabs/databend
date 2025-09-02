@@ -26,8 +26,8 @@ use crate::ast::Identifier;
 pub struct CreateSequenceStmt {
     pub create_option: CreateOption,
     pub sequence: Identifier,
-    pub start: u64,
-    pub increment: u64,
+    pub start: Option<u64>,
+    pub increment: Option<u64>,
     pub comment: Option<String>,
 }
 
@@ -41,11 +41,15 @@ impl Display for CreateSequenceStmt {
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(
-            f,
-            "{} START = {} INCREMENT = {}",
-            self.sequence, self.start, self.increment
-        )?;
+        write!(f, "{}", self.sequence)?;
+
+        if let Some(s) = &self.start {
+            write!(f, " START = {}", s)?;
+        }
+
+        if let Some(i) = &self.increment {
+            write!(f, " INCREMENT = {}", i)?;
+        }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }

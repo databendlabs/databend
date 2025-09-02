@@ -62,8 +62,8 @@ fn create_sequence(i: Input) -> IResult<Statement> {
             Ok(Statement::CreateSequence(CreateSequenceStmt {
                 create_option,
                 sequence,
-                start: opt_start.map(|(_, _, start)| start).unwrap_or(1),
-                increment: opt_increment.map(|(_, _, start)| start).unwrap_or(1),
+                start: opt_start.map(|(_, _, start)| start),
+                increment: opt_increment.map(|(_, _, start)| start),
                 comment: opt_comment.map(|(_, _, comment)| comment),
             }))
         },

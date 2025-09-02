@@ -43,7 +43,9 @@ impl Binder {
             comment,
         } = stmt;
 
-        if *increment == 0 {
+        let start = start.unwrap_or(1);
+        let increment = increment.unwrap_or(1);
+        if increment == 0 {
             return Err(ErrorCode::InvalidArgument(
                 "Increment is an invalid value '0'",
             ));
@@ -55,8 +57,8 @@ impl Binder {
         let plan = CreateSequencePlan {
             create_option: create_option.clone().into(),
             ident: SequenceIdent::new(tenant, sequence),
-            start: *start,
-            increment: *increment,
+            start,
+            increment,
             comment: comment.clone(),
         };
         Ok(Plan::CreateSequence(plan.into()))
