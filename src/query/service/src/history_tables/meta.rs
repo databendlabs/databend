@@ -134,15 +134,16 @@ impl HeartbeatTask {
 
         let exited = Arc::new(AtomicBool::new(false));
 
-        let task_name = format!("heartbeat_{}", &meta_key);
+        let task_name = format!("heartbeat_{}", meta_key);
         let exited_clone = exited.clone();
+        let meta_key = meta_key.to_string();
         spawn_named(
             async move {
                 let result = loop_fut.await;
-                if result.is_err() {
+                if let Err(e) = result {
                     warn!(
                         "[HISTORY-TABLES] {} loop exited with error: {}",
-                        task_name, result
+                        meta_key, e
                     );
                 }
                 exited_clone.store(true, std::sync::atomic::Ordering::SeqCst);
