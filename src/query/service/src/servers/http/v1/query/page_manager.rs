@@ -24,6 +24,8 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -88,6 +90,7 @@ impl PageManager {
     }
 
     #[async_backtrace::framed]
+    #[fastrace::trace(name = "PageManager::get_a_page")]
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no {
@@ -95,6 +98,7 @@ impl PageManager {
             if !self.end {
                 let end = self.collect_new_page(&mut serializer, tp).await?;
                 let num_row = serializer.num_rows();
+                log::debug!(num_row, wait_type:? = tp; "collect_new_page");
                 self.total_rows += num_row;
                 let page = Page {
                     data: Arc::new(serializer),
@@ -226,7 +230,10 @@ impl PageManager {
                         // timeout() will return Ok if the future completes immediately
                         break;
                     }
-                    match tokio::time::timeout(d, self.block_receiver.recv()).await {
+                    match tokio::time::timeout(d, self.block_receiver.recv())
+                        .in_span(Span::enter_with_local_parent("PageManager::recv_block"))
+                        .await
+                    {
                         Ok(Some(block)) => {
                             debug!(
                                 "[HTTP-QUERY] Received new data block with {} rows",

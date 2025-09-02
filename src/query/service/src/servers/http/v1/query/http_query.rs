@@ -651,7 +651,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    #[fastrace::trace]
+    #[fastrace::trace(name = "HttpQuery::get_response_page",properties = {"page_no": "{page_no}"})]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state();
@@ -922,6 +922,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[fastrace::trace(name = "HttpQuery::on_heartbeat")]
     pub fn on_heartbeat(&self) -> bool {
         let mut expire_state = self.state.lock();
         match *expire_state {

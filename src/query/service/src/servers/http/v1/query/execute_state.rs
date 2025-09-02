@@ -397,7 +397,7 @@ impl ExecuteState {
         let ctx_clone = ctx.clone();
         let block_sender_closer = block_sender.closer();
 
-        let res = execute(
+        let res = Self::execute(
             interpreter,
             plan.schema(),
             ctx_clone,
@@ -418,49 +418,50 @@ impl ExecuteState {
 
         Ok(())
     }
-}
 
-async fn execute(
-    interpreter: Arc<dyn Interpreter>,
-    schema: DataSchemaRef,
-    ctx: Arc<QueryContext>,
-    block_sender: SizedChannelSender<DataBlock>,
-    executor: Arc<Mutex<Executor>>,
-) -> Result<(), ExecutionError> {
-    let make_error = || format!("failed to execute {}", interpreter.name());
+    #[fastrace::trace(name = "ExecuteState::execute")]
+    async fn execute(
+        interpreter: Arc<dyn Interpreter>,
+        schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
+        block_sender: SizedChannelSender<DataBlock>,
+        executor: Arc<Mutex<Executor>>,
+    ) -> Result<(), ExecutionError> {
+        let make_error = || format!("failed to execute {}", interpreter.name());
 
-    let mut data_stream = interpreter
-        .execute(ctx.clone())
-        .await
-        .with_context(make_error)?;
-    match data_stream.next().await {
-        None => {
-            let block = DataBlock::empty_with_schema(schema);
-            block_sender.send(block, 0).await;
-            Executor::stop::<()>(&executor, Ok(()));
-            block_sender.close();
-        }
-        Some(Err(err)) => {
-            Executor::stop(&executor, Err(err));
-            block_sender.close();
-        }
-        Some(Ok(block)) => {
-            let size = block.num_rows();
-            block_sender.send(block, size).await;
-            while let Some(block_r) = data_stream.next().await {
-                match block_r {
-                    Ok(block) => {
-                        block_sender.send(block.clone(), block.num_rows()).await;
-                    }
-                    Err(err) => {
-                        block_sender.close();
-                        return Err(err.with_context(make_error()));
-                    }
-                };
+        let mut data_stream = interpreter
+            .execute(ctx.clone())
+            .await
+            .with_context(make_error)?;
+        match data_stream.next().await {
+            None => {
+                let block = DataBlock::empty_with_schema(schema);
+                block_sender.send(block, 0).await;
+                Executor::stop::<()>(&executor, Ok(()));
+                block_sender.close();
             }
-            Executor::stop::<()>(&executor, Ok(()));
-            block_sender.close();
+            Some(Err(err)) => {
+                Executor::stop(&executor, Err(err));
+                block_sender.close();
+            }
+            Some(Ok(block)) => {
+                let size = block.num_rows();
+                block_sender.send(block, size).await;
+                while let Some(block_r) = data_stream.next().await {
+                    match block_r {
+                        Ok(block) => {
+                            block_sender.send(block.clone(), block.num_rows()).await;
+                        }
+                        Err(err) => {
+                            block_sender.close();
+                            return Err(err.with_context(make_error()));
+                        }
+                    };
+                }
+                Executor::stop::<()>(&executor, Ok(()));
+                block_sender.close();
+            }
         }
+        Ok(())
     }
-    Ok(())
 }
