@@ -141,8 +141,8 @@ impl HeartbeatTask {
                 let result = loop_fut.await;
                 if result.is_err() {
                     warn!(
-                        "[HISTORY-TABLES] Heartbeat loop exited with error: {:?}",
-                        result
+                        "[HISTORY-TABLES] {} loop exited with error: {}",
+                        task_name, result
                     );
                 }
                 exited_clone.store(true, std::sync::atomic::Ordering::SeqCst);
