@@ -1690,10 +1690,10 @@ impl From<AppError> for ErrorCode {
             }
             AppError::VirtualColumnTooMany(err) => ErrorCode::VirtualColumnTooMany(err.message()),
             AppError::MarkDatabaseMetaAsGCInProgressFailed(err) => {
-                ErrorCode::UndropDbGeneralFailure(err.message())
+                ErrorCode::GeneralDbGcFailure(err.message())
             }
             AppError::CleanDbIdTableNamesFailed(err) => {
-                ErrorCode::UndropDbGeneralFailure(err.message())
+                ErrorCode::GeneralDbGcFailure(err.message())
             }
         }
     }

@@ -526,7 +526,7 @@ build_exceptions! {
     /// Row Policy already exists
     RowAccessPolicyAlreadyExists(2324),
     /// General failures met while garbage collecting database meta
-    UndropDbGeneralFailure(2325),
+    GeneralDbGcFailure(2325),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]
