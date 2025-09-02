@@ -4156,6 +4156,7 @@ dependencies = [
  "databend-common-storages-basic",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-row-access-policy-feature",
  "databend-storages-common-cache",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
@@ -4844,7 +4845,6 @@ dependencies = [
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
- "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
@@ -4900,16 +4900,6 @@ dependencies = [
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
-]
-
-[[package]]
-name = "databend-enterprise-storage-quota"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "databend-common-base",
- "databend-common-exception",
- "databend-common-license",
 ]
 
 [[package]]

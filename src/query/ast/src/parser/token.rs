@@ -731,6 +731,10 @@ pub enum TokenKind {
     INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
+    #[token("INCREMENT", ignore(ascii_case))]
+    INCREMENT,
+    #[token("START", ignore(ascii_case))]
+    START,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
     #[token("INFORMATION", ignore(ascii_case))]

@@ -22,7 +22,6 @@ use jwt_simple::claims::JWTClaims;
 
 use crate::license::Feature;
 use crate::license::LicenseInfo;
-use crate::license::StorageQuota;
 
 pub trait LicenseManager: Sync + Send {
     fn init(tenant: String) -> Result<()>
@@ -62,9 +61,6 @@ pub trait LicenseManager: Sync + Send {
         self.parse_license(&license_key)?;
         Ok(())
     }
-
-    /// Get the storage quota from license key.
-    fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota>;
 }
 
 pub struct LicenseManagerSwitch {
@@ -111,11 +107,6 @@ impl LicenseManager for OssLicenseManager {
         Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ))
-    }
-
-    /// Always return default storage quota.
-    fn get_storage_quota(&self, _: String) -> Result<StorageQuota> {
-        Ok(StorageQuota::default())
     }
 }
 
@@ -189,10 +180,6 @@ mod tests {
 
         fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
             self.license_claim.clone()
-        }
-
-        fn get_storage_quota(&self, _license_key: String) -> Result<StorageQuota> {
-            unimplemented!()
         }
     }
 

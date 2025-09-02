@@ -128,8 +128,8 @@ pub trait Setup {
     async fn setup(&self) -> Result<InnerConfig>;
 }
 
-struct OSSSetup {
-    config: InnerConfig,
+pub struct OSSSetup {
+    pub config: InnerConfig,
 }
 
 #[async_trait::async_trait]

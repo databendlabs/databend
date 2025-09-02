@@ -157,13 +157,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
-                ("sequence_step_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(65536),
-                    desc: "Sets the sequence step size for nextval function.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
-                }),
                 ("week_start", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Specifies the first day of the week.(Used by week-related date functions)",
@@ -933,7 +926,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of table recluster.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

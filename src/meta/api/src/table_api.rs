@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -45,6 +46,7 @@ use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -60,6 +62,7 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
@@ -111,6 +114,8 @@ use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
 use crate::deserialize_struct;
 use crate::fetch_id;
+use crate::garbage_collection_api::get_history_tables_for_gc;
+use crate::garbage_collection_api::ORPHAN_POSTFIX;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -121,10 +126,8 @@ use crate::schema_api::construct_drop_table_txn_operations;
 use crate::schema_api::get_db_by_id_or_err;
 use crate::schema_api::get_db_id_or_err;
 use crate::schema_api::get_history_table_metas;
-use crate::schema_api::get_history_tables_for_gc;
 use crate::schema_api::handle_undrop_table;
 use crate::schema_api::table_has_to_not_exist;
-use crate::schema_api::ORPHAN_POSTFIX;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -269,6 +272,8 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
+        let mut old_table_id = None;
+
         loop {
             trials.next().unwrap()?.await;
 
@@ -319,6 +324,7 @@ where
                                 spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
+                                old_table_id: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
@@ -330,6 +336,7 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
+                                old_table_id = Some(*id.data);
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
@@ -467,6 +474,7 @@ where
                         spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
+                        old_table_id,
                     });
                 } else {
                     // re-run txn with re-fetched data
@@ -1656,6 +1664,29 @@ where
             vacuum_tables,
             drop_ids,
         })
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime, KVAppError> {
+        debug!(req :? =(&name_ident, &value); "TableApi: {}", func_name!());
+
+        let transition = self
+            .crud_upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
+                let curr = t.into_value().unwrap_or_default();
+                if curr.time >= value.time {
+                    Ok(None)
+                } else {
+                    Ok(Some(value.clone()))
+                }
+            })
+            .await?;
+
+        return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
 }
 

@@ -49,6 +49,7 @@ use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
@@ -112,6 +113,7 @@ pub enum RelOp {
     Join,
     EvalScalar,
     Filter,
+    SecureFilter,
     Aggregate,
     Sort,
     Limit,
@@ -149,6 +151,7 @@ pub enum RelOperator {
     Join(Join),
     EvalScalar(EvalScalar),
     Filter(Filter),
+    SecureFilter(SecureFilter),
     Aggregate(Aggregate),
     Sort(Sort),
     Limit(Limit),
@@ -254,6 +257,7 @@ impl_try_from_rel_operator! {
     Join,
     EvalScalar,
     Filter,
+    SecureFilter,
     Aggregate,
     Sort,
     Limit,

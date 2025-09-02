@@ -109,6 +109,7 @@ impl TempTblMgr {
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
+        let mut old_table_id = None;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
             (true, CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
@@ -122,9 +123,9 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                let old_id = self.name_to_id.insert(desc.clone(), table_id);
-                if let Some(old_id) = old_id {
-                    self.id_to_table.remove(&old_id);
+                old_table_id = self.name_to_id.insert(desc.clone(), table_id);
+                if let Some(old_id) = &old_table_id {
+                    self.id_to_table.remove(old_id);
                 }
                 self.id_to_table.insert(table_id, TempTable {
                     db_name: name_ident.db_name,
@@ -149,6 +150,7 @@ impl TempTblMgr {
             spec_vec: None,
             prev_table_id: None,
             orphan_table_name,
+            old_table_id,
         })
     }
 

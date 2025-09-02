@@ -187,6 +187,40 @@ jobs:
         with:
           name: test-sqllogic-standalone-minio-tpch-http-with-bendsave
 
+  cluster_with_minio_and_nginx:
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_arch }}
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        dirs:
+          - "http_handler"
+        handler:
+          - "ttc-rust"
+          - "ttc-go"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_test
+        with:
+          artifacts: sqllogictests,meta,query
+
+      - uses: ./.github/actions/setup_minio
+
+      - name: Run sqllogic Tests with Cluster behind Nginx
+        shell: bash
+        env:
+          TEST_HANDLERS: ${{ matrix.handler }}
+        run: bash ./scripts/ci/ci-run-sqllogic-tests-cluster-nginx.sh ${{ matrix.dirs }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-cluster-minio-${{ matrix.dirs }}-${{ matrix.handler }}
+
   # TODO: tmp disable since iceberg image not running on arm64
   # standalone_iceberg_tpch:
   #   runs-on:
