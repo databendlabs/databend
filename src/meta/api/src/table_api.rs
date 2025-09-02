@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -45,6 +46,7 @@ use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -60,6 +62,7 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
@@ -1656,6 +1659,29 @@ where
             vacuum_tables,
             drop_ids,
         })
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime, KVAppError> {
+        debug!(req :? =(&name_ident, &value); "TableApi: {}", func_name!());
+
+        let transition = self
+            .crud_upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
+                let curr = t.into_value().unwrap_or_default();
+                if curr.time >= value.time {
+                    Ok(None)
+                } else {
+                    Ok(Some(value.clone()))
+                }
+            })
+            .await?;
+
+        return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
 }
 
