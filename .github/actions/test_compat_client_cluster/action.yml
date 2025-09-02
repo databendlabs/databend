@@ -1,0 +1,52 @@
+name: "Test compat client"
+description: "Running client compat tests in cluster mode"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: meta,query
+
+    - uses: ./.github/actions/setup_minio
+
+    - uses: wntrblm/nox@2025.05.01
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Set up Maven
+      uses: stCarolas/setup-maven@v5
+      with:
+        maven-version: 3.9.9
+
+    - name: checkout databend-jdbc
+      uses: actions/checkout@v4
+      with:
+        repository: databendlabs/databend-jdbc
+        ref: main
+        path: tests/nox/cache/databend-jdbc
+
+    - name: build databend-jdbc
+      shell: bash
+      working-directory: tests/nox/cache/databend-jdbc
+      env:
+        TEST_HANDLERS: http
+      run: |
+        mvn package -DskipTests
+        echo "JDBC_MAIN_VER=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
+        pwd
+
+    - name: Run databend with Cluster mode
+      shell: bash
+      env:
+        STORAGE_ALLOW_INSECURE: true
+      run: bash ./scripts/ci/deploy/databend-query-cluster-3-nodes-nginx.sh
+
+    - name: Run test
+      shell: bash
+      run: nox -f tests/nox/noxfile.py
+      env:
+        JDBC_MAIN_VER: ${{env.JDBC_MAIN_VER}}

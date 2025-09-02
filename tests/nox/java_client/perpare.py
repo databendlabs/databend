@@ -9,28 +9,25 @@ def main():
     parser.add_argument("version")
     args = parser.parse_args()
 
-    download_jdbc(args.version)
+    if args.version != "main":
+        download_jdbc(args.version)
     download_testng()
     create_user()
 
 
 def download_jdbc(version):
-    files = [f"databend-jdbc-{version}.jar", f"databend-jdbc-{version}-tests.jar"]
+    filename =f"databend-jdbc-{version}.jar"
+    target = Path(f"cache/jdbc/{filename}")
+    if target.exists():
+        print(f"{filename} exists")
+    target.parent.mkdir(parents=True, exist_ok=True)
 
-    for filename in files:
-        target = Path(f"cache/jdbc/{filename}")
-        if target.exists():
-            print(f"{filename} exists")
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        print(f"start download {filename}")
-        resp = requests.get(
-            f"https://github.com/databendlabs/databend-jdbc/releases/download/v{version}/{filename}"
-        )
-        resp.raise_for_status()
-        target.write_bytes(resp.content)
-
+    print(f"start download {filename}")
+    resp = requests.get(
+        f"https://github.com/databendlabs/databend-jdbc/releases/download/v{version}/{filename}"
+    )
+    resp.raise_for_status()
+    target.write_bytes(resp.content)
 
 def create_user():
     requests.post(
