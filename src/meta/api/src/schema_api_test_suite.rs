@@ -1452,25 +1452,25 @@ impl SchemaApiTestSuite {
 
             let lvt_name_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
 
-            let res = mt.get(&lvt_name_ident).await?;
+            let res = mt.get_pb(&lvt_name_ident).await?;
             assert!(res.is_none());
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_big).await?;
             assert_eq!(res.time, time_big);
-            let res = mt.get(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_big);
+            let res = mt.get_pb(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().data.time, time_big);
 
             // test lvt never fall back
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_small).await?;
             assert_eq!(res.time, time_big);
-            let res = mt.get(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_big);
+            let res = mt.get_pb(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().data.time, time_big);
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_bigger).await?;
             assert_eq!(res.time, time_bigger);
-            let res = mt.get(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_bigger);
+            let res = mt.get_pb(&lvt_name_ident).await?;
+            assert_eq!(res.unwrap().data.time, time_bigger);
         }
 
         Ok(())
@@ -4841,6 +4841,7 @@ impl SchemaApiTestSuite {
                 new_table: true,
                 orphan_table_name: None,
                 spec_vec: None,
+                old_table_id: None,
             };
             let cur_db = util.get_database().await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -5582,6 +5583,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq".to_string()),
                 storage_version,
             };
@@ -5604,6 +5607,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 ident: SequenceIdent::new(&tenant, "seq1"),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
             };
@@ -5653,6 +5658,8 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::CreateOrReplace,
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
+                start: 1,
+                increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
             };

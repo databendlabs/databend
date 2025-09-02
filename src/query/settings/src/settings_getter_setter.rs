@@ -197,11 +197,6 @@ impl Settings {
         self.try_set_u64("max_block_size", val)
     }
 
-    // Get sequence_step_size.
-    pub fn get_sequence_step_size(&self) -> Result<u64> {
-        self.try_get_u64("sequence_step_size")
-    }
-
     // Max block size for parquet reader
     pub fn get_parquet_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("parquet_max_block_size")

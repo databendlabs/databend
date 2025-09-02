@@ -64,7 +64,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let meta: SequenceMeta = req.clone().into();
 
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
-        let storage_value = Id::new_typed(SequenceStorageValue(1));
+        let storage_value = Id::new_typed(SequenceStorageValue(req.start));
 
         let conditions = if req.create_option == CreateOption::CreateOrReplace {
             vec![]

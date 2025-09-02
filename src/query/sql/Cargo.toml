@@ -31,6 +31,7 @@ databend-common-storage = { workspace = true }
 databend-common-storages-basic = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }

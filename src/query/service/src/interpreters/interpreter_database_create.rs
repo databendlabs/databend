@@ -88,6 +88,16 @@ impl Interpreter for CreateDatabaseInterpreter {
                         &current_role.name,
                     )
                     .await?;
+
+                // if old_db_id is some means create or replace is success, we should delete the old db id's ownership key
+                if let Some(old_db_id) = reply.old_db_id {
+                    role_api
+                        .revoke_ownership(&OwnershipObject::Database {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id: *old_db_id,
+                        })
+                        .await?;
+                }
                 RoleCacheManager::instance().invalidate_cache(&tenant);
             }
         }

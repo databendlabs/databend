@@ -5394,7 +5394,7 @@ impl<'a> TypeChecker<'a> {
         } else {
             None
         };
-        databend_common_base::runtime::block_on(catalog.get_sequence(req, visibility_checker))?;
+        databend_common_base::runtime::block_on(catalog.get_sequence(req, &visibility_checker))?;
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);

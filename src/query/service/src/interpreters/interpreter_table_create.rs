@@ -33,6 +33,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndexType;
@@ -41,6 +42,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -228,22 +230,7 @@ impl CreateTableInterpreter {
         let db_id = reply.db_id;
 
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            // grant the ownership of the table to the current role.
-            let current_role = self.ctx.get_current_role();
-            if let Some(current_role) = current_role {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Table {
-                            catalog_name: self.plan.catalog.clone(),
-                            db_id,
-                            table_id,
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+            self.process_ownership(&tenant, reply).await?;
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -336,6 +323,43 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
+    async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
+        // grant the ownership of the table to the current role.
+        let mut invalid_cache = false;
+        let current_role = self.ctx.get_current_role();
+        let role_api = UserApiProvider::instance().role_api(tenant);
+        if let Some(current_role) = current_role {
+            role_api
+                .grant_ownership(
+                    &OwnershipObject::Table {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id: reply.db_id,
+                        table_id: reply.table_id,
+                    },
+                    &current_role.name,
+                )
+                .await?;
+            invalid_cache = true;
+        }
+
+        // TODO: can refactor into create_table in one txn
+        // if old_table_id is some means create or replace is success, we should delete the old table id's ownership key
+        if let Some(old_table_id) = reply.old_table_id {
+            role_api
+                .revoke_ownership(&OwnershipObject::Table {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id: reply.db_id,
+                    table_id: old_table_id,
+                })
+                .await?;
+            invalid_cache = true;
+        }
+        if invalid_cache {
+            RoleCacheManager::instance().invalidate_cache(tenant);
+        }
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
@@ -390,27 +414,10 @@ impl CreateTableInterpreter {
             self.register_temp_table(prefix).await?;
         }
 
+        // iceberg table do not need to generate ownership.
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
-            // iceberg table do not need to generate ownership.
-            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in the future.
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let tenant = self.ctx.get_tenant();
-                let db = catalog.get_database(&tenant, &self.plan.database).await?;
-                let db_id = db.get_db_info().database_id.db_id;
-
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Table {
-                            catalog_name: self.plan.catalog.clone(),
-                            db_id,
-                            table_id: reply.table_id,
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+            let tenant = self.ctx.get_tenant();
+            self.process_ownership(&tenant, reply).await?;
         }
 
         Ok(PipelineBuildResult::create())

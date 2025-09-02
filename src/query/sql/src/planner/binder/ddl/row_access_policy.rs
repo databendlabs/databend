@@ -15,7 +15,13 @@
 use databend_common_ast::ast::CreateRowAccessPolicyStmt;
 use databend_common_ast::ast::DescRowAccessPolicyStmt;
 use databend_common_ast::ast::DropRowAccessPolicyStmt;
+use databend_common_ast::ast::Expr;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_functions::is_builtin_function;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
+use unicase::Ascii;
 
 use crate::normalize_identifier;
 use crate::plans::CreateRowAccessPolicyPlan;
@@ -23,6 +29,8 @@ use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::Plan;
 use crate::Binder;
+use crate::NameResolutionContext;
+use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -36,6 +44,54 @@ impl Binder {
             description,
             definition,
         } = stmt;
+
+        #[derive(Visitor)]
+        #[visitor(Expr(enter))]
+        struct PolicyVisitor {
+            name_resolution_ctx: NameResolutionContext,
+            error: Option<ErrorCode>,
+        }
+
+        impl PolicyVisitor {
+            fn enter_expr(&mut self, expr: &Expr) {
+                match expr {
+                    Expr::FunctionCall { func, span: _ } => {
+                        let func_name =
+                            normalize_identifier(&func.name, &self.name_resolution_ctx).to_string();
+                        let func_name = func_name.as_str();
+                        let uni_case_func_name = Ascii::new(func_name);
+                        if !(is_builtin_function(func_name)
+                            || TypeChecker::all_sugar_functions().contains(&uni_case_func_name)
+                            || func.window.is_none()
+                            || func.lambda.is_none()
+                            || func.order_by.is_empty())
+                        {
+                            self.error = Some(ErrorCode::InvalidArgument(
+                                "Row access policy expr only builtin function",
+                            ));
+                        }
+                    }
+                    Expr::InSubquery { .. } | Expr::LikeSubquery { .. } => {
+                        self.error = Some(ErrorCode::InvalidArgument(
+                            "Row access policy expr only builtin function",
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let stmt = stmt.clone();
+        let name_resolution_ctx = self.name_resolution_ctx.clone();
+        let mut visitor = PolicyVisitor {
+            name_resolution_ctx,
+            error: None,
+        };
+        stmt.drive(&mut visitor);
+
+        if let Some(e) = visitor.error {
+            return Err(e);
+        }
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateRowAccessPolicyPlan {

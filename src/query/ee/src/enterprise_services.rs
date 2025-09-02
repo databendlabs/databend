@@ -26,7 +26,6 @@ use crate::license::license_mgr::RealLicenseManager;
 use crate::resource_management::init_resources_management;
 use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storage_encryption::RealStorageEncryptionHandler;
-use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
 use crate::table_index::RealTableIndexHandler;
@@ -46,7 +45,6 @@ impl EnterpriseServices {
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
         RealTableIndexHandler::init()?;
-        RealStorageQuotaHandler::init(&cfg, version)?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg, version).await?;
         RealHilbertClusteringHandler::init()?;

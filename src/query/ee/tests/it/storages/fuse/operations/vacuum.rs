@@ -21,7 +21,7 @@ use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::SchemaApi;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -605,7 +605,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
         table_id: table.get_id(),
     };
     let table_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
-    let v = meta.get(&table_ownership_key).await?;
+    let v = meta.get_pb(&table_ownership_key).await?;
     assert!(v.is_some());
 
     // 5. Drop test database
@@ -624,7 +624,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
     };
 
     let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
-    let v = meta.get(&table_ownership_key).await?;
+    let v = meta.get_pb(&table_ownership_key).await?;
     assert!(v.is_none());
 
     Ok(())

@@ -27,9 +27,9 @@ use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
+use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi;
-use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;
@@ -333,7 +333,10 @@ impl Catalog for MutableCatalog {
         });
         let database = self.build_db_instance(&db_info)?;
         database.init_database(req.name_ident.tenant_name()).await?;
-        Ok(CreateDatabaseReply { db_id: res.db_id })
+        Ok(CreateDatabaseReply {
+            db_id: res.db_id,
+            old_db_id: res.old_db_id,
+        })
     }
 
     #[async_backtrace::framed]
@@ -825,7 +828,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -858,7 +861,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

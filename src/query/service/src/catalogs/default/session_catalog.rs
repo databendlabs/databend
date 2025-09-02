@@ -704,7 +704,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         self.inner.get_sequence(req, visibility_checker).await
     }
@@ -715,7 +715,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         self.inner
             .get_sequence_next_value(req, visibility_checker)
