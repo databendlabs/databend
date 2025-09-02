@@ -36,7 +36,6 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::FutureExt;
 use log::debug;
-use log::info;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
