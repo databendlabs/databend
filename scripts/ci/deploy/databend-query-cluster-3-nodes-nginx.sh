@@ -51,7 +51,7 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 sleep 1
 
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 QUERY_HTTP_HANDLER_PORT=8081 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 QUERY_HTTP_HANDLER_PORT=8001 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
