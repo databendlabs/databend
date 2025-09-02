@@ -67,6 +67,8 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 
+const DEAD_IN_SECS: u64 = 60;
+
 pub struct GlobalHistoryLog {
     meta_handle: HistoryMetaHandle,
     interval: u64,
@@ -378,7 +380,10 @@ impl GlobalHistoryLog {
         loop {
             // 1. Acquire heartbeat
             let heartbeat_key = format!("{}/{}", meta_key, table.name);
-            let heartbeat_guard = match self.meta_handle.create_heartbeat_task(&heartbeat_key).await
+            let heartbeat_guard = match self
+                .meta_handle
+                .create_heartbeat_task(&heartbeat_key, DEAD_IN_SECS)
+                .await
             {
                 Ok(Some(guard)) => guard,
                 Ok(None) => {
@@ -442,11 +447,33 @@ impl GlobalHistoryLog {
                             }
                             sleep(self.transform_sleep_duration()).await;
                         }
+
+                        // On error(e.g. DUPLICATED_UPSERT_FILES), verify that our heartbeat is still valid (from this node).
+                        // Purpose: avoid two nodes performing the same work concurrently.
+                        // The periodic heartbeat loop would also detect the conflict, but it runs
+                        // only around every 30 seconds; this check enables faster failover.
+                        if e.code() == ErrorCode::DUPLICATED_UPSERT_FILES
+                            || e.code() == ErrorCode::TABLE_ALREADY_LOCKED
+                            || e.code() == ErrorCode::TABLE_LOCK_EXPIRED
+                            || e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+                        {
+                            if let Ok(valid) =
+                                self.meta_handle.is_heartbeat_valid(&heartbeat_key).await
+                            {
+                                if !valid {
+                                    info!(
+                                        "[HISTORY-TABLES] {} heartbeat lost during transform",
+                                        table.name
+                                    );
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
                 // Release heartbeat periodically to allow other nodes in the cluster
                 // to take over and ensure even task distribution across the cluster
-                if transform_cnt % 100 == 0 {
+                if transform_cnt % 200 == 0 {
                     break;
                 }
             }
