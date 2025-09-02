@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
-use databend_common_license::license::StorageQuota;
 use databend_common_license::license::VerifyResult;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -152,38 +151,6 @@ impl LicenseManager for RealLicenseManager {
             self.cache.insert(raw.to_string(), license.clone());
             Ok(license)
         }
-    }
-
-    fn get_storage_quota(&self, license_key: String) -> Result<StorageQuota> {
-        if license_key.is_empty() {
-            return Ok(StorageQuota::default());
-        }
-
-        if let Some(v) = self.cache.get(&license_key) {
-            if Self::verify_license_expired(v.value())? {
-                return Err(ErrorCode::LicenseKeyExpired(format!(
-                    "[LicenseManager] License key expired at {:?}",
-                    v.value().expires_at,
-                )));
-            }
-            return Ok(v.custom.get_storage_quota());
-        }
-
-        let license = self.parse_license(&license_key).map_err_to_code(
-            ErrorCode::LicenseKeyInvalid,
-            || format!("[LicenseManager] Storage use requires enterprise license. Current license invalid for tenant: {}", self.tenant),
-        )?;
-
-        if Self::verify_license_expired(&license)? {
-            return Err(ErrorCode::LicenseKeyExpired(format!(
-                "[LicenseManager] License key expired at {:?}",
-                license.expires_at,
-            )));
-        }
-
-        let quota = license.custom.get_storage_quota();
-        self.cache.insert(license_key, license);
-        Ok(quota)
     }
 }
 

@@ -22,7 +22,6 @@ pub mod license;
 pub mod resource_management;
 pub mod row_access_policy;
 pub mod storage_encryption;
-pub mod storage_quota;
 pub mod storages;
 pub mod stream;
 pub mod table_index;

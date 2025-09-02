@@ -20,26 +20,6 @@ use display_more::DisplaySliceExt;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct ComputeQuota {
-    pub threads_num: Option<usize>,
-    pub memory_usage: Option<usize>,
-}
-
-#[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct StorageQuota {
-    pub storage_usage: Option<usize>,
-}
-
-/// We allow user to use upto 1TiB storage size.
-impl Default for StorageQuota {
-    fn default() -> Self {
-        Self {
-            storage_usage: Some(1024 * 1024 * 1024 * 1024),
-        }
-    }
-}
-
 // All enterprise features are defined here.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Feature {
@@ -65,10 +45,6 @@ pub enum Feature {
     Stream,
     #[serde(alias = "attach_table", alias = "ATTACH_TABLE")]
     AttacheTable,
-    #[serde(alias = "compute_quota", alias = "COMPUTE_QUOTA")]
-    ComputeQuota(ComputeQuota),
-    #[serde(alias = "storage_quota", alias = "STORAGE_QUOTA")]
-    StorageQuota(StorageQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
     #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
@@ -115,32 +91,6 @@ impl fmt::Display for Feature {
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
             Feature::AttacheTable => write!(f, "attach_table"),
-            Feature::ComputeQuota(v) => {
-                write!(f, "compute_quota(")?;
-
-                write!(f, "threads_num: ")?;
-                match &v.threads_num {
-                    None => write!(f, "unlimited,")?,
-                    Some(threads_num) => write!(f, "{}", *threads_num)?,
-                };
-
-                write!(f, ", memory_usage: ")?;
-                match v.memory_usage {
-                    None => write!(f, "unlimited,")?,
-                    Some(memory_usage) => write!(f, "{}", memory_usage)?,
-                }
-                write!(f, ")")
-            }
-            Feature::StorageQuota(v) => {
-                write!(f, "storage_quota(")?;
-
-                write!(f, "storage_usage: ")?;
-                match v.storage_usage {
-                    None => write!(f, "unlimited,")?,
-                    Some(storage_usage) => write!(f, "{}", storage_usage)?,
-                }
-                write!(f, ")")
-            }
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
             Feature::HilbertClustering => write!(f, "hilbert_clustering"),
@@ -167,30 +117,6 @@ impl Feature {
 
     pub fn verify(&self, feature: &Feature) -> Result<VerifyResult, ErrorCode> {
         match (self, feature) {
-            (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
-                if let Some(thread_num) = c.threads_num {
-                    if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
-                        return Ok(VerifyResult::Failure);
-                    }
-                }
-
-                if let Some(max_memory_usage) = c.memory_usage {
-                    if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
-                        return Ok(VerifyResult::Failure);
-                    }
-                }
-
-                Ok(VerifyResult::Success)
-            }
-            (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
-                if let Some(max_storage_usage) = c.storage_usage {
-                    if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
-                        return Ok(VerifyResult::Failure);
-                    }
-                }
-
-                Ok(VerifyResult::Success)
-            }
             (Feature::MaxCpuQuota(c), Feature::MaxCpuQuota(v)) => match c > v {
                 true => Ok(VerifyResult::Success),
                 false => Ok(VerifyResult::Failure),
@@ -276,24 +202,6 @@ impl LicenseInfo {
 
         DisplayFeatures(self)
     }
-
-    /// Get Storage Quota from given license info.
-    ///
-    /// Returns the default storage quota if the storage quota is not licensed.
-    pub fn get_storage_quota(&self) -> StorageQuota {
-        let Some(features) = self.features.as_ref() else {
-            return StorageQuota::default();
-        };
-
-        features
-            .iter()
-            .find_map(|f| match f {
-                Feature::StorageQuota(v) => Some(v),
-                _ => None,
-            })
-            .cloned()
-            .unwrap_or_default()
-    }
 }
 
 #[cfg(test)]
@@ -345,31 +253,6 @@ mod tests {
         assert_eq!(
             Feature::AttacheTable,
             serde_json::from_str::<Feature>("\"ATTACH_TABLE\"").unwrap()
-        );
-        assert_eq!(
-            Feature::ComputeQuota(ComputeQuota {
-                threads_num: Some(1),
-                memory_usage: Some(1),
-            }),
-            serde_json::from_str::<Feature>(
-                "{\"ComputeQuota\":{\"threads_num\":1, \"memory_usage\":1}}"
-            )
-            .unwrap()
-        );
-
-        assert_eq!(
-            Feature::ComputeQuota(ComputeQuota {
-                threads_num: None,
-                memory_usage: Some(1),
-            }),
-            serde_json::from_str::<Feature>("{\"ComputeQuota\":{\"memory_usage\":1}}").unwrap()
-        );
-
-        assert_eq!(
-            Feature::StorageQuota(StorageQuota {
-                storage_usage: Some(1),
-            }),
-            serde_json::from_str::<Feature>("{\"StorageQuota\":{\"storage_usage\":1}}").unwrap()
         );
 
         assert_eq!(
@@ -441,13 +324,6 @@ mod tests {
                 Feature::StorageEncryption,
                 Feature::Stream,
                 Feature::AttacheTable,
-                Feature::ComputeQuota(ComputeQuota {
-                    threads_num: Some(1),
-                    memory_usage: Some(1),
-                }),
-                Feature::StorageQuota(StorageQuota {
-                    storage_usage: Some(1),
-                }),
                 Feature::AmendTable,
                 Feature::HilbertClustering,
                 Feature::NgramIndex,
@@ -459,7 +335,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }
