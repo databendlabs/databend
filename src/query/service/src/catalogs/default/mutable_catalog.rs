@@ -30,7 +30,6 @@ use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi;
-use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_api::TableApi;

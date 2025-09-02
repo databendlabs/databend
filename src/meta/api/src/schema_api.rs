@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::type_name;
-use std::convert::Infallible;
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -27,7 +25,6 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -35,7 +32,6 @@ use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDe
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::TableId;
@@ -55,12 +51,10 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
-use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
 use log::debug;
 use log::error;
 use log::warn;
-use seq_marked::SeqValue;
 use ConditionResult::Eq;
 
 use crate::catalog_api::CatalogApi;
@@ -72,9 +66,7 @@ use crate::get_u64_value;
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::lock_api::LockApi;
-use crate::meta_txn_error::MetaTxnError;
 use crate::security_api::SecurityApi;
 use crate::send_txn;
 use crate::serialize_struct;
@@ -124,109 +116,7 @@ where
     Self: SecurityApi,
     Self: TableApi,
 {
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn set_table_lvt(
-        &self,
-        name_ident: &LeastVisibleTimeIdent,
-        value: &LeastVisibleTime,
-    ) -> Result<LeastVisibleTime, KVAppError> {
-        debug!(req :? =(&name_ident, &value); "SchemaApi: {}", func_name!());
-
-        let transition = self
-            .crud_upsert_with::<Infallible>(name_ident, |t: Option<SeqV<LeastVisibleTime>>| {
-                let curr = t.into_value().unwrap_or_default();
-                if curr.time >= value.time {
-                    Ok(None)
-                } else {
-                    Ok(Some(value.clone()))
-                }
-            })
-            .await?;
-
-        return Ok(transition.unwrap().result.into_value().unwrap_or_default());
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn get<K>(&self, name_ident: &K) -> Result<Option<K::ValueType>, MetaError>
-    where
-        K: kvapi::Key + Sync + 'static,
-        K::ValueType: FromToProto + 'static,
-    {
-        debug!(req :? =(&name_ident); "SchemaApi::get::<{}>()", typ::<K>());
-
-        let seq_lvt = self.get_pb(name_ident).await?;
-        Ok(seq_lvt.into_value())
-    }
-
-    fn name(&self) -> String {
-        "SchemaApiImpl".to_string()
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn remove_marked_deleted_index_ids(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        index_ids: &[u64],
-    ) -> Result<(), MetaTxnError> {
-        let mut trials = txn_backoff(None, func_name!());
-
-        loop {
-            trials.next().unwrap()?.await;
-            let mut txn = TxnRequest::default();
-
-            for index_id in index_ids {
-                txn.if_then
-                    .push(txn_op_del(&MarkedDeletedIndexIdIdent::new_generic(
-                        tenant,
-                        MarkedDeletedIndexId::new(table_id, *index_id),
-                    )));
-            }
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-
-            if succ {
-                return Ok(());
-            }
-        }
-    }
-
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn remove_marked_deleted_table_indexes(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        indexes: &[(String, String)],
-    ) -> Result<(), MetaTxnError> {
-        let mut trials = txn_backoff(None, func_name!());
-
-        loop {
-            trials.next().unwrap()?.await;
-            let mut txn = TxnRequest::default();
-
-            for (index_name, index_version) in indexes {
-                txn.if_then
-                    .push(txn_op_del(&MarkedDeletedTableIndexIdIdent::new_generic(
-                        tenant,
-                        MarkedDeletedTableIndexId::new(
-                            table_id,
-                            index_name.to_string(),
-                            index_version.to_string(),
-                        ),
-                    )));
-            }
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-
-            if succ {
-                return Ok(());
-            }
-        }
-    }
+    // Pure trait composition - all methods moved to respective domain traits
 }
 
 pub async fn get_history_table_metas(
@@ -628,13 +518,6 @@ pub async fn handle_undrop_table(
             }
         }
     }
-}
-
-fn typ<K>() -> &'static str {
-    type_name::<K>()
-        .rsplit("::")
-        .next()
-        .unwrap_or("UnknownType")
 }
 
 /// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta

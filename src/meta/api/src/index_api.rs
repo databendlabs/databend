@@ -67,6 +67,7 @@ use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_eq_seq;
 use crate::txn_cond_seq;
+use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
@@ -493,6 +494,70 @@ where
                 .push((index_name, index_version, index_meta));
         }
         Ok(GetMarkedDeletedTableIndexesReply { table_indexes })
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<(), MetaTxnError> {
+        let mut trials = txn_backoff(None, func_name!());
+
+        loop {
+            trials.next().unwrap()?.await;
+            let mut txn = TxnRequest::default();
+
+            for index_id in index_ids {
+                txn.if_then
+                    .push(txn_op_del(&MarkedDeletedIndexIdIdent::new_generic(
+                        tenant,
+                        MarkedDeletedIndexId::new(table_id, *index_id),
+                    )));
+            }
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+
+            if succ {
+                return Ok(());
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<(), MetaTxnError> {
+        let mut trials = txn_backoff(None, func_name!());
+
+        loop {
+            trials.next().unwrap()?.await;
+            let mut txn = TxnRequest::default();
+
+            for (index_name, index_version) in indexes {
+                txn.if_then
+                    .push(txn_op_del(&MarkedDeletedTableIndexIdIdent::new_generic(
+                        tenant,
+                        MarkedDeletedTableIndexId::new(
+                            table_id,
+                            index_name.to_string(),
+                            index_version.to_string(),
+                        ),
+                    )));
+            }
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+
+            if succ {
+                return Ok(());
+            }
+        }
     }
 }
 
