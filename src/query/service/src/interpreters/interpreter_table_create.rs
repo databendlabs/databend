@@ -342,6 +342,7 @@ impl CreateTableInterpreter {
             invalid_cache = true;
         }
 
+        // TODO: can refactor into create_table in one txn
         // if old_table_id is some means create or replace is success, we should delete the old table id's ownership key
         if let Some(old_table_id) = reply.old_table_id {
             role_api
