@@ -88,7 +88,7 @@ impl PageBuilder {
 
 struct SizedChannelBuffer {
     max_size: usize,
-    values: VecDeque<DataBlock>,
+    values: VecDeque<SpillableBlock>,
     is_recv_stopped: bool,
     is_send_stopped: bool,
 }
@@ -112,19 +112,32 @@ impl SizedChannelBuffer {
     }
 
     fn size(&self) -> usize {
-        self.values.iter().map(|x| x.num_rows()).sum::<usize>()
+        self.values
+            .iter()
+            .map(|x| x.data.map(DataBlock::num_rows).unwrap_or_default())
+            .sum::<usize>()
     }
 
-    fn try_send(&mut self, value: DataBlock) -> Result<(), Option<DataBlock>> {
-        let current_size = self.size();
-        let value_size = value.num_rows();
+    fn try_send(&mut self, value: SpillableBlock) -> Result<(), Option<SpillableBlock>> {
         if self.is_recv_stopped || self.is_send_stopped {
-            Err(None)
-        } else if current_size + value_size <= self.max_size || current_size == 0 {
-            self.values.push_back(value);
-            Ok(())
-        } else {
-            Err(Some(value))
+            return Err(None);
+        }
+
+        match &value.data {
+            Some(data) => {
+                let value_size = data.num_rows();
+                let current_size = self.size();
+                if current_size + value_size <= self.max_size || current_size == 0 {
+                    self.values.push_back(value);
+                    Ok(())
+                } else {
+                    Err(Some(value))
+                }
+            }
+            None => {
+                self.values.push_back(value);
+                Ok(())
+            }
         }
     }
 
@@ -140,69 +153,88 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_block_once(&mut self, builder: &mut PageBuilder) {
-        let Some(block) = self.values.pop_front() else {
-            return;
+    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Result<(), &Location> {
+        let Some(block) = self.values.front_mut() else {
+            return Ok(());
         };
 
-        if block.is_empty() {
-            return;
-        }
+        let Some(data) = &block.data else {
+            return Err(block.location.as_ref().unwrap());
+        };
 
-        let take_rows = builder.calculate_take_rows(block.num_rows(), block.memory_size());
-        if take_rows < block.num_rows() {
+        let take_rows = builder.calculate_take_rows(data.num_rows(), data.memory_size());
+        if take_rows < data.num_rows() {
             builder.remain_rows = 0;
-            let remaining_block = builder.append_partial_block(block, take_rows);
-            self.values.push_front(remaining_block);
+            builder.collector.append_block(block.slice(take_rows));
         } else {
-            builder.append_full_block(block);
+            builder.append_full_block(self.values.pop_front().unwrap().data.unwrap());
         }
+        Ok(())
     }
 
-    fn take_block(&mut self, builder: &mut PageBuilder) -> bool {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<(), &Location> {
         while builder.has_capacity() && !self.values.is_empty() {
-            self.take_block_once(builder)
+            self.take_block_once(builder)?;
         }
-        !self.values.is_empty()
+        Ok(())
+    }
+
+    fn restore_first(&mut self, location: &Location, data: DataBlock) {
+        self.values.front_mut().unwrap().restore(location, data);
     }
 }
 
-struct SizedChannel {
+struct SizedChannel<S: Spill> {
     inner: Mutex<SizedChannelBuffer>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
 
     is_plan_ready: WatchNotify,
     format_settings: Mutex<Option<FormatSettings>>,
+    spiller: S,
 }
 
-impl SizedChannel {
-    fn create(max_size: usize) -> Self {
+impl<S: Spill> SizedChannel<S> {
+    fn create(max_size: usize, spiller: S) -> Self {
         SizedChannel {
             inner: Mutex::new(SizedChannelBuffer::create(max_size)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
             is_plan_ready: WatchNotify::new(),
             format_settings: Mutex::new(None),
+            spiller,
         }
     }
 
     fn try_send(&self, value: DataBlock) -> Result<(), Option<DataBlock>> {
-        self.inner.lock().unwrap().try_send(value)
+        self.inner
+            .lock()
+            .unwrap()
+            .try_send(SpillableBlock::new(value))
     }
 
     #[fastrace::trace(name = "SizedChannel::try_take_block")]
-    fn try_take_block(&self, builder: &mut PageBuilder) -> bool {
-        let has_more = self.inner.lock().unwrap().take_block(builder);
-        self.notify_on_recv.notify_one();
-        has_more
+    async fn try_take_block(
+        &self,
+        builder: &mut PageBuilder,
+    ) -> Result<(), ErrorCode> {
+        let location = match self.inner.lock().unwrap().take_block(builder) {
+            Err(location) => location.clone(),
+            Ok(_) => {
+                return Ok(());
+            }
+        };
+        let data = self.spiller.restore(&location).await?;
+        self.inner.lock().unwrap().restore_first(&location, data);
+        Ok(())
     }
 
     #[async_backtrace::framed]
     async fn send(&self, value: DataBlock) -> bool {
-        let mut to_send = value;
+        let mut to_send = SpillableBlock::new(value);
         loop {
-            match self.try_send(to_send) {
+            let result = self.inner.lock().unwrap().try_send(to_send);
+            match result {
                 Ok(_) => {
                     self.notify_on_sent.notify_one();
                     return true;
@@ -210,6 +242,7 @@ impl SizedChannel {
                 Err(None) => return false,
                 Err(Some(v)) => {
                     to_send = v;
+                    // todo
                     self.notify_on_recv.notified().await;
                 }
             }
@@ -277,10 +310,12 @@ impl SizedChannelReceiver {
     ) -> Result<(BlocksSerializer, bool), ErrorCode> {
         let mut builder = PageBuilder::new(max_rows_per_page);
 
+        let spiller = todo!();
+
         while builder.has_capacity() {
             match tp {
                 Wait::Async => {
-                    self.chan.try_take_block(&mut builder);
+                    self.chan.try_take_block(&mut builder, &spiller).await?;
                 }
                 Wait::Deadline(t) => {
                     let d = match t.checked_duration_since(Instant::now()) {
@@ -292,7 +327,7 @@ impl SizedChannelReceiver {
                     };
                     match tokio::time::timeout(d, self.chan.recv()).await {
                         Ok(true) => {
-                            self.chan.try_take_block(&mut builder);
+                            self.chan.try_take_block(&mut builder, &spiller);
                             debug!("[HTTP-QUERY] Appended new data block");
                         }
                         Ok(false) => {
@@ -381,6 +416,14 @@ impl SpillableBlock {
         }
     }
 
+    fn memory_size(&self) -> usize {
+        self.memory_size
+    }
+
+    fn is_empty(&self) -> bool {
+        self.rows == 0
+    }
+
     fn slice(&mut self, pos: usize) -> DataBlock {
         let data = self.data.as_ref().unwrap();
 
@@ -393,6 +436,10 @@ impl SpillableBlock {
             self.processed += pos;
         }
         left
+    }
+
+    fn take_data(&mut self) -> Option<DataBlock> {
+        self.data.take()
     }
 
     async fn spill(&mut self, spiller: &impl Spill) -> Result<(), ErrorCode> {
