@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 chrono = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
