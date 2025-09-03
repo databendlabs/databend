@@ -130,7 +130,7 @@ error:
   --> SQL:1:11
   |
 1 | show table
-  |           ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS`?
+  |           ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?
 
 
 ---------- Input ----------
