@@ -42,7 +42,7 @@ use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::RowsStat;
-use crate::spillers::Spiller;
+use crate::spillers::SpillerRef;
 
 #[derive(Debug)]
 enum State {
@@ -100,7 +100,7 @@ where
         sort_desc: Arc<[SortColumnDescription]>,
         max_block_size: usize,
         limit: Option<(usize, bool)>,
-        spiller: Arc<Spiller>,
+        spiller: SpillerRef,
         output_order_col: bool,
         order_col_generated: bool,
         memory_settings: MemorySettings,

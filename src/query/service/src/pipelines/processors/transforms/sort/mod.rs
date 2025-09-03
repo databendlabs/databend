@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use bounds::Bounds;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
@@ -24,7 +22,7 @@ use databend_common_pipeline_transforms::SortSpillParams;
 use enum_as_inner::EnumAsInner;
 use sort_spill::SpillableBlock;
 
-use crate::spillers::Spiller;
+use crate::spillers::SpillerRef;
 
 mod bounds;
 mod merge_sort;
@@ -51,7 +49,7 @@ pub use sort_route::*;
 #[derive(Clone)]
 struct Base {
     schema: DataSchemaRef,
-    spiller: Arc<Spiller>,
+    spiller: SpillerRef,
     sort_row_offset: usize,
     limit: Option<usize>,
 }

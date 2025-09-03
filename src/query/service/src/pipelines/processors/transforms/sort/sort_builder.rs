@@ -38,7 +38,6 @@ use databend_common_pipeline_transforms::MemorySettings;
 use super::*;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
-use crate::spillers::Spiller;
 
 enum SortType {
     Sort(Arc<InputPort>),
@@ -63,7 +62,7 @@ pub struct TransformSortBuilder {
     order_col_generated: bool,
     output_order_col: bool,
     memory_settings: MemorySettings,
-    spiller: Option<Arc<Spiller>>,
+    spiller: Option<SpillerRef>,
     enable_loser_tree: bool,
     limit: Option<usize>,
     enable_fixed_rows: bool,
@@ -90,7 +89,7 @@ impl TransformSortBuilder {
         }
     }
 
-    pub fn with_spiller(mut self, spiller: Arc<Spiller>) -> Self {
+    pub fn with_spiller(mut self, spiller: SpillerRef) -> Self {
         self.spiller = Some(spiller);
         self
     }

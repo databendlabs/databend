@@ -21,7 +21,6 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::atomic;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
@@ -37,6 +36,7 @@ use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_traits::DataBlockSpill;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
@@ -45,7 +45,7 @@ use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
 use crate::spillers::Location;
-use crate::spillers::Spiller;
+use crate::spillers::SpillerRef;
 
 pub(super) struct SortSpill<A: SortAlgorithm> {
     base: Base,
@@ -60,7 +60,7 @@ enum Step<A: SortAlgorithm> {
 struct StepCollect<A: SortAlgorithm> {
     params: SortSpillParams,
     sampler: FixedRateSampler<StdRng>,
-    streams: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
+    streams: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
 }
 
 struct StepSort<A: SortAlgorithm> {
@@ -71,11 +71,10 @@ struct StepSort<A: SortAlgorithm> {
     cur_bound: Option<Scalar>,
     bound_index: i32,
 
-    subsequent: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
-    current: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
+    subsequent: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
+    current: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
 
-    #[expect(clippy::type_complexity)]
-    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, Arc<Spiller>>>>,
+    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, SpillerRef>>>,
 }
 
 impl<A> SortSpill<A>
@@ -567,7 +566,7 @@ impl Base {
         &self,
         blocks: VecDeque<SpillableBlock>,
         bound: Option<Scalar>,
-    ) -> BoundBlockStream<R, Arc<Spiller>> {
+    ) -> BoundBlockStream<R, SpillerRef> {
         assert!(!blocks.is_empty());
         BoundBlockStream {
             blocks,
@@ -705,7 +704,7 @@ impl SpillableBlock {
         R::from_column(&self.domain).unwrap()
     }
 
-    async fn spill(&mut self, spiller: &impl Spill) -> Result<()> {
+    async fn spill(&mut self, spiller: &impl DataBlockSpill) -> Result<()> {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
             let location = spiller.spill(data).await?;
@@ -731,23 +730,6 @@ fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
     data.get_by_offset(sort_row_offset).as_column().unwrap()
 }
 
-#[async_trait::async_trait]
-pub trait Spill: Send {
-    async fn spill(&self, data_block: DataBlock) -> Result<Location>;
-    async fn restore(&self, location: &Location) -> Result<DataBlock>;
-}
-
-#[async_trait::async_trait]
-impl Spill for Arc<Spiller> {
-    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
-        self.as_ref().spill(vec![data_block]).await
-    }
-
-    async fn restore(&self, location: &Location) -> Result<DataBlock> {
-        self.read_spilled_file(location).await
-    }
-}
-
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
 struct BoundBlockStream<R: Rows, S> {
     blocks: VecDeque<SpillableBlock>,
@@ -768,7 +750,7 @@ impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
 }
 
 #[async_trait::async_trait]
-impl<R: Rows, S: Spill> SortedStream for BoundBlockStream<R, S> {
+impl<R: Rows, S: DataBlockSpill> SortedStream for BoundBlockStream<R, S> {
     async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
             self.restore_first().await?;
@@ -833,7 +815,7 @@ impl<R: Rows, S> BoundBlockStream<R, S> {
     }
 }
 
-impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
+impl<R: Rows, S: DataBlockSpill> BoundBlockStream<R, S> {
     async fn restore_first(&mut self) -> Result<()> {
         let block = self.blocks.front_mut().unwrap();
         if block.data.is_some() {
@@ -985,6 +967,7 @@ fn get_domain(col: &Column) -> Column {
 mod tests {
     use std::collections::HashMap;
     use std::ops::Range;
+    use std::sync::Arc;
     use std::sync::Mutex;
 
     use databend_common_base::base::GlobalUniqName;
@@ -1019,7 +1002,7 @@ mod tests {
     }
 
     async fn run_bound_block_stream<R: Rows>(
-        spiller: impl Spill + Clone,
+        spiller: impl DataBlockSpill + Clone,
         sort_desc: &[SortColumnDescription],
         bound: Scalar,
         block_part: usize,
@@ -1124,7 +1107,7 @@ mod tests {
     }
 
     async fn prepare_test_blocks(
-        spiller: &impl Spill,
+        spiller: &impl DataBlockSpill,
         sort_desc: &[SortColumnDescription],
         with_spilled: bool,
         with_sliced: bool,
@@ -1193,8 +1176,8 @@ mod tests {
     }
 
     async fn collect_and_verify_blocks<R: Rows>(
-        stream: &mut BoundBlockStream<R, impl Spill + Clone>,
-        spiller: &impl Spill,
+        stream: &mut BoundBlockStream<R, impl DataBlockSpill + Clone>,
+        spiller: &impl DataBlockSpill,
         expected_blocks: &[Column],
     ) -> Result<()> {
         let mut result_blocks = Vec::new();
@@ -1222,7 +1205,7 @@ mod tests {
     }
 
     async fn run_take_next_bounded_spillable<R: Rows>(
-        spiller: impl Spill + Clone,
+        spiller: impl DataBlockSpill + Clone,
         sort_desc: &[SortColumnDescription],
         bound: Option<Scalar>,
         expected_blocks: Vec<Column>,
@@ -1444,7 +1427,7 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl Spill for MockSpiller {
+    impl DataBlockSpill for MockSpiller {
         async fn spill(&self, data_block: DataBlock) -> Result<Location> {
             let name = GlobalUniqName::unique();
             self.map.lock().unwrap().insert(name.clone(), data_block);

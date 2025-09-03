@@ -31,8 +31,9 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_traits::DataBlockSpill;
+use databend_common_traits::Location;
 use databend_storages_common_cache::TempDir;
-use databend_storages_common_cache::TempPath;
 use opendal::services::Fs;
 use opendal::Buffer;
 use opendal::Operator;
@@ -524,12 +525,6 @@ pub struct Chunk {
     pub layout: Layout,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum Location {
-    Remote(String),
-    Local(TempPath),
-}
-
 fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
     match location {
         Location::Remote(_) => {
@@ -572,5 +567,25 @@ fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) 
                 start.elapsed().as_millis() as usize,
             );
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct SpillerRef(Arc<Spiller>);
+
+impl From<Spiller> for SpillerRef {
+    fn from(value: Spiller) -> Self {
+        SpillerRef(Arc::new(value))
+    }
+}
+
+#[async_trait::async_trait]
+impl DataBlockSpill for SpillerRef {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+        self.0.as_ref().spill(vec![data_block]).await
+    }
+
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
+        self.0.read_spilled_file(location).await
     }
 }
