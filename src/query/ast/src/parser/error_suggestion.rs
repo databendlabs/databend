@@ -88,6 +88,25 @@ fn error_correction(input: &str) -> Option<String> {
         return None;
     }
 
+    // Only suggest for inputs that look like SQL commands
+    if input_tokens.is_empty() {
+        return None;
+    }
+
+    let first_token = input_tokens[0].to_uppercase();
+    let valid_starts = ["SHOW", "VACUUM", "CREATE", "DROP", "SELECT", "INSERT", "UPDATE", "DELETE"];
+    
+    // Check for exact match or typo in first token
+    let is_sql_command = valid_starts.contains(&first_token.as_str()) || 
+        valid_starts.iter().any(|&keyword| {
+            let distance = edit_distance(&first_token, keyword);
+            distance <= 2 && distance < keyword.len() / 2
+        });
+    
+    if !is_sql_command {
+        return None;
+    }
+
     let mut candidates: Vec<(&str, f64)> = Vec::new();
 
     for &pattern in PATTERNS {
@@ -104,9 +123,9 @@ fn error_correction(input: &str) -> Option<String> {
     // Sort by score descending
     candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    // Only suggest if best match has reasonable similarity
+    // Only suggest if best match has high similarity and is actually relevant
     let best_score = candidates[0].1;
-    if best_score < 3.0 {
+    if best_score < 4.0 {
         return None;
     }
 
