@@ -45,25 +45,24 @@ use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
 use crate::spillers::Location;
-use crate::spillers::SpillerRef;
 
-pub(super) struct SortSpill<A: SortAlgorithm> {
-    base: Base,
-    step: Step<A>,
+pub(super) struct SortSpill<A: SortAlgorithm, S: DataBlockSpill> {
+    base: Base<S>,
+    step: Step<A, S>,
 }
 
-enum Step<A: SortAlgorithm> {
-    Collect(StepCollect<A>),
-    Sort(StepSort<A>),
+enum Step<A: SortAlgorithm, S: DataBlockSpill> {
+    Collect(StepCollect<A, S>),
+    Sort(StepSort<A, S>),
 }
 
-struct StepCollect<A: SortAlgorithm> {
+struct StepCollect<A: SortAlgorithm, S> {
     params: SortSpillParams,
     sampler: FixedRateSampler<StdRng>,
-    streams: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
+    streams: Vec<BoundBlockStream<A::Rows, S>>,
 }
 
-struct StepSort<A: SortAlgorithm> {
+struct StepSort<A: SortAlgorithm, S: DataBlockSpill> {
     params: SortSpillParams,
     /// Partition boundaries for restoring and sorting blocks.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
@@ -71,16 +70,18 @@ struct StepSort<A: SortAlgorithm> {
     cur_bound: Option<Scalar>,
     bound_index: i32,
 
-    subsequent: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
-    current: Vec<BoundBlockStream<A::Rows, SpillerRef>>,
+    subsequent: Vec<BoundBlockStream<A::Rows, S>>,
+    current: Vec<BoundBlockStream<A::Rows, S>>,
 
-    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, SpillerRef>>>,
+    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, S>>>,
 }
 
-impl<A> SortSpill<A>
-where A: SortAlgorithm
+impl<A, S> SortSpill<A, S>
+where
+    A: SortAlgorithm,
+    S: DataBlockSpill,
 {
-    pub fn new(base: Base, params: SortSpillParams) -> Self {
+    pub fn new(base: Base<S>, params: SortSpillParams) -> Self {
         let step = Step::Collect(StepCollect {
             sampler: FixedRateSampler::new(
                 vec![base.sort_row_offset],
@@ -97,7 +98,7 @@ where A: SortAlgorithm
         Self { base, step }
     }
 
-    pub fn from_meta(base: Base, meta: SortCollectedMeta) -> Self {
+    pub fn from_meta(base: Base<S>, meta: SortCollectedMeta) -> Self {
         let SortCollectedMeta {
             params,
             bounds,
@@ -194,7 +195,7 @@ where A: SortAlgorithm
     }
 
     #[expect(unused)]
-    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A> {
+    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A, S> {
         FmtMemoryUsage(self)
     }
 
@@ -230,11 +231,11 @@ where A: SortAlgorithm
     }
 }
 
-impl<A: SortAlgorithm> StepCollect<A> {
+impl<A: SortAlgorithm, S: DataBlockSpill> StepCollect<A, S> {
     #[fastrace::trace(name = "StepCollect::sort_input_data")]
     async fn sort_input_data(
         &mut self,
-        base: &Base,
+        base: &Base<S>,
         mut input_data: Vec<DataBlock>,
         need_spill: bool,
         aborting: &AtomicBool,
@@ -287,7 +288,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
 
     #[allow(dead_code)]
     #[fastrace::trace(name = "StepCollect::spill_last")]
-    async fn spill_last(&mut self, base: &Base, target_rows: usize) -> Result<()> {
+    async fn spill_last(&mut self, base: &Base<S>, target_rows: usize) -> Result<()> {
         let Some(s) = self.streams.last_mut() else {
             return Ok(());
         };
@@ -306,7 +307,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(())
     }
 
-    fn next_step(&mut self, base: &Base) -> Result<StepSort<A>> {
+    fn next_step(&mut self, base: &Base<S>) -> Result<StepSort<A, S>> {
         self.sampler.compact_blocks(true);
         let sampled_rows = std::mem::take(&mut self.sampler.dense_blocks);
         let bounds = base.determine_bounds::<A>(sampled_rows, self.params.batch_rows)?;
@@ -329,7 +330,7 @@ pub(super) struct OutputData {
     pub finish: bool,
 }
 
-impl<A: SortAlgorithm> StepSort<A> {
+impl<A: SortAlgorithm, S: DataBlockSpill> StepSort<A, S> {
     fn next_bound(&mut self) {
         match self.bounds.next_bound() {
             Some(bound) => self.cur_bound = Some(bound),
@@ -339,7 +340,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::merge_current")]
-    async fn merge_current(&mut self, base: &Base, num_merge: usize) -> Result<()> {
+    async fn merge_current(&mut self, base: &Base<S>, num_merge: usize) -> Result<()> {
         for s in &mut self.subsequent {
             s.spill(0).await?;
         }
@@ -375,7 +376,7 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::restore_and_output")]
-    async fn restore_and_output(&mut self, base: &Base, num_merge: usize) -> Result<OutputData> {
+    async fn restore_and_output(&mut self, base: &Base<S>, num_merge: usize) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -472,7 +473,12 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 
     #[fastrace::trace(name = "StepSort::sort_spill")]
-    async fn sort_spill(&mut self, base: &Base, batch_rows: usize, num_merge: usize) -> Result<()> {
+    async fn sort_spill(
+        &mut self,
+        base: &Base<S>,
+        batch_rows: usize,
+        num_merge: usize,
+    ) -> Result<()> {
         let need = self
             .current
             .iter()
@@ -561,12 +567,12 @@ impl<A: SortAlgorithm> StepSort<A> {
     }
 }
 
-impl Base {
+impl<S: DataBlockSpill> Base<S> {
     fn new_stream<R: Rows>(
         &self,
         blocks: VecDeque<SpillableBlock>,
         bound: Option<Scalar>,
-    ) -> BoundBlockStream<R, SpillerRef> {
+    ) -> BoundBlockStream<R, S> {
         assert!(!blocks.is_empty());
         BoundBlockStream {
             blocks,
@@ -635,9 +641,9 @@ impl<R: Rows, S> RowsStat for Vec<BoundBlockStream<R, S>> {
     }
 }
 
-pub struct FmtMemoryUsage<'a, A: SortAlgorithm>(&'a SortSpill<A>);
+pub struct FmtMemoryUsage<'a, A: SortAlgorithm, S: DataBlockSpill>(&'a SortSpill<A, S>);
 
-impl<A: SortAlgorithm> fmt::Debug for FmtMemoryUsage<'_, A> {
+impl<A: SortAlgorithm, S: DataBlockSpill> fmt::Debug for FmtMemoryUsage<'_, A, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let debug = &mut f.debug_struct("SortSpill");
         match &self.0.step {
@@ -1002,7 +1008,7 @@ mod tests {
     }
 
     async fn run_bound_block_stream<R: Rows>(
-        spiller: impl DataBlockSpill + Clone,
+        spiller: impl DataBlockSpill,
         sort_desc: &[SortColumnDescription],
         bound: Scalar,
         block_part: usize,
@@ -1176,7 +1182,7 @@ mod tests {
     }
 
     async fn collect_and_verify_blocks<R: Rows>(
-        stream: &mut BoundBlockStream<R, impl DataBlockSpill + Clone>,
+        stream: &mut BoundBlockStream<R, impl DataBlockSpill>,
         spiller: &impl DataBlockSpill,
         expected_blocks: &[Column],
     ) -> Result<()> {
@@ -1205,7 +1211,7 @@ mod tests {
     }
 
     async fn run_take_next_bounded_spillable<R: Rows>(
-        spiller: impl DataBlockSpill + Clone,
+        spiller: impl DataBlockSpill,
         sort_desc: &[SortColumnDescription],
         bound: Option<Scalar>,
         expected_blocks: Vec<Column>,

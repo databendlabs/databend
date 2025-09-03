@@ -23,7 +23,7 @@ pub enum Location {
 }
 
 #[async_trait::async_trait]
-pub trait DataBlockSpill: Send {
+pub trait DataBlockSpill: Clone + Send + Sync + 'static {
     async fn spill(&self, data_block: DataBlock) -> Result<Location>;
     async fn restore(&self, location: &Location) -> Result<DataBlock>;
 }

@@ -22,8 +22,6 @@ use databend_common_pipeline_transforms::SortSpillParams;
 use enum_as_inner::EnumAsInner;
 use sort_spill::SpillableBlock;
 
-use crate::spillers::SpillerRef;
-
 mod bounds;
 mod merge_sort;
 mod sort_broadcast;
@@ -47,9 +45,9 @@ pub use sort_restore::*;
 pub use sort_route::*;
 
 #[derive(Clone)]
-struct Base {
+struct Base<S: Send + Clone> {
     schema: DataSchemaRef,
-    spiller: SpillerRef,
+    spiller: S,
     sort_row_offset: usize,
     limit: Option<usize>,
 }
