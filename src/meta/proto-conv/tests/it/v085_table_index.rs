@@ -100,6 +100,7 @@ fn test_decode_v85_table_meta() -> anyhow::Result<()> {
             version: "".to_string(),
             options: btreemap! {},
         }},
+        constraints: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_meta_v85.as_slice(), 85, want())?;

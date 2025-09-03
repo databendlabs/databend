@@ -461,6 +461,7 @@ impl CreateTableInterpreter {
         }
         let comment = options.remove(OPT_KEY_COMMENT);
         let indexes = self.plan.table_indexes.clone().unwrap_or_default();
+        let constraints = self.plan.table_constraints.clone().unwrap_or_default();
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
@@ -474,6 +475,7 @@ impl CreateTableInterpreter {
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
             indexes,
+            constraints,
             ..Default::default()
         };
 

@@ -170,6 +170,7 @@ fn new_table_meta() -> mt::TableMeta {
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         row_access_policy: Some("p1".to_string()),
         indexes: btreemap! {},
+        constraints: btreemap! {},
     }
 }
 
