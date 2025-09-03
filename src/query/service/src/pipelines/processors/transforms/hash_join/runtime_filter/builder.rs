@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -85,6 +87,11 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         let bloom_time = bloom_start.elapsed();
 
         let total_time = start.elapsed();
+
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RuntimeFilterBuildTime,
+            total_time.as_nanos() as usize,
+        );
 
         log::info!(
             "RUNTIME-FILTER: Built filter {} - total: {:?}, min_max: {:?}, inlist: {:?}, bloom: {:?}, rows: {}",
