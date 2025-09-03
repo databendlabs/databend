@@ -94,9 +94,14 @@ fn error_correction(input: &str) -> Option<String> {
     }
 
     let first_token = input_tokens[0].to_uppercase();
-    let valid_starts = [
-        "SHOW", "VACUUM", "CREATE", "DROP", "SELECT", "INSERT", "UPDATE", "DELETE",
-    ];
+    
+    // Extract valid starts from PATTERNS
+    let mut valid_starts: Vec<&str> = PATTERNS
+        .iter()
+        .map(|pattern| pattern.split_whitespace().next().unwrap())
+        .collect();
+    valid_starts.sort();
+    valid_starts.dedup();
 
     // Check for exact match or typo in first token
     let is_sql_command = valid_starts.contains(&first_token.as_str())
@@ -310,5 +315,28 @@ mod tests {
 
         // Should work for reasonable length inputs
         assert!(suggest_correction("show table").is_some());
+    }
+
+    #[test]
+    fn test_valid_starts_extraction() {
+        // Test that valid starts are correctly extracted from PATTERNS
+        let mut expected_starts: Vec<&str> = PATTERNS
+            .iter()
+            .map(|pattern| pattern.split_whitespace().next().unwrap())
+            .collect();
+        expected_starts.sort();
+        expected_starts.dedup();
+        
+        // Should contain SHOW and VACUUM from our patterns
+        assert!(expected_starts.contains(&"SHOW"));
+        assert!(expected_starts.contains(&"VACUUM"));
+        
+        // Should recognize valid starts with similar commands
+        assert!(suggest_correction("show table").is_some()); // Similar to SHOW TABLES
+        assert!(suggest_correction("vacuum temp").is_some()); // Similar to VACUUM TEMPORARY
+        
+        // Should not recognize invalid starts  
+        assert_eq!(suggest_correction("create unknown"), None);
+        assert_eq!(suggest_correction("select unknown"), None);
     }
 }
