@@ -203,50 +203,67 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_error_suggestions() {
-        // Typo suggestions (may be single or multiple)
-        let show_tabl = suggest_correction("show tabl").unwrap();
-        assert!(show_tabl.contains("SHOW TABLES"));
-        assert!(show_tabl.contains("Did you mean"));
+    fn test_typo_corrections() {
+        // Typo corrections
+        let result = suggest_correction("show tabl").unwrap();
+        assert!(result.contains("SHOW TABLES"));
+        assert!(result.contains("Did you mean"));
 
-        // Test vacuum suggestions
-        let vacum_drop_result = suggest_correction("vacum drop table");
-        if let Some(suggestion) = vacum_drop_result {
-            assert!(suggestion.contains("VACUUM DROP TABLE"));
-        }
-
-        let vacum_temp_result = suggest_correction("vacum temporary files");
-        if let Some(suggestion) = vacum_temp_result {
-            assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
-        }
-
-        // Multiple suggestions for ambiguous cases
-        let table_suggestion = suggest_correction("show table").unwrap();
-        assert!(table_suggestion.contains("SHOW TABLES"));
-        assert!(table_suggestion.contains("Did you mean"));
-        // May contain multiple suggestions
-        if table_suggestion.contains(" or ") {
-            assert!(table_suggestion.contains("SHOW TABLE FUNCTIONS"));
-        }
-
-        // Correct commands
-        assert_eq!(suggest_correction("show tables"), None);
-        assert_eq!(suggest_correction("vacuum drop table"), None);
-
-        // Context help
-        let vacuum_help = suggest_correction("vacuum").unwrap();
-        assert!(vacuum_help.contains("Try:") && vacuum_help.contains("VACUUM"));
-
-        let show_help = suggest_correction("show").unwrap();
-        assert!(show_help.contains("Try:") && show_help.contains("SHOW"));
-
-        // Invalid
-        assert_eq!(suggest_correction("xyz abc"), None);
-        assert_eq!(suggest_correction("s"), None);
+        assert_eq!(
+            suggest_correction("vacum drop table"), 
+            Some("Did you mean `VACUUM DROP TABLE`?".to_string())
+        );
+        assert_eq!(
+            suggest_correction("vacuum tempare files"),
+            Some("Did you mean `VACUUM TEMPORARY FILES`?".to_string())
+        );
     }
 
     #[test]
-    fn test_similarity() {
+    fn test_multiple_suggestions() {
+        // Should suggest multiple options when similarity scores are close
+        let result = suggest_correction("show table").unwrap();
+        assert!(result.contains("SHOW TABLES"));
+        assert!(result.contains("or") || result.contains("SHOW TABLE FUNCTIONS"));
+
+        let result = suggest_correction("vacuum temp").unwrap();
+        assert!(result.contains("VACUUM TEMPORARY FILES"));
+        assert!(result.contains("VACUUM TEMPORARY TABLES"));
+    }
+
+    #[test]
+    fn test_context_help() {
+        // Single word prefixes should get context help
+        let result = suggest_correction("vacuum").unwrap();
+        assert!(result.contains("Try:"));
+        assert!(result.contains("VACUUM DROP TABLE"));
+        assert!(result.contains("VACUUM TEMPORARY"));
+
+        let result = suggest_correction("show").unwrap();
+        assert!(result.contains("Try:"));
+        assert!(result.contains("SHOW TABLES"));
+    }
+
+    #[test]
+    fn test_exact_matches() {
+        // Exact matches should return None
+        assert_eq!(suggest_correction("show tables"), None);
+        assert_eq!(suggest_correction("VACUUM DROP TABLE"), None);
+        assert_eq!(suggest_correction("Show Tables"), None);
+    }
+
+    #[test]
+    fn test_no_suggestions() {
+        // Should not suggest for unrelated input
+        assert_eq!(suggest_correction("xyz abc def"), None);
+        assert_eq!(suggest_correction("create index"), None);
+        assert_eq!(suggest_correction("s"), None);
+        assert_eq!(suggest_correction(""), None);
+    }
+
+    #[test]
+    fn test_similarity_scoring() {
+        // Exact match should score higher than partial
         assert!(
             calculate_similarity(&["show", "tables"], "SHOW TABLES")
                 > calculate_similarity(&["show", "table"], "SHOW TABLES")
@@ -254,75 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn test_typo_matching() {
-        // Test the core functionality that "vacuum tempare files" matches "VACUUM TEMPORARY FILES"
-        let result = suggest_correction("vacuum tempare files");
-        assert!(result.is_some());
-        let suggestion = result.unwrap();
-        assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
-    }
-
-    #[test]
     fn test_edit_distance() {
         assert_eq!(edit_distance("show", "show"), 0);
-        assert_eq!(edit_distance("crate", "create"), 1);
+        assert_eq!(edit_distance("tempare", "temporary"), 3);
         assert_eq!(edit_distance("tabl", "tables"), 2);
-    }
-
-    #[test]
-    fn test_multiple_suggestions() {
-        // Test "show table" - should suggest the best match
-        let show_table = suggest_correction("show table").unwrap();
-        println!("show table suggestion: {}", show_table);
-        assert!(show_table.contains("SHOW TABLES"));
-        assert!(show_table.starts_with("Did you mean"));
-
-        // Test case that could potentially have multiple high-scoring matches
-        let vacuum_result = suggest_correction("vacuum temp");
-        if let Some(vacuum_suggestion) = vacuum_result {
-            println!("vacuum temp suggestion: {}", vacuum_suggestion);
-            assert!(vacuum_suggestion.contains("VACUUM TEMPORARY"));
-            // Could be "VACUUM TEMPORARY FILES" or "VACUUM TEMPORARY TABLES"
-            assert!(
-                vacuum_suggestion.contains("FILES")
-                    || vacuum_suggestion.contains("TABLES")
-                    || vacuum_suggestion.contains(" or ")
-            );
-        }
-
-        // Test typo in middle of command - "vacuum tempare files"
-        let vacuum_typo = suggest_correction("vacuum tempare files");
-        if let Some(suggestion) = vacuum_typo {
-            println!("vacuum tempare files suggestion: {}", suggestion);
-            assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
-        } else {
-            println!("No suggestion for 'vacuum tempare files'");
-        }
-    }
-
-    #[test]
-    fn test_context_help() {
-        // Should provide context help for valid prefixes
-        let vacuum_help = suggest_correction("vacuum").unwrap();
-        assert!(vacuum_help.contains("Try:"));
-        assert!(
-            vacuum_help.contains("VACUUM DROP TABLE") && vacuum_help.contains("VACUUM TEMPORARY")
-        );
-
-        let show_help = suggest_correction("show").unwrap();
-        assert!(show_help.contains("Try:"));
-        assert!(show_help.contains("SHOW TABLES"));
-        assert!(show_help.contains("SHOW DATABASES") || show_help.contains("SHOW FUNCTIONS"));
-
-        // Should provide suggestions for partial commands that don't match exactly
-        let show_create = suggest_correction("show create");
-        if show_create.is_some() {
-            // Should suggest relevant SHOW commands
-            let suggestion = show_create.unwrap();
-            assert!(suggestion.contains("SHOW"));
-        }
-
-        // Should not provide suggestions for completely unrelated input
-        assert_eq!(suggest_correction("xyz abc def"), None);
     }
 }
