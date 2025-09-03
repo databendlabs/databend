@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,7 +25,6 @@ use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
@@ -38,14 +36,9 @@ use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
-struct ShutdownMessage {
-    error: Option<ErrorCode>,
-    profile: Option<HashMap<u32, PlanProfile>>,
-}
-
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,
-    shutdown_flag_sender: Sender<ShutdownMessage>,
+    shutdown_flag_sender: Sender<Option<ErrorCode>>,
     join_handle: Option<JoinHandle<()>>,
 }
 
@@ -59,8 +52,7 @@ impl StatisticsSender {
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
-        let (shutdown_flag_sender, shutdown_flag_receiver) =
-            async_channel::bounded::<ShutdownMessage>(1);
+        let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner.spawn({
             let query_id = query_id.to_string();
@@ -77,29 +69,19 @@ impl StatisticsSender {
                         Either::Right((Err(_), _)) => {
                             break;
                         }
-                        Either::Right((Ok(shutdown_message), _)) => {
-                            if let Some(error_code) = shutdown_message.error {
-                                let data = DataPacket::ErrorCode(error_code);
-                                if let Err(error_code) = tx.send(data).await {
-                                    warn!(
-                                        "Cannot send data via flight exchange, cause: {:?}",
-                                        error_code
-                                    );
-                                }
-                                return;
-                            }
-                            if let Some(profile) = shutdown_message.profile {
-                                if !profile.is_empty() {
-                                    let data_packet = DataPacket::QueryProfiles(profile);
-                                    if let Err(error_code) = tx.send(data_packet).await {
-                                        warn!(
-                                            "Cannot send data via flight exchange, cause: {:?}",
-                                            error_code
-                                        );
-                                    }
-                                }
-                            }
+                        Either::Right((Ok(None), _)) => {
                             break;
+                        }
+                        Either::Right((Ok(Some(error_code)), _recv)) => {
+                            let data = DataPacket::ErrorCode(error_code);
+                            if let Err(error_code) = tx.send(data).await {
+                                warn!(
+                                    "Cannot send data via flight exchange, cause: {:?}",
+                                    error_code
+                                );
+                            }
+
+                            return;
                         }
                         Either::Left((_, right)) => {
                             notified = right;
@@ -153,18 +135,12 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(
-        &mut self,
-        error: Option<ErrorCode>,
-        profile: Option<HashMap<u32, PlanProfile>>,
-    ) {
-        let shutdown_message = ShutdownMessage { error, profile };
-
+    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
         futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(shutdown_message).await {
+            if let Err(error_code) = shutdown_flag_sender.send(error).await {
                 warn!(
                     "Cannot send data via flight exchange, cause: {:?}",
                     error_code
