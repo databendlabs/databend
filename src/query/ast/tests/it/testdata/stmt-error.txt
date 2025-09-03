@@ -130,9 +130,7 @@ error:
   --> SQL:1:11
   |
 1 | show table
-  | ----      ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?
-  | |         
-  | while parsing `SHOW TABLES STATUS [FROM <database>] [<show_limit>]`
+  |           ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS`?
 
 
 ---------- Input ----------

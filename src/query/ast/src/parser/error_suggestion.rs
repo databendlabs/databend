@@ -136,7 +136,8 @@ fn error_correction(input: &str) -> Option<String> {
         return None;
     }
 
-    // Filter candidates with similar high scores
+    // Include candidates that are truly relevant
+    // Use a reasonable threshold - suggest if score is within 1.0 of best
     let threshold = best_score - 1.0;
     let good_candidates: Vec<&str> = candidates
         .iter()
@@ -230,11 +231,11 @@ mod tests {
 
     #[test]
     fn test_typo_corrections() {
-        // Typo corrections
-        let result = suggest_correction("show tabl").unwrap();
-        assert!(result.contains("SHOW TABLES"));
-        assert!(result.contains("Did you mean"));
-
+        // Typo corrections - may return multiple suggestions if scores are close
+        assert_eq!(
+            suggest_correction("show tabl"),
+            Some("Did you mean `SHOW TABLES` or `SHOW TABLE FUNCTIONS`?".to_string())
+        );
         assert_eq!(
             suggest_correction("vacum drop table"),
             Some("Did you mean `VACUUM DROP TABLE`?".to_string())
@@ -247,26 +248,29 @@ mod tests {
 
     #[test]
     fn test_multiple_suggestions() {
-        // Should suggest multiple options when similarity scores are close
-        let result = suggest_correction("show table").unwrap();
-        assert!(result.contains("SHOW TABLES"));
-        assert!(result.contains("or") || result.contains("SHOW TABLE FUNCTIONS"));
+        // Should suggest both relevant options for ambiguous input
+        assert_eq!(
+            suggest_correction("show table"),
+            Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
+        );
 
-        let result = suggest_correction("vacuum temp").unwrap();
-        assert!(result.contains("VACUUM TEMPORARY FILES"));
-        assert!(result.contains("VACUUM TEMPORARY TABLES"));
+        // Multiple suggestions when scores are very close
+        assert_eq!(
+            suggest_correction("vacuum temp"),
+            Some("Did you mean `VACUUM TEMPORARY FILES` or `VACUUM TEMPORARY TABLES`?".to_string())
+        );
     }
 
     #[test]
     fn test_context_help() {
         // Single word prefixes should get context help
-        let result = suggest_correction("vacuum").unwrap();
-        assert!(result.contains("Try:"));
-        assert!(result.contains("VACUUM DROP TABLE"));
-        assert!(result.contains("VACUUM TEMPORARY"));
+        assert_eq!(
+            suggest_correction("vacuum"),
+            Some("Try: `VACUUM DROP TABLE`, `VACUUM TEMPORARY FILES`, or `VACUUM TEMPORARY TABLES`".to_string())
+        );
 
         let result = suggest_correction("show").unwrap();
-        assert!(result.contains("Try:"));
+        assert!(result.starts_with("Try: "));
         assert!(result.contains("SHOW TABLES"));
     }
 
@@ -332,8 +336,14 @@ mod tests {
         assert!(expected_starts.contains(&"VACUUM"));
 
         // Should recognize valid starts with similar commands
-        assert!(suggest_correction("show table").is_some()); // Similar to SHOW TABLES
-        assert!(suggest_correction("vacuum temp").is_some()); // Similar to VACUUM TEMPORARY
+        assert_eq!(
+            suggest_correction("show table"),
+            Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
+        );
+        assert_eq!(
+            suggest_correction("vacuum temp"),
+            Some("Did you mean `VACUUM TEMPORARY FILES` or `VACUUM TEMPORARY TABLES`?".to_string())
+        );
 
         // Should not recognize invalid starts
         assert_eq!(suggest_correction("create unknown"), None);

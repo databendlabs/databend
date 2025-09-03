@@ -242,7 +242,8 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         });
 
         // Check for intelligent keyword suggestions first
-        if let Some(suggestion) = suggest_keyword_correction(span_text, source, &expected_tokens) {
+        let has_suggestion = suggest_keyword_correction(span_text, source, &expected_tokens);
+        if let Some(suggestion) = has_suggestion {
             let mut msg = if span_text.is_empty() {
                 "unexpected end of input".to_string()
             } else {
@@ -250,6 +251,9 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             };
             msg += &format!(". {}", suggestion);
             labels = vec![(inner.span, msg)];
+            
+            // Return early to skip context labels when we have intelligent suggestions
+            return pretty_print_error(source, labels);
         } else {
             let mut msg = if span_text.is_empty() {
                 "unexpected end of input".to_string()
