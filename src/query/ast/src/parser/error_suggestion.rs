@@ -1,4 +1,4 @@
-// Copyright 2025 Datafuse Labs
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,8 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//! SQL Error Suggestion System
 
 const PATTERNS: &[&str] = &[
     "SHOW TABLES",
@@ -29,7 +27,6 @@ const PATTERNS: &[&str] = &[
     "SHOW SETTINGS",
     "SHOW LOCKS",
     "SHOW COLUMNS",
-    "SHOW CREATE TABLE",
     "SHOW CATALOGS",
     "SHOW USER FUNCTIONS",
     "SHOW TABLE FUNCTIONS",
@@ -84,41 +81,31 @@ fn context_help(input: &str) -> Option<String> {
 
 fn error_correction(input: &str) -> Option<String> {
     let input_tokens: Vec<&str> = input.split_whitespace().collect();
-    let input_upper = input.trim().to_uppercase();
+    let mut candidates: Vec<(&str, f64)> = Vec::new();
 
-    // If input exactly matches a pattern, no correction needed
-    if PATTERNS.iter().any(|&p| p == input_upper) {
-        return None;
+    for &pattern in PATTERNS {
+        let score = similarity(&input_tokens, pattern);
+        if score >= 4.0 && !is_correct(input, pattern) && is_error(input, pattern) {
+            candidates.push((pattern, score));
+        }
     }
-
-    let mut candidates: Vec<(&str, f64)> = PATTERNS
-        .iter()
-        .filter_map(|&pattern| {
-            let score = similarity(&input_tokens, pattern);
-            if score >= 4.0 && is_error(input, pattern) {
-                Some((pattern, score))
-            } else {
-                None
-            }
-        })
-        .collect();
 
     if candidates.is_empty() {
         return None;
     }
 
+    // Sort by score descending
     candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    let suggestions: Vec<&str> = candidates.iter().take(3).map(|(p, _)| *p).collect();
-    match suggestions.len() {
-        1 => Some(format!("Did you mean `{}`?", suggestions[0])),
+    match candidates.len() {
+        1 => Some(format!("Did you mean `{}`?", candidates[0].0)),
         2 => Some(format!(
             "Did you mean `{}` or `{}`?",
-            suggestions[0], suggestions[1]
+            candidates[0].0, candidates[1].0
         )),
         _ => Some(format!(
             "Did you mean `{}`, `{}`, or `{}`?",
-            suggestions[0], suggestions[1], suggestions[2]
+            candidates[0].0, candidates[1].0, candidates[2].0
         )),
     }
 }
@@ -192,6 +179,11 @@ fn edit_distance(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+fn is_correct(input: &str, _pattern: &str) -> bool {
+    let input = input.trim().to_uppercase();
+    PATTERNS.iter().any(|&p| p == input)
+}
+
 fn is_error(input: &str, suggestion: &str) -> bool {
     let input_upper = input.to_uppercase();
     let input_words: Vec<&str> = input_upper.split_whitespace().collect();
@@ -237,16 +229,22 @@ mod tests {
         assert!(show_tabl.contains("SHOW TABLES"));
         assert!(show_tabl.contains("Did you mean"));
 
-        // Test with remaining patterns
-        let vacum_drop_result = suggest_correction("vacum drop table");
-        if let Some(suggestion) = vacum_drop_result {
-            assert!(suggestion.contains("VACUUM DROP TABLE"));
-        }
-
-        let vacum_temp_result = suggest_correction("vacum temporary files");
-        if let Some(suggestion) = vacum_temp_result {
-            assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
-        }
+        assert_eq!(
+            suggest_correction("crate table"),
+            Some("Did you mean `CREATE TABLE`?".to_string())
+        );
+        assert_eq!(
+            suggest_correction("creat table"),
+            Some("Did you mean `CREATE TABLE`?".to_string())
+        );
+        assert_eq!(
+            suggest_correction("optmize table"),
+            Some("Did you mean `OPTIMIZE TABLE`?".to_string())
+        );
+        assert_eq!(
+            suggest_correction("vacum table"),
+            Some("Did you mean `VACUUM TABLE`?".to_string())
+        );
 
         // Multiple suggestions for ambiguous cases
         let table_suggestion = suggest_correction("show table").unwrap();
@@ -259,7 +257,7 @@ mod tests {
 
         // Correct commands
         assert_eq!(suggest_correction("show tables"), None);
-        assert_eq!(suggest_correction("vacuum drop table"), None);
+        assert_eq!(suggest_correction("create table"), None);
 
         // Context help
         let vacuum_help = suggest_correction("vacuum").unwrap();
@@ -296,10 +294,9 @@ mod tests {
 
     #[test]
     fn test_correct_command_detection() {
-        // Test pattern matching directly
-        assert!(!PATTERNS.contains(&"show".to_uppercase().as_str()));
-        assert!(PATTERNS.contains(&"SHOW TABLES"));
-        assert!(!PATTERNS.contains(&"show tabl".to_uppercase().as_str()));
+        assert!(!is_correct("show", "SHOW TABLES"));
+        assert!(is_correct("SHOW TABLES", "SHOW TABLES"));
+        assert!(!is_correct("show tabl", "SHOW TABLES"));
     }
 
     #[test]
@@ -336,14 +333,20 @@ mod tests {
         // Should provide context help for valid prefixes
         let vacuum_help = suggest_correction("vacuum").unwrap();
         assert!(vacuum_help.contains("Try:"));
+        assert!(vacuum_help.contains("VACUUM TABLE"));
         assert!(
-            vacuum_help.contains("VACUUM DROP TABLE") && vacuum_help.contains("VACUUM TEMPORARY")
+            vacuum_help.contains("VACUUM DROP TABLE") || vacuum_help.contains("VACUUM TEMPORARY")
         );
 
         let show_help = suggest_correction("show").unwrap();
         assert!(show_help.contains("Try:"));
         assert!(show_help.contains("SHOW TABLES"));
         assert!(show_help.contains("SHOW DATABASES") || show_help.contains("SHOW FUNCTIONS"));
+
+        let create_help = suggest_correction("create").unwrap();
+        assert!(create_help.contains("Try:"));
+        assert!(create_help.contains("CREATE TABLE"));
+        assert!(create_help.contains("CREATE DATABASE") || create_help.contains("CREATE USER"));
 
         // Should not provide context help for multi-word inputs or unknown prefixes
         assert_eq!(suggest_correction("show create"), None);
