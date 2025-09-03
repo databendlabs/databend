@@ -4688,6 +4688,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-traits"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-storages-common-cache",
+]
+
+[[package]]
 name = "databend-common-users"
 version = "0.1.0"
 dependencies = [
@@ -5225,6 +5235,7 @@ dependencies = [
  "databend-common-storages-system",
  "databend-common-telemetry",
  "databend-common-tracing",
+ "databend-common-traits",
  "databend-common-users",
  "databend-common-version",
  "databend-enterprise-aggregating-index",

@@ -27,6 +27,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use log::debug;
 use log::info;
 
@@ -99,14 +100,7 @@ pub fn sized_spsc(
     SizedChannelSender<PlaceholderSpill>,
     SizedChannelReceiver<PlaceholderSpill>,
 ) {
-    sized_spsc_with_spiller(max_size, PlaceholderSpill)
-}
-
-pub fn sized_spsc_with_spiller<S: Spill>(
-    max_size: usize,
-    spiller: S,
-) -> (SizedChannelSender<S>, SizedChannelReceiver<S>) {
-    let chan = Arc::new(SizedChannel::create(max_size, spiller));
+    let chan = Arc::new(SizedChannel::create(max_size, PlaceholderSpill));
     let cloned = chan.clone();
     (SizedChannelSender { chan }, SizedChannelReceiver {
         chan: cloned,
@@ -197,7 +191,7 @@ impl SizedChannelBuffer {
     }
 }
 
-struct SizedChannel<S: Spill> {
+struct SizedChannel<S> {
     inner: Mutex<SizedChannelBuffer>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
@@ -207,7 +201,9 @@ struct SizedChannel<S: Spill> {
     spiller: S,
 }
 
-impl<S: Spill> SizedChannel<S> {
+impl<S> SizedChannel<S>
+where S: DataBlockSpill
+{
     fn create(max_size: usize, spiller: S) -> Self {
         SizedChannel {
             inner: Mutex::new(SizedChannelBuffer::create(max_size)),
@@ -304,11 +300,13 @@ pub enum Wait {
     Deadline(Instant),
 }
 
-pub struct SizedChannelReceiver<S: Spill> {
+pub struct SizedChannelReceiver<S> {
     chan: Arc<SizedChannel<S>>,
 }
 
-impl<S: Spill> SizedChannelReceiver<S> {
+impl<S> SizedChannelReceiver<S>
+where S: DataBlockSpill
+{
     pub fn close(&self) {
         self.chan.stop_recv()
     }
@@ -362,11 +360,13 @@ impl<S: Spill> SizedChannelReceiver<S> {
 }
 
 #[derive(Clone)]
-pub struct SizedChannelSender<S: Spill> {
+pub struct SizedChannelSender<S> {
     chan: Arc<SizedChannel<S>>,
 }
 
-impl<S: Spill> SizedChannelSender<S> {
+impl<S> SizedChannelSender<S>
+where S: DataBlockSpill
+{
     #[async_backtrace::framed]
     pub async fn send(&self, value: DataBlock) -> bool {
         self.chan.send(value).await
@@ -389,11 +389,13 @@ impl<S: Spill> SizedChannelSender<S> {
     }
 }
 
-pub struct SizedChannelSenderCloser<S: Spill> {
+pub struct SizedChannelSenderCloser<S> {
     chan: Arc<SizedChannel<S>>,
 }
 
-impl<S: Spill> SizedChannelSenderCloser<S> {
+impl<S> SizedChannelSenderCloser<S>
+where S: DataBlockSpill
+{
     pub fn close(&self) {
         self.chan.stop_send()
     }
@@ -408,25 +410,17 @@ struct SpillableBlock {
     processed: usize,
 }
 
-#[async_trait::async_trait]
-pub trait Spill: Send {
-    async fn spill(&self, data_block: DataBlock) -> Result<Location, ErrorCode>;
-    async fn restore(&self, location: &Location) -> Result<DataBlock, ErrorCode>;
-}
-
 /// Placeholder implementation of Spill trait
 #[derive(Clone)]
 pub struct PlaceholderSpill;
 
 #[async_trait::async_trait]
-impl Spill for PlaceholderSpill {
-    async fn spill(&self, _data_block: DataBlock) -> Result<Location, ErrorCode> {
-        // TODO: Implement actual spill logic
-        todo!("PlaceholderSpill::spill not implemented")
+impl DataBlockSpill for PlaceholderSpill {
+    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location, ErrorCode> {
+        todo!("PlaceholderSpill::merge_and_spill not implemented")
     }
 
     async fn restore(&self, _location: &Location) -> Result<DataBlock, ErrorCode> {
-        // TODO: Implement actual restore logic
         todo!("PlaceholderSpill::restore not implemented")
     }
 }
@@ -468,7 +462,8 @@ impl SpillableBlock {
         self.data.take()
     }
 
-    async fn spill(&mut self, spiller: &impl Spill) -> Result<(), ErrorCode> {
+    async fn spill<S>(&mut self, spiller: &S) -> Result<(), ErrorCode>
+    where S: DataBlockSpill {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
             let location = spiller.spill(data).await?;
