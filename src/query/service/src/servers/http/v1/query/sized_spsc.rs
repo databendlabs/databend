@@ -93,8 +93,20 @@ struct SizedChannelBuffer {
     is_send_stopped: bool,
 }
 
-pub fn sized_spsc(max_size: usize) -> (SizedChannelSender, SizedChannelReceiver) {
-    let chan = Arc::new(SizedChannel::create(max_size));
+pub fn sized_spsc(
+    max_size: usize,
+) -> (
+    SizedChannelSender<PlaceholderSpill>,
+    SizedChannelReceiver<PlaceholderSpill>,
+) {
+    sized_spsc_with_spiller(max_size, PlaceholderSpill)
+}
+
+pub fn sized_spsc_with_spiller<S: Spill>(
+    max_size: usize,
+    spiller: S,
+) -> (SizedChannelSender<S>, SizedChannelReceiver<S>) {
+    let chan = Arc::new(SizedChannel::create(max_size, spiller));
     let cloned = chan.clone();
     (SizedChannelSender { chan }, SizedChannelReceiver {
         chan: cloned,
@@ -114,7 +126,7 @@ impl SizedChannelBuffer {
     fn size(&self) -> usize {
         self.values
             .iter()
-            .map(|x| x.data.map(DataBlock::num_rows).unwrap_or_default())
+            .map(|x| x.data.as_ref().map(DataBlock::num_rows).unwrap_or_default())
             .sum::<usize>()
     }
 
@@ -153,13 +165,12 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Result<(), &Location> {
+    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Result<(), Location> {
         let Some(block) = self.values.front_mut() else {
             return Ok(());
         };
-
         let Some(data) = &block.data else {
-            return Err(block.location.as_ref().unwrap());
+            return Err(block.location.clone().unwrap());
         };
 
         let take_rows = builder.calculate_take_rows(data.num_rows(), data.memory_size());
@@ -167,12 +178,14 @@ impl SizedChannelBuffer {
             builder.remain_rows = 0;
             builder.collector.append_block(block.slice(take_rows));
         } else {
-            builder.append_full_block(self.values.pop_front().unwrap().data.unwrap());
+            let data = block.data.take().unwrap();
+            self.values.pop_front();
+            builder.append_full_block(data);
         }
         Ok(())
     }
 
-    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<(), &Location> {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<(), Location> {
         while builder.has_capacity() && !self.values.is_empty() {
             self.take_block_once(builder)?;
         }
@@ -211,13 +224,11 @@ impl<S: Spill> SizedChannel<S> {
             .lock()
             .unwrap()
             .try_send(SpillableBlock::new(value))
+            .map_err(|block| Some(block?.data.unwrap()))
     }
 
     #[fastrace::trace(name = "SizedChannel::try_take_block")]
-    async fn try_take_block(
-        &self,
-        builder: &mut PageBuilder,
-    ) -> Result<(), ErrorCode> {
+    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<(), ErrorCode> {
         let location = match self.inner.lock().unwrap().take_block(builder) {
             Err(location) => location.clone(),
             Ok(_) => {
@@ -293,11 +304,11 @@ pub enum Wait {
     Deadline(Instant),
 }
 
-pub struct SizedChannelReceiver {
-    chan: Arc<SizedChannel>,
+pub struct SizedChannelReceiver<S: Spill> {
+    chan: Arc<SizedChannel<S>>,
 }
 
-impl SizedChannelReceiver {
+impl<S: Spill> SizedChannelReceiver<S> {
     pub fn close(&self) {
         self.chan.stop_recv()
     }
@@ -310,12 +321,10 @@ impl SizedChannelReceiver {
     ) -> Result<(BlocksSerializer, bool), ErrorCode> {
         let mut builder = PageBuilder::new(max_rows_per_page);
 
-        let spiller = todo!();
-
         while builder.has_capacity() {
             match tp {
                 Wait::Async => {
-                    self.chan.try_take_block(&mut builder, &spiller).await?;
+                    self.chan.try_take_block(&mut builder).await?;
                 }
                 Wait::Deadline(t) => {
                     let d = match t.checked_duration_since(Instant::now()) {
@@ -327,7 +336,7 @@ impl SizedChannelReceiver {
                     };
                     match tokio::time::timeout(d, self.chan.recv()).await {
                         Ok(true) => {
-                            self.chan.try_take_block(&mut builder, &spiller);
+                            self.chan.try_take_block(&mut builder).await?;
                             debug!("[HTTP-QUERY] Appended new data block");
                         }
                         Ok(false) => {
@@ -353,11 +362,11 @@ impl SizedChannelReceiver {
 }
 
 #[derive(Clone)]
-pub struct SizedChannelSender {
-    chan: Arc<SizedChannel>,
+pub struct SizedChannelSender<S: Spill> {
+    chan: Arc<SizedChannel<S>>,
 }
 
-impl SizedChannelSender {
+impl<S: Spill> SizedChannelSender<S> {
     #[async_backtrace::framed]
     pub async fn send(&self, value: DataBlock) -> bool {
         self.chan.send(value).await
@@ -367,7 +376,7 @@ impl SizedChannelSender {
         self.chan.stop_send()
     }
 
-    pub fn closer(&self) -> SizedChannelSenderCloser {
+    pub fn closer(&self) -> SizedChannelSenderCloser<S> {
         SizedChannelSenderCloser {
             chan: self.chan.clone(),
         }
@@ -380,11 +389,11 @@ impl SizedChannelSender {
     }
 }
 
-pub struct SizedChannelSenderCloser {
-    chan: Arc<SizedChannel>,
+pub struct SizedChannelSenderCloser<S: Spill> {
+    chan: Arc<SizedChannel<S>>,
 }
 
-impl SizedChannelSenderCloser {
+impl<S: Spill> SizedChannelSenderCloser<S> {
     pub fn close(&self) {
         self.chan.stop_send()
     }
@@ -403,6 +412,23 @@ struct SpillableBlock {
 pub trait Spill: Send {
     async fn spill(&self, data_block: DataBlock) -> Result<Location, ErrorCode>;
     async fn restore(&self, location: &Location) -> Result<DataBlock, ErrorCode>;
+}
+
+/// Placeholder implementation of Spill trait
+#[derive(Clone)]
+pub struct PlaceholderSpill;
+
+#[async_trait::async_trait]
+impl Spill for PlaceholderSpill {
+    async fn spill(&self, _data_block: DataBlock) -> Result<Location, ErrorCode> {
+        // TODO: Implement actual spill logic
+        todo!("PlaceholderSpill::spill not implemented")
+    }
+
+    async fn restore(&self, _location: &Location) -> Result<DataBlock, ErrorCode> {
+        // TODO: Implement actual restore logic
+        todo!("PlaceholderSpill::restore not implemented")
+    }
 }
 
 impl SpillableBlock {

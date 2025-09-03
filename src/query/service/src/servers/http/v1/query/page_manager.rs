@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::blocks_serializer::BlocksSerializer;
+use crate::servers::http::v1::query::sized_spsc::PlaceholderSpill;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
 use crate::servers::http::v1::query::sized_spsc::Wait;
 
@@ -37,11 +38,14 @@ pub struct PageManager {
     total_pages: usize,
     end: bool,
     last_page: Option<Page>,
-    block_receiver: SizedChannelReceiver,
+    block_receiver: SizedChannelReceiver<PlaceholderSpill>,
 }
 
 impl PageManager {
-    pub fn new(max_rows_per_page: usize, block_receiver: SizedChannelReceiver) -> PageManager {
+    pub fn new(
+        max_rows_per_page: usize,
+        block_receiver: SizedChannelReceiver<PlaceholderSpill>,
+    ) -> PageManager {
         PageManager {
             total_rows: 0,
             last_page: None,
