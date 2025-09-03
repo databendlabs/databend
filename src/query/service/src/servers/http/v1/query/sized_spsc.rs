@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A channel bounded with the sum of sizes associate with items instead of count of items.
-//!
-//! other features:
-//! 1. it is SPSC, enough for now.
-//! 2. receive can check status of channel with fn is_empty().
-
 use std::cmp::min;
 use std::collections::VecDeque;
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -30,13 +27,12 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
-use fastrace::future::FutureExt;
-use fastrace::Span;
 use log::debug;
 use log::info;
 
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;
+use crate::spillers::Location;
 
 pub struct PageBuilder {
     pub collector: BlocksCollector,
@@ -90,7 +86,7 @@ impl PageBuilder {
     }
 }
 
-struct SizedChannelInner {
+struct SizedChannelBuffer {
     max_size: usize,
     values: VecDeque<DataBlock>,
     is_recv_stopped: bool,
@@ -105,9 +101,9 @@ pub fn sized_spsc(max_size: usize) -> (SizedChannelSender, SizedChannelReceiver)
     })
 }
 
-impl SizedChannelInner {
+impl SizedChannelBuffer {
     fn create(max_size: usize) -> Self {
-        SizedChannelInner {
+        SizedChannelBuffer {
             max_size,
             values: Default::default(),
             is_recv_stopped: false,
@@ -172,7 +168,7 @@ impl SizedChannelInner {
 }
 
 struct SizedChannel {
-    inner: Mutex<SizedChannelInner>,
+    inner: Mutex<SizedChannelBuffer>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
 
@@ -183,7 +179,7 @@ struct SizedChannel {
 impl SizedChannel {
     fn create(max_size: usize) -> Self {
         SizedChannel {
-            inner: Mutex::new(SizedChannelInner::create(max_size)),
+            inner: Mutex::new(SizedChannelBuffer::create(max_size)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
             is_plan_ready: WatchNotify::new(),
@@ -283,7 +279,9 @@ impl SizedChannelReceiver {
 
         while builder.has_capacity() {
             match tp {
-                Wait::Async => self.chan.try_take_block(&mut builder),
+                Wait::Async => {
+                    self.chan.try_take_block(&mut builder);
+                }
                 Wait::Deadline(t) => {
                     let d = match t.checked_duration_since(Instant::now()) {
                         Some(d) if !d.is_zero() => d,
@@ -354,5 +352,72 @@ pub struct SizedChannelSenderCloser {
 impl SizedChannelSenderCloser {
     pub fn close(&self) {
         self.chan.stop_send()
+    }
+}
+
+struct SpillableBlock {
+    data: Option<DataBlock>,
+    /// [SpillableBlock::slice] does not reallocate memory, so memorysize remains unchanged
+    memory_size: usize,
+    rows: usize,
+    location: Option<Location>,
+    processed: usize,
+}
+
+#[async_trait::async_trait]
+pub trait Spill: Send {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location, ErrorCode>;
+    async fn restore(&self, location: &Location) -> Result<DataBlock, ErrorCode>;
+}
+
+impl SpillableBlock {
+    fn new(data: DataBlock) -> Self {
+        Self {
+            location: None,
+            processed: 0,
+            rows: data.num_rows(),
+            memory_size: data.memory_size(),
+            data: Some(data),
+        }
+    }
+
+    fn slice(&mut self, pos: usize) -> DataBlock {
+        let data = self.data.as_ref().unwrap();
+
+        let left = data.slice(0..pos);
+        let right = data.slice(pos..data.num_rows());
+
+        self.rows = right.num_rows();
+        self.data = Some(right);
+        if self.location.is_some() {
+            self.processed += pos;
+        }
+        left
+    }
+
+    async fn spill(&mut self, spiller: &impl Spill) -> Result<(), ErrorCode> {
+        let data = self.data.take().unwrap();
+        if self.location.is_none() {
+            let location = spiller.spill(data).await?;
+            self.location = Some(location);
+        }
+        Ok(())
+    }
+
+    fn restore(&mut self, location: &Location, data: DataBlock) {
+        assert_eq!(self.location.as_ref(), Some(location));
+        self.data = Some(data)
+    }
+}
+
+impl Debug for SpillableBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpillableBlock")
+            .field("has_data", &self.data.is_some())
+            .field("memory_size", &self.memory_size)
+            .field("rows", &self.rows)
+            .field("location", &self.location)
+            .field("processed", &self.processed)
+            .finish()
     }
 }
