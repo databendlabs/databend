@@ -14,7 +14,7 @@ statement error 2004
 CREATE SEQUENCE seq start = 1 increment = 0
 
 statement ok
-CREATE SEQUENCE seq start = 1 increment = 1
+CREATE SEQUENCE seq
 
 statement ok
 DROP TABLE IF EXISTS tmp;

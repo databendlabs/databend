@@ -30,9 +30,9 @@ echo "drop table if exists tmp_b1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists tmp_b2;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists tmp_b3;" | $BENDSQL_CLIENT_CONNECT
 
-echo "CREATE sequence seq1 start = 1 increment =1" | $USER_A_CONNECT
-echo "create sequence seq2 start = 1 increment =1" | $USER_A_CONNECT
-echo "create sequence seq3 start = 1 increment =1" | $USER_A_CONNECT
+echo "CREATE sequence seq1" | $USER_A_CONNECT
+echo "create sequence seq2" | $USER_A_CONNECT
+echo "create sequence seq3" | $USER_A_CONNECT
 echo "DESC sequence seq1;" | $USER_A_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_A_CONNECT | grep seq2 | wc -l
 echo "DESC sequence seq3;" | $USER_A_CONNECT | grep seq3 | wc -l
@@ -46,9 +46,9 @@ echo "=== NEW LOGIC: user has super privileges can operator all sequences with e
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 echo "set global enable_experimental_sequence_privilege_check=1;" | $USER_A_CONNECT
 echo "--- CREATE 3 sequences WILL SUCCESS ---"
-echo "CREATE sequence seq1 start = 1 increment =1" | $USER_A_CONNECT
-echo "create sequence seq2 start = 1 increment =1" | $USER_A_CONNECT
-echo "create sequence seq3 start = 1 increment =1" | $USER_A_CONNECT
+echo "CREATE sequence seq1" | $USER_A_CONNECT
+echo "create sequence seq2" | $USER_A_CONNECT
+echo "create sequence seq3" | $USER_A_CONNECT
 echo "DESC sequence seq1;" | $USER_A_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_A_CONNECT | grep seq2 | wc -l
 echo "DESC sequence seq3;" | $USER_A_CONNECT | grep seq3 | wc -l
@@ -68,14 +68,14 @@ echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "grant create sequence on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
 echo "--- USER b failed to create conn seq1 because current role is public, can not create ---"
-echo "CREATE sequence seq1 start = 1 increment =1" | $USER_B_CONNECT
+echo "CREATE sequence seq1" | $USER_B_CONNECT
 
 echo "alter user b with default_role='role1';" | $BENDSQL_CLIENT_CONNECT
 
 echo "--- success, seq1,2,3 owner role is role1 ---";
-echo "CREATE sequence seq1 start = 1 increment =1" | $USER_B_CONNECT
-echo "create sequence seq2 start = 1 increment =1" | $USER_B_CONNECT
-echo "create sequence seq3 start = 1 increment =1" | $USER_B_CONNECT
+echo "CREATE sequence seq1" | $USER_B_CONNECT
+echo "create sequence seq2" | $USER_B_CONNECT
+echo "create sequence seq3" | $USER_B_CONNECT
 echo "DESC sequence seq1;" | $USER_B_CONNECT | grep seq1 | wc -l
 echo "DESC sequence seq2;" | $USER_B_CONNECT | grep seq2 | wc -l
 echo "DESC sequence seq3;" | $USER_B_CONNECT | grep seq3 | wc -l
