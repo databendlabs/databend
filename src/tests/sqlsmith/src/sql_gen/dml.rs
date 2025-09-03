@@ -489,6 +489,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     name,
                     data_type,
                     expr: None,
+                    check: None,
                     comment: None,
                 };
                 (

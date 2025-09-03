@@ -35,6 +35,7 @@ pub mod sequence_storage;
 pub mod table_lock_ident;
 pub mod table_niv;
 
+mod constraint;
 mod create_option;
 mod database;
 mod dictionary;
@@ -50,6 +51,7 @@ pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
 pub use catalog_id_to_name_ident::CatalogIdToNameIdent;
 pub use catalog_name_ident::CatalogNameIdent;
+pub use constraint::Constraint;
 pub use create_option::CreateOption;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;

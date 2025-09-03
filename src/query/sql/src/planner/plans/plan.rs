@@ -35,6 +35,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::AddTableColumnPlan;
+use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
@@ -103,6 +104,7 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
+use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
@@ -270,6 +272,8 @@ pub enum Plan {
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
+    AddTableConstraint(Box<AddTableConstraintPlan>),
+    DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterPlan>),

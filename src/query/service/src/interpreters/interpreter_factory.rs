@@ -84,7 +84,9 @@ use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
 use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInterpreter;
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
+use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
+use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPolicyInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
@@ -353,6 +355,12 @@ impl InterpreterFactory {
             )),
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
+            )),
+            Plan::AddTableConstraint(add_constraint) => Ok(Arc::new(
+                AddTableConstraintInterpreter::try_create(ctx, *add_constraint.clone())?,
+            )),
+            Plan::DropTableConstraint(drop_constraint) => Ok(Arc::new(
+                DropTableConstraintInterpreter::try_create(ctx, *drop_constraint.clone())?,
             )),
             Plan::ModifyTableColumn(modify_table_column) => Ok(Arc::new(
                 ModifyTableColumnInterpreter::try_create(ctx, *modify_table_column.clone())?,

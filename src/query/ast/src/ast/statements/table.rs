@@ -21,6 +21,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::quote::QuotedString;
+use crate::ast::statements::constraint::ConstraintType;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
@@ -299,7 +300,12 @@ impl Display for AttachTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateTableSource {
-    Columns(Vec<ColumnDefinition>, Option<Vec<TableIndexDefinition>>),
+    Columns {
+        columns: Vec<ColumnDefinition>,
+        opt_table_indexes: Option<Vec<TableIndexDefinition>>,
+        opt_column_constraints: Option<Vec<ConstraintDefinition>>,
+        opt_table_constraints: Option<Vec<ConstraintDefinition>>,
+    },
     Like {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
@@ -310,12 +316,22 @@ pub enum CreateTableSource {
 impl Display for CreateTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            CreateTableSource::Columns(columns, table_indexes) => {
+            // `column_constraints` are not displayed, but are displayed by column
+            CreateTableSource::Columns {
+                columns,
+                opt_table_indexes,
+                opt_column_constraints: _column_constraints,
+                opt_table_constraints: table_constraints,
+            } => {
                 write!(f, "(")?;
                 write_comma_separated_list(f, columns)?;
-                if let Some(table_indexes) = table_indexes {
+                if let Some(table_indexes) = opt_table_indexes {
                     write!(f, ", ")?;
                     write_comma_separated_list(f, table_indexes)?;
+                }
+                if let Some(constraints) = table_constraints {
+                    write!(f, ", ")?;
+                    write_comma_separated_list(f, constraints)?;
                 }
                 write!(f, ")")
             }
@@ -437,6 +453,12 @@ pub enum AlterTableAction {
     ModifyColumn {
         action: ModifyColumnAction,
     },
+    AddConstraint {
+        constraint: ConstraintDefinition,
+    },
+    DropConstraint {
+        constraint_name: Identifier,
+    },
     // (column name id, policy name)
     AddRowAccessPolicy {
         columns: Vec<Identifier>,
@@ -497,6 +519,12 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AddColumn { column, option } => {
                 write!(f, "ADD COLUMN {column}{option}")?;
+            }
+            AlterTableAction::AddConstraint { constraint } => {
+                write!(f, "ADD {}", constraint)?;
+            }
+            AlterTableAction::DropConstraint { constraint_name } => {
+                write!(f, "DROP CONSTRAINT {}", constraint_name)?;
             }
             AlterTableAction::ModifyColumn { action } => {
                 write!(f, "MODIFY COLUMN {action}")?;
@@ -940,6 +968,7 @@ pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
+    pub check: Option<Expr>,
     pub comment: Option<String>,
 }
 
@@ -948,6 +977,9 @@ impl Display for ColumnDefinition {
         write!(f, "{} {}", self.name, self.data_type)?;
         if let Some(expr) = &self.expr {
             write!(f, "{expr}")?;
+        }
+        if let Some(check_expr) = &self.check {
+            write!(f, " CHECK ({check_expr})")?;
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT {}", QuotedString(comment, '\''))?;
@@ -986,9 +1018,25 @@ impl Display for TableIndexDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ConstraintDefinition {
+    pub name: Option<Identifier>,
+    pub constraint_type: ConstraintType,
+}
+
+impl Display for ConstraintDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(constraint_name) = &self.name {
+            write!(f, "CONSTRAINT {} ", constraint_name)?;
+        }
+        write!(f, "{}", self.constraint_type)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateDefinition {
     Column(ColumnDefinition),
     TableIndex(TableIndexDefinition),
+    Constraint(ConstraintDefinition),
 }
 
 impl Display for CreateDefinition {
@@ -999,6 +1047,9 @@ impl Display for CreateDefinition {
             }
             CreateDefinition::TableIndex(table_index_def) => {
                 write!(f, "{}", table_index_def)?;
+            }
+            CreateDefinition::Constraint(constraint_def) => {
+                write!(f, "{}", constraint_def)?;
             }
         }
         Ok(())

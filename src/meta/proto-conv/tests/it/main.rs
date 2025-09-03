@@ -137,3 +137,4 @@ mod v142_table_row_access_policy;
 mod v143_udtf;
 mod v144_scalar_udf;
 mod v145_opaque_data_type;
+mod v146_constraint;

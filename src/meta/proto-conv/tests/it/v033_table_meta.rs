@@ -150,6 +150,7 @@ fn test_decode_v33_table_meta() -> anyhow::Result<()> {
         column_mask_policy: None,
         row_access_policy: None,
         indexes: btreemap! {},
+        constraints: btreemap! {},
     };
 
     common::test_pb_from_to(func_name!(), want())?;

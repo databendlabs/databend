@@ -15,6 +15,7 @@
 mod multi_table_insert_commit;
 mod sink_commit;
 mod transform_block_writer;
+mod transform_constraint_verify;
 mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;
 mod transform_serialize_block;
@@ -24,6 +25,7 @@ pub use multi_table_insert_commit::CommitMultiTableInsert;
 pub use sink_commit::CommitSink;
 pub use transform_block_writer::TransformBlockBuilder;
 pub use transform_block_writer::TransformBlockWriter;
+pub use transform_constraint_verify::TransformConstraintVerify;
 pub use transform_merge_commit_meta::TransformMergeCommitMeta;
 pub use transform_mutation_aggregator::TableMutationAggregator;
 pub use transform_serialize_block::TransformSerializeBlock;

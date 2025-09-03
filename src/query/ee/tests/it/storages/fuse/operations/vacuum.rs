@@ -21,14 +21,20 @@ use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::get_u64_value;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::send_txn;
+use databend_common_meta_api::util::txn_replace_exact;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_meta_types::TxnRequest;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_common_version::BUILD_INFO;
@@ -547,21 +553,8 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
     // 1. Prepare local meta service
-    let version = &BUILD_INFO;
-    let meta_config = MetaConfig::default();
-    let meta = {
-        let config = meta_config.to_meta_grpc_client_conf(version);
-        let provider = Arc::new(MetaStoreProvider::new(config));
-        provider.create_meta_store().await.map_err(|e| {
-            ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-        })?
-    };
-
-    // Extracts endpoints to comunicate with meta service
-    let MetaStore::L(local) = &meta else {
-        panic!("MetaStore should not be local");
-    };
-    let endpoints = local.endpoints.clone();
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
 
     // Modify config to use local meta store
     let mut ee_setup = EESetup::new();
@@ -598,15 +591,25 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
         .get_database(&tenant, db_name)
         .await?;
 
+    let db_id = db.get_db_info().database_id.db_id;
     let catalog_name = fixture.default_catalog_name();
     let table_ownership = OwnershipObject::Table {
         catalog_name: catalog_name.clone(),
-        db_id: db.get_db_info().database_id.db_id,
+        db_id,
         table_id: table.get_id(),
     };
     let table_ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), table_ownership);
     let v = meta.get_pb(&table_ownership_key).await?;
     assert!(v.is_some());
+
+    // 4. Check that DbIdTableName mapping exists
+    let db_id_table_name = DBIdTableName {
+        db_id,
+        table_name: tbl_name.to_owned(),
+    };
+
+    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    assert!(seq > 0);
 
     // 5. Drop test database
     fixture
@@ -627,5 +630,100 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
     let v = meta.get_pb(&table_ownership_key).await?;
     assert!(v.is_none());
 
+    // 8. Chek that DbIdTableName mapping is cleaned up
+    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    assert_eq!(seq, 0);
+
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be available for vacuum immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_ownership";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(format!("create table {db_name}.{tbl_name} (a int)").as_str())
+        .await?;
+
+    let tenant = ctx.get_tenant();
+    let db = ctx
+        .get_default_catalog()?
+        .get_database(&tenant, db_name)
+        .await?;
+
+    let db_id = db.get_db_info().database_id.db_id;
+
+    // Drop the database
+    fixture
+        .execute_command(format!("drop database {db_name}").as_str())
+        .await?;
+
+    // 4. Simulate gc_in_progress
+
+    let db_id_key = DatabaseId { db_id };
+    let mut seq_db_meta = meta.get_pb(&db_id_key).await?.unwrap();
+
+    seq_db_meta.gc_in_progress = true;
+
+    let mut txn = TxnRequest::default();
+    txn_replace_exact(&mut txn, &db_id_key, seq_db_meta.seq, &seq_db_meta.data).unwrap();
+    let (success, _) = send_txn(&meta, txn).await?;
+
+    assert!(success, "update gc_in_progress to true should work");
+
+    // 5. Undrop database should fail with UnknownDatabase error
+    let res = fixture
+        .execute_command(format!("undrop database {db_name}").as_str())
+        .await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_DATABASE);
+
+    // Database should be inaccessible
+    let res = ctx
+        .get_default_catalog()?
+        .get_database(&tenant, db_name)
+        .await;
+
+    let Err(e) = res else {
+        panic!("get_database should fail")
+    };
+    assert_eq!(e.code(), ErrorCode::UNKNOWN_DATABASE);
+
+    Ok(())
+}
+
+async fn new_local_meta() -> MetaStore {
+    let version = &BUILD_INFO;
+    let meta_config = MetaConfig::default();
+    let meta = {
+        let config = meta_config.to_meta_grpc_client_conf(version);
+        let provider = Arc::new(MetaStoreProvider::new(config));
+        provider
+            .create_meta_store()
+            .await
+            .map_err(|e| ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e)))
+            .unwrap()
+    };
+    meta
 }

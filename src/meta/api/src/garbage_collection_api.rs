@@ -17,6 +17,9 @@ use std::ops::Range;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
+use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
@@ -38,6 +41,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
@@ -54,9 +58,11 @@ use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_eq_seq;
 use crate::txn_op_del;
+use crate::txn_op_get;
 use crate::util::txn_delete_exact;
 use crate::util::txn_op_put_pb;
 use crate::util::txn_put_pb;
+use crate::util::txn_replace_exact;
 
 /// GarbageCollectionApi defines APIs for garbage collection operations.
 ///
@@ -154,6 +160,8 @@ async fn remove_copied_files_for_dropped_table(
             copied_files.display()
         );
 
+        // Txn failures are ignored for simplicity, since copied files kv pairs are put with ttl,
+        // they will not be leaked permanently, will be cleaned eventually.
         send_txn(kv_api, txn).await?;
     }
     unreachable!()
@@ -226,8 +234,6 @@ pub async fn get_history_tables_for_gc(
 }
 
 /// Permanently remove a dropped database from the meta-service.
-///
-/// Upon calling this method, the dropped database must be already marked as `gc_in_progress`,
 /// then remove all **dropped and non-dropped** tables in the database.
 async fn gc_dropped_db_by_id(
     kv_api: &(impl GarbageCollectionApi + IndexApi + ?Sized),
@@ -237,7 +243,7 @@ async fn gc_dropped_db_by_id(
     db_name: String,
 ) -> Result<(), KVAppError> {
     // List tables by tenant, db_id, table_name.
-    let db_id_history_ident = DatabaseIdHistoryIdent::new(tenant, db_name);
+    let db_id_history_ident = DatabaseIdHistoryIdent::new(tenant, db_name.clone());
     let Some(seq_dbid_list) = kv_api.get_pb(&db_id_history_ident).await? else {
         return Ok(());
     };
@@ -262,17 +268,75 @@ async fn gc_dropped_db_by_id(
         return Ok(());
     }
 
-    // TODO: enable this when gc_in_progress is set.
-    // if !seq_db_meta.gc_in_progress {
-    //     let err = UnknownDatabaseId::new(
-    //         db_id,
-    //         "database is not in gc_in_progress state, \
-    //         can not gc. \
-    //         First mark the database as gc_in_progress, \
-    //         then gc is allowed.",
-    //     );
-    //     return Err(AppError::from(err).into());
-    // }
+    // Mark database meta as gc_in_progress if necessary
+    let mut db_meta_seq = seq_db_meta.seq;
+    if !seq_db_meta.gc_in_progress {
+        // Mark db_meta as gc_in_process, in which state that db can no longer be undropped.
+        let mut new_db_meta = seq_db_meta;
+        new_db_meta.gc_in_progress = true;
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &dbid, new_db_meta.seq, &new_db_meta.data)?;
+        txn.if_then.push(txn_op_get(&dbid));
+        let (success, mut responses) = send_txn(kv_api, txn).await?;
+        if !success {
+            return Err(KVAppError::AppError(AppError::from(
+                MarkDatabaseMetaAsGCInProgressFailed::new(format!(
+                    "Failed to mark database {}[{}] as gc_in_progress",
+                    db_name, db_id
+                )),
+            )));
+        }
+
+        // Grab the sequence number of new database meta key value pair
+        let resp = responses.pop().unwrap();
+        let Some(Response::Get(get_resp)) = resp.response else {
+            unreachable!(
+                "internal error: expect TxnGetResponseGet of get database meta by db_id, but got {:?}",
+                resp.response
+            )
+        };
+        db_meta_seq = get_resp
+            .value
+            .expect("txn op response of get(&dbid) should have value")
+            .seq
+    };
+
+    // Cleaning up DbIdTableName keys
+    {
+        let db_id_table_name = DBIdTableName {
+            db_id,
+            // Going to use 1 level DirName as list prefix, thus the table_name field does not matter
+            table_name: "dummy".to_string(),
+        };
+        let dir_name = DirName::new_with_level(db_id_table_name, 1);
+
+        let batch_size = 1024;
+        let key_stream = kv_api.list_pb_keys(&dir_name).await?;
+        let mut chunks = key_stream.chunks(batch_size);
+        while let Some(targets) = chunks.next().await {
+            let mut txn = TxnRequest::default();
+            use itertools::Itertools;
+            let targets: Vec<DBIdTableName> = targets.into_iter().try_collect()?;
+            for target in &targets {
+                txn.if_then.push(txn_op_del(target));
+            }
+            let (succ, _resp) = send_txn(kv_api, txn).await?;
+            if !succ {
+                return Err(KVAppError::AppError(AppError::from(
+                    CleanDbIdTableNamesFailed::new(format!(
+                        "Failed to clean dbIdTableNames of database {}[{}]",
+                        db_name, db_id
+                    )),
+                )));
+            } else {
+                // Audit log, output all the items in the batch intentionally
+                info!(
+                    "DbIdTableNames cleaned (database {}[{}]): {:?}",
+                    db_name, db_id, targets
+                );
+            }
+        }
+    }
 
     let id_to_name = DatabaseIdToName { db_id };
     let Some(seq_name) = kv_api.get_pb(&id_to_name).await? else {
@@ -292,8 +356,6 @@ async fn gc_dropped_db_by_id(
     for (ident, table_history) in table_history_items {
         for tb_id in table_history.id_list.iter() {
             let table_id_ident = TableId { table_id: *tb_id };
-
-            // TODO: mark table as gc_in_progress
 
             remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
             let _ = remove_data_for_dropped_table(
@@ -323,10 +385,10 @@ async fn gc_dropped_db_by_id(
             .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
     }
 
-    // Verify db_meta hasn't changed since we started this operation.
+    // Verify database_meta hasn't changed since the mark database meta as gc_in_progress phase.
     // This establishes a condition for the transaction that will prevent it from committing
     // if the database metadata was modified by another concurrent operation (like un-dropping).
-    txn.condition.push(txn_cond_eq_seq(&dbid, seq_db_meta.seq));
+    txn.condition.push(txn_cond_eq_seq(&dbid, db_meta_seq));
     txn.if_then.push(txn_op_del(&dbid));
     txn.condition
         .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
