@@ -64,6 +64,7 @@ impl PageBuilder {
         self.collector.append_block(block);
     }
 
+    #[allow(dead_code)]
     fn append_partial_block(&mut self, block: DataBlock, take_rows: usize) -> DataBlock {
         self.collector.append_block(block.slice(0..take_rows));
 
@@ -215,6 +216,7 @@ where S: DataBlockSpill
         }
     }
 
+    #[allow(dead_code)]
     fn try_send(&self, value: DataBlock) -> Result<(), Option<DataBlock>> {
         self.inner
             .lock()
@@ -436,10 +438,12 @@ impl SpillableBlock {
         }
     }
 
+    #[allow(dead_code)]
     fn memory_size(&self) -> usize {
         self.memory_size
     }
 
+    #[allow(dead_code)]
     fn is_empty(&self) -> bool {
         self.rows == 0
     }
@@ -458,10 +462,12 @@ impl SpillableBlock {
         left
     }
 
+    #[allow(dead_code)]
     fn take_data(&mut self) -> Option<DataBlock> {
         self.data.take()
     }
 
+    #[allow(dead_code)]
     async fn spill<S>(&mut self, spiller: &S) -> Result<(), ErrorCode>
     where S: DataBlockSpill {
         let data = self.data.take().unwrap();
