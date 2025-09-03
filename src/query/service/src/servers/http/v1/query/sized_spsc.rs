@@ -144,7 +144,7 @@ impl SizedChannelInner {
         self.is_recv_stopped = true
     }
 
-    fn append_block_once(&mut self, builder: &mut PageBuilder) {
+    fn take_block_once(&mut self, builder: &mut PageBuilder) {
         let Some(block) = self.values.pop_front() else {
             return;
         };
@@ -163,9 +163,9 @@ impl SizedChannelInner {
         }
     }
 
-    fn append_block(&mut self, builder: &mut PageBuilder) -> bool {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> bool {
         while builder.has_capacity() && !self.values.is_empty() {
-            self.append_block_once(builder)
+            self.take_block_once(builder)
         }
         !self.values.is_empty()
     }
@@ -192,13 +192,12 @@ impl SizedChannel {
     }
 
     fn try_send(&self, value: DataBlock) -> Result<(), Option<DataBlock>> {
-        let mut guard = self.inner.lock().unwrap();
-        guard.try_send(value)
+        self.inner.lock().unwrap().try_send(value)
     }
 
-    #[fastrace::trace(name = "SizedChannel::try_append_block")]
-    fn try_append_block(&self, builder: &mut PageBuilder) -> bool {
-        let has_more = self.inner.lock().unwrap().append_block(builder);
+    #[fastrace::trace(name = "SizedChannel::try_take_block")]
+    fn try_take_block(&self, builder: &mut PageBuilder) -> bool {
+        let has_more = self.inner.lock().unwrap().take_block(builder);
         self.notify_on_recv.notify_one();
         has_more
     }
@@ -284,10 +283,7 @@ impl SizedChannelReceiver {
 
         while builder.has_capacity() {
             match tp {
-                Wait::Async => match self.chan.try_append_block(&mut builder) {
-                    true => (),
-                    false => break,
-                },
+                Wait::Async => self.chan.try_take_block(&mut builder),
                 Wait::Deadline(t) => {
                     let d = match t.checked_duration_since(Instant::now()) {
                         Some(d) if !d.is_zero() => d,
@@ -298,7 +294,7 @@ impl SizedChannelReceiver {
                     };
                     match tokio::time::timeout(d, self.chan.recv()).await {
                         Ok(true) => {
-                            self.chan.try_append_block(&mut builder);
+                            self.chan.try_take_block(&mut builder);
                             debug!("[HTTP-QUERY] Appended new data block");
                         }
                         Ok(false) => {
