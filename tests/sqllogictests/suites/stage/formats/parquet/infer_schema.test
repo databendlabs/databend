@@ -105,7 +105,7 @@ id BIGINT 1 0
 value BIGINT 1 1
 
 query TTBI
-select * from infer_schema(location => '@data/csv/max_records.csv.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
 ----
 id BIGINT 1 0
 value BIGINT 1 1
@@ -117,7 +117,7 @@ id BIGINT 1 0
 value BIGINT 1 1
 
 query TTBI
-select * from infer_schema(location => '@data/csv/max_records.csv.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
 ----
 id BIGINT 1 0
 value BIGINT 1 1
@@ -138,6 +138,11 @@ utf8_col VARCHAR 1 8
 query TTBI
 select * from infer_schema(location => '@data/csv/merge/', file_format => 'head_csv_format');
 ----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4
 
 # NDJSON
 query TTBI
@@ -172,7 +177,7 @@ id BIGINT 1 0
 value BIGINT 1 1
 
 query TTBI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson.zst', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_pre_file => 5);
 ----
 id BIGINT 1 0
 value BIGINT 1 1
@@ -184,7 +189,7 @@ id BIGINT 1 0
 value BIGINT 1 1
 
 query TTBI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson.xz', file_format => 'NDJSON', max_records_pre_file => 5)
+select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_pre_file => 5)
 ----
 id BIGINT 1 0
 value BIGINT 1 1
@@ -207,3 +212,8 @@ obj_col TUPLE(A INT64, B STRING) 1 10
 query TTBI
 select * from infer_schema(location => '@data/ndjson/merge/', file_format => 'NDJSON');
 ----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4

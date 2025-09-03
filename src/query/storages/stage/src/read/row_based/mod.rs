@@ -21,3 +21,5 @@ mod utils;
 
 pub use batch::BytesBatch;
 pub use read_pipeline::RowBasedReadPipelineBuilder;
+pub use processors::BytesReader;
+pub use processors::Decompressor;

@@ -13,7 +13,8 @@
 // limitations under the License.
 
 mod infer_schema_table;
-mod source;
+mod parquet;
 mod table_args;
+mod separator;
 
 pub use infer_schema_table::InferSchemaTable;

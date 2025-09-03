@@ -26,6 +26,7 @@ mod stage_table;
 mod streaming_load;
 mod transform_generating;
 mod transform_null_if;
+mod infer_schema;
 
 pub use append::StageSinkTable;
 pub use compression::get_compression_with_path;
@@ -33,3 +34,7 @@ pub use read::row_based::BytesBatch;
 pub use stage_table::StageTable;
 pub use streaming_load::build_streaming_load_pipeline;
 pub use transform_null_if::TransformNullIf;
+pub use infer_schema::InferSchemaPartInfo;
+pub use read::row_based::BytesReader;
+pub use read::row_based::Decompressor;
+pub use read::LoadContext;
