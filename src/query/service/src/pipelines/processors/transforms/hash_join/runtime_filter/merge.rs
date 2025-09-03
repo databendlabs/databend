@@ -26,7 +26,7 @@ pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
 ) -> Result<JoinRuntimeFilterPacket> {
     log::info!(
-        "[RUNTIME-FILTER] merge_join_runtime_filter_packets input: {:?}",
+        "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
         packets
     );
     // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
@@ -50,7 +50,7 @@ pub fn merge_join_runtime_filter_packets(
     }
 
     log::info!(
-        "[RUNTIME-FILTER] merge_join_runtime_filter_packets output: {:?}",
+        "RUNTIME-FILTER: merge_join_runtime_filter_packets output: {:?}",
         result
     );
     Ok(JoinRuntimeFilterPacket {
