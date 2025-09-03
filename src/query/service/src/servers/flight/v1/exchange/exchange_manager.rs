@@ -35,6 +35,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use fastrace::prelude::*;
@@ -43,6 +44,7 @@ use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
+use tokio::sync::oneshot;
 use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
@@ -941,6 +943,15 @@ impl QueryCoordinator {
             }
         }
 
+        let (finished_profiling_tx, mut finished_profiling_rx) = oneshot::channel();
+        pipelines.first_mut().map(|p| {
+            p.set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                let profiling = info.profiling.clone();
+                let _ = finished_profiling_tx.send(profiling);
+                Ok(())
+            }));
+        });
+
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
@@ -976,7 +987,11 @@ impl QueryCoordinator {
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let error = executor.execute().err();
-            statistics_sender.shutdown(error.clone());
+            if let Ok(profiling) = finished_profiling_rx.try_recv() {
+                statistics_sender.shutdown(error.clone(), Some(profiling))
+            } else {
+                statistics_sender.shutdown(error.clone(), None);
+            }
             query_ctx
                 .get_exchange_manager()
                 .on_finished_query(&query_id, error);
