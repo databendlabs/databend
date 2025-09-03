@@ -371,7 +371,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let scan_id = self.metadata.write().next_scan_id();
         log::info!(
-            "[RUNTIME-FILTER] bind_base_table scan_id: {},table_entry: {:?}",
+            "RUNTIME-FILTER: bind_base_table scan_id: {},table_entry: {:?}",
             scan_id,
             table
         );
