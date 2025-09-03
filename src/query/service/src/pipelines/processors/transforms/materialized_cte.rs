@@ -65,6 +65,7 @@ impl Processor for MaterializedCteSink {
 
         if self.input.has_data() {
             if self.should_apply_backpressure() {
+                self.input.set_need_data();
                 return Ok(Event::NeedConsume);
             }
             return Ok(Event::Async);
