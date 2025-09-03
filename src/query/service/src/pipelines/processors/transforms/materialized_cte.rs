@@ -32,11 +32,16 @@ use databend_common_storages_fuse::TableContext;
 pub struct MaterializedCteSink {
     input: Arc<InputPort>,
     senders: Vec<Sender<DataBlock>>,
+    input_data: Option<DataBlock>,
 }
 
 impl MaterializedCteSink {
     pub fn create(input: Arc<InputPort>, senders: Vec<Sender<DataBlock>>) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(Self { input, senders })))
+        Ok(ProcessorPtr::create(Box::new(Self {
+            input,
+            senders,
+            input_data: None,
+        })))
     }
 
     fn should_apply_backpressure(&self) -> bool {
@@ -68,6 +73,9 @@ impl Processor for MaterializedCteSink {
                 self.input.set_need_data();
                 return Ok(Event::NeedConsume);
             }
+            self.input_data = Some(self.input.pull_data().ok_or_else(|| {
+                ErrorCode::Internal("Failed to pull data from input port in materialized cte sink")
+            })??);
             return Ok(Event::Async);
         }
 
@@ -76,9 +84,7 @@ impl Processor for MaterializedCteSink {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let data_block = self.input.pull_data().ok_or_else(|| {
-            ErrorCode::Internal("Failed to pull data from input port in materialized cte sink")
-        })??;
+        let data_block = self.input_data.take().unwrap();
         for sender in self.senders.iter() {
             sender.send(data_block.clone()).await.map_err(|_| {
                 ErrorCode::Internal("Failed to send blocks to materialized cte consumer")
