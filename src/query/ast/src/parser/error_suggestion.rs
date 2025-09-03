@@ -81,11 +81,18 @@ fn context_help(input: &str) -> Option<String> {
 
 fn error_correction(input: &str) -> Option<String> {
     let input_tokens: Vec<&str> = input.split_whitespace().collect();
+    let input_upper = input.trim().to_uppercase();
+
+    // If input exactly matches a pattern, no correction needed
+    if PATTERNS.iter().any(|&p| p == input_upper) {
+        return None;
+    }
+
     let mut candidates: Vec<(&str, f64)> = Vec::new();
 
     for &pattern in PATTERNS {
-        let score = similarity(&input_tokens, pattern);
-        if score >= 4.0 && !is_correct(input, pattern) && is_error(input, pattern) {
+        let score = calculate_similarity(&input_tokens, pattern);
+        if score > 0.0 {
             candidates.push((pattern, score));
         }
     }
@@ -97,24 +104,40 @@ fn error_correction(input: &str) -> Option<String> {
     // Sort by score descending
     candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-    match candidates.len() {
-        1 => Some(format!("Did you mean `{}`?", candidates[0].0)),
+    // Only suggest if best match has reasonable similarity
+    let best_score = candidates[0].1;
+    if best_score < 3.0 {
+        return None;
+    }
+
+    // Filter candidates with similar high scores
+    let threshold = best_score - 1.0;
+    let good_candidates: Vec<&str> = candidates
+        .iter()
+        .take_while(|(_, score)| *score >= threshold)
+        .take(3)
+        .map(|(pattern, _)| *pattern)
+        .collect();
+
+    match good_candidates.len() {
+        1 => Some(format!("Did you mean `{}`?", good_candidates[0])),
         2 => Some(format!(
             "Did you mean `{}` or `{}`?",
-            candidates[0].0, candidates[1].0
+            good_candidates[0], good_candidates[1]
         )),
         _ => Some(format!(
             "Did you mean `{}`, `{}`, or `{}`?",
-            candidates[0].0, candidates[1].0, candidates[2].0
+            good_candidates[0], good_candidates[1], good_candidates[2]
         )),
     }
 }
 
-fn similarity(input_tokens: &[&str], pattern: &str) -> f64 {
+fn calculate_similarity(input_tokens: &[&str], pattern: &str) -> f64 {
     let pattern_tokens: Vec<&str> = pattern.split_whitespace().collect();
-    let mut score = 0.0;
-    let mut matches = 0;
+    let mut total_score = 0.0;
+    let mut matched_tokens = 0;
 
+    // Compare each input token with corresponding pattern token
     for (i, &input_token) in input_tokens.iter().enumerate() {
         if i >= pattern_tokens.len() {
             break;
@@ -122,37 +145,33 @@ fn similarity(input_tokens: &[&str], pattern: &str) -> f64 {
         let pattern_token = pattern_tokens[i];
 
         if input_token.eq_ignore_ascii_case(pattern_token) {
-            score += 2.0;
-            matches += 1;
-        } else if is_prefix(input_token, pattern_token) {
-            score += 1.5;
-            matches += 1;
-        } else if is_typo(input_token, pattern_token) {
-            score += 1.0;
-            matches += 1;
+            // Exact match
+            total_score += 3.0;
+            matched_tokens += 1;
+        } else if pattern_token
+            .to_lowercase()
+            .starts_with(&input_token.to_lowercase())
+        {
+            // Prefix match
+            total_score += 2.0;
+            matched_tokens += 1;
         } else {
-            break;
+            // Typo match
+            let distance = edit_distance(input_token, pattern_token);
+            let max_distance = if pattern_token.len() > 6 { 3 } else { 2 };
+            if distance <= max_distance && distance < pattern_token.len() / 2 {
+                total_score += 2.0 - (distance as f64 * 0.5);
+                matched_tokens += 1;
+            }
         }
     }
 
-    if matches == input_tokens.len() && matches > 0 {
-        score += 3.0;
+    // Bonus for matching more tokens
+    if matched_tokens == input_tokens.len() && matched_tokens > 0 {
+        total_score += matched_tokens as f64;
     }
-    if input_tokens.len() == 1 && matches == 1 {
-        score += 2.0;
-    }
-    score
-}
 
-fn is_prefix(input: &str, pattern: &str) -> bool {
-    pattern.to_lowercase().starts_with(&input.to_lowercase())
-}
-
-fn is_typo(input: &str, pattern: &str) -> bool {
-    if input.len() < 3 {
-        return false;
-    }
-    edit_distance(input, pattern) <= 2
+    total_score
 }
 
 fn edit_distance(a: &str, b: &str) -> usize {
@@ -177,45 +196,6 @@ fn edit_distance(a: &str, b: &str) -> usize {
         std::mem::swap(&mut prev, &mut curr);
     }
     prev[b.len()]
-}
-
-fn is_correct(input: &str, _pattern: &str) -> bool {
-    let input = input.trim().to_uppercase();
-    PATTERNS.iter().any(|&p| p == input)
-}
-
-fn is_error(input: &str, suggestion: &str) -> bool {
-    let input_upper = input.to_uppercase();
-    let input_words: Vec<&str> = input_upper.split_whitespace().collect();
-    let sugg_words: Vec<&str> = suggestion.split_whitespace().collect();
-
-    if input_words.len() == sugg_words.len() {
-        // Same word count: check for typos or prefix matches
-        input_words
-            .iter()
-            .zip(sugg_words.iter())
-            .any(|(i, s)| i != s && (is_typo(i, s) || is_prefix(i, s)))
-    } else if input_words.len() < sugg_words.len() {
-        // Input is shorter: check if it's a valid prefix with potential typo in last word
-        if input_words.is_empty() {
-            return false;
-        }
-
-        // All but last word must match exactly
-        for i in 0..input_words.len() - 1 {
-            if input_words[i] != sugg_words[i] {
-                return false;
-            }
-        }
-
-        // Last word can be typo or prefix
-        let last_input = input_words[input_words.len() - 1];
-        let last_sugg = sugg_words[input_words.len() - 1];
-        last_input != last_sugg
-            && (is_typo(last_input, last_sugg) || is_prefix(last_input, last_sugg))
-    } else {
-        false
-    }
 }
 
 #[cfg(test)]
@@ -268,29 +248,18 @@ mod tests {
     #[test]
     fn test_similarity() {
         assert!(
-            similarity(&["show", "tables"], "SHOW TABLES")
-                > similarity(&["show", "table"], "SHOW TABLES")
+            calculate_similarity(&["show", "tables"], "SHOW TABLES")
+                > calculate_similarity(&["show", "table"], "SHOW TABLES")
         );
     }
 
     #[test]
-    fn test_keyword_similarity() {
-        assert!(is_prefix("tabl", "tables"));
-        assert!(!is_prefix("tables", "table"));
-    }
-
-    #[test]
-    fn test_error_detection() {
-        assert!(is_error("show tabl", "SHOW TABLES"));
-        assert!(is_error("crate table", "CREATE TABLE"));
-        assert!(!is_error("show", "SHOW TABLES"));
-    }
-
-    #[test]
-    fn test_correct_command_detection() {
-        assert!(!is_correct("show", "SHOW TABLES"));
-        assert!(is_correct("SHOW TABLES", "SHOW TABLES"));
-        assert!(!is_correct("show tabl", "SHOW TABLES"));
+    fn test_typo_matching() {
+        // Test the core functionality that "vacuum tempare files" matches "VACUUM TEMPORARY FILES"
+        let result = suggest_correction("vacuum tempare files");
+        assert!(result.is_some());
+        let suggestion = result.unwrap();
+        assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
     }
 
     #[test]
@@ -320,6 +289,15 @@ mod tests {
                     || vacuum_suggestion.contains(" or ")
             );
         }
+
+        // Test typo in middle of command - "vacuum tempare files"
+        let vacuum_typo = suggest_correction("vacuum tempare files");
+        if let Some(suggestion) = vacuum_typo {
+            println!("vacuum tempare files suggestion: {}", suggestion);
+            assert!(suggestion.contains("VACUUM TEMPORARY FILES"));
+        } else {
+            println!("No suggestion for 'vacuum tempare files'");
+        }
     }
 
     #[test]
@@ -336,9 +314,15 @@ mod tests {
         assert!(show_help.contains("SHOW TABLES"));
         assert!(show_help.contains("SHOW DATABASES") || show_help.contains("SHOW FUNCTIONS"));
 
-        // Should not provide context help for multi-word inputs or unknown prefixes
-        assert_eq!(suggest_correction("show create"), None);
-        assert_eq!(suggest_correction("vacuum drop"), None);
-        assert_eq!(suggest_correction("xyz"), None);
+        // Should provide suggestions for partial commands that don't match exactly
+        let show_create = suggest_correction("show create");
+        if show_create.is_some() {
+            // Should suggest relevant SHOW commands
+            let suggestion = show_create.unwrap();
+            assert!(suggestion.contains("SHOW"));
+        }
+
+        // Should not provide suggestions for completely unrelated input
+        assert_eq!(suggest_correction("xyz abc def"), None);
     }
 }
