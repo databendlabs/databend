@@ -94,7 +94,7 @@ fn error_correction(input: &str) -> Option<String> {
     }
 
     let first_token = input_tokens[0].to_uppercase();
-    
+
     // Extract valid starts from PATTERNS
     let mut valid_starts: Vec<&str> = PATTERNS
         .iter()
@@ -326,16 +326,16 @@ mod tests {
             .collect();
         expected_starts.sort();
         expected_starts.dedup();
-        
+
         // Should contain SHOW and VACUUM from our patterns
         assert!(expected_starts.contains(&"SHOW"));
         assert!(expected_starts.contains(&"VACUUM"));
-        
+
         // Should recognize valid starts with similar commands
         assert!(suggest_correction("show table").is_some()); // Similar to SHOW TABLES
         assert!(suggest_correction("vacuum temp").is_some()); // Similar to VACUUM TEMPORARY
-        
-        // Should not recognize invalid starts  
+
+        // Should not recognize invalid starts
         assert_eq!(suggest_correction("create unknown"), None);
         assert_eq!(suggest_correction("select unknown"), None);
     }
