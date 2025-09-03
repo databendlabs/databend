@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
+use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -292,6 +293,19 @@ where
             let mut db_meta = seq_meta.into_value().unwrap();
 
             debug!(db_id = db_id, name_key :? =(name_key); "undrop_database");
+
+            // Ensure that db is not being GC.
+            //
+            // And since later inside the undrop database kv txn, the sequence number of db_meta will
+            // also be checked, it can be ensured that db_meta.gc_in_progress will not transit from
+            // TRUE to FALSE in this kv txn.
+            if db_meta.gc_in_progress {
+                let err = UnknownDatabase::new(
+                    name_key.database_name(),
+                    "undropping database (gc in progress)".to_owned(),
+                );
+                return Err(KVAppError::AppError(AppError::from(err)));
+            }
 
             {
                 // reset drop on time
