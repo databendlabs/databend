@@ -16,7 +16,6 @@ use std::fmt::Display;
 
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
@@ -32,35 +31,13 @@ use databend_common_meta_types::TxnRequest;
 use log::debug;
 use log::warn;
 
+use crate::error_util::unknown_database_error;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::unknown_database_error;
-
-/// Return OK if a db_id or db_meta does not exist by checking the seq.
-///
-/// Otherwise returns DatabaseAlreadyExists error
-pub(crate) fn db_has_to_not_exist(
-    seq: u64,
-    name_ident: &DatabaseNameIdent,
-    ctx: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-
-        Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
-            DatabaseAlreadyExists::new(
-                name_ident.database_name(),
-                format!("{}: {}", ctx, name_ident.display()),
-            ),
-        )))
-    }
-}
 
 pub(crate) async fn drop_database_meta(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),

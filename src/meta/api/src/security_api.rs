@@ -42,13 +42,13 @@ use crate::errors::TableError;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::send_txn;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_replace_exact;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::txn_replace_exact;
 
 /// SecurityApi defines APIs for table security policy management.
 ///

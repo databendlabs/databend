@@ -23,7 +23,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::FromToProto;
 
 use crate::kv_app_error::KVAppError;
-use crate::util::deserialize_u64;
+use crate::serialization_util::deserialize_u64;
 
 /// Get existing value by key. Panic if key is absent.
 pub(crate) async fn get_kv_data<T>(
