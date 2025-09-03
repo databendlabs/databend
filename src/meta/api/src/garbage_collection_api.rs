@@ -385,7 +385,7 @@ async fn gc_dropped_db_by_id(
             .push(txn_put_pb(&db_id_history_ident, &db_id_list)?);
     }
 
-    // Verify data_meta hasn't changed since the mark database meta as gc_in_progress phase
+    // Verify database_meta hasn't changed since the mark database meta as gc_in_progress phase.
     // This establishes a condition for the transaction that will prevent it from committing
     // if the database metadata was modified by another concurrent operation (like un-dropping).
     txn.condition.push(txn_cond_eq_seq(&dbid, db_meta_seq));

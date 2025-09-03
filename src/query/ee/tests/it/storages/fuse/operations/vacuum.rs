@@ -651,7 +651,7 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
     // 2. Setup test fixture by using local meta store
     let fixture = TestFixture::setup_with_custom(ee_setup).await?;
 
-    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    // Adjust retention period to 0, so that dropped tables will be available for vacuum immediately
     let session = fixture.default_session();
     session.get_settings().set_data_retention_time_in_days(0)?;
 
