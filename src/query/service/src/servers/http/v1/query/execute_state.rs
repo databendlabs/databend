@@ -42,6 +42,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::http_query::ResponseState;
+use crate::servers::http::v1::query::sized_spsc::PlaceholderSpill;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
@@ -113,7 +114,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender,
+    pub(crate) sender: SizedChannelSender<PlaceholderSpill>,
 }
 
 pub struct ExecuteRunning {
@@ -354,7 +355,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender,
+        block_sender: SizedChannelSender<PlaceholderSpill>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -421,7 +422,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender,
+        block_sender: SizedChannelSender<PlaceholderSpill>,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
