@@ -300,15 +300,17 @@ impl Interpreter for InsertInterpreter {
                 }
             }
         };
-        build_res
-            .main_pipeline
-            .try_add_async_accumulating_transformer(|| {
-                Ok(TransformConstraintVerify::new(
-                    table_constraints.clone(),
-                    self.ctx.get_function_context()?,
-                    table.name().to_string(),
-                ))
-            })?;
+        if !table_constraints.is_empty() {
+            build_res
+                .main_pipeline
+                .try_add_async_accumulating_transformer(|| {
+                    Ok(TransformConstraintVerify::new(
+                        table_constraints.clone(),
+                        self.ctx.get_function_context()?,
+                        table.name().to_string(),
+                    ))
+                })?;
+        }
 
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
