@@ -42,7 +42,7 @@ const PATTERNS: &[&str] = &[
 /// Generate suggestion for SQL parsing error
 pub fn suggest_correction(input: &str) -> Option<String> {
     let input = input.trim();
-    if input.len() < 2 {
+    if input.len() < 2 || input.len() > 128 {
         return None;
     }
 
@@ -94,15 +94,17 @@ fn error_correction(input: &str) -> Option<String> {
     }
 
     let first_token = input_tokens[0].to_uppercase();
-    let valid_starts = ["SHOW", "VACUUM", "CREATE", "DROP", "SELECT", "INSERT", "UPDATE", "DELETE"];
-    
+    let valid_starts = [
+        "SHOW", "VACUUM", "CREATE", "DROP", "SELECT", "INSERT", "UPDATE", "DELETE",
+    ];
+
     // Check for exact match or typo in first token
-    let is_sql_command = valid_starts.contains(&first_token.as_str()) || 
-        valid_starts.iter().any(|&keyword| {
+    let is_sql_command = valid_starts.contains(&first_token.as_str())
+        || valid_starts.iter().any(|&keyword| {
             let distance = edit_distance(&first_token, keyword);
             distance <= 2 && distance < keyword.len() / 2
         });
-    
+
     if !is_sql_command {
         return None;
     }
@@ -229,7 +231,7 @@ mod tests {
         assert!(result.contains("Did you mean"));
 
         assert_eq!(
-            suggest_correction("vacum drop table"), 
+            suggest_correction("vacum drop table"),
             Some("Did you mean `VACUUM DROP TABLE`?".to_string())
         );
         assert_eq!(
@@ -294,5 +296,19 @@ mod tests {
         assert_eq!(edit_distance("show", "show"), 0);
         assert_eq!(edit_distance("tempare", "temporary"), 3);
         assert_eq!(edit_distance("tabl", "tables"), 2);
+    }
+
+    #[test]
+    fn test_performance_limits() {
+        // Should return None for very short inputs
+        assert_eq!(suggest_correction("a"), None);
+        assert_eq!(suggest_correction(""), None);
+
+        // Should return None for inputs longer than 128 characters
+        let long_sql = "a".repeat(129);
+        assert_eq!(suggest_correction(&long_sql), None);
+
+        // Should work for reasonable length inputs
+        assert!(suggest_correction("show table").is_some());
     }
 }
