@@ -266,7 +266,10 @@ mod tests {
         // Single word prefixes should get context help
         assert_eq!(
             suggest_correction("vacuum"),
-            Some("Try: `VACUUM DROP TABLE`, `VACUUM TEMPORARY FILES`, or `VACUUM TEMPORARY TABLES`".to_string())
+            Some(
+                "Try: `VACUUM DROP TABLE`, `VACUUM TEMPORARY FILES`, or `VACUUM TEMPORARY TABLES`"
+                    .to_string()
+            )
         );
 
         let result = suggest_correction("show").unwrap();

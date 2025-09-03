@@ -251,7 +251,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             };
             msg += &format!(". {}", suggestion);
             labels = vec![(inner.span, msg)];
-            
+
             // Return early to skip context labels when we have intelligent suggestions
             return pretty_print_error(source, labels);
         } else {
