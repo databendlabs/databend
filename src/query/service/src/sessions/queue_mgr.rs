@@ -229,17 +229,26 @@ impl<Data: QueueData> QueueManager<Data> {
                     workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
                 }
 
-                data.set_status("[QUERY-QUEUE] Waiting for local workload semaphore");
+                let used_slots = workload_group.semaphore.available_permits();
+                let total_permits = permits;
+                let current_used = total_permits - used_slots;
+
+                data.set_status(&format!(
+                    "[BLOCKED] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used", 
+                    workload_group.meta.name, permits, current_used, total_permits
+                ));
 
                 let semaphore = workload_group.semaphore.clone();
-                let acquire = tokio::time::timeout(timeout, semaphore.acquire_owned());
+                let acquire = tokio::time::timeout(timeout, semaphore.clone().acquire_owned());
                 let queue_future = AcquireQueueFuture::create(data.clone(), acquire, self.clone());
 
                 guards.push(queue_future.await?);
 
+                let used_slots_after = workload_group.semaphore.available_permits();
+                let current_used_after = total_permits - used_slots_after;
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from local workload semaphore. elapsed: {:?}",
-                    instant.elapsed()
+                    "[ACQUIRED] Workload group '{}' local (max_concurrency={}): {}/{} slots used (waited {:.2}s)",
+                    workload_group.meta.name, permits, current_used_after, total_permits, instant.elapsed().as_secs_f64()
                 );
 
                 timeout -= instant.elapsed();
@@ -267,9 +276,15 @@ impl<Data: QueueData> QueueManager<Data> {
             }
         }
 
-        data.set_status("[QUERY-QUEUE] Waiting for warehouse resource scheduling");
+        let queue_length = self.length();
+        let used_slots = self.permits - self.semaphore.available_permits();
 
-        guards.extend(self.acquire_warehouse_queue(data, timeout).await?);
+        data.set_status(&format!(
+            "[BLOCKED] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting", 
+            self.permits, used_slots, self.permits, queue_length
+        ));
+
+        guards.extend(self.acquire_warehouse_queue(data, timeout, instant).await?);
 
         inc_session_running_acquired_queries();
         record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
@@ -321,6 +336,7 @@ impl<Data: QueueData> QueueManager<Data> {
         self: &Arc<Self>,
         data: Arc<Data>,
         timeout: Duration,
+        instant: Instant,
     ) -> Result<Vec<AcquireQueueGuardInner>> {
         let mut guards = vec![];
 
@@ -351,9 +367,11 @@ impl<Data: QueueData> QueueManager<Data> {
         match acquire_res {
             Ok(v) => {
                 guards.push(v);
+                let queue_length = self.length();
+                let used_slots = self.permits - self.semaphore.available_permits();
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from queue, current length: {}",
-                    self.length()
+                    "[ACQUIRED] Warehouse resource (max_running_queries={}): {}/{} slots used, {} queries waiting (waited {:.2}s)",
+                    self.permits, used_slots, self.permits, queue_length, instant.elapsed().as_secs_f64()
                 );
 
                 Ok(guards)
