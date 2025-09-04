@@ -4970,6 +4970,7 @@ name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "databend-common-base",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",

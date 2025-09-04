@@ -18,6 +18,7 @@ mod copy;
 mod data_mask;
 pub mod dynamic_table;
 mod error;
+mod error_suggestion;
 pub mod expr;
 mod input;
 #[allow(clippy::module_inception)]
@@ -37,6 +38,7 @@ pub use error::display_parser_error;
 pub use error::Backtrace;
 pub use error::Error;
 pub use error::ErrorKind;
+pub use error_suggestion::suggest_correction;
 pub use input::Dialect;
 pub use input::Input;
 pub use input::ParseMode;

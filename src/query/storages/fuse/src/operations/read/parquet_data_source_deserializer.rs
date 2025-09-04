@@ -43,7 +43,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
-use log::info;
 use xorf::BinaryFuse16;
 
 use super::parquet_data_source::ParquetDataSource;
@@ -295,12 +294,23 @@ impl Processor for DeserializeDataTransform {
                     let mut filter = None;
                     if self.ctx.has_bloom_runtime_filters(self.table_index) {
                         let start = Instant::now();
+                        let rows_before = data_block.num_rows();
                         if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
                             data_block = data_block.filter_with_bitmap(&bitmap)?;
                             filter = Some(bitmap);
+                            let rows_after = data_block.num_rows();
+                            let bloom_duration = start.elapsed();
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::RuntimeFilterBloomTime,
+                                bloom_duration.as_nanos() as usize,
+                            );
+                            if rows_before > rows_after {
+                                Profile::record_usize_profile(
+                                    ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
+                                    rows_before - rows_after,
+                                );
+                            }
                         }
-                        let bloom_duration = start.elapsed();
-                        info!("RUNTIME-FILTER: Bloom runtime filter check took {:?}, scan_id: {}, rows after filter: {}", bloom_duration, self.scan_id, data_block.num_rows());
                     }
 
                     // Add optional virtual columns
