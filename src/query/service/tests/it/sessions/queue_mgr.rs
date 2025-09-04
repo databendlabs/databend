@@ -48,7 +48,6 @@ struct TestData<const PASSED: bool = false> {
     acquire_id: String,
     abort_notify: Arc<WatchNotify>,
     test_timeout: Duration,
-    status: Arc<Mutex<Option<String>>>,
 }
 
 impl<const PASSED: bool> std::fmt::Debug for TestData<PASSED> {
@@ -68,7 +67,6 @@ impl<const PASSED: bool> TestData<PASSED> {
             acquire_id,
             abort_notify: Arc::new(WatchNotify::new()),
             test_timeout: Duration::from_secs(1000),
-            status: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -78,12 +76,7 @@ impl<const PASSED: bool> TestData<PASSED> {
             acquire_id,
             abort_notify: Arc::new(WatchNotify::new()),
             test_timeout: timeout,
-            status: Arc::new(Mutex::new(None)),
         }
-    }
-
-    fn get_status(&self) -> Option<String> {
-        self.status.lock().unwrap().clone()
     }
 }
 
@@ -116,11 +109,6 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.abort_notify.clone()
-    }
-
-    fn set_status(&self, status: &str) {
-        *self.status.lock().unwrap() = Some(status.to_string());
-        println!("TestData {}: {}", self.acquire_id, status);
     }
 }
 
@@ -943,89 +931,6 @@ async fn test_workload_group_with_timeout() -> Result<()> {
         timeout_result.is_err(),
         "Queue acquisition should timeout when permits are exhausted"
     );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_workload_group_concurrency_status_logging() -> Result<()> {
-    let metastore = create_meta_store().await?;
-    let queue = QueueManager::<TestData>::create(100, metastore, false);
-
-    // Create workload group with concurrency limit of 16 (simulating your scenario)
-    let mut quotas = HashMap::new();
-    quotas.insert(MAX_CONCURRENCY_QUOTA_KEY.to_string(), QuotaValue::Number(16));
-
-    let workload_group = Arc::new(WorkloadGroupResource {
-        meta: WorkloadGroup {
-            id: "test_wg".to_string(),
-            name: "TestWorkloadGroup".to_string(),
-            quotas,
-        },
-        queue_key: "test_wg_queue".to_string(),
-        permits: 16,
-        mutex: Arc::new(Default::default()),
-        semaphore: Arc::new(Semaphore::new(16)),
-        mem_stat: MemStat::create(String::new()),
-        max_memory_usage: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-        destroy_fn: None,
-    });
-
-    let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    tracking_payload.workload_group_resource = Some(workload_group.clone());
-    let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-
-    println!("Starting 100 concurrent queries with max_concurrency=16...");
-    
-    let concurrent_count = 100;
-    let query_duration = Duration::from_secs(1); // Shorter for testing
-    let barrier = Arc::new(tokio::sync::Barrier::new(concurrent_count));
-    let mut join_handles = Vec::with_capacity(concurrent_count);
-
-    for i in 0..concurrent_count {
-        let queue = queue.clone();
-        let barrier = barrier.clone();
-        let query_duration = query_duration.clone();
-        
-        join_handles.push(databend_common_base::runtime::spawn(async move {
-            barrier.wait().await;
-            
-            println!("Query {} attempting to acquire...", i);
-            let test_data = TestData::with_timeout(
-                format!("query_lock_{}", i),
-                format!("query_{}", i),
-                Duration::from_secs(30), // Timeout for queue waiting
-            );
-            
-            let start_time = Instant::now();
-            match queue.acquire(test_data).await {
-                Ok(guard) => {
-                    let wait_time = start_time.elapsed();
-                    println!("Query {} ACQUIRED after waiting {:?}", i, wait_time);
-                    
-                    // Simulate query execution time
-                    tokio::time::sleep(query_duration).await;
-                    
-                    println!("Query {} COMPLETED after {:?} total", i, start_time.elapsed());
-                    drop(guard);
-                }
-                Err(e) => {
-                    println!("Query {} FAILED: {}", i, e);
-                }
-            }
-        }));
-    }
-
-    // Wait for all queries to complete
-    for (i, handle) in join_handles.into_iter().enumerate() {
-        match handle.await {
-            Ok(_) => println!("Join handle {} completed successfully", i),
-            Err(e) => println!("Join handle {} failed: {}", i, e),
-        }
-    }
-
-    println!("All queries completed. Queue length: {}", queue.length());
-    assert_eq!(queue.length(), 0);
 
     Ok(())
 }

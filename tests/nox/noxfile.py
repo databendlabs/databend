@@ -36,13 +36,13 @@ def run_jdbc_test(session, driver_version, main_version):
         env = {}
     else:
         main_jar = f"cache/jdbc/databend-jdbc-{driver_version}.jar"
-        env={"DATABEND_JDBC_VERSION": driver_version}
+        env = {"DATABEND_JDBC_VERSION": driver_version}
     session.run(
         "java",
         "-cp",
-        ":".join( [ "cache/lib/*", main_jar, test_jar] ),
+        ":".join(["cache/lib/*", main_jar, test_jar]),
         "org.testng.TestNG",
         "java_client/testng.xml",
         external=True,
-        env=env
+        env=env,
     )
