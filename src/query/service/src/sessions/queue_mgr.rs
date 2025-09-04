@@ -229,13 +229,12 @@ impl<Data: QueueData> QueueManager<Data> {
                     workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
                 }
 
-                let used_slots = workload_group.semaphore.available_permits();
-                let total_permits = permits;
-                let current_used = total_permits - used_slots;
+                let available_permits = workload_group.semaphore.available_permits();
+                let current_used = permits.saturating_sub(available_permits);
 
                 data.set_status(&format!(
                     "[BLOCKED] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used", 
-                    workload_group.meta.name, permits, current_used, total_permits
+                    workload_group.meta.name, permits, current_used, permits
                 ));
 
                 let semaphore = workload_group.semaphore.clone();
@@ -244,11 +243,11 @@ impl<Data: QueueData> QueueManager<Data> {
 
                 guards.push(queue_future.await?);
 
-                let used_slots_after = workload_group.semaphore.available_permits();
-                let current_used_after = total_permits - used_slots_after;
+                let available_permits_after = workload_group.semaphore.available_permits();
+                let current_used_after = permits.saturating_sub(available_permits_after);
                 info!(
                     "[ACQUIRED] Workload group '{}' local (max_concurrency={}): {}/{} slots used (waited {:.2}s)",
-                    workload_group.meta.name, permits, current_used_after, total_permits, instant.elapsed().as_secs_f64()
+                    workload_group.meta.name, permits, current_used_after, permits, instant.elapsed().as_secs_f64()
                 );
 
                 timeout -= instant.elapsed();
