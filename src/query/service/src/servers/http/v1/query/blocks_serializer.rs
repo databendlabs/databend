@@ -66,6 +66,10 @@ impl BlocksCollector {
         self.append_columns(columns, num_rows);
     }
 
+    pub fn num_rows(&self) -> usize {
+        self.columns.iter().map(|(_, num_rows)| *num_rows).sum()
+    }
+
     pub fn into_serializer(self, format: FormatSettings) -> BlocksSerializer {
         BlocksSerializer {
             columns: self.columns,

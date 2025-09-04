@@ -802,12 +802,13 @@ impl HttpQuery {
 
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
+                let block_sender_closer = block_sender.closer();
                 if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
                     query_state.clone(),
                     sql,
                     query_session,
                     query_context.clone(),
-                    block_sender.clone(),
+                    block_sender,
                 ))
                 .await
                 .with_context(|| "failed to start query")
@@ -834,7 +835,7 @@ impl HttpQuery {
                         e
                     );
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
-                    block_sender.close();
+                    block_sender_closer.close();
                 }
             }
             .in_span(span),

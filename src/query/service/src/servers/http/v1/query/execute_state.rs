@@ -426,7 +426,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<SpillerRef>,
+        mut block_sender: SizedChannelSender<SpillerRef>,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
@@ -438,7 +438,7 @@ impl ExecuteState {
         match data_stream.next().await {
             None => {
                 let block = DataBlock::empty_with_schema(schema);
-                block_sender.send(block).await;
+                let _ = block_sender.send(block).await;
                 Executor::stop::<()>(&executor, Ok(()));
                 block_sender.close();
             }
@@ -447,11 +447,15 @@ impl ExecuteState {
                 block_sender.close();
             }
             Some(Ok(block)) => {
-                block_sender.send(block).await;
-                while let Some(block_r) = data_stream.next().await {
-                    match block_r {
+                Self::send_data_block(&mut block_sender, &executor, block)
+                    .await
+                    .with_context(make_error)?;
+                while let Some(block) = data_stream.next().await {
+                    match block {
                         Ok(block) => {
-                            block_sender.send(block.clone()).await;
+                            Self::send_data_block(&mut block_sender, &executor, block)
+                                .await
+                                .with_context(make_error)?;
                         }
                         Err(err) => {
                             block_sender.close();
@@ -464,6 +468,20 @@ impl ExecuteState {
             }
         }
         Ok(())
+    }
+
+    async fn send_data_block(
+        sender: &mut SizedChannelSender<SpillerRef>,
+        executor: &Arc<Mutex<Executor>>,
+        block: DataBlock,
+    ) -> Result<()> {
+        match sender.send(block).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                Executor::stop(executor, Err(err.clone()));
+                Err(err)
+            }
+        }
     }
 
     fn apply_settings(
