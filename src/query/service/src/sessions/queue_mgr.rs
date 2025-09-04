@@ -725,8 +725,7 @@ impl QueueData for QueryEntry {
     }
 
     fn enter_wait_pending(&self) {
-        self.ctx
-            .set_status_info("[QUERY-QUEUE] Preparing to acquire resources");
+        // Don't overwrite existing detailed status - just update to show we're now queued
     }
 
     fn set_status(&self, status: &str) {
