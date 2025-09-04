@@ -168,7 +168,7 @@ impl SizedChannelBuffer {
             return Err(block.location.clone().unwrap());
         };
 
-        let take_rows = builder.calculate_take_rows(&data);
+        let take_rows = builder.calculate_take_rows(data);
         if take_rows < data.num_rows() {
             builder.remain_rows = 0;
             builder.collector.append_block(block.slice(take_rows));
