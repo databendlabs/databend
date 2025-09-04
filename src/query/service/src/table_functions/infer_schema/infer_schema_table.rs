@@ -18,17 +18,21 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
-use databend_common_catalog::plan::{DataSourcePlan, PartInfo, StageTableInfo};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_compress::CompressAlgorithm;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::{BlockThresholds, TableDataType};
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
@@ -40,16 +44,18 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::PrefetchAsyncSourcer;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::resolve_file_location;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::{BytesReader, Decompressor, LoadContext};
+use databend_common_storages_stage::BytesReader;
+use databend_common_storages_stage::Decompressor;
 use databend_common_storages_stage::InferSchemaPartInfo;
+use databend_common_storages_stage::LoadContext;
 use databend_common_users::Object;
-use opendal::Scheme;
-use databend_common_compress::CompressAlgorithm;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_storages_common_stage::SingleFilePartition;
+use opendal::Scheme;
+
 use super::parquet::ParquetInferSchemaSource;
 use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::separator::InferSchemaSeparator;
@@ -187,7 +193,12 @@ impl Table for InferSchemaTable {
         Ok((
             PartStatistics::default(),
             Partitions::create(PartitionsShuffleKind::Seq, vec![
-                InferSchemaPartInfo::create(files_info, file_format_params, stage_info, stage_file_infos),
+                InferSchemaPartInfo::create(
+                    files_info,
+                    file_format_params,
+                    stage_info,
+                    stage_file_infos,
+                ),
             ]),
         ))
     }
@@ -210,7 +221,8 @@ impl Table for InferSchemaTable {
 
         match info.file_format_params {
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) => {
-                let partitions = info.stage_file_infos
+                let partitions = info
+                    .stage_file_infos
                     .iter()
                     .map(|v| {
                         let part = SingleFilePartition {
@@ -248,11 +260,15 @@ impl Table for InferSchemaTable {
                 let mut algo = None;
 
                 for file_info in info.stage_file_infos.iter() {
-                    let Some(new_algo) = CompressAlgorithm::from_path(&file_info.path) else { continue };
+                    let Some(new_algo) = CompressAlgorithm::from_path(&file_info.path) else {
+                        continue;
+                    };
 
                     if let Some(algo) = algo {
                         if algo != new_algo {
-                            return Err(ErrorCode::UnknownCompressionType("`infer_schema` only supports single compression type"));
+                            return Err(ErrorCode::UnknownCompressionType(
+                                "`infer_schema` only supports single compression type",
+                            ));
                         }
                     }
                     algo = Some(new_algo);
@@ -263,7 +279,11 @@ impl Table for InferSchemaTable {
                     })?;
                 }
                 pipeline.add_accumulating_transformer(|| {
-                   InferSchemaSeparator::create(info.file_format_params.clone(), self.args_parsed.max_records)
+                    InferSchemaSeparator::create(
+                        info.file_format_params.clone(),
+                        self.args_parsed.max_records,
+                        info.stage_file_infos.len(),
+                    )
                 });
             }
             FileFormatParams::Parquet(_) => {

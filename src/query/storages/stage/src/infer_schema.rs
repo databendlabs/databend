@@ -13,12 +13,19 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
-use databend_common_catalog::plan::{PartInfo, PartInfoPtr, PartInfoType};
+
+use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
-use databend_common_meta_app::principal::{FileFormatParams, StageInfo};
-use databend_common_storage::{StageFileInfo, StageFilesInfo};
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct InferSchemaPartInfo {
@@ -26,7 +33,6 @@ pub struct InferSchemaPartInfo {
     pub file_format_params: FileFormatParams,
     pub stage_info: StageInfo,
     pub stage_file_infos: Vec<StageFileInfo>,
-    
 }
 
 #[typetag::serde(name = "infer_schema")]
@@ -69,7 +75,9 @@ impl InferSchemaPartInfo {
         }))
     }
 
-    pub fn from_part(info: &PartInfoPtr) -> databend_common_exception::Result<&InferSchemaPartInfo> {
+    pub fn from_part(
+        info: &PartInfoPtr,
+    ) -> databend_common_exception::Result<&InferSchemaPartInfo> {
         info.as_any()
             .downcast_ref::<InferSchemaPartInfo>()
             .ok_or_else(|| {

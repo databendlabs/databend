@@ -61,11 +61,11 @@ drop CONNECTION IF EXISTS my_conn
 statement ok
 create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/' region='auto'
 
-# query
-# select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
-# ----
-# id INT 0 0
-# t TUPLE(A INT32, B STRING) 0 1
+query
+select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
+----
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
 
 # CSV
 statement ok

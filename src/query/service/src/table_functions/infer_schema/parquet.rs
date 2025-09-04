@@ -28,8 +28,9 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
-use databend_common_storage::{init_stage_operator, StageFileInfo};
+use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
+use databend_common_storage::StageFileInfo;
 use futures_util::future::try_join_all;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
@@ -71,6 +72,7 @@ impl AsyncSource for ParquetInferSchemaSource {
         let infer_schema_futures = self.stage_file_infos.iter().map(|file| async {
             read_parquet_schema_async_rs(&operator, &file.path, Some(file.size)).await
         });
+        // todo: unify_schemas(arrow-rs unsupported now)
         let arrow_schema = Schema::try_merge(try_join_all(infer_schema_futures).await?)?;
         let table_schema = TableSchema::try_from(&arrow_schema)?;
 

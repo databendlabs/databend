@@ -12,30 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Cursor;
+
 use arrow_csv::reader::Format;
-use arrow_json::reader::{infer_json_schema_from_iterator, ValueIter};
-use arrow_schema::{ArrowError, Schema};
-use databend_common_expression::{BlockMetaInfoDowncast, DataBlock, FromData, TableSchema};
-use databend_common_pipeline_transforms::AccumulatingTransform;
-use databend_common_exception::{ErrorCode, Result};
-use databend_common_expression::types::{BooleanType, StringType, UInt64Type};
+use arrow_json::reader::infer_json_schema_from_iterator;
+use arrow_json::reader::ValueIter;
+use arrow_schema::ArrowError;
+use arrow_schema::Schema;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_storages_stage::BytesBatch;
+
+use crate::table_functions::infer_schema::merge::merge_schema;
 
 pub struct InferSchemaSeparator {
     pub file_format_params: FileFormatParams,
-    pub bytes_buf: Vec<u8>,
+    files: HashMap<String, Vec<u8>>,
     pub max_records: Option<usize>,
+    schemas: Vec<Schema>,
+    files_len: usize,
     is_finished: bool,
 }
 
 impl InferSchemaSeparator {
-    pub fn create(file_format_params: FileFormatParams, max_records: Option<usize>) -> Self {
+    pub fn create(
+        file_format_params: FileFormatParams,
+        max_records: Option<usize>,
+        files_len: usize,
+    ) -> Self {
         InferSchemaSeparator {
             file_format_params,
-            bytes_buf: vec![],
+            files: HashMap::new(),
             max_records,
+            schemas: Vec::with_capacity(files_len),
+            files_len,
             is_finished: false,
         }
     }
@@ -52,13 +72,15 @@ impl AccumulatingTransform for InferSchemaSeparator {
             .get_owned_meta()
             .and_then(BytesBatch::downcast_from)
             .unwrap();
-        self.bytes_buf.extend(batch.data);
+
+        let bytes = self.files.entry(batch.path.clone()).or_insert(Vec::new());
+        bytes.extend(batch.data);
 
         // When max_records exists, it will try to use the current bytes to read, otherwise it will buffer all bytes
         if self.max_records.is_none() && !batch.is_eof {
             return Ok(vec![DataBlock::empty()]);
         }
-        let bytes = Cursor::new(&self.bytes_buf);
+        let bytes = Cursor::new(bytes);
         let result = match &self.file_format_params {
             FileFormatParams::Csv(params) => {
                 let escape = if params.escape.is_empty() {
@@ -74,7 +96,10 @@ impl AccumulatingTransform for InferSchemaSeparator {
                 if let Some(escape) = escape {
                     format = format.with_escape(escape);
                 }
-                format.infer_schema(bytes, self.max_records).map(|(schema, _)| schema).map_err(Some)
+                format
+                    .infer_schema(bytes, self.max_records)
+                    .map(|(schema, _)| schema)
+                    .map_err(Some)
             }
             FileFormatParams::NdJson(_) => {
                 let mut records = ValueIter::new(bytes, self.max_records);
@@ -101,19 +126,36 @@ impl AccumulatingTransform for InferSchemaSeparator {
         };
         let arrow_schema = match result {
             Ok(schema) => schema,
-            Err(None) => {
-                return Ok(vec![DataBlock::empty()])
-            }
+            Err(None) => return Ok(vec![DataBlock::empty()]),
             Err(Some(err)) => {
-                if matches!(err, ArrowError::CsvError(_)) && self.max_records.is_some() && !batch.is_eof {
+                if matches!(err, ArrowError::CsvError(_))
+                    && self.max_records.is_some()
+                    && !batch.is_eof
+                {
                     return Ok(vec![DataBlock::empty()]);
                 }
                 return Err(err.into());
             }
         };
-        self.is_finished = true;
+        self.files.remove(&batch.path);
+        self.schemas.push(arrow_schema);
 
-        let table_schema = TableSchema::try_from(&arrow_schema)?;
+        if self.schemas.len() != self.files_len {
+            return Ok(vec![DataBlock::empty()]);
+        }
+        self.is_finished = true;
+        if self.schemas.len() == 0 {
+            return Ok(vec![DataBlock::empty()]);
+        }
+        let table_schema = if self.schemas.len() == 1 {
+            TableSchema::try_from(&self.schemas.pop().unwrap())?
+        } else {
+            self.schemas[1..]
+                .iter()
+                .try_fold(TableSchema::try_from(&self.schemas[0])?, |acc, schema| {
+                    TableSchema::try_from(schema).map(|schema| merge_schema(acc, schema))
+                })?
+        };
 
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
