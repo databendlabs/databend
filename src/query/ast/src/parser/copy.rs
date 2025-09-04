@@ -16,6 +16,7 @@ use nom::branch::alt;
 use nom::combinator::map;
 use nom_rule::rule;
 
+use super::query::select_target;
 use super::query::with;
 use crate::ast::CopyIntoLocationOption;
 use crate::ast::CopyIntoLocationSource;
@@ -47,9 +48,10 @@ use crate::parser::Input;
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
-        map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
-            CopyIntoTableSource::Query(Box::new(query))
-        }),
+        map(
+            rule! { "(" ~ SELECT ~ #comma_separated_list1(select_target) ~ FROM ~ #file_location ~ ")" },
+            |(_, _, select_list, _, from, _)| CopyIntoTableSource::Query { select_list, from },
+        ),
     ));
 
     map_res(

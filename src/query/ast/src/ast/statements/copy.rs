@@ -26,12 +26,14 @@ use percent_encoding::percent_decode_str;
 use url::Url;
 
 use crate::ast::quote::QuotedString;
+use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::SelectTarget;
 use crate::ast::TableRef;
 use crate::ast::With;
 use crate::ParseError;
@@ -304,15 +306,19 @@ pub enum CopyIntoTableSource {
     Location(FileLocation),
     /// Load with Transform
     /// limited to `(SELECT ... FROM <location>)`
-    Query(Box<Query>),
+    Query {
+        select_list: Vec<SelectTarget>,
+        from: FileLocation,
+    },
 }
 
 impl Display for CopyIntoTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
-            CopyIntoTableSource::Query(query) => {
-                write!(f, "({query})")
+            CopyIntoTableSource::Query { select_list, from } => {
+                write_comma_separated_list(f, select_list)?;
+                write!(f, " FROM {from}")
             }
         }
     }

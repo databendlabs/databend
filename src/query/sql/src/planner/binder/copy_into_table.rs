@@ -28,9 +28,7 @@ use databend_common_ast::ast::HintItem;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::LiteralStringOrVariable;
-use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
-use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
@@ -98,20 +96,15 @@ impl Binder {
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
-            CopyIntoTableSource::Query(query) => {
-                self.init_cte(bind_context, &stmt.with)?;
-
+            CopyIntoTableSource::Query { select_list, from } => {
                 let mut max_column_position = MaxColumnPosition::new();
-                query.drive(&mut max_column_position);
+                select_list.drive(&mut max_column_position);
                 self.metadata
                     .write()
                     .set_max_column_position(max_column_position.max_pos);
-                let (select_list, location, alias) = check_transform_query(query)?;
-                let plan = self
-                    .bind_copy_into_table_common(stmt, location, true)
-                    .await?;
+                let plan = self.bind_copy_into_table_common(stmt, from, true).await?;
 
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
+                self.bind_copy_from_query_into_table(bind_context, plan, select_list, &None)
                     .await
             }
         }
@@ -613,46 +606,6 @@ impl Binder {
             .await?;
         Ok((Arc::new(TableSchema::new(attachment_fields)), const_values))
     }
-}
-
-// we can avoid this by specializing the parser.
-// make parse a little more complex, now it is COPY ~ INTO ~ #copy_unit ~ FROM ~ #copy_unit
-// also check_query here may give a more friendly error msg.
-fn check_transform_query(
-    query: &Query,
-) -> Result<(&Vec<SelectTarget>, &FileLocation, &Option<TableAlias>)> {
-    if query.offset.is_none()
-        && query.limit.is_empty()
-        && query.order_by.is_empty()
-        && query.with.is_none()
-    {
-        if let SetExpr::Select(select) = &query.body {
-            if select.group_by.is_none()
-                && !select.distinct
-                && select.having.is_none()
-                && select.from.len() == 1
-            {
-                if let TableReference::Location {
-                    span: _,
-                    location,
-                    options,
-                    alias,
-                } = &select.from[0]
-                {
-                    if options.is_empty() {
-                        return Ok((&select.select_list, location, alias));
-                    } else {
-                        return Err(ErrorCode::SyntaxException(
-                            "stage table function inside copy not allow options, apply them in the outer copy stmt instead.",
-                        ));
-                    }
-                }
-            }
-        }
-    }
-    Err(ErrorCode::SyntaxException(
-        "query as source of copy only allow projection on one stage table",
-    ))
 }
 
 /// Named stage(start with `@`):
