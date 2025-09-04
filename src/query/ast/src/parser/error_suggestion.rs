@@ -183,7 +183,7 @@ fn calculate_similarity(input_tokens: &[&str], pattern: &str) -> f64 {
             let input_len = input_token.len() as f64;
             let pattern_len = pattern_token.len() as f64;
             let prefix_ratio = input_len / pattern_len;
-            
+
             // Only give good scores for meaningful prefixes (at least 3 chars or >50% of word)
             if input_len >= 3.0 || prefix_ratio > 0.5 {
                 total_score += 1.5 + prefix_ratio * 1.0; // Max 2.5, always < 3.0 exact match
@@ -335,9 +335,9 @@ mod tests {
 
     #[test]
     fn test_prefix_matching_accuracy() {
-        // "show tab" should suggest table-related commands, not random ones  
+        // "show tab" should suggest table-related commands, not random ones
         let result = suggest_correction("show tab").unwrap();
-        // Should prioritize table-related suggestions  
+        // Should prioritize table-related suggestions
         assert_eq!(
             result,
             "Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string()
