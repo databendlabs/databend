@@ -385,12 +385,26 @@ impl SpillAdapter for LiteAdapter {
     }
 }
 
-pub type LiteSpiller = Arc<SpillerInner<LiteAdapter>>;
+#[derive(Clone)]
+pub struct LiteSpiller(Arc<SpillerInner<LiteAdapter>>);
 
-pub fn new_lite_spiller(operator: Operator, config: SpillerConfig) -> Result<LiteSpiller> {
-    Ok(Arc::new(SpillerInner::new(
-        Default::default(),
-        operator,
-        config,
-    )?))
+impl LiteSpiller {
+    pub fn new(operator: Operator, config: SpillerConfig) -> Result<LiteSpiller> {
+        Ok(LiteSpiller(Arc::new(SpillerInner::new(
+            Default::default(),
+            operator,
+            config,
+        )?)))
+    }
+}
+
+#[async_trait::async_trait]
+impl DataBlockSpill for LiteSpiller {
+    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+        self.0.spill(data_block).await
+    }
+
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
+        self.0.read_spilled_file(location).await
+    }
 }

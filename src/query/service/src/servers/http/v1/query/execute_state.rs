@@ -50,10 +50,9 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::spillers::Spiller;
+use crate::spillers::LiteSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
-use crate::spillers::SpillerRef;
 use crate::spillers::SpillerType;
 
 pub struct ExecutionError;
@@ -120,7 +119,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender<SpillerRef>,
+    pub(crate) sender: SizedChannelSender<LiteSpiller>,
 }
 
 pub struct ExecuteRunning {
@@ -361,7 +360,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        mut block_sender: SizedChannelSender<SpillerRef>,
+        mut block_sender: SizedChannelSender<LiteSpiller>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -426,7 +425,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<SpillerRef>,
+        block_sender: SizedChannelSender<LiteSpiller>,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
@@ -468,31 +467,35 @@ impl ExecuteState {
 
     fn apply_settings(
         ctx: &Arc<QueryContext>,
-        block_sender: &mut SizedChannelSender<SpillerRef>,
+        block_sender: &mut SizedChannelSender<LiteSpiller>,
     ) -> Result<()> {
         let settings = ctx.get_settings();
-        let temp_dir_manager = TempDirManager::instance();
-        let disk_bytes_limit = settings.get_sort_spilling_to_disk_bytes_limit()?;
-        let enable_dio = settings.get_enable_dio()?;
-        let disk_spill = temp_dir_manager
-            .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
-            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-            .transpose()?;
 
-        let location_prefix = ctx.query_id_spill_prefix();
-        let config = SpillerConfig {
-            spiller_type: SpillerType::OrderBy,
-            location_prefix,
-            disk_spill,
-            use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+        let spiller = if settings.get_enable_result_set_spilling()? {
+            let temp_dir_manager = TempDirManager::instance();
+            let disk_bytes_limit = settings.get_result_set_spilling_to_disk_bytes_limit()?;
+            let enable_dio = settings.get_enable_dio()?;
+            let disk_spill = temp_dir_manager
+                .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
+                .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+                .transpose()?;
+
+            let location_prefix = ctx.query_id_spill_prefix();
+            let config = SpillerConfig {
+                spiller_type: SpillerType::ResultSet,
+                location_prefix,
+                disk_spill,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            };
+            let op = DataOperator::instance().spill_operator();
+            Some(LiteSpiller::new(op, config)?)
+        } else {
+            None
         };
-        let op = DataOperator::instance().spill_operator();
-
-        let spiller = Spiller::create(ctx.clone(), op, config)?.into();
 
         // set_var may change settings
         let format_settings = ctx.get_format_settings()?;
-        block_sender.plan_ready(format_settings, Some(spiller));
+        block_sender.plan_ready(format_settings, spiller);
         Ok(())
     }
 }

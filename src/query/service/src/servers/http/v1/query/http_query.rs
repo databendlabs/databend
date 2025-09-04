@@ -74,7 +74,7 @@ use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::spillers::SpillerRef;
+use crate::spillers::LiteSpiller;
 
 fn default_as_true() -> bool {
     true
@@ -612,7 +612,7 @@ impl HttpQuery {
             })
         };
 
-        let (sender, receiver) = sized_spsc::<SpillerRef>(req.pagination.max_rows_in_buffer);
+        let (sender, receiver) = sized_spsc::<LiteSpiller>(req.pagination.max_rows_in_buffer);
 
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
