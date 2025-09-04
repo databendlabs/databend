@@ -52,7 +52,6 @@ members = [
     "src/query/script",
     "src/query/settings",
     "src/query/sql",
-    "src/query/traits",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
     "src/query/storages/common/index",
@@ -183,7 +182,6 @@ databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
 databend-common-telemetry = { path = "src/common/telemetry" }
 databend-common-tracing = { path = "src/common/tracing" }
-databend-common-traits = { path = "src/query/traits" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-common-version = { path = "src/common/version" }

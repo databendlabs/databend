@@ -28,12 +28,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::Location;
 use log::debug;
 use log::info;
 
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;
-use crate::spillers::Location;
 
 pub struct PageBuilder {
     pub collector: BlocksCollector,
@@ -418,7 +418,7 @@ pub struct PlaceholderSpill;
 
 #[async_trait::async_trait]
 impl DataBlockSpill for PlaceholderSpill {
-    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location, ErrorCode> {
+    async fn merge_and_spill(&self, _data_block: Vec<DataBlock>) -> Result<Location, ErrorCode> {
         todo!("PlaceholderSpill::merge_and_spill not implemented")
     }
 
