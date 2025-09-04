@@ -36,7 +36,7 @@ pub(crate) struct Processor {
     pub(crate) tx: mpsc::Sender<PermitEvent>,
 
     /// Contains descriptive information about the context of this watcher.
-    pub(crate) ctx: String,
+    pub(crate) watcher_name: String,
 }
 
 impl Processor {
@@ -45,13 +45,13 @@ impl Processor {
         Self {
             queue: SemaphoreQueue::new(capacity),
             tx,
-            ctx: "".to_string(),
+            watcher_name: "".to_string(),
         }
     }
 
     /// Set the debugging context of this watcher.
-    pub(crate) fn with_context(mut self, ctx: impl ToString) -> Self {
-        self.ctx = ctx.to_string();
+    pub(crate) fn with_watcher_name(mut self, watcher_name: impl ToString) -> Self {
+        self.watcher_name = watcher_name.to_string();
         self
     }
 
@@ -60,7 +60,8 @@ impl Processor {
         &mut self,
         watch_response: WatchResponse,
     ) -> Result<(), ConnectionClosed> {
-        let Some((key, prev, current)) = Self::decode_watch_response(watch_response, &self.ctx)?
+        let Some((key, prev, current)) =
+            Self::decode_watch_response(watch_response, &self.watcher_name)?
         else {
             return Ok(());
         };
@@ -76,7 +77,7 @@ impl Processor {
     ) -> Result<(), ConnectionClosed> {
         log::debug!(
             "{} processing kv change: {}: {:?} -> {:?}",
-            self.ctx,
+            self.watcher_name,
             sem_key,
             prev,
             current
@@ -96,14 +97,19 @@ impl Processor {
             }
         };
 
-        log::debug!("{} queue state: {}", self.ctx, self.queue);
+        log::info!(
+            "{} queue state: {}; new events: {}",
+            self.watcher_name,
+            self.queue,
+            state_changes.display()
+        );
 
         for event in state_changes {
-            log::debug!("{} sending event: {}", self.ctx, event);
+            log::debug!("{} sending event: {}", self.watcher_name, event);
 
             self.tx.send(event).await.map_err(|e| {
                 ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
-                    .context(&self.ctx)
+                    .context(&self.watcher_name)
             })?;
         }
 

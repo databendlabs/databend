@@ -196,7 +196,7 @@ impl Semaphore {
 
         let stat = SharedAcquirerStat::new();
 
-        let ctx = format!("{}-Acquirer(id={})", self, id);
+        let name = format!("{}-Acquirer(id={})", self, id);
         let acquirer = Acquirer {
             prefix: self.prefix.clone(),
             acquirer_id: id.to_string(),
@@ -206,12 +206,12 @@ impl Semaphore {
             subscriber_cancel_tx: self.subscriber_cancel_tx,
             permit_event_rx: self.sem_event_rx.take().unwrap(),
             stat: stat.clone(),
-            ctx: ctx.clone(),
+            name: name.clone(),
         };
 
         let res = acquirer.acquire().await;
 
-        info!("{}: acquire-result: {:?}; stat: {}", ctx, res, stat);
+        info!("{}: acquire-result: {:?}; stat: {}", name, res, stat);
 
         res
     }
@@ -232,13 +232,13 @@ impl Semaphore {
     ) {
         let (left, right) = self.queue_key_range();
 
-        let ctx = format!("{}-watcher", self);
+        let watcher_name = format!("{}-watcher", self);
         let subscriber = MetaEventSubscriber {
             left,
             right,
             meta_client: self.meta_client.clone(),
-            processor: Processor::new(capacity, tx).with_context(&ctx),
-            ctx,
+            processor: Processor::new(capacity, tx).with_watcher_name(&watcher_name),
+            watcher_name,
         };
 
         let task_name = self.to_string();

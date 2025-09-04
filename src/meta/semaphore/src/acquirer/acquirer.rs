@@ -97,12 +97,33 @@ pub(crate) struct Acquirer {
     pub(crate) stat: SharedAcquirerStat,
 
     /// The context information of this acquirer instance, used for logging.
-    pub(crate) ctx: String,
+    pub(crate) name: String,
+}
+
+pub struct QueuedPermit {
+    pub(crate) permit_key: PermitKey,
+    pub(crate) permit_entry: PermitEntry,
+    pub(crate) leaser_cancel_tx: oneshot::Sender<()>,
 }
 
 impl Acquirer {
-    /// Acquires a new semaphore permit and returns a [`Permit`] handle.
+    /// Acquires a semaphore permit by enqueuing a request and waiting for it to be granted.
+    ///
+    /// Returns a [`Permit`] handle that must be explicitly released when no longer needed.
+    ///
+    /// It is a combination of [`Self::request_permit`] and [`Self::await_permit`].
     pub async fn acquire(mut self) -> Result<Permit, AcquireError> {
+        let enqueued = self.request_permit().await?;
+        self.await_permit(enqueued).await
+    }
+
+    /// Enqueues a permit request to the semaphore queue in meta-service.
+    ///
+    /// Creates a new permit entry and adds it to the `<prefix>/queue` with a unique sequence number.
+    /// The permit will be granted when it reaches the front of the queue based on available capacity.
+    ///
+    /// Returns a [`QueuedPermit`] containing the permit key and lease management handle for permit acquisition.
+    pub async fn request_permit(&mut self) -> Result<QueuedPermit, ConnectionClosed> {
         self.stat.start();
 
         let permit_entry = PermitEntry {
@@ -111,7 +132,7 @@ impl Acquirer {
         };
         let val_bytes = permit_entry
             .encode_to_vec()
-            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
+            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.name))?;
 
         // Step 1: Create a new semaphore entry with the key format `{prefix}/queue/{seq:020}`.
 
@@ -123,16 +144,36 @@ impl Acquirer {
             SeqPolicy::TimeBased => self.enqueue_time_based_permit_entry(&permit_entry).await?,
         };
 
+        info!("{} created: {}", self.name, permit_key);
+
         // Step 2: The sem entry is inserted, keep it alive by extending the lease.
 
         let leaser_cancel_tx = self.spawn_extend_lease_task(permit_key.clone(), val_bytes);
+
+        Ok(QueuedPermit {
+            permit_key,
+            permit_entry,
+            leaser_cancel_tx,
+        })
+    }
+
+    /// Waits for the permit to be granted by the semaphore queue.
+    ///
+    /// It will wait until the permit is acquired or removed(failed to acquire).
+    pub async fn await_permit(mut self, enqueued: QueuedPermit) -> Result<Permit, AcquireError> {
+        // Step 1 assign the enqueued values to the local variables.
+        let QueuedPermit {
+            permit_key,
+            permit_entry,
+            leaser_cancel_tx,
+        } = enqueued;
 
         // Step 3: Wait for the semaphore to be acquired or removed.
 
         while let Some(sem_event) = self.permit_event_rx.recv().await {
             info!(
                 "Acquirer({}): received semaphore event: {:?}",
-                self.ctx, sem_event
+                self.name, sem_event
             );
 
             self.stat.on_receive_event(&sem_event);
@@ -144,7 +185,7 @@ impl Acquirer {
 
                         info!(
                             "{} acquired: {}->{}",
-                            self.ctx, permit_key, self.acquirer_id
+                            self.name, permit_key, self.acquirer_id
                         );
                         break;
                     }
@@ -166,14 +207,7 @@ impl Acquirer {
             }
         }
 
-        let permit = Permit::new(
-            self.permit_event_rx,
-            permit_key,
-            permit_entry,
-            self.stat,
-            self.subscriber_cancel_tx,
-            leaser_cancel_tx,
-        );
+        let permit = Permit::new(self, permit_key, permit_entry, leaser_cancel_tx);
 
         Ok(permit)
     }
@@ -192,7 +226,7 @@ impl Acquirer {
 
         let val_bytes = permit_entry
             .encode_to_vec()
-            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
+            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.name))?;
 
         loop {
             // Step 1: Get a new globally unique sequence number.
@@ -225,7 +259,7 @@ impl Acquirer {
                         &sem_key, &permit_entry
                     ),
                 )
-                .context(&self.ctx)
+                .context(&self.name)
             })?;
 
             self.stat.on_finish_try_insert_seq();
@@ -260,7 +294,7 @@ impl Acquirer {
     ) -> Result<PermitKey, ConnectionClosed> {
         let val_bytes = permit_entry
             .encode_to_vec()
-            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.ctx))?;
+            .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.name))?;
 
         loop {
             let sem_seq = SystemTime::now()
@@ -285,7 +319,7 @@ impl Acquirer {
                         &sem_key, &permit_entry
                     ),
                 )
-                .context(&self.ctx)
+                .context(&self.name)
             })?;
 
             self.stat.on_finish_try_insert_seq();
@@ -319,7 +353,7 @@ impl Acquirer {
 
         let res = self.meta_client.upsert_kv(upsert).await;
         let resp = res.map_err(|e| {
-            conn_io_error(e, "upsert seq_generator_key to get a new seq").context(&self.ctx)
+            conn_io_error(e, "upsert seq_generator_key to get a new seq").context(&self.name)
         })?;
 
         debug_assert!(
@@ -349,10 +383,10 @@ impl Acquirer {
             val_bytes,
             self.lease,
             cancel_rx.map(|_| ()),
-            self.ctx.clone(),
+            self.name.clone(),
         );
 
-        let task_name = format!("{}/(seq={})", self.ctx, sem_key.seq);
+        let task_name = format!("{}/(seq={})", self.name, sem_key.seq);
 
         spawn_named(
             async move {
