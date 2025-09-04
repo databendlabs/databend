@@ -74,7 +74,7 @@ pub fn promote_numeric(
         _ => None,
     };
     match (idx_a, idx_b) {
-        (Some(i), Some(j)) => Some(TableDataType::Number(types[usize::max(i, j)].clone())),
+        (Some(i), Some(j)) => Some(TableDataType::Number(types[usize::max(i, j)])),
         _ => None,
     }
 }

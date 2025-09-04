@@ -73,7 +73,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             .and_then(BytesBatch::downcast_from)
             .unwrap();
 
-        let bytes = self.files.entry(batch.path.clone()).or_insert(Vec::new());
+        let bytes = self.files.entry(batch.path.clone()).or_default();
         bytes.extend(batch.data);
 
         // When max_records exists, it will try to use the current bytes to read, otherwise it will buffer all bytes
@@ -144,7 +144,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             return Ok(vec![DataBlock::empty()]);
         }
         self.is_finished = true;
-        if self.schemas.len() == 0 {
+        if self.schemas.is_empty() {
             return Ok(vec![DataBlock::empty()]);
         }
         let table_schema = if self.schemas.len() == 1 {
