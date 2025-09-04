@@ -466,7 +466,7 @@ pub trait TableContext: Send + Sync {
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         unimplemented!()
     }
-    fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+    fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
         unimplemented!()
     }
 }
