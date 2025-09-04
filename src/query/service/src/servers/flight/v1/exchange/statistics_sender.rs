@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
+use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
@@ -30,7 +31,6 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
-use tokio::sync::oneshot;
 
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -129,6 +129,10 @@ impl StatisticsSender {
                 if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
                     warn!("Perf send has error, cause: {:?}.", error);
                 }
+
+                if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
+                    warn!("PartStatistics send has error, cause: {:?}.", error);
+                }
             }
         });
 
@@ -209,6 +213,7 @@ impl StatisticsSender {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn send_profile(
         executor: &PipelineExecutor,
         tx: &FlightSender,
@@ -224,6 +229,19 @@ impl StatisticsSender {
         Ok(())
     }
 
+    #[async_backtrace::framed]
+    async fn send_part_statistics(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
+        let part_stats = ctx.get_pruned_partitions_stats();
+
+        if !part_stats.is_empty() {
+            let data_packet = DataPacket::PartStatistics(part_stats);
+            tx.send(data_packet).await?;
+        }
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
     async fn send_final_profile(
         mut rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
         tx: &FlightSender,

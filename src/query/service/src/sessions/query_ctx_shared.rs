@@ -884,7 +884,18 @@ impl QueryContextShared {
         self.pruned_partitions_stats
             .write()
             .entry(plan_id)
+            .and_modify(|s| s.merge(&stats))
             .or_insert(stats);
+    }
+
+    pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+        let mut guard = self.pruned_partitions_stats.write();
+        for (plan_id, stats) in other.iter() {
+            guard
+                .entry(*plan_id)
+                .and_modify(|s| s.merge(stats))
+                .or_insert_with(|| stats.clone());
+        }
     }
 
     pub fn set_perf_flag(&self, flag: bool) {
