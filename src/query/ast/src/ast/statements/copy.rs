@@ -309,6 +309,8 @@ pub enum CopyIntoTableSource {
     Query {
         select_list: Vec<SelectTarget>,
         from: FileLocation,
+        // no need to support this, for compatible only
+        alias_name: Option<Identifier>,
     },
 }
 
@@ -316,9 +318,19 @@ impl Display for CopyIntoTableSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             CopyIntoTableSource::Location(location) => write!(f, "{location}"),
-            CopyIntoTableSource::Query { select_list, from } => {
+            CopyIntoTableSource::Query {
+                select_list,
+                from,
+                alias_name,
+            } => {
+                write!(f, "(SELECT ")?;
                 write_comma_separated_list(f, select_list)?;
-                write!(f, " FROM {from}")
+                write!(f, " FROM {from}")?;
+                if let Some(a) = alias_name {
+                    write!(f, " AS {}", a.name)?;
+                }
+                write!(f, ")")?;
+                Ok(())
             }
         }
     }

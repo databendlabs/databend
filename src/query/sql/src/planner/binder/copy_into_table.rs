@@ -30,7 +30,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
-use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
@@ -96,7 +95,11 @@ impl Binder {
                 self.bind_copy_into_table_from_location(bind_context, plan)
                     .await
             }
-            CopyIntoTableSource::Query { select_list, from } => {
+            CopyIntoTableSource::Query {
+                select_list,
+                from,
+                alias_name,
+            } => {
                 let mut max_column_position = MaxColumnPosition::new();
                 select_list.drive(&mut max_column_position);
                 self.metadata
@@ -104,7 +107,11 @@ impl Binder {
                     .set_max_column_position(max_column_position.max_pos);
                 let plan = self.bind_copy_into_table_common(stmt, from, true).await?;
 
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, &None)
+                let alias = alias_name.as_ref().map(|name| TableAlias {
+                    name: name.clone(),
+                    columns: vec![],
+                });
+                self.bind_copy_from_query_into_table(bind_context, plan, select_list, &alias)
                     .await
             }
         }

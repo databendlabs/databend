@@ -1263,7 +1263,7 @@ error:
   --> SQL:1:51
   |
 1 | copy into t1 from (select a from @data/not_exists where a = 1)
-  | ----                                              ^^^^^ unexpected `where`, expecting `)`
+  | ----                                              ^^^^^ unexpected `where`, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
   | |                                                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
