@@ -198,6 +198,7 @@ Exchange
     ├── exchange bytes: 1.09 KiB
     ├── output rows: 1
     ├── output bytes: 43.00 B
+    ├── runtime filter build time: <slt:ignore>
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
     ├── join type: INNER
     ├── build keys: [author.id (#4)]
@@ -239,6 +240,7 @@ Exchange
         ├── output bytes: 20.00 B
         ├── bytes scanned: 20.00 B
         ├── parts pruned by runtime filter: 5
+        ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
         ├── read rows: 6

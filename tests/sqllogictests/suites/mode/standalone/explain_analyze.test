@@ -29,7 +29,7 @@ EvalScalar
     └── AggregatePartial
         ├── cpu time: <slt:ignore>
         ├── output rows: 4
-        ├── output bytes: 170.00 B
+        ├── output bytes: 68.00 B
         ├── group by: []
         ├── aggregate functions: [sum(number), count()]
         ├── estimated rows: 1.00
@@ -204,6 +204,7 @@ HashJoin
     ├── output bytes: 20.00 B
     ├── bytes scanned: 20.00 B
     ├── parts pruned by runtime filter: 5
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
     ├── read rows: 6
