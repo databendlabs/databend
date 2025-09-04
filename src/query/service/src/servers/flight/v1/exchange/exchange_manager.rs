@@ -944,13 +944,13 @@ impl QueryCoordinator {
         }
 
         let (finished_profiling_tx, finished_profiling_rx) = oneshot::channel();
-        pipelines.first_mut().map(|p| {
+        if let Some(p) = pipelines.first_mut() {
             p.set_on_finished(always_callback(move |info: &ExecutionInfo| {
                 let profiling = info.profiling.clone();
                 let _ = finished_profiling_tx.send(profiling);
                 Ok(())
             }));
-        });
+        };
 
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
