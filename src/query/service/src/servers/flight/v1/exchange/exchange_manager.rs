@@ -24,6 +24,7 @@ use std::time::Duration;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightData;
 use async_channel::Receiver;
+use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -35,6 +36,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use fastrace::prelude::*;
@@ -941,6 +943,15 @@ impl QueryCoordinator {
             }
         }
 
+        let (finished_profiling_tx, mut finished_profiling_rx) = oneshot::channel();
+        pipelines.first_mut().map(|p| {
+            p.set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                let profiling = info.profiling.clone();
+                let _ = finished_profiling_tx.send(profiling);
+                Ok(())
+            }));
+        });
+
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
@@ -966,6 +977,7 @@ impl QueryCoordinator {
             request_server_exchange,
             executor.get_inner(),
             perf_guard,
+            finished_profiling_rx,
         );
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {

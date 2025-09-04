@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,9 +26,11 @@ use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
+use tokio::sync::oneshot;
 
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -49,6 +52,7 @@ impl StatisticsSender {
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
+        profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
@@ -106,8 +110,8 @@ impl StatisticsSender {
                     }
                 }
 
-                if let Err(error) = Self::send_profile(&executor, &tx, true).await {
-                    warn!("Profiles send has error, cause: {:?}.", error);
+                if let Err(error) = Self::send_final_profile(profile_rx, &tx).await {
+                    warn!("Final profiles send has error, cause: {:?}.", error);
                 }
 
                 if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
@@ -220,6 +224,23 @@ impl StatisticsSender {
         Ok(())
     }
 
+    async fn send_final_profile(
+        mut rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
+        tx: &FlightSender,
+    ) -> Result<()> {
+        /// The plans_profile comes from the executor's on_finish callback.
+        /// We use try_recv() instead of blocking recv() because the execution order
+        /// guarantees that on_finish is called before the statistics sender shuts down.
+        if let Ok(plans_profile) = rx.try_recv() {
+            if !plans_profile.is_empty() {
+                let data_packet = DataPacket::QueryProfiles(plans_profile);
+                tx.send(data_packet).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     async fn send_scan_cache_metrics(
         ctx: &Arc<QueryContext>,
@@ -272,8 +293,4 @@ impl StatisticsSender {
         }
         progress_info
     }
-
-    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
-    //     // ctx.get_exchange_manager()
-    // }
 }
