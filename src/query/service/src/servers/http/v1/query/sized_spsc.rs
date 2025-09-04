@@ -64,13 +64,6 @@ impl PageBuilder {
         self.collector.append_block(block);
     }
 
-    #[allow(dead_code)]
-    fn append_partial_block(&mut self, block: DataBlock, take_rows: usize) -> DataBlock {
-        self.collector.append_block(block.slice(0..take_rows));
-
-        block.slice(take_rows..block.num_rows())
-    }
-
     fn calculate_take_rows(&self, block_rows: usize, memory_size: usize) -> usize {
         min(
             self.remain_rows,
@@ -95,17 +88,12 @@ struct SizedChannelBuffer {
     is_send_stopped: bool,
 }
 
-pub fn sized_spsc(
-    max_size: usize,
-) -> (
-    SizedChannelSender<PlaceholderSpill>,
-    SizedChannelReceiver<PlaceholderSpill>,
-) {
-    let chan = Arc::new(SizedChannel::create(max_size, PlaceholderSpill));
-    let cloned = chan.clone();
-    (SizedChannelSender { chan }, SizedChannelReceiver {
-        chan: cloned,
-    })
+pub fn sized_spsc<S>(max_size: usize) -> (SizedChannelSender<S>, SizedChannelReceiver<S>)
+where S: DataBlockSpill {
+    let chan = Arc::new(SizedChannel::create(max_size));
+    let sender = SizedChannelSender { chan: chan.clone() };
+    let receiver = SizedChannelReceiver { chan };
+    (sender, receiver)
 }
 
 impl SizedChannelBuffer {
@@ -180,11 +168,11 @@ impl SizedChannelBuffer {
         Ok(())
     }
 
-    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<(), Location> {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<bool, Location> {
         while builder.has_capacity() && !self.values.is_empty() {
             self.take_block_once(builder)?;
         }
-        Ok(())
+        Ok(!self.values.is_empty())
     }
 
     fn restore_first(&mut self, location: &Location, data: DataBlock) {
@@ -199,59 +187,59 @@ struct SizedChannel<S> {
 
     is_plan_ready: WatchNotify,
     format_settings: Mutex<Option<FormatSettings>>,
-    spiller: S,
+    spiller: Mutex<Option<S>>,
 }
 
 impl<S> SizedChannel<S>
 where S: DataBlockSpill
 {
-    fn create(max_size: usize, spiller: S) -> Self {
+    fn create(max_size: usize) -> Self {
         SizedChannel {
             inner: Mutex::new(SizedChannelBuffer::create(max_size)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
             is_plan_ready: WatchNotify::new(),
             format_settings: Mutex::new(None),
-            spiller,
+            spiller: Mutex::new(None),
         }
     }
 
-    #[allow(dead_code)]
-    fn try_send(&self, value: DataBlock) -> Result<(), Option<DataBlock>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .try_send(SpillableBlock::new(value))
-            .map_err(|block| Some(block?.data.unwrap()))
-    }
-
     #[fastrace::trace(name = "SizedChannel::try_take_block")]
-    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<(), ErrorCode> {
+    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<bool, ErrorCode> {
         let location = match self.inner.lock().unwrap().take_block(builder) {
             Err(location) => location.clone(),
-            Ok(_) => {
-                return Ok(());
+            Ok(has_more) => {
+                return Ok(has_more);
             }
         };
-        let data = self.spiller.restore(&location).await?;
+
+        let spiller = self.spiller.lock().unwrap().clone().unwrap();
+        let data = spiller.restore(&location).await?;
+
         self.inner.lock().unwrap().restore_first(&location, data);
-        Ok(())
+        Ok(true)
     }
 
     #[async_backtrace::framed]
-    async fn send(&self, value: DataBlock) -> bool {
+    async fn send(&self, value: DataBlock) -> Result<bool, ErrorCode> {
         let mut to_send = SpillableBlock::new(value);
         loop {
             let result = self.inner.lock().unwrap().try_send(to_send);
             match result {
                 Ok(_) => {
                     self.notify_on_sent.notify_one();
-                    return true;
+                    return Ok(true);
                 }
-                Err(None) => return false,
+                Err(None) => return Ok(false),
                 Err(Some(v)) => {
                     to_send = v;
-                    // todo
+                    if self.should_spill() {
+                        let spiller = self.spiller.lock().unwrap().clone();
+                        if let Some(spiller) = spiller.as_ref() {
+                            to_send.spill(spiller).await?;
+                            continue;
+                        }
+                    }
                     self.notify_on_recv.notified().await;
                 }
             }
@@ -294,6 +282,10 @@ where S: DataBlockSpill
         }
         self.notify_on_recv.notify_one();
     }
+
+    fn should_spill(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -324,7 +316,9 @@ where S: DataBlockSpill
         while builder.has_capacity() {
             match tp {
                 Wait::Async => {
-                    self.chan.try_take_block(&mut builder).await?;
+                    if !self.chan.try_take_block(&mut builder).await? {
+                        break;
+                    }
                 }
                 Wait::Deadline(t) => {
                     let d = match t.checked_duration_since(Instant::now()) {
@@ -371,7 +365,7 @@ where S: DataBlockSpill
 {
     #[async_backtrace::framed]
     pub async fn send(&self, value: DataBlock) -> bool {
-        self.chan.send(value).await
+        self.chan.send(value).await.unwrap()
     }
 
     pub fn close(&self) {
@@ -384,9 +378,10 @@ where S: DataBlockSpill
         }
     }
 
-    pub fn plan_ready(&self, format_settings: FormatSettings) {
+    pub fn plan_ready(&mut self, format_settings: FormatSettings, spiller: Option<S>) {
         assert!(!self.chan.is_plan_ready.has_notified());
         *self.chan.format_settings.lock().unwrap() = Some(format_settings);
+        *self.chan.spiller.lock().unwrap() = spiller;
         self.chan.is_plan_ready.notify_waiters();
     }
 }
@@ -438,16 +433,6 @@ impl SpillableBlock {
         }
     }
 
-    #[allow(dead_code)]
-    fn memory_size(&self) -> usize {
-        self.memory_size
-    }
-
-    #[allow(dead_code)]
-    fn is_empty(&self) -> bool {
-        self.rows == 0
-    }
-
     fn slice(&mut self, pos: usize) -> DataBlock {
         let data = self.data.as_ref().unwrap();
 
@@ -462,12 +447,6 @@ impl SpillableBlock {
         left
     }
 
-    #[allow(dead_code)]
-    fn take_data(&mut self) -> Option<DataBlock> {
-        self.data.take()
-    }
-
-    #[allow(dead_code)]
     async fn spill<S>(&mut self, spiller: &S) -> Result<(), ErrorCode>
     where S: DataBlockSpill {
         let data = self.data.take().unwrap();
