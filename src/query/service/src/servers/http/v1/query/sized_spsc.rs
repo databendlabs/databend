@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::result;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -24,7 +25,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::WatchNotify;
-use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
@@ -113,7 +114,7 @@ impl SizedChannelBuffer {
             .sum::<usize>()
     }
 
-    fn try_send(&mut self, value: SpillableBlock) -> Result<(), Option<SpillableBlock>> {
+    fn try_send(&mut self, value: SpillableBlock) -> result::Result<(), Option<SpillableBlock>> {
         if self.is_recv_stopped || self.is_send_stopped {
             return Err(None);
         }
@@ -148,7 +149,7 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Result<(), Location> {
+    fn take_block_once(&mut self, builder: &mut PageBuilder) -> result::Result<(), Location> {
         let Some(block) = self.values.front_mut() else {
             return Ok(());
         };
@@ -168,7 +169,7 @@ impl SizedChannelBuffer {
         Ok(())
     }
 
-    fn take_block(&mut self, builder: &mut PageBuilder) -> Result<bool, Location> {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> result::Result<bool, Location> {
         while builder.has_capacity() && !self.values.is_empty() {
             self.take_block_once(builder)?;
         }
@@ -205,7 +206,7 @@ where S: DataBlockSpill
     }
 
     #[fastrace::trace(name = "SizedChannel::try_take_block")]
-    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<bool, ErrorCode> {
+    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<bool> {
         let location = match self.inner.lock().unwrap().take_block(builder) {
             Err(location) => location.clone(),
             Ok(has_more) => {
@@ -221,7 +222,7 @@ where S: DataBlockSpill
     }
 
     #[async_backtrace::framed]
-    async fn send(&self, value: DataBlock) -> Result<bool, ErrorCode> {
+    async fn send(&self, value: DataBlock) -> Result<bool> {
         let mut to_send = SpillableBlock::new(value);
         loop {
             let result = self.inner.lock().unwrap().try_send(to_send);
@@ -310,7 +311,7 @@ where S: DataBlockSpill
         &mut self,
         max_rows_per_page: usize,
         tp: &Wait,
-    ) -> Result<(BlocksSerializer, bool), ErrorCode> {
+    ) -> Result<(BlocksSerializer, bool)> {
         let mut builder = PageBuilder::new(max_rows_per_page);
 
         while builder.has_capacity() {
@@ -346,12 +347,15 @@ where S: DataBlockSpill
             }
         }
 
+        let format = self.chan.format_settings.lock().unwrap().clone();
+        let format = format.unwrap_or_else(|| {
+            assert!(builder.collector.num_rows() == 0);
+            FormatSettings::default()
+        });
+
         // try to report 'no more data' earlier to client to avoid unnecessary http call
         let block_end = self.chan.is_close();
-        Ok((
-            builder.into_serializer(self.chan.format_settings.lock().unwrap().clone().unwrap()),
-            block_end,
-        ))
+        Ok((builder.into_serializer(format), block_end))
     }
 }
 
@@ -364,8 +368,8 @@ impl<S> SizedChannelSender<S>
 where S: DataBlockSpill
 {
     #[async_backtrace::framed]
-    pub async fn send(&self, value: DataBlock) -> bool {
-        self.chan.send(value).await.unwrap()
+    pub async fn send(&self, value: DataBlock) -> Result<bool> {
+        self.chan.send(value).await
     }
 
     pub fn close(&self) {
@@ -393,7 +397,7 @@ pub struct SizedChannelSenderCloser<S> {
 impl<S> SizedChannelSenderCloser<S>
 where S: DataBlockSpill
 {
-    pub fn close(&self) {
+    pub fn close(self) {
         self.chan.stop_send()
     }
 }
@@ -405,21 +409,6 @@ struct SpillableBlock {
     rows: usize,
     location: Option<Location>,
     processed: usize,
-}
-
-/// Placeholder implementation of Spill trait
-#[derive(Clone)]
-pub struct PlaceholderSpill;
-
-#[async_trait::async_trait]
-impl DataBlockSpill for PlaceholderSpill {
-    async fn merge_and_spill(&self, _data_block: Vec<DataBlock>) -> Result<Location, ErrorCode> {
-        todo!("PlaceholderSpill::merge_and_spill not implemented")
-    }
-
-    async fn restore(&self, _location: &Location) -> Result<DataBlock, ErrorCode> {
-        todo!("PlaceholderSpill::restore not implemented")
-    }
 }
 
 impl SpillableBlock {
@@ -447,7 +436,7 @@ impl SpillableBlock {
         left
     }
 
-    async fn spill<S>(&mut self, spiller: &S) -> Result<(), ErrorCode>
+    async fn spill<S>(&mut self, spiller: &S) -> Result<()>
     where S: DataBlockSpill {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
@@ -472,5 +461,104 @@ impl Debug for SpillableBlock {
             .field("location", &self.location)
             .field("processed", &self.processed)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    use databend_common_exception::ErrorCode;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::FromData;
+    use databend_common_io::prelude::FormatSettings;
+    use databend_common_pipeline_transforms::traits::DataBlockSpill;
+    use databend_common_pipeline_transforms::traits::Location;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct MockSpiller {
+        storage: Arc<Mutex<HashMap<String, DataBlock>>>,
+    }
+
+    impl MockSpiller {
+        fn new() -> Self {
+            Self {
+                storage: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl DataBlockSpill for MockSpiller {
+        async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+            let key = format!("block_{}", rand::random::<u64>());
+            self.storage.lock().unwrap().insert(key.clone(), data_block);
+            Ok(Location::Remote(key))
+        }
+
+        async fn merge_and_spill(&self, _data_block: Vec<DataBlock>) -> Result<Location> {
+            unimplemented!()
+        }
+
+        async fn restore(&self, location: &Location) -> Result<DataBlock> {
+            match location {
+                Location::Remote(key) => {
+                    let storage = self.storage.lock().unwrap();
+                    storage
+                        .get(key)
+                        .cloned()
+                        .ok_or_else(|| ErrorCode::Internal("Block not found in mock spiller"))
+                }
+                _ => Err(ErrorCode::Internal("Unsupported location type")),
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sized_spsc_channel() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(2);
+
+        let test_data = vec![
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![4, 5, 6])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![7, 8, 9])]),
+        ];
+
+        let sender_data = test_data.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            let format_settings = FormatSettings::default();
+            let spiller = MockSpiller::new();
+            sender.plan_ready(format_settings, Some(spiller));
+
+            for block in sender_data {
+                sender.send(block).await.unwrap();
+            }
+            sender.close();
+        });
+
+        let mut received_blocks = Vec::new();
+        loop {
+            let (serializer, is_end) = receiver.collect_new_page(10, &Wait::Async).await.unwrap();
+
+            if serializer.num_rows() > 0 {
+                received_blocks.push(serializer.num_rows());
+            }
+
+            if is_end {
+                break;
+            }
+        }
+
+        send_task.await.unwrap();
+
+        let expected_total_rows: usize = test_data.iter().map(|b| b.num_rows()).sum();
+        let received_total_rows: usize = received_blocks.iter().sum();
+
+        assert_eq!(expected_total_rows, received_total_rows);
+        assert!(!received_blocks.is_empty());
     }
 }
