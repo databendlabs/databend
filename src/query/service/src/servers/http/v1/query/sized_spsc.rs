@@ -26,6 +26,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
@@ -65,7 +66,17 @@ impl PageBuilder {
         self.collector.append_block(block);
     }
 
-    fn calculate_take_rows(&self, block_rows: usize, memory_size: usize) -> usize {
+    fn calculate_take_rows(&self, block: &DataBlock) -> usize {
+        let block_rows = block.num_rows();
+        let memory_size = block
+            .columns()
+            .iter()
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, _, n) => *n * scalar.as_ref().memory_size(),
+                BlockEntry::Column(column) => column.memory_size(),
+            })
+            .sum::<usize>();
+
         min(
             self.remain_rows,
             if memory_size > self.remain_size {
@@ -157,7 +168,7 @@ impl SizedChannelBuffer {
             return Err(block.location.clone().unwrap());
         };
 
-        let take_rows = builder.calculate_take_rows(data.num_rows(), data.memory_size());
+        let take_rows = builder.calculate_take_rows(&data);
         if take_rows < data.num_rows() {
             builder.remain_rows = 0;
             builder.collector.append_block(block.slice(take_rows));
@@ -303,7 +314,8 @@ impl<S> SizedChannelReceiver<S>
 where S: DataBlockSpill
 {
     pub fn close(&self) {
-        self.chan.stop_recv()
+        self.chan.stop_recv();
+        self.chan.spiller.lock().unwrap().take(); // release session
     }
 
     #[async_backtrace::framed]
