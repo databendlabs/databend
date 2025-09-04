@@ -28,11 +28,11 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::MergeSort;
 use databend_common_pipeline_transforms::SortSpillParams;
 use databend_common_pipeline_transforms::TransformSortMergeLimit;
-use databend_common_traits::DataBlockSpill;
 
 use super::sort_spill::SortSpill;
 use super::Base;

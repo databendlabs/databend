@@ -35,8 +35,9 @@ use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use databend_common_pipeline_transforms::processors::SortSpillParams;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_traits::DataBlockSpill;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
@@ -44,7 +45,6 @@ use super::bounds::Bounds;
 use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
-use crate::spillers::Location;
 
 pub(super) struct SortSpill<A: SortAlgorithm, S: DataBlockSpill> {
     base: Base<S>,

@@ -27,13 +27,13 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_pipeline_transforms::traits::Location;
 use log::debug;
 use log::info;
 
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;
-use crate::spillers::Location;
 
 pub struct PageBuilder {
     pub collector: BlocksCollector,

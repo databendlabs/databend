@@ -33,8 +33,8 @@ use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_traits::DataBlockSpill;
 
 use super::*;
 use crate::servers::flight::v1::exchange::ExchangeInjector;

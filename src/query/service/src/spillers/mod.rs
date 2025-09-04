@@ -16,7 +16,7 @@ mod partition_buffer;
 mod serialize;
 mod spiller;
 
-pub use databend_common_traits::Location;
+pub use databend_common_pipeline_transforms::traits::Location;
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
 pub use serialize::Layout;

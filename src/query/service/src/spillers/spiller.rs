@@ -31,8 +31,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_traits::DataBlockSpill;
-use databend_common_traits::Location;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_storages_common_cache::TempDir;
 use opendal::services::Fs;
 use opendal::Buffer;
@@ -40,6 +39,7 @@ use opendal::Operator;
 use parking_lot::RwLock;
 
 use super::serialize::*;
+use super::Location;
 use crate::sessions::QueryContext;
 
 /// Spiller type, currently only supports HashJoin

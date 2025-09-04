@@ -23,10 +23,10 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::HookTransform;
 use databend_common_pipeline_transforms::HookTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_traits::DataBlockSpill;
 
 use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
