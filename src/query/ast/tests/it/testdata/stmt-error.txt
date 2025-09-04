@@ -124,6 +124,58 @@ error:
 
 
 ---------- Input ----------
+show table
+---------- Output ---------
+error: 
+  --> SQL:1:11
+  |
+1 | show table
+  |           ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?
+
+
+---------- Input ----------
+show column
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show column
+  |      ^^^^^^ unexpected `column`. Did you mean `SHOW COLUMNS`?
+
+
+---------- Input ----------
+show function
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show function
+  |      ^^^^^^^^ unexpected `function`. Did you mean `SHOW FUNCTIONS`?
+
+
+---------- Input ----------
+show database
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show database
+  |      ^^^^^^^^ unexpected `database`. Did you mean `SHOW DATABASES`?
+
+
+---------- Input ----------
+create table if test
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | create table if test
+  | ------          ^^^^ unexpected `test`, expecting `NOT`
+  | |                
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 truncate table a.b.c.d
 ---------- Output ---------
 error: 
@@ -187,7 +239,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of input, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
+  |                   ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS`?
 
 
 ---------- Input ----------
@@ -468,7 +520,7 @@ error:
   --> SQL:1:15
   |
 1 | show settings ilike 'enable%'
-  |               ^^^^^ unexpected `ilike`, expecting `LIKE`, `LIMIT`, `WHERE`, `FORMAT`, or `;`
+  |               ^^^^^ unexpected `ilike`. Did you mean `SHOW SETTINGS`?
 
 
 ---------- Input ----------
@@ -490,7 +542,7 @@ error:
   --> SQL:1:25
   |
 1 | show columns from db1.t from ctl.db
-  |                         ^^^^ unexpected `from`, expecting `FORMAT`, `.`, `LIKE`, `WHERE`, or `;`
+  |                         ^^^^ unexpected `from`. Did you mean `SHOW COLUMNS`?
 
 
 ---------- Input ----------

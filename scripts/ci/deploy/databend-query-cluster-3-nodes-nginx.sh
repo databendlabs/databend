@@ -83,7 +83,7 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 9093
 
 echo 'Start Nginx'
 if docker inspect nginx_db >/dev/null 2>&1; then
-  docker rm -f nginx_db
+	docker rm -f nginx_db
 fi
 docker run -d --network host --name nginx_db -v "$(pwd)/scripts/ci/deploy/config/nginx.conf":/etc/nginx/nginx.conf:ro nginx
 
