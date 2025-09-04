@@ -12,7 +12,7 @@ EvalScalar
     └── bytes scanned: 1.00 B
 
 query T
-EXPLAIN ANALYZE select avg(number) from numbers(1000000);
+settings (max_threads = 4) EXPLAIN ANALYZE select avg(number) from numbers(1000000);
 ----
 EvalScalar
 ├── output columns: [sum(number) / if(count(number) = 0, 1, count(number)) (#3)]
@@ -32,8 +32,8 @@ EvalScalar
         ├── exchange type: Merge
         └── AggregatePartial
             ├── cpu time: <slt:ignore>
-            ├── output rows: 30
-            ├── output bytes: 510.00 B
+            ├── output rows: 12
+            ├── output bytes: 204.00 B
             ├── group by: []
             ├── aggregate functions: [sum(number), count()]
             ├── estimated rows: 1.00
