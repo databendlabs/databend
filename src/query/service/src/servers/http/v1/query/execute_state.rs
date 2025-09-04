@@ -471,28 +471,32 @@ impl ExecuteState {
         block_sender: &mut SizedChannelSender<SpillerRef>,
     ) -> Result<()> {
         let settings = ctx.get_settings();
-        let temp_dir_manager = TempDirManager::instance();
-        let disk_bytes_limit = settings.get_sort_spilling_to_disk_bytes_limit()?;
-        let enable_dio = settings.get_enable_dio()?;
-        let disk_spill = temp_dir_manager
-            .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
-            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-            .transpose()?;
 
-        let location_prefix = ctx.query_id_spill_prefix();
-        let config = SpillerConfig {
-            spiller_type: SpillerType::OrderBy,
-            location_prefix,
-            disk_spill,
-            use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+        let spiller = if settings.get_enable_result_set_spilling()? {
+            let temp_dir_manager = TempDirManager::instance();
+            let disk_bytes_limit = settings.get_result_set_spilling_to_disk_bytes_limit()?;
+            let enable_dio = settings.get_enable_dio()?;
+            let disk_spill = temp_dir_manager
+                .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
+                .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+                .transpose()?;
+
+            let location_prefix = ctx.query_id_spill_prefix();
+            let config = SpillerConfig {
+                spiller_type: SpillerType::ResultSet,
+                location_prefix,
+                disk_spill,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            };
+            let op = DataOperator::instance().spill_operator();
+            Some(Spiller::create(ctx.clone(), op, config)?.into())
+        } else {
+            None
         };
-        let op = DataOperator::instance().spill_operator();
-
-        let spiller = Spiller::create(ctx.clone(), op, config)?.into();
 
         // set_var may change settings
         let format_settings = ctx.get_format_settings()?;
-        block_sender.plan_ready(format_settings, Some(spiller));
+        block_sender.plan_ready(format_settings, spiller);
         Ok(())
     }
 }

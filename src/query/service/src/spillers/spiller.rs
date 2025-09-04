@@ -50,6 +50,7 @@ pub enum SpillerType {
     Window,
     OrderBy,
     Aggregation,
+    ResultSet,
 }
 
 impl Display for SpillerType {
@@ -60,6 +61,7 @@ impl Display for SpillerType {
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
             SpillerType::Aggregation => write!(f, "Aggregation"),
+            SpillerType::ResultSet => write!(f, "ResultSet"),
         }
     }
 }
