@@ -74,6 +74,7 @@ use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+use crate::spillers::SpillerRef;
 
 fn default_as_true() -> bool {
     true
@@ -611,7 +612,7 @@ impl HttpQuery {
             })
         };
 
-        let (sender, block_receiver) = sized_spsc(req.pagination.max_rows_in_buffer);
+        let (sender, receiver) = sized_spsc::<SpillerRef>(req.pagination.max_rows_in_buffer);
 
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
@@ -624,9 +625,9 @@ impl HttpQuery {
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
 
-        let data = Arc::new(TokioMutex::new(PageManager::new(
+        let page_manager = Arc::new(TokioMutex::new(PageManager::new(
             req.pagination.max_rows_per_page,
-            block_receiver,
+            receiver,
         )));
 
         Ok(HttpQuery {
@@ -636,7 +637,7 @@ impl HttpQuery {
             node_id,
             request: req,
             executor,
-            page_manager: data,
+            page_manager,
             result_timeout_secs,
 
             state: Arc::new(Mutex::new(HttpQueryState::Working)),

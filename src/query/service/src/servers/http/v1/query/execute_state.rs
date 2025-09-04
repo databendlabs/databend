@@ -26,6 +26,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_settings::Settings;
+use databend_common_storage::DataOperator;
+use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
@@ -42,13 +44,17 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::http_query::ResponseState;
-use crate::servers::http::v1::query::sized_spsc::PlaceholderSpill;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerDiskConfig;
+use crate::spillers::SpillerRef;
+use crate::spillers::SpillerType;
 
 pub struct ExecutionError;
 
@@ -114,7 +120,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender<PlaceholderSpill>,
+    pub(crate) sender: SizedChannelSender<SpillerRef>,
 }
 
 pub struct ExecuteRunning {
@@ -355,7 +361,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<PlaceholderSpill>,
+        mut block_sender: SizedChannelSender<SpillerRef>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -367,9 +373,7 @@ impl ExecuteState {
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
 
-        // set_var may change settings
-        let format_settings = ctx.get_format_settings().with_context(make_error)?;
-        block_sender.plan_ready(format_settings);
+        Self::apply_settings(&ctx, &mut block_sender).with_context(make_error)?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -422,7 +426,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<PlaceholderSpill>,
+        block_sender: SizedChannelSender<SpillerRef>,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
@@ -459,6 +463,36 @@ impl ExecuteState {
                 block_sender.close();
             }
         }
+        Ok(())
+    }
+
+    fn apply_settings(
+        ctx: &Arc<QueryContext>,
+        block_sender: &mut SizedChannelSender<SpillerRef>,
+    ) -> Result<()> {
+        let settings = ctx.get_settings();
+        let temp_dir_manager = TempDirManager::instance();
+        let disk_bytes_limit = settings.get_sort_spilling_to_disk_bytes_limit()?;
+        let enable_dio = settings.get_enable_dio()?;
+        let disk_spill = temp_dir_manager
+            .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
+            .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+            .transpose()?;
+
+        let location_prefix = ctx.query_id_spill_prefix();
+        let config = SpillerConfig {
+            spiller_type: SpillerType::OrderBy,
+            location_prefix,
+            disk_spill,
+            use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+        };
+        let op = DataOperator::instance().spill_operator();
+
+        let spiller = Spiller::create(ctx.clone(), op, config)?.into();
+
+        // set_var may change settings
+        let format_settings = ctx.get_format_settings()?;
+        block_sender.plan_ready(format_settings, Some(spiller));
         Ok(())
     }
 }
