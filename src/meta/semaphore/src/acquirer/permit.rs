@@ -17,10 +17,11 @@ use std::future::Future;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use log::debug;
+use log::info;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use crate::acquirer;
+use crate::acquirer::Acquirer;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::ConnectionClosed;
 use crate::queue::PermitEvent;

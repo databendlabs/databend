@@ -15,6 +15,8 @@
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_client::ClientHandle;
@@ -40,13 +42,12 @@ pub struct Semaphore {
     /// Such as `foo`, not `foo/`
     prefix: String,
 
-    /// Whether to generate seq number based on time.
+    /// The sequence number generation policy for permit ordering.
     ///
-    /// Which is less accurate but more efficient,
-    /// because it does lead to transaction conflict when CAS the seq_generator key.
-    ///
-    /// By default, it is `false`,
-    time_based_seq: bool,
+    /// Determines how sequence numbers are assigned to semaphore permits:
+    /// - `GeneratorKey`: Uses a centralized generator in meta-service for strict ordering
+    /// - `TimeBased`: Uses timestamps for faster but potentially non-strict ordering
+    seq_policy: SeqPolicy,
 
     /// The metadata client to interact with the remote meta-service.
     meta_client: Arc<ClientHandle>,
@@ -100,15 +101,23 @@ impl Semaphore {
         sem.acquire(id, lease).await
     }
 
+    /// Acquires a new semaphore using timestamp-based sequence numbering.
+    ///
+    /// This method sets the semaphore to use timestamp-based ordering instead of
+    /// the default generator-based ordering, which can be more efficient but less strict.
+    ///
+    /// # Parameters
+    /// * `seq_timestamp` - Optional timestamp to use as sequence number. If `None`, uses current time.
     pub async fn new_acquired_by_time(
         meta_client: Arc<ClientHandle>,
         prefix: impl ToString,
         capacity: u64,
         id: impl ToString,
+        seq_timestamp: Option<Duration>,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
         let mut sem = Self::new(meta_client, prefix, capacity).await;
-        sem.set_time_based_seq(true);
+        sem.set_time_based_seq(seq_timestamp);
         sem.acquire(id, lease).await
     }
 
@@ -141,12 +150,19 @@ impl Semaphore {
 
         let mut sem = Semaphore {
             prefix,
-            time_based_seq: false,
+            seq_policy: SeqPolicy::TimeBased {
+                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
+            },
             meta_client,
             subscriber_task_handle: None,
             subscriber_cancel_tx: cancel_tx,
             sem_event_rx: Some(rx),
             uniq,
+        };
+
+        // The default is using generator key
+        sem.seq_policy = SeqPolicy::GeneratorKey {
+            generator_key: sem.seq_generator_key(),
         };
 
         sem.spawn_meta_event_subscriber(tx, capacity, cancel_rx)
@@ -155,9 +171,28 @@ impl Semaphore {
         sem
     }
 
-    /// Set the time-based sequence number generation policy.
-    pub fn set_time_based_seq(&mut self, time_based_seq: bool) {
-        self.time_based_seq = time_based_seq;
+    /// Configure semaphore to use timestamp-based sequence numbering.
+    ///
+    /// Switches from generator-based to timestamp-based sequencing for better performance
+    /// at the cost of potentially non-strict ordering.
+    ///
+    /// # Parameters
+    /// * `timestamp` - Optional timestamp to use. If `None`, uses current system time.
+    pub fn set_time_based_seq(&mut self, timestamp: Option<Duration>) {
+        let timestamp =
+            timestamp.unwrap_or_else(|| SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
+
+        self.seq_policy = SeqPolicy::TimeBased { timestamp };
+    }
+
+    /// Configure semaphore to use generator-based sequence numbering.
+    ///
+    /// Switches to centralized sequence generation in meta-service for strict ordering.
+    /// This is the default policy but can be explicitly set if previously changed.
+    pub fn set_storage_based_seq(&mut self) {
+        self.seq_policy = SeqPolicy::GeneratorKey {
+            generator_key: self.seq_generator_key(),
+        };
     }
 
     /// Acquires a semaphore with a given id and ttl.
@@ -187,17 +222,36 @@ impl Semaphore {
     ///
     /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
     /// is dropped or its future is awaited, the semaphore will be released.
-    pub async fn acquire(
-        mut self,
-        id: impl ToString,
-        lease: Duration,
-    ) -> Result<Permit, AcquireError> {
+    pub async fn acquire(self, id: impl ToString, lease: Duration) -> Result<Permit, AcquireError> {
+        let mut acquirer = self.new_acquirer(id, lease);
+
+        let queued_res = acquirer.enqueue_permit().await;
+
+        info!("{}: enqueue-result: {:?}", acquirer.name, queued_res);
+
+        let queued = queued_res?;
+
+        let name = acquirer.name.clone();
+        let stat = acquirer.stat.clone();
+
+        let res = acquirer.await_permit(queued).await;
+
+        info!("{}: acquire-result: {:?}; stat: {}", name, res, stat);
+
+        res
+    }
+
+    /// Creates a new acquirer for this semaphore without immediately acquiring.
+    ///
+    /// This allows for more granular control over the acquisition process by
+    /// separating creation from the actual acquire operation.
+    pub fn new_acquirer(mut self, id: impl ToString, lease: Duration) -> Acquirer {
         let id = id.to_string();
 
         let stat = SharedAcquirerStat::new();
 
         let name = format!("{}-Acquirer(id={})", self, id);
-        let acquirer = Acquirer {
+        Acquirer {
             prefix: self.prefix.clone(),
             acquirer_id: id.to_string(),
             lease,
@@ -207,13 +261,7 @@ impl Semaphore {
             permit_event_rx: self.sem_event_rx.take().unwrap(),
             stat: stat.clone(),
             name: name.clone(),
-        };
-
-        let res = acquirer.acquire().await;
-
-        info!("{}: acquire-result: {:?}; stat: {}", name, res, stat);
-
-        res
+        }
     }
 
     /// Spawns a background task to subscribe to the meta-service key value change events.
@@ -249,13 +297,7 @@ impl Semaphore {
     }
 
     fn seq_policy(&self) -> SeqPolicy {
-        if self.time_based_seq {
-            SeqPolicy::TimeBased
-        } else {
-            SeqPolicy::GeneratorKey {
-                generator_key: self.seq_generator_key(),
-            }
-        }
+        self.seq_policy.clone()
     }
 
     /// The key to store the permit sequence number generator.

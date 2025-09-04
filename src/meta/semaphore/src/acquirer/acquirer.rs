@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::future::Future;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use codeq::Encode;
 use databend_common_base::runtime::spawn_named;
@@ -50,10 +49,14 @@ pub(crate) enum SeqPolicy {
     /// Retry if the seq generator is updated by other process.
     GeneratorKey { generator_key: String },
 
-    /// Use the current timestamp as the sequence number.
+    /// Use timestamp-based sequence numbering for permit ordering.
     ///
-    /// Retry if duplicated
-    TimeBased,
+    /// More efficient than generator-based approach but may allow permits with
+    /// duplicate timestamps. Retries automatically increment the timestamp by 1µs.
+    ///
+    /// The timestamp parameter allows applications to specify a particular time point,
+    /// useful for scenarios like retry operations where consistency is needed.
+    TimeBased { timestamp: Duration },
 }
 
 /// The acquirer is responsible for acquiring a semaphore permit.
@@ -62,7 +65,7 @@ pub(crate) enum SeqPolicy {
 ///
 /// The acquirer will keep the semaphore entry alive by extending the lease periodically,
 /// until it is acquired or removed.
-pub(crate) struct Acquirer {
+pub struct Acquirer {
     pub(crate) prefix: String,
 
     /// The ID of this acquirer.
@@ -106,15 +109,35 @@ pub struct QueuedPermit {
     pub(crate) leaser_cancel_tx: oneshot::Sender<()>,
 }
 
+impl fmt::Debug for QueuedPermit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "QueuedPermit{{ permit_key: {}, permit_entry: {} }}",
+            self.permit_key, self.permit_entry
+        )
+    }
+}
+
+impl fmt::Display for QueuedPermit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "QueuedPermit{{ permit_key: {}, permit_entry: {} }}",
+            self.permit_key, self.permit_entry
+        )
+    }
+}
+
 impl Acquirer {
     /// Acquires a semaphore permit by enqueuing a request and waiting for it to be granted.
     ///
     /// Returns a [`Permit`] handle that must be explicitly released when no longer needed.
     ///
-    /// It is a combination of [`Self::request_permit`] and [`Self::await_permit`].
+    /// This is a convenience method that combines [`Self::enqueue_permit`] and [`Self::await_permit`].
     pub async fn acquire(mut self) -> Result<Permit, AcquireError> {
-        let enqueued = self.request_permit().await?;
-        self.await_permit(enqueued).await
+        let queued = self.enqueue_permit().await?;
+        self.await_permit(queued).await
     }
 
     /// Enqueues a permit request to the semaphore queue in meta-service.
@@ -123,7 +146,7 @@ impl Acquirer {
     /// The permit will be granted when it reaches the front of the queue based on available capacity.
     ///
     /// Returns a [`QueuedPermit`] containing the permit key and lease management handle for permit acquisition.
-    pub async fn request_permit(&mut self) -> Result<QueuedPermit, ConnectionClosed> {
+    pub async fn enqueue_permit(&mut self) -> Result<QueuedPermit, ConnectionClosed> {
         self.stat.start();
 
         let permit_entry = PermitEntry {
@@ -141,7 +164,10 @@ impl Acquirer {
                 self.enqueue_permit_entry(&permit_entry, &generator_key)
                     .await?
             }
-            SeqPolicy::TimeBased => self.enqueue_time_based_permit_entry(&permit_entry).await?,
+            SeqPolicy::TimeBased { timestamp } => {
+                self.enqueue_time_based_permit_entry(&permit_entry, timestamp)
+                    .await?
+            }
         };
 
         info!("{} created: {}", self.name, permit_key);
@@ -283,24 +309,37 @@ impl Acquirer {
         }
     }
 
-    /// Add a new semaphore entry to the `<prefix>/queue` in the meta-service.
+    /// Enqueues a permit entry using timestamp-based sequence numbering.
     ///
-    /// In this method, the sequence number is generated with current timestamp,
-    /// which means it may not be globally unique, on which case it will be retried,
-    /// and it may not be in strict order, meaning more semaphore entries than the `capacity` may be acquired.
+    /// Uses the provided timestamp as the sequence number for ordering permits in the queue.
+    /// This approach is more efficient but may allow non-strict ordering since timestamps
+    /// may not be globally unique across distributed processes.
+    ///
+    /// # Conflict Resolution
+    /// When timestamp conflicts occur, the method automatically increments the timestamp
+    /// by 1 microsecond and retries. This means the final sequence number may differ
+    /// from the initially provided timestamp.
+    ///
+    /// # Ordering Guarantees
+    /// Unlike generator-based sequencing, timestamp-based sequencing may allow more
+    /// permits than the semaphore capacity to be acquired due to potential race conditions.
     async fn enqueue_time_based_permit_entry(
         &mut self,
         permit_entry: &PermitEntry,
+        mut timestamp: Duration,
     ) -> Result<PermitKey, ConnectionClosed> {
         let val_bytes = permit_entry
             .encode_to_vec()
             .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.name))?;
 
         loop {
-            let sem_seq = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_micros() as u64;
+            // Use provided timestamp.
+            // On conflict, increment timestamp by 1 microsecond for retry.
+            let sem_seq = {
+                let micros = timestamp.as_micros() as u64;
+                timestamp += Duration::from_micros(1);
+                micros
+            };
 
             self.stat.on_finish_get_seq();
 

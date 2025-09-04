@@ -15,6 +15,7 @@
 use codeq::Decode;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
+use display_more::DisplaySliceExt;
 use log::warn;
 use tokio::sync::mpsc;
 
