@@ -228,9 +228,9 @@ impl StatisticsSender {
         mut rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
         tx: &FlightSender,
     ) -> Result<()> {
-        /// The plans_profile comes from the executor's on_finish callback.
-        /// We use try_recv() instead of blocking recv() because the execution order
-        /// guarantees that on_finish is called before the statistics sender shuts down.
+        // The plans_profile comes from the executor's on_finish callback.
+        // We use try_recv() instead of blocking recv() because the execution order
+        // guarantees that on_finish is called before the statistics sender shuts down.
         if let Ok(plans_profile) = rx.try_recv() {
             if !plans_profile.is_empty() {
                 let data_packet = DataPacket::QueryProfiles(plans_profile);

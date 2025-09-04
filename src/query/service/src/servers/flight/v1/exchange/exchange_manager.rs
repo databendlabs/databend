@@ -943,7 +943,7 @@ impl QueryCoordinator {
             }
         }
 
-        let (finished_profiling_tx, mut finished_profiling_rx) = oneshot::channel();
+        let (finished_profiling_tx, finished_profiling_rx) = oneshot::channel();
         pipelines.first_mut().map(|p| {
             p.set_on_finished(always_callback(move |info: &ExecutionInfo| {
                 let profiling = info.profiling.clone();
