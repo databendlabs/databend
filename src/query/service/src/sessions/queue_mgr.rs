@@ -255,7 +255,10 @@ impl<Data: QueueData> QueueManager<Data> {
                 // Prevent concurrent access to meta and serialize the submission of acquire requests.
                 // This ensures that at most permits + nodes acquirers will be in the queue at any given time.
                 let _guard = workload_group.mutex.clone().lock_owned().await;
-                data.set_status("[QUERY-QUEUE] Waiting for global workload semaphore");
+                data.set_status(&format!(
+                    "[BLOCKED] Workload group '{}' global limit: acquiring distributed semaphore",
+                    workload_group.meta.name
+                ));
 
                 let workload_queue_guard = self
                     .acquire_workload_queue(
@@ -723,7 +726,7 @@ impl QueueData for QueryEntry {
 
     fn enter_wait_pending(&self) {
         self.ctx
-            .set_status_info("[QUERY-QUEUE] Waiting for resource scheduling");
+            .set_status_info("[QUERY-QUEUE] Preparing to acquire resources");
     }
 
     fn set_status(&self, status: &str) {
