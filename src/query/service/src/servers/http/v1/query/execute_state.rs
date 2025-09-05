@@ -55,6 +55,8 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
+type Sender = SizedChannelSender<LiteSpiller>;
+
 pub struct ExecutionError;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -119,7 +121,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender<LiteSpiller>,
+    pub(crate) sender: Sender,
 }
 
 pub struct ExecuteRunning {
@@ -360,7 +362,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        mut block_sender: SizedChannelSender<LiteSpiller>,
+        mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -425,7 +427,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        mut block_sender: SizedChannelSender<LiteSpiller>,
+        mut block_sender: Sender,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
@@ -470,7 +472,7 @@ impl ExecuteState {
     }
 
     async fn send_data_block(
-        sender: &mut SizedChannelSender<LiteSpiller>,
+        sender: &mut Sender,
         executor: &Arc<Mutex<Executor>>,
         block: DataBlock,
     ) -> Result<()> {
@@ -483,10 +485,7 @@ impl ExecuteState {
         }
     }
 
-    fn apply_settings(
-        ctx: &Arc<QueryContext>,
-        block_sender: &mut SizedChannelSender<LiteSpiller>,
-    ) -> Result<()> {
+    fn apply_settings(ctx: &Arc<QueryContext>, block_sender: &mut Sender) -> Result<()> {
         let settings = ctx.get_settings();
 
         let spiller = if settings.get_enable_result_set_spilling()? {
