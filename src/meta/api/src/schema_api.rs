@@ -19,7 +19,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
-use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
@@ -58,9 +57,12 @@ use log::warn;
 use ConditionResult::Eq;
 
 use crate::catalog_api::CatalogApi;
+use crate::data_retention_util::is_drop_time_retainable;
 use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
 use crate::dictionary_api::DictionaryApi;
+use crate::error_util::db_id_has_to_exist;
+use crate::error_util::unknown_database_error;
 use crate::garbage_collection_api::GarbageCollectionApi;
 use crate::get_u64_value;
 use crate::index_api::IndexApi;
@@ -68,19 +70,16 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::lock_api::LockApi;
 use crate::security_api::SecurityApi;
-use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
 use crate::table_api::TableApi;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::db_id_has_to_exist;
-use crate::util::is_drop_time_retainable;
-use crate::util::txn_op_put_pb;
-use crate::util::unknown_database_error;
 
 impl<KV> SchemaApi for KV
 where
@@ -302,25 +301,6 @@ pub async fn get_db_by_id_or_err(
         // Safe unwrap(): db_meta_seq > 0 implies db_meta is not None.
         db_meta.unwrap(),
     ))
-}
-
-/// Return OK if a table_id or table_meta does not exist by checking the seq.
-///
-/// Otherwise returns TableAlreadyExists error
-pub fn table_has_to_not_exist(
-    seq: u64,
-    name_ident: &TableNameIdent,
-    ctx: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-
-        Err(KVAppError::AppError(AppError::TableAlreadyExists(
-            TableAlreadyExists::new(&name_ident.table_name, format!("{}: {}", ctx, name_ident)),
-        )))
-    }
 }
 
 pub fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {

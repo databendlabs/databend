@@ -36,12 +36,12 @@ use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::util::txn_delete_exact;
-use crate::util::txn_op_put_pb;
-use crate::util::txn_replace_exact;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_delete_exact;
+use crate::txn_core_util::txn_replace_exact;
+use crate::txn_op_builder_util::txn_op_put_pb;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls DatamaskApi.

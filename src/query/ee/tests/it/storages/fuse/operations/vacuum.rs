@@ -24,7 +24,7 @@ use databend_common_exception::Result;
 use databend_common_meta_api::get_u64_value;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::send_txn;
-use databend_common_meta_api::util::txn_replace_exact;
+use databend_common_meta_api::txn_core_util::txn_replace_exact;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::DBIdTableName;

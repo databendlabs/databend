@@ -62,15 +62,15 @@ use crate::meta_txn_error::MetaTxnError;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::schema_api::mark_index_as_deleted;
 use crate::schema_api::mark_table_index_as_deleted;
-use crate::send_txn;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_delete_exact;
+use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::txn_delete_exact;
-use crate::util::txn_op_put_pb;
 
 /// IndexApi defines APIs for index management and metadata.
 ///

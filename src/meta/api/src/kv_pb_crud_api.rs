@@ -30,10 +30,10 @@ use seq_marked::SeqValue;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
-use crate::send_txn;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::util::txn_op_put_pb;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_op_builder_util::txn_op_put_pb;
 
 /// [`KVPbCrudApi`] provide generic meta-service access pattern implementations for `name -> value` mapping.
 ///

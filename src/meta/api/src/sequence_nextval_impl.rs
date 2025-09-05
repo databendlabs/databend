@@ -28,9 +28,9 @@ use fastrace::func_name;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;
-use crate::send_txn;
-use crate::txn_cond_eq_seq;
-use crate::util::txn_op_put_pb;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_op_builder_util::txn_op_put_pb;
 
 /// The implementation of `next_val` for sequence number.
 ///
