@@ -92,3 +92,22 @@ print(df_polars.to_pandas().values.tolist())  # [[90.0, "9", 9.0]]
 | `ctx.register_ndjson(name, path, pattern=None)`  | Register NDJSON files                   | `ctx.register_ndjson("logs", "/logs/")`        |
 | `ctx.register_tsv(name, path, pattern=None)`     | Register TSV files                      | `ctx.register_tsv("data", "/data.tsv")`        |
 
+## Development
+
+```bash
+# Setup environment
+uv sync
+source .venv/bin/activate
+
+# Build and install locally
+uvx maturin develop
+
+# Run tests
+uvx maturin develop -E test
+pytest tests/
+
+# Build documentation
+uvx maturin develop -E docs
+uvx pdoc databend
+```
+
