@@ -234,7 +234,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 let queue_length = self.length();
 
                 data.set_status(&format!(
-                    "[BLOCKED] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used, {} queries waiting", 
+                    "[WAITING] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used, {} queries waiting", 
                     workload_group.meta.name, permits, current_used, permits, queue_length
                 ));
 
@@ -258,7 +258,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 let _guard = workload_group.mutex.clone().lock_owned().await;
                 let queue_length = self.length();
                 data.set_status(&format!(
-                    "[BLOCKED] Workload group '{}' global limit: acquiring distributed semaphore, {} queries waiting",
+                    "[WAITING] Workload group '{}' global limit: acquiring distributed semaphore, {} queries waiting",
                     workload_group.meta.name, queue_length
                 ));
 
@@ -284,7 +284,7 @@ impl<Data: QueueData> QueueManager<Data> {
         let used_slots = self.permits - self.semaphore.available_permits();
 
         data.set_status(&format!(
-            "[BLOCKED] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting", 
+            "[WAITING] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting", 
             self.permits, used_slots, self.permits, queue_length
         ));
 
