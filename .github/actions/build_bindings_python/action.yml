@@ -66,7 +66,7 @@ runs:
         target: ${{ inputs.target }}
         manylinux: "2_28"
         # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
-        rustup-components: rust-std rustfmt
+        rustup-components: rustfmt
         args: ${{ steps.opts.outputs.BUILD_ARGS }}
         docker-options: --env RUSTC_WRAPPER=sccache --env SCCACHE_GCS_RW_MODE=READ_WRITE --env SCCACHE_GCS_BUCKET=databend-ci --env SCCACHE_GCS_KEY_PREFIX=cache/sccache/
         before-script-linux: |
