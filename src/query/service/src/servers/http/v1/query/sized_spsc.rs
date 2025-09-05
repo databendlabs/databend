@@ -31,6 +31,7 @@ use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
+use either::Either;
 use log::debug;
 use log::info;
 
@@ -160,12 +161,12 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_block_once(&mut self, builder: &mut PageBuilder) -> result::Result<(), Location> {
+    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Either<(), Location> {
         let Some(block) = self.values.front_mut() else {
-            return Ok(());
+            return Either::Left(());
         };
         let Some(data) = &block.data else {
-            return Err(block.location.clone().unwrap());
+            return Either::Right(block.location.clone().unwrap());
         };
 
         let take_rows = builder.calculate_take_rows(data);
@@ -177,14 +178,16 @@ impl SizedChannelBuffer {
             self.values.pop_front();
             builder.append_full_block(data);
         }
-        Ok(())
+        Either::Left(())
     }
 
-    fn take_block(&mut self, builder: &mut PageBuilder) -> result::Result<bool, Location> {
+    fn take_block(&mut self, builder: &mut PageBuilder) -> Either<bool, Location> {
         while builder.has_capacity() && !self.values.is_empty() {
-            self.take_block_once(builder)?;
+            if let Either::Right(location) = self.take_block_once(builder) {
+                return Either::Right(location);
+            }
         }
-        Ok(!self.values.is_empty())
+        Either::Left(!self.values.is_empty())
     }
 
     fn restore_first(&mut self, location: &Location, data: DataBlock) {
@@ -219,8 +222,8 @@ where S: DataBlockSpill
     #[fastrace::trace(name = "SizedChannel::try_take_block")]
     async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<bool> {
         let location = match self.inner.lock().unwrap().take_block(builder) {
-            Err(location) => location.clone(),
-            Ok(has_more) => {
+            Either::Right(location) => location,
+            Either::Left(has_more) => {
                 return Ok(has_more);
             }
         };
