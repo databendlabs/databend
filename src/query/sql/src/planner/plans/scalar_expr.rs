@@ -37,6 +37,7 @@ use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -1221,6 +1222,7 @@ impl AsyncFunctionCall {
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
         visibility_checker: Option<GrantObjectVisibilityChecker>,
+        gen_default: bool,
     ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
@@ -1229,15 +1231,23 @@ impl AsyncFunctionCall {
                         return Err(ErrorCode::PermissionDenied(format!("Permission denied: privilege ACCESS SEQUENCE is required on sequence {}", sequence_name)));
                     }
                 }
-                let req = GetSequenceNextValueReq {
-                    ident: SequenceIdent::new(&tenant, sequence_name.clone()),
-                    count: 1,
-                };
-                // Call meta's api to generate an incremental value.
-                let reply = catalog
-                    .get_sequence_next_value(req, &visibility_checker)
-                    .await?;
-                Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
+                if gen_default {
+                    let req = GetSequenceReq {
+                        ident: SequenceIdent::new(&tenant, sequence_name.clone()),
+                    };
+                    let reply = catalog.get_sequence(req, &visibility_checker).await?;
+                    Ok(Scalar::Number(NumberScalar::UInt64(reply.meta.current)))
+                } else {
+                    let req = GetSequenceNextValueReq {
+                        ident: SequenceIdent::new(&tenant, sequence_name.clone()),
+                        count: 1,
+                    };
+                    // Call meta's api to generate an incremental value.
+                    let reply = catalog
+                        .get_sequence_next_value(req, &visibility_checker)
+                        .await?;
+                    Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
+                }
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))

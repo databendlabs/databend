@@ -87,7 +87,7 @@ impl DefaultExprBinder {
 
         let dummy_block = DataBlock::new(vec![], 1);
         let func_ctx = ctx.get_function_context()?;
-        let rewriter = ExprValuesRewriter::new(ctx.clone());
+        let rewriter = ExprValuesRewriter::new(ctx.clone(), true);
 
         Ok(DefaultExprBinder {
             bind_context,

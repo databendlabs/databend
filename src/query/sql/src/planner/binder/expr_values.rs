@@ -42,13 +42,15 @@ use crate::ScalarExpr;
 pub(crate) struct ExprValuesRewriter {
     ctx: Arc<dyn TableContext>,
     scalars: Vec<ScalarExpr>,
+    gen_default: bool,
 }
 
 impl ExprValuesRewriter {
-    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, gen_default: bool) -> Self {
         Self {
             ctx,
             scalars: vec![],
+            gen_default,
         }
     }
 
@@ -78,9 +80,15 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
             } else {
                 None
             };
+            let gen_default = self.gen_default;
             let value = databend_common_base::runtime::block_on(async move {
                 async_func
-                    .generate(tenant.clone(), catalog.clone(), visibility_checker)
+                    .generate(
+                        tenant.clone(),
+                        catalog.clone(),
+                        visibility_checker,
+                        gen_default,
+                    )
                     .await
             })?;
 
@@ -128,7 +136,7 @@ impl BindContext {
         let mut map_exprs = Vec::with_capacity(exprs.len());
 
         // check invalid ScalarExpr
-        let mut rewriter = ExprValuesRewriter::new(ctx.clone());
+        let mut rewriter = ExprValuesRewriter::new(ctx.clone(), false);
         let mut default_values_binder = DefaultExprBinder::try_new(ctx.clone())?;
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
