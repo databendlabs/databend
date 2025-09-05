@@ -398,13 +398,14 @@ async fn query_page_handler(
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    // tracing in middleware
 
     let http_query_manager = HttpQueryManager::instance();
 
     let Some(query) = http_query_manager.get_query(&query_id) else {
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
+
+    ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();
 

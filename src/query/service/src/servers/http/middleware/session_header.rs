@@ -102,7 +102,7 @@ impl ClientSession {
                         id,
                         last_refresh_time: SystemTime::now(),
                     },
-                    typ: ClientSessionType::Cookie,
+                    typ: ClientSessionType::IDOnly,
                     is_new_session: false,
                     refreshed: false,
                 });
@@ -215,16 +215,9 @@ impl ClientSession {
                 if ClientSessionType::IDOnly == self.typ
                     || elapsed > client_session_mgr.min_refresh_interval
                 {
-                    if client_session_mgr.refresh_in_memory_states(&self.header.id, user_name) {
-                        client_session_mgr
-                            .refresh_session_handle(tenant, user_name.to_string(), &self.header.id)
-                            .await?;
-                        info!(
-                            "[HTTP-SESSION] refreshing session {} after {} seconds",
-                            self.header.id,
-                            elapsed.as_secs(),
-                        );
-                    }
+                    client_session_mgr
+                        .try_refresh_state(tenant, &self.header.id, user_name)
+                        .await?;
                     self.refreshed = true;
                     if ClientSessionType::Cookie == self.typ {
                         cookie.add(make_cookie(
