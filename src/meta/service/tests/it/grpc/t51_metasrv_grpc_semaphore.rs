@@ -140,16 +140,16 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
     let s2 = "s2";
 
     // Two semaphore in s1 can be acquired
-    let _s1g1 = Semaphore::new_acquired_by_time(client(), s1, 2, "id11", secs(3)).await?;
-    let s1g2 = Semaphore::new_acquired_by_time(client(), s1, 2, "id12", secs(3)).await?;
+    let _s1g1 = Semaphore::new_acquired_by_time(client(), s1, 2, "id11", None, secs(3)).await?;
+    let s1g2 = Semaphore::new_acquired_by_time(client(), s1, 2, "id12", None, secs(3)).await?;
 
     // Two semaphore in s2 can be acquired
-    let _s2g1 = Semaphore::new_acquired_by_time(client(), s2, 2, "id21", secs(3)).await?;
-    let _s2g2 = Semaphore::new_acquired_by_time(client(), s2, 2, "id22", secs(3)).await?;
+    let _s2g1 = Semaphore::new_acquired_by_time(client(), s2, 2, "id21", None, secs(3)).await?;
+    let _s2g2 = Semaphore::new_acquired_by_time(client(), s2, 2, "id22", None, secs(3)).await?;
 
     // Another semaphore in s1 can not be acquired
 
-    let fu = Semaphore::new_acquired_by_time(client(), s1, 2, "id13", secs(3));
+    let fu = Semaphore::new_acquired_by_time(client(), s1, 2, "id13", None, secs(3));
     let s1g3 = timeout(Duration::from_secs(1), fu).await;
 
     assert!(
@@ -161,7 +161,7 @@ async fn test_semaphore_time_based() -> anyhow::Result<()> {
 
     drop(s1g2);
 
-    let _s1g4 = Semaphore::new_acquired_by_time(client(), s1, 2, "id14", secs(3)).await?;
+    let _s1g4 = Semaphore::new_acquired_by_time(client(), s1, 2, "id14", None, secs(3)).await?;
 
     Ok(())
 }

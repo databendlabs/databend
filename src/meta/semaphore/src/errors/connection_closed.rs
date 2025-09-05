@@ -19,7 +19,14 @@ use tonic::Status;
 
 use crate::errors::either::Either;
 
-/// The connection to the meta-service has been closed.
+/// Indicates that the connection to the meta-service has been unexpectedly closed.
+///
+/// This error occurs when the gRPC connection to the distributed meta-service
+/// is terminated during semaphore operations. Common causes include:
+/// - Network connectivity issues
+/// - Meta-service restarts or failures
+/// - Client-side timeout configurations
+/// - Authentication/authorization failures
 #[derive(thiserror::Error, Debug)]
 pub struct ConnectionClosed {
     reason: Either<io::Error, String>,
@@ -27,7 +34,9 @@ pub struct ConnectionClosed {
 }
 
 impl ConnectionClosed {
-    /// Create a new connection closed error.
+    /// Creates a new connection closed error with the given reason.
+    ///
+    /// The reason can be either an `io::Error` or a string description.
     pub fn new(reason: impl Into<Either<io::Error, String>>) -> Self {
         ConnectionClosed {
             reason: reason.into(),
@@ -35,7 +44,9 @@ impl ConnectionClosed {
         }
     }
 
-    /// Create a new connection closed error from an io::Error.
+    /// Creates a connection closed error from an I/O error.
+    ///
+    /// Typically used when the underlying transport layer fails.
     pub fn new_io_error(reason: impl Into<io::Error>) -> Self {
         ConnectionClosed {
             reason: Either::A(reason.into()),
@@ -43,7 +54,9 @@ impl ConnectionClosed {
         }
     }
 
-    /// Create a new connection closed error from a string.
+    /// Creates a connection closed error from a string description.
+    ///
+    /// Used for application-level error messages and gRPC status descriptions.
     pub fn new_str(reason: impl ToString) -> Self {
         ConnectionClosed {
             reason: Either::B(reason.to_string()),
@@ -51,7 +64,10 @@ impl ConnectionClosed {
         }
     }
 
-    /// Append a context to the error.
+    /// Adds contextual information about when/where the error occurred.
+    ///
+    /// This creates a chain of context that helps with debugging by showing
+    /// the sequence of operations that led to the connection failure.
     pub fn context(mut self, context: impl ToString) -> Self {
         self.when.push(context.to_string());
         self

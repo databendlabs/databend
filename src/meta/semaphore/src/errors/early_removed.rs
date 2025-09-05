@@ -15,9 +15,18 @@
 use crate::storage::PermitEntry;
 use crate::storage::PermitKey;
 
-/// The [`PermitEntry`] has been removed from the meta-service before being acquired.
+/// The [`PermitEntry`] was removed from meta-service before acquisition completed.
 ///
-/// Usually this happens when the semaphore ttl is expired.
+/// This error indicates that a semaphore permit entry was deleted from the queue
+/// while still waiting to be acquired. Common scenarios include:
+///
+/// - **TTL Expiration**: The permit's time-to-live expired while waiting
+/// - **Manual Removal**: External processes or administrators removed the permit
+/// - **Service Restart**: Meta-service restart with non-persistent permit entries
+/// - **Queue Cleanup**: Automatic cleanup of stale or orphaned entries
+///
+/// This is typically a transient condition that can be resolved by retrying
+/// the acquisition with a fresh permit entry.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("EarlyRemoved: Semaphore PermitEntry is removed before being acquired: key:{permit_key} entry:{permit_entry}")]
 pub struct EarlyRemoved {
@@ -26,6 +35,11 @@ pub struct EarlyRemoved {
 }
 
 impl EarlyRemoved {
+    /// Creates a new early removal error with the affected permit details.
+    ///
+    /// # Parameters
+    /// * `permit_key` - The key of the permit that was removed
+    /// * `permit_entry` - The permit entry that was removed
     pub fn new(permit_key: PermitKey, permit_entry: PermitEntry) -> Self {
         Self {
             permit_key,

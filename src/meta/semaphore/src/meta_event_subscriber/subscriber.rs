@@ -38,7 +38,7 @@ pub(crate) struct MetaEventSubscriber {
     pub(crate) processor: Processor,
 
     /// Contains descriptive information about the context of this watcher.
-    pub(crate) ctx: String,
+    pub(crate) watcher_name: String,
 }
 
 impl MetaEventSubscriber {
@@ -47,10 +47,10 @@ impl MetaEventSubscriber {
         self,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) {
-        let ctx = self.ctx.clone();
+        let watcher_name = self.watcher_name.clone();
         let res = self.do_subscribe(cancel).await;
         if let Err(e) = res {
-            error!("{} watcher error: {}", ctx, e);
+            error!("{} watcher error: {}", watcher_name, e);
         }
     }
 
@@ -72,12 +72,12 @@ impl MetaEventSubscriber {
         let strm = self.meta_client.request(watch).await.map_err(|x| {
             ConnectionClosed::new_str(x.to_string())
                 .context("send watch request")
-                .context(&self.ctx)
+                .context(&self.watcher_name)
         })?;
 
         info!(
             "{} watch stream created: [{}, {})",
-            self.ctx, self.left, self.right
+            self.watcher_name, self.left, self.right
         );
 
         Ok(strm)
@@ -113,7 +113,7 @@ impl MetaEventSubscriber {
         loop {
             let watch_result = futures::select! {
                 _ = c.as_mut().fuse() => {
-                    info!("Semaphore Subscriber loop canceled by user");
+                    info!("{}: process_meta_event_loop canceled by user", self.watcher_name);
                     return Ok(());
                 }
 
@@ -126,19 +126,24 @@ impl MetaEventSubscriber {
                 Ok(t) => {
                     log::debug!(
                         "{} received event from watch-stream: Ok({})",
-                        self.ctx,
+                        self.watcher_name,
                         t.display()
                     );
                 }
                 Err(e) => {
-                    info!("{} received event from watch-stream: Err({})", self.ctx, e);
+                    info!(
+                        "{} received event from watch-stream: Err({})",
+                        self.watcher_name, e
+                    );
                 }
             }
 
             let Some(watch_response) = watch_result? else {
                 // TODO: add retry connecting.
-                error!("watch-stream closed: {}", self.ctx);
-                return Err(ConnectionClosed::new_str("watch-stream closed").context(&self.ctx));
+                error!("watch-stream closed: {}", self.watcher_name);
+                return Err(
+                    ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name)
+                );
             };
 
             self.processor

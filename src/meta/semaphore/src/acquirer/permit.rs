@@ -17,9 +17,11 @@ use std::future::Future;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use log::debug;
+use log::info;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
+use crate::acquirer::Acquirer;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::ConnectionClosed;
 use crate::queue::PermitEvent;
@@ -39,13 +41,29 @@ use crate::storage::PermitKey;
 /// the oneshot sender signals the lease extending task to stop,
 /// allowing for proper cleanup of the [`PermitEntry`] in the meta-service.
 pub struct Permit {
+    pub acquirer_name: String,
     pub stat: SharedAcquirerStat,
     pub fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
 }
 
 impl std::fmt::Debug for Permit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Permit")
+        let stat = self.stat.to_string();
+        write!(f, "{}-Permit: {}", self.acquirer_name, stat)
+    }
+}
+
+impl std::fmt::Display for Permit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stat = self.stat.to_string();
+        write!(f, "{}-Permit: {}", self.acquirer_name, stat)
+    }
+}
+
+impl Drop for Permit {
+    fn drop(&mut self) {
+        let stat = self.stat.to_string();
+        info!("{}-Permit Released(dropped): {}", self.acquirer_name, stat);
     }
 }
 
@@ -66,23 +84,22 @@ impl Permit {
     /// It keeps watching the permit event stream and will be notified when the [`PermitEntry`] is removed.
     /// And it also keeps two channels to cancel the subscriber task and the lease extending task.
     pub(crate) fn new(
-        permit_event_rx: mpsc::Receiver<PermitEvent>,
+        acquirer: Acquirer,
         permit_key: PermitKey,
         permit_entry: PermitEntry,
-        stat: SharedAcquirerStat,
-        subscriber_cancel_tx: oneshot::Sender<()>,
         leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Self {
         let fu = Self::watch_for_remove(
-            permit_event_rx,
+            acquirer.permit_event_rx,
             permit_key,
             permit_entry,
-            subscriber_cancel_tx,
+            acquirer.subscriber_cancel_tx,
             leaser_cancel_tx,
         );
 
         Permit {
-            stat,
+            acquirer_name: acquirer.name,
+            stat: acquirer.stat,
             fu: Box::pin(fu),
         }
     }

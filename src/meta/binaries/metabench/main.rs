@@ -413,7 +413,11 @@ async fn benchmark_semaphore(
     let permit_str = format!("({sem_key}, id={id})");
 
     let mut sem = Semaphore::new(client.clone(), &sem_key, param.capacity).await;
-    sem.set_time_based_seq(param.time_based);
+    if param.time_based {
+        sem.set_time_based_seq(None);
+    } else {
+        sem.set_storage_based_seq();
+    }
 
     let permit_res = sem.acquire(&id, param.ttl()).await;
 
