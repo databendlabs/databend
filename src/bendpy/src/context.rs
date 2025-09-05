@@ -45,8 +45,12 @@ pub(crate) struct PySessionContext {
 #[pymethods]
 impl PySessionContext {
     #[new]
-    #[pyo3(signature = (tenant = None))]
-    fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
+    #[pyo3(signature = (tenant = None, config = None, local_dir = None))]
+    fn new(tenant: Option<&str>, config: Option<&str>, local_dir: Option<&str>, py: Python) -> PyResult<Self> {
+        let config = config.unwrap_or("");
+        let local_dir = local_dir.unwrap_or(".databend");
+        crate::ensure_service_initialized(config, local_dir)?;
+        
         let session = RUNTIME.block_on(async {
             let session_manager = SessionManager::instance();
             let mut session = session_manager

@@ -12,31 +12,14 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
-import databend
-
-databend.init_service(
-    config="""
-[meta]
-embedded_dir = "./.databend/"
-
-# Storage config.
-[storage]
-# fs | s3 | azblob | obs | oss
-type = "fs"
-allow_insecure = true
-
-[storage.fs]
-data_path = "./.databend/"
-"""
-)
-
 from databend import SessionContext
 import pandas as pd
 import polars
 
 
 class TestBasic:
-    ctx = SessionContext()
+    def setup_method(self):
+        self.ctx = SessionContext()
 
     def test_simple(self):
         df = self.ctx.sql(

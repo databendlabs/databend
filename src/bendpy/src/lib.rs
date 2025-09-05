@@ -38,6 +38,17 @@ use utils::RUNTIME;
 static INIT: Once = Once::new();
 static INITIALIZED_MUTEX: Mutex<()> = Mutex::new(());
 
+pub fn ensure_service_initialized(config: &str, local_dir: &str) -> PyResult<()> {
+    let _guard = INITIALIZED_MUTEX.lock().unwrap_or_else(|poisoned| {
+        // Recover from poisoned mutex by clearing the poison
+        poisoned.into_inner()
+    });
+    if INIT.is_completed() {
+        return Ok(());
+    }
+    init_service_internal(config, local_dir)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule(gil_used = false)]
 pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -48,12 +59,18 @@ pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(signature = (config = "", local_dir = ""))]
 fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
-    let _guard = INITIALIZED_MUTEX.lock().unwrap();
+    let _guard = INITIALIZED_MUTEX.lock().unwrap_or_else(|poisoned| {
+        poisoned.into_inner()
+    });
     if INIT.is_completed() {
         return Err(pyo3::exceptions::PyRuntimeError::new_err(
             "Service already initialized",
         ));
     }
+    init_service_internal(config, local_dir)
+}
+
+fn init_service_internal(config: &str, local_dir: &str) -> PyResult<()> {
 
     // if config is file read it to config_str
     let conf = if std::fs::exists(Path::new(config)).unwrap_or_default() {
@@ -63,16 +80,44 @@ fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
         let mut file = std::fs::File::create(temp_dr.path().join("config.toml")).unwrap();
 
         let config = if local_dir.is_empty() {
+            use std::net::{TcpListener, SocketAddr};
+            
+            // Find available ports
+            let find_free_port = || -> u16 {
+                TcpListener::bind("127.0.0.1:0")
+                    .and_then(|listener| listener.local_addr())
+                    .map(|addr| addr.port())
+                    .unwrap_or(0)
+            };
+            
+            let meta_port = find_free_port();
+            let flight_port = find_free_port();
+            
             format!(
                 r#"[meta]
 embedded_dir = "{local_dir}"
+endpoints = ["127.0.0.1:{}"]
+
+[query]
+flight_api_address = "127.0.0.1:{}"
+admin_api_address = "127.0.0.1:0"
+metric_api_address = "127.0.0.1:0"
+mysql_handler_host = "127.0.0.1"
+mysql_handler_port = 0
+clickhouse_http_handler_host = "127.0.0.1"
+clickhouse_http_handler_port = 0
+clickhouse_handler_host = "127.0.0.1"
+clickhouse_handler_port = 0
+http_handler_host = "127.0.0.1"
+http_handler_port = 0
+
 [storage]
 type = "fs"
 allow_insecure = true
+
 [storage.fs]
 data_path = "{local_dir}"
-allow_insecure = true
-"#
+"#, meta_port, flight_port
             )
         } else {
             config.to_string()
