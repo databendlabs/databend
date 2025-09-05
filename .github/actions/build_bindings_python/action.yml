@@ -68,12 +68,14 @@ runs:
         # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
         rustup-components: rustfmt
         args: ${{ steps.opts.outputs.BUILD_ARGS }}
-        docker-options: --env RUSTC_WRAPPER=sccache --env SCCACHE_GCS_RW_MODE=READ_WRITE --env SCCACHE_GCS_BUCKET=databend-ci --env SCCACHE_GCS_KEY_PREFIX=cache/sccache/
+        docker-options: --env RUSTC_WRAPPER=sccache --env SCCACHE_GCS_RW_MODE=READ_WRITE --env SCCACHE_GCS_BUCKET=databend-ci --env SCCACHE_GCS_KEY_PREFIX=cache/sccache/ --env MATURIN_NO_AUTO_INSTALL=1
         container-options: --platform linux/amd64
         before-script-linux: |
           unset RUSTC_WRAPPER
           # Add the target for the specified architecture
           rustup target add ${{ inputs.target }}
+          # Install cargo-zigbuild manually to avoid musl target issues
+          cargo install cargo-zigbuild --target ${{ inputs.target }}
           ../../scripts/setup/dev_setup.sh -yb
           uv venv --python=python3.12
           uv sync --all-groups --all-extras
