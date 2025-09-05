@@ -89,6 +89,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn exit_wait_pending(&self, _wait_time: Duration) {}
 
     fn get_abort_notify(&self) -> Arc<WatchNotify>;
+
+    fn get_retry_timeout(&self) -> Option<Duration>;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -234,7 +236,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 let queue_length = self.length();
 
                 data.set_status(&format!(
-                    "[WAITING] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used, {} queries waiting", 
+                    "[WAITING] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used, {} queries waiting",
                     workload_group.meta.name, permits, current_used, permits, queue_length
                 ));
 
@@ -284,7 +286,7 @@ impl<Data: QueueData> QueueManager<Data> {
         let used_slots = self.permits - self.semaphore.available_permits();
 
         data.set_status(&format!(
-            "[WAITING] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting", 
+            "[WAITING] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting",
             self.permits, used_slots, self.permits, queue_length
         ));
 
@@ -308,6 +310,7 @@ impl<Data: QueueData> QueueManager<Data> {
             permits,
             data.get_key(), // ID of this acquirer
             data.lock_ttl(),
+            data.get_retry_timeout(),
         );
 
         let acquire_res = AcquireQueueFuture::create(
@@ -355,6 +358,7 @@ impl<Data: QueueData> QueueManager<Data> {
                     self.permits as u64,
                     data.get_key(), // ID of this acquirer
                     data.lock_ttl(),
+                    data.get_retry_timeout(),
                 );
 
                 // Prevent concurrent access to meta and serialize the submission of acquire requests.
@@ -561,6 +565,7 @@ pub struct QueryEntry {
     pub timeout: Duration,
     pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
+    pub retry_timeout: Option<Duration>,
     pub abort_watch_notify: Arc<WatchNotify>,
 }
 
@@ -571,8 +576,14 @@ impl QueryEntry {
         need_acquire_to_queue: bool,
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
+        let retry_timeout = match settings.get_queries_queue_retry_timeout()? {
+            0 => None,
+            retry_timeout => Some(Duration::from_secs(retry_timeout)),
+        };
+
         Ok(QueryEntry {
             ctx: ctx.clone(),
+            retry_timeout,
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
@@ -747,6 +758,10 @@ impl QueueData for QueryEntry {
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.abort_watch_notify.clone()
+    }
+
+    fn get_retry_timeout(&self) -> Option<Duration> {
+        self.retry_timeout
     }
 }
 

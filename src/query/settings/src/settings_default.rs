@@ -1452,6 +1452,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("queries_queue_retry_timeout", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5 * 60),
+                    desc: "The retry interval for query queue timeout. 0 if never retry.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

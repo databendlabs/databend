@@ -18,7 +18,10 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
+use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_client::errors::CreationError;
@@ -106,7 +109,40 @@ impl MetaStore {
         capacity: u64,
         id: impl ToString,
         lease: Duration,
+        retry_timeout: Option<Duration>,
     ) -> Result<Permit, AcquireError> {
+        if let Some(retry_timeout) = retry_timeout {
+            let timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
+
+            let mut attempt = 0;
+            let id = id.to_string();
+            let prefix = prefix.to_string();
+            loop {
+                let client = self.deref().clone();
+                let acquired_by_time = timeout(
+                    retry_timeout,
+                    Semaphore::new_acquired_by_time(
+                        client,
+                        prefix.clone(),
+                        capacity,
+                        id.clone(),
+                        timestamp,
+                        lease,
+                    ),
+                );
+
+                if let Ok(acquired_by_time) = acquired_by_time.await {
+                    return acquired_by_time;
+                }
+
+                info!(
+                    "Semaphore retry attempt {}. retry timeout: {:?}",
+                    attempt, retry_timeout
+                );
+                attempt += 1;
+            }
+        }
+
         let client = self.deref();
         Semaphore::new_acquired_by_time(client.clone(), prefix, capacity, id, None, lease).await
     }
