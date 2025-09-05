@@ -43,7 +43,7 @@ pub struct GrpcServer {
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
-    pub(crate) meta_node: Arc<MetaNode>,
+    pub meta_node: Arc<MetaNode>,
     join_handle: Option<JoinHandle<()>>,
     stop_grpc_tx: Option<Sender<()>>,
 }

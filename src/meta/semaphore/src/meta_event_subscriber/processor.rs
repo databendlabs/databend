@@ -21,7 +21,9 @@ use tokio::sync::mpsc;
 
 #[cfg(doc)]
 use crate::acquirer::Acquirer;
+use crate::errors::AcquirerClosed;
 use crate::errors::ConnectionClosed;
+use crate::errors::ProcessorError;
 use crate::queue::PermitEvent;
 use crate::queue::SemaphoreQueue;
 use crate::PermitEntry;
@@ -34,7 +36,10 @@ pub(crate) struct Processor {
     pub(crate) queue: SemaphoreQueue,
 
     /// The channel to send the [`PermitEvent`] to the [`Acquirer`].
-    pub(crate) tx: mpsc::Sender<PermitEvent>,
+    ///
+    /// When the [`Acquirer`] acquired a [`Permit`], this channel is no longer used,
+    /// because the receiving end may not be polled and sending to it may block forever.
+    pub(crate) tx_to_acquirer: mpsc::Sender<PermitEvent>,
 
     /// Contains descriptive information about the context of this watcher.
     pub(crate) watcher_name: String,
@@ -42,10 +47,10 @@ pub(crate) struct Processor {
 
 impl Processor {
     /// Create a new [`Processor`] instance with given permits capacity and the channel to send the [`PermitEvent`] to the [`Acquirer`].
-    pub(crate) fn new(capacity: u64, tx: mpsc::Sender<PermitEvent>) -> Self {
+    pub(crate) fn new(capacity: u64, tx_to_acquirer: mpsc::Sender<PermitEvent>) -> Self {
         Self {
             queue: SemaphoreQueue::new(capacity),
-            tx,
+            tx_to_acquirer,
             watcher_name: "".to_string(),
         }
     }
@@ -60,14 +65,16 @@ impl Processor {
     pub(crate) async fn process_watch_response(
         &mut self,
         watch_response: WatchResponse,
-    ) -> Result<(), ConnectionClosed> {
+    ) -> Result<(), ProcessorError> {
         let Some((key, prev, current)) =
             Self::decode_watch_response(watch_response, &self.watcher_name)?
         else {
             return Ok(());
         };
 
-        self.process_kv_change(key, prev, current).await
+        self.process_kv_change(key, prev, current).await?;
+
+        Ok(())
     }
 
     async fn process_kv_change(
@@ -75,7 +82,7 @@ impl Processor {
         sem_key: PermitKey,
         prev: Option<SeqV<PermitEntry>>,
         current: Option<SeqV<PermitEntry>>,
-    ) -> Result<(), ConnectionClosed> {
+    ) -> Result<(), AcquirerClosed> {
         log::debug!(
             "{} processing kv change: {}: {:?} -> {:?}",
             self.watcher_name,
@@ -108,8 +115,8 @@ impl Processor {
         for event in state_changes {
             log::debug!("{} sending event: {}", self.watcher_name, event);
 
-            self.tx.send(event).await.map_err(|e| {
-                ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
+            self.tx_to_acquirer.send(event).await.map_err(|e| {
+                AcquirerClosed::new(format!("Semaphore-Watcher fail to send {}", e.0))
                     .context(&self.watcher_name)
             })?;
         }
