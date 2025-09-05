@@ -205,3 +205,41 @@ select segment_count, row_count from fuse_snapshot('db','t_17800') limit 3;
 1 117
 2 117
 1 100
+
+statement ok
+CREATE OR REPLACE TABLE t1(id string, raw_data variant, add_time timestamp, action string);
+
+statement ok
+INSERT INTO t1 VALUES
+('1', '{"id":1, "float_col":1.1}', '2025-09-04 16:41:35.519000', 'insert'),
+('2', '{"id":2, "float_col":2.1}', '2025-09-04 16:41:35.519000', 'insert'),
+('2', '{"id":2, "float_col":2.2}', '2025-09-04 16:41:35.519000', 'delete');
+
+statement ok
+CREATE OR REPLACE TABLE t2(id int not null, float_col float);
+
+statement ok
+INSERT INTO t2 VALUES (1, 3.14159), (3, 3.14159);
+
+statement ok
+MERGE INTO t2 a USING (
+    SELECT 
+        raw_data:id as id, 
+        raw_data:float_col as float_col, 
+        action FROM t1
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY id ORDER BY add_time DESC) = 1)
+    b ON a.id = b.id 
+WHEN MATCHED AND b.action = 'update' THEN 
+UPDATE * WHEN MATCHED AND b.action = 'delete' THEN DELETE WHEN NOT MATCHED AND b.action!='delete' THEN INSERT *
+
+query II
+SELECT id, float_col FROM t2 ORDER BY id;
+----
+1 3.14159
+2 2.1
+3 3.14159
+
+statement ok
+drop database if exists db;
+

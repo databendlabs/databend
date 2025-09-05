@@ -832,17 +832,16 @@ pub fn generate_update_list(
             let field = schema.field(*index);
             let data_type = scalar.data_type()?;
             let target_type = field.data_type();
-            let left = if data_type != *target_type {
-                wrap_cast(scalar, target_type)
-            } else {
-                scalar.clone()
-            };
 
             let scalar = if col_indices.is_empty() {
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                left
+                if data_type != *target_type {
+                    wrap_cast(scalar, target_type)
+                } else {
+                    scalar.clone()
+                }
             } else {
                 // Replace column to the result of the following expression:
                 // if(condition, CAST(expression, type), column)
@@ -862,7 +861,24 @@ pub fn generate_update_list(
                     }
                 }
 
-                let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+                let right = right.ok_or_else(|| {
+                    ErrorCode::Internal(
+                        format!("Can not find column {} in table {}", field.name(), table)
+                            .to_string(),
+                    )
+                })?;
+
+                // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
+                let target_type = if right.data_type()?.is_nullable() {
+                    target_type.wrap_nullable()
+                } else {
+                    target_type.clone()
+                };
+                let left = if data_type != target_type {
+                    wrap_cast(scalar, &target_type)
+                } else {
+                    scalar.clone()
+                };
 
                 // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
                 // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
@@ -923,11 +939,6 @@ pub fn mutation_update_expr(
             let field = schema.field(*index);
             let data_type = scalar.data_type()?;
             let target_type = field.data_type();
-            let left = if data_type != *target_type {
-                wrap_cast(scalar, target_type)
-            } else {
-                scalar.clone()
-            };
 
             // Replace column to the result of the following expression:
             // if(condition, CAST(expression, type), column)
@@ -951,6 +962,18 @@ pub fn mutation_update_expr(
                     format!("Can not find column {} in table {}", field.name(), table).to_string(),
                 )
             })?;
+
+            // If right is nullable, left must also be wrapped in nullable to ensure both have the same type.
+            let target_type = if right.data_type()?.is_nullable() {
+                target_type.wrap_nullable()
+            } else {
+                target_type.clone()
+            };
+            let left = if data_type != target_type {
+                wrap_cast(scalar, &target_type)
+            } else {
+                scalar.clone()
+            };
 
             let scalar = ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
