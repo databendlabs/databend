@@ -7,7 +7,7 @@ build-backend = "maturin"
 version = "0.1.0"
 name = "databend"
 requires-python = ">=3.10"
-description = "Official Python binding for Databend - A modern cloud data warehouse with vectorized execution, built-in AI capabilities, and elastic scaling. Supports SQL analytics, real-time data processing, and machine learning workloads."
+description = "Official Python binding for Databend - The AI-Native Data Warehouse. Open-source alternative to Snowflake with near 100% SQL compatibility, native AI capabilities, and unified support for structured, semi-structured, and vector data."
 license = {text = "Apache-2.0"}
 authors = [{name = "Databend Labs", email = "hi@databend.com"}]
 maintainers = [{name = "Databend Community", email = "hi@databend.com"}]

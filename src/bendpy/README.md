@@ -1,6 +1,8 @@
 # Databend Python Binding
 
-Official Python binding for [Databend](https://databend.com) - A modern cloud data warehouse with vectorized execution and elastic scaling.
+Official Python binding for [Databend](https://databend.com) - The AI-Native Data Warehouse.
+
+Databend is the open-source alternative to Snowflake with near 100% SQL compatibility and native AI capabilities. Built in Rust with MPP architecture and S3-native storage, Databend unifies structured tables, JSON documents, and vector embeddings in a single platform.
 
 ## Installation
 
@@ -28,108 +30,65 @@ pandas_df = df.to_pandas()
 polars_df = df.to_polars()
 ```
 
-## Core Features
+## Examples
 
-**SQL Analytics**: Full SQL support with advanced functions
-```python
-ctx.sql("SELECT department, AVG(salary) FROM employees GROUP BY department").show()
-```
+### 1. Register External Files and Query
 
-**External Data**: Register and query files directly
 ```python
-ctx.register_parquet("events", "/path/to/events/", pattern="*.parquet")  
+import databend
+
+databend.init_service(local_dir=".databend")
+ctx = databend.SessionContext()
+
+# Register external files
+ctx.register_parquet("pa", "/home/dataset/hits_p/", pattern=".*.parquet")
 ctx.register_csv("users", "/path/to/users.csv")
-df = ctx.sql("SELECT * FROM events JOIN users ON events.user_id = users.id")
+ctx.register_ndjson("logs", "/path/to/logs/", pattern=".*.jsonl")
+
+# Query external data
+result = ctx.sql("SELECT * FROM pa LIMIT 10").collect()
+print(result)
 ```
 
-**Multi-tenant**: Isolated data per tenant
+### 2. Create Table, Insert and Select
+
 ```python
-ctx_a = databend.SessionContext(tenant="team_a")
-ctx_b = databend.SessionContext(tenant="team_b")  # Completely separate
-```
-
-## Development
-
-Setup virtualenv:
-
-```shell
-uv sync
-```
-
-Activate venv:
-
-```shell
-source .venv/bin/activate
-````
-
-Install `maturin`:
-
-```shell
-pip install "maturin[patchelf]"
-```
-
-Build bindings:
-
-```shell
-uvx maturin develop
-```
-
-Run tests:
-
-```shell
-uvx maturin develop -E test
-```
-
-Build API docs:
-
-```shell
-uvx maturin develop -E docs
-uvx pdoc databend
-```
-
-## Service configuration
-
-> Note:
-
-**`databend.init_service`  must be initialized before `SessionContext`**
-
-**`databend.init_service`  must be called only once**
-
-
--  By default, you can init the service by a local directory, then data & catalogs will be stored inside the directory.
-```
 import databend
 
-databend.init_service(local_dir = ".databend")
+databend.init_service(local_dir=".databend")
+ctx = databend.SessionContext()
+
+# Create table
+ctx.sql("CREATE TABLE aa (a INT, b STRING, c BOOL, d DOUBLE)").collect()
+
+# Insert data
+ctx.sql("INSERT INTO aa SELECT number, number, true, number FROM numbers(10)").collect()
+ctx.sql("INSERT INTO aa SELECT number, number, true, number FROM numbers(10)").collect()
+
+# Query and convert to pandas
+df = ctx.sql("SELECT sum(a) x, max(b) y, max(d) z FROM aa WHERE c").to_pandas()
+print(df.values.tolist())  # [[90.0, "9", 9.0]]
+
+# Query and convert to polars  
+df_polars = ctx.sql("SELECT sum(a) x, max(b) y, max(d) z FROM aa WHERE c").to_polars()
+print(df_polars.to_pandas().values.tolist())  # [[90.0, "9", 9.0]]
 ```
 
--  You can also init by file
+## API Reference
 
-```
-import databend
-databend.init_service( config = "config.toml.sample" )
-```
+| Method                                           | Description                             | Example                                        |
+|--------------------------------------------------|-----------------------------------------|------------------------------------------------|
+| `databend.init_service(config="", local_dir="")` | Initialize Databend service (call once) | `databend.init_service(local_dir=".databend")` |
+| `SessionContext(tenant=None)`                    | Create session context                  | `ctx = databend.SessionContext()`              |
+| `ctx.sql(sql)`                                   | Execute SQL and return DataFrame        | `df = ctx.sql("SELECT * FROM table")`          |
+| `df.show(num=20)`                                | Display DataFrame results               | `df.show()`                                    |
+| `df.collect()`                                   | Collect DataFrame as DataBlocks         | `blocks = df.collect()`                        |
+| `df.to_pandas()`                                 | Convert to Pandas DataFrame             | `pdf = df.to_pandas()`                         |
+| `df.to_polars()`                                 | Convert to Polars DataFrame             | `pldf = df.to_polars()`                        |
+| `df.to_py_arrow()`                               | Convert to PyArrow batches              | `batches = df.to_py_arrow()`                   |
+| `df.to_arrow_table()`                            | Convert to PyArrow Table                | `table = df.to_arrow_table()`                  |
+| `ctx.register_parquet(name, path, pattern=None)` | Register Parquet files                  | `ctx.register_parquet("data", "/path/")`       |
+| `ctx.register_csv(name, path, pattern=None)`     | Register CSV files                      | `ctx.register_csv("users", "/users.csv")`      |
+| `ctx.register_ndjson(name, path, pattern=None)`  | Register NDJSON files                   | `ctx.register_ndjson("logs", "/logs/")`        |
+| `ctx.register_tsv(name, path, pattern=None)`     | Register TSV files                      | `ctx.register_tsv("data", "/data.tsv")`        |
 
-- And by config str
-```
-import databend
-
-databend.init_service(config = """
-[meta]
-embedded_dir = "./.databend/"
-
-# Storage config.
-[storage]
-# fs | s3 | azblob | obs | oss
-type = "fs"
-allow_insecure = true
-
-[storage.fs]
-data_path = "./.databend/"
-""")
-```
-
-Read more about configs of databend in [docs](https://docs.databend.com/guides/deploy/deploy/production/metasrv-deploy)
-
-## More
-Databend python api is inspired by [arrow-datafusion-python](https://github.com/apache/arrow-datafusion-python), thanks for their great work.
