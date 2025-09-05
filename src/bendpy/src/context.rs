@@ -190,6 +190,103 @@ impl PySessionContext {
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
+
+    fn create_s3_connection(
+        &mut self,
+        name: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        endpoint_url: Option<&str>,
+        region: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        let endpoint_clause = endpoint_url.map(|e| format!(" endpoint_url = '{}'", e)).unwrap_or_default();
+        let region_clause = region.map(|r| format!(" region = '{}'", r)).unwrap_or_default();
+        let sql = format!(
+            "CREATE OR REPLACE CONNECTION {} TYPE = 'S3' access_key_id = '{}' secret_access_key = '{}'{}{}", 
+            name, access_key_id, secret_access_key, endpoint_clause, region_clause
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn create_azblob_connection(
+        &mut self,
+        name: &str,
+        endpoint_url: &str,
+        account_name: &str,
+        account_key: &str,
+        py: Python,
+    ) -> PyResult<()> {
+        let sql = format!(
+            "CREATE OR REPLACE CONNECTION {} TYPE = 'AZBLOB' endpoint_url = '{}' account_name = '{}' account_key = '{}'",
+            name, endpoint_url, account_name, account_key
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn create_gcs_connection(
+        &mut self,
+        name: &str,
+        endpoint_url: &str,
+        credential: &str,
+        py: Python,
+    ) -> PyResult<()> {
+        let sql = format!(
+            "CREATE OR REPLACE CONNECTION {} TYPE = 'GCS' endpoint_url = '{}' credential = '{}'",
+            name, endpoint_url, credential
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn create_oss_connection(
+        &mut self,
+        name: &str,
+        endpoint_url: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        py: Python,
+    ) -> PyResult<()> {
+        let sql = format!(
+            "CREATE OR REPLACE CONNECTION {} TYPE = 'OSS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
+            name, endpoint_url, access_key_id, secret_access_key
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn create_cos_connection(
+        &mut self,
+        name: &str,
+        endpoint_url: &str,
+        access_key_id: &str,
+        secret_access_key: &str,
+        py: Python,
+    ) -> PyResult<()> {
+        let sql = format!(
+            "CREATE OR REPLACE CONNECTION {} TYPE = 'COS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
+            name, endpoint_url, access_key_id, secret_access_key
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn list_connections(&mut self, py: Python) -> PyResult<PyDataFrame> {
+        self.sql("SHOW CONNECTIONS", py)
+    }
+
+    fn describe_connection(&mut self, name: &str, py: Python) -> PyResult<PyDataFrame> {
+        let sql = format!("DESC CONNECTION {}", name);
+        self.sql(&sql, py)
+    }
+
+    fn drop_connection(&mut self, name: &str, py: Python) -> PyResult<()> {
+        let sql = format!("DROP CONNECTION {}", name);
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
 }
 
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {

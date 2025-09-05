@@ -7,11 +7,27 @@ build-backend = "maturin"
 version = "0.1.0"
 name = "databend"
 requires-python = ">=3.10"
-description = "Databend Python Binding"
+description = "Official Python binding for Databend - The AI-Native Data Warehouse. Open-source alternative to Snowflake with near 100% SQL compatibility, native AI capabilities, and unified support for structured, semi-structured, and vector data."
+license = {text = "Apache-2.0"}
+authors = [{name = "Databend Labs", email = "hi@databend.com"}]
+maintainers = [{name = "Databend Community", email = "hi@databend.com"}]
+keywords = ["databend", "database", "analytics", "data-warehouse", "sql", "olap"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research", 
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11", 
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +38,7 @@ test = ["pytest", "pandas", "polars", "pyarrow"]
 [project.urls]
 Documentation = "https://pypi.org/project/databend/"
 Homepage =  "https://databend.com"
-Repository = "https://github.com/datafuselabs/databend"
+Repository = "https://github.com/databendlabs/databend"
 
 [dependency-groups]
 dev = ["maturin>=1.8.2"]
