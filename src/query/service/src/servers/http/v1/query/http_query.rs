@@ -33,7 +33,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TempTblMgrRef;
@@ -75,6 +74,7 @@ use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+use crate::spillers::PortableSpillerRef;
 
 fn default_as_true() -> bool {
     true
@@ -612,7 +612,8 @@ impl HttpQuery {
             })
         };
 
-        let (sender, block_receiver) = sized_spsc(req.pagination.max_rows_in_buffer);
+        let (sender, receiver) =
+            sized_spsc::<PortableSpillerRef>(req.pagination.max_rows_in_buffer);
 
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
@@ -624,12 +625,10 @@ impl HttpQuery {
 
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
 
-        let data = Arc::new(TokioMutex::new(PageManager::new(
+        let page_manager = Arc::new(TokioMutex::new(PageManager::new(
             req.pagination.max_rows_per_page,
-            block_receiver,
-            format_settings,
+            receiver,
         )));
 
         Ok(HttpQuery {
@@ -639,7 +638,7 @@ impl HttpQuery {
             node_id,
             request: req,
             executor,
-            page_manager: data,
+            page_manager,
             result_timeout_secs,
 
             state: Arc::new(Mutex::new(HttpQueryState::Working)),
@@ -651,7 +650,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    #[fastrace::trace]
+    #[fastrace::trace(name = "HttpQuery::get_response_page",properties = {"page_no": "{page_no}"})]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state();
@@ -802,20 +801,15 @@ impl HttpQuery {
 
         let query_state = self.executor.clone();
 
-        let query_format_settings = {
-            let page_manager = self.page_manager.lock().await;
-            page_manager.format_settings.clone()
-        };
-
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
+                let block_sender_closer = block_sender.closer();
                 if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
                     query_state.clone(),
                     sql,
                     query_session,
                     query_context.clone(),
-                    block_sender.clone(),
-                    query_format_settings,
+                    block_sender,
                 ))
                 .await
                 .with_context(|| "failed to start query")
@@ -842,7 +836,7 @@ impl HttpQuery {
                         e
                     );
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
-                    block_sender.close();
+                    block_sender_closer.close();
                 }
             }
             .in_span(span),
@@ -922,6 +916,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[fastrace::trace(name = "HttpQuery::on_heartbeat")]
     pub fn on_heartbeat(&self) -> bool {
         let mut expire_state = self.state.lock();
         match *expire_state {

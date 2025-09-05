@@ -78,6 +78,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
+use crate::spillers;
 use crate::storages::Table;
 
 pub struct MemoryUpdater {
@@ -169,8 +170,7 @@ pub struct QueryContextShared {
     pub(super) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
-    pub(super) spilled_files:
-        Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
+    pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,

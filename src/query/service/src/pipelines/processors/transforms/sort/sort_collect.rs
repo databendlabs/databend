@@ -28,6 +28,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::MergeSort;
 use databend_common_pipeline_transforms::SortSpillParams;
@@ -37,14 +38,14 @@ use super::sort_spill::SortSpill;
 use super::Base;
 use super::RowsStat;
 
-enum Inner<A: SortAlgorithm> {
+enum Inner<A: SortAlgorithm, S: DataBlockSpill> {
     Collect(Vec<DataBlock>),
     Limit(TransformSortMergeLimit<A::Rows>),
-    Spill(Vec<DataBlock>, SortSpill<A>),
+    Spill(Vec<DataBlock>, SortSpill<A, S>),
     None,
 }
 
-pub struct TransformSortCollect<A: SortAlgorithm, C> {
+pub struct TransformSortCollect<A: SortAlgorithm, C, S: DataBlockSpill> {
     name: &'static str,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -60,23 +61,24 @@ pub struct TransformSortCollect<A: SortAlgorithm, C> {
     /// so we don't need to generate the order column again.
     order_col_generated: bool,
 
-    base: Base,
-    inner: Inner<A>,
+    base: Base<S>,
+    inner: Inner<A, S>,
 
     aborting: AtomicBool,
 
     memory_settings: MemorySettings,
 }
 
-impl<A, C> TransformSortCollect<A, C>
+impl<A, C, S> TransformSortCollect<A, C, S>
 where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
+    S: DataBlockSpill,
 {
     pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        base: Base,
+        base: Base<S>,
         sort_desc: Arc<[SortColumnDescription]>,
         max_block_size: usize,
         default_num_merge: usize,
@@ -243,11 +245,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<A, C> Processor for TransformSortCollect<A, C>
+impl<A, C, S> Processor for TransformSortCollect<A, C, S>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
     C: RowConverter<A::Rows> + Send + 'static,
+    S: DataBlockSpill,
 {
     fn name(&self) -> String {
         self.name.to_string()

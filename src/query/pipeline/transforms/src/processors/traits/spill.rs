@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod partition_buffer;
-mod serialize;
-mod spiller;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_storages_common_cache::TempPath;
 
-pub use databend_common_pipeline_transforms::traits::Location;
-pub use partition_buffer::PartitionBuffer;
-pub use partition_buffer::PartitionBufferFetchOption;
-pub use serialize::Layout;
-pub use spiller::*;
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum Location {
+    Remote(String),
+    Local(TempPath),
+}
+
+#[async_trait::async_trait]
+pub trait DataBlockSpill: Clone + Send + Sync + 'static {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location>;
+    async fn restore(&self, location: &Location) -> Result<DataBlock>;
+}

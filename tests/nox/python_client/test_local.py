@@ -101,12 +101,12 @@ def run_load_file(load_method):
         "INSERT INTO test VALUES FROM @_databend_load file_format = (type=csv)",
         "testdata/test.csv",
     )
-    assert (
-        progress.write_rows == 3
-    ), f"{load_method} progress.write_rows: {progress.write_rows}"
-    assert (
-        progress.write_bytes == 194
-    ), f"{load_method}: progress.write_bytes: {progress.write_bytes}"
+    assert progress.write_rows == 3, (
+        f"{load_method} progress.write_rows: {progress.write_rows}"
+    )
+    assert progress.write_bytes == 194, (
+        f"{load_method}: progress.write_bytes: {progress.write_bytes}"
+    )
 
     rows = conn.query_iter("SELECT * FROM test")
     ret = [row.values() for row in rows]
