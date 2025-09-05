@@ -4,7 +4,6 @@
 
 set -e
 
-
 echo "*************************************"
 echo "* Setting STORAGE_TYPE to S3.       *"
 echo "*                                   *"
