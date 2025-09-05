@@ -5246,6 +5246,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "derive-visitor",
  "dyn-clone",
+ "either",
  "enum-as-inner",
  "ethnum",
  "fastrace",
