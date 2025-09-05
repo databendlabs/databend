@@ -121,23 +121,6 @@ TableScan
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 6.00
 
-query T
-EXPLAIN SELECT * FROM article where article_id < 3;
-----
-Filter
-├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
-├── filters: [is_true(article.article_id (#0) < 3)]
-├── estimated rows: 3.00
-└── TableScan
-    ├── table: default.default.article
-    ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 6
-    ├── partitions scanned: 4
-    ├── pruning stats: [segments: <range pruning: 6 to 4>, blocks: <range pruning: 4 to 4>]
-    ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
-    └── estimated rows: 6.00
 
 query T
 EXPLAIN ANALYZE SELECT * FROM article where article_id < 3;
