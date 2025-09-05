@@ -667,3 +667,6 @@ tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "75
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+
+# remove after sqllogictest 0.28.4 released
+sqllogictest = { git = "https://github.com/risinglightdb/sqllogictest-rs.git", rev = "5fe912a" }
