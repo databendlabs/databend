@@ -52,7 +52,7 @@ const OPT_BINARY_FORMAT: &str = "binary_format";
 const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
 
 /// File format parameters after checking and parsing.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum FileFormatParams {
     Csv(CsvFileFormatParams),
@@ -446,7 +446,7 @@ impl FileFormatOptionsReader {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CsvFileFormatParams {
     pub compression: StageFileCompression,
 
@@ -498,7 +498,7 @@ impl CsvFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TsvFileFormatParams {
     pub compression: StageFileCompression,
     pub headers: u64,
@@ -532,7 +532,7 @@ impl TsvFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct XmlFileFormatParams {
     pub compression: StageFileCompression,
     pub row_tag: String,
@@ -558,7 +558,7 @@ impl Default for XmlFileFormatParams {
 
 /// used for both `missing_field_as` and `null_field_as`
 /// for extensibility, it is stored as PB string in meta
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum NullAs {
     /// for `missing_field_as` only, and is default for it for safety,
     /// in case of wrong field names when creating table.
@@ -570,7 +570,7 @@ pub enum NullAs {
     FieldDefault,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum EmptyFieldAs {
     #[default]
     Null,
@@ -638,7 +638,7 @@ impl Display for NullAs {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum BinaryFormat {
     #[default]
     Hex,
@@ -668,7 +668,7 @@ impl Display for BinaryFormat {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct JsonFileFormatParams {
     pub compression: StageFileCompression,
 }
@@ -690,7 +690,7 @@ impl Default for JsonFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NdJsonFileFormatParams {
     pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
@@ -741,7 +741,7 @@ impl NdJsonFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AvroFileFormatParams {
     pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
@@ -791,7 +791,7 @@ impl AvroFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ParquetFileFormatParams {
     // used only for unload
     pub compression: StageFileCompression,
@@ -828,7 +828,7 @@ impl ParquetFileFormatParams {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OrcFileFormatParams {
     pub missing_field_as: NullAs,
 }

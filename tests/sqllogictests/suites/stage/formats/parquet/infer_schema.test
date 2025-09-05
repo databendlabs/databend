@@ -66,3 +66,154 @@ select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parqu
 ----
 id INT 0 0
 t TUPLE(A INT32, B STRING) 0 1
+
+# CSV
+statement ok
+create or replace file format head_csv_format type = 'CSV' field_delimiter = ',' skip_header = 1;
+
+query TTBI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'CSV');
+----
+column_1 VARCHAR 1 0
+column_2 VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+statement error
+select * from infer_schema(location => '@data/csv/ragged.csv', file_format => 'head_csv_format');
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 0
+value VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/csv/types.csv', file_format => 'head_csv_format')
+----
+bool_col BOOLEAN 1 0
+int_col BIGINT 1 1
+float_col DOUBLE 1 2
+date_col DATE 1 3
+ts_sec TIMESTAMP 1 4
+ts_ms TIMESTAMP 1 5
+ts_us TIMESTAMP 1 6
+ts_ns TIMESTAMP 1 7
+utf8_col VARCHAR 1 8
+
+query TTBI
+select * from infer_schema(location => '@data/csv/merge/', file_format => 'head_csv_format');
+----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4
+
+# NDJSON
+query TTBI
+select * from infer_schema(location => '@data/ndjson/numbers.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/ragged.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value BIGINT 1 1
+comment VARCHAR 1 2
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 0
+value VARCHAR 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_pre_file => 5)
+----
+id BIGINT 1 0
+value BIGINT 1 1
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/types.ndjson', file_format => 'NDJSON')
+----
+bool_col BOOLEAN 1 0
+int_col BIGINT 1 1
+float_col DOUBLE 1 2
+date_col VARCHAR 1 3
+ts_sec VARCHAR 1 4
+ts_ms VARCHAR 1 5
+ts_us VARCHAR 1 6
+ts_ns VARCHAR 1 7
+utf8_col VARCHAR 1 8
+arr_col ARRAY(STRING) 1 9
+obj_col TUPLE(A INT64, B STRING) 1 10
+
+query TTBI
+select * from infer_schema(location => '@data/ndjson/merge/', file_format => 'NDJSON');
+----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4

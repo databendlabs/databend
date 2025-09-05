@@ -20,3 +20,4 @@ pub mod row_based;
 pub(crate) mod block_builder_state;
 mod default_expr_evaluator;
 pub(crate) mod whole_file_reader;
+pub use load_context::LoadContext;

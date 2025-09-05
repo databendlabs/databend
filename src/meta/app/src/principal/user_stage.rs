@@ -60,7 +60,7 @@ pub const COPY_MAX_FILES_PER_COMMIT: usize = 15000;
 /// Instruction for exceeding 'copy into table' file limit.
 pub const COPY_MAX_FILES_COMMIT_MSG: &str = "Commit limit reached: 15,000 files for 'copy into table'. To handle more files, adjust 'CopyOption' with 'max_files=<num>'(e.g., 'max_files=10000') and perform several operations until all files are processed.";
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum StageType {
     /// LegacyInternal will be deprecated.
     ///
@@ -96,7 +96,7 @@ impl Default for StageType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum StageFileCompression {
     Auto,
     Gzip,
@@ -396,13 +396,13 @@ impl Display for FileFormatOptions {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct StageParams {
     pub storage: StorageParams,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
@@ -419,7 +419,7 @@ pub struct CopyOptions {
     pub detailed_output: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct StageInfo {
     pub stage_name: String,
