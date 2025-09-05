@@ -114,6 +114,7 @@ impl MetaStore {
         if let Some(retry_timeout) = retry_timeout {
             let timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
 
+            let mut attempt = 0;
             let id = id.to_string();
             let prefix = prefix.to_string();
             loop {
@@ -133,6 +134,12 @@ impl MetaStore {
                 if let Ok(acquired_by_time) = acquired_by_time.await {
                     return acquired_by_time;
                 }
+
+                info!(
+                    "Semaphore retry attempt {}. retry timeout: {:?}",
+                    attempt, retry_timeout
+                );
+                attempt += 1;
             }
         }
 
