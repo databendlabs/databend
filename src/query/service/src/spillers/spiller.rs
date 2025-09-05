@@ -42,6 +42,8 @@ use super::serialize::*;
 use super::Location;
 use crate::sessions::QueryContext;
 
+pub type Spiller = SpillerInner<Arc<QueryContext>>;
+
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpillerType {
@@ -103,8 +105,8 @@ impl SpillerDiskConfig {
 /// 3. Serialization and deserialization input data
 /// 4. Interact with the underlying storage engine to write and read spilled data
 #[derive(Clone)]
-pub struct Spiller {
-    ctx: Arc<QueryContext>,
+pub struct SpillerInner<S: SpillFileManager> {
+    file_manager: S,
     operator: Operator,
     location_prefix: String,
     temp_dir: Option<Arc<TempDir>>,
@@ -115,21 +117,37 @@ pub struct Spiller {
 
     // Stores the spilled files that controlled by current spiller
     private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
-    pub join_spilling_partition_bits: usize,
     /// 1 partition -> N partition files
     pub partition_location: HashMap<usize, Vec<Location>>,
     /// Record how many bytes have been spilled for each partition.
     pub partition_spilled_bytes: HashMap<usize, u64>,
 }
 
+pub trait SpillFileManager: Send + Sync + 'static {
+    const PORTABLE: bool;
+
+    fn add_spill_file(&self, location: Location, layout: Layout, size: usize);
+    fn get_spill_layout(&self, location: &Location) -> Option<Layout>;
+}
+
+impl SpillFileManager for Arc<QueryContext> {
+    const PORTABLE: bool = false;
+
+    fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
+        self.as_ref().add_spill_file(location, layout, size);
+    }
+
+    fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
+        self.as_ref().get_spill_layout(location)
+    }
+}
+
 impl Spiller {
-    /// Create a new spiller
     pub fn create(
-        ctx: Arc<QueryContext>,
+        file_manager: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
     ) -> Result<Self> {
-        let settings = ctx.get_settings();
         let SpillerConfig {
             location_prefix,
             disk_spill,
@@ -146,7 +164,7 @@ impl Spiller {
         };
 
         Ok(Self {
-            ctx,
+            file_manager,
             operator,
             location_prefix,
             temp_dir,
@@ -154,14 +172,23 @@ impl Spiller {
             use_parquet,
             _spiller_type: spiller_type,
             private_spilled_files: Default::default(),
-            join_spilling_partition_bits: settings.get_join_spilling_partition_bits()?,
             partition_location: Default::default(),
             partition_spilled_bytes: Default::default(),
         })
     }
+}
 
+impl<M: SpillFileManager> SpillerInner<M> {
     pub fn spilled_partitions(&self) -> HashSet<usize> {
         self.partition_location.keys().copied().collect()
+    }
+
+    fn record_file(&self, location: Location, layout: Layout, data_size: usize) {
+        if !M::PORTABLE {
+            self.file_manager
+                .add_spill_file(location.clone(), layout.clone(), data_size);
+        }
+        self.private_spilled_files.write().insert(location, layout);
     }
 
     /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
@@ -170,11 +197,7 @@ impl Spiller {
         let (location, layout, data_size) = self.spill_unmanage(data_block).await?;
 
         // Record columns layout for spilled data.
-        self.ctx
-            .add_spill_file(location.clone(), layout.clone(), data_size);
-        self.private_spilled_files
-            .write()
-            .insert(location.clone(), layout);
+        self.record_file(location.clone(), layout, data_size);
         Ok(location)
     }
 
@@ -229,53 +252,12 @@ impl Spiller {
         }
 
         writer.close().await?;
-        self.ctx.add_spill_file(
+        self.record_file(
             Location::Remote(location.clone()),
             Layout::Aggregate,
             write_bytes,
         );
-
-        self.private_spilled_files
-            .write()
-            .insert(Location::Remote(location.clone()), Layout::Aggregate);
         Ok((location, write_bytes))
-    }
-
-    #[async_backtrace::framed]
-    /// Spill data block with partition
-    pub async fn spill_with_partition(
-        &mut self,
-        partition_id: usize,
-        data: Vec<DataBlock>,
-    ) -> Result<()> {
-        let (num_rows, memory_size) = data
-            .iter()
-            .map(|b| (b.num_rows(), b.memory_size()))
-            .reduce(|acc, x| (acc.0 + x.0, acc.1 + x.1))
-            .unwrap();
-
-        let progress_val = ProgressValues {
-            rows: num_rows,
-            bytes: memory_size,
-        };
-
-        self.partition_spilled_bytes
-            .entry(partition_id)
-            .and_modify(|bytes| {
-                *bytes += memory_size as u64;
-            })
-            .or_insert(memory_size as u64);
-
-        let location = self.spill(data).await?;
-        self.partition_location
-            .entry(partition_id)
-            .and_modify(|locs| {
-                locs.push(location.clone());
-            })
-            .or_insert(vec![location.clone()]);
-
-        self.ctx.get_join_spill_progress().incr(&progress_val);
-        Ok(())
     }
 
     pub async fn spill_with_merged_partitions(
@@ -316,11 +298,7 @@ impl Spiller {
         // Record statistics.
         record_write_profile(&location, &instant, write_bytes);
 
-        self.ctx
-            .add_spill_file(location.clone(), layout.clone(), write_bytes);
-        self.private_spilled_files
-            .write()
-            .insert(location.clone(), layout);
+        self.record_file(location.clone(), layout, write_bytes);
         Ok(MergedPartition {
             location,
             partitions,
@@ -328,10 +306,19 @@ impl Spiller {
     }
 
     /// Read a certain file to a [`DataBlock`].
-    /// We should guarantee that the file is managed by this spiller.
     #[fastrace::trace(name = "Spiller::read_spilled_file")]
     pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
-        let layout = self.ctx.get_spill_layout(location).unwrap();
+        let layout = self.file_manager.get_spill_layout(location).unwrap();
+        self.read_unmanage_spilled_file(location, &layout).await
+    }
+
+    async fn read_spilled_file_private(&self, location: &Location) -> Result<DataBlock> {
+        let layout = self
+            .private_spilled_files
+            .read()
+            .get(location)
+            .cloned()
+            .unwrap();
         self.read_unmanage_spilled_file(location, &layout).await
     }
 
@@ -517,6 +504,55 @@ impl Spiller {
     }
 }
 
+pub trait SpillFileManagerExt: SpillFileManager {
+    fn update_join_spill_progress(&self, progress: &ProgressValues);
+}
+
+impl SpillFileManagerExt for Arc<QueryContext> {
+    fn update_join_spill_progress(&self, progress: &ProgressValues) {
+        self.as_ref().get_join_spill_progress().incr(progress);
+    }
+}
+
+impl<M: SpillFileManagerExt> SpillerInner<M> {
+    #[async_backtrace::framed]
+    /// Spill data block with partition
+    pub async fn spill_with_partition(
+        &mut self,
+        partition_id: usize,
+        data: Vec<DataBlock>,
+    ) -> Result<()> {
+        let (num_rows, memory_size) = data
+            .iter()
+            .map(|b| (b.num_rows(), b.memory_size()))
+            .reduce(|acc, x| (acc.0 + x.0, acc.1 + x.1))
+            .unwrap();
+
+        let progress_val = ProgressValues {
+            rows: num_rows,
+            bytes: memory_size,
+        };
+
+        self.partition_spilled_bytes
+            .entry(partition_id)
+            .and_modify(|bytes| {
+                *bytes += memory_size as u64;
+            })
+            .or_insert(memory_size as u64);
+
+        let location = self.spill(data).await?;
+        self.partition_location
+            .entry(partition_id)
+            .and_modify(|locs| {
+                locs.push(location.clone());
+            })
+            .or_insert(vec![location.clone()]);
+
+        self.file_manager.update_join_spill_progress(&progress_val);
+        Ok(())
+    }
+}
+
 pub struct MergedPartition {
     pub location: Location,
     pub partitions: Vec<(usize, Chunk)>,
@@ -584,10 +620,73 @@ impl From<Spiller> for SpillerRef {
 #[async_trait::async_trait]
 impl DataBlockSpill for SpillerRef {
     async fn spill(&self, data_block: DataBlock) -> Result<Location> {
-        self.0.as_ref().spill(vec![data_block]).await
+        self.0.spill(vec![data_block]).await
     }
 
     async fn restore(&self, location: &Location) -> Result<DataBlock> {
         self.0.read_spilled_file(location).await
+    }
+}
+
+#[derive(Clone)]
+pub struct DummyFileManager;
+
+impl SpillFileManager for DummyFileManager {
+    const PORTABLE: bool = true;
+
+    fn add_spill_file(&self, _: Location, _: Layout, _: usize) {
+        unreachable!()
+    }
+
+    fn get_spill_layout(&self, _: &Location) -> Option<Layout> {
+        unreachable!()
+    }
+}
+
+pub type PortableSpiller = SpillerInner<DummyFileManager>;
+
+impl PortableSpiller {
+    pub fn create(operator: Operator, config: SpillerConfig) -> Result<PortableSpillerRef> {
+        let SpillerConfig {
+            location_prefix,
+            disk_spill,
+            spiller_type,
+            use_parquet,
+        } = config;
+
+        let (temp_dir, local_operator) = match disk_spill {
+            Some(SpillerDiskConfig {
+                temp_dir,
+                local_operator,
+            }) => (Some(temp_dir), local_operator),
+            None => (None, None),
+        };
+
+        Ok(PortableSpillerRef(Arc::new(Self {
+            file_manager: DummyFileManager,
+            operator,
+            location_prefix,
+            temp_dir,
+            local_operator,
+            use_parquet,
+            _spiller_type: spiller_type,
+            private_spilled_files: Default::default(),
+            partition_location: Default::default(),
+            partition_spilled_bytes: Default::default(),
+        })))
+    }
+}
+
+#[derive(Clone)]
+pub struct PortableSpillerRef(Arc<PortableSpiller>);
+
+#[async_trait::async_trait]
+impl DataBlockSpill for PortableSpillerRef {
+    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+        self.0.spill(vec![data_block]).await
+    }
+
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
+        self.0.read_spilled_file_private(location).await
     }
 }
