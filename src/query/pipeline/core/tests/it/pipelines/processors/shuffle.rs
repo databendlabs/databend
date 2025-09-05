@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::BlockLimit;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
@@ -43,10 +46,18 @@ async fn test_shuffle_output_finish() -> Result<()> {
     let downstream_input2 = InputPort::create();
 
     unsafe {
-        connect(&input1, &upstream_output1);
-        connect(&input2, &upstream_output2);
-        connect(&downstream_input1, &output1);
-        connect(&downstream_input2, &output2);
+        connect(&input1, &upstream_output1, Arc::new(BlockLimit::default()));
+        connect(&input2, &upstream_output2, Arc::new(BlockLimit::default()));
+        connect(
+            &downstream_input1,
+            &output1,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input2,
+            &output2,
+            Arc::new(BlockLimit::default()),
+        );
     }
 
     downstream_input1.finish();
@@ -106,14 +117,30 @@ async fn test_shuffle_processor() -> Result<()> {
     let downstream_input4 = InputPort::create();
 
     unsafe {
-        connect(&input1, &upstream_output1);
-        connect(&input2, &upstream_output2);
-        connect(&input3, &upstream_output3);
-        connect(&input4, &upstream_output4);
-        connect(&downstream_input1, &output1);
-        connect(&downstream_input2, &output2);
-        connect(&downstream_input3, &output3);
-        connect(&downstream_input4, &output4);
+        connect(&input1, &upstream_output1, Arc::new(BlockLimit::default()));
+        connect(&input2, &upstream_output2, Arc::new(BlockLimit::default()));
+        connect(&input3, &upstream_output3, Arc::new(BlockLimit::default()));
+        connect(&input4, &upstream_output4, Arc::new(BlockLimit::default()));
+        connect(
+            &downstream_input1,
+            &output1,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input2,
+            &output2,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input3,
+            &output3,
+            Arc::new(BlockLimit::default()),
+        );
+        connect(
+            &downstream_input4,
+            &output4,
+            Arc::new(BlockLimit::default()),
+        );
     }
 
     let col1 = Int32Type::from_data(vec![1]);
