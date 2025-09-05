@@ -3,6 +3,12 @@ name: Bindings Python
 on:
   ## uncomment it when bendpy is enabled
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (optional for testing)
+        required: false
+        type: string
+        default: "test-build"
   pull_request:
     branches:
       - main

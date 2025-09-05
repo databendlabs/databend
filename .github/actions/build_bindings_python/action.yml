@@ -57,7 +57,7 @@ runs:
         enable-cache: true
 
     - name: Build wheels
-      if: inputs.tag
+      if: inputs.version
       uses: PyO3/maturin-action@v1
       with:
         rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
