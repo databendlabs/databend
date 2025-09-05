@@ -1,6 +1,6 @@
 # Databend Python Binding
 
-This crate intends to build a native python binding.
+Official Python binding for [Databend](https://databend.com) - A modern cloud data warehouse with vectorized execution and elastic scaling.
 
 ## Installation
 
@@ -8,50 +8,44 @@ This crate intends to build a native python binding.
 pip install databend
 ```
 
-## Usage
+## Quick Start
 
-### Basic:
 ```python
 import databend
-databend.init_service(local_dir = ".databend")
-# or use config
-# databend.init_service( config = "config.toml.sample" )
 
-from databend import SessionContext
-ctx = SessionContext()
+# Initialize service (call once at startup)
+databend.init_service(local_dir=".databend")
 
-df = ctx.sql("select number, number + 1, number::String as number_p_1 from numbers(8)")
+# Create session
+ctx = databend.SessionContext()
 
+# Execute SQL
+df = ctx.sql("SELECT number, number + 1 FROM numbers(5)")
 df.show()
-# convert to pyarrow
-import pyarrow
-df.to_py_arrow()
 
-# convert to pandas
-import pandas
-df.to_pandas()
+# Convert to pandas/polars
+pandas_df = df.to_pandas()
+polars_df = df.to_polars()
 ```
 
-### Register external table:
+## Core Features
 
-***supported functions:***
-- register_parquet
-- register_ndjson
-- register_csv
-- register_tsv
-
+**SQL Analytics**: Full SQL support with advanced functions
 ```python
-
-ctx.register_parquet("pa", "/home/sundy/dataset/hits_p/", pattern = ".*.parquet")
-ctx.sql("select * from pa limit 10").collect()
+ctx.sql("SELECT department, AVG(salary) FROM employees GROUP BY department").show()
 ```
 
-### Tenant separation:
-
-Tenant has it's own catalog and tables
-
+**External Data**: Register and query files directly
 ```python
-ctx = SessionContext(tenant = "your_tenant_name")
+ctx.register_parquet("events", "/path/to/events/", pattern="*.parquet")  
+ctx.register_csv("users", "/path/to/users.csv")
+df = ctx.sql("SELECT * FROM events JOIN users ON events.user_id = users.id")
+```
+
+**Multi-tenant**: Isolated data per tenant
+```python
+ctx_a = databend.SessionContext(tenant="team_a")
+ctx_b = databend.SessionContext(tenant="team_b")  # Completely separate
 ```
 
 ## Development
