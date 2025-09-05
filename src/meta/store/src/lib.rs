@@ -108,7 +108,7 @@ impl MetaStore {
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
         let client = self.deref();
-        Semaphore::new_acquired_by_time(client.clone(), prefix, capacity, id, lease).await
+        Semaphore::new_acquired_by_time(client.clone(), prefix, capacity, id, None, lease).await
     }
 }
 

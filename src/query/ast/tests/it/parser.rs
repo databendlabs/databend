@@ -1134,6 +1134,7 @@ fn test_statement_error() {
                 RETURN sum;
             END;
             $$;"#,
+        r#"copy into t1 from (select a from @data/not_exists where a = 1)"#,
     ];
 
     for case in cases {

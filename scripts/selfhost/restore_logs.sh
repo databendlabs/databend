@@ -170,8 +170,8 @@ interactive_file_selector() {
 	echo ""
 
 	# Calculate column widths for alignment
-	local max_name_len=8  # minimum for "Filename"
-	local max_size_len=4  # minimum for "Size"
+	local max_name_len=8 # minimum for "Filename"
+	local max_size_len=4 # minimum for "Size"
 
 	calculate_column_widths() {
 		max_name_len=8
@@ -181,7 +181,7 @@ interactive_file_selector() {
 			[[ ${#files[$i]} -gt $max_name_len ]] && max_name_len=${#files[$i]}
 			[[ ${#sizes[$i]} -gt $max_size_len ]] && max_size_len=${#sizes[$i]}
 		done
-		
+
 		# Add padding
 		max_name_len=$((max_name_len + 2))
 		max_size_len=$((max_size_len + 2))
@@ -195,13 +195,13 @@ interactive_file_selector() {
 		local time_since_refresh=$((current_time - last_refresh))
 		local next_refresh=$((30 - time_since_refresh))
 		[[ $next_refresh -lt 0 ]] && next_refresh=0
-		
+
 		# Clear screen and move to top
 		echo -ne "\033[2J\033[H"
 		echo "Stage: @${stage} ($total files) - Next refresh in ${next_refresh}s"
 		echo "Use ↑/↓ or k/j to navigate, Enter to select, r to refresh, q to quit"
 		echo ""
-		
+
 		# Header
 		printf "%-${max_name_len}s %-${max_size_len}s %s\n" "Filename" "Size" "Last Modified"
 		printf "%-${max_name_len}s %-${max_size_len}s %s\n" \
@@ -227,7 +227,7 @@ interactive_file_selector() {
 	refresh_data() {
 		echo -ne "\033[2J\033[H"
 		echo "Refreshing file list from stage @${stage}..."
-		
+
 		local old_selected_file=""
 		if [[ $selected -lt ${#files[@]} ]]; then
 			old_selected_file="${files[$selected]}"
@@ -258,9 +258,9 @@ interactive_file_selector() {
 			total=${#files[@]}
 			calculate_column_widths
 			last_refresh=$(date +%s)
-			
+
 			# Try to maintain selection on the same file
-			selected=0  # Default to first
+			selected=0 # Default to first
 			if [[ -n "$old_selected_file" ]]; then
 				for i in "${!files[@]}"; do
 					if [[ "${files[$i]}" == "$old_selected_file" ]]; then
@@ -269,7 +269,7 @@ interactive_file_selector() {
 					fi
 				done
 			fi
-			
+
 			# Ensure selected is within bounds
 			if [[ $selected -ge $total ]]; then
 				selected=$((total - 1))
@@ -299,7 +299,7 @@ interactive_file_selector() {
 		# Calculate remaining time for timeout
 		local timeout=$((30 - (current_time - last_refresh)))
 		[[ $timeout -le 0 ]] && timeout=1
-		
+
 		# Read single character with timeout
 		if read -rsn1 -t $timeout key; then
 			case "$key" in
