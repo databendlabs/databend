@@ -4035,6 +4035,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
+ "databend-storages-common-cache",
  "itertools 0.13.0",
  "jsonb",
  "log",

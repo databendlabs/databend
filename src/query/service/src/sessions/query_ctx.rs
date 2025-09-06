@@ -155,6 +155,7 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::spillers;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
@@ -412,11 +413,11 @@ impl QueryContext {
 
     pub fn add_spill_file(
         &self,
-        location: crate::spillers::Location,
-        layout: crate::spillers::Layout,
+        location: spillers::Location,
+        layout: spillers::Layout,
         data_size: usize,
     ) {
-        if matches!(location, crate::spillers::Location::Remote(_)) {
+        if matches!(location, spillers::Location::Remote(_)) {
             let current_id = self.get_cluster().local_id();
             let mut w = self.shared.cluster_spill_progress.write();
             let p = SpillProgress::new(1, data_size);
@@ -458,15 +459,12 @@ impl QueryContext {
         total
     }
 
-    pub fn get_spill_layout(
-        &self,
-        location: &crate::spillers::Location,
-    ) -> Option<crate::spillers::Layout> {
+    pub fn get_spill_layout(&self, location: &spillers::Location) -> Option<spillers::Layout> {
         let r = self.shared.spilled_files.read();
         r.get(location).cloned()
     }
 
-    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
+    pub fn get_spilled_files(&self) -> Vec<spillers::Location> {
         let r = self.shared.spilled_files.read();
         r.keys().cloned().collect()
     }
@@ -532,7 +530,7 @@ impl QueryContext {
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
-                crate::spillers::Location::Remote(r) => Some(r),
+                spillers::Location::Remote(r) => Some(r),
                 _ => None,
             })
             .cloned()

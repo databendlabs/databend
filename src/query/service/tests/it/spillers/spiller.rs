@@ -54,7 +54,7 @@ async fn test_spill_with_partition() -> Result<()> {
     let res = spiller.spill_with_partition(0, vec![data]).await;
 
     assert!(res.is_ok());
-    let location = &spiller.partition_location.get(&0).unwrap()[0];
+    let location = &spiller.get_partition_locations(&0).unwrap()[0];
     assert_matches!(location, Location::Remote(_));
 
     // Test read spilled data

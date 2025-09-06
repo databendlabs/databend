@@ -162,7 +162,6 @@ impl PipelinePullingExecutor {
         })
     }
 
-    #[fastrace::trace]
     pub fn start(&mut self) {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 

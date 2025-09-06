@@ -15,9 +15,12 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -30,10 +33,9 @@ use databend_common_pipeline_transforms::HookTransformer;
 use super::bounds::Bounds;
 use super::SortCollectedMeta;
 use super::SortExchangeMeta;
-use crate::sessions::QueryContext;
 
-pub struct TransformSortBoundBroadcast<R: Rows> {
-    state: SortSampleState,
+pub struct TransformSortBoundBroadcast<R: Rows, C: BroadcastChannel> {
+    state: SortSampleState<C>,
     input_data: Vec<SortCollectedMeta>,
     output_data: Option<SortCollectedMeta>,
     called_on_finish: bool,
@@ -41,11 +43,15 @@ pub struct TransformSortBoundBroadcast<R: Rows> {
     _r: PhantomData<R>,
 }
 
-impl<R: Rows + 'static> TransformSortBoundBroadcast<R> {
+impl<R, C> TransformSortBoundBroadcast<R, C>
+where
+    R: Rows + 'static,
+    C: BroadcastChannel,
+{
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        state: SortSampleState,
+        state: SortSampleState<C>,
     ) -> Box<dyn Processor> {
         Box::new(HookTransformer::new(input, output, Self {
             state,
@@ -58,17 +64,20 @@ impl<R: Rows + 'static> TransformSortBoundBroadcast<R> {
 }
 
 #[derive(Clone)]
-pub struct SortSampleState {
-    ctx: Arc<QueryContext>,
-    broadcast_id: u32,
+pub struct SortSampleState<C: BroadcastChannel> {
+    channel: C,
     batch_rows: usize,
 }
 
-impl SortSampleState {
-    pub fn new(batch_rows: usize, ctx: Arc<QueryContext>, broadcast_id: u32) -> SortSampleState {
-        SortSampleState {
-            ctx,
-            broadcast_id,
+pub trait BroadcastChannel: Clone + Send + 'static {
+    fn sender(&self) -> Sender<BlockMetaInfoPtr>;
+    fn receiver(&self) -> Receiver<BlockMetaInfoPtr>;
+}
+
+impl<C: BroadcastChannel> SortSampleState<C> {
+    pub fn new(batch_rows: usize, channel: C) -> Self {
+        Self {
+            channel,
             batch_rows,
         }
     }
@@ -78,7 +87,7 @@ impl SortSampleState {
         &mut self,
         meta: Option<SortExchangeMeta>,
     ) -> Result<Vec<SortExchangeMeta>> {
-        let sender = self.ctx.broadcast_source_sender(self.broadcast_id);
+        let sender = self.channel.sender();
         let is_empty = meta.is_none();
         let meta = meta.map(|meta| meta.boxed()).unwrap_or(().boxed());
         sender
@@ -88,7 +97,7 @@ impl SortSampleState {
         sender.close();
         log::debug!(is_empty; "sample has sent");
 
-        let receiver = self.ctx.broadcast_sink_receiver(self.broadcast_id);
+        let receiver = self.channel.receiver();
         let mut all = Vec::new();
         while let Ok(r) = receiver.recv().await {
             match SortExchangeMeta::downcast_from_err(r) {
@@ -103,7 +112,11 @@ impl SortSampleState {
 }
 
 #[async_trait::async_trait]
-impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
+impl<R, C> HookTransform for TransformSortBoundBroadcast<R, C>
+where
+    R: Rows + 'static,
+    C: BroadcastChannel,
+{
     const NAME: &'static str = "SortBoundBroadcast";
 
     fn on_input(&mut self, mut data: DataBlock) -> Result<()> {

@@ -76,9 +76,9 @@ print("Done")
     ]
 
     for phrase in expected_phrases:
-        assert (
-            phrase in output
-        ), f"Expected phrase '{phrase}' not found in output:\n{output}"
+        assert phrase in output, (
+            f"Expected phrase '{phrase}' not found in output:\n{output}"
+        )
 
     print("✓ Cross-task access test passed")
     kill_databend_meta()
