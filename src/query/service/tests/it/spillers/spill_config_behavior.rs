@@ -170,7 +170,7 @@ async fn test_spill_data_integrity() -> Result<()> {
     assert!(spill_result.is_ok(), "Spill operation should succeed");
 
     // Verify spill locations were created
-    let locations = spiller.partition_location.get(&0);
+    let locations = spiller.get_partition_locations(&0);
     assert!(locations.is_some(), "Spill locations should be created");
     let locations = locations.unwrap();
     assert!(

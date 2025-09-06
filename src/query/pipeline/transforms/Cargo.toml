@@ -15,6 +15,7 @@ databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }

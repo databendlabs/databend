@@ -33,12 +33,12 @@ use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::*;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
-use crate::spillers::Spiller;
 
 enum SortType {
     Sort(Arc<InputPort>),
@@ -56,26 +56,26 @@ enum SortType {
     BoundedMergeSort(Vec<Arc<InputPort>>),
 }
 
-pub struct TransformSortBuilder {
+pub struct TransformSortBuilder<S: DataBlockSpill> {
     schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Arc<[SortColumnDescription]>,
     order_col_generated: bool,
     output_order_col: bool,
     memory_settings: MemorySettings,
-    spiller: Option<Arc<Spiller>>,
+    spiller: Option<S>,
     enable_loser_tree: bool,
     limit: Option<usize>,
     enable_fixed_rows: bool,
 }
 
-impl TransformSortBuilder {
+impl<S: DataBlockSpill> TransformSortBuilder<S> {
     pub fn new(
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
         enable_fixed_rows: bool,
-    ) -> Self {
+    ) -> TransformSortBuilder<S> {
         TransformSortBuilder {
             block_size,
             schema,
@@ -90,7 +90,7 @@ impl TransformSortBuilder {
         }
     }
 
-    pub fn with_spiller(mut self, spiller: Arc<Spiller>) -> Self {
+    pub fn with_spiller(mut self, spiller: S) -> Self {
         self.spiller = Some(spiller);
         self
     }
@@ -219,7 +219,7 @@ impl TransformSortBuilder {
         assert_eq!(self.schema.has_field(ORDER_COL_NAME), self.output_order_col)
     }
 
-    fn new_base(&self) -> Base {
+    fn new_base(&self) -> Base<S> {
         let schema = self.inner_schema();
         let sort_row_offset = schema.fields().len() - 1;
         Base {
@@ -282,13 +282,13 @@ impl TransformSortBuilder {
     }
 }
 
-struct Build<'a> {
-    params: &'a TransformSortBuilder,
+struct Build<'a, S: DataBlockSpill> {
+    params: &'a TransformSortBuilder<S>,
     typ: Option<SortType>,
     output: Arc<OutputPort>,
 }
 
-impl Build<'_> {
+impl<S: DataBlockSpill> Build<'_, S> {
     fn build_sort<A, C>(
         &mut self,
         sort_limit: bool,
@@ -303,7 +303,7 @@ impl Build<'_> {
             &self.params.sort_desc,
             self.params.enable_fixed_rows,
         );
-        Ok(Box::new(TransformSort::<A, C>::new(
+        Ok(Box::new(TransformSort::<A, C, S>::new(
             input,
             self.output.clone(),
             schema,
@@ -327,7 +327,7 @@ impl Build<'_> {
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
-        Ok(Box::new(TransformSortCollect::<A, C>::new(
+        Ok(Box::new(TransformSortCollect::<A, C, S>::new(
             input,
             self.output.clone(),
             self.params.new_base(),
@@ -342,7 +342,7 @@ impl Build<'_> {
 
     fn build_sort_restore<A>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        Ok(Box::new(TransformSortRestore::<A>::create(
+        Ok(Box::new(TransformSortRestore::<A, S>::create(
             input,
             self.output.clone(),
             self.params.new_base(),
@@ -382,7 +382,7 @@ impl Build<'_> {
     }
 }
 
-impl RowsTypeVisitor for Build<'_> {
+impl<S: DataBlockSpill> RowsTypeVisitor for Build<'_, S> {
     type Result = Result<Box<dyn Processor>>;
     fn schema(&self) -> DataSchemaRef {
         self.params.schema.clone()

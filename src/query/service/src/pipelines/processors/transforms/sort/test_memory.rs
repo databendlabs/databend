@@ -29,12 +29,12 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
 use rand::Rng;
 
 use crate::sessions::QueryContext;
-use crate::spillers::Location;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
