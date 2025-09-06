@@ -16,6 +16,8 @@ mod adapter;
 mod inner;
 mod partition_buffer;
 mod serialize;
+#[cfg(test)]
+mod test_memory;
 
 pub use adapter::*;
 pub use databend_common_pipeline_transforms::traits::Location;

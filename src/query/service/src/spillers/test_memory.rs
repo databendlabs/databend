@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use bytesize::ByteSize;
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::SpillConfig;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -34,13 +33,12 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
 use rand::Rng;
 
-use crate::sessions::QueryContext;
-use crate::spillers::Spiller;
+use crate::spillers::new_lite_spiller;
+use crate::spillers::LiteSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 use crate::test_kits::ConfigBuilder;
-use crate::test_kits::TestFixture;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
@@ -188,30 +186,30 @@ impl MockDataGen {
     }
 }
 
-async fn init() -> Result<(TestFixture, Arc<QueryContext>, Spiller)> {
-    let mut config = ConfigBuilder::create().config();
-    config.spill = SpillConfig::new_for_test("test_data".to_string(), 0.01, 1 << 30);
-    let fixture = TestFixture::setup_with_config(&config).await?;
+async fn init() -> Result<LiteSpiller> {
+    GlobalInstance::init_testing(std::thread::current().name().unwrap());
 
-    let ctx = fixture.new_query_ctx().await?;
+    let config = ConfigBuilder::create().config();
+    let spill_config =
+        SpillConfig::new_for_test(".databend/_query_spill".to_string(), 0.01, 1 << 30);
 
+    GlobalIORuntime::init(2)?;
+    DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
+    TempDirManager::init(&spill_config, "test_tenant")?;
     let temp_dir_manager = TempDirManager::instance();
     let disk_spill = temp_dir_manager
-        .get_disk_spill_dir(1024 * 1024 * 1024 * 10, &ctx.get_id())
+        .get_disk_spill_dir(1024 * 1024 * 1024 * 10, "test_id")
         .map(|temp_dir| SpillerDiskConfig::new(temp_dir, true))
         .transpose()?;
 
-    // Create spiller configuration (using remote storage)
-    let location_prefix = ctx.query_id_spill_prefix();
     let spiller_config = SpillerConfig {
         spiller_type: SpillerType::OrderBy,
-        location_prefix,
+        location_prefix: "_query_spill".to_string(),
         disk_spill,
         use_parquet: true,
     };
     let operator = DataOperator::instance().spill_operator();
-    let spiller = Spiller::create(ctx.clone(), operator, spiller_config)?;
-    Ok((fixture, ctx, spiller))
+    new_lite_spiller(operator, spiller_config)
 }
 
 #[derive(Debug)]
@@ -223,11 +221,10 @@ pub struct TestResult {
     pub memory_usage_real: ByteSize,
 }
 
-async fn run_spill_test(spiller: &Spiller, rows: usize) -> Result<TestResult> {
+async fn run_spill_test(spiller: &LiteSpiller, rows: usize) -> Result<TestResult> {
     let data_block = MockDataGen::generate_orders_table(rows);
     let memory_size = ByteSize(data_block.memory_size() as _);
 
-    // Spill the data block
     let Location::Local(path) = spiller.spill(vec![data_block]).await? else {
         unreachable!()
     };
@@ -252,8 +249,7 @@ async fn run_spill_test(spiller: &Spiller, rows: usize) -> Result<TestResult> {
 // #[tokio::test] manual test only
 #[allow(dead_code)]
 async fn test_block_spill_sizes() -> Result<()> {
-    let (fixture, _, spiller) = init().await?;
-    fixture.keep_alive();
+    let spiller = init().await?;
 
     // Test different row counts
     let row_counts = vec![1000, 10000, 50000, 65535];

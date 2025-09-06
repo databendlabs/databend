@@ -32,8 +32,6 @@ mod sort_merge_stream;
 mod sort_restore;
 mod sort_route;
 mod sort_spill;
-#[cfg(test)]
-mod test_memory;
 
 pub use merge_sort::*;
 pub use sort_broadcast::*;
