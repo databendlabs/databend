@@ -179,8 +179,6 @@ impl AggregateHashTable {
     ) -> Result<usize> {
         #[cfg(debug_assertions)]
         {
-            println!("==== add_groups_inner ====");
-            println!("group_types: {:?}", self.payload.group_types);
             for (i, group_column) in group_columns.iter().enumerate() {
                 if group_column.data_type() != self.payload.group_types[i] {
                     return Err(ErrorCode::UnknownException(format!(
