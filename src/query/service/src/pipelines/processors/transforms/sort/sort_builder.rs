@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::InputPort;
@@ -49,7 +50,7 @@ enum SortType {
     },
     BoundBroadcast {
         input: Arc<InputPort>,
-        state: SortSampleState,
+        state: SortSampleState<ContextChannel>,
     },
     Restore(Arc<InputPort>),
 
@@ -156,7 +157,7 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        state: SortSampleState,
+        state: SortSampleState<ContextChannel>,
     ) -> Result<Box<dyn Processor>> {
         self.check();
 
@@ -239,9 +240,9 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
         pipeline: &mut Pipeline,
         batch_rows: usize,
         ctx: Arc<QueryContext>,
-        broadcast_id: u32,
+        id: u32,
     ) -> Result<()> {
-        let state = SortSampleState::new(batch_rows, ctx, broadcast_id);
+        let state = SortSampleState::new(batch_rows, ContextChannel { ctx, id });
 
         pipeline.resize(1, false)?;
         pipeline.add_transform(|input, output| {
@@ -351,15 +352,16 @@ impl<S: DataBlockSpill> Build<'_, S> {
         )?))
     }
 
-    fn build_bound_broadcast<R>(
+    fn build_bound_broadcast<R, C>(
         &mut self,
         input: Arc<InputPort>,
-        state: SortSampleState,
+        state: SortSampleState<C>,
     ) -> Result<Box<dyn Processor>>
     where
         R: Rows + 'static,
+        C: BroadcastChannel,
     {
-        Ok(TransformSortBoundBroadcast::<R>::create(
+        Ok(TransformSortBoundBroadcast::<R, C>::create(
             input,
             self.output.clone(),
             state,
@@ -418,7 +420,7 @@ impl<S: DataBlockSpill> RowsTypeVisitor for Build<'_, S> {
                 }
             },
             SortType::BoundBroadcast { input, state } => {
-                self.build_bound_broadcast::<R>(input, state)
+                self.build_bound_broadcast::<R, _>(input, state)
             }
             SortType::Restore(input) => match self.params.enable_loser_tree {
                 true => self.build_sort_restore::<LoserTreeSort<R>>(input),
@@ -430,5 +432,21 @@ impl<S: DataBlockSpill> RowsTypeVisitor for Build<'_, S> {
                 false => self.build_bounded_merge_sort::<HeapSort<R>>(inputs),
             },
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct ContextChannel {
+    ctx: Arc<QueryContext>,
+    id: u32,
+}
+
+impl BroadcastChannel for ContextChannel {
+    fn sender(&self) -> async_channel::Sender<BlockMetaInfoPtr> {
+        self.ctx.broadcast_source_sender(self.id)
+    }
+
+    fn receiver(&self) -> async_channel::Receiver<BlockMetaInfoPtr> {
+        self.ctx.broadcast_sink_receiver(self.id)
     }
 }
