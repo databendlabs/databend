@@ -98,6 +98,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::meta_node_kv_api_impl::MetaKVApi;
 use crate::meta_service::meta_node_kv_api_impl::MetaKVApiOwned;
 use crate::meta_service::meta_node_status::MetaNodeStatus;
+use crate::meta_service::runtime_config::RuntimeConfig;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
 use crate::meta_service::RaftServiceImpl;
@@ -121,6 +122,7 @@ pub struct MetaNode {
     /// Other components should keep a weak one.
     pub dispatcher_handle: Arc<DispatcherHandle>,
     pub raft: MetaRaft,
+    pub runtime_config: RuntimeConfig,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
@@ -175,6 +177,8 @@ impl MetaNodeBuilder {
             .await
             .map_err(|e| MetaStartupError::MetaServiceError(e.to_string()))?;
 
+        let runtime_config = RuntimeConfig::default();
+
         let (tx, rx) = watch::channel::<()>(());
 
         let handle = Dispatcher::spawn();
@@ -183,7 +187,17 @@ impl MetaNodeBuilder {
 
         let on_change_applied = {
             let h = handle.clone();
-            move |change| h.send_change(change)
+            let broadcast = runtime_config.broadcast_state_machine_changes.clone();
+            move |change| {
+                if broadcast.load(std::sync::atomic::Ordering::Relaxed) {
+                    h.send_change(change)
+                } else {
+                    info!(
+                        "broadcast_state_machine_changes is disabled, ignoring change: {:?}",
+                        change
+                    );
+                }
+            }
         };
 
         sto.state_machine()
@@ -193,6 +207,7 @@ impl MetaNodeBuilder {
             raft_store: sto.clone(),
             dispatcher_handle: handle,
             raft: raft.clone(),
+            runtime_config,
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
@@ -1593,6 +1608,10 @@ impl MetaNode {
 
     pub fn kv_api_owned(self: &Arc<Self>) -> MetaKVApiOwned {
         MetaKVApiOwned::new(self.clone())
+    }
+
+    pub fn runtime_config(&self) -> &RuntimeConfig {
+        &self.runtime_config
     }
 }
 
