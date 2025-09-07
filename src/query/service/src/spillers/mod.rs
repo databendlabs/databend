@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod adapter;
+mod inner;
 mod partition_buffer;
 mod serialize;
-mod spiller;
+#[cfg(test)]
+mod test_memory;
 
+pub use adapter::*;
+pub use databend_common_pipeline_transforms::traits::Location;
+pub use inner::*;
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
 pub use serialize::Layout;
-pub use spiller::*;

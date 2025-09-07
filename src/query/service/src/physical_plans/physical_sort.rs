@@ -49,8 +49,11 @@ use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
 use crate::pipelines::builders::SortPipelineBuilder;
-use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
+use crate::spillers::SortSpiller;
+
+type TransformSortBuilder =
+    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpiller>;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {

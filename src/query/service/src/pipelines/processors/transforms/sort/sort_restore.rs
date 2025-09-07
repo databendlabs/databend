@@ -23,6 +23,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::HookTransform;
 use databend_common_pipeline_transforms::HookTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
@@ -34,7 +35,7 @@ use super::SortBound;
 use super::SortBoundNext;
 use super::SortCollectedMeta;
 
-pub struct TransformSortRestore<A: SortAlgorithm> {
+pub struct TransformSortRestore<A: SortAlgorithm, S: DataBlockSpill> {
     input: Vec<SortCollectedMeta>,
     output: Option<DataBlock>,
 
@@ -43,17 +44,19 @@ pub struct TransformSortRestore<A: SortAlgorithm> {
     remove_order_col: bool,
     memory_settings: MemorySettings,
 
-    base: Base,
-    inner: Option<SortSpill<A>>,
+    base: Base<S>,
+    inner: Option<SortSpill<A, S>>,
 }
 
-impl<A> TransformSortRestore<A>
-where A: SortAlgorithm + Send + 'static
+impl<A, S> TransformSortRestore<A, S>
+where
+    A: SortAlgorithm + Send + 'static,
+    S: DataBlockSpill,
 {
     pub(super) fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        base: Base,
+        base: Base<S>,
         output_order_col: bool,
         memory_settings: MemorySettings,
     ) -> Result<HookTransformer<Self>> {
@@ -69,10 +72,11 @@ where A: SortAlgorithm + Send + 'static
 }
 
 #[async_trait::async_trait]
-impl<A> HookTransform for TransformSortRestore<A>
+impl<A, S> HookTransform for TransformSortRestore<A, S>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
+    S: DataBlockSpill,
 {
     const NAME: &'static str = "TransformSortRestore";
 

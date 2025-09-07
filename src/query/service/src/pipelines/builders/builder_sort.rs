@@ -35,12 +35,14 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::sessions::QueryContext;
-use crate::spillers::Spiller;
+use crate::spillers::SortSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
+
+type TransformSortBuilder =
+    crate::pipelines::processors::transforms::TransformSortBuilder<SortSpiller>;
 
 pub struct SortPipelineBuilder {
     ctx: Arc<QueryContext>,
@@ -145,7 +147,7 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
+            SortSpiller::new(self.ctx.clone(), op, config)?
         };
 
         pipeline.add_transform(|input, output| {
@@ -231,7 +233,7 @@ impl SortPipelineBuilder {
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
             let op = DataOperator::instance().spill_operator();
-            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
+            SortSpiller::new(self.ctx.clone(), op, config)?
         };
 
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
