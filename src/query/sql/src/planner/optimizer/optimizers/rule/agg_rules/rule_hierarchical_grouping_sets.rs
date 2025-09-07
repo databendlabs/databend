@@ -66,10 +66,16 @@ const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
 pub struct RuleHierarchicalGroupingSetsToUnion {
     id: RuleID,
     matchers: Vec<Matcher>,
+    cte_channel_size: usize,
 }
 
 impl RuleHierarchicalGroupingSetsToUnion {
-    pub fn new(_ctx: Arc<OptimizerContext>) -> Self {
+    pub fn new(ctx: Arc<OptimizerContext>) -> Self {
+        let cte_channel_size = ctx
+            .get_table_ctx()
+            .get_settings()
+            .get_grouping_sets_channel_size()
+            .unwrap();
         Self {
             id: ID,
             matchers: vec![Matcher::MatchOp {
@@ -79,21 +85,36 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     children: vec![Matcher::Leaf],
                 }],
             }],
+            cte_channel_size: cte_channel_size as usize,
         }
     }
 
     /// Analyzes grouping sets to build a true hierarchical dependency DAG
-    fn build_hierarchy_dag(&self, grouping_sets: &[Vec<IndexType>]) -> HierarchyDAG {
+    fn build_hierarchy_dag(
+        &self,
+        grouping_sets: &[Vec<IndexType>],
+        agg: &Aggregate,
+    ) -> HierarchyDAG {
         let mut levels: Vec<GroupingLevel> = grouping_sets
             .iter()
             .enumerate()
-            .map(|(idx, set)| GroupingLevel {
-                set_index: idx,
-                columns: set.clone(),
-                direct_children: Vec::new(),
-                possible_parents: Vec::new(),
-                chosen_parent: None,
-                level: set.len(),
+            .map(|(idx, set)| {
+                // Sort columns according to their order in group_items for consistent schema ordering
+                let mut sorted_columns = set.clone();
+                sorted_columns.sort_by_key(|&col_idx| {
+                    agg.group_items
+                        .iter()
+                        .position(|item| item.index == col_idx)
+                        .unwrap_or(usize::MAX) // Put unknown columns at the end
+                });
+                GroupingLevel {
+                    set_index: idx,
+                    columns: sorted_columns,
+                    direct_children: Vec::new(),
+                    possible_parents: Vec::new(),
+                    chosen_parent: None,
+                    level: set.len(),
+                }
             })
             .collect();
 
@@ -406,7 +427,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: None,
+                    channel_size: Some(self.cte_channel_size),
                 }
                 .into(),
             ),
@@ -457,7 +478,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: None,
+                    channel_size: Some(self.cte_channel_size),
                 }
                 .into(),
             ),
@@ -497,7 +518,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: None,
+                    channel_size: Some(self.cte_channel_size),
                 }
                 .into(),
             ),
@@ -632,10 +653,11 @@ impl RuleHierarchicalGroupingSetsToUnion {
         // Create parent CTE consumer
         let parent_output_columns: Vec<IndexType> = {
             let mut output_cols = Vec::new();
-            // Then: aggregate function output columns
+            // First: aggregate function output columns
             for agg_item in &agg.aggregate_functions {
                 output_cols.push(agg_item.index);
             }
+            // Then: parent level columns (already sorted from build_hierarchy_dag)
             for &col_idx in &parent_level.columns {
                 output_cols.push(col_idx);
             }
@@ -666,7 +688,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                     cte_name: cte_name.to_string(),
                     cte_output_columns: None,
                     ref_count: 1,
-                    channel_size: None,
+                    channel_size: Some(self.cte_channel_size),
                 }
                 .into(),
             ),
@@ -850,7 +872,7 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
         }
 
         // Build hierarchy DAG
-        let hierarchy = self.build_hierarchy_dag(&grouping_sets.sets);
+        let hierarchy = self.build_hierarchy_dag(&grouping_sets.sets, &agg);
         // Check if we have meaningful hierarchical structure
         let hierarchical_levels = hierarchy
             .levels
