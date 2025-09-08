@@ -18,20 +18,21 @@ crate-type = ["cdylib"]
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
 ctor = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-users = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ] }
 pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
-tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 

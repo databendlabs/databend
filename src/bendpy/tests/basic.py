@@ -12,9 +12,13 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+import databend
 from databend import SessionContext
 import pandas as pd
 import polars
+
+# Manual initialization as originally intended
+databend.init_embedded(".databend")
 
 
 class TestBasic:
@@ -31,8 +35,8 @@ class TestBasic:
             "select number % 3 n, sum(number) b from numbers(100) group by n order by n"
         ).collect()
         assert (
-            str(df)
-            == """┌─────────────────────┐
+                str(df)
+                == """┌─────────────────────┐
 │   n   │      b      │
 │ UInt8 │ UInt64 NULL │
 ├───────┼─────────────┤
