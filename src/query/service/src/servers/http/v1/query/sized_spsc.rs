@@ -31,70 +31,117 @@ use databend_common_expression::DataBlock;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
-use either::Either;
 use log::debug;
 use log::info;
 
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;
 
-pub fn sized_spsc<S>(max_size: usize) -> (SizedChannelSender<S>, SizedChannelReceiver<S>)
-where S: DataBlockSpill {
-    let chan = Arc::new(SizedChannel::create(max_size));
+pub fn sized_spsc<S>(
+    max_size: usize,
+    page_size: usize,
+) -> (SizedChannelSender<S>, SizedChannelReceiver<S>)
+where
+    S: DataBlockSpill,
+{
+    let chan = Arc::new(SizedChannel::create(max_size, page_size));
     let sender = SizedChannelSender { chan: chan.clone() };
     let receiver = SizedChannelReceiver { chan };
     (sender, receiver)
 }
 
+enum Page {
+    Memory(Vec<DataBlock>),
+    Spilled(SpillableBlock),
+}
+
 struct SizedChannelBuffer {
     max_size: usize,
-    values: VecDeque<SpillableBlock>,
+    page_size: usize,
+    pages: VecDeque<Page>,
+    current_page: Option<PageBuilder>,
     is_recv_stopped: bool,
     is_send_stopped: bool,
 }
 
 impl SizedChannelBuffer {
-    fn create(max_size: usize) -> Self {
+    fn create(max_size: usize, page_size: usize) -> Self {
         SizedChannelBuffer {
             max_size,
-            values: Default::default(),
+            page_size,
+            pages: Default::default(),
+            current_page: None,
             is_recv_stopped: false,
             is_send_stopped: false,
         }
     }
 
-    fn size(&self) -> usize {
-        self.values
+    fn pages_rows(&self) -> usize {
+        self.pages
             .iter()
-            .map(|x| x.data.as_ref().map(DataBlock::num_rows).unwrap_or_default())
+            .map(|page| match page {
+                Page::Memory(blocks) => blocks.iter().map(DataBlock::num_rows).sum::<usize>(),
+                Page::Spilled(_) => 0,
+            })
             .sum::<usize>()
     }
 
-    fn try_send(&mut self, value: SpillableBlock) -> result::Result<(), Option<SpillableBlock>> {
+    fn try_add_block(&mut self, mut block: DataBlock) -> result::Result<(), SendFail> {
         if self.is_recv_stopped || self.is_send_stopped {
-            return Err(None);
+            return Err(SendFail::Closed);
         }
 
-        match &value.data {
-            Some(data) => {
-                let value_size = data.num_rows();
-                let current_size = self.size();
-                if current_size + value_size <= self.max_size || current_size == 0 {
-                    self.values.push_back(value);
-                    Ok(())
-                } else {
-                    Err(Some(value))
+        loop {
+            let page_builder = self
+                .current_page
+                .get_or_insert_with(|| PageBuilder::new(self.page_size));
+
+            let remain = page_builder.try_append_block(block);
+            if !page_builder.has_capacity() {
+                let rows = page_builder.num_rows();
+                let page = self.current_page.take().unwrap().into_page();
+                if self.pages_rows() + rows > self.max_size {
+                    return Err(SendFail::Full { page, remain });
                 }
+                self.pages.push_back(Page::Memory(page));
             }
-            None => {
-                self.values.push_back(value);
-                Ok(())
+            match remain {
+                Some(remain) => block = remain,
+                None => return Ok(()),
             }
         }
     }
 
+    fn try_add_page(&mut self, page: Page) -> result::Result<(), SendFail> {
+        assert!(self.current_page.is_none());
+
+        if self.is_recv_stopped || self.is_send_stopped {
+            return Err(SendFail::Closed);
+        }
+
+        match page {
+            Page::Memory(blocks) => {
+                let rows = blocks.iter().map(DataBlock::num_rows).sum::<usize>();
+                if self.pages_rows() + rows > self.max_size {
+                    return Err(SendFail::Full {
+                        page: blocks,
+                        remain: None,
+                    });
+                };
+                self.pages.push_back(Page::Memory(blocks))
+            }
+            page @ Page::Spilled(_) => self.pages.push_back(page),
+        };
+        Ok(())
+    }
+
     fn is_close(&self) -> bool {
-        self.values.is_empty() && self.is_send_stopped
+        self.current_page
+            .as_ref()
+            .map(PageBuilder::is_empty)
+            .unwrap_or(true)
+            && self.pages.is_empty()
+            && self.is_send_stopped
     }
 
     fn stop_send(&mut self) {
@@ -105,42 +152,30 @@ impl SizedChannelBuffer {
         self.is_recv_stopped = true
     }
 
-    fn take_block_once(&mut self, builder: &mut PageBuilder) -> Either<(), Location> {
-        let Some(block) = self.values.front_mut() else {
-            return Either::Left(());
-        };
-        let Some(data) = &block.data else {
-            return Either::Right(block.location.clone().unwrap());
-        };
-
-        let take_rows = builder.calculate_take_rows(data);
-        if take_rows < data.num_rows() {
-            builder.remain_rows = 0;
-            builder.collector.append_block(block.slice(take_rows));
-        } else {
-            let data = block.data.take().unwrap();
-            self.values.pop_front();
-            builder.append_full_block(data);
-        }
-        Either::Left(())
-    }
-
-    fn take_block(&mut self, builder: &mut PageBuilder) -> Either<bool, Location> {
-        while builder.has_capacity() && !self.values.is_empty() {
-            if let Either::Right(location) = self.take_block_once(builder) {
-                return Either::Right(location);
+    fn flush_current_page(&mut self) {
+        if let Some(page_builder) = self.current_page.take() {
+            let blocks = page_builder.into_page();
+            if !blocks.is_empty() {
+                self.pages.push_back(Page::Memory(blocks));
             }
         }
-        Either::Left(!self.values.is_empty())
     }
 
-    fn restore_first(&mut self, location: &Location, data: DataBlock) {
-        self.values.front_mut().unwrap().restore(location, data);
+    fn take_page(&mut self) -> Option<Page> {
+        self.pages.pop_front()
     }
 }
 
+enum SendFail {
+    Closed,
+    Full {
+        page: Vec<DataBlock>,
+        remain: Option<DataBlock>,
+    },
+}
+
 pub struct PageBuilder {
-    pub collector: BlocksCollector,
+    pub blocks: Vec<DataBlock>,
     pub remain_rows: usize,
     pub remain_size: usize,
 }
@@ -148,7 +183,7 @@ pub struct PageBuilder {
 impl PageBuilder {
     fn new(max_rows: usize) -> Self {
         Self {
-            collector: BlocksCollector::new(),
+            blocks: Vec::new(),
             remain_size: 10 * 1024 * 1024,
             remain_rows: max_rows,
         }
@@ -158,14 +193,12 @@ impl PageBuilder {
         self.remain_rows > 0 && self.remain_size > 0
     }
 
-    fn append_full_block(&mut self, block: DataBlock) {
-        let memory_size = block.memory_size();
-        let num_rows = block.num_rows();
+    fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
 
-        self.remain_size -= min(self.remain_size, memory_size);
-        self.remain_rows -= num_rows;
-
-        self.collector.append_block(block);
+    fn num_rows(&self) -> usize {
+        self.blocks.iter().map(DataBlock::num_rows).sum()
     }
 
     fn calculate_take_rows(&self, block: &DataBlock) -> usize {
@@ -190,13 +223,36 @@ impl PageBuilder {
         .max(1)
     }
 
-    fn into_serializer(self, format_settings: FormatSettings) -> BlocksSerializer {
-        self.collector.into_serializer(format_settings)
+    fn append_full_block(&mut self, block: DataBlock) {
+        let memory_size = block.memory_size();
+        let num_rows = block.num_rows();
+
+        self.remain_size -= min(self.remain_size, memory_size);
+        self.remain_rows -= num_rows;
+
+        self.blocks.push(block);
+    }
+
+    fn try_append_block(&mut self, block: DataBlock) -> Option<DataBlock> {
+        let take_rows = self.calculate_take_rows(&block);
+        let total = block.num_rows();
+        if take_rows < block.num_rows() {
+            self.remain_rows = 0;
+            self.append_full_block(block.slice(0..take_rows));
+            Some(block.slice(take_rows..total))
+        } else {
+            self.append_full_block(block);
+            None
+        }
+    }
+
+    fn into_page(self) -> Vec<DataBlock> {
+        self.blocks
     }
 }
 
 struct SizedChannel<S> {
-    inner: Mutex<SizedChannelBuffer>,
+    buffer: Mutex<SizedChannelBuffer>,
     notify_on_sent: Notify,
     notify_on_recv: Notify,
 
@@ -208,9 +264,9 @@ struct SizedChannel<S> {
 impl<S> SizedChannel<S>
 where S: DataBlockSpill
 {
-    fn create(max_size: usize) -> Self {
+    fn create(max_size: usize, page_size: usize) -> Self {
         SizedChannel {
-            inner: Mutex::new(SizedChannelBuffer::create(max_size)),
+            buffer: Mutex::new(SizedChannelBuffer::create(max_size, page_size)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
             is_plan_ready: WatchNotify::new(),
@@ -219,54 +275,88 @@ where S: DataBlockSpill
         }
     }
 
-    #[fastrace::trace(name = "SizedChannel::try_take_block")]
-    async fn try_take_block(&self, builder: &mut PageBuilder) -> Result<bool> {
-        let location = match self.inner.lock().unwrap().take_block(builder) {
-            Either::Right(location) => location,
-            Either::Left(has_more) => {
-                return Ok(has_more);
+    #[fastrace::trace(name = "SizedChannel::try_take_page")]
+    async fn try_take_page(&self) -> Result<Option<BlocksSerializer>> {
+        let format_settings = self
+            .format_settings
+            .lock()
+            .unwrap()
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        let page = self.buffer.lock().unwrap().take_page();
+        match page {
+            Some(Page::Memory(blocks)) => {
+                let mut collector = BlocksCollector::new();
+                for block in blocks {
+                    collector.append_block(block);
+                }
+                Ok(Some(collector.into_serializer(format_settings)))
             }
-        };
-
-        let spiller = self.spiller.lock().unwrap().clone().unwrap();
-        let data = spiller.restore(&location).await?;
-
-        self.inner.lock().unwrap().restore_first(&location, data);
-        Ok(true)
+            Some(Page::Spilled(_)) => {
+                // TODO: Implement restoration from spilled page
+                unimplemented!("Restoration from spilled page not implemented yet")
+            }
+            None => Ok(None),
+        }
     }
 
     #[async_backtrace::framed]
-    async fn send(&self, value: DataBlock) -> Result<bool> {
-        let mut to_send = SpillableBlock::new(value);
+    async fn send(&self, mut block: DataBlock) -> Result<bool> {
         loop {
-            let result = self.inner.lock().unwrap().try_send(to_send);
+            let result = self.buffer.lock().unwrap().try_add_block(block);
             match result {
                 Ok(_) => {
                     self.notify_on_sent.notify_one();
                     return Ok(true);
                 }
-                Err(None) => return Ok(false),
-                Err(Some(v)) => {
-                    to_send = v;
-                    if self.should_spill() {
-                        let spiller = self.spiller.lock().unwrap().clone();
-                        if let Some(spiller) = spiller.as_ref() {
-                            to_send.spill(spiller).await?;
-                            continue;
+                Err(SendFail::Closed) => {
+                    self.notify_on_sent.notify_one();
+                    return Ok(false);
+                }
+                Err(SendFail::Full { page, remain }) => {
+                    let mut to_add = self.try_spill_page(page).await?;
+                    loop {
+                        let result = self.buffer.lock().unwrap().try_add_page(to_add);
+                        match result {
+                            Ok(_) => break,
+                            Err(SendFail::Closed) => return Ok(false),
+                            Err(SendFail::Full { page, .. }) => {
+                                to_add = Page::Memory(page);
+                                self.notify_on_recv.notified().await;
+                            }
                         }
                     }
-                    self.notify_on_recv.notified().await;
+
+                    match remain {
+                        Some(remain) => {
+                            block = remain;
+                        }
+                        None => return Ok(true),
+                    }
                 }
             }
         }
+    }
+
+    async fn try_spill_page(&self, page: Vec<DataBlock>) -> Result<Page> {
+        if !self.should_spill() {
+            return Ok(Page::Memory(page));
+        }
+        let spiller = self.spiller.lock().unwrap().clone();
+        let Some(spiller) = spiller.as_ref() else {
+            return Ok(Page::Memory(page));
+        };
+        let spilled = SpillableBlock::spill_page(page, spiller).await?;
+        Ok(Page::Spilled(spilled))
     }
 
     #[async_backtrace::framed]
     async fn recv(&self) -> bool {
         loop {
             {
-                let g = self.inner.lock().unwrap();
-                if !g.values.is_empty() {
+                let g = self.buffer.lock().unwrap();
+                if !g.pages.is_empty() {
                     return true;
                 }
                 if g.is_send_stopped {
@@ -278,13 +368,13 @@ where S: DataBlockSpill
     }
 
     pub fn is_close(&self) -> bool {
-        let guard = self.inner.lock().unwrap();
-        guard.is_close()
+        self.buffer.lock().unwrap().is_close()
     }
 
     pub fn stop_send(&self) {
         {
-            let mut guard = self.inner.lock().unwrap();
+            let mut guard = self.buffer.lock().unwrap();
+            guard.flush_current_page();
             guard.stop_send()
         }
         self.notify_on_sent.notify_one();
@@ -292,7 +382,7 @@ where S: DataBlockSpill
 
     pub fn stop_recv(&self) {
         {
-            let mut guard = self.inner.lock().unwrap();
+            let mut guard = self.buffer.lock().unwrap();
             guard.stop_recv()
         }
         self.notify_on_recv.notify_one();
@@ -324,53 +414,41 @@ where S: DataBlockSpill
     #[async_backtrace::framed]
     pub async fn collect_new_page(
         &mut self,
-        max_rows_per_page: usize,
+        _max_rows_per_page: usize, // Now ignored since pages are pre-built
         tp: &Wait,
     ) -> Result<(BlocksSerializer, bool)> {
-        let mut builder = PageBuilder::new(max_rows_per_page);
-
-        while builder.has_capacity() {
-            match tp {
-                Wait::Async => {
-                    if !self.chan.try_take_block(&mut builder).await? {
-                        break;
+        let page = match tp {
+            Wait::Async => self.chan.try_take_page().await?,
+            Wait::Deadline(t) => {
+                let d = match t.checked_duration_since(Instant::now()) {
+                    Some(d) if !d.is_zero() => d,
+                    _ => {
+                        // timeout() will return Ok if the future completes immediately
+                        return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
-                }
-                Wait::Deadline(t) => {
-                    let d = match t.checked_duration_since(Instant::now()) {
-                        Some(d) if !d.is_zero() => d,
-                        _ => {
-                            // timeout() will return Ok if the future completes immediately
-                            break;
-                        }
-                    };
-                    match tokio::time::timeout(d, self.chan.recv()).await {
-                        Ok(true) => {
-                            self.chan.try_take_block(&mut builder).await?;
-                            debug!("[HTTP-QUERY] Appended new data block");
-                        }
-                        Ok(false) => {
-                            info!("[HTTP-QUERY] Reached end of data blocks");
-                            break;
-                        }
-                        Err(_) => {
-                            debug!("[HTTP-QUERY] Long polling timeout reached");
-                            break;
-                        }
+                };
+                match tokio::time::timeout(d, self.chan.recv()).await {
+                    Ok(true) => self.chan.try_take_page().await?,
+                    Ok(false) => {
+                        info!("[HTTP-QUERY] Reached end of data blocks");
+                        return Ok((BlocksSerializer::empty(), true));
+                    }
+                    Err(_) => {
+                        debug!("[HTTP-QUERY] Long polling timeout reached");
+                        return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }
             }
-        }
+        };
 
-        let format = self.chan.format_settings.lock().unwrap().clone();
-        let format = format.unwrap_or_else(|| {
-            assert!(builder.collector.num_rows() == 0);
-            FormatSettings::default()
-        });
+        let page = match page {
+            Some(page) => page,
+            None => BlocksSerializer::empty(),
+        };
 
         // try to report 'no more data' earlier to client to avoid unnecessary http call
         let block_end = self.chan.is_close();
-        Ok((builder.into_serializer(format), block_end))
+        Ok((page, block_end))
     }
 }
 
@@ -427,14 +505,17 @@ struct SpillableBlock {
 }
 
 impl SpillableBlock {
-    fn new(data: DataBlock) -> Self {
-        Self {
-            location: None,
+    async fn spill_page(page: Vec<DataBlock>, spiller: &impl DataBlockSpill) -> Result<Self> {
+        let rows = page.iter().map(DataBlock::num_rows).sum();
+        let memory_size = page.iter().map(DataBlock::memory_size).sum();
+        let location = spiller.merge_and_spill(page).await?;
+        Ok(Self {
+            location: Some(location),
             processed: 0,
-            rows: data.num_rows(),
-            memory_size: data.memory_size(),
-            data: Some(data),
-        }
+            rows,
+            memory_size,
+            data: None,
+        })
     }
 
     fn slice(&mut self, pos: usize) -> DataBlock {
@@ -535,7 +616,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sized_spsc_channel() {
-        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(2);
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(2, 10);
 
         let test_data = vec![
             DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]),

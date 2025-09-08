@@ -612,7 +612,10 @@ impl HttpQuery {
             })
         };
 
-        let (sender, receiver) = sized_spsc::<LiteSpiller>(req.pagination.max_rows_in_buffer);
+        let (sender, receiver) = sized_spsc::<LiteSpiller>(
+            req.pagination.max_rows_in_buffer,
+            req.pagination.max_rows_per_page,
+        );
 
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
