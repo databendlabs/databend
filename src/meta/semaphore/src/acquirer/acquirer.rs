@@ -94,7 +94,7 @@ pub struct Acquirer {
 
     /// The receiver to receive semaphore state change events from the internal subscriber task.
     /// This task subscribes to the watch stream and forwards relevant state changes through this channel.
-    pub(crate) permit_event_rx: mpsc::Receiver<PermitEvent>,
+    pub(crate) permit_event_rx: mpsc::Receiver<Result<PermitEvent, ConnectionClosed>>,
 
     /// The stat about the process of acquiring the semaphore.
     pub(crate) stat: SharedAcquirerStat,
@@ -216,11 +216,13 @@ impl Acquirer {
 
         let mut acquired = false;
 
-        while let Some(sem_event) = self.permit_event_rx.recv().await {
+        while let Some(sem_event_res) = self.permit_event_rx.recv().await {
             info!(
                 "Acquirer({}): received semaphore event: {:?}",
-                self.name, sem_event
+                self.name, sem_event_res
             );
+
+            let sem_event = sem_event_res?;
 
             self.stat.on_receive_event(&sem_event);
 
@@ -236,7 +238,6 @@ impl Acquirer {
 
                         acquired = true;
                         break;
-
                     }
                 }
                 PermitEvent::Removed((seq, _)) => {
@@ -263,12 +264,9 @@ impl Acquirer {
             let permit = Permit::new(self, permit_key, permit_entry, leaser_cancel_tx);
 
             Ok(permit)
-
         } else {
-            Err(ConnectionClosed::new_str("event channel clsoed").into())
+            Err(ConnectionClosed::new_str("event channel closed").into())
         }
-
-
     }
 
     /// Add a new semaphore entry to the `<prefix>/queue` in the meta-service.

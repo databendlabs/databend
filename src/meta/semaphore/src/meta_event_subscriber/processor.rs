@@ -39,7 +39,7 @@ pub(crate) struct Processor {
     ///
     /// When the [`Acquirer`] acquired a [`Permit`], this channel is no longer used,
     /// because the receiving end may not be polled and sending to it may block forever.
-    pub(crate) tx_to_acquirer: mpsc::Sender<PermitEvent>,
+    pub(crate) tx_to_acquirer: mpsc::Sender<Result<PermitEvent, ConnectionClosed>>,
 
     /// Contains descriptive information about the context of this watcher.
     pub(crate) watcher_name: String,
@@ -47,7 +47,10 @@ pub(crate) struct Processor {
 
 impl Processor {
     /// Create a new [`Processor`] instance with given permits capacity and the channel to send the [`PermitEvent`] to the [`Acquirer`].
-    pub(crate) fn new(capacity: u64, tx_to_acquirer: mpsc::Sender<PermitEvent>) -> Self {
+    pub(crate) fn new(
+        capacity: u64,
+        tx_to_acquirer: mpsc::Sender<Result<PermitEvent, ConnectionClosed>>,
+    ) -> Self {
         Self {
             queue: SemaphoreQueue::new(capacity),
             tx_to_acquirer,
@@ -115,8 +118,8 @@ impl Processor {
         for event in state_changes {
             log::debug!("{} sending event: {}", self.watcher_name, event);
 
-            self.tx_to_acquirer.send(event).await.map_err(|e| {
-                AcquirerClosed::new(format!("Semaphore-Watcher fail to send {}", e.0))
+            self.tx_to_acquirer.send(Ok(event)).await.map_err(|e| {
+                AcquirerClosed::new(format!("Semaphore-Watcher fail to send {}", e.0.unwrap()))
                     .context(&self.watcher_name)
             })?;
         }
@@ -217,17 +220,23 @@ mod tests {
             received_events.push(event);
         }
 
-        assert_eq!(received_events, vec![
-            acquired(1, 5),
-            acquired(2, 4),
-            removed(2, 4),
-            acquired(3, 3),
-            acquired(4, 2), // size = 10
-            removed(1, 5),
-            removed(4, 2),  // size = 3
-            acquired(5, 6), // size = 9
-            acquired(6, 1), // size = 10
-        ]);
+        assert_eq!(
+            received_events
+                .into_iter()
+                .map(|x| x.unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                acquired(1, 5),
+                acquired(2, 4),
+                removed(2, 4),
+                acquired(3, 3),
+                acquired(4, 2), // size = 10
+                removed(1, 5),
+                removed(4, 2),  // size = 3
+                acquired(5, 6), // size = 9
+                acquired(6, 1), // size = 10
+            ]
+        );
 
         Ok(())
     }

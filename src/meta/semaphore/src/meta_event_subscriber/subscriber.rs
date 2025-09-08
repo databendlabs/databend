@@ -154,23 +154,40 @@ impl MetaEventSubscriber {
                 }
             };
 
-            match &watch_result {
+            let watch_response = match watch_result {
                 Ok(t) => {
                     log::debug!(
                         "{} received event from watch-stream: Ok({})",
                         self.watcher_name,
                         t.display()
                     );
+                    t
                 }
                 Err(e) => {
-                    info!(
+                    warn!(
                         "{} received event from watch-stream: Err({})",
                         self.watcher_name, e
                     );
-                }
-            }
 
-            let Some(watch_response) = watch_result? else {
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    self.processor
+                        .tx_to_acquirer
+                        .send(Err(conn_error))
+                        .await
+                        .ok();
+
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("watch-stream closed in process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    return Err(conn_error.into());
+                }
+            };
+
+            let Some(watch_response) = watch_response else {
                 warn!("watch-stream closed: {}", self.watcher_name);
 
                 return Err(ProcessorError::ConnectionClosed(

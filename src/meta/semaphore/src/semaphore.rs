@@ -32,6 +32,7 @@ use crate::acquirer::Permit;
 use crate::acquirer::SeqPolicy;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::AcquireError;
+use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
 use crate::meta_event_subscriber::Processor;
 use crate::queue::PermitEvent;
@@ -70,7 +71,7 @@ pub struct Semaphore {
     subscriber_cancel_tx: oneshot::Sender<()>,
 
     /// The receiver to receive semaphore state change event from the subscriber.
-    sem_event_rx: Option<mpsc::Receiver<PermitEvent>>,
+    sem_event_rx: Option<mpsc::Receiver<Result<PermitEvent, ConnectionClosed>>>,
 
     /// A process-wide unique identifier for the semaphore. Used for debugging purposes.
     uniq: u64,
@@ -293,7 +294,7 @@ impl Semaphore {
     /// When semaphore permit are created or deleted, appropriate events are generated.
     async fn spawn_meta_event_subscriber(
         &mut self,
-        tx: mpsc::Sender<PermitEvent>,
+        tx: mpsc::Sender<Result<PermitEvent, ConnectionClosed>>,
         capacity: u64,
         cancel_rx: oneshot::Receiver<()>,
     ) {
