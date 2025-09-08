@@ -38,60 +38,12 @@ use log::info;
 use super::blocks_serializer::BlocksCollector;
 use super::blocks_serializer::BlocksSerializer;
 
-pub struct PageBuilder {
-    pub collector: BlocksCollector,
-    pub remain_rows: usize,
-    pub remain_size: usize,
-}
-
-impl PageBuilder {
-    fn new(max_rows: usize) -> Self {
-        Self {
-            collector: BlocksCollector::new(),
-            remain_size: 10 * 1024 * 1024,
-            remain_rows: max_rows,
-        }
-    }
-
-    fn has_capacity(&self) -> bool {
-        self.remain_rows > 0 && self.remain_size > 0
-    }
-
-    fn append_full_block(&mut self, block: DataBlock) {
-        let memory_size = block.memory_size();
-        let num_rows = block.num_rows();
-
-        self.remain_size -= min(self.remain_size, memory_size);
-        self.remain_rows -= num_rows;
-
-        self.collector.append_block(block);
-    }
-
-    fn calculate_take_rows(&self, block: &DataBlock) -> usize {
-        let block_rows = block.num_rows();
-        let memory_size = block
-            .columns()
-            .iter()
-            .map(|entry| match entry {
-                BlockEntry::Const(scalar, _, n) => *n * scalar.as_ref().memory_size(),
-                BlockEntry::Column(column) => column.memory_size(),
-            })
-            .sum::<usize>();
-
-        min(
-            self.remain_rows,
-            if memory_size > self.remain_size {
-                (self.remain_size * block_rows) / memory_size
-            } else {
-                block_rows
-            },
-        )
-        .max(1)
-    }
-
-    fn into_serializer(self, format_settings: FormatSettings) -> BlocksSerializer {
-        self.collector.into_serializer(format_settings)
-    }
+pub fn sized_spsc<S>(max_size: usize) -> (SizedChannelSender<S>, SizedChannelReceiver<S>)
+where S: DataBlockSpill {
+    let chan = Arc::new(SizedChannel::create(max_size));
+    let sender = SizedChannelSender { chan: chan.clone() };
+    let receiver = SizedChannelReceiver { chan };
+    (sender, receiver)
 }
 
 struct SizedChannelBuffer {
@@ -99,14 +51,6 @@ struct SizedChannelBuffer {
     values: VecDeque<SpillableBlock>,
     is_recv_stopped: bool,
     is_send_stopped: bool,
-}
-
-pub fn sized_spsc<S>(max_size: usize) -> (SizedChannelSender<S>, SizedChannelReceiver<S>)
-where S: DataBlockSpill {
-    let chan = Arc::new(SizedChannel::create(max_size));
-    let sender = SizedChannelSender { chan: chan.clone() };
-    let receiver = SizedChannelReceiver { chan };
-    (sender, receiver)
 }
 
 impl SizedChannelBuffer {
@@ -192,6 +136,62 @@ impl SizedChannelBuffer {
 
     fn restore_first(&mut self, location: &Location, data: DataBlock) {
         self.values.front_mut().unwrap().restore(location, data);
+    }
+}
+
+pub struct PageBuilder {
+    pub collector: BlocksCollector,
+    pub remain_rows: usize,
+    pub remain_size: usize,
+}
+
+impl PageBuilder {
+    fn new(max_rows: usize) -> Self {
+        Self {
+            collector: BlocksCollector::new(),
+            remain_size: 10 * 1024 * 1024,
+            remain_rows: max_rows,
+        }
+    }
+
+    fn has_capacity(&self) -> bool {
+        self.remain_rows > 0 && self.remain_size > 0
+    }
+
+    fn append_full_block(&mut self, block: DataBlock) {
+        let memory_size = block.memory_size();
+        let num_rows = block.num_rows();
+
+        self.remain_size -= min(self.remain_size, memory_size);
+        self.remain_rows -= num_rows;
+
+        self.collector.append_block(block);
+    }
+
+    fn calculate_take_rows(&self, block: &DataBlock) -> usize {
+        let block_rows = block.num_rows();
+        let memory_size = block
+            .columns()
+            .iter()
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, _, n) => *n * scalar.as_ref().memory_size(),
+                BlockEntry::Column(column) => column.memory_size(),
+            })
+            .sum::<usize>();
+
+        min(
+            self.remain_rows,
+            if memory_size > self.remain_size {
+                (self.remain_size * block_rows) / memory_size
+            } else {
+                block_rows
+            },
+        )
+        .max(1)
+    }
+
+    fn into_serializer(self, format_settings: FormatSettings) -> BlocksSerializer {
+        self.collector.into_serializer(format_settings)
     }
 }
 
