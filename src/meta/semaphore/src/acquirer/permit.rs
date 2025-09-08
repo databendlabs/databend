@@ -24,6 +24,7 @@ use tokio::sync::oneshot;
 
 use crate::acquirer::Acquirer;
 use crate::acquirer::SharedAcquirerStat;
+use crate::errors::ConnectionClosed;
 use crate::queue::PermitEvent;
 use crate::storage::PermitEntry;
 use crate::storage::PermitKey;
@@ -138,7 +139,7 @@ impl Permit {
     /// Note that if it returns `Err(ConnectionClosed)`, it does not mean the permit is lost,
     /// in such case, the permit may still be valid.
     pub(crate) async fn watch_for_remove(
-        mut permit_event_rx: mpsc::Receiver<PermitEvent>,
+        mut permit_event_rx: mpsc::Receiver<Result<PermitEvent, ConnectionClosed>>,
         acquirer_name: String,
         permit_key: PermitKey,
         permit_entry: PermitEntry,
@@ -146,7 +147,15 @@ impl Permit {
     ) {
         let ctx = format!("{}: {}->{}", acquirer_name, permit_key, permit_entry);
 
-        while let Some(sem_event) = permit_event_rx.recv().await {
+        while let Some(sem_event_res) = permit_event_rx.recv().await {
+            let sem_event = match sem_event_res {
+                Ok(x) => x,
+                Err(e) => {
+                    warn!("{}: watch_for_remove recv error: {}", ctx, e);
+                    return;
+                }
+            };
+
             debug!("{}: received semaphore event: {}", ctx, sem_event);
 
             match sem_event {

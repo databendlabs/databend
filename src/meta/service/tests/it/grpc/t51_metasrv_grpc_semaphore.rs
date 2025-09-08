@@ -16,6 +16,7 @@
 
 use std::time::Duration;
 
+use databend_common_base::base::Stoppable;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::Semaphore;
@@ -530,6 +531,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;
+            println!("=== permit2: {:?}", res);
             info!("permit2: {:?}", res);
             tx.send(res).ok();
         },
@@ -550,7 +552,58 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 
     let res = rx.await;
     info!("permit2: {:?}", res);
-    assert!(res.unwrap().is_ok(), "permit2 should be acquired");
+    // Re-connect in side subscriber is dangerous, it may miss some event and never acquire a
+    // permit.
+    assert!(
+        res.unwrap().unwrap().is_err(),
+        "permit2 can not be acquired"
+    );
+
+    Ok(())
+}
+
+/// The acquirer should receive a connection closed error when the stream is closed
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
+    let mut tcs = crate::tests::start_metasrv_cluster(&[0]).await?;
+
+    let mut tc = tcs.remove(0);
+
+    let address = tc.config.grpc_api_address.clone();
+
+    let cli = make_grpc_client(vec![address])?;
+    let client = || cli.clone();
+    let secs = |n| Duration::from_secs(n);
+
+    let timestamp2 = Some(Duration::from_millis(2000));
+
+    let fu = Semaphore::new_acquired_by_time(client(), "time_seq", 0, "later", timestamp2, secs(1));
+
+    let (tx, rx) = oneshot::channel();
+    spawn_named(
+        async move {
+            //
+            let res = tokio::time::timeout(secs(5), fu).await;
+            println!("=== permit2: {:?}", res);
+            info!("permit2: {:?}", res);
+            tx.send(res).ok();
+        },
+        "foo".to_string(),
+    );
+
+    tokio::time::sleep(secs(1)).await;
+
+    let mut srv = tc.grpc_srv.take().unwrap();
+    srv.stop(None).await?;
+
+    let res = rx.await;
+    info!("permit2: {:?}", res);
+    println!("permit2: {:?}", res);
+    let err = res.unwrap().unwrap().unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("distributed-Semaphore connection closed"));
 
     Ok(())
 }

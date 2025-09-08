@@ -34,6 +34,9 @@ use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
 pub use local::LocalMetaService;
 use log::info;
+use log::warn;
+use tokio::time::error::Elapsed;
+use tokio::time::Instant;
 use tokio_stream::Stream;
 
 pub type WatchStream =
@@ -111,40 +114,70 @@ impl MetaStore {
         lease: Duration,
         retry_timeout: Option<Duration>,
     ) -> Result<Permit, AcquireError> {
-        if let Some(retry_timeout) = retry_timeout {
-            let timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
+        let prefix = prefix.to_string();
+        let id = id.to_string();
 
-            let mut attempt = 0;
-            let id = id.to_string();
-            let prefix = prefix.to_string();
-            loop {
-                let client = self.deref().clone();
-                let acquired_by_time = timeout(
-                    retry_timeout,
-                    Semaphore::new_acquired_by_time(
-                        client,
-                        prefix.clone(),
-                        capacity,
-                        id.clone(),
-                        timestamp,
-                        lease,
-                    ),
-                );
+        let name = format!("Semaphore-{prefix}-{id}");
 
-                if let Ok(acquired_by_time) = acquired_by_time.await {
-                    return acquired_by_time;
+        let mut ith = 0;
+        loop {
+            ith += 1;
+
+            let start = Instant::now();
+
+            let timeout_res = self
+                .do_new_acquired_by_time(prefix.clone(), capacity, id.clone(), lease, retry_timeout)
+                .await;
+
+            info!(
+                "{} attempt {} to acquire semaphore, result:{:?}",
+                name, ith, timeout_res
+            );
+
+            let res = match timeout_res {
+                Ok(acquire_res) => acquire_res,
+                Err(_elapsed) => {
+                    warn!(
+                        "{} attempt {} to acquire semaphore; timeout after: {:?}; retry at once",
+                        name,
+                        ith,
+                        start.elapsed()
+                    );
+                    continue;
                 }
+            };
 
-                info!(
-                    "Semaphore retry attempt {}. retry timeout: {:?}",
-                    attempt, retry_timeout
-                );
-                attempt += 1;
+            match res {
+                Ok(permit) => return Ok(permit),
+                Err(err) => {
+                    warn!(
+                        "{} attempt {} to acquire semaphore failed: {:?}; retry at once",
+                        name, ith, err
+                    );
+                    continue;
+                }
             }
         }
+    }
 
-        let client = self.deref();
-        Semaphore::new_acquired_by_time(client.clone(), prefix, capacity, id, None, lease).await
+    pub async fn do_new_acquired_by_time(
+        &self,
+        prefix: impl ToString,
+        capacity: u64,
+        id: impl ToString,
+        lease: Duration,
+        retry_timeout: Option<Duration>,
+    ) -> Result<Result<Permit, AcquireError>, Elapsed> {
+        let client = self.deref().clone();
+
+        let timestamp = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap());
+        let retry_timeout = retry_timeout.unwrap_or(Duration::from_secs(365 * 86400));
+
+        timeout(
+            retry_timeout,
+            Semaphore::new_acquired_by_time(client, prefix, capacity, id, timestamp, lease),
+        )
+        .await
     }
 }
 

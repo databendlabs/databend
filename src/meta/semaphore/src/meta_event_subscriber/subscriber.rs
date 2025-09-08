@@ -65,34 +65,20 @@ impl MetaEventSubscriber {
         mut self,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), ConnectionClosed> {
-        // Retry connect if there is a connection error to the remote meta-service
-        let mut ith = 0u64;
-        let mut sleep_time = Duration::from_millis(20);
-        let max_sleep_time = Duration::from_secs(10);
-
         let mut c = std::pin::pin!(cancel);
 
-        loop {
-            ith += 1;
-            let strm = self.new_watch_stream(format!("retry {ith}")).await?;
+        let strm = self.new_watch_stream("subscriber").await?;
 
-            let res = self.process_meta_event_loop(strm, c.as_mut()).await;
-            match res {
-                Ok(()) => return Ok(()),
-                Err(ProcessorError::AcquirerClosed(e)) => {
-                    info!("{}: {}", self.watcher_name, e);
-                    return Ok(());
-                }
-                Err(ProcessorError::ConnectionClosed(e)) => {
-                    sleep_time = sleep_time * 3 / 2;
-                    sleep_time = sleep_time.min(max_sleep_time);
-
-                    warn!(
-                        "{}: {}; About to retry {} times connecting to remote meta-service after {:?}",
-                        self.watcher_name, e, ith+1, sleep_time
-                    );
-                    tokio::time::sleep(sleep_time).await;
-                }
+        let res = self.process_meta_event_loop(strm, c.as_mut()).await;
+        match res {
+            Ok(()) => Ok(()),
+            Err(ProcessorError::AcquirerClosed(e)) => {
+                info!("{}: {}", self.watcher_name, e);
+                Ok(())
+            }
+            Err(ProcessorError::ConnectionClosed(e)) => {
+                warn!("{}: {}", self.watcher_name, e);
+                Err(e)
             }
         }
     }
@@ -168,23 +154,40 @@ impl MetaEventSubscriber {
                 }
             };
 
-            match &watch_result {
+            let watch_response = match watch_result {
                 Ok(t) => {
                     log::debug!(
                         "{} received event from watch-stream: Ok({})",
                         self.watcher_name,
                         t.display()
                     );
+                    t
                 }
                 Err(e) => {
-                    info!(
+                    warn!(
                         "{} received event from watch-stream: Err({})",
                         self.watcher_name, e
                     );
-                }
-            }
 
-            let Some(watch_response) = watch_result? else {
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    self.processor
+                        .tx_to_acquirer
+                        .send(Err(conn_error))
+                        .await
+                        .ok();
+
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("watch-stream closed in process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    return Err(conn_error.into());
+                }
+            };
+
+            let Some(watch_response) = watch_response else {
                 warn!("watch-stream closed: {}", self.watcher_name);
 
                 return Err(ProcessorError::ConnectionClosed(
