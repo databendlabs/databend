@@ -214,6 +214,8 @@ impl Acquirer {
 
         // Step 3: Wait for the semaphore to be acquired or removed.
 
+        let mut acquired = false;
+
         while let Some(sem_event) = self.permit_event_rx.recv().await {
             info!(
                 "Acquirer({}): received semaphore event: {:?}",
@@ -231,7 +233,10 @@ impl Acquirer {
                             "{} acquired: {}->{}",
                             self.name, permit_key, self.acquirer_id
                         );
+
+                        acquired = true;
                         break;
+
                     }
                 }
                 PermitEvent::Removed((seq, _)) => {
@@ -251,12 +256,19 @@ impl Acquirer {
             }
         }
 
-        let mut in_proc = self.acquire_in_progress.take().unwrap();
-        in_proc.finished = true;
+        if acquired {
+            let mut in_proc = self.acquire_in_progress.take().unwrap();
+            in_proc.finished = true;
 
-        let permit = Permit::new(self, permit_key, permit_entry, leaser_cancel_tx);
+            let permit = Permit::new(self, permit_key, permit_entry, leaser_cancel_tx);
 
-        Ok(permit)
+            Ok(permit)
+
+        } else {
+            Err(ConnectionClosed::new_str("event channel clsoed").into())
+        }
+
+
     }
 
     /// Add a new semaphore entry to the `<prefix>/queue` in the meta-service.

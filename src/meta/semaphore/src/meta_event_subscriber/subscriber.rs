@@ -65,51 +65,20 @@ impl MetaEventSubscriber {
         mut self,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), ConnectionClosed> {
-        // Retry connect if there is a connection error to the remote meta-service
-        let mut ith = 0u64;
-        let mut sleep_time = Duration::from_millis(20);
-        let max_sleep_time = Duration::from_secs(10);
-
         let mut c = std::pin::pin!(cancel);
 
-        loop {
-            ith += 1;
-            let strm_res = self.new_watch_stream(format!("retry {ith}")).await;
-            let strm = match strm_res {
-                Ok(strm) => strm,
-                Err(e) => {
-                    sleep_time = sleep_time * 3 / 2;
-                    sleep_time = sleep_time.min(max_sleep_time);
+        let strm = self.new_watch_stream("subscriber").await?;
 
-                    warn!(
-                        "{}: {}; About to retry {} times connecting to remote meta-service after {:?}",
-                        self.watcher_name, e, ith+1, sleep_time
-                    );
-                    tokio::time::sleep(sleep_time).await;
-
-                    continue;
-                }
-            };
-
-            sleep_time = Duration::from_millis(20);
-
-            let res = self.process_meta_event_loop(strm, c.as_mut()).await;
-            match res {
-                Ok(()) => return Ok(()),
-                Err(ProcessorError::AcquirerClosed(e)) => {
-                    info!("{}: {}", self.watcher_name, e);
-                    return Ok(());
-                }
-                Err(ProcessorError::ConnectionClosed(e)) => {
-                    sleep_time = sleep_time * 3 / 2;
-                    sleep_time = sleep_time.min(max_sleep_time);
-
-                    warn!(
-                        "{}: {}; About to retry {} times connecting to remote meta-service after {:?}",
-                        self.watcher_name, e, ith+1, sleep_time
-                    );
-                    tokio::time::sleep(sleep_time).await;
-                }
+        let res = self.process_meta_event_loop(strm, c.as_mut()).await;
+        match res {
+            Ok(()) => Ok(()),
+            Err(ProcessorError::AcquirerClosed(e)) => {
+                info!("{}: {}", self.watcher_name, e);
+                Ok(())
+            }
+            Err(ProcessorError::ConnectionClosed(e)) => {
+                warn!("{}: {}", self.watcher_name, e);
+                Err(e)
             }
         }
     }

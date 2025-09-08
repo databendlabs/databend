@@ -530,6 +530,7 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
         async move {
             //
             let res = tokio::time::timeout(secs(5), fu).await;
+            println!("=== permit2: {:?}", res);
             info!("permit2: {:?}", res);
             tx.send(res).ok();
         },
@@ -550,7 +551,9 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
 
     let res = rx.await;
     info!("permit2: {:?}", res);
-    assert!(res.unwrap().is_ok(), "permit2 should be acquired");
+    // Re-connect in side subscriber is dangerous, it may miss some event and never acquire a
+    // permit.
+    assert!(res.unwrap().unwrap().is_err(), "permit2 can not be acquired");
 
     Ok(())
 }
