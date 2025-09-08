@@ -164,11 +164,11 @@ DROP TABLE IF EXISTS tmp3;
 statement ok
 CREATE OR REPLACE SEQUENCE seq;
 
-statement error
+statement error 1065
 create or replace table t(id int default nextval(seq) + 1, name string);
 
-statement error
-create or replace table t(id int default, name string default nextval(seq));
+statement error 1065
+create or replace table t(id int, name string default nextval(seq));
 
 statement ok
 create or replace table t(id int default nextval(seq), name string);
@@ -176,7 +176,7 @@ create or replace table t(id int default nextval(seq), name string);
 statement ok
 insert into t (name) values('a');
 
-query TT
+query IT
 select * from t order by id;
 ----
 1 a
@@ -184,7 +184,7 @@ select * from t order by id;
 statement ok
 insert into t (name) values('b');
 
-query TT
+query IT
 select * from t order by id;
 ----
 1 a
@@ -193,15 +193,31 @@ select * from t order by id;
 statement ok
 insert into t (name) values('c');
 
-query TT
+query IT
 select * from t order by id;
 ----
 1 a
 2 b
 3 c
 
-statement error
-alter table t add column age int default nextval(seq);
+statement error 1132
+alter table t add column id2 int default nextval(seq);
+
+statement ok
+delete from t;
+
+statement ok
+alter table t add column id2 int default nextval(seq);
+
+statement ok
+insert into t (name) values('a'),('b'),('c');
+
+query ITI
+select * from t order by id;
+----
+4 a 7
+5 b 8
+6 c 9
 
 statement ok
 drop table t;
