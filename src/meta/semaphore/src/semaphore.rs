@@ -27,6 +27,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::acquirer::Acquirer;
+use crate::acquirer::DropHandle;
 use crate::acquirer::Permit;
 use crate::acquirer::SeqPolicy;
 use crate::acquirer::SharedAcquirerStat;
@@ -274,6 +275,10 @@ impl Semaphore {
             subscriber_cancel_tx: self.subscriber_cancel_tx,
             permit_event_rx: self.sem_event_rx.take().unwrap(),
             stat: stat.clone(),
+            acquire_in_progress: Some(DropHandle {
+                name: name.clone(),
+                finished: false,
+            }),
             name: name.clone(),
         }
     }

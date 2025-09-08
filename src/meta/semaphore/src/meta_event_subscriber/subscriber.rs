@@ -74,7 +74,24 @@ impl MetaEventSubscriber {
 
         loop {
             ith += 1;
-            let strm = self.new_watch_stream(format!("retry {ith}")).await?;
+            let strm_res = self.new_watch_stream(format!("retry {ith}")).await;
+            let strm = match strm_res {
+                Ok(strm) => strm,
+                Err(e) => {
+                    sleep_time = sleep_time * 3 / 2;
+                    sleep_time = sleep_time.min(max_sleep_time);
+
+                    warn!(
+                        "{}: {}; About to retry {} times connecting to remote meta-service after {:?}",
+                        self.watcher_name, e, ith+1, sleep_time
+                    );
+                    tokio::time::sleep(sleep_time).await;
+
+                    continue;
+                }
+            };
+
+            sleep_time = Duration::from_millis(20);
 
             let res = self.process_meta_event_loop(strm, c.as_mut()).await;
             match res {
