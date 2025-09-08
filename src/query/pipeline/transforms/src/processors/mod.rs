@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod memory_settings;
+pub mod traits;
 mod transforms;
 
 pub use memory_settings::MemorySettings;

@@ -168,6 +168,19 @@ impl ClientSessionManager {
             }
         }
     }
+    pub async fn try_refresh_state(
+        &self,
+        tenant: Tenant,
+        sid: &str,
+        user_name: &str,
+    ) -> Result<()> {
+        if self.refresh_in_memory_states(sid, user_name) {
+            self.refresh_session_handle(tenant, user_name.to_string(), sid)
+                .await?;
+            info!("[HTTP-SESSION] refreshing session {}", sid);
+        }
+        Ok(())
+    }
 
     pub async fn refresh_session_handle(
         &self,

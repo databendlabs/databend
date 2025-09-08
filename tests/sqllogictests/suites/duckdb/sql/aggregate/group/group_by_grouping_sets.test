@@ -261,6 +261,41 @@ a A 1 4 NULL A
 a B 1 5 NULL B
 a A 1 5 NULL NULL
 
+
+## group with CTE
+query ?TTT
+WITH cte_0 AS
+(
+       SELECT  try_cast(number % 10 AS String) AS media_source,
+             try_cast(number % 12 AS String) AS site_name,
+              try_cast(number AS Float64)  AS bi_cost,
+             try_cast((today() +  ( number % 11)) AS Date) AS created_at
+       FROM   numbers(1000)
+),
+cte_1 AS
+(
+         SELECT   sum(bi_cost)     AS bi_cost_agg,
+                  media_source,
+                  created_at,
+                  site_name
+         FROM     cte_0
+         GROUP BY cube (media_source, created_at, site_name)
+         HAVING   1 = 1)SELECT *
+FROM   cte_1 order by bi_cost_agg desc LIMIT 10;
+---
+----
+499500.0 NULL NULL NULL
+50400.0 9 NULL NULL
+50300.0 8 NULL NULL
+50200.0 7 NULL NULL
+50100.0 6 NULL NULL
+50000.0 5 NULL NULL
+49900.0 4 NULL NULL
+49800.0 3 NULL NULL
+49700.0 2 NULL NULL
+49600.0 1 NULL NULL
+
+
 statement ok
 drop table t all;
 

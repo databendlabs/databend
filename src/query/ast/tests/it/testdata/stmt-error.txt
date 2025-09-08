@@ -1256,3 +1256,22 @@ error:
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
 
 
+---------- Input ----------
+copy into t1 from (select a from @data/not_exists where a = 1)
+---------- Output ---------
+error: 
+  --> SQL:1:51
+  |
+1 | copy into t1 from (select a from @data/not_exists where a = 1)
+  | ----                                              ^^^^^ unexpected `where`, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
+  | |                                                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+
+

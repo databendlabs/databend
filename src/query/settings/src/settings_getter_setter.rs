@@ -1071,4 +1071,8 @@ impl Settings {
     pub fn set_enable_table_snapshot_stats(&self, val: u64) -> Result<()> {
         self.try_set_u64("enable_table_snapshot_stats", val)
     }
+
+    pub fn get_queries_queue_retry_timeout(&self) -> Result<u64> {
+        self.try_get_u64("queries_queue_retry_timeout")
+    }
 }

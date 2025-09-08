@@ -15,12 +15,23 @@
 use crate::errors::ConnectionClosed;
 use crate::errors::EarlyRemoved;
 
-/// Error that occurs when acquiring a semaphore permit.
+/// Errors that can occur during semaphore permit acquisition.
+///
+/// This enum represents all possible failure modes when attempting to acquire
+/// a distributed semaphore permit through the meta-service.
 #[derive(thiserror::Error, Debug)]
 pub enum AcquireError {
+    /// The connection to meta-service was lost during acquisition.
+    ///
+    /// This can occur due to network issues, meta-service unavailability,
+    /// or gRPC connection failures. The operation can typically be retried.
     #[error("AcquireError: {0}")]
     ConnectionClosed(#[from] ConnectionClosed),
 
+    /// The permit entry was removed from meta-service before acquisition completed.
+    ///
+    /// This typically occurs when the permit's TTL expires while waiting in the queue,
+    /// or when external processes manually remove the permit entry.
     #[error(
         "AcquireError: the semaphore permit entry is removed from meta-service before being acquired: {0}"
     )]

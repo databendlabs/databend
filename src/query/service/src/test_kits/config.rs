@@ -171,6 +171,11 @@ ADDRESS = 'https://databend.com';"
         self
     }
 
+    pub fn off_log(mut self) -> ConfigBuilder {
+        self.conf.log.file.on = false;
+        self
+    }
+
     pub fn build(self) -> InnerConfig {
         self.conf
     }

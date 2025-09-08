@@ -15,12 +15,15 @@
 use codeq::Decode;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
+use display_more::DisplaySliceExt;
 use log::warn;
 use tokio::sync::mpsc;
 
 #[cfg(doc)]
 use crate::acquirer::Acquirer;
+use crate::errors::AcquirerClosed;
 use crate::errors::ConnectionClosed;
+use crate::errors::ProcessorError;
 use crate::queue::PermitEvent;
 use crate::queue::SemaphoreQueue;
 use crate::PermitEntry;
@@ -33,25 +36,28 @@ pub(crate) struct Processor {
     pub(crate) queue: SemaphoreQueue,
 
     /// The channel to send the [`PermitEvent`] to the [`Acquirer`].
-    pub(crate) tx: mpsc::Sender<PermitEvent>,
+    ///
+    /// When the [`Acquirer`] acquired a [`Permit`], this channel is no longer used,
+    /// because the receiving end may not be polled and sending to it may block forever.
+    pub(crate) tx_to_acquirer: mpsc::Sender<PermitEvent>,
 
     /// Contains descriptive information about the context of this watcher.
-    pub(crate) ctx: String,
+    pub(crate) watcher_name: String,
 }
 
 impl Processor {
     /// Create a new [`Processor`] instance with given permits capacity and the channel to send the [`PermitEvent`] to the [`Acquirer`].
-    pub(crate) fn new(capacity: u64, tx: mpsc::Sender<PermitEvent>) -> Self {
+    pub(crate) fn new(capacity: u64, tx_to_acquirer: mpsc::Sender<PermitEvent>) -> Self {
         Self {
             queue: SemaphoreQueue::new(capacity),
-            tx,
-            ctx: "".to_string(),
+            tx_to_acquirer,
+            watcher_name: "".to_string(),
         }
     }
 
     /// Set the debugging context of this watcher.
-    pub(crate) fn with_context(mut self, ctx: impl ToString) -> Self {
-        self.ctx = ctx.to_string();
+    pub(crate) fn with_watcher_name(mut self, watcher_name: impl ToString) -> Self {
+        self.watcher_name = watcher_name.to_string();
         self
     }
 
@@ -59,13 +65,16 @@ impl Processor {
     pub(crate) async fn process_watch_response(
         &mut self,
         watch_response: WatchResponse,
-    ) -> Result<(), ConnectionClosed> {
-        let Some((key, prev, current)) = Self::decode_watch_response(watch_response, &self.ctx)?
+    ) -> Result<(), ProcessorError> {
+        let Some((key, prev, current)) =
+            Self::decode_watch_response(watch_response, &self.watcher_name)?
         else {
             return Ok(());
         };
 
-        self.process_kv_change(key, prev, current).await
+        self.process_kv_change(key, prev, current).await?;
+
+        Ok(())
     }
 
     async fn process_kv_change(
@@ -73,10 +82,10 @@ impl Processor {
         sem_key: PermitKey,
         prev: Option<SeqV<PermitEntry>>,
         current: Option<SeqV<PermitEntry>>,
-    ) -> Result<(), ConnectionClosed> {
+    ) -> Result<(), AcquirerClosed> {
         log::debug!(
             "{} processing kv change: {}: {:?} -> {:?}",
-            self.ctx,
+            self.watcher_name,
             sem_key,
             prev,
             current
@@ -96,14 +105,19 @@ impl Processor {
             }
         };
 
-        log::debug!("{} queue state: {}", self.ctx, self.queue);
+        log::info!(
+            "{} queue state: {}; new events: {}",
+            self.watcher_name,
+            self.queue,
+            state_changes.display()
+        );
 
         for event in state_changes {
-            log::debug!("{} sending event: {}", self.ctx, event);
+            log::debug!("{} sending event: {}", self.watcher_name, event);
 
-            self.tx.send(event).await.map_err(|e| {
-                ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
-                    .context(&self.ctx)
+            self.tx_to_acquirer.send(event).await.map_err(|e| {
+                AcquirerClosed::new(format!("Semaphore-Watcher fail to send {}", e.0))
+                    .context(&self.watcher_name)
             })?;
         }
 
