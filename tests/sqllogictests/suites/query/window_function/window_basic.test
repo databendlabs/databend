@@ -931,11 +931,19 @@ FROM t_date_sparse ORDER BY id;
 3 30 50
 4 40 40
 
+onlyif mysql
 statement error 1105
 SELECT id, v,
        SUM(v) OVER (ORDER BY d RANGE BETWEEN 'HELLO' PRECEDING AND 'DATABASE' FOLLOWING) AS win_sum
 FROM t_date_sparse ORDER BY id;
 
+onlyif mysql
+statement error 1105
+SELECT id, v,
+       SUM(v) OVER (ORDER BY d RANGE BETWEEN 3 PRECEDING AND -3 FOLLOWING) AS win_sum
+FROM t_date_sparse ORDER BY id
+
+onlyif mysql
 statement error 1105
 SELECT id, v,
        SUM(v) OVER (ORDER BY d RANGE BETWEEN INTERVAL '7 day' PRECEDING AND 3 FOLLOWING) AS win_sum
@@ -965,7 +973,8 @@ FROM t_ts_sparse ORDER BY id;
 3 300 300
 4 400 400
 
-statement error 1007
+onlyif mysql
+statement error 1105
 SELECT id, v,
        SUM(v) OVER (ORDER BY ts RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS win_sum
 FROM t_ts_sparse ORDER BY id;

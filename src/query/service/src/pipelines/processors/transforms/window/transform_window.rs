@@ -981,7 +981,7 @@ impl TransformWindow {
                     };
                     cmp_v_timestamp.cmp(&ref_v_timestamp)
                 } else {
-                    return Err(ErrorCode::InvalidArgument(
+                    return Err(ErrorCode::IllegalDataType(
                         "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval"
                     ));
                 }
@@ -991,7 +991,7 @@ impl TransformWindow {
                 let ref_v = TimestampType::try_downcast_scalar(&ref_v).unwrap();
 
                 let Some(n) = offset.as_interval() else {
-                    return Err(ErrorCode::InvalidArgument(
+                    return Err(ErrorCode::IllegalDataType(
                         "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval"
                     ));
                 };
@@ -1003,7 +1003,7 @@ impl TransformWindow {
                 };
                 cmp_v.cmp(&ref_v)
             }
-            _ => return Err(ErrorCode::InvalidArgument("window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`")),
+            _ => return Err(ErrorCode::IllegalDataType("window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`")),
         };
         Ok(ordering)
     }
