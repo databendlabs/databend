@@ -16,63 +16,38 @@ use std::cmp::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::Number;
 use databend_common_expression::Scalar;
 use databend_common_sql::plans::WindowFuncFrameBound;
 
 #[derive(Debug, PartialEq)]
-pub enum FrameBound<T: Number> {
+pub enum FrameBound {
     CurrentRow,
-    Preceding(Option<T>),
-    Following(Option<T>),
+    Preceding(Option<Scalar>),
+    Following(Option<Scalar>),
 }
 
-impl<T: Number> FrameBound<T> {
-    pub fn get_inner(&self) -> Option<T> {
+impl FrameBound {
+    pub fn get_inner(&self) -> Option<&Scalar> {
         match self {
-            FrameBound::Preceding(Some(v)) => Some(*v),
-            FrameBound::Following(Some(v)) => Some(*v),
+            FrameBound::Preceding(Some(v)) => Some(v),
+            FrameBound::Following(Some(v)) => Some(v),
             _ => None,
         }
     }
 }
 
-impl<T: Number> TryFrom<&WindowFuncFrameBound> for FrameBound<T> {
+impl TryFrom<&WindowFuncFrameBound> for FrameBound {
     type Error = ErrorCode;
     fn try_from(value: &WindowFuncFrameBound) -> Result<Self> {
         match value {
             WindowFuncFrameBound::CurrentRow => Ok(FrameBound::CurrentRow),
-            WindowFuncFrameBound::Preceding(v) => Ok(FrameBound::Preceding(
-                v.as_ref()
-                    .map(|v| {
-                        if let Scalar::Number(scalar) = v {
-                            T::try_downcast_scalar(scalar).ok_or_else(|| {
-                                ErrorCode::Internal(format!("number, but got {:?}", v))
-                            })
-                        } else {
-                            Err(ErrorCode::Internal(format!("number, but got {:?}", v)))
-                        }
-                    })
-                    .transpose()?,
-            )),
-            WindowFuncFrameBound::Following(v) => Ok(FrameBound::Following(
-                v.as_ref()
-                    .map(|v| {
-                        if let Scalar::Number(scalar) = v {
-                            T::try_downcast_scalar(scalar).ok_or_else(|| {
-                                ErrorCode::Internal(format!("number, but got {:?}", v))
-                            })
-                        } else {
-                            Err(ErrorCode::Internal(format!("number, but got {:?}", v)))
-                        }
-                    })
-                    .transpose()?,
-            )),
+            WindowFuncFrameBound::Preceding(v) => Ok(FrameBound::Preceding(v.clone())),
+            WindowFuncFrameBound::Following(v) => Ok(FrameBound::Following(v.clone())),
         }
     }
 }
 
-impl<T: Number> PartialOrd for FrameBound<T> {
+impl PartialOrd for FrameBound {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (FrameBound::CurrentRow, FrameBound::CurrentRow) => Some(Ordering::Equal),

@@ -898,4 +898,106 @@ Product B 800 1200
 Product B 1200 NULL
 
 statement ok
+CREATE OR REPLACE TABLE t_date_sparse (
+    id INT,
+    d DATE,
+    v INT
+);
+
+statement ok
+INSERT INTO t_date_sparse VALUES
+(1, to_date('2022-01-01'), 10),
+(2, to_date('2022-01-05'), 20),
+(3, to_date('2022-01-10'), 30),
+(4, to_date('2022-01-20'), 40);
+
+query III
+SELECT id, v,
+       SUM(v) OVER (ORDER BY d RANGE BETWEEN 3 PRECEDING AND 3 FOLLOWING) AS win_sum
+FROM t_date_sparse ORDER BY id;
+----
+1 10 10
+2 20 20
+3 30 30
+4 40 40
+
+query III
+SELECT id, v,
+       SUM(v) OVER (ORDER BY d RANGE BETWEEN INTERVAL '7 day' PRECEDING AND INTERVAL '7 day' FOLLOWING) AS win_sum
+FROM t_date_sparse ORDER BY id;
+----
+1 10 30
+2 20 60
+3 30 50
+4 40 40
+
+statement error 1105
+SELECT id, v,
+       SUM(v) OVER (ORDER BY d RANGE BETWEEN 'HELLO' PRECEDING AND 'DATABASE' FOLLOWING) AS win_sum
+FROM t_date_sparse ORDER BY id;
+
+statement error 1105
+SELECT id, v,
+       SUM(v) OVER (ORDER BY d RANGE BETWEEN INTERVAL '7 day' PRECEDING AND 3 FOLLOWING) AS win_sum
+FROM t_date_sparse ORDER BY id;
+
+statement ok
+CREATE OR REPLACE TABLE t_ts_sparse (
+    id INT,
+    ts TIMESTAMP,
+    v INT
+);
+
+statement ok
+INSERT INTO t_ts_sparse VALUES
+(1, to_timestamp('2022-01-01 00:00:00'), 100),
+(2, to_timestamp('2022-01-01 06:00:00'), 200),
+(3, to_timestamp('2022-01-02 00:00:00'), 300),
+(4, to_timestamp('2022-01-03 12:00:00'), 400);
+
+query III
+SELECT id, v,
+       SUM(v) OVER (ORDER BY ts RANGE BETWEEN INTERVAL '8 hours' PRECEDING AND INTERVAL '8 hours' FOLLOWING) AS win_sum
+FROM t_ts_sparse ORDER BY id;
+----
+1 100 300
+2 200 300
+3 300 300
+4 400 400
+
+statement error 1007
+SELECT id, v,
+       SUM(v) OVER (ORDER BY ts RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS win_sum
+FROM t_ts_sparse ORDER BY id;
+
+statement ok
+CREATE OR REPLACE TABLE t_date_null (
+    id INT,
+    d DATE,
+    v INT
+);
+
+statement ok
+INSERT INTO t_date_null VALUES
+(1, NULL, 10),
+(2, to_date('2022-01-01'), 20),
+(3, to_date('2022-01-02'), 30),
+(4, NULL, 40);
+
+query IBII
+SELECT id, d IS NULL AS is_null, v,
+       SUM(v) OVER (
+         ORDER BY COALESCE(EXTRACT(epoch FROM CAST(d AS TIMESTAMP)),
+                           32503680000 + id * 864000) -- base epoch + id * big_step
+         RANGE BETWEEN 86400 PRECEDING AND 86400 FOLLOWING
+       ) AS win_sum
+FROM t_date_null
+ORDER BY id;
+----
+1 1 10 10
+2 0 20 50
+3 0 30 50
+4 1 40 40
+
+statement ok
 DROP DATABASE test_window_basic;
