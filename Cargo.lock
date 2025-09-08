@@ -14300,8 +14300,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.28.3"
-source = "git+https://github.com/risinglightdb/sqllogictest-rs.git?rev=5fe912a#5fe912ae7963ca43071f46f83ee63ea402fc08a3"
+version = "0.28.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3566426f72a13e393aa34ca3d542c5b0eb86da4c0db137ee9b5cfccc6179e52d"
 dependencies = [
  "async-trait",
  "educe",
