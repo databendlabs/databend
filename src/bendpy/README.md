@@ -15,10 +15,7 @@ pip install databend
 ```python
 import databend
 
-# Initialize service (call once at startup)
-databend.init_service(local_dir=".databend")
-
-# Create session
+# Create session (automatically initializes embedded mode)
 ctx = databend.SessionContext()
 
 # Execute SQL
@@ -37,7 +34,6 @@ polars_df = df.to_polars()
 ```python
 import databend
 
-databend.init_service(local_dir=".databend")
 ctx = databend.SessionContext()
 
 # Register external files
@@ -55,7 +51,6 @@ print(result)
 ```python
 import databend
 
-databend.init_service(local_dir=".databend")
 ctx = databend.SessionContext()
 
 # Create table
@@ -78,8 +73,7 @@ print(df_polars.to_pandas().values.tolist())  # [[90.0, "9", 9.0]]
 
 | Method                                           | Description                             | Example                                        |
 |--------------------------------------------------|-----------------------------------------|------------------------------------------------|
-| `databend.init_service(config="", local_dir="")` | Initialize Databend service (call once) | `databend.init_service(local_dir=".databend")` |
-| `SessionContext(tenant=None)`                    | Create session context                  | `ctx = databend.SessionContext()`              |
+| `SessionContext(tenant=None, data_path=".databend")` | Create session context (auto-initializes) | `ctx = databend.SessionContext()`              |
 | `ctx.sql(sql)`                                   | Execute SQL and return DataFrame        | `df = ctx.sql("SELECT * FROM table")`          |
 | `df.show(num=20)`                                | Display DataFrame results               | `df.show()`                                    |
 | `df.collect()`                                   | Collect DataFrame as DataBlocks         | `blocks = df.collect()`                        |

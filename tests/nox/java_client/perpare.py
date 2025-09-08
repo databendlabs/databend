@@ -16,7 +16,7 @@ def main():
 
 
 def download_jdbc(version):
-    filename =f"databend-jdbc-{version}.jar"
+    filename = f"databend-jdbc-{version}.jar"
     target = Path(f"cache/jdbc/{filename}")
     if target.exists():
         print(f"{filename} exists")
@@ -28,6 +28,7 @@ def download_jdbc(version):
     )
     resp.raise_for_status()
     target.write_bytes(resp.content)
+
 
 def create_user():
     requests.post(

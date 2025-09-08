@@ -17,9 +17,6 @@ from databend import SessionContext
 import pandas as pd
 import polars
 
-# Manual initialization as originally intended
-databend.init_embedded(".databend")
-
 
 class TestBasic:
     def setup_method(self):

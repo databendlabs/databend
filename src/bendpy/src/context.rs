@@ -37,13 +37,11 @@ pub(crate) struct PySessionContext {
 #[pymethods]
 impl PySessionContext {
     #[new]
-    #[pyo3(signature = (_tenant = None))]
-    fn new(_tenant: Option<&str>, _py: Python) -> PyResult<Self> {
-        // Check if init_embedded was called
+    #[pyo3(signature = (_tenant = None, data_path = ".databend"))]
+    fn new(_tenant: Option<&str>, data_path: &str, _py: Python) -> PyResult<Self> {
+        // Auto-initialize if not already done
         if !crate::EMBEDDED_INIT_STATE.load(std::sync::atomic::Ordering::Acquire) {
-            return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "Please call databend.init_embedded() first",
-            ));
+            crate::init_embedded(_py, data_path)?;
         }
 
         // Create session using the initialized services

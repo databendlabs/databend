@@ -114,10 +114,7 @@ impl GrpcServer {
 
                 // Send started signal immediately after spawning
                 let _ = started_tx.send(());
-                info!(
-                    "meta-service gRPC(on {}) started and ready to serve",
-                    addr
-                );
+                info!("meta-service gRPC(on {}) started and ready to serve", addr);
 
                 let res = builder
                     .add_service(reflect_srv)

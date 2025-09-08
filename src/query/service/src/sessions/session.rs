@@ -156,9 +156,11 @@ impl Session {
         version: BuildInfoRef,
     ) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
-        let cluster = if config.query.cluster_id.is_empty() && config.query.warehouse_id.is_empty() {
+        let cluster = if databend_common_config::GlobalConfig::is_embedded_mode() {
             // Use single node cluster for embedded/local mode
-            ClusterDiscovery::instance().single_node_cluster(&config).await?
+            ClusterDiscovery::instance()
+                .single_node_cluster(&config)
+                .await?
         } else {
             ClusterDiscovery::instance().discover(&config).await?
         };
