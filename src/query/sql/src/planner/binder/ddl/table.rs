@@ -1091,7 +1091,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment, is_deterministic) =
+                let (field, comment, is_deterministic, is_nextval) =
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
@@ -1109,6 +1109,7 @@ impl Binder {
                     comment,
                     option,
                     is_deterministic,
+                    is_nextval,
                 })))
             }
             AlterTableAction::AddConstraint { constraint } => {
@@ -1179,7 +1180,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment, _) =
+                            let (field, comment, _, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -1656,20 +1657,22 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String, bool)> {
+    ) -> Result<(TableField, String, bool, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
+        let mut is_nextval = false;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
                     let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
-                    let (expr, expr_is_deterministic) =
+                    let (expr, expr_is_deterministic, expr_is_nextval) =
                         default_expr_binder.parse_default_expr_to_string(&field, default_expr)?;
                     field = field.with_default_expr(Some(expr));
                     is_deterministic = expr_is_deterministic;
+                    is_nextval = expr_is_nextval;
                 }
                 ColumnExpr::Virtual(virtual_expr) => {
                     let expr = parse_computed_expr_to_string(
@@ -1693,7 +1696,7 @@ impl Binder {
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment, is_deterministic))
+        Ok((field, comment, is_deterministic, is_nextval))
     }
 
     #[async_backtrace::framed]
@@ -1714,7 +1717,7 @@ impl Binder {
             if let Some(expr) = &column.expr {
                 match expr {
                     ColumnExpr::Default(default_expr) => {
-                        let (expr, _) = default_expr_binder
+                        let (expr, _, _) = default_expr_binder
                             .parse_default_expr_to_string(&field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }

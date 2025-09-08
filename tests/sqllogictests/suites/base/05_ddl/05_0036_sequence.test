@@ -164,6 +164,12 @@ DROP TABLE IF EXISTS tmp3;
 statement ok
 CREATE OR REPLACE SEQUENCE seq;
 
+statement error
+create or replace table t(id int default nextval(seq) + 1, name string);
+
+statement error
+create or replace table t(id int default, name string default nextval(seq));
+
 statement ok
 create or replace table t(id int default nextval(seq), name string);
 
@@ -193,6 +199,9 @@ select * from t order by id;
 1 a
 2 b
 3 c
+
+statement error
+alter table t add column age int default nextval(seq);
 
 statement ok
 drop table t;

@@ -104,6 +104,15 @@ impl Interpreter for AddTableColumnInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
+        if self.plan.is_nextval {
+            let num_rows = table_info.meta.statistics.number_of_rows;
+            if num_rows > 0 {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
+                    &self.plan.field.name, &self.plan.table
+                )));
+            }
+        }
         if field.default_expr().is_some() {
             let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }
