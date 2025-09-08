@@ -68,6 +68,7 @@ use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::session_header::ClientSession;
+use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
@@ -453,8 +454,10 @@ impl<E> HTTPSessionEndpoint<E> {
                 //     log every request, which can be distinguished by `session_id = ''`
                 login_history.disable_write = true;
             }
-            s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
-                .await?;
+            if ClientSessionType::IDOnly != s.typ {
+                s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
+                    .await?;
+            }
         }
 
         let session = session_manager.register_session(session)?;

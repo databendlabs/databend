@@ -27,6 +27,7 @@ use poem::RequestBody;
 
 use crate::auth::Credential;
 use crate::servers::http::middleware::session_header::ClientSession;
+use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
@@ -112,7 +113,56 @@ impl HttpQueryContext {
                 return Err(poem::Error::from_string(msg, StatusCode::NOT_FOUND));
             }
         }
+        Ok(())
+    }
 
+    pub async fn try_refresh_worksheet_session(&self) -> databend_common_exception::Result<()> {
+        if let Some(client_session) = self.client_session.as_ref() {
+            if client_session.typ == ClientSessionType::IDOnly {
+                ClientSessionManager::instance()
+                    .try_refresh_state(
+                        self.session.get_current_tenant(),
+                        &client_session.header.id,
+                        &self.user_name,
+                    )
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn try_set_worksheet_session(
+        &self,
+        http_session_conf: &Option<HttpSessionConf>,
+    ) -> databend_common_exception::Result<()> {
+        if let Some(client_session) = self.client_session.as_ref() {
+            if client_session.typ == ClientSessionType::IDOnly {
+                if let Some(conf) = http_session_conf.as_ref() {
+                    match &conf.internal {
+                        Some(internal) => {
+                            if internal.has_temp_table {
+                                ClientSessionManager::instance()
+                                    .try_refresh_state(
+                                        self.session.get_current_tenant(),
+                                        &client_session.header.id,
+                                        &self.user_name,
+                                    )
+                                    .await?;
+                            }
+                        }
+                        None => {
+                            ClientSessionManager::instance()
+                                .drop_client_session_state(
+                                    &self.session.get_current_tenant(),
+                                    &self.user_name,
+                                    &client_session.header.id,
+                                )
+                                .await?;
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
