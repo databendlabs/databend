@@ -57,19 +57,18 @@ impl PySessionContext {
             let dummy_session = session_manager.create_session(SessionType::Dummy).await?;
             let session = session_manager.register_session(dummy_session)?;
 
-            // Set root user as super admin (mimicking builtin user configuration)
+            // Set root user with full permissions for embedded mode
             let mut user_info = UserInfo::new_no_auth("root", "%");
-            // Grant global privileges like builtin users
+            // Grant all global privileges
             user_info.grants.grant_privileges(
                 &databend_common_meta_app::principal::GrantObject::Global,
                 databend_common_meta_app::principal::UserPrivilegeSet::available_privileges_on_global(),
             );
-            // Grant admin role to configured user
+            // Grant account_admin role
             user_info.grants.grant_role("account_admin".to_string());
             user_info.option.set_default_role(Some("account_admin".to_string()));
-            // This is the key - set_all_flag() bypasses warehouse and other checks
+            // Set all flags to bypass various checks
             user_info.option.set_all_flag();
-            // Set account_admin as the auth role directly in set_authed_user
             session.set_authed_user(user_info, Some("account_admin".to_string())).await?;
 
             Ok::<Arc<Session>, Box<dyn std::error::Error + Send + Sync>>(session)
@@ -91,40 +90,9 @@ impl PySessionContext {
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        // Manually create a cluster with proper warehouse assignment for embedded mode
-        let cluster = {
-            use std::sync::Arc;
-
-            use databend_common_catalog::cluster_info::Cluster;
-            use databend_common_config::GlobalConfig;
-            use databend_common_meta_types::NodeInfo;
-
-            let config = GlobalConfig::instance();
-            let node_info = NodeInfo::create(
-                "embedded_node".to_string(),
-                config.query.node_secret.clone(),
-                format!(
-                    "{}:{}",
-                    config.query.http_handler_host, config.query.http_handler_port
-                ),
-                config.query.flight_api_address.clone(),
-                config.query.discovery_address.clone(),
-                "python_binding_warehouse".to_string(), // Set warehouse_id
-                "python_binding_cluster".to_string(),   // Set cluster_id
-            );
-
-            // Manually create cluster with unassign = false
-            Arc::new(Cluster {
-                unassign: false, // This is the key - manually set to false
-                local_id: "embedded_node".to_string(),
-                nodes: vec![Arc::new(node_info)],
-            })
-        };
-
-        let ctx = self
-            .session
-            .create_query_context_with_cluster(cluster, self.version)
-            .map_err(|e| {
+        // Use standard query context creation - embedded mode will be handled automatically
+        let ctx =
+            wait_for_future(py, self.session.create_query_context(self.version)).map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                     "Failed to create query context: {}",
                     e

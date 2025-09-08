@@ -99,15 +99,8 @@ print(df_polars.to_pandas().values.tolist())  # [[90.0, "9", 9.0]]
 uv sync
 source .venv/bin/activate
 
-# Build and install locally
-uvx maturin develop
-
 # Run tests
 uvx maturin develop -E test
 pytest tests/
-
-# Build documentation
-uvx maturin develop -E docs
-uvx pdoc databend
 ```
 
