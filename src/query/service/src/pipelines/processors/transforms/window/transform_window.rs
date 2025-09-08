@@ -1292,52 +1292,35 @@ macro_rules! impl_advance_frame_bound_method {
                         .column_at(&self.current_row, offset)
                         .clone();
                     let data_type = ref_col.data_type().remove_nullable();
-                    with_number_mapped_type!(|NUM_TYPE| match &data_type {
-                        DataType::Number(NumberDataType::NUM_TYPE) => {
-                            let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                            while self.[<frame_ $bound>] < self.partition_end {
-                                let cmp_col = self
-                                    .column_at(&self.[<frame_ $bound>], offset);
-                                let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-                                let mut ordering = Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?;
-                                if !asc {
-                                    ordering = ordering.reverse();
-                                }
-
-                                if ordering.$op() {
-                                    // `self.frame_end` is excluded when aggregating.
-                                    self.[<frame_ $bound ed>] = true;
-                                    return Ok(());
-                                }
-
-                                self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
+                    while self.[<frame_ $bound>] < self.partition_end {
+                        let cmp_col = self
+                            .column_at(&self.[<frame_ $bound>], offset);
+                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
+                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
+                            DataType::Number(NumberDataType::NUM_TYPE) => {
+                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
                             }
-                            self.[<frame_ $bound ed>] = self.partition_ended;
-                        }
-                        // FIXME: clean copied code
-                        DataType::Date | DataType::Timestamp => {
-                            let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                            while self.[<frame_ $bound>] < self.partition_end {
-                                let cmp_col = self
-                                    .column_at(&self.[<frame_ $bound>], offset);
-                                let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-                                let mut ordering = Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?;
-                                if !asc {
-                                    ordering = ordering.reverse();
-                                }
-
-                                if ordering.$op() {
-                                    // `self.frame_end` is excluded when aggregating.
-                                    self.[<frame_ $bound ed>] = true;
-                                    return Ok(());
-                                }
-
-                                self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                            DataType::Date | DataType::Timestamp => {
+                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
                             }
-                            self.[<frame_ $bound ed>] = self.partition_ended;
+                            _ => return Err(ErrorCode::IllegalDataType(
+                                "window function `ORDER BY` must use numeric or Date, Timestamp"
+                            )),
+                        });
+                        if !asc {
+                            ordering = ordering.reverse();
                         }
-                        _ => ()
-                    });
+
+                        if ordering.$op() {
+                            // `self.frame_end` is excluded when aggregating.
+                            self.[<frame_ $bound ed>] = true;
+                            return Ok(());
+                        }
+
+                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                    }
+                    self.[<frame_ $bound ed>] = self.partition_ended;
                     Ok(())
                 }
 
@@ -1358,82 +1341,51 @@ macro_rules! impl_advance_frame_bound_method {
                         .column
                         .clone();
                     let data_type = ref_col.data_type().remove_nullable();
-                    with_number_mapped_type!(|NUM_TYPE| match &data_type {
-                        DataType::Number(NumberDataType::NUM_TYPE) => {
-                            let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                            while self.[<frame_ $bound>] < self.partition_end {
-                                let col = self
-                                    .column_at(&self.[<frame_ $bound>], ref_idx)
-                                    .as_nullable()
-                                    .unwrap();
-                                let validity = &col.validity;
-                                if unsafe { !validity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
-                                    // Need to skip null rows.
-                                    if nulls_first {
-                                        // The null rows are at front.
-                                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
-                                        continue;
-                                    } else {
-                                        // The null rows are at back.
-                                        self.[<frame_ $bound ed>] = true;
-                                        return Ok(());
-                                    }
-                                }
-                                let cmp_col = &col.column;
-                                let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-                                let mut ordering = Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?;
-                                if !asc {
-                                    ordering = ordering.reverse();
-                                }
-
-                                if ordering.$op() {
-                                    self.[<frame_ $bound ed>] = true;
-                                    return Ok(());
-                                }
-
+                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
+                    while self.[<frame_ $bound>] < self.partition_end {
+                        let col = self
+                            .column_at(&self.[<frame_ $bound>], ref_idx)
+                            .as_nullable()
+                            .unwrap();
+                        let validity = &col.validity;
+                        if unsafe { !validity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
+                            // Need to skip null rows.
+                            if nulls_first {
+                                // The null rows are at front.
                                 self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                                continue;
+                            } else {
+                                // The null rows are at back.
+                                self.[<frame_ $bound ed>] = true;
+                                return Ok(());
                             }
-                            self.[<frame_ $bound ed>] = self.partition_ended;
                         }
-                        // FIXME: clean copied code
-                        DataType::Date | DataType::Timestamp => {
-                            let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                            while self.[<frame_ $bound>] < self.partition_end {
-                                let col = self
-                                    .column_at(&self.[<frame_ $bound>], ref_idx)
-                                    .as_nullable()
-                                    .unwrap();
-                                let validity = &col.validity;
-                                if unsafe { !validity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
-                                    // Need to skip null rows.
-                                    if nulls_first {
-                                        // The null rows are at front.
-                                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
-                                        continue;
-                                    } else {
-                                        // The null rows are at back.
-                                        self.[<frame_ $bound ed>] = true;
-                                        return Ok(());
-                                    }
-                                }
-                                let cmp_col = &col.column;
-                                let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-                                let mut ordering = Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?;
-                                if !asc {
-                                    ordering = ordering.reverse();
-                                }
+                        let cmp_col = &col.column;
+                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
 
-                                if ordering.$op() {
-                                    self.[<frame_ $bound ed>] = true;
-                                    return Ok(());
-                                }
-
-                                self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
+                            DataType::Number(NumberDataType::NUM_TYPE) => {
+                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
                             }
-                            self.[<frame_ $bound ed>] = self.partition_ended;
+                            DataType::Date | DataType::Timestamp => {
+                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
+                            }
+                            _ => return Err(ErrorCode::IllegalDataType(
+                                "window function `ORDER BY` must use numeric or Date, Timestamp"
+                            )),
+                        });
+                        if !asc {
+                            ordering = ordering.reverse();
                         }
-                        _ => ()
-                    });
+
+                        if ordering.$op() {
+                            self.[<frame_ $bound ed>] = true;
+                            return Ok(());
+                        }
+
+                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
+                    }
+                    self.[<frame_ $bound ed>] = self.partition_ended;
                     Ok(())
                 }
             }
