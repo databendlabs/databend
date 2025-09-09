@@ -53,7 +53,7 @@ check_response_error "$response"
 create_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
 
-sleep 10
+sleep 20
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 RESUME\"}")
 check_response_error "$response"
@@ -65,7 +65,7 @@ check_response_error "$response"
 resume_task_2_query_id=$(echo $response | jq -r '.id')
 echo "RESUME Task 2 ID: $resume_task_2_query_id"
 
-sleep 25
+sleep 60
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
@@ -87,7 +87,7 @@ check_response_error "$response"
 suspend_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Suspend WareHouse 2 Query ID: $suspend_warehouse_2_query_id"
 
-sleep 20
+sleep 40
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
