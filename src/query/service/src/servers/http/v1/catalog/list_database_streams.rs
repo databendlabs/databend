@@ -91,7 +91,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         })
         .collect::<Vec<_>>();
 
-    let table_ids = tables
+    let table_ids = streams
         .iter()
         .map(|tbl| tbl.get_table_info().ident.table_id)
         .collect::<Vec<_>>();
