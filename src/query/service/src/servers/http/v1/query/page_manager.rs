@@ -33,26 +33,21 @@ pub struct ResponseData {
 }
 
 pub struct PageManager {
-    max_rows_per_page: usize,
     total_rows: usize,
     total_pages: usize,
     end: bool,
     last_page: Option<Page>,
-    block_receiver: SizedChannelReceiver<LiteSpiller>,
+    receiver: SizedChannelReceiver<LiteSpiller>,
 }
 
 impl PageManager {
-    pub fn new(
-        max_rows_per_page: usize,
-        block_receiver: SizedChannelReceiver<LiteSpiller>,
-    ) -> PageManager {
+    pub fn new(receiver: SizedChannelReceiver<LiteSpiller>) -> PageManager {
         PageManager {
             total_rows: 0,
             last_page: None,
             total_pages: 0,
             end: false,
-            block_receiver,
-            max_rows_per_page,
+            receiver,
         }
     }
 
@@ -70,7 +65,7 @@ impl PageManager {
         let next_no = self.total_pages;
         if page_no == next_no {
             if !self.end {
-                let (serializer, end) = self.block_receiver.collect_new_page(tp).await?;
+                let (serializer, end) = self.receiver.collect_new_page(tp).await?;
                 let num_row = serializer.num_rows();
                 log::debug!(num_row, wait_type:? = tp; "collect_new_page");
                 self.total_rows += num_row;
@@ -113,7 +108,12 @@ impl PageManager {
 
     #[async_backtrace::framed]
     pub async fn detach(&mut self) {
-        self.block_receiver.close();
         self.last_page = None;
+        if let Some(spiller) = self.receiver.close() {
+            let _ = spiller.cleanup().await;
+        };
     }
+
+    #[async_backtrace::framed]
+    pub async fn cleanup(&mut self) {}
 }

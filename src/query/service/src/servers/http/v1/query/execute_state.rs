@@ -121,7 +121,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: Sender,
+    pub(crate) sender: Option<Sender>,
 }
 
 pub struct ExecuteRunning {
@@ -427,7 +427,7 @@ impl ExecuteState {
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
-        mut block_sender: Sender,
+        mut sender: Sender,
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
@@ -438,34 +438,35 @@ impl ExecuteState {
             .with_context(make_error)?;
         match data_stream.next().await {
             None => {
-                let block = DataBlock::empty_with_schema(schema);
-                let _ = block_sender.send(block).await;
+                Self::send_data_block(&mut sender, &executor, DataBlock::empty_with_schema(schema))
+                    .await
+                    .with_context(make_error)?;
                 Executor::stop::<()>(&executor, Ok(()));
-                block_sender.finish();
+                sender.finish();
             }
             Some(Err(err)) => {
                 Executor::stop(&executor, Err(err));
-                block_sender.finish();
+                sender.abort();
             }
             Some(Ok(block)) => {
-                Self::send_data_block(&mut block_sender, &executor, block)
+                Self::send_data_block(&mut sender, &executor, block)
                     .await
                     .with_context(make_error)?;
                 while let Some(block) = data_stream.next().await {
                     match block {
                         Ok(block) => {
-                            Self::send_data_block(&mut block_sender, &executor, block)
+                            Self::send_data_block(&mut sender, &executor, block)
                                 .await
                                 .with_context(make_error)?;
                         }
                         Err(err) => {
-                            block_sender.finish();
+                            sender.abort();
                             return Err(err.with_context(make_error()));
                         }
                     };
                 }
                 Executor::stop::<()>(&executor, Ok(()));
-                block_sender.finish();
+                sender.finish();
             }
         }
         Ok(())
@@ -475,11 +476,12 @@ impl ExecuteState {
         sender: &mut Sender,
         executor: &Arc<Mutex<Executor>>,
         block: DataBlock,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         match sender.send(block).await {
-            Ok(_) => Ok(()),
+            Ok(ok) => Ok(ok),
             Err(err) => {
                 Executor::stop(executor, Err(err.clone()));
+                sender.abort();
                 Err(err)
             }
         }

@@ -621,17 +621,14 @@ impl HttpQuery {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting {
                 ctx: ctx.clone(),
-                sender,
+                sender: Some(sender),
             }),
         }));
 
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
 
-        let page_manager = Arc::new(TokioMutex::new(PageManager::new(
-            req.pagination.max_rows_per_page,
-            receiver,
-        )));
+        let page_manager = Arc::new(TokioMutex::new(PageManager::new(receiver)));
 
         Ok(HttpQuery {
             id: query_id,
@@ -789,14 +786,14 @@ impl HttpQuery {
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
         let span = fastrace::Span::enter_with_local_parent("HttpQuery::start_query");
         let (block_sender, query_context) = {
-            let state = self.executor.lock();
-            let ExecuteState::Starting(state) = &state.state else {
+            let state = &mut self.executor.lock().state;
+            let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
                     "[HTTP-QUERY] Invalid query state: expected Starting state",
                 ));
             };
 
-            (state.sender.clone(), state.ctx.clone())
+            (state.sender.take().unwrap(), state.ctx.clone())
         };
 
         let query_session = query_context.get_current_session();
@@ -851,15 +848,9 @@ impl HttpQuery {
     #[async_backtrace::framed]
     pub async fn kill(&self, reason: ErrorCode) {
         // the query will be removed from the query manager before the session is dropped.
-        self.detach().await;
+        self.page_manager.lock().await.detach().await;
 
         Executor::stop(&self.executor, Err(reason));
-    }
-
-    #[async_backtrace::framed]
-    async fn detach(&self) {
-        let mut data = self.page_manager.lock().await;
-        data.detach().await
     }
 
     #[async_backtrace::framed]

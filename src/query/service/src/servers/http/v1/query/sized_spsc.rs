@@ -50,7 +50,7 @@ where
 
 enum Page {
     Memory(Vec<DataBlock>),
-    Spilled(SpillableBlock),
+    Spilled(Location),
 }
 
 struct SizedChannelBuffer {
@@ -179,10 +179,6 @@ impl PageBuilder {
         self.remain_rows > 0 && self.remain_size > 0
     }
 
-    fn is_empty(&self) -> bool {
-        self.blocks.is_empty()
-    }
-
     fn num_rows(&self) -> usize {
         self.blocks.iter().map(DataBlock::num_rows).sum()
     }
@@ -269,8 +265,8 @@ where S: DataBlockSpill
         let Some(spiller) = spiller.as_ref() else {
             return Ok(Page::Memory(page));
         };
-        let spilled = SpillableBlock::spill_page(page, spiller).await?;
-        Ok(Page::Spilled(spilled))
+        let location = spiller.merge_and_spill(page).await?;
+        Ok(Page::Spilled(location))
     }
 
     #[async_backtrace::framed]
@@ -317,8 +313,14 @@ pub struct SizedChannelReceiver<S> {
 impl<S> SizedChannelReceiver<S>
 where S: DataBlockSpill
 {
-    pub fn close(&self) {
+    pub fn close(&mut self) -> Option<S> {
         self.chan.stop_recv();
+        {
+            let mut buffer = self.chan.buffer.lock().unwrap();
+            buffer.current_page = None;
+            buffer.pages.clear();
+        }
+        self.chan.spiller.lock().unwrap().take()
     }
 
     #[async_backtrace::framed]
@@ -362,16 +364,16 @@ where S: DataBlockSpill
         let page = self.chan.buffer.lock().unwrap().take_page();
         let collector = match page {
             None => return Ok(None),
-            Some(Page::Memory(blocks)) => {
+            Some(Page::Memory(page)) => {
                 let mut collector = BlocksCollector::new();
-                for block in blocks {
+                for block in page {
                     collector.append_block(block);
                 }
                 collector
             }
-            Some(Page::Spilled(block)) => {
+            Some(Page::Spilled(location)) => {
                 let spiller = self.chan.spiller.lock().unwrap().clone().unwrap();
-                let block = spiller.restore(&block.location).await?;
+                let block = spiller.restore(&location).await?;
                 let mut collector = BlocksCollector::new();
                 collector.append_block(block);
                 collector
@@ -389,7 +391,6 @@ where S: DataBlockSpill
     }
 }
 
-#[derive(Clone)]
 pub struct SizedChannelSender<S> {
     chan: Arc<SizedChannel<S>>,
 }
@@ -435,7 +436,12 @@ where S: DataBlockSpill
         }
     }
 
-    pub fn finish(&mut self) {
+    pub fn abort(&mut self) {
+        self.chan.buffer.lock().unwrap().stop_send();
+        self.chan.notify_on_sent.notify_one();
+    }
+
+    pub fn finish(self) {
         {
             let mut buffer = self.chan.buffer.lock().unwrap();
             let builder = buffer.current_page.take().unwrap();
@@ -469,17 +475,6 @@ where S: DataBlockSpill
     pub fn abort(self) {
         self.chan.buffer.lock().unwrap().stop_send();
         self.chan.notify_on_sent.notify_one();
-    }
-}
-
-struct SpillableBlock {
-    location: Location,
-}
-
-impl SpillableBlock {
-    async fn spill_page(page: Vec<DataBlock>, spiller: &impl DataBlockSpill) -> Result<Self> {
-        let location = spiller.merge_and_spill(page).await?;
-        Ok(Self { location })
     }
 }
 
@@ -519,8 +514,8 @@ mod tests {
             Ok(Location::Remote(key))
         }
 
-        async fn merge_and_spill(&self, _data_block: Vec<DataBlock>) -> Result<Location> {
-            unimplemented!()
+        async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+            self.spill(DataBlock::concat(&data_block)?).await
         }
 
         async fn restore(&self, location: &Location) -> Result<DataBlock> {

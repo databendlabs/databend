@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -395,6 +396,21 @@ impl LiteSpiller {
             operator,
             config,
         )?)))
+    }
+
+    pub async fn cleanup(self) -> Result<()> {
+        let files = std::mem::take(self.0.adapter.files.write().unwrap().deref_mut());
+        let files: Vec<_> = files
+            .into_keys()
+            .filter_map(|location| match location {
+                Location::Remote(path) => Some(path),
+                Location::Local(_) => None,
+            })
+            .collect();
+        let op = self.0.local_operator.as_ref().unwrap_or(&self.0.operator);
+
+        op.delete_iter(files).await?;
+        Ok(())
     }
 }
 
