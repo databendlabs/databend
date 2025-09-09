@@ -86,3 +86,32 @@ runs:
           ../../scripts/setup/dev_setup.sh -yb
           uv venv --python=python3.12
           uv sync --all-groups --all-extras
+
+    - name: Run Python tests
+      shell: bash
+      working-directory: src/bendpy
+      run: |
+        echo "Running Python binding tests..."
+        
+        # Ensure we have a clean environment
+        export PATH="$HOME/.local/bin:$PATH"
+        
+        # Install the package and test dependencies
+        if [ -z "${{ inputs.version }}" ]; then
+          # Development build for testing
+          echo "Running development build tests..."
+          uv tool run maturin develop -E test --quiet
+        else
+          # Install from built wheel for release testing
+          echo "Testing built wheel..."
+          uv venv --python python3.12
+          source .venv/bin/activate
+          uv pip install dist/*.whl
+          uv pip install pytest pandas polars pyarrow
+        fi
+        
+        # Run pytest tests
+        echo "Executing pytest tests..."
+        python -m pytest tests/ -v --tb=short
+        
+        echo "All Python binding tests passed!"
