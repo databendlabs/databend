@@ -1,25 +1,22 @@
->>>> create table t1(a int)
-<<<<
->>>> create stream s1 on table t1
-<<<<
 # Test catalog streams API - existing database
 {
   "streams": [
     {
       "name": "s1",
       "database": "default",
-      "table": "t1",
+      "catalog": "default",
+      "stream_id": 1082,
       "mode": "append_only",
       "comment": "",
-      "created_on": "...",
-      "updated_on": "..."
+      "table_name": null,
+      "table_id": 1074,
+      "table_version": 1081,
+      "snapshot_location": null,
+      "invalid_reason": "",
+      "owner": null
     }
   ],
   "warnings": []
 }
 # Test catalog streams API - non-existent database
-404
->>>> drop stream if exists s1
-<<<<
->>>> drop table if exists t1
-<<<<
+{"error":{"code":404,"message":"UnknownDatabase. Code: 1003, Text = Unknown database 'nonexistent'."}}404
