@@ -76,9 +76,9 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     }
 
     let warnings = vec![];
-    let tables = db.list_tables().await?;
-
-    let streams = tables
+    let tables = db
+        .list_tables()
+        .await?
         .into_iter()
         .filter(|tbl| {
             visibility_checker.check_table_visibility(
@@ -91,7 +91,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         })
         .collect::<Vec<_>>();
 
-    let table_ids = streams
+    let table_ids = tables
         .iter()
         .map(|tbl| tbl.get_table_info().ident.table_id)
         .collect::<Vec<_>>();
@@ -105,28 +105,27 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
         .collect::<HashMap<_, _>>();
 
-    let mut res = vec![];
-    for stream in streams {
-        let info = stream.get_table_info();
-        let stream_table =
-            databend_common_storages_stream::stream_table::StreamTable::try_from_table(
-                stream.as_ref(),
-            )?;
-        res.push(StreamInfo {
-            name: stream.name().to_string(),
+    let mut streams = vec![];
+    for tbl in tables {
+        let info = tbl.get_table_info();
+        let stream = databend_common_storages_stream::stream_table::StreamTable::try_from_table(
+            tbl.as_ref(),
+        )?;
+        streams.push(StreamInfo {
+            name: tbl.name().to_string(),
             database: db.name().to_string(),
             catalog: catalog.name().clone(),
             stream_id: info.ident.table_id,
             created_on: info.meta.created_on,
             updated_on: info.meta.updated_on,
-            mode: stream_table.mode().to_string(),
+            mode: stream.mode().to_string(),
             comment: info.meta.comment.clone(),
             table_name: source_tb_ids
-                .get(&stream_table.source_table_id().unwrap())
+                .get(&stream.source_table_id().unwrap())
                 .cloned(),
-            table_id: stream_table.source_table_id().ok(),
-            table_version: stream_table.offset().ok(),
-            snapshot_location: stream_table.snapshot_loc(),
+            table_id: stream.source_table_id().ok(),
+            table_version: stream.offset().ok(),
+            snapshot_location: stream.snapshot_loc(),
             invalid_reason: String::new(),
             owner: None,
         });
