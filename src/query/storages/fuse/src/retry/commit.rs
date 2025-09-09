@@ -153,48 +153,50 @@ async fn try_rebuild_req(
             if let Some(txn_begin_timestamp) =
                 txn_mgr.get_table_txn_begin_timestamp(latest_table.get_id())
             {
-                let Some(latest_snapshot_timestamp) = latest_snapshot.timestamp() else {
-                    return Err(ErrorCode::UnresolvableConflict(format!(
+                if let Some(latest_snapshot) = latest_snapshot.as_ref() {
+                    let Some(latest_snapshot_timestamp) = latest_snapshot.timestamp else {
+                        return Err(ErrorCode::UnresolvableConflict(format!(
                         "Table {} snapshot lacks required timestamp. This table was created with a significantly outdated version that is no longer directly supported by the current version and requires migration.
                          Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com",
                         tid
                     )));
-                };
+                    };
 
-                // By enforcing txn_begin_timestamp >= latest_snapshot_timestamp, we ensure that
-                // vacuum operations won't remove table data (segment, blocks, etc.) that newly
-                // created in the current active transaction.
+                    // By enforcing txn_begin_timestamp >= latest_snapshot_timestamp, we ensure that
+                    // vacuum operations won't remove table data (segment, blocks, etc.) that newly
+                    // created in the current active transaction.
 
-                // In the current transaction, all the newly created table data (segments, blocks, etc.)
-                // has timestamps that are greater than or equal to txn_begin_timestamp, but the
-                // final snapshot which contains those data (and is yet to be committed) may have a timestamp
-                // that is larger than txn_begin_timestamp.
+                    // In the current transaction, all the newly created table data (segments, blocks, etc.)
+                    // has timestamps that are greater than or equal to txn_begin_timestamp, but the
+                    // final snapshot which contains those data (and is yet to be committed) may have a timestamp
+                    // that is larger than txn_begin_timestamp.
 
-                // To maintain vacuum safety, we must ensure that if the latest snapshot's timestamp
-                // (latest_snapshot_timestamp) is larger than txn_begin_timestamp, we abort the transaction
-                // to prevent potential data loss during vacuum operations.
+                    // To maintain vacuum safety, we must ensure that if the latest snapshot's timestamp
+                    // (latest_snapshot_timestamp) is larger than txn_begin_timestamp, we abort the transaction
+                    // to prevent potential data loss during vacuum operations.
 
-                // Example:
-                // session1:                                      session2:                    session3:
-                // begin;
-                // -- newly created table data
-                // -- timestamped as A
-                // insert into t values (1);
-                //                                              -- new snapshot S's ts is B
-                //                                              insert into t values (2);
-                //                                                                             -- using S as gc root
-                //                                                                             -- if B > A, then newly created table data
-                //                                                                             -- in session1 will be purged
-                //                                                                             call fuse_vacuum2('db', 't');
-                // -- while merging with S
-                // -- if A < B, this txn should abort
-                // commit;
+                    // Example:
+                    // session1:                                      session2:                    session3:
+                    // begin;
+                    // -- newly created table data
+                    // -- timestamped as A
+                    // insert into t values (1);
+                    //                                              -- new snapshot S's ts is B
+                    //                                              insert into t values (2);
+                    //                                                                             -- using S as gc root
+                    //                                                                             -- if B > A, then newly created table data
+                    //                                                                             -- in session1 will be purged
+                    //                                                                             call fuse_vacuum2('db', 't');
+                    // -- while merging with S
+                    // -- if A < B, this txn should abort
+                    // commit;
 
-                if txn_begin_timestamp < latest_snapshot_timestamp {
-                    return Err(ErrorCode::UnresolvableConflict(format!(
+                    if txn_begin_timestamp < latest_snapshot_timestamp {
+                        return Err(ErrorCode::UnresolvableConflict(format!(
                        "Unresolvable conflict detected for table {} while resolving conflicts: txn started with logical timestamp {}, which is less than the latest table timestamp {}. Transaction must be aborted.",
                         tid, txn_begin_timestamp, latest_snapshot_timestamp
                     )));
+                    }
                 }
             }
         }
