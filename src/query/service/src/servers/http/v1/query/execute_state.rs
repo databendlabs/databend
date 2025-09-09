@@ -410,11 +410,11 @@ impl ExecuteState {
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
                 Executor::stop(&executor_clone, Err(err.clone()));
-                block_sender_closer.close();
+                block_sender_closer.abort();
             }
             Err(e) => {
                 Executor::stop(&executor_clone, Err(e));
-                block_sender_closer.close();
+                block_sender_closer.abort();
             }
             _ => {}
         }
@@ -441,11 +441,11 @@ impl ExecuteState {
                 let block = DataBlock::empty_with_schema(schema);
                 let _ = block_sender.send(block).await;
                 Executor::stop::<()>(&executor, Ok(()));
-                block_sender.close();
+                block_sender.finish();
             }
             Some(Err(err)) => {
                 Executor::stop(&executor, Err(err));
-                block_sender.close();
+                block_sender.finish();
             }
             Some(Ok(block)) => {
                 Self::send_data_block(&mut block_sender, &executor, block)
@@ -459,13 +459,13 @@ impl ExecuteState {
                                 .with_context(make_error)?;
                         }
                         Err(err) => {
-                            block_sender.close();
+                            block_sender.finish();
                             return Err(err.with_context(make_error()));
                         }
                     };
                 }
                 Executor::stop::<()>(&executor, Ok(()));
-                block_sender.close();
+                block_sender.finish();
             }
         }
         Ok(())

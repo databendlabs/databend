@@ -14,9 +14,7 @@
 
 use std::cmp::min;
 use std::collections::VecDeque;
-use std::fmt;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::result;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -70,7 +68,7 @@ impl SizedChannelBuffer {
             max_size,
             page_size,
             pages: Default::default(),
-            current_page: None,
+            current_page: Some(PageBuilder::new(page_size)),
             is_recv_stopped: false,
             is_send_stopped: false,
         }
@@ -92,18 +90,24 @@ impl SizedChannelBuffer {
         }
 
         loop {
-            let page_builder = self
-                .current_page
-                .get_or_insert_with(|| PageBuilder::new(self.page_size));
+            let page_builder = self.current_page.as_mut().unwrap();
 
             let remain = page_builder.try_append_block(block);
             if !page_builder.has_capacity() {
                 let rows = page_builder.num_rows();
-                let page = self.current_page.take().unwrap().into_page();
+
                 if self.pages_rows() + rows > self.max_size {
-                    return Err(SendFail::Full { page, remain });
+                    return Err(SendFail::Full {
+                        page: self.current_page.take().unwrap().into_page(),
+                        remain,
+                    });
                 }
-                self.pages.push_back(Page::Memory(page));
+                self.pages.push_back(Page::Memory(
+                    self.current_page
+                        .replace(PageBuilder::new(self.page_size))
+                        .unwrap()
+                        .into_page(),
+                ));
             }
             match remain {
                 Some(remain) => block = remain,
@@ -135,30 +139,12 @@ impl SizedChannelBuffer {
         Ok(())
     }
 
-    fn is_close(&self) -> bool {
-        self.current_page
-            .as_ref()
-            .map(PageBuilder::is_empty)
-            .unwrap_or(true)
-            && self.pages.is_empty()
-            && self.is_send_stopped
-    }
-
     fn stop_send(&mut self) {
         self.is_send_stopped = true
     }
 
     fn stop_recv(&mut self) {
         self.is_recv_stopped = true
-    }
-
-    fn flush_current_page(&mut self) {
-        if let Some(page_builder) = self.current_page.take() {
-            let blocks = page_builder.into_page();
-            if !blocks.is_empty() {
-                self.pages.push_back(Page::Memory(blocks));
-            }
-        }
     }
 
     fn take_page(&mut self) -> Option<Page> {
@@ -275,70 +261,6 @@ where S: DataBlockSpill
         }
     }
 
-    #[fastrace::trace(name = "SizedChannel::try_take_page")]
-    async fn try_take_page(&self) -> Result<Option<BlocksSerializer>> {
-        let format_settings = self
-            .format_settings
-            .lock()
-            .unwrap()
-            .as_ref()
-            .cloned()
-            .unwrap_or_default();
-        let page = self.buffer.lock().unwrap().take_page();
-        match page {
-            Some(Page::Memory(blocks)) => {
-                let mut collector = BlocksCollector::new();
-                for block in blocks {
-                    collector.append_block(block);
-                }
-                Ok(Some(collector.into_serializer(format_settings)))
-            }
-            Some(Page::Spilled(_)) => {
-                // TODO: Implement restoration from spilled page
-                unimplemented!("Restoration from spilled page not implemented yet")
-            }
-            None => Ok(None),
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn send(&self, mut block: DataBlock) -> Result<bool> {
-        loop {
-            let result = self.buffer.lock().unwrap().try_add_block(block);
-            match result {
-                Ok(_) => {
-                    self.notify_on_sent.notify_one();
-                    return Ok(true);
-                }
-                Err(SendFail::Closed) => {
-                    self.notify_on_sent.notify_one();
-                    return Ok(false);
-                }
-                Err(SendFail::Full { page, remain }) => {
-                    let mut to_add = self.try_spill_page(page).await?;
-                    loop {
-                        let result = self.buffer.lock().unwrap().try_add_page(to_add);
-                        match result {
-                            Ok(_) => break,
-                            Err(SendFail::Closed) => return Ok(false),
-                            Err(SendFail::Full { page, .. }) => {
-                                to_add = Page::Memory(page);
-                                self.notify_on_recv.notified().await;
-                            }
-                        }
-                    }
-
-                    match remain {
-                        Some(remain) => {
-                            block = remain;
-                        }
-                        None => return Ok(true),
-                    }
-                }
-            }
-        }
-    }
-
     async fn try_spill_page(&self, page: Vec<DataBlock>) -> Result<Page> {
         if !self.should_spill() {
             return Ok(Page::Memory(page));
@@ -355,11 +277,11 @@ where S: DataBlockSpill
     async fn recv(&self) -> bool {
         loop {
             {
-                let g = self.buffer.lock().unwrap();
-                if !g.pages.is_empty() {
+                let buffer = self.buffer.lock().unwrap();
+                if !buffer.pages.is_empty() {
                     return true;
                 }
-                if g.is_send_stopped {
+                if buffer.is_send_stopped {
                     return false;
                 }
             }
@@ -367,24 +289,13 @@ where S: DataBlockSpill
         }
     }
 
-    pub fn is_close(&self) -> bool {
-        self.buffer.lock().unwrap().is_close()
+    fn is_close(&self) -> bool {
+        let buffer = self.buffer.lock().unwrap();
+        buffer.is_send_stopped && buffer.pages.is_empty()
     }
 
-    pub fn stop_send(&self) {
-        {
-            let mut guard = self.buffer.lock().unwrap();
-            guard.flush_current_page();
-            guard.stop_send()
-        }
-        self.notify_on_sent.notify_one();
-    }
-
-    pub fn stop_recv(&self) {
-        {
-            let mut guard = self.buffer.lock().unwrap();
-            guard.stop_recv()
-        }
+    fn stop_recv(&self) {
+        self.buffer.lock().unwrap().stop_recv();
         self.notify_on_recv.notify_one();
     }
 
@@ -408,17 +319,12 @@ where S: DataBlockSpill
 {
     pub fn close(&self) {
         self.chan.stop_recv();
-        self.chan.spiller.lock().unwrap().take(); // release session
     }
 
     #[async_backtrace::framed]
-    pub async fn collect_new_page(
-        &mut self,
-        _max_rows_per_page: usize, // Now ignored since pages are pre-built
-        tp: &Wait,
-    ) -> Result<(BlocksSerializer, bool)> {
+    pub async fn collect_new_page(&mut self, tp: &Wait) -> Result<(BlocksSerializer, bool)> {
         let page = match tp {
-            Wait::Async => self.chan.try_take_page().await?,
+            Wait::Async => self.try_take_page().await?,
             Wait::Deadline(t) => {
                 let d = match t.checked_duration_since(Instant::now()) {
                     Some(d) if !d.is_zero() => d,
@@ -428,7 +334,7 @@ where S: DataBlockSpill
                     }
                 };
                 match tokio::time::timeout(d, self.chan.recv()).await {
-                    Ok(true) => self.chan.try_take_page().await?,
+                    Ok(true) => self.try_take_page().await?,
                     Ok(false) => {
                         info!("[HTTP-QUERY] Reached end of data blocks");
                         return Ok((BlocksSerializer::empty(), true));
@@ -450,6 +356,37 @@ where S: DataBlockSpill
         let block_end = self.chan.is_close();
         Ok((page, block_end))
     }
+
+    #[fastrace::trace(name = "SizedChannelReceiver::try_take_page")]
+    async fn try_take_page(&mut self) -> Result<Option<BlocksSerializer>> {
+        let page = self.chan.buffer.lock().unwrap().take_page();
+        let collector = match page {
+            None => return Ok(None),
+            Some(Page::Memory(blocks)) => {
+                let mut collector = BlocksCollector::new();
+                for block in blocks {
+                    collector.append_block(block);
+                }
+                collector
+            }
+            Some(Page::Spilled(block)) => {
+                let spiller = self.chan.spiller.lock().unwrap().clone().unwrap();
+                let block = spiller.restore(&block.location).await?;
+                let mut collector = BlocksCollector::new();
+                collector.append_block(block);
+                collector
+            }
+        };
+
+        let format_settings = self
+            .chan
+            .format_settings
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_default();
+        Ok(Some(collector.into_serializer(format_settings)))
+    }
 }
 
 #[derive(Clone)]
@@ -461,12 +398,51 @@ impl<S> SizedChannelSender<S>
 where S: DataBlockSpill
 {
     #[async_backtrace::framed]
-    pub async fn send(&self, value: DataBlock) -> Result<bool> {
-        self.chan.send(value).await
+    pub async fn send(&mut self, mut block: DataBlock) -> Result<bool> {
+        loop {
+            let result = self.chan.buffer.lock().unwrap().try_add_block(block);
+            match result {
+                Ok(_) => {
+                    self.chan.notify_on_sent.notify_one();
+                    return Ok(true);
+                }
+                Err(SendFail::Closed) => {
+                    self.chan.notify_on_sent.notify_one();
+                    return Ok(false);
+                }
+                Err(SendFail::Full { page, remain }) => {
+                    let mut to_add = self.chan.try_spill_page(page).await?;
+                    loop {
+                        let result = self.chan.buffer.lock().unwrap().try_add_page(to_add);
+                        match result {
+                            Ok(_) => break,
+                            Err(SendFail::Closed) => return Ok(false),
+                            Err(SendFail::Full { page, .. }) => {
+                                to_add = Page::Memory(page);
+                                self.chan.notify_on_recv.notified().await;
+                            }
+                        }
+                    }
+
+                    match remain {
+                        Some(remain) => {
+                            block = remain;
+                        }
+                        None => return Ok(true),
+                    }
+                }
+            }
+        }
     }
 
-    pub fn close(&self) {
-        self.chan.stop_send()
+    pub fn finish(&mut self) {
+        {
+            let mut buffer = self.chan.buffer.lock().unwrap();
+            let builder = buffer.current_page.take().unwrap();
+            buffer.pages.push_back(Page::Memory(builder.into_page()));
+            buffer.stop_send();
+        }
+        self.chan.notify_on_sent.notify_one();
     }
 
     pub fn closer(&self) -> SizedChannelSenderCloser<S> {
@@ -490,73 +466,20 @@ pub struct SizedChannelSenderCloser<S> {
 impl<S> SizedChannelSenderCloser<S>
 where S: DataBlockSpill
 {
-    pub fn close(self) {
-        self.chan.stop_send()
+    pub fn abort(self) {
+        self.chan.buffer.lock().unwrap().stop_send();
+        self.chan.notify_on_sent.notify_one();
     }
 }
 
 struct SpillableBlock {
-    data: Option<DataBlock>,
-    /// [SpillableBlock::slice] does not reallocate memory, so memorysize remains unchanged
-    memory_size: usize,
-    rows: usize,
-    location: Option<Location>,
-    processed: usize,
+    location: Location,
 }
 
 impl SpillableBlock {
     async fn spill_page(page: Vec<DataBlock>, spiller: &impl DataBlockSpill) -> Result<Self> {
-        let rows = page.iter().map(DataBlock::num_rows).sum();
-        let memory_size = page.iter().map(DataBlock::memory_size).sum();
         let location = spiller.merge_and_spill(page).await?;
-        Ok(Self {
-            location: Some(location),
-            processed: 0,
-            rows,
-            memory_size,
-            data: None,
-        })
-    }
-
-    fn slice(&mut self, pos: usize) -> DataBlock {
-        let data = self.data.as_ref().unwrap();
-
-        let left = data.slice(0..pos);
-        let right = data.slice(pos..data.num_rows());
-
-        self.rows = right.num_rows();
-        self.data = Some(right);
-        if self.location.is_some() {
-            self.processed += pos;
-        }
-        left
-    }
-
-    async fn spill<S>(&mut self, spiller: &S) -> Result<()>
-    where S: DataBlockSpill {
-        let data = self.data.take().unwrap();
-        if self.location.is_none() {
-            let location = spiller.spill(data).await?;
-            self.location = Some(location);
-        }
-        Ok(())
-    }
-
-    fn restore(&mut self, location: &Location, data: DataBlock) {
-        assert_eq!(self.location.as_ref(), Some(location));
-        self.data = Some(data)
-    }
-}
-
-impl Debug for SpillableBlock {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SpillableBlock")
-            .field("has_data", &self.data.is_some())
-            .field("memory_size", &self.memory_size)
-            .field("rows", &self.rows)
-            .field("location", &self.location)
-            .field("processed", &self.processed)
-            .finish()
+        Ok(Self { location })
     }
 }
 
@@ -633,12 +556,12 @@ mod tests {
             for block in sender_data {
                 sender.send(block).await.unwrap();
             }
-            sender.close();
+            sender.finish();
         });
 
         let mut received_blocks = Vec::new();
         loop {
-            let (serializer, is_end) = receiver.collect_new_page(10, &Wait::Async).await.unwrap();
+            let (serializer, is_end) = receiver.collect_new_page(&Wait::Async).await.unwrap();
 
             if serializer.num_rows() > 0 {
                 received_blocks.push(serializer.num_rows());

@@ -70,10 +70,7 @@ impl PageManager {
         let next_no = self.total_pages;
         if page_no == next_no {
             if !self.end {
-                let (serializer, end) = self
-                    .block_receiver
-                    .collect_new_page(self.max_rows_per_page, tp)
-                    .await?;
+                let (serializer, end) = self.block_receiver.collect_new_page(tp).await?;
                 let num_row = serializer.num_rows();
                 log::debug!(num_row, wait_type:? = tp; "collect_new_page");
                 self.total_rows += num_row;

@@ -838,7 +838,7 @@ impl HttpQuery {
                         e
                     );
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
-                    block_sender_closer.close();
+                    block_sender_closer.abort();
                 }
             }
             .in_span(span),
