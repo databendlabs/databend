@@ -65,7 +65,10 @@ fn init_embedded(_py: Python, data_path: &str) -> PyResult<()> {
             ))
         })?;
 
-    // Keep global config unchanged for embedded mode
+    // Python binding telemetry - mandatory reporting
+    RUNTIME.block_on(async {
+        report_python_binding_telemetry(&conf).await;
+    });
 
     // Initialize license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).map_err(|e| {
@@ -136,4 +139,87 @@ pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_embedded, m)?)?;
     m.add_class::<context::PySessionContext>()?;
     Ok(())
+}
+
+async fn report_python_binding_telemetry(config: &InnerConfig) {
+    use databend_common_telemetry::report_node_telemetry;
+    use databend_common_version::DATABEND_TELEMETRY_API_KEY;
+    use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
+
+    let payload = create_python_binding_telemetry_payload(config);
+    report_node_telemetry(
+        payload,
+        DATABEND_TELEMETRY_ENDPOINT,
+        DATABEND_TELEMETRY_API_KEY,
+    )
+    .await;
+}
+
+fn create_python_binding_telemetry_payload(config: &InnerConfig) -> serde_json::Value {
+    let start_time = std::time::Instant::now();
+
+    // Collect system information
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    system.refresh_cpu_all();
+
+    serde_json::json!({
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        "event_type": "python_binding_init",
+        "mode": "python_binding",
+        "cluster": {
+            "cluster_id": "embedded_cluster",
+            "tenant_name": config.query.tenant_id.tenant_name()
+        },
+        "node": {
+            "node_id": config.query.node_id,
+            "version": BUILD_INFO.commit_detail.as_str()
+        },
+        "system": {
+            "os_name": sysinfo::System::name().unwrap_or_else(|| "unknown".to_string()),
+            "os_version": sysinfo::System::os_version().unwrap_or_else(|| "unknown".to_string()),
+            "kernel_version": sysinfo::System::kernel_version().unwrap_or_else(|| "unknown".to_string()),
+            "arch": sysinfo::System::cpu_arch(),
+            "cpu_cores": system.cpus().len(),
+            "total_memory": system.total_memory(),
+            "available_memory": system.available_memory(),
+            "used_memory": system.used_memory(),
+            "uptime_seconds": sysinfo::System::uptime()
+        },
+        "cache_strategy": {
+            "enable_table_meta_cache": config.cache.enable_table_meta_cache,
+            "table_meta_snapshot_count": config.cache.table_meta_snapshot_count,
+            "table_meta_segment_bytes": config.cache.table_meta_segment_bytes,
+            "block_meta_count": config.cache.block_meta_count,
+            "data_cache_in_memory_bytes": config.cache.data_cache_in_memory_bytes,
+            "disk_cache_max_bytes": config.cache.disk_cache_config.max_bytes
+        },
+        "memory_management": {
+            "max_server_memory_usage": config.query.max_server_memory_usage,
+            "max_memory_limit_enabled": config.query.max_memory_limit_enabled,
+            "spill_enabled": config.spill.global_bytes_limit > 0
+        },
+        "meta_config": {
+            "meta_embedded": !config.meta.embedded_dir.is_empty(),
+            "meta_client_timeout": config.meta.client_timeout_in_second,
+            "endpoints": config.meta.endpoints,
+        },
+        "embedded_config": {
+            "data_path_configured": true,
+            "log_level": config.log.file.level,
+            "log_to_file": config.log.file.on
+        },
+        "observability": {
+            "collection_duration_ms": start_time.elapsed().as_millis() as u64,
+            "report_timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            "source": "databend-python-binding",
+            "schema_version": "1.1"
+        }
+    })
 }

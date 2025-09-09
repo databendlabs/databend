@@ -25,6 +25,7 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 databend-query = { workspace = true, features = [
@@ -32,6 +33,8 @@ databend-query = { workspace = true, features = [
     "disable_initial_exec_tls",
 ] }
 pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
+serde_json = { workspace = true }
+sysinfo = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 
