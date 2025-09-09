@@ -415,11 +415,18 @@ impl ClusterDiscovery {
     }
 
     pub async fn single_node_cluster(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self
-            .warehouse_manager
-            .get_node_info(&config.query.node_id)
-            .await?
-        {
+        // For embedded/local mode with empty cluster_id and warehouse_id, skip meta lookup
+        let use_embedded_mode = databend_common_config::GlobalConfig::is_embedded_mode();
+
+        let node_info_opt = if use_embedded_mode {
+            None // Skip meta lookup for embedded mode
+        } else {
+            self.warehouse_manager
+                .get_node_info(&config.query.node_id)
+                .await?
+        };
+
+        match node_info_opt {
             None => {
                 let mut node_info = NodeInfo::create(
                     config.query.node_id.clone(),
@@ -434,8 +441,14 @@ impl ClusterDiscovery {
                     String::new(),
                 );
 
-                node_info.cluster_id = config.query.cluster_id.clone();
-                node_info.warehouse_id = config.query.warehouse_id.clone();
+                // For embedded mode, set virtual cluster/warehouse IDs to make node "assigned"
+                if use_embedded_mode {
+                    node_info.cluster_id = "embedded_cluster".to_string();
+                    node_info.warehouse_id = "embedded_warehouse".to_string();
+                } else {
+                    node_info.cluster_id = config.query.cluster_id.clone();
+                    node_info.warehouse_id = config.query.warehouse_id.clone();
+                }
                 Ok(Cluster::empty(node_info))
             }
             Some(v) => Ok(Cluster::create(

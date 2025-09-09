@@ -3,6 +3,12 @@ name: Bindings Python
 on:
   ## uncomment it when bendpy is enabled
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (optional for testing)
+        required: false
+        type: string
+        default: "test-build"
   pull_request:
     branches:
       - main
@@ -27,7 +33,27 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    # Run tests on all PRs and workflow dispatches
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 4c16g
+      - aws
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/build_bindings_python
+        with:
+          target: x86_64-unknown-linux-gnu
+          # No version means development build with tests
+
   linux:
+    # Only run for version builds (releases)
+    if: inputs.version
     runs-on:
       - self-hosted
       - "${{ matrix.runner }}"

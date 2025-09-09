@@ -139,9 +139,16 @@ impl InterpreterFactory {
         other: impl FnOnce(Arc<QueryContext>, &Plan) -> Result<InterpreterPtr>,
     ) -> Result<InterpreterPtr> {
         match plan {
-            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(ctx.clone())?)),
-            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(ctx.clone())?)),
-            Plan::UseWarehouse(v) => Ok(Arc::new(UseWarehouseInterpreter::try_create(ctx.clone(), *v.clone())?)),
+            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(
+                ctx.clone(),
+            )?)),
+            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(
+                ctx.clone(),
+            )?)),
+            Plan::UseWarehouse(v) => Ok(Arc::new(UseWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
             Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),

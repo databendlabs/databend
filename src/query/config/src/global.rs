@@ -42,4 +42,12 @@ impl GlobalConfig {
     pub fn try_get_instance() -> Option<Arc<InnerConfig>> {
         GlobalInstance::try_get()
     }
+
+    /// Returns true if running in embedded mode (single-node, no external meta service)
+    ///
+    /// Embedded mode is determined by empty cluster_id and warehouse_id
+    pub fn is_embedded_mode() -> bool {
+        let config = Self::instance();
+        config.query.cluster_id.is_empty() && config.query.warehouse_id.is_empty()
+    }
 }
