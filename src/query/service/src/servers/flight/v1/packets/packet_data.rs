@@ -23,6 +23,7 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -64,6 +65,7 @@ pub enum DataPacket {
     CopyStatus(CopyStatus),
     MutationStatus(MutationStatus),
     DataCacheMetrics(DataCacheMetricValues),
+    PartStatistics(HashMap<u32, PartStatistics>),
     QueryPerf(String),
 }
 
@@ -83,6 +85,7 @@ impl DataPacket {
             DataPacket::QueryProfiles(_) => 0,
             DataPacket::DataCacheMetrics(_) => 0,
             DataPacket::QueryPerf(_) => 0,
+            DataPacket::PartStatistics(_) => 0,
         }
     }
 }
@@ -146,6 +149,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::QueryPerf(query_perf) => FlightData {
                 app_metadata: vec![0x09].into(),
                 data_body: query_perf.into_bytes().into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
+            DataPacket::PartStatistics(stat) => FlightData {
+                app_metadata: vec![0x10].into(),
+                data_body: serde_json::to_vec(&stat)?.into(),
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
@@ -214,6 +223,11 @@ impl TryFrom<FlightData> for DataPacket {
                 let query_perf = String::from_utf8(flight_data.data_body.to_vec())
                     .map_err(|_| ErrorCode::BadBytes("Invalid UTF-8 in query performance data."))?;
                 Ok(DataPacket::QueryPerf(query_perf))
+            }
+            0x10 => {
+                let stat =
+                    serde_json::from_slice::<HashMap<u32, PartStatistics>>(&flight_data.data_body)?;
+                Ok(DataPacket::PartStatistics(stat))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }

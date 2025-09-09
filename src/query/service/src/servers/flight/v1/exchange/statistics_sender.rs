@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
+use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
@@ -25,6 +27,7 @@ use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
@@ -49,6 +52,7 @@ impl StatisticsSender {
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
+        profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();
@@ -106,8 +110,8 @@ impl StatisticsSender {
                     }
                 }
 
-                if let Err(error) = Self::send_profile(&executor, &tx, true).await {
-                    warn!("Profiles send has error, cause: {:?}.", error);
+                if let Err(error) = Self::send_final_profile(profile_rx, &tx).await {
+                    warn!("Final profiles send has error, cause: {:?}.", error);
                 }
 
                 if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
@@ -124,6 +128,10 @@ impl StatisticsSender {
 
                 if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
                     warn!("Perf send has error, cause: {:?}.", error);
+                }
+
+                if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
+                    warn!("PartStatistics send has error, cause: {:?}.", error);
                 }
             }
         });
@@ -205,6 +213,7 @@ impl StatisticsSender {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn send_profile(
         executor: &PipelineExecutor,
         tx: &FlightSender,
@@ -215,6 +224,36 @@ impl StatisticsSender {
         if !plans_profile.is_empty() {
             let data_packet = DataPacket::QueryProfiles(plans_profile);
             tx.send(data_packet).await?;
+        }
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn send_part_statistics(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
+        let part_stats = ctx.get_pruned_partitions_stats();
+
+        if !part_stats.is_empty() {
+            let data_packet = DataPacket::PartStatistics(part_stats);
+            tx.send(data_packet).await?;
+        }
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn send_final_profile(
+        mut rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
+        tx: &FlightSender,
+    ) -> Result<()> {
+        // The plans_profile comes from the executor's on_finish callback.
+        // We use try_recv() instead of blocking recv() because the execution order
+        // guarantees that on_finish is called before the statistics sender shuts down.
+        if let Ok(plans_profile) = rx.try_recv() {
+            if !plans_profile.is_empty() {
+                let data_packet = DataPacket::QueryProfiles(plans_profile);
+                tx.send(data_packet).await?;
+            }
         }
 
         Ok(())
@@ -272,8 +311,4 @@ impl StatisticsSender {
         }
         progress_info
     }
-
-    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
-    //     // ctx.get_exchange_manager()
-    // }
 }
