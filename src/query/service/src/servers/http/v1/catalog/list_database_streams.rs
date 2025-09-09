@@ -113,10 +113,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
                 updated_on: info.meta.updated_on,
                 mode: stream_table.mode().to_string(),
                 comment: info.meta.comment.clone(),
-                table_name: stream_table
-                    .source_table_id()
-                    .ok()
-                    .map(|_| "unknown".to_string()),
+                table_name: stream_table.source_table_id().unwrap_or_default(),
                 table_id: stream_table.source_table_id().ok(),
                 table_version: stream_table.offset().ok(),
                 snapshot_location: stream_table.snapshot_loc(),
