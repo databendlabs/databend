@@ -83,9 +83,9 @@ def test_transfer_leader_subcommand():
         print(
             f"✓ Leadership transferred from node {initial_leader} to node {new_leader}"
         )
-        assert new_leader != initial_leader, (
-            f"Leader should change from {initial_leader}"
-        )
+        assert (
+            new_leader != initial_leader
+        ), f"Leader should change from {initial_leader}"
     else:
         print("✓ No leader change detected (acceptable if cluster is stable)")
 
@@ -149,9 +149,9 @@ def test_transfer_leader_with_target():
             f"✓ Leadership transferred from node {initial_leader} to node {new_leader}"
         )
         # Note: The actual new leader might not be exactly the target due to cluster dynamics
-        assert new_leader != initial_leader, (
-            f"Leader should change from {initial_leader}"
-        )
+        assert (
+            new_leader != initial_leader
+        ), f"Leader should change from {initial_leader}"
     else:
         print("✓ No leader change detected (acceptable if transfer was to same node)")
 

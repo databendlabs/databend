@@ -85,9 +85,9 @@ def verify_kv(grpc_addr, key, expected_value=None):
         print(f"Actual value: '{actual_value}', Expected: '{expected_value}'")
 
         if expected_value is not None:
-            assert actual_value == expected_value, (
-                f"Expected '{expected_value}', got '{actual_value}'"
-            )
+            assert (
+                actual_value == expected_value
+            ), f"Expected '{expected_value}', got '{actual_value}'"
 
 
 def metactl_export_from_grpc(addr: str) -> str:

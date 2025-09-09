@@ -67,9 +67,9 @@ def test_import_subcommand():
         assert False, f"Import command failed with return code {process.returncode}"
 
     # Verify raft directory was created
-    assert os.path.exists(target_raft_dir), (
-        f"Raft directory should exist: {target_raft_dir}"
-    )
+    assert os.path.exists(
+        target_raft_dir
+    ), f"Raft directory should exist: {target_raft_dir}"
     print(f"✓ Raft directory created: {target_raft_dir}")
 
     # Check for raft log files in correct location
@@ -110,9 +110,9 @@ def test_import_subcommand():
 
     # Parse first line to check version
     header_data = json.loads(lines[0])
-    assert header_data[1]["DataHeader"]["value"]["version"] == "V004", (
-        "Should import V004 data"
-    )
+    assert (
+        header_data[1]["DataHeader"]["value"]["version"] == "V004"
+    ), "Should import V004 data"
     print("✓ Imported data version verification passed")
 
     # Check for required sections

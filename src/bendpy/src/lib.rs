@@ -23,9 +23,14 @@ mod utils;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
 use databend_query::GlobalServices;
@@ -43,7 +48,7 @@ fn init_embedded(_py: Python, data_path: &str) -> PyResult<()> {
     }
 
     // Create configuration and initialize services
-    let conf = create_local_meta_config(data_path).map_err(|e| {
+    let conf = create_embedded_config(data_path).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Config creation failed: {}", e))
     })?;
 
@@ -74,23 +79,26 @@ fn init_embedded(_py: Python, data_path: &str) -> PyResult<()> {
     Ok(())
 }
 
-fn create_local_meta_config(
+fn create_embedded_config(
     data_path: &str,
 ) -> Result<InnerConfig, Box<dyn std::error::Error + Send + Sync>> {
-    use databend_common_config::BuiltInConfig;
-    use databend_common_config::UserAuthConfig;
-    use databend_common_config::UserConfig;
-    use databend_common_meta_app::storage::StorageFsConfig;
-    use databend_common_meta_app::storage::StorageParams;
-
     let mut conf = InnerConfig::default();
+
+    // Query configuration
     conf.query.tenant_id = Tenant::new_literal("python_binding");
-    conf.log = databend_common_tracing::Config::new_testing();
-    conf.query.cluster_id = "".to_string(); // Empty cluster_id for embedded mode
-    conf.query.warehouse_id = "".to_string(); // Empty warehouse_id for embedded mode
+    conf.query.cluster_id = "".to_string();
+    conf.query.warehouse_id = "".to_string();
     conf.query.node_id = "embedded_node".to_string();
 
-    // Add builtin users
+    // Logging configuration
+    let mut log_config = databend_common_tracing::Config::new_testing();
+    log_config.stderr.on = false;
+    let log_dir = std::path::Path::new(data_path).join("logs");
+    std::fs::create_dir_all(&log_dir)?;
+    log_config.file.dir = log_dir.to_str().unwrap().to_string();
+    conf.log = log_config;
+
+    // Builtin users
     let users = vec![UserConfig {
         name: "root".to_string(),
         auth: UserAuthConfig {
@@ -98,34 +106,24 @@ fn create_local_meta_config(
             auth_string: None,
         },
     }];
-
     conf.query.builtin = BuiltInConfig {
         users,
         udfs: vec![],
     };
 
     // Storage configuration
-    let storage_path = std::path::Path::new(data_path)
-        .join("data")
-        .to_str()
-        .unwrap()
-        .to_string();
-
+    let storage_path = std::path::Path::new(data_path).join("data");
     std::fs::create_dir_all(&storage_path)?;
-
-    conf.storage.params = StorageParams::Fs(StorageFsConfig { root: storage_path });
+    conf.storage.params = StorageParams::Fs(StorageFsConfig {
+        root: storage_path.to_str().unwrap().to_string(),
+    });
     conf.storage.allow_insecure = true;
 
-    // Local meta mode: endpoints must be empty for local mode
+    // Meta configuration
+    let meta_dir = std::path::Path::new(data_path).join("meta");
+    std::fs::create_dir_all(&meta_dir)?;
     conf.meta.endpoints = vec![];
-    // embedded_dir can be set to a path for persistent storage, or empty for temp storage
-    conf.meta.embedded_dir = std::path::Path::new(data_path)
-        .join("meta")
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    std::fs::create_dir_all(&conf.meta.embedded_dir)?;
+    conf.meta.embedded_dir = meta_dir.to_str().unwrap().to_string();
 
     Ok(conf)
 }
