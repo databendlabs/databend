@@ -97,12 +97,19 @@ runs:
       run: |
         echo "Building development wheel for testing..."
         
+        # Create and activate virtual environment
+        uv venv --python python3.12
+        source .venv/bin/activate
+        
+        # Install development dependencies  
+        uv pip install maturin pytest pandas polars pyarrow
+        
         # Ensure we have a clean environment
         export PATH="$HOME/.local/bin:$PATH"
         export PATH="$HOME/.cargo/bin:$PATH"
         
         echo "Running development build tests..."
-        uv tool run maturin develop -E test --quiet
+        maturin develop -E test --quiet
         
         # Run pytest tests
         echo "Executing pytest tests..."
