@@ -129,6 +129,18 @@ fn create_embedded_config(
     conf.meta.endpoints = vec![];
     conf.meta.embedded_dir = meta_dir.to_str().unwrap().to_string();
 
+    // Memory and spill configuration
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    let total_memory = system.total_memory();
+
+    // Set max server memory usage to 80% of system memory
+    conf.query.max_server_memory_usage = (total_memory as f64 * 0.8) as u64;
+    conf.query.max_memory_limit_enabled = true;
+
+    // Enable spill when memory usage exceeds 60% of system memory
+    conf.spill.global_bytes_limit = (total_memory as f64 * 0.6) as u64;
+
     Ok(conf)
 }
 
@@ -200,7 +212,10 @@ fn create_python_binding_telemetry_payload(config: &InnerConfig) -> serde_json::
         "memory_management": {
             "max_server_memory_usage": config.query.max_server_memory_usage,
             "max_memory_limit_enabled": config.query.max_memory_limit_enabled,
-            "spill_enabled": config.spill.global_bytes_limit > 0
+            "spill_enabled": config.spill.global_bytes_limit > 0,
+            "spill_threshold_bytes": config.spill.global_bytes_limit,
+            "spill_threshold_percent": 60.0,
+            "memory_limit_percent": 80.0
         },
         "meta_config": {
             "meta_embedded": !config.meta.embedded_dir.is_empty(),
