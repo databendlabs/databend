@@ -839,38 +839,6 @@ async fn test_catalog_apis() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_catalog_streams_apis() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
-    let ep = create_endpoint()?;
-
-    let sql = "create table t1(a int)";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
-
-    let sql = "create stream s1 on table t1";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded);
-
-    let response = get_uri(&ep, "/v1/catalog/databases/default/streams").await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = response.into_body().into_string().await.unwrap();
-    let body: catalog::list_database_streams::ListDatabaseStreamsResponse =
-        serde_json::from_str(&body).unwrap();
-
-    assert!(body.streams.is_empty() || !body.streams.is_empty());
-    assert!(body.warnings.is_empty() || !body.warnings.is_empty());
-
-    let response = get_uri(&ep, "/v1/catalog/databases/nonexistent/streams").await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
 async fn test_user_apis() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;

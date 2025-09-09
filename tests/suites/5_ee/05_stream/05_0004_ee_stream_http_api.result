@@ -1,0 +1,25 @@
+>>>> create table t1(a int)
+<<<<
+>>>> create stream s1 on table t1
+<<<<
+# Test catalog streams API - existing database
+{
+  "streams": [
+    {
+      "name": "s1",
+      "database": "default",
+      "table": "t1",
+      "mode": "append_only",
+      "comment": "",
+      "created_on": "...",
+      "updated_on": "..."
+    }
+  ],
+  "warnings": []
+}
+# Test catalog streams API - non-existent database
+404
+>>>> drop stream if exists s1
+<<<<
+>>>> drop table if exists t1
+<<<<
