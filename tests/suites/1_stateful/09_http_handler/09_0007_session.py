@@ -168,8 +168,12 @@ HEADER_SESSION_ID_V = "101010"
 
 
 def do_query_from_worksheet(client, sql, sid=HEADER_SESSION_ID_V, new_session=False):
-    internal = None if new_session else "{}";
-    payload = {"sql": sql, "pagination": {"max_rows_per_page": 2, "wait_time_secs": 10}, "session": {"internal": internal}}
+    internal = None if new_session else "{}"
+    payload = {
+        "sql": sql,
+        "pagination": {"max_rows_per_page": 2, "wait_time_secs": 10},
+        "session": {"internal": internal},
+    }
     resp = client.post(
         query_url,
         auth=auth,
@@ -208,8 +212,11 @@ def test_worksheet_session():
     resp = do_query_from_worksheet(client, "select * from t09_0007", new_session=True)
     assert "Unknown table" in resp["error"]["message"], resp
 
-    resp = do_query_from_worksheet(client, "select * from numbers(10) ", new_session=True)
+    resp = do_query_from_worksheet(
+        client, "select * from numbers(10) ", new_session=True
+    )
     assert len(resp["data"]) == 2, resp
+
 
 def main():
     test_no_session()
