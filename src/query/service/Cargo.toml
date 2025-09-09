@@ -189,6 +189,7 @@ maplit = { workspace = true }
 mysql_async = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = { workspace = true }
 reqwest = { workspace = true }
 serde_json.workspace = true
 serde_yaml = { workspace = true }
@@ -197,7 +198,6 @@ tempfile = { workspace = true }
 tower = { workspace = true }
 url = { workspace = true }
 wiremock = { workspace = true }
-proptest = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

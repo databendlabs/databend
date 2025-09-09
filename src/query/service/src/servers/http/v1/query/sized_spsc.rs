@@ -213,16 +213,15 @@ impl PageBuilder {
     fn try_append_block(&mut self, block: DataBlock) -> Option<DataBlock> {
         assert!(self.has_capacity());
         let (take_rows, memory_size) = self.calculate_take_rows(&block);
-        let total = block.num_rows();
-        if take_rows < total {
+        let total_rows = block.num_rows();
+        if take_rows < total_rows {
             self.remain_size = 0;
-            self.remain_rows -= total;
+            self.remain_rows -= take_rows;
             self.blocks.push(block.slice(0..take_rows));
-            Some(block.slice(take_rows..total))
+            Some(block.slice(take_rows..total_rows))
         } else {
             self.remain_size -= min(self.remain_size, memory_size);
-            self.remain_rows -= total;
-
+            self.remain_rows -= total_rows;
             self.blocks.push(block);
             None
         }
