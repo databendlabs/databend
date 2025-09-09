@@ -843,31 +843,27 @@ async fn test_catalog_streams_apis() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
 
-    // First create a table and a stream
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded);
 
-    // Create a stream (this might fail if streams are not supported, but that's ok for testing)
     let sql = "create stream s1 on table t1";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
-    // Stream creation might fail if not supported, so we don't assert success here
-    // We'll test the API regardless
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
 
-    // Test list streams API
     let response = get_uri(&ep, "/v1/catalog/databases/default/streams").await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().into_string().await.unwrap();
     let body: catalog::list_database_streams::ListDatabaseStreamsResponse =
         serde_json::from_str(&body).unwrap();
 
-    // The response should be valid JSON with streams array and warnings array
-    assert!(body.streams.is_empty() || !body.streams.is_empty()); // Either empty or has streams
-    assert!(body.warnings.is_empty() || !body.warnings.is_empty()); // Either empty or has warnings
+    assert!(body.streams.is_empty() || !body.streams.is_empty());
+    assert!(body.warnings.is_empty() || !body.warnings.is_empty());
 
-    // Test with non-existent database
     let response = get_uri(&ep, "/v1/catalog/databases/nonexistent/streams").await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
