@@ -112,14 +112,11 @@ impl GrpcServer {
             async move {
                 let _d = DropDebug::new(format!("GrpcServer(id={}) spawned service task", id));
 
-                // Send started signal immediately after spawning
-                let _ = started_tx.send(());
-                info!("meta-service gRPC(on {}) started and ready to serve", addr);
-
                 let res = builder
                     .add_service(reflect_srv)
                     .add_service(grpc_srv)
                     .serve_with_shutdown(addr, async move {
+                        let _ = started_tx.send(());
                         info!(
                             "meta-service gRPC(on {}) starts to wait for stop signal",
                             addr
@@ -139,7 +136,7 @@ impl GrpcServer {
 
         started_rx
             .await
-            .expect("Failed to receive gRPC server startup signal");
+            .expect("maybe address already in use, try to use another port");
 
         self.join_handle = Some(j);
         self.stop_grpc_tx = Some(stop_grpc_tx);
