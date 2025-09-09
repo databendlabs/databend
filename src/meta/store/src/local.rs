@@ -31,6 +31,7 @@ use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
 use databend_meta::meta_service::MetaNode;
+use log::debug;
 use log::info;
 use log::warn;
 use tokio::time::sleep;
@@ -244,23 +245,25 @@ fn next_port() -> u16 {
     let candidate_port = base.saturating_add(port_offset).max(19_000);
 
     if is_port_available(candidate_port) {
-        candidate_port
-    } else {
-        match find_available_port() {
-            Ok(port) => {
-                warn!("Calculated port {candidate_port} not available, using {port} instead");
-                port
-            }
-            Err(_) => {
-                warn!("No available ports found, returning calculated port {candidate_port}");
-                candidate_port
-            }
+        return candidate_port;
+    }
+
+    match find_available_port() {
+        Ok(port) => {
+            warn!("Calculated port {candidate_port} not available, using {port} instead");
+            port
+        }
+        Err(_) => {
+            warn!("No available ports found, returning calculated port {candidate_port}");
+            candidate_port
         }
     }
 }
 
 fn is_port_available(port: u16) -> bool {
-    TcpListener::bind(format!("127.0.0.1:{port}")).is_ok()
+    let x = TcpListener::bind(format!("127.0.0.1:{port}")).is_ok();
+    debug!("is_port_available({port}) -> {x}");
+    x
 }
 
 fn get_machine_unique_base_port() -> u16 {
@@ -268,9 +271,8 @@ fn get_machine_unique_base_port() -> u16 {
     static BASE_ONCE: std::sync::Once = std::sync::Once::new();
     unsafe {
         BASE_ONCE.call_once(|| {
-            match try_bind() {
-                Ok((port, listener)) => {
-                    Box::leak(Box::new(listener));
+            match find_available_port_by_os() {
+                Ok(port) => {
                     BASE = port;
                 }
                 Err(e) => {
@@ -284,31 +286,22 @@ fn get_machine_unique_base_port() -> u16 {
     }
 }
 
-fn try_bind() -> Result<(u16, TcpListener), std::io::Error> {
-    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
-        if let Ok(addr) = listener.local_addr() {
-            let port = addr.port();
-            info!("bind to 127.0.0.1:{port} OK (OS assigned)");
-            return Ok((port, listener));
-        }
+fn find_available_port() -> Result<u16, std::io::Error> {
+    if let Ok(port) = find_available_port_by_os() {
+        return Ok(port);
     }
 
-    let port = find_port_in_range(19_000, 65535)?;
-    let address = format!("127.0.0.1:{port}");
-    let listener = TcpListener::bind(&address)?;
-    info!("bind to {address} OK");
-    Ok((port, listener))
+    find_port_in_range(19_000, 65535)
 }
 
-fn find_available_port() -> Result<u16, std::io::Error> {
-    if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
-        if let Ok(addr) = listener.local_addr() {
-            let port = addr.port();
-            drop(listener);
-            return Ok(port);
-        }
-    }
-    find_port_in_range(19_000, 65535)
+fn find_available_port_by_os() -> Result<u16, std::io::Error> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+
+    let addr = listener.local_addr()?;
+
+    let port = addr.port();
+    info!("get_local_available_port: bind to 127.0.0.1:{port} OK (OS assigned)");
+    Ok(port)
 }
 
 fn find_port_in_range(start: u16, end: u16) -> Result<u16, std::io::Error> {
@@ -341,15 +334,12 @@ mod tests {
         let port = find_available_port();
         assert!(port.is_ok(), "Should be able to find an available port");
 
-        let port_num = port.unwrap();
+        let port_num = port?;
         assert!(port_num >= 19_000, "Port should be in valid range");
 
         // Test try_bind function
-        let bind_result = try_bind();
+        let bind_result = find_available_port_by_os();
         assert!(bind_result.is_ok(), "Should be able to bind to a port");
-
-        let (_port, _listener) = bind_result.unwrap();
-        // Listener is dropped automatically, releasing the port
 
         Ok(())
     }
@@ -357,6 +347,7 @@ mod tests {
     #[test]
     fn test_next_port_no_panic() {
         // This test ensures next_port doesn't panic even under stress
+        let mut prev = None;
         for _ in 0..100 {
             let port = next_port();
             assert!(
@@ -364,6 +355,9 @@ mod tests {
                 "Port should be in reasonable range: {}",
                 port
             );
+
+            assert_ne!(prev, Some(port));
+            prev = Some(port);
         }
     }
 }
