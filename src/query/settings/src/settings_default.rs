@@ -697,7 +697,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_result_set_spilling", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable spilling result set data to storage when memory usage exceeds the threshold.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
