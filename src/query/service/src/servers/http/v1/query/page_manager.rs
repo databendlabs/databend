@@ -70,13 +70,13 @@ impl PageManager {
 
     #[async_backtrace::framed]
     #[fastrace::trace(name = "PageManager::get_a_page")]
-    pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
+    pub async fn get_a_page(&mut self, page_no: usize, wait: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no {
             if !self.end {
-                let (serializer, end) = self.receiver.collect_new_page(tp).await?;
+                let (serializer, end) = self.receiver.next_page(wait).await?;
                 let num_row = serializer.num_rows();
-                log::debug!(num_row, wait_type:? = tp; "collect_new_page");
+                log::debug!(num_row, wait_type:? = wait; "collect_new_page");
                 self.total_rows += num_row;
                 let page = Page {
                     data: Arc::new(serializer),

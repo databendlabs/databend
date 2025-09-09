@@ -1758,7 +1758,8 @@ async fn test_has_result_set() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_max_size_per_page() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let _fixture =
+        TestFixture::setup_with_config(&ConfigBuilder::create().off_log().config()).await?;
 
     let sql = "select repeat('1', 1000) as a, repeat('2', 1000) from numbers(10000)";
     let wait_time_secs = 5;
@@ -1768,8 +1769,9 @@ async fn test_max_size_per_page() -> Result<()> {
     let target = (10_usize * 1024 * 1024) as f64;
     assert!(
         (0.9..1.1).contains(&(body.len() as f64 / target)),
-        "body len {}",
-        body.len()
+        "body len {} rows {}",
+        body.len(),
+        reply.data.len()
     );
     Ok(())
 }

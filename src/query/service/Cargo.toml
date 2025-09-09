@@ -197,6 +197,7 @@ tempfile = { workspace = true }
 tower = { workspace = true }
 url = { workspace = true }
 wiremock = { workspace = true }
+proptest = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

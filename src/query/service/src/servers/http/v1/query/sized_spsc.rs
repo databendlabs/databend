@@ -121,13 +121,10 @@ impl SizedChannelBuffer {
             return Err(SendFail::Closed);
         }
 
-        let is_none = self
-            .current_page
-            .replace(PageBuilder::new(self.page_size))
-            .is_none();
-        assert!(is_none);
+        assert!(self.current_page.is_none());
 
         match page {
+            page @ Page::Spilled(_) => self.pages.push_back(page),
             Page::Memory(blocks) => {
                 let rows = blocks.iter().map(DataBlock::num_rows).sum::<usize>();
                 if self.pages_rows() + rows > self.max_size {
@@ -138,8 +135,9 @@ impl SizedChannelBuffer {
                 };
                 self.pages.push_back(Page::Memory(blocks))
             }
-            page @ Page::Spilled(_) => self.pages.push_back(page),
         };
+
+        self.current_page = Some(PageBuilder::new(self.page_size));
         Ok(())
     }
 
@@ -187,7 +185,7 @@ impl PageBuilder {
         self.blocks.iter().map(DataBlock::num_rows).sum()
     }
 
-    fn calculate_take_rows(&self, block: &DataBlock) -> usize {
+    fn calculate_take_rows(&self, block: &DataBlock) -> (usize, usize) {
         let block_rows = block.num_rows();
         let memory_size = block
             .columns()
@@ -198,36 +196,34 @@ impl PageBuilder {
             })
             .sum::<usize>();
 
-        min(
-            self.remain_rows,
-            if memory_size > self.remain_size {
-                (self.remain_size * block_rows) / memory_size
-            } else {
-                block_rows
-            },
+        (
+            min(
+                self.remain_rows,
+                if memory_size > self.remain_size {
+                    (self.remain_size * block_rows) / memory_size
+                } else {
+                    block_rows
+                },
+            )
+            .max(1),
+            memory_size,
         )
-        .max(1)
-    }
-
-    fn append_full_block(&mut self, block: DataBlock) {
-        let memory_size = block.memory_size();
-        let num_rows = block.num_rows();
-
-        self.remain_size -= min(self.remain_size, memory_size);
-        self.remain_rows -= num_rows;
-
-        self.blocks.push(block);
     }
 
     fn try_append_block(&mut self, block: DataBlock) -> Option<DataBlock> {
         assert!(self.has_capacity());
-        let take_rows = self.calculate_take_rows(&block);
+        let (take_rows, memory_size) = self.calculate_take_rows(&block);
         let total = block.num_rows();
-        if take_rows < block.num_rows() {
-            self.append_full_block(block.slice(0..take_rows));
+        if take_rows < total {
+            self.remain_size = 0;
+            self.remain_rows -= total;
+            self.blocks.push(block.slice(0..take_rows));
             Some(block.slice(take_rows..total))
         } else {
-            self.append_full_block(block);
+            self.remain_size -= min(self.remain_size, memory_size);
+            self.remain_rows -= total;
+
+            self.blocks.push(block);
             None
         }
     }
@@ -328,7 +324,7 @@ where S: DataBlockSpill
     }
 
     #[async_backtrace::framed]
-    pub async fn collect_new_page(&mut self, tp: &Wait) -> Result<(BlocksSerializer, bool)> {
+    pub async fn next_page(&mut self, tp: &Wait) -> Result<(BlocksSerializer, bool)> {
         let page = match tp {
             Wait::Async => self.try_take_page().await?,
             Wait::Deadline(t) => {
@@ -383,6 +379,7 @@ where S: DataBlockSpill
                 collector
             }
         };
+        self.chan.notify_on_recv.notify_one();
 
         let format_settings = self
             .chan
@@ -487,13 +484,19 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::time::Duration;
 
     use databend_common_exception::ErrorCode;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::Number;
+    use databend_common_expression::types::NumberType;
     use databend_common_expression::FromData;
     use databend_common_io::prelude::FormatSettings;
     use databend_common_pipeline_transforms::traits::DataBlockSpill;
     use databend_common_pipeline_transforms::traits::Location;
+    use proptest::prelude::*;
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
 
     use super::*;
 
@@ -552,7 +555,7 @@ mod tests {
 
         let mut received_blocks_size = Vec::new();
         loop {
-            let (serializer, is_end) = receiver.collect_new_page(&Wait::Async).await.unwrap();
+            let (serializer, is_end) = receiver.next_page(&Wait::Async).await.unwrap();
 
             if serializer.num_rows() > 0 {
                 received_blocks_size.push(serializer.num_rows());
@@ -568,5 +571,85 @@ mod tests {
 
         send_task.await.unwrap();
         assert_eq!(received_blocks_size, vec![4, 4, 1]);
+    }
+
+    fn data_block_strategy<N>(len: usize) -> impl Strategy<Value = DataBlock>
+    where
+        N: Number + Arbitrary + 'static,
+        NumberType<N>: FromData<N>,
+    {
+        prop::collection::vec(any::<N>(), len)
+            .prop_map(|data| DataBlock::new_from_columns(vec![NumberType::<N>::from_data(data)]))
+    }
+
+    fn data_block_vec_strategy() -> impl Strategy<Value = Vec<DataBlock>> {
+        let num_rows_strategy = 0..30_usize;
+        let num_blocks_strategy = 0..100_usize;
+        (num_blocks_strategy, num_rows_strategy).prop_flat_map(|(num_blocks, num_rows)| {
+            prop::collection::vec(data_block_strategy::<i32>(num_rows), num_blocks)
+        })
+    }
+
+    async fn delay() {
+        if rand::thread_rng().gen_bool(0.7) {
+            let delay = rand::thread_rng().gen_range(0..1000);
+            tokio::time::sleep(Duration::from_micros(delay)).await;
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sized_spsc_channel_fuzz() {
+        let mut runner = TestRunner::default();
+        for _ in 0..100 {
+            let (has_spiller, max_size, page_size, test_data) = (
+                any::<bool>(),
+                10_usize..20,
+                5_usize..8,
+                data_block_vec_strategy(),
+            )
+                .new_tree(&mut runner)
+                .unwrap()
+                .current();
+
+            let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(max_size, page_size);
+
+            let sender_data = test_data.clone();
+            let send_task = databend_common_base::runtime::spawn(async move {
+                let format_settings = FormatSettings::default();
+                sender.plan_ready(format_settings, has_spiller.then(MockSpiller::default));
+
+                for block in sender_data {
+                    delay().await;
+                    sender.send(block).await.unwrap();
+                    delay().await;
+                }
+                sender.finish();
+            });
+
+            let mut received_blocks_size = Vec::new();
+            loop {
+                delay().await;
+                let wait = Wait::Deadline(Instant::now() + Duration::from_millis(50));
+                let (serializer, is_end) = receiver.next_page(&wait).await.unwrap();
+                if !serializer.is_empty() {
+                    received_blocks_size.push(serializer.num_rows());
+                }
+                if is_end {
+                    break;
+                }
+            }
+
+            send_task.await.unwrap();
+
+            if has_spiller {
+                let _ = receiver.close().unwrap().storage;
+            } else {
+                assert!(receiver.close().is_none());
+            }
+
+            let total = test_data.iter().map(|data| data.num_rows()).sum::<usize>();
+
+            assert_eq!(received_blocks_size.iter().sum::<usize>(), total);
+        }
     }
 }

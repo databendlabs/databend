@@ -5285,6 +5285,7 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "prometheus-client 0.22.3",
+ "proptest",
  "prost",
  "rand 0.8.5",
  "recursive",
