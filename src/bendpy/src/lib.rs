@@ -93,6 +93,7 @@ fn create_embedded_config(
     // Logging configuration
     let mut log_config = databend_common_tracing::Config::new_testing();
     log_config.stderr.on = false;
+    log_config.file.level = "INFO".to_string();
     let log_dir = std::path::Path::new(data_path).join("logs");
     std::fs::create_dir_all(&log_dir)?;
     log_config.file.dir = log_dir.to_str().unwrap().to_string();

@@ -26,22 +26,12 @@ ctx.create_s3_connection(
 
 ctx.create_stage(
     name="my_stage", 
-    url="s3://bohu/pybend/", 
+    url="s3://bohu/pybend/stage/", 
     connection_name="s3_conn"
 )
 
-# Show all stages  
-ctx.show_stages().show()
-
-# Prepare sample data
-ctx.sql("create or replace table sample_data (id int, name string, value float)").collect()
-ctx.sql("insert into sample_data values (1, 'Alice', 100.5), (2, 'Bob', 200.8), (3, 'Charlie', 300.2)").collect()
-
-# Show sample data
-ctx.sql("select * from sample_data").show()
-
-# Unload data to stage
-ctx.sql("copy into @my_stage from sample_data file_format = (type = parquet)").collect()
+# Unload generated data to stage
+ctx.sql("copy into @my_stage from (select number from numbers(10)) file_format = (type = parquet)").collect()
 
 # List files in stage
 ctx.list_stages("my_stage").show()
