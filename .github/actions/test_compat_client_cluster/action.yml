@@ -29,6 +29,13 @@ runs:
         ref: main
         path: tests/nox/cache/databend-jdbc
 
+    - name: checkout bendsql
+      uses: actions/checkout@v4
+      with:
+        repository: databendlabs/bendsql
+        ref: main
+        path: tests/nox/cache/bendsql
+
     - name: build databend-jdbc
       shell: bash
       working-directory: tests/nox/cache/databend-jdbc
