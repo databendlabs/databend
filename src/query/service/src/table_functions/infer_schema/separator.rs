@@ -145,7 +145,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
         };
         self.schemas = Some(merge_schema);
 
-        self.remaining_files_len = self.remaining_files_len.checked_sub(1).unwrap_or(0);
+        self.remaining_files_len = self.remaining_files_len.saturating_sub(1);
         if self.remaining_files_len > 0 {
             return Ok(vec![DataBlock::empty()]);
         }
