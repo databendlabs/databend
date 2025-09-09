@@ -96,25 +96,25 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Building development wheel for testing..."
-        
+
         # Create and activate virtual environment
         uv venv --python python3.12
         source .venv/bin/activate
-        
-        # Install development dependencies  
+
+        # Install development dependencies
         uv pip install maturin pytest pandas polars pyarrow
-        
+
         # Ensure we have a clean environment
         export PATH="$HOME/.local/bin:$PATH"
         export PATH="$HOME/.cargo/bin:$PATH"
-        
+
         echo "Running development build tests..."
         maturin develop -E test --quiet
-        
+
         # Run pytest tests
         echo "Executing pytest tests..."
         python -m pytest tests/ -v --tb=short
-        
+
         echo "All Python binding tests passed!"
 
     - name: Test built wheels
@@ -123,15 +123,15 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Testing built wheels..."
-        
+
         # Install from built wheel for release testing
         uv venv --python python3.12
         source .venv/bin/activate
         uv pip install dist/*.whl
         uv pip install pytest pandas polars pyarrow
-        
+
         # Run pytest tests
         echo "Executing pytest tests..."
         python -m pytest tests/ -v --tb=short
-        
+
         echo "All Python binding tests passed!"
