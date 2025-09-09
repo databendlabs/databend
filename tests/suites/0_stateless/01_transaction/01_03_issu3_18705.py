@@ -1,21 +1,6 @@
 #!/usr/bin/env python3
 
-import os
 import mysql.connector
-import sys
-
-log = None
-
-# client1 send long query, client mydb fetch the long query and kill it.
-# Use to mock in MySQL Client press Ctrl C to intercept a long query.
-
-mydb = mysql.connector.connect(
-    host="127.0.0.1", user="root", passwd="root", port="3307"
-)
-
-mydb2 = mysql.connector.connect(
-    host="127.0.0.1", user="root", passwd="root", port="3307"
-)
 
 if __name__ == "__main__":
     # Session 1:
