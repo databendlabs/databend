@@ -32,15 +32,19 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_storages_stage::BytesBatch;
+use itertools::Itertools;
 
 use crate::table_functions::infer_schema::merge::merge_schema;
+
+const MAX_SINGLE_FILE_BYTES: usize = 100 * 1024 * 1024;
 
 pub struct InferSchemaSeparator {
     pub file_format_params: FileFormatParams,
     files: HashMap<String, Vec<u8>>,
     pub max_records: Option<usize>,
     schemas: Option<TableSchema>,
-    remaining_files_len: usize,
+    files_len: usize,
+    filenames: Vec<String>,
     is_finished: bool,
 }
 
@@ -55,7 +59,8 @@ impl InferSchemaSeparator {
             files: HashMap::new(),
             max_records,
             schemas: None,
-            remaining_files_len: files_len,
+            files_len,
+            filenames: Vec::with_capacity(files_len),
             is_finished: false,
         }
     }
@@ -75,6 +80,14 @@ impl AccumulatingTransform for InferSchemaSeparator {
 
         let bytes = self.files.entry(batch.path.clone()).or_default();
         bytes.extend(batch.data);
+
+        if bytes.len() > MAX_SINGLE_FILE_BYTES {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "The file '{}' is too large(maximum allowed: {})",
+                batch.path,
+                human_readable_size(MAX_SINGLE_FILE_BYTES),
+            )));
+        }
 
         // When max_records exists, it will try to use the current bytes to read, otherwise it will buffer all bytes
         if self.max_records.is_none() && !batch.is_eof {
@@ -138,6 +151,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             }
         };
         self.files.remove(&batch.path);
+        self.filenames.push(batch.path);
 
         let merge_schema = match self.schemas.take() {
             None => TableSchema::try_from(&arrow_schema)?,
@@ -145,8 +159,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
         };
         self.schemas = Some(merge_schema);
 
-        self.remaining_files_len = self.remaining_files_len.saturating_sub(1);
-        if self.remaining_files_len > 0 {
+        if self.files_len > self.filenames.len() {
             return Ok(vec![DataBlock::empty()]);
         }
         self.is_finished = true;
@@ -157,6 +170,8 @@ impl AccumulatingTransform for InferSchemaSeparator {
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         let mut nulls: Vec<bool> = vec![];
+        let mut filenames: Vec<String> = vec![];
+        let filenames_str = self.filenames.iter().join(", ");
 
         for field in table_schema.fields().iter() {
             names.push(field.name().to_string());
@@ -164,6 +179,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
             let non_null_type = field.data_type().remove_recursive_nullable();
             types.push(non_null_type.sql_name());
             nulls.push(field.is_nullable());
+            filenames.push(filenames_str.clone());
         }
 
         let order_ids = (0..table_schema.fields().len() as u64).collect::<Vec<_>>();
@@ -172,8 +188,26 @@ impl AccumulatingTransform for InferSchemaSeparator {
             StringType::from_data(names),
             StringType::from_data(types),
             BooleanType::from_data(nulls),
+            StringType::from_data(filenames),
             UInt64Type::from_data(order_ids),
         ]);
         Ok(vec![block])
+    }
+}
+
+fn human_readable_size(bytes: usize) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    let b = bytes as f64;
+    if b >= GB {
+        format!("{:.2} GB", b / GB)
+    } else if b >= MB {
+        format!("{:.2} MB", b / MB)
+    } else if b >= KB {
+        format!("{:.2} KB", b / KB)
+    } else {
+        format!("{} B", bytes)
     }
 }

@@ -98,7 +98,7 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
 }
 /// select * from @s1/<path> (FILES => <files> PATTERN => <pattern>)
 /// copy from @s1/<path> FILES = <files> PATTERN => <pattern>
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct StageFilesInfo {
     pub path: String,
     pub files: Option<Vec<String>>,

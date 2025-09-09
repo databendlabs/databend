@@ -102,6 +102,7 @@ impl InferSchemaTable {
             TableField::new("column_name", TableDataType::String),
             TableField::new("type", TableDataType::String),
             TableField::new("nullable", TableDataType::Boolean),
+            TableField::new("filenames", TableDataType::String),
             TableField::new("order_id", TableDataType::Number(NumberDataType::UInt64)),
         ])
     }

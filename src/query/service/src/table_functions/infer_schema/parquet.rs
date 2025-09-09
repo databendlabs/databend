@@ -32,6 +32,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFileInfo;
 use futures_util::future::try_join_all;
+use itertools::Itertools;
 
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 
@@ -79,6 +80,12 @@ impl AsyncSource for ParquetInferSchemaSource {
         let mut names: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         let mut nulls: Vec<bool> = vec![];
+        let mut filenames: Vec<String> = vec![];
+        let filenames_str = self
+            .stage_file_infos
+            .iter()
+            .map(|info| &info.path)
+            .join(", ");
 
         for field in table_schema.fields().iter() {
             names.push(field.name().to_string());
@@ -86,6 +93,7 @@ impl AsyncSource for ParquetInferSchemaSource {
             let non_null_type = field.data_type().remove_recursive_nullable();
             types.push(non_null_type.sql_name());
             nulls.push(field.is_nullable());
+            filenames.push(filenames_str.clone());
         }
 
         let order_ids = (0..table_schema.fields().len() as u64).collect::<Vec<_>>();
@@ -94,6 +102,7 @@ impl AsyncSource for ParquetInferSchemaSource {
             StringType::from_data(names),
             StringType::from_data(types),
             BooleanType::from_data(nulls),
+            StringType::from_data(filenames),
             UInt64Type::from_data(order_ids),
         ]);
         Ok(Some(block))

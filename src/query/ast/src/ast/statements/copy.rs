@@ -648,9 +648,7 @@ impl Display for FileFormatValue {
     }
 }
 
-#[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq, Hash,
-)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
 pub enum OnErrorMode {
     Continue,
     SkipFileNum(u64),

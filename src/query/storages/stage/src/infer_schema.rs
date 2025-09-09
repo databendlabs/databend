@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
@@ -48,11 +45,7 @@ impl PartInfo for InferSchemaPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.files_info.hash(&mut s);
-        self.file_format_params.hash(&mut s);
-        self.stage_info.hash(&mut s);
-        s.finish()
+        0
     }
 
     fn part_type(&self) -> PartInfoType {
