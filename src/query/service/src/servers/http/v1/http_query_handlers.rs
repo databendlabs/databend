@@ -71,6 +71,7 @@ use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::catalog::catalog_stats_handler;
 use crate::servers::http::v1::catalog::get_database_table_handler;
+use crate::servers::http::v1::catalog::list_database_streams_handler;
 use crate::servers::http::v1::catalog::list_database_table_fields_handler;
 use crate::servers::http::v1::catalog::list_database_tables_handler;
 use crate::servers::http::v1::catalog::list_databases_handler;
@@ -790,6 +791,11 @@ pub fn query_route() -> Route {
         (
             "/catalog/databases/:database/tables/:table/fields",
             get(list_database_table_fields_handler),
+            EndpointKind::Catalog,
+        ),
+        (
+            "/catalog/databases/:database/streams",
+            get(list_database_streams_handler),
             EndpointKind::Catalog,
         ),
         (
