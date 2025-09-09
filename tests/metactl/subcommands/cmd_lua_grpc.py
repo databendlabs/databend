@@ -71,9 +71,9 @@ Get null result:\tNULL"""
     print("expect:", expected_output)
 
     # Check if entire output matches expected value
-    assert output == expected_output, (
-        f"Expected:\n{expected_output}\n\nActual:\n{output}"
-    )
+    assert (
+        output == expected_output
+    ), f"Expected:\n{expected_output}\n\nActual:\n{output}"
 
     print("✓ Lua gRPC client test passed")
 
