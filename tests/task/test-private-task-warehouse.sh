@@ -16,7 +16,7 @@ CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-system-managed.toml"
 cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
 
 echo "Starting Databend Query cluster enable private task"
-./scripts/ci/deploy/databend-query-system-managed.sh 2
+./scripts/ci/deploy/databend-query-system-managed.sh 4
 
 check_response_error() {
     local response="$1"
@@ -28,12 +28,12 @@ check_response_error() {
     fi
 }
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh1 WITH WAREHOUSE_SIZE = '1'\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh1 WITH WAREHOUSE_SIZE = '2'\"}")
 check_response_error "$response"
 create_warehouse_1_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 1 Query ID: $create_warehouse_1_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh2 WITH WAREHOUSE_SIZE = '1'\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh2 WITH WAREHOUSE_SIZE = '2'\"}")
 check_response_error "$response"
 create_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 2 Query ID: $create_warehouse_2_query_id"

@@ -248,7 +248,6 @@ else
 fi
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_1\"}")
-check_response_error "$response"
 state=$(echo "$response" | jq -r '.state')
 if [ "$state" = "Succeeded" ]; then
   echo "❌ Failed"
