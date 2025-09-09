@@ -1,0 +1,239 @@
+query T
+EXPLAIN ANALYZE SELECT 1;
+----
+EvalScalar
+├── output columns: [1 (#0)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── DummyTableScan
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 1
+    ├── output bytes: 1.00 B
+    └── bytes scanned: 1.00 B
+
+query T
+settings (max_threads = 4) EXPLAIN ANALYZE select avg(number) from numbers(1000000);
+----
+EvalScalar
+├── output columns: [sum(number) / if(count(number) = 0, 1, count(number)) (#3)]
+├── expressions: [sum(number) (#1) / CAST(if(CAST(count(number) (#2) = 0 AS Boolean NULL), 1, count(number) (#2)) AS UInt64 NULL)]
+├── estimated rows: 1.00
+└── AggregateFinal
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 1
+    ├── output bytes: 17.00 B
+    ├── output columns: [sum(number) (#1), count(number) (#2)]
+    ├── group by: []
+    ├── aggregate functions: [sum(number), count()]
+    ├── estimated rows: 1.00
+    └── Exchange
+        ├── output columns: [sum(number) (#1), count(number) (#2)]
+        ├── exchange type: Merge
+        └── AggregatePartial
+            ├── cpu time: <slt:ignore>
+            ├── output rows: 12
+            ├── output bytes: 204.00 B
+            ├── group by: []
+            ├── aggregate functions: [sum(number), count()]
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── cpu time: <slt:ignore>
+                ├── output rows: 1 million
+                ├── output bytes: 7.63 MiB
+                ├── bytes scanned: 7.63 MiB
+                ├── table: default.system.numbers
+                ├── output columns: [number (#0)]
+                ├── read rows: 1000000
+                ├── read size: 7.63 MiB
+                ├── partitions total: 16
+                ├── partitions scanned: 16
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1000000.00
+
+statement ok
+drop table if exists article;
+
+statement ok
+drop table if exists author;
+
+statement ok
+create table if not exists article (article_id int, author_id int, viewer_id int, view_date date);
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('1', '3', '5', '2019-08-01');
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('1', '3', '6', '2019-08-02');
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('2', '7', '7', '2019-08-01');
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('2', '7', '6', '2019-08-02');
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('4', '7', '1', '2019-07-22');
+
+statement ok
+insert into article (article_id, author_id, viewer_id, view_date) values ('3', '4', '4', '2019-07-21');
+
+statement ok
+create table author (id int, name string);
+
+statement ok
+insert into author values(1, 'mark');
+
+statement ok
+insert into author values(2, 'mark2');
+
+statement ok
+insert into author values(3, 'mark3');
+
+statement ok
+insert into author values(4, 'mark4');
+
+statement ok
+insert into author values(7, 'mark7');
+
+query T
+EXPLAIN SELECT * FROM article;
+----
+Exchange
+├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
+├── exchange type: Merge
+└── TableScan
+    ├── table: default.default.article
+    ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 6
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 6.00
+
+
+query T
+EXPLAIN ANALYZE SELECT * FROM article;
+----
+Exchange
+├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
+├── exchange type: Merge
+└── TableScan
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 6
+    ├── output bytes: 120.00 B
+    ├── bytes scanned: 120.00 B
+    ├── table: default.default.article
+    ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
+    ├── read rows: 6
+    ├── read size: < 1 KiB
+    ├── partitions total: 6
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 6.00
+
+query T
+EXPLAIN ANALYZE SELECT * FROM article where article_id < 3;
+----
+Exchange
+├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
+├── exchange type: Merge
+└── Filter
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 4
+    ├── output bytes: 80.00 B
+    ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3)]
+    ├── filters: [is_true(article.article_id (#0) < 3)]
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── output rows: 4
+        ├── output bytes: 80.00 B
+        ├── bytes scanned: 80.00 B
+        ├── table: default.default.article
+        ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 4
+        ├── pruning stats: [segments: <range pruning: 6 to 4>, blocks: <range pruning: 4 to 4>]
+        ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
+        └── estimated rows: 6.00
+
+query T
+EXPLAIN ANALYZE SELECT * FROM article,author WHERE article.author_id = author.id and author.name = 'mark4';
+----
+Exchange
+├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
+├── exchange type: Merge
+└── HashJoin
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── exchange bytes: 1.09 KiB
+    ├── output rows: 1
+    ├── output bytes: 43.00 B
+    ├── runtime filter build time: <slt:ignore>
+    ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
+    ├── join type: INNER
+    ├── build keys: [author.id (#4)]
+    ├── probe keys: [article.author_id (#1)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:author.id (#4), probe key:article.author_id (#1), filter type:inlist,min_max
+    ├── estimated rows: 2.50
+    ├── Exchange(Build)
+    │   ├── output columns: [author.id (#4), author.name (#5)]
+    │   ├── exchange type: Broadcast
+    │   └── Filter
+    │       ├── cpu time: <slt:ignore>
+    │       ├── output rows: 1
+    │       ├── output bytes: 23.00 B
+    │       ├── output columns: [author.id (#4), author.name (#5)]
+    │       ├── filters: [is_true(author.name (#5) = 'mark4')]
+    │       ├── estimated rows: 1.25
+    │       └── TableScan
+    │           ├── cpu time: <slt:ignore>
+    │           ├── wait time: <slt:ignore>
+    │           ├── output rows: 1
+    │           ├── output bytes: 23.00 B
+    │           ├── bytes scanned: 23.00 B
+    │           ├── table: default.default.author
+    │           ├── output columns: [id (#4), name (#5)]
+    │           ├── read rows: 1
+    │           ├── read size: < 1 KiB
+    │           ├── partitions total: 5
+    │           ├── partitions scanned: 1
+    │           ├── pruning stats: [segments: <range pruning: 5 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+    │           ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
+    │           └── estimated rows: 5.00
+    └── TableScan(Probe)
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── output rows: 1
+        ├── output bytes: 20.00 B
+        ├── bytes scanned: 20.00 B
+        ├── parts pruned by runtime filter: 5
+        ├── runtime filter inlist/min-max time: <slt:ignore>
+        ├── table: default.default.article
+        ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
+        ├── read rows: 6
+        ├── read size: < 1 KiB
+        ├── partitions total: 6
+        ├── partitions scanned: 6
+        ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 6.00
+
+
+statement ok
+drop table if exists article;
+
+statement ok
+drop table if exists author;

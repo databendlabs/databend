@@ -585,6 +585,7 @@ impl HttpQuery {
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
     ) -> Result<HttpQuery> {
+        http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
             .create_session(&req.session, SessionType::HTTPQuery)
             .await?;

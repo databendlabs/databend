@@ -13,11 +13,15 @@
 // limitations under the License.
 
 mod acquire_error;
+mod acquirer_closed;
 mod connection_closed;
 mod early_removed;
 mod either;
+mod processer_error;
 
 pub use acquire_error::AcquireError;
+pub use acquirer_closed::AcquirerClosed;
 pub use connection_closed::ConnectionClosed;
 pub use early_removed::EarlyRemoved;
 pub use either::Either;
+pub use processer_error::ProcessorError;

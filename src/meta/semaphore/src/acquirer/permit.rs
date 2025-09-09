@@ -14,10 +14,11 @@
 
 use std::future::Future;
 
-use futures::future::BoxFuture;
+use databend_common_base::runtime::spawn_named;
 use futures::FutureExt;
 use log::debug;
 use log::info;
+use log::warn;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -43,7 +44,15 @@ use crate::storage::PermitKey;
 pub struct Permit {
     pub acquirer_name: String,
     pub stat: SharedAcquirerStat,
-    pub fu: BoxFuture<'static, Result<(), ConnectionClosed>>,
+
+    // Hold it so that the subscriber keep running.
+    pub(crate) _subscriber_cancel_tx: oneshot::Sender<()>,
+
+    // Hold it so that the lease extending task keep running.
+    pub(crate) _leaser_cancel_tx: oneshot::Sender<()>,
+
+    /// Gets ready if the [`PermitEntry`] is removed from meta-service.
+    pub(crate) is_removed_rx: oneshot::Receiver<()>,
 }
 
 impl std::fmt::Debug for Permit {
@@ -68,13 +77,16 @@ impl Drop for Permit {
 }
 
 impl Future for Permit {
-    type Output = Result<(), ConnectionClosed>;
+    type Output = ();
 
     fn poll(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        self.fu.poll_unpin(cx)
+        match self.is_removed_rx.poll_unpin(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
     }
 }
 
@@ -89,18 +101,26 @@ impl Permit {
         permit_entry: PermitEntry,
         leaser_cancel_tx: oneshot::Sender<()>,
     ) -> Self {
+        let (is_removed_tx, is_removed_rx) = oneshot::channel::<()>();
+
+        // There must be a standalone task that consumes incoming events so that it won't block the permit_event_rx sender
+        let acquirer_name = acquirer.name.clone();
         let fu = Self::watch_for_remove(
             acquirer.permit_event_rx,
+            acquirer_name.clone(),
             permit_key,
             permit_entry,
-            acquirer.subscriber_cancel_tx,
-            leaser_cancel_tx,
+            is_removed_tx,
         );
 
+        spawn_named(fu, format!("{}-WatchRemove", acquirer_name.clone()));
+
         Permit {
-            acquirer_name: acquirer.name,
+            acquirer_name,
             stat: acquirer.stat,
-            fu: Box::pin(fu),
+            _subscriber_cancel_tx: acquirer.subscriber_cancel_tx,
+            _leaser_cancel_tx: leaser_cancel_tx,
+            is_removed_rx,
         }
     }
 
@@ -119,31 +139,35 @@ impl Permit {
     /// Note that if it returns `Err(ConnectionClosed)`, it does not mean the permit is lost,
     /// in such case, the permit may still be valid.
     pub(crate) async fn watch_for_remove(
-        mut permit_event_rx: mpsc::Receiver<PermitEvent>,
+        mut permit_event_rx: mpsc::Receiver<Result<PermitEvent, ConnectionClosed>>,
+        acquirer_name: String,
         permit_key: PermitKey,
         permit_entry: PermitEntry,
-        _subscriber_cancel_tx: oneshot::Sender<()>,
-        _leaser_cancel_tx: oneshot::Sender<()>,
-    ) -> Result<(), ConnectionClosed> {
-        let ctx = format!("Semaphore-Acquired: {}->{}", permit_key, permit_entry);
+        is_removed_tx: oneshot::Sender<()>,
+    ) {
+        let ctx = format!("{}: {}->{}", acquirer_name, permit_key, permit_entry);
 
-        while let Some(sem_event) = permit_event_rx.recv().await {
-            debug!("semaphore event: {} received by: {}", sem_event, ctx);
+        while let Some(sem_event_res) = permit_event_rx.recv().await {
+            let sem_event = match sem_event_res {
+                Ok(x) => x,
+                Err(e) => {
+                    warn!("{}: watch_for_remove recv error: {}", ctx, e);
+                    return;
+                }
+            };
+
+            debug!("{}: received semaphore event: {}", ctx, sem_event);
 
             match sem_event {
                 PermitEvent::Acquired((_seq, _entry)) => {}
                 PermitEvent::Removed((seq, _)) => {
                     if seq == permit_key.seq {
-                        debug!(
-                            "semaphore PermitEntry is removed: {}->{}",
-                            permit_key, permit_entry.id
-                        );
-                        return Ok(());
+                        warn!("{}: PermitEntry is removed", ctx);
+                        is_removed_tx.send(()).ok();
+                        return;
                     }
                 }
             }
         }
-
-        Err(ConnectionClosed::new_str("semaphore event stream closed").context(&ctx))
     }
 }

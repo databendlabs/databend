@@ -27,10 +27,12 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::acquirer::Acquirer;
+use crate::acquirer::DropHandle;
 use crate::acquirer::Permit;
 use crate::acquirer::SeqPolicy;
 use crate::acquirer::SharedAcquirerStat;
 use crate::errors::AcquireError;
+use crate::errors::ConnectionClosed;
 use crate::meta_event_subscriber::MetaEventSubscriber;
 use crate::meta_event_subscriber::Processor;
 use crate::queue::PermitEvent;
@@ -52,6 +54,13 @@ pub struct Semaphore {
     /// The metadata client to interact with the remote meta-service.
     meta_client: Arc<ClientHandle>,
 
+    /// Duration for automatic permit lease expiration.
+    ///
+    /// A background task renews the lease every `lease/3` interval.
+    /// The permit is automatically released when its entry is removed from meta-service,
+    /// either through explicit deletion or lease expiration.
+    permit_ttl: Duration,
+
     /// The background subscriber task handle.
     subscriber_task_handle: Option<JoinHandle<()>>,
 
@@ -62,7 +71,7 @@ pub struct Semaphore {
     subscriber_cancel_tx: oneshot::Sender<()>,
 
     /// The receiver to receive semaphore state change event from the subscriber.
-    sem_event_rx: Option<mpsc::Receiver<PermitEvent>>,
+    sem_event_rx: Option<mpsc::Receiver<Result<PermitEvent, ConnectionClosed>>>,
 
     /// A process-wide unique identifier for the semaphore. Used for debugging purposes.
     uniq: u64,
@@ -97,8 +106,8 @@ impl Semaphore {
         id: impl ToString,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
-        let sem = Self::new(meta_client, prefix, capacity).await;
-        sem.acquire(id, lease).await
+        let sem = Self::new(meta_client, prefix, capacity, lease).await;
+        sem.acquire(id).await
     }
 
     /// Acquires a new semaphore using timestamp-based sequence numbering.
@@ -116,9 +125,9 @@ impl Semaphore {
         seq_timestamp: Option<Duration>,
         lease: Duration,
     ) -> Result<Permit, AcquireError> {
-        let mut sem = Self::new(meta_client, prefix, capacity).await;
+        let mut sem = Self::new(meta_client, prefix, capacity, lease).await;
         sem.set_time_based_seq(seq_timestamp);
-        sem.acquire(id, lease).await
+        sem.acquire(id).await
     }
 
     /// Create a new semaphore.
@@ -134,7 +143,12 @@ impl Semaphore {
     ///
     /// This method spawns a background task to subscribe to the meta-service key value change events.
     /// The task will be notified to quit when this instance is dropped.
-    pub async fn new(meta_client: Arc<ClientHandle>, prefix: impl ToString, capacity: u64) -> Self {
+    pub async fn new(
+        meta_client: Arc<ClientHandle>,
+        prefix: impl ToString,
+        capacity: u64,
+        permit_ttl: Duration,
+    ) -> Self {
         let mut prefix = prefix.to_string();
 
         // strip the trailing '/'
@@ -154,6 +168,7 @@ impl Semaphore {
                 timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap(),
             },
             meta_client,
+            permit_ttl,
             subscriber_task_handle: None,
             subscriber_cancel_tx: cancel_tx,
             sem_event_rx: Some(rx),
@@ -222,8 +237,9 @@ impl Semaphore {
     ///
     /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
     /// is dropped or its future is awaited, the semaphore will be released.
-    pub async fn acquire(self, id: impl ToString, lease: Duration) -> Result<Permit, AcquireError> {
-        let mut acquirer = self.new_acquirer(id, lease);
+    pub async fn acquire(self, id: impl ToString) -> Result<Permit, AcquireError> {
+        let permit_ttl = self.permit_ttl;
+        let mut acquirer = self.new_acquirer(id, permit_ttl);
 
         let queued_res = acquirer.enqueue_permit().await;
 
@@ -260,6 +276,10 @@ impl Semaphore {
             subscriber_cancel_tx: self.subscriber_cancel_tx,
             permit_event_rx: self.sem_event_rx.take().unwrap(),
             stat: stat.clone(),
+            acquire_in_progress: Some(DropHandle {
+                name: name.clone(),
+                finished: false,
+            }),
             name: name.clone(),
         }
     }
@@ -274,7 +294,7 @@ impl Semaphore {
     /// When semaphore permit are created or deleted, appropriate events are generated.
     async fn spawn_meta_event_subscriber(
         &mut self,
-        tx: mpsc::Sender<PermitEvent>,
+        tx: mpsc::Sender<Result<PermitEvent, ConnectionClosed>>,
         capacity: u64,
         cancel_rx: oneshot::Receiver<()>,
     ) {
@@ -285,6 +305,7 @@ impl Semaphore {
             left,
             right,
             meta_client: self.meta_client.clone(),
+            permit_ttl: self.permit_ttl,
             processor: Processor::new(capacity, tx).with_watcher_name(&watcher_name),
             watcher_name,
         };

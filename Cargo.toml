@@ -585,7 +585,7 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 
 # Databend Integration Test
 quickcheck = "1.0"
-sqllogictest = "0.28.0"
+sqllogictest = "0.28.4"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"

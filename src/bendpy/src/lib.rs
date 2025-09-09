@@ -20,85 +20,121 @@ mod dataframe;
 mod schema;
 mod utils;
 
-use std::io::Write;
-use std::path::Path;
-use std::sync::Mutex;
-use std::sync::Once;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
-use databend_common_config::Config;
 use databend_common_config::InnerConfig;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
-use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
 
-static INIT: Once = Once::new();
-static INITIALIZED_MUTEX: Mutex<()> = Mutex::new(());
+pub static EMBEDDED_INIT_STATE: AtomicBool = AtomicBool::new(false);
+
+#[pyfunction]
+#[pyo3(signature = (data_path = ".databend"))]
+fn init_embedded(_py: Python, data_path: &str) -> PyResult<()> {
+    // Check if already initialized
+    if EMBEDDED_INIT_STATE.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    // Create configuration and initialize services
+    let conf = create_local_meta_config(data_path).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Config creation failed: {}", e))
+    })?;
+
+    // Initialize global instance
+    databend_common_base::base::GlobalInstance::init_production();
+
+    // Initialize all Databend services
+    RUNTIME
+        .block_on(async { GlobalServices::init_with(&conf, &BUILD_INFO, false).await })
+        .map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Service initialization failed: {}",
+                e
+            ))
+        })?;
+
+    // Keep global config unchanged for embedded mode
+
+    // Initialize license manager
+    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "License manager init failed: {}",
+            e
+        ))
+    })?;
+
+    EMBEDDED_INIT_STATE.store(true, Ordering::Release);
+    Ok(())
+}
+
+fn create_local_meta_config(
+    data_path: &str,
+) -> Result<InnerConfig, Box<dyn std::error::Error + Send + Sync>> {
+    use databend_common_config::BuiltInConfig;
+    use databend_common_config::UserAuthConfig;
+    use databend_common_config::UserConfig;
+    use databend_common_meta_app::storage::StorageFsConfig;
+    use databend_common_meta_app::storage::StorageParams;
+
+    let mut conf = InnerConfig::default();
+    conf.query.tenant_id = Tenant::new_literal("python_binding");
+    conf.log = databend_common_tracing::Config::new_testing();
+    conf.query.cluster_id = "".to_string(); // Empty cluster_id for embedded mode
+    conf.query.warehouse_id = "".to_string(); // Empty warehouse_id for embedded mode
+    conf.query.node_id = "embedded_node".to_string();
+
+    // Add builtin users
+    let users = vec![UserConfig {
+        name: "root".to_string(),
+        auth: UserAuthConfig {
+            auth_type: "no_password".to_string(),
+            auth_string: None,
+        },
+    }];
+
+    conf.query.builtin = BuiltInConfig {
+        users,
+        udfs: vec![],
+    };
+
+    // Storage configuration
+    let storage_path = std::path::Path::new(data_path)
+        .join("data")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    std::fs::create_dir_all(&storage_path)?;
+
+    conf.storage.params = StorageParams::Fs(StorageFsConfig { root: storage_path });
+    conf.storage.allow_insecure = true;
+
+    // Local meta mode: endpoints must be empty for local mode
+    conf.meta.endpoints = vec![];
+    // embedded_dir can be set to a path for persistent storage, or empty for temp storage
+    conf.meta.embedded_dir = std::path::Path::new(data_path)
+        .join("meta")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    std::fs::create_dir_all(&conf.meta.embedded_dir)?;
+
+    Ok(conf)
+}
 
 /// A Python module implemented in Rust.
 #[pymodule(gil_used = false)]
 pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(init_service, m)?)?;
+    // m.add_function(wrap_pyfunction!(init_service, m)?)?;
+    m.add_function(wrap_pyfunction!(init_embedded, m)?)?;
     m.add_class::<context::PySessionContext>()?;
-    Ok(())
-}
-#[pyfunction]
-#[pyo3(signature = (config = "", local_dir = ""))]
-fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
-    let _guard = INITIALIZED_MUTEX.lock().unwrap();
-    if INIT.is_completed() {
-        return Err(pyo3::exceptions::PyRuntimeError::new_err(
-            "Service already initialized",
-        ));
-    }
-
-    // if config is file read it to config_str
-    let conf = if std::fs::exists(Path::new(config)).unwrap_or_default() {
-        Config::load_with_config_file(config).unwrap()
-    } else {
-        let temp_dr = tempfile::tempdir().unwrap();
-        let mut file = std::fs::File::create(temp_dr.path().join("config.toml")).unwrap();
-
-        let config = if local_dir.is_empty() {
-            format!(
-                r#"[meta]
-embedded_dir = "{local_dir}"
-[storage]
-type = "fs"
-allow_insecure = true
-[storage.fs]
-data_path = "{local_dir}"
-allow_insecure = true
-"#
-            )
-        } else {
-            config.to_string()
-        };
-
-        file.write_all(config.as_bytes()).unwrap();
-        let p = format!("{}", temp_dr.path().join("config.toml").as_path().display());
-        Config::load_with_config_file(&p).unwrap()
-    };
-
-    let mut conf: InnerConfig = conf.try_into().unwrap();
-    conf.query.cluster_id = "bendpy".to_string();
-
-    INIT.call_once(|| {
-        RUNTIME
-            .block_on(async {
-                GlobalServices::init(&conf, &BUILD_INFO, false).await?;
-                // init oss license manager
-                OssLicenseManager::init("".to_string()).unwrap();
-                // Cluster register.
-                ClusterDiscovery::instance()
-                    .register_to_metastore(&conf)
-                    .await
-            })
-            .unwrap();
-    });
-
     Ok(())
 }

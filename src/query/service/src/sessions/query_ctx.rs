@@ -2036,6 +2036,10 @@ impl TableContext for QueryContext {
         self.shared.set_pruned_partitions_stats(plan_id, stats);
     }
 
+    fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+        self.shared.merge_pruned_partitions_stats(other);
+    }
+
     fn get_next_broadcast_id(&self) -> u32 {
         self.shared
             .next_broadcast_id

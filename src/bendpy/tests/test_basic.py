@@ -13,30 +13,14 @@
 ## limitations under the License.
 
 import databend
-
-databend.init_service(
-    config="""
-[meta]
-embedded_dir = "./.databend/"
-
-# Storage config.
-[storage]
-# fs | s3 | azblob | obs | oss
-type = "fs"
-allow_insecure = true
-
-[storage.fs]
-data_path = "./.databend/"
-"""
-)
-
 from databend import SessionContext
 import pandas as pd
 import polars
 
 
 class TestBasic:
-    ctx = SessionContext()
+    def setup_method(self):
+        self.ctx = SessionContext()
 
     def test_simple(self):
         df = self.ctx.sql(
@@ -48,8 +32,8 @@ class TestBasic:
             "select number % 3 n, sum(number) b from numbers(100) group by n order by n"
         ).collect()
         assert (
-            str(df)
-            == """┌─────────────────────┐
+                str(df)
+                == """┌─────────────────────┐
 │   n   │      b      │
 │ UInt8 │ UInt64 NULL │
 ├───────┼─────────────┤
