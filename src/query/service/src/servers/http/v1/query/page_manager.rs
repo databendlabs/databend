@@ -18,8 +18,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::blocks_serializer::BlocksSerializer;
-use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
-use crate::servers::http::v1::query::sized_spsc::Wait;
+use super::http_query::PaginationConf;
+use super::sized_spsc::sized_spsc;
+use super::sized_spsc::SizedChannelReceiver;
+use super::sized_spsc::SizedChannelSender;
+use super::Wait;
 use crate::spillers::LiteSpiller;
 
 #[derive(Clone)]
@@ -41,14 +44,20 @@ pub struct PageManager {
 }
 
 impl PageManager {
-    pub fn new(receiver: SizedChannelReceiver<LiteSpiller>) -> PageManager {
-        PageManager {
-            total_rows: 0,
-            last_page: None,
-            total_pages: 0,
-            end: false,
-            receiver,
-        }
+    pub fn create(conf: &PaginationConf) -> (PageManager, SizedChannelSender<LiteSpiller>) {
+        let (sender, receiver) =
+            sized_spsc::<LiteSpiller>(conf.max_rows_in_buffer, conf.max_rows_per_page);
+
+        (
+            PageManager {
+                total_rows: 0,
+                last_page: None,
+                total_pages: 0,
+                end: false,
+                receiver,
+            },
+            sender,
+        )
     }
 
     pub fn next_page_no(&mut self) -> Option<usize> {
@@ -110,10 +119,9 @@ impl PageManager {
     pub async fn detach(&mut self) {
         self.last_page = None;
         if let Some(spiller) = self.receiver.close() {
-            let _ = spiller.cleanup().await;
+            if let Err(error) = spiller.cleanup().await {
+                log::error!(error:?; "clean up spilled result set file fail");
+            }
         };
     }
-
-    #[async_backtrace::framed]
-    pub async fn cleanup(&mut self) {}
 }

@@ -117,11 +117,15 @@ impl SizedChannelBuffer {
     }
 
     fn try_add_page(&mut self, page: Page) -> result::Result<(), SendFail> {
-        assert!(self.current_page.is_none());
-
         if self.is_recv_stopped || self.is_send_stopped {
             return Err(SendFail::Closed);
         }
+
+        let is_none = self
+            .current_page
+            .replace(PageBuilder::new(self.page_size))
+            .is_none();
+        assert!(is_none);
 
         match page {
             Page::Memory(blocks) => {
@@ -216,10 +220,10 @@ impl PageBuilder {
     }
 
     fn try_append_block(&mut self, block: DataBlock) -> Option<DataBlock> {
+        assert!(self.has_capacity());
         let take_rows = self.calculate_take_rows(&block);
         let total = block.num_rows();
         if take_rows < block.num_rows() {
-            self.remain_rows = 0;
             self.append_full_block(block.slice(0..take_rows));
             Some(block.slice(take_rows..total))
         } else {
@@ -493,17 +497,9 @@ mod tests {
 
     use super::*;
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct MockSpiller {
         storage: Arc<Mutex<HashMap<String, DataBlock>>>,
-    }
-
-    impl MockSpiller {
-        fn new() -> Self {
-            Self {
-                storage: Arc::new(Mutex::new(HashMap::new())),
-            }
-        }
     }
 
     #[async_trait::async_trait]
@@ -534,7 +530,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sized_spsc_channel() {
-        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(2, 10);
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
 
         let test_data = vec![
             DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]),
@@ -545,7 +541,7 @@ mod tests {
         let sender_data = test_data.clone();
         let send_task = databend_common_base::runtime::spawn(async move {
             let format_settings = FormatSettings::default();
-            let spiller = MockSpiller::new();
+            let spiller = MockSpiller::default();
             sender.plan_ready(format_settings, Some(spiller));
 
             for block in sender_data {
@@ -554,12 +550,12 @@ mod tests {
             sender.finish();
         });
 
-        let mut received_blocks = Vec::new();
+        let mut received_blocks_size = Vec::new();
         loop {
             let (serializer, is_end) = receiver.collect_new_page(&Wait::Async).await.unwrap();
 
             if serializer.num_rows() > 0 {
-                received_blocks.push(serializer.num_rows());
+                received_blocks_size.push(serializer.num_rows());
             }
 
             if is_end {
@@ -567,12 +563,10 @@ mod tests {
             }
         }
 
+        let storage = receiver.close().unwrap().storage;
+        assert_eq!(storage.lock().unwrap().len(), 1);
+
         send_task.await.unwrap();
-
-        let expected_total_rows: usize = test_data.iter().map(|b| b.num_rows()).sum();
-        let received_total_rows: usize = received_blocks.iter().sum();
-
-        assert_eq!(expected_total_rows, received_total_rows);
-        assert!(!received_blocks.is_empty());
+        assert_eq!(received_blocks_size, vec![4, 4, 1]);
     }
 }

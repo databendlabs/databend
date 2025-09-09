@@ -60,7 +60,6 @@ use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
 use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
-use crate::servers::http::v1::query::sized_spsc::sized_spsc;
 use crate::servers::http::v1::query::ExecuteState;
 use crate::servers::http::v1::query::ExecuteStateKind;
 use crate::servers::http::v1::query::Executor;
@@ -74,7 +73,6 @@ use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
-use crate::spillers::LiteSpiller;
 
 fn default_as_true() -> bool {
     true
@@ -612,11 +610,7 @@ impl HttpQuery {
             })
         };
 
-        let (sender, receiver) = sized_spsc::<LiteSpiller>(
-            req.pagination.max_rows_in_buffer,
-            req.pagination.max_rows_per_page,
-        );
-
+        let (page_manager, sender) = PageManager::create(&req.pagination);
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting {
@@ -628,8 +622,6 @@ impl HttpQuery {
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
 
-        let page_manager = Arc::new(TokioMutex::new(PageManager::new(receiver)));
-
         Ok(HttpQuery {
             id: query_id,
             user_name: http_ctx.user_name.clone(),
@@ -637,7 +629,7 @@ impl HttpQuery {
             node_id,
             request: req,
             executor,
-            page_manager,
+            page_manager: Arc::new(TokioMutex::new(page_manager)),
             result_timeout_secs,
 
             state: Arc::new(Mutex::new(HttpQueryState::Working)),
