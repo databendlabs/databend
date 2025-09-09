@@ -39,8 +39,8 @@ pub struct InferSchemaSeparator {
     pub file_format_params: FileFormatParams,
     files: HashMap<String, Vec<u8>>,
     pub max_records: Option<usize>,
-    schemas: Vec<Schema>,
-    files_len: usize,
+    schemas: Option<TableSchema>,
+    remaining_files_len: usize,
     is_finished: bool,
 }
 
@@ -54,8 +54,8 @@ impl InferSchemaSeparator {
             file_format_params,
             files: HashMap::new(),
             max_records,
-            schemas: Vec::with_capacity(files_len),
-            files_len,
+            schemas: None,
+            remaining_files_len: files_len,
             is_finished: false,
         }
     }
@@ -138,23 +138,20 @@ impl AccumulatingTransform for InferSchemaSeparator {
             }
         };
         self.files.remove(&batch.path);
-        self.schemas.push(arrow_schema);
 
-        if self.schemas.len() != self.files_len {
+        let merge_schema = match self.schemas.take() {
+            None => TableSchema::try_from(&arrow_schema)?,
+            Some(schema) => merge_schema(schema, TableSchema::try_from(&arrow_schema)?),
+        };
+        self.schemas = Some(merge_schema);
+
+        self.remaining_files_len = self.remaining_files_len.checked_sub(1).unwrap_or(0);
+        if self.remaining_files_len > 0 {
             return Ok(vec![DataBlock::empty()]);
         }
         self.is_finished = true;
-        if self.schemas.is_empty() {
+        let Some(table_schema) = self.schemas.take() else {
             return Ok(vec![DataBlock::empty()]);
-        }
-        let table_schema = if self.schemas.len() == 1 {
-            TableSchema::try_from(&self.schemas.pop().unwrap())?
-        } else {
-            self.schemas[1..]
-                .iter()
-                .try_fold(TableSchema::try_from(&self.schemas[0])?, |acc, schema| {
-                    TableSchema::try_from(schema).map(|schema| merge_schema(acc, schema))
-                })?
         };
 
         let mut names: Vec<String> = vec![];

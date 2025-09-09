@@ -144,6 +144,15 @@ col3 VARCHAR 1 2
 col4 VARCHAR 1 3
 col5 VARCHAR 1 4
 
+query TTBI
+select * from infer_schema(location => '@data/csv/max_file_count/', file_format => 'head_csv_format', max_file_count => 2);
+----
+col1 BIGINT 1 0
+col2 BIGINT 1 1
+col3 BIGINT 1 2
+col4 BIGINT 1 3
+col5 BIGINT 1 4
+
 # NDJSON
 query TTBI
 select * from infer_schema(location => '@data/ndjson/numbers.ndjson', file_format => 'NDJSON');

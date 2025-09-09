@@ -189,7 +189,9 @@ impl Table for InferSchemaTable {
             None => stage_info.file_format_params.clone(),
         };
         let operator = init_stage_operator(&stage_info)?;
-        let stage_file_infos = files_info.list(&operator, 1, None).await?;
+        let stage_file_infos = files_info
+            .list(&operator, 1, self.args_parsed.max_file_count)
+            .await?;
         Ok((
             PartStatistics::default(),
             Partitions::create(PartitionsShuffleKind::Seq, vec![
