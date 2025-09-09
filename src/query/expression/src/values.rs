@@ -655,6 +655,23 @@ impl ScalarRef<'_> {
         }
     }
 
+    pub fn get_i64(&self) -> Option<i64> {
+        match self {
+            ScalarRef::Number(n) => match n {
+                NumberScalar::Int8(x) => Some(*x as _),
+                NumberScalar::Int16(x) => Some(*x as _),
+                NumberScalar::Int32(x) => Some(*x as _),
+                NumberScalar::Int64(x) => Some(*x as _),
+                NumberScalar::UInt8(x) => Some(*x as _),
+                NumberScalar::UInt16(x) => Some(*x as _),
+                NumberScalar::UInt32(x) => Some(*x as _),
+                NumberScalar::UInt64(x) => i64::try_from(*x).ok(),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn memory_size(&self) -> usize {
         match self {
             ScalarRef::Null | ScalarRef::EmptyArray | ScalarRef::EmptyMap => 0,
