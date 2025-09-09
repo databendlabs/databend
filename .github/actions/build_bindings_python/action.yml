@@ -15,16 +15,12 @@ runs:
       if: inputs.version
       shell: bash
       run: |
-        # Extract version number or generate test version based on git tag
-        if echo "${{ inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
-          VERSION="${{ inputs.version }}"
-        else
-          # For test builds, use latest tag version with dev suffix
-          LATEST_TAG=$(git describe --tags --abbrev=0 | sed 's/^v//')
-          # Remove -nightly suffix if present and add dev suffix for test builds
-          VERSION=$(echo "$LATEST_TAG" | sed 's/-nightly$//' | sed 's/$/.dev0/')
-        fi
-        echo "building tag and version: git tag: $GIT_TAG version: $VERSION"
+        raw_version="${{ inputs.version }}"
+        # Remove v prefix: v1.2.3-nightly -> 1.2.3-nightly
+        version_no_v=${raw_version/v/}
+        # Convert to Python-compatible version: 1.2.3-nightly -> 1.2.3.dev0, 1.2.3-p1 -> 1.2.3.post1
+        VERSION=$(echo "$version_no_v" | sed 's/-nightly/.dev0/' | sed 's/-p\([0-9]*\)/.post\1/')
+        echo "building version: $raw_version -> $VERSION"
         sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
         sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" pyproject.toml > pyproject.toml.bak
 
