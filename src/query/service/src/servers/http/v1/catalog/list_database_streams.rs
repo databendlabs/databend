@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
