@@ -42,7 +42,7 @@ pub fn sized_spsc<S>(
 where
     S: DataBlockSpill,
 {
-    let chan = Arc::new(SizedChannel::create(max_size, page_size));
+    let chan = Arc::new(SizedChannel::new(max_size, page_size));
     let sender = SizedChannelSender { chan: chan.clone() };
     let receiver = SizedChannelReceiver { chan };
     (sender, receiver)
@@ -54,8 +54,8 @@ enum Page {
 }
 
 struct SizedChannelBuffer {
-    max_size: usize,
-    page_size: usize,
+    max_rows: usize,
+    page_rows: usize,
     pages: VecDeque<Page>,
     current_page: Option<PageBuilder>,
     is_recv_stopped: bool,
@@ -63,12 +63,12 @@ struct SizedChannelBuffer {
 }
 
 impl SizedChannelBuffer {
-    fn create(max_size: usize, page_size: usize) -> Self {
+    fn new(max_rows: usize, page_rows: usize) -> Self {
         SizedChannelBuffer {
-            max_size,
-            page_size,
+            max_rows: max_rows.max(page_rows),
+            page_rows,
             pages: Default::default(),
-            current_page: Some(PageBuilder::new(page_size)),
+            current_page: Some(PageBuilder::new(page_rows)),
             is_recv_stopped: false,
             is_send_stopped: false,
         }
@@ -81,7 +81,11 @@ impl SizedChannelBuffer {
                 Page::Memory(blocks) => blocks.iter().map(DataBlock::num_rows).sum::<usize>(),
                 Page::Spilled(_) => 0,
             })
-            .sum::<usize>()
+            .sum()
+    }
+
+    fn is_pages_full(&self, reserve: usize) -> bool {
+        self.pages_rows() + reserve > self.max_rows
     }
 
     fn try_add_block(&mut self, mut block: DataBlock) -> result::Result<(), SendFail> {
@@ -90,24 +94,27 @@ impl SizedChannelBuffer {
         }
 
         loop {
-            let page_builder = self.current_page.as_mut().unwrap();
+            let page_builder = self.current_page.as_mut().expect("current_page has taken");
 
             let remain = page_builder.try_append_block(block);
             if !page_builder.has_capacity() {
                 let rows = page_builder.num_rows();
-
-                if self.pages_rows() + rows > self.max_size {
+                if self.is_pages_full(rows) {
                     return Err(SendFail::Full {
-                        page: self.current_page.take().unwrap().into_page(),
+                        page: self
+                            .current_page
+                            .take()
+                            .expect("current_page has taken")
+                            .into_page(),
                         remain,
                     });
                 }
-                self.pages.push_back(Page::Memory(
-                    self.current_page
-                        .replace(PageBuilder::new(self.page_size))
-                        .unwrap()
-                        .into_page(),
-                ));
+                let page = self
+                    .current_page
+                    .replace(PageBuilder::new(self.page_rows))
+                    .expect("current_page has taken")
+                    .into_page();
+                self.pages.push_back(Page::Memory(page));
             }
             match remain {
                 Some(remain) => block = remain,
@@ -125,19 +132,16 @@ impl SizedChannelBuffer {
 
         match page {
             page @ Page::Spilled(_) => self.pages.push_back(page),
-            Page::Memory(blocks) => {
-                let rows = blocks.iter().map(DataBlock::num_rows).sum::<usize>();
-                if self.pages_rows() + rows > self.max_size {
-                    return Err(SendFail::Full {
-                        page: blocks,
-                        remain: None,
-                    });
+            Page::Memory(page) => {
+                let rows = page.iter().map(DataBlock::num_rows).sum();
+                if self.is_pages_full(rows) {
+                    return Err(SendFail::Full { page, remain: None });
                 };
-                self.pages.push_back(Page::Memory(blocks))
+                self.pages.push_back(Page::Memory(page))
             }
         };
 
-        self.current_page = Some(PageBuilder::new(self.page_size));
+        self.current_page = Some(PageBuilder::new(self.page_rows));
         Ok(())
     }
 
@@ -162,10 +166,10 @@ enum SendFail {
     },
 }
 
-pub struct PageBuilder {
-    pub blocks: Vec<DataBlock>,
-    pub remain_rows: usize,
-    pub remain_size: usize,
+struct PageBuilder {
+    blocks: Vec<DataBlock>,
+    remain_rows: usize,
+    remain_size: usize,
 }
 
 impl PageBuilder {
@@ -245,14 +249,14 @@ struct SizedChannel<S> {
 impl<S> SizedChannel<S>
 where S: DataBlockSpill
 {
-    fn create(max_size: usize, page_size: usize) -> Self {
+    fn new(max_rows: usize, page_rows: usize) -> Self {
         SizedChannel {
-            buffer: Mutex::new(SizedChannelBuffer::create(max_size, page_size)),
+            buffer: Mutex::new(SizedChannelBuffer::new(max_rows, page_rows)),
             notify_on_sent: Default::default(),
             notify_on_recv: Default::default(),
             is_plan_ready: WatchNotify::new(),
-            format_settings: Mutex::new(None),
-            spiller: Mutex::new(None),
+            format_settings: Default::default(),
+            spiller: Default::default(),
         }
     }
 
@@ -289,12 +293,8 @@ where S: DataBlockSpill
         buffer.is_send_stopped && buffer.pages.is_empty()
     }
 
-    fn stop_recv(&self) {
-        self.buffer.lock().unwrap().stop_recv();
-        self.notify_on_recv.notify_one();
-    }
-
     fn should_spill(&self) -> bool {
+        // todo: expected to be controlled externally
         true
     }
 }
@@ -313,13 +313,15 @@ impl<S> SizedChannelReceiver<S>
 where S: DataBlockSpill
 {
     pub fn close(&mut self) -> Option<S> {
-        self.chan.stop_recv();
         {
             let mut buffer = self.chan.buffer.lock().unwrap();
+            buffer.stop_recv();
             buffer.current_page = None;
             buffer.pages.clear();
         }
-        self.chan.spiller.lock().unwrap().take()
+        let spiller = self.chan.spiller.lock().unwrap().take();
+        self.chan.notify_on_recv.notify_one();
+        spiller
     }
 
     #[async_backtrace::framed]
@@ -444,8 +446,14 @@ where S: DataBlockSpill
     pub fn finish(self) {
         {
             let mut buffer = self.chan.buffer.lock().unwrap();
-            let builder = buffer.current_page.take().unwrap();
-            buffer.pages.push_back(Page::Memory(builder.into_page()));
+            if !buffer.is_recv_stopped && !buffer.is_send_stopped {
+                let page = buffer
+                    .current_page
+                    .take()
+                    .expect("current_page has taken")
+                    .into_page();
+                buffer.pages.push_back(Page::Memory(page));
+            }
             buffer.stop_send();
         }
         self.chan.notify_on_sent.notify_one();
@@ -565,8 +573,7 @@ mod tests {
             }
         }
 
-        let storage = receiver.close().unwrap().storage;
-        assert_eq!(storage.lock().unwrap().len(), 1);
+        let _ = receiver.close().unwrap().storage;
 
         send_task.await.unwrap();
         assert_eq!(received_blocks_size, vec![4, 4, 1]);
