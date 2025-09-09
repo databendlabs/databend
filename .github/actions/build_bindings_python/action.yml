@@ -83,17 +83,19 @@ runs:
           uv venv --python=python3.12
           uv sync --all-groups --all-extras
 
+    - name: Setup Rust for development builds
+      if: inputs.version == ''
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
+        components: rustfmt
+
     - name: Build development wheel and run tests
       if: inputs.version == ''
       shell: bash
       working-directory: src/bendpy
       run: |
         echo "Building development wheel for testing..."
-        
-        # Setup Rust toolchain
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
-        source ~/.cargo/env
-        rustup component add rustfmt
         
         # Ensure we have a clean environment
         export PATH="$HOME/.local/bin:$PATH"
