@@ -82,6 +82,9 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     let tables = db.list_tables().await?;
     let mut source_table_id_set = HashSet::new();
     for table in tables {
+        if !table.is_stream() {
+            continue;
+        }
         let info = table.get_table_info();
         if !visibility_checker.check_table_visibility(
             catalog.name().as_str(),
@@ -90,9 +93,6 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             db.get_db_info().database_id.db_id,
             info.ident.table_id,
         ) {
-            continue;
-        }
-        if !table.is_stream() {
             continue;
         }
         let stream = StreamTable::try_from_table(table.as_ref())?;
