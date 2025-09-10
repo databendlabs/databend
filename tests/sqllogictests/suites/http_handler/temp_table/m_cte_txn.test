@@ -1,0 +1,8 @@
+statement ok
+begin;
+
+statement ok
+with cte as materialized (select * from numbers(1)) select * from cte;
+
+statement ok
+commit;
