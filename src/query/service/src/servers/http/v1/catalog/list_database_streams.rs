@@ -20,6 +20,7 @@ use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::Object;
 use poem::error::InternalServerError;
 use poem::error::NotFound;
@@ -77,32 +78,43 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     }
 
     let warnings = vec![];
+    let mut streams = vec![];
     let tables = db.list_tables().await?;
     let mut source_table_id_set = HashSet::new();
-    let mut stream_infos = vec![];
     for table in tables {
+        let info = table.get_table_info();
         if !visibility_checker.check_table_visibility(
             catalog.name().as_str(),
             db.name(),
             table.name(),
             db.get_db_info().database_id.db_id,
-            table.get_table_info().ident.table_id,
+            info.ident.table_id,
         ) {
             continue;
         }
         if !table.is_stream() {
             continue;
         }
-        let info = table.get_table_info();
-        let stream = databend_common_storages_stream::stream_table::StreamTable::try_from_table(
-            table.as_ref(),
-        )?;
+        let stream = StreamTable::try_from_table(table.as_ref())?;
         let source_table_id = stream.source_table_id()?;
         source_table_id_set.insert(source_table_id);
-        stream_infos.push((info, stream, source_table_id));
+        streams.push(StreamInfo {
+            name: table.name().to_string(),
+            database: db.name().to_string(),
+            catalog: catalog.name().clone(),
+            stream_id: info.ident.table_id,
+            created_on: info.meta.created_on,
+            updated_on: info.meta.updated_on,
+            mode: stream.mode().to_string(),
+            comment: info.meta.comment.clone(),
+            table_name: None,
+            table_id: Some(source_table_id),
+            table_version: stream.offset().ok(),
+            snapshot_location: stream.snapshot_loc(),
+        });
     }
 
-    let mut source_table_ids = source_table_id_set.into_iter().collect::<Vec<u64>>();
+    let source_table_ids = source_table_id_set.into_iter().collect::<Vec<u64>>();
     let source_table_names = catalog
         .mget_table_names_by_ids(&tenant, &source_table_ids, false)
         .await?;
@@ -113,23 +125,12 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
         .collect::<HashMap<_, _>>();
 
-    let streams = stream_infos
-        .into_iter()
-        .map(|(info, stream, source_table_id)| StreamInfo {
-            name: info.name.clone(),
-            database: db.name().to_string(),
-            catalog: catalog.name().clone(),
-            stream_id: info.ident.table_id,
-            created_on: info.meta.created_on,
-            updated_on: info.meta.updated_on,
-            mode: stream.mode().to_string(),
-            comment: info.meta.comment.clone(),
-            table_name: source_table_map.get(&source_table_id).cloned(),
-            table_id: Some(source_table_id),
-            table_version: stream.offset().ok(),
-            snapshot_location: stream.snapshot_loc(),
-        })
-        .collect::<Vec<_>>();
+    streams.iter_mut().for_each(|stream| {
+        stream.table_name = match stream.table_id {
+            Some(table_id) => source_table_map.get(&table_id).cloned(),
+            None => None,
+        }
+    });
 
     Ok(ListDatabaseStreamsResponse { streams, warnings })
 }
