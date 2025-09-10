@@ -2,6 +2,7 @@
 
 import mysql.connector
 
+# https://github.com/databendlabs/databend/issues/18705
 if __name__ == "__main__":
     # Session 1:
     # Insert into empty table
