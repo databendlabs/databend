@@ -2,20 +2,6 @@ name: Bindings Python
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version to build (optional, leave empty for development build)
-        required: false
-        type: string
-        default: ""
-      build_type:
-        description: Build type
-        required: false
-        type: choice
-        default: "development"
-        options:
-          - "development"
-          - "release"
   workflow_call:
     inputs:
       version:
