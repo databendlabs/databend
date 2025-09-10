@@ -16,16 +16,16 @@ runs:
       shell: bash
       run: |
         raw_version="${{ inputs.version }}"
-        # Remove v prefix: v1.2.3-nightly -> 1.2.3-nightly
-        version_no_v=${raw_version/v/}
-        # Convert to Python-compatible version: 1.2.3-nightly -> 1.2.3.dev0, 1.2.3-p1 -> 1.2.3.post1
-        VERSION=$(echo "$version_no_v" | sed 's/-nightly/.dev0/' | sed 's/-p\([0-9]*\)/.post\1/')
+        # Remove v prefix and suffixes: v1.2.809-nightly -> 1.2.809
+        VERSION=$(echo "$raw_version" | sed 's/^v//' | sed 's/-nightly//' | sed 's/-p[0-9]*//')
+        
         echo "building version: $raw_version -> $VERSION"
-        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
-        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" pyproject.toml > pyproject.toml.bak
+        # Replace any existing version in Cargo.toml and pyproject.toml
+        sed "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml > Cargo.toml.tmp
+        sed "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml > pyproject.toml.tmp
 
-        mv Cargo.toml.bak Cargo.toml
-        mv pyproject.toml.bak pyproject.toml
+        mv Cargo.toml.tmp Cargo.toml
+        mv pyproject.toml.tmp pyproject.toml
 
         echo "version in Cargo.toml: $(grep 'version' Cargo.toml)"
         echo "version in pyproject.toml: $(grep 'version' pyproject.toml)"
@@ -80,6 +80,8 @@ runs:
           # Install cargo-zigbuild manually to avoid musl target issues
           cargo install cargo-zigbuild --target ${{ inputs.target }}
           ../../scripts/setup/dev_setup.sh -yb
+          # Clean up any existing virtual environment
+          rm -rf .venv || true
           uv venv --python=python3.12
           uv sync --all-groups --all-extras
 
@@ -96,6 +98,9 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Building development wheel for testing..."
+
+        # Clean up any existing virtual environment
+        rm -rf .venv || true
 
         # Create and activate virtual environment
         uv venv --python python3.12
@@ -123,6 +128,9 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Testing built wheels..."
+
+        # Clean up any existing virtual environment
+        rm -rf .venv || true
 
         # Install from built wheel for release testing
         uv venv --python python3.12
