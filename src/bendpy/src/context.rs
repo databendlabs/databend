@@ -107,44 +107,52 @@ impl PySessionContext {
         }
     }
 
+    #[pyo3(signature = (name, path, pattern = None, connection = None))]
     fn register_parquet(
         &mut self,
         name: &str,
         path: &str,
         pattern: Option<&str>,
+        connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        self.register_table(name, path, "parquet", pattern, py)
+        self.register_table(name, path, "parquet", pattern, connection, py)
     }
 
+    #[pyo3(signature = (name, path, pattern = None, connection = None))]
     fn register_csv(
         &mut self,
         name: &str,
         path: &str,
         pattern: Option<&str>,
+        connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        self.register_table(name, path, "csv", pattern, py)
+        self.register_table(name, path, "csv", pattern, connection, py)
     }
 
+    #[pyo3(signature = (name, path, pattern = None, connection = None))]
     fn register_ndjson(
         &mut self,
         name: &str,
         path: &str,
         pattern: Option<&str>,
+        connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        self.register_table(name, path, "ndjson", pattern, py)
+        self.register_table(name, path, "ndjson", pattern, connection, py)
     }
 
+    #[pyo3(signature = (name, path, pattern = None, connection = None))]
     fn register_tsv(
         &mut self,
         name: &str,
         path: &str,
         pattern: Option<&str>,
+        connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        self.register_table(name, path, "tsv", pattern, py)
+        self.register_table(name, path, "tsv", pattern, connection, py)
     }
 
     fn register_table(
@@ -153,31 +161,37 @@ impl PySessionContext {
         path: &str,
         file_format: &str,
         pattern: Option<&str>,
+        connection: Option<&str>,
         py: Python,
     ) -> PyResult<()> {
-        let mut path = path.to_owned();
-        if path.starts_with('/') {
-            path = format!("fs://{}", path);
-        }
-
-        if !path.contains("://") {
-            path = format!(
-                "fs://{}/{}",
-                std::env::current_dir().unwrap().to_str().unwrap(),
-                path.as_str()
-            );
-        }
-
-        // Example: select * from '/home/sundy/dataset/hits_p/' (file_format => 'parquet', pattern => '.*.parquet') limit 3;
-        let sql = if let Some(pattern) = pattern {
+        let sql = if let Some(connection_name) = connection {
+            let pattern_clause = pattern
+                .map(|p| format!(", pattern => '{}'", p))
+                .unwrap_or_default();
             format!(
-                "create view {} as select * from '{}' (file_format => '{}', pattern => '{}')",
-                name, path, file_format, pattern
+                "create view {} as select * from '{}' (file_format => '{}'{}, connection => '{}')",
+                name, path, file_format, pattern_clause, connection_name
             )
         } else {
+            let mut path = path.to_owned();
+            if path.starts_with('/') {
+                path = format!("fs://{}", path);
+            }
+
+            if !path.contains("://") {
+                path = format!(
+                    "fs://{}/{}",
+                    std::env::current_dir().unwrap().to_str().unwrap(),
+                    path.as_str()
+                );
+            }
+
+            let pattern_clause = pattern
+                .map(|p| format!(", pattern => '{}'", p))
+                .unwrap_or_default();
             format!(
-                "create view {} as select * from '{}' (file_format => '{}')",
-                name, path, file_format
+                "create view {} as select * from '{}' (file_format => '{}'{})",
+                name, path, file_format, pattern_clause
             )
         };
 
@@ -185,6 +199,7 @@ impl PySessionContext {
         Ok(())
     }
 
+    #[pyo3(signature = (name, access_key_id, secret_access_key, endpoint_url = None, region = None))]
     fn create_s3_connection(
         &mut self,
         name: &str,
@@ -201,13 +216,14 @@ impl PySessionContext {
             .map(|r| format!(" region = '{}'", r))
             .unwrap_or_default();
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} TYPE = 'S3' access_key_id = '{}' secret_access_key = '{}'{}{}", 
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'S3' access_key_id = '{}' secret_access_key = '{}'{}{}", 
             name, access_key_id, secret_access_key, endpoint_clause, region_clause
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
 
+    #[pyo3(signature = (name, endpoint_url, account_name, account_key))]
     fn create_azblob_connection(
         &mut self,
         name: &str,
@@ -217,13 +233,14 @@ impl PySessionContext {
         py: Python,
     ) -> PyResult<()> {
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} TYPE = 'AZBLOB' endpoint_url = '{}' account_name = '{}' account_key = '{}'",
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'AZBLOB' endpoint_url = '{}' account_name = '{}' account_key = '{}'",
             name, endpoint_url, account_name, account_key
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
 
+    #[pyo3(signature = (name, endpoint_url, credential))]
     fn create_gcs_connection(
         &mut self,
         name: &str,
@@ -232,13 +249,14 @@ impl PySessionContext {
         py: Python,
     ) -> PyResult<()> {
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} TYPE = 'GCS' endpoint_url = '{}' credential = '{}'",
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'GCS' endpoint_url = '{}' credential = '{}'",
             name, endpoint_url, credential
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
 
+    #[pyo3(signature = (name, endpoint_url, access_key_id, secret_access_key))]
     fn create_oss_connection(
         &mut self,
         name: &str,
@@ -248,13 +266,14 @@ impl PySessionContext {
         py: Python,
     ) -> PyResult<()> {
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} TYPE = 'OSS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'OSS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
             name, endpoint_url, access_key_id, secret_access_key
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }
 
+    #[pyo3(signature = (name, endpoint_url, access_key_id, secret_access_key))]
     fn create_cos_connection(
         &mut self,
         name: &str,
@@ -264,7 +283,7 @@ impl PySessionContext {
         py: Python,
     ) -> PyResult<()> {
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} TYPE = 'COS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'COS' endpoint_url = '{}' access_key_id = '{}' secret_access_key = '{}'",
             name, endpoint_url, access_key_id, secret_access_key
         );
         let _ = self.sql(&sql, py)?.collect(py)?;
@@ -282,6 +301,42 @@ impl PySessionContext {
 
     fn drop_connection(&mut self, name: &str, py: Python) -> PyResult<()> {
         let sql = format!("DROP CONNECTION {}", name);
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    #[pyo3(signature = (name, url, connection_name))]
+    fn create_stage(
+        &mut self,
+        name: &str,
+        url: &str,
+        connection_name: &str,
+        py: Python,
+    ) -> PyResult<()> {
+        let sql = format!(
+            "CREATE OR REPLACE STAGE {} URL='{}' CONNECTION = (connection_name='{}')",
+            name, url, connection_name
+        );
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
+
+    fn show_stages(&mut self, py: Python) -> PyResult<PyDataFrame> {
+        self.sql("SHOW STAGES", py)
+    }
+
+    fn list_stages(&mut self, stage_name: &str, py: Python) -> PyResult<PyDataFrame> {
+        let sql = format!("LIST @{}", stage_name);
+        self.sql(&sql, py)
+    }
+
+    fn describe_stage(&mut self, name: &str, py: Python) -> PyResult<PyDataFrame> {
+        let sql = format!("DESC STAGE {}", name);
+        self.sql(&sql, py)
+    }
+
+    fn drop_stage(&mut self, name: &str, py: Python) -> PyResult<()> {
+        let sql = format!("DROP STAGE {}", name);
         let _ = self.sql(&sql, py)?.collect(py)?;
         Ok(())
     }

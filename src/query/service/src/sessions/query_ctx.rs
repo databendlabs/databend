@@ -1986,10 +1986,11 @@ impl TableContext for QueryContext {
                 .get(OPT_KEY_TEMP_PREFIX)
                 .cloned()
                 .unwrap_or_default();
+            let table_id = table.get_table_info().ident.table_id;
             let drop_table_req = DropTableByIdReq {
                 if_exists: true,
                 tenant: tenant.clone(),
-                tb_id: table.get_table_info().ident.table_id,
+                tb_id: table_id,
                 table_name: table_name.to_string(),
                 db_id: db.get_db_info().database_id.db_id,
                 db_name: db.name().to_string(),
@@ -2001,6 +2002,11 @@ impl TableContext for QueryContext {
                 .is_some()
             {
                 ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+
+                // Clear the temp table state from TxnBuffer
+                let txn_mgr_ref = self.txn_mgr();
+                let mut txn_mgr = txn_mgr_ref.lock();
+                txn_mgr.clear_temp_table_by_id(table_id);
             }
         }
         let mut m_cte_temp_table = self.m_cte_temp_table.write();

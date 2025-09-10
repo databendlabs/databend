@@ -136,6 +136,13 @@ impl TxnBuffer {
                 .or_insert(stream_meta.clone());
         }
     }
+
+    fn clear_temp_table_by_id(&mut self, table_id: u64) {
+        if let Some(temp_table) = self.mutated_temp_tables.remove(&table_id) {
+            let desc = format!("'{}'.'{}'", temp_table.db_name, temp_table.table_name);
+            self.temp_table_desc_to_id.remove(&desc);
+        }
+    }
 }
 
 impl TxnManager {
@@ -404,5 +411,9 @@ impl TxnManager {
             .get(&table_id)
             .unwrap()
             .clone()
+    }
+
+    pub fn clear_temp_table_by_id(&mut self, table_id: u64) {
+        self.txn_buffer.clear_temp_table_by_id(table_id);
     }
 }
