@@ -39,7 +39,7 @@ test = ["pytest", "pandas", "polars", "pyarrow"]
 [project.urls]
 Documentation = "https://pypi.org/project/databend/"
 Homepage =  "https://databend.com"
-Repository = "https://github.com/databendlabs/databend"
+Repository = "https://github.com/databendlabs/databend/tree/main/src/bendpy"
 
 [dependency-groups]
 dev = ["maturin>=1.8.2"]
