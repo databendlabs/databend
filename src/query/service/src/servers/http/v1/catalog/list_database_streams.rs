@@ -77,7 +77,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     }
 
     let warnings = vec![];
-    let tables: Vec<std::sync::Arc<dyn Table>> = db.list_tables().await?;
+    let tables = db.list_tables().await?;
     let mut source_table_id_set = HashSet::new();
     let mut stream_infos = vec![];
     for table in tables {
