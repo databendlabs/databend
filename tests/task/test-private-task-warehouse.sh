@@ -16,7 +16,7 @@ CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-system-managed.toml"
 cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
 
 echo "Starting Databend Query cluster enable private task"
-./scripts/ci/deploy/databend-query-system-managed.sh 4
+./scripts/ci/deploy/databend-query-system-managed.sh 2
 
 check_response_error() {
     local response="$1"
@@ -28,12 +28,12 @@ check_response_error() {
     fi
 }
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh1 WITH WAREHOUSE_SIZE = '2'\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh1 WITH WAREHOUSE_SIZE = '1'\"}")
 check_response_error "$response"
 create_warehouse_1_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 1 Query ID: $create_warehouse_1_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh2 WITH WAREHOUSE_SIZE = '2'\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE WAREHOUSE wh2 WITH WAREHOUSE_SIZE = '1'\"}")
 check_response_error "$response"
 create_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Create WareHouse 2 Query ID: $create_warehouse_2_query_id"
@@ -53,7 +53,7 @@ check_response_error "$response"
 create_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
 
-sleep 20
+sleep 10
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 RESUME\"}")
 check_response_error "$response"
@@ -65,7 +65,7 @@ check_response_error "$response"
 resume_task_2_query_id=$(echo $response | jq -r '.id')
 echo "RESUME Task 2 ID: $resume_task_2_query_id"
 
-sleep 60
+sleep 25
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
@@ -87,7 +87,7 @@ check_response_error "$response"
 suspend_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Suspend WareHouse 2 Query ID: $suspend_warehouse_2_query_id"
 
-sleep 40
+sleep 20
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
