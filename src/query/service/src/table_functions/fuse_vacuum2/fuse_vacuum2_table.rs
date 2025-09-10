@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -39,6 +40,7 @@ use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use log::info;
 
 use crate::sessions::TableContext;
 
@@ -106,7 +108,10 @@ impl SimpleTableFunc for FuseVacuum2Table {
                 )
                 .await?
             }
-            Vacuum2TableArgs::All => self.apply_all_tables(ctx, catalog.as_ref()).await?,
+            Vacuum2TableArgs::All => {
+                eprintln!("apply all");
+                self.apply_all_tables(ctx, catalog.as_ref()).await?
+            }
         };
         Ok(Some(DataBlock::new_from_columns(vec![
             StringType::from_data(res),
@@ -182,16 +187,37 @@ impl FuseVacuum2Table {
         let tenant_id = ctx.get_tenant();
         let dbs = catalog.list_databases(&tenant_id).await?;
         for db in dbs {
-            if db.engine() != "DEFAULT" {
+            if db.engine().to_uppercase() == "SYSTEM" {
+                info!("Bypass system database [{}]", db.name());
                 continue;
             }
-            let tables = catalog.list_tables(&tenant_id, db.name()).await?;
-            for table in tables {
-                let tbl = FuseTable::try_from_table(table.as_ref()).map_err(|_| {
-                    ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
-                })?;
 
-                if table.is_read_only() {
+            info!("Processing db {}", db.name());
+            let tables = catalog.list_tables(&tenant_id, db.name()).await?;
+            info!("Found {} tables in db {}", tables.len(), db.name());
+
+            for table in tables {
+                info!(
+                    "Processing table {}.{}",
+                    db.name(),
+                    table.get_table_info().name
+                );
+
+                let Ok(tbl) = FuseTable::try_from_table(table.as_ref()) else {
+                    info!(
+                        "Bypass non-fuse table {}.{}",
+                        db.name(),
+                        table.get_table_info().name
+                    );
+                    continue;
+                };
+
+                if tbl.is_read_only() {
+                    info!(
+                        "Bypass read only table {}.{}",
+                        db.name(),
+                        table.get_table_info().name
+                    );
                     continue;
                 }
 
