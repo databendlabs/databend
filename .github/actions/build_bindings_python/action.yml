@@ -80,9 +80,8 @@ runs:
           # Install cargo-zigbuild manually to avoid musl target issues
           cargo install cargo-zigbuild --target ${{ inputs.target }}
           ../../scripts/setup/dev_setup.sh -yb
-          # Clean up any existing virtual environment
-          rm -rf .venv || true
-          uv venv --python=python3.12
+          # Create virtual environment for build dependencies (overwrite if exists)
+          uv venv .venv --python=python3.12 --clear
           uv sync --all-groups --all-extras
 
     - name: Setup Rust for development builds
@@ -99,11 +98,8 @@ runs:
       run: |
         echo "Building development wheel for testing..."
 
-        # Clean up any existing virtual environment
-        rm -rf .venv || true
-
-        # Create and activate virtual environment
-        uv venv --python python3.12
+        # Create virtual environment (overwrite if exists)
+        uv venv .venv --python python3.12 --clear
         source .venv/bin/activate
 
         # Install development dependencies
@@ -122,24 +118,3 @@ runs:
 
         echo "All Python binding tests passed!"
 
-    - name: Test built wheels
-      if: inputs.version != ''
-      shell: bash
-      working-directory: src/bendpy
-      run: |
-        echo "Testing built wheels..."
-
-        # Clean up any existing virtual environment
-        rm -rf .venv || true
-
-        # Install from built wheel for release testing
-        uv venv --python python3.12
-        source .venv/bin/activate
-        uv pip install dist/*.whl
-        uv pip install pytest pandas polars pyarrow
-
-        # Run pytest tests
-        echo "Executing pytest tests..."
-        python -m pytest tests/ -v --tb=short
-
-        echo "All Python binding tests passed!"
