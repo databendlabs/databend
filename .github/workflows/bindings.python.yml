@@ -1,20 +1,21 @@
 name: Bindings Python
 
 on:
-  ## uncomment it when bendpy is enabled
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release (optional for testing)
+        description: Version to build (optional, leave empty for development build)
         required: false
         type: string
-        default: "test-build"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - ".github/workflows/bindings.python.yml"
+        default: ""
+      build_type:
+        description: Build type
+        required: false
+        type: choice
+        default: "development"
+        options:
+          - "development"
+          - "release"
   workflow_call:
     inputs:
       version:
@@ -33,9 +34,45 @@ permissions:
   packages: write
 
 jobs:
+  # Get version info
+  get-version:
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            # Use provided version
+            VERSION="${{ inputs.version }}"
+            echo "Using provided version: $VERSION"
+          elif [[ "${{ inputs.build_type }}" == "release" ]]; then
+            # Get latest tag for release build
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+            echo "Using latest tag: $VERSION"
+          else
+            # Development build
+            VERSION=""
+            echo "Development build - no version"
+          fi
+          
+          IS_RELEASE=$([[ "${{ inputs.build_type }}" == "release" || -n "${{ inputs.version }}" ]] && echo "true" || echo "false")
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Final version: $VERSION, is_release: $IS_RELEASE"
+
   test:
-    # Run tests on all PRs and workflow dispatches
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # Run tests on workflow dispatches
+    if: github.event_name == 'workflow_dispatch'
+    needs: [get-version]
     runs-on:
       - self-hosted
       - X64
@@ -49,11 +86,12 @@ jobs:
       - uses: ./.github/actions/build_bindings_python
         with:
           target: x86_64-unknown-linux-gnu
-          # No version means development build with tests
+          version: ${{ needs.get-version.outputs.is_release == 'true' && needs.get-version.outputs.version || '' }}
 
   linux:
-    # Only run for version builds (releases)
-    if: inputs.version
+    # Run for release builds (workflow_call with version OR workflow_dispatch with release type)
+    if: (github.event_name == 'workflow_call' && inputs.version) || (github.event_name == 'workflow_dispatch' && needs.get-version.outputs.is_release == 'true')
+    needs: [get-version]
     runs-on:
       - self-hosted
       - "${{ matrix.runner }}"
@@ -72,16 +110,16 @@ jobs:
       - uses: ./.github/actions/build_bindings_python
         with:
           target: ${{ matrix.arch }}-unknown-linux-gnu
-          version: ${{ inputs.version }}
+          version: ${{ github.event_name == 'workflow_call' && inputs.version || needs.get-version.outputs.version }}
       - name: upload
-        if: inputs.version
         uses: actions/upload-artifact@v4
         with:
           name: python-linux-${{ matrix.arch }}
           path: src/bendpy/dist/*.whl
 
   # macos:
-  #   if: inputs.version
+  #   if: (github.event_name == 'workflow_call' && inputs.version) || (github.event_name == 'workflow_dispatch' && needs.get-version.outputs.is_release == 'true')
+  #   needs: [get-version]
   #   runs-on: macos-latest
   #   strategy:
   #     matrix:
@@ -94,18 +132,17 @@ jobs:
   #     - uses: ./.github/actions/build_bindings_python
   #       with:
   #         target: ${{ matrix.arch }}-apple-darwin
-  #         version: ${{ inputs.version }}
+  #         version: ${{ github.event_name == 'workflow_call' && inputs.version || needs.get-version.outputs.version }}
   #     - name: upload
-  #       if: inputs.version
   #       uses: actions/upload-artifact@v4
   #       with:
   #         name: python-macos-${{ matrix.arch }}
   #         path: src/bendpy/dist/*.whl
 
   publish:
-    if: inputs.version
+    if: (github.event_name == 'workflow_call' && inputs.version) || (github.event_name == 'workflow_dispatch' && needs.get-version.outputs.is_release == 'true')
     name: Publish
-    needs: [linux]
+    needs: [get-version, linux]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
