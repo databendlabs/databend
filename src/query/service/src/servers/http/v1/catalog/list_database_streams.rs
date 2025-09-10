@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -76,8 +77,8 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     }
 
     let warnings = vec![];
-    let tables = db.list_tables().await?;
-    let mut source_table_ids = HashSet::new();
+    let tables: Vec<std::sync::Arc<dyn Table>> = db.list_tables().await?;
+    let mut source_table_id_set = HashSet::new();
     let mut stream_infos = vec![];
     for table in tables {
         if !visibility_checker.check_table_visibility(
@@ -97,14 +98,15 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             table.as_ref(),
         )?;
         let source_table_id = stream.source_table_id()?;
-        source_table_ids.insert(source_table_id);
+        source_table_id_set.insert(source_table_id);
         stream_infos.push((info, stream, source_table_id));
     }
 
+    let mut source_table_ids = source_table_id_set.into_iter().collect::<Vec<u64>>();
     let source_table_names = catalog
         .mget_table_names_by_ids(&tenant, &source_table_ids, false)
         .await?;
-    let source_table_ids = source_table_ids
+    let source_table_map = source_table_ids
         .into_iter()
         .zip(source_table_names.into_iter())
         .filter(|(_, tb_name)| tb_name.is_some())
@@ -122,7 +124,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             updated_on: info.meta.updated_on,
             mode: stream.mode().to_string(),
             comment: info.meta.comment.clone(),
-            table_name: source_table_ids.get(&source_table_id).cloned(),
+            table_name: source_table_map.get(&source_table_id).cloned(),
             table_id: Some(source_table_id),
             table_version: stream.offset().ok(),
             snapshot_location: stream.snapshot_loc(),
