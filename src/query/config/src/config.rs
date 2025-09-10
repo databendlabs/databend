@@ -1791,6 +1791,8 @@ pub struct QueryConfig {
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
+    #[clap(long)]
+    pub embedded_mode: bool,
 
     /// Deprecated: jwt_key_file is deprecated, use jwt_key_files to add a list of available jwks url
     #[clap(long, value_name = "VALUE", default_value_t)]
@@ -2017,6 +2019,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_query_log_size: self.max_query_log_size,
             databend_enterprise_license: self.databend_enterprise_license,
             management_mode: self.management_mode,
+            embedded_mode: self.embedded_mode,
             parquet_fast_read_bytes: self.parquet_fast_read_bytes,
             max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
@@ -2159,6 +2162,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             settings: HashMap::new(),
             resources_management: None,
             enable_queries_executor: inner.enable_queries_executor,
+            embedded_mode: inner.embedded_mode,
         }
     }
 }

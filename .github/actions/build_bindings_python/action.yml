@@ -18,7 +18,7 @@ runs:
         raw_version="${{ inputs.version }}"
         # Remove v prefix and suffixes: v1.2.809-nightly -> 1.2.809
         VERSION=$(echo "$raw_version" | sed 's/^v//' | sed 's/-nightly//' | sed 's/-p[0-9]*//')
-        
+
         echo "building version: $raw_version -> $VERSION"
         # Replace any existing version in Cargo.toml and pyproject.toml
         sed "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml > Cargo.toml.tmp
@@ -117,4 +117,3 @@ runs:
         python -m pytest tests/ -v --tb=short
 
         echo "All Python binding tests passed!"
-
