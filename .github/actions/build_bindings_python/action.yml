@@ -80,6 +80,8 @@ runs:
           # Install cargo-zigbuild manually to avoid musl target issues
           cargo install cargo-zigbuild --target ${{ inputs.target }}
           ../../scripts/setup/dev_setup.sh -yb
+          # Clean up any existing virtual environment
+          rm -rf .venv || true
           uv venv --python=python3.12
           uv sync --all-groups --all-extras
 
@@ -96,6 +98,9 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Building development wheel for testing..."
+
+        # Clean up any existing virtual environment
+        rm -rf .venv || true
 
         # Create and activate virtual environment
         uv venv --python python3.12
@@ -123,6 +128,9 @@ runs:
       working-directory: src/bendpy
       run: |
         echo "Testing built wheels..."
+
+        # Clean up any existing virtual environment
+        rm -rf .venv || true
 
         # Install from built wheel for release testing
         uv venv --python python3.12
