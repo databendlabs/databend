@@ -44,19 +44,19 @@ jobs:
             echo "Error: No version provided for workflow_call"
             exit 1
           fi
-          
+
           # Validate version format
           if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
             echo "Warning: Version $VERSION may not follow semantic versioning (vX.Y.Z)"
           fi
-          
+
           echo "Final version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
   test:
     name: Run Tests
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
-    needs: [get-version]
+    needs: [ get-version ]
     runs-on:
       - self-hosted
       - X64
@@ -75,7 +75,7 @@ jobs:
   linux:
     name: Build Linux Wheels
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
-    needs: [get-version, test]
+    needs: [ get-version, test ]
     runs-on:
       - self-hosted
       - "${{ matrix.runner }}"
@@ -106,27 +106,27 @@ jobs:
   macos:
     name: Build macOS Wheels
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
-    needs: [get-version, test]
+    needs: [ get-version, test ]
     runs-on: macos-latest
     continue-on-error: true
     strategy:
       matrix:
-        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+        target: [ x86_64-apple-darwin, aarch64-apple-darwin ]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Install dependencies
         run: |
           # Install OpenSSL and necessary tools
           brew install openssl@3
-          
+
           # Use vendored OpenSSL to avoid cross-compilation issues
           echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
           echo "OPENSSL_VENDORED=1" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
-          
+
       - uses: ./.github/actions/build_bindings_python
         with:
           target: ${{ matrix.target }}
@@ -141,7 +141,7 @@ jobs:
   publish:
     name: Publish to PyPI
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
-    needs: [get-version, test, linux]
+    needs: [ get-version, test, linux ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
