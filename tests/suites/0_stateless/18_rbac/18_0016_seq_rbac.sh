@@ -8,7 +8,6 @@ export USER_A_CONNECT="bendsql --user=a --password=123 --host=${QUERY_MYSQL_HAND
 export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "set global sequence_step_size = 1;" | $BENDSQL_CLIENT_CONNECT
 echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 echo "set global enable_experimental_sequence_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT

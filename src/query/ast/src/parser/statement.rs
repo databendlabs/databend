@@ -3235,6 +3235,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         DefaultExpr(Box<Expr>),
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
+        CheckExpr(Box<Expr>),
     }
 
     let nullable = alt((
@@ -3260,6 +3261,12 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             },
             |(_, _, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
         ),
+        map(
+            rule! {
+                CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")"
+            },
+            |(_, _, expr, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
+        ),
     ));
 
     let comment = map(
@@ -3275,13 +3282,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
+                check: None,
                 comment,
             };
             (def, constraints)
@@ -3314,6 +3322,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ColumnConstraint::StoredExpr(stored_expr) => {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
+            ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
         }
     }
 
@@ -3341,10 +3350,26 @@ pub fn table_index_def(i: Input) -> IResult<TableIndexDefinition> {
     )(i)
 }
 
+pub fn constraint_def(i: Input) -> IResult<ConstraintDefinition> {
+    map_res(
+        rule! {
+            (CONSTRAINT ~ #ident)?
+            ~ CHECK ~ ^"(" ~ ^#expr ~ ^")"
+        },
+        |(opt_constraint_name, _, _, expr, _)| {
+            Ok(ConstraintDefinition {
+                name: opt_constraint_name.map(|(_, name)| name),
+                constraint_type: ConstraintType::Check(expr),
+            })
+        },
+    )(i)
+}
+
 pub fn create_def(i: Input) -> IResult<CreateDefinition> {
     alt((
         map(rule! { #column_def }, CreateDefinition::Column),
         map(rule! { #table_index_def }, CreateDefinition::TableIndex),
+        map(rule! { #constraint_def }, CreateDefinition::Constraint),
     ))(i)
 }
 
@@ -3840,13 +3865,24 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         |(_, create_defs, _)| {
             let mut columns = Vec::with_capacity(create_defs.len());
             let mut table_indexes = Vec::new();
+            let mut column_constraints = Vec::new();
+            let mut table_constraints = Vec::new();
             for create_def in create_defs {
                 match create_def {
                     CreateDefinition::Column(column) => {
+                        if let Some(expr) = &column.check {
+                            column_constraints.push(ConstraintDefinition {
+                                name: None,
+                                constraint_type: ConstraintType::Check(expr.clone()),
+                            });
+                        }
                         columns.push(column);
                     }
                     CreateDefinition::TableIndex(table_index) => {
                         table_indexes.push(table_index);
+                    }
+                    CreateDefinition::Constraint(constraint) => {
+                        table_constraints.push(constraint);
                     }
                 }
             }
@@ -3855,7 +3891,22 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
             } else {
                 None
             };
-            CreateTableSource::Columns(columns, opt_table_indexes)
+            let opt_column_constraints = if !column_constraints.is_empty() {
+                Some(column_constraints)
+            } else {
+                None
+            };
+            let opt_table_constraints = if !table_constraints.is_empty() {
+                Some(table_constraints)
+            } else {
+                None
+            };
+            CreateTableSource::Columns {
+                columns,
+                opt_table_indexes,
+                opt_column_constraints,
+                opt_table_constraints,
+            }
         },
     );
     let like = map(
@@ -3928,13 +3979,14 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <expr>] [CHECK <expr>] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
+                check: None,
                 comment,
             };
             for constraint in constraints {
@@ -4078,6 +4130,20 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, action)| AlterTableAction::ModifyColumn { action },
     );
 
+    let add_constraint = map(
+        rule! {
+            ADD ~ #constraint_def
+        },
+        |(_, constraint)| AlterTableAction::AddConstraint { constraint },
+    );
+
+    let drop_constraint = map(
+        rule! {
+            DROP ~ CONSTRAINT ~ #ident
+        },
+        |(_, _, constraint_name)| AlterTableAction::DropConstraint { constraint_name },
+    );
+
     let add_row_access_policy = map(
         rule! {
             ADD ~ ROW ~ ACCESS ~ POLICY ~ #ident ~ ON ~ "(" ~ ^#comma_separated_list1(ident) ~ ^")"
@@ -4178,6 +4244,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
+        | #drop_constraint
         | #rename_table
         | #rename_column
         | #modify_table_comment
@@ -4193,6 +4260,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_all_row_access_polices
         | #drop_row_access_policy
         | #add_row_access_policy
+        | #add_constraint
     )(i)
 }
 

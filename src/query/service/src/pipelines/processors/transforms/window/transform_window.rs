@@ -21,16 +21,26 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_column::types::months_days_micros;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::date_helper::calc_date_to_timestamp;
+use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
@@ -87,7 +97,7 @@ struct WindowBlock {
 /// The input [`DataBlock`] of [`TransformWindow`] should be sorted by partition and order by columns.
 ///
 /// Window function will not change the rows count of the original data.
-pub struct TransformWindow<T: Number> {
+pub struct TransformWindow {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     state: ProcessorState,
@@ -117,8 +127,8 @@ pub struct TransformWindow<T: Number> {
 
     // Frame: [`frame_start`, `frame_end`). `frame_end` is excluded.
     frame_unit: WindowFuncFrameUnits,
-    start_bound: FrameBound<T>,
-    end_bound: FrameBound<T>,
+    start_bound: FrameBound,
+    end_bound: FrameBound,
 
     // Only used for ROWS frame, default value: 0. (when not used)
     rows_start_bound: usize,
@@ -161,7 +171,7 @@ pub struct TransformWindow<T: Number> {
     is_ranking: bool,
 }
 
-impl<T: Number> TransformWindow<T> {
+impl TransformWindow {
     #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
@@ -739,7 +749,7 @@ impl<T: Number> TransformWindow<T> {
 }
 
 // For ROWS frame
-impl TransformWindow<u64> {
+impl TransformWindow {
     /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
     pub fn try_create_rows(
         input: Arc<InputPort>,
@@ -747,7 +757,7 @@ impl TransformWindow<u64> {
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
         order_by: Vec<WindowSortDesc>,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
+        bounds: (FrameBound, FrameBound),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
@@ -760,8 +770,14 @@ impl TransformWindow<u64> {
                 | WindowFunctionImpl::DenseRank
         );
 
-        let rows_start_bound = start_bound.get_inner().unwrap_or_default() as usize;
-        let rows_end_bound = end_bound.get_inner().unwrap_or_default() as usize;
+        let rows_start_bound = start_bound
+            .get_inner()
+            .and_then(|scalar| scalar.get_i64())
+            .unwrap_or_default() as usize;
+        let rows_end_bound = end_bound
+            .get_inner()
+            .and_then(|scalar| scalar.get_i64())
+            .unwrap_or_default() as usize;
 
         Ok(Self {
             input,
@@ -808,9 +824,7 @@ impl TransformWindow<u64> {
 }
 
 // For RANGE frame
-impl<T> TransformWindow<T>
-where T: Number + ResultTypeOfUnary
-{
+impl TransformWindow {
     /// Cannot be cloned because every [`TransformWindow`] has one independent `place`.
     pub fn try_create_range(
         input: Arc<InputPort>,
@@ -818,7 +832,7 @@ where T: Number + ResultTypeOfUnary
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
         order_by: Vec<WindowSortDesc>,
-        bounds: (FrameBound<T>, FrameBound<T>),
+        bounds: (FrameBound, FrameBound),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
@@ -883,30 +897,120 @@ where T: Number + ResultTypeOfUnary
         })
     }
 
+    fn timestamp_sub(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+        let ts = a
+            .wrapping_sub(b.microseconds())
+            .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
+        Ok(EvalMonthsImpl::eval_timestamp(
+            ts,
+            func_ctx.tz.clone(),
+            -b.months(),
+            false,
+        )?)
+    }
+
+    fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+        let ts = a
+            .wrapping_add(b.microseconds())
+            .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
+        Ok(EvalMonthsImpl::eval_timestamp(
+            ts,
+            func_ctx.tz.clone(),
+            b.months(),
+            false,
+        )?)
+    }
+
     /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
     ///
     /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
     #[inline]
-    fn compare_value_with_offset(cmp_v: T, ref_v: T, offset: T, is_preceding: bool) -> Ordering {
-        let res = if is_preceding {
-            ref_v.checked_sub(offset)
-        } else {
-            ref_v.checked_add(offset)
-        };
+    fn compare_value_with_offset<T: Number + ResultTypeOfUnary>(
+        cmp_v: ScalarRef,
+        ref_v: ScalarRef,
+        offset: ScalarRef,
+        is_preceding: bool,
+        data_type: &DataType,
+    ) -> Result<Ordering> {
+        let ordering = match data_type {
+            DataType::Number(_) => {
+                let cmp_v = NumberType::<T>::try_downcast_scalar(&cmp_v).unwrap();
+                let ref_v = NumberType::<T>::try_downcast_scalar(&ref_v).unwrap();
+                let offset = NumberType::<T>::try_downcast_scalar(&offset).unwrap();
+                let res = if is_preceding {
+                    ref_v.checked_sub(offset)
+                } else {
+                    ref_v.checked_add(offset)
+                };
 
-        if let Some(res) = res {
-            // Not overflow
-            cmp_v.cmp(&res)
-        } else if is_preceding {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
+                if let Some(res) = res {
+                    // Not overflow
+                    cmp_v.cmp(&res)
+                } else if is_preceding {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            }
+            DataType::Date => {
+                let cmp_v = DateType::try_downcast_scalar(&cmp_v).unwrap();
+                let ref_v = DateType::try_downcast_scalar(&ref_v).unwrap();
+
+                if let Some(n) = offset.get_i64() {
+                    let res = if is_preceding {
+                        (ref_v as i64).checked_sub(n)
+                    } else {
+                        (ref_v as i64).checked_add(n)
+                    };
+                    if let Some(res) = res {
+                        // Not overflow
+                        (cmp_v as i64).cmp(&res)
+                    } else if is_preceding {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Less
+                    }
+                } else if let Some(n) = offset.as_interval() {
+                    let func_ctx = FunctionContext::default();
+                    let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, func_ctx.tz.clone())?;
+                    let ref_v_timestamp = calc_date_to_timestamp(ref_v, func_ctx.tz.clone())?;
+                    let ref_v_timestamp = if is_preceding {
+                        Self::timestamp_sub(ref_v_timestamp, n, func_ctx)?
+                    } else {
+                        Self::timestamp_add(ref_v_timestamp, n, func_ctx)?
+                    };
+                    cmp_v_timestamp.cmp(&ref_v_timestamp)
+                } else {
+                    return Err(ErrorCode::IllegalDataType(
+                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval"
+                    ));
+                }
+            }
+            DataType::Timestamp => {
+                let cmp_v = TimestampType::try_downcast_scalar(&cmp_v).unwrap();
+                let ref_v = TimestampType::try_downcast_scalar(&ref_v).unwrap();
+
+                let Some(n) = offset.as_interval() else {
+                    return Err(ErrorCode::IllegalDataType(
+                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval"
+                    ));
+                };
+                let func_ctx = FunctionContext::default();
+                let ref_v = if is_preceding {
+                    Self::timestamp_sub(ref_v, n, func_ctx)?
+                } else {
+                    Self::timestamp_add(ref_v, n, func_ctx)?
+                };
+                cmp_v.cmp(&ref_v)
+            }
+            _ => return Err(ErrorCode::IllegalDataType("window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`")),
+        };
+        Ok(ordering)
     }
 
-    fn advance_frame_start(&mut self) {
+    fn advance_frame_start(&mut self) -> Result<()> {
         if self.frame_started {
-            return;
+            return Ok(());
         }
         match &self.start_bound {
             FrameBound::CurrentRow => {
@@ -930,9 +1034,9 @@ where T: Number + ResultTypeOfUnary
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_start_rows_preceding(self.rows_start_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_start_nullable_range(*n, true);
+                    self.advance_frame_start_nullable_range(n.clone(), true)?;
                 } else {
-                    self.advance_frame_start_range(*n, true);
+                    self.advance_frame_start_range(n.clone(), true)?;
                 }
             }
             FrameBound::Preceding(_) => {
@@ -947,18 +1051,19 @@ where T: Number + ResultTypeOfUnary
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_start_rows_following(self.rows_start_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_start_nullable_range(*n, false);
+                    self.advance_frame_start_nullable_range(n.clone(), false)?;
                 } else {
-                    self.advance_frame_start_range(*n, false);
+                    self.advance_frame_start_range(n.clone(), false)?;
                 }
             }
             FrameBound::Following(_) => {
                 unreachable!()
             }
         }
+        Ok(())
     }
 
-    fn advance_frame_end(&mut self) {
+    fn advance_frame_end(&mut self) -> Result<()> {
         debug_assert!(!self.frame_ended);
 
         match &self.end_bound {
@@ -973,9 +1078,9 @@ where T: Number + ResultTypeOfUnary
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_end_rows_preceding(self.rows_end_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_end_nullable_range(*n, true);
+                    self.advance_frame_end_nullable_range(n.clone(), true)?;
                 } else {
-                    self.advance_frame_end_range(*n, true)
+                    self.advance_frame_end_range(n.clone(), true)?
                 }
             }
             FrameBound::Preceding(_) => {
@@ -989,9 +1094,9 @@ where T: Number + ResultTypeOfUnary
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_end_rows_following(self.rows_end_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_end_nullable_range(*n, false);
+                    self.advance_frame_end_nullable_range(n.clone(), false)?;
                 } else {
-                    self.advance_frame_end_range(*n, false);
+                    self.advance_frame_end_range(n.clone(), false)?;
                 }
             }
             FrameBound::Following(_) => {
@@ -999,6 +1104,7 @@ where T: Number + ResultTypeOfUnary
                 self.frame_end = self.partition_end;
             }
         }
+        Ok(())
     }
 
     fn compute_on_frame(&mut self) -> Result<()> {
@@ -1092,7 +1198,7 @@ where T: Number + ResultTypeOfUnary
                     // Non-NULL empty frame, no need to advance bounds.
                     self.func.reset();
                 } else if !self.is_ranking {
-                    self.advance_frame_start();
+                    self.advance_frame_start()?;
                     if !self.frame_started {
                         debug_assert!(!self.input_is_finished);
                         debug_assert!(!self.partition_ended);
@@ -1103,7 +1209,7 @@ where T: Number + ResultTypeOfUnary
                         self.frame_end = self.frame_start;
                     }
 
-                    self.advance_frame_end();
+                    self.advance_frame_end()?;
                     if !self.frame_ended {
                         debug_assert!(!self.input_is_finished);
                         debug_assert!(!self.partition_ended);
@@ -1173,24 +1279,35 @@ where T: Number + ResultTypeOfUnary
 macro_rules! impl_advance_frame_bound_method {
     ($bound: ident, $op: ident) => {
         paste::paste! {
-            impl<T: Number + ResultTypeOfUnary> TransformWindow<T> {
-                fn [<advance_frame_ $bound _range>](&mut self, n: T, is_preceding: bool) {
+            impl TransformWindow {
+                fn [<advance_frame_ $bound _range>](&mut self, n_scalar: Scalar, is_preceding: bool) -> Result<()> {
                     let WindowSortDesc {
                         offset,
                         asc,
                         ..
                     } = self.order_by[0];
+
                     let preceding = asc == is_preceding;
                     let ref_col = self
-                        .column_at(&self.current_row, offset);
-                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
-                    let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
+                        .column_at(&self.current_row, offset)
+                        .clone();
+                    let data_type = ref_col.data_type().remove_nullable();
+                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let cmp_col = self
                             .column_at(&self.[<frame_ $bound>], offset);
-                        let cmp_col = NumberType::<T>::try_downcast_column(cmp_col).unwrap();
-                        let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
-                        let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
+                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
+                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
+                            DataType::Number(NumberDataType::NUM_TYPE) => {
+                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
+                            }
+                            DataType::Date | DataType::Timestamp => {
+                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
+                            }
+                            _ => return Err(ErrorCode::IllegalDataType(
+                                "window function `ORDER BY` must use numeric or Date, Timestamp"
+                            )),
+                        });
                         if !asc {
                             ordering = ordering.reverse();
                         }
@@ -1198,30 +1315,33 @@ macro_rules! impl_advance_frame_bound_method {
                         if ordering.$op() {
                             // `self.frame_end` is excluded when aggregating.
                             self.[<frame_ $bound ed>] = true;
-                            return;
+                            return Ok(());
                         }
 
                         self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
                     }
                     self.[<frame_ $bound ed>] = self.partition_ended;
+                    Ok(())
                 }
 
-                fn [<advance_frame_ $bound _nullable_range>](&mut self, n: T, is_preceding: bool) {
+                fn [<advance_frame_ $bound _nullable_range>](&mut self, n_scalar: Scalar, is_preceding: bool) -> Result<()> {
                     let WindowSortDesc {
                         offset: ref_idx,
                         asc,
                         nulls_first,
                         ..
                     } = self.order_by[0];
+
                     let preceding = asc == is_preceding;
                     // Current row should not be in the null frame.
-                    let ref_col = &self
+                    let ref_col = self
                         .column_at(&self.current_row, ref_idx)
                         .as_nullable()
                         .unwrap()
-                        .column;
-                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
-                    let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
+                        .column
+                        .clone();
+                    let data_type = ref_col.data_type().remove_nullable();
+                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let col = self
                             .column_at(&self.[<frame_ $bound>], ref_idx)
@@ -1237,24 +1357,36 @@ macro_rules! impl_advance_frame_bound_method {
                             } else {
                                 // The null rows are at back.
                                 self.[<frame_ $bound ed>] = true;
-                                return;
+                                return Ok(());
                             }
                         }
-                        let cmp_col = NumberType::<T>::try_downcast_column(&col.column).unwrap();
-                        let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
-                        let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
+                        let cmp_col = &col.column;
+                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
+
+                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
+                            DataType::Number(NumberDataType::NUM_TYPE) => {
+                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
+                            }
+                            DataType::Date | DataType::Timestamp => {
+                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
+                            }
+                            _ => return Err(ErrorCode::IllegalDataType(
+                                "window function `ORDER BY` must use numeric or Date, Timestamp"
+                            )),
+                        });
                         if !asc {
                             ordering = ordering.reverse();
                         }
 
                         if ordering.$op() {
                             self.[<frame_ $bound ed>] = true;
-                            return;
+                            return Ok(());
                         }
 
                         self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
                     }
                     self.[<frame_ $bound ed>] = self.partition_ended;
+                    Ok(())
                 }
             }
         }
@@ -1271,9 +1403,7 @@ enum ProcessorState {
 }
 
 #[async_trait::async_trait]
-impl<T> Processor for TransformWindow<T>
-where T: Number + ResultTypeOfUnary
-{
+impl Processor for TransformWindow {
     fn name(&self) -> String {
         "Transform Window".to_string()
     }
@@ -1358,10 +1488,12 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::Column;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
     use databend_common_pipeline_core::processors::Event;
@@ -1377,9 +1509,7 @@ mod tests {
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
 
-    fn get_ranking_transform_window(
-        bounds: (FrameBound<u64>, FrameBound<u64>),
-    ) -> Result<TransformWindow<u64>> {
+    fn get_ranking_transform_window(bounds: (FrameBound, FrameBound)) -> Result<TransformWindow> {
         let func = WindowFunctionInfo::DenseRank;
         TransformWindow::try_create_range(
             InputPort::create(),
@@ -1398,9 +1528,9 @@ mod tests {
 
     fn get_transform_window_without_partition(
         _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
+        bounds: (FrameBound, FrameBound),
         arg_type: DataType,
-    ) -> Result<TransformWindow<u64>> {
+    ) -> Result<TransformWindow> {
         let agg =
             AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
@@ -1421,9 +1551,9 @@ mod tests {
 
     fn get_transform_window(
         _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
+        bounds: (FrameBound, FrameBound),
         arg_type: DataType,
-    ) -> Result<TransformWindow<u64>> {
+    ) -> Result<TransformWindow> {
         let agg =
             AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
@@ -1439,9 +1569,9 @@ mod tests {
 
     fn get_transform_window_with_data(
         unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
+        bounds: (FrameBound, FrameBound),
         column: Column,
-    ) -> Result<TransformWindow<u64>> {
+    ) -> Result<TransformWindow> {
         let data_type = column.data_type();
         let num_rows = column.len();
         let mut transform = get_transform_window(unit, bounds, data_type.clone())?;
@@ -1488,8 +1618,8 @@ mod tests {
             let mut transform = get_transform_window_with_data(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Following(Some(4)),
-                    FrameBound::Following(Some(5)),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(4)))),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(5)))),
                 ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -1499,7 +1629,7 @@ mod tests {
             assert!(!transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
 
-            transform.advance_frame_start();
+            transform.advance_frame_start()?;
             assert!(!transform.frame_started)
         }
 
@@ -1507,8 +1637,8 @@ mod tests {
             let mut transform = get_transform_window_with_data(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Preceding(Some(2)),
-                    FrameBound::Following(Some(5)),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(2)))),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(5)))),
                 ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -1519,11 +1649,11 @@ mod tests {
             assert!(!transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
 
-            transform.advance_frame_start();
+            transform.advance_frame_start()?;
             assert!(transform.frame_started);
             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
 
-            transform.advance_frame_end();
+            transform.advance_frame_end()?;
             assert!(!transform.frame_ended);
         }
 
@@ -1531,8 +1661,8 @@ mod tests {
             let mut transform = get_transform_window_with_data(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Preceding(Some(2)),
-                    FrameBound::Following(Some(1)),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(2)))),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(1)))),
                 ),
                 Int32Type::from_data(vec![1, 1, 1]),
             )?;
@@ -1545,11 +1675,11 @@ mod tests {
             assert!(!transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(1, 0));
 
-            transform.advance_frame_start();
+            transform.advance_frame_start()?;
             assert!(transform.frame_started);
             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
 
-            transform.advance_frame_end();
+            transform.advance_frame_end()?;
             assert!(transform.frame_ended);
             assert_eq!(transform.frame_end, RowPtr::new(1, 0));
         }
@@ -1569,11 +1699,11 @@ mod tests {
             assert!(transform.partition_ended);
             assert_eq!(transform.partition_end, RowPtr::new(0, 3));
 
-            transform.advance_frame_start();
+            transform.advance_frame_start()?;
             assert!(transform.frame_started);
             assert_eq!(transform.frame_start, RowPtr::new(0, 0));
 
-            transform.advance_frame_end();
+            transform.advance_frame_end()?;
             assert!(transform.frame_ended);
             assert_eq!(transform.frame_end, RowPtr::new(0, 3));
         }
@@ -2026,7 +2156,10 @@ mod tests {
         {
             let mut transform = get_transform_window(
                 WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(None), FrameBound::Following(Some(1))),
+                (
+                    FrameBound::Preceding(None),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(1)))),
+                ),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -2086,8 +2219,8 @@ mod tests {
             let mut transform = get_transform_window(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Preceding(Some(1)),
-                    FrameBound::Following(Some(1)),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(1)))),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(1)))),
                 ),
                 DataType::Number(NumberDataType::Int32),
             )?;
@@ -2206,7 +2339,10 @@ mod tests {
         {
             let mut transform = get_transform_window(
                 WindowFuncFrameUnits::Rows,
-                (FrameBound::Preceding(Some(1)), FrameBound::CurrentRow),
+                (
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(1)))),
+                    FrameBound::CurrentRow,
+                ),
                 DataType::Number(NumberDataType::Int32),
             )?;
 
@@ -2268,7 +2404,7 @@ mod tests {
     #[allow(clippy::type_complexity)]
     fn get_transform_window_and_ports(
         _unit: WindowFuncFrameUnits,
-        bounds: (FrameBound<u64>, FrameBound<u64>),
+        bounds: (FrameBound, FrameBound),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
         let agg = AggregateFunctionFactory::instance().get(
             "sum",
@@ -2299,8 +2435,8 @@ mod tests {
             let (mut transform, input, output) = get_transform_window_and_ports(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Preceding(Some(1)),
-                    FrameBound::Following(Some(1)),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(1)))),
+                    FrameBound::Following(Some(Scalar::Number(NumberScalar::Int32(1)))),
                 ),
             )?;
 
@@ -2471,8 +2607,8 @@ mod tests {
             let (mut transform, input, output) = get_transform_window_and_ports(
                 WindowFuncFrameUnits::Rows,
                 (
-                    FrameBound::Preceding(Some(3)),
-                    FrameBound::Preceding(Some(1)),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(3)))),
+                    FrameBound::Preceding(Some(Scalar::Number(NumberScalar::Int32(1)))),
                 ),
             )?;
 

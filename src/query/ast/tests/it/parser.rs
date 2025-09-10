@@ -321,6 +321,9 @@ SELECT * from s;"#,
         r#"ALTER TABLE t MODIFY a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
+        r#"ALTER TABLE t ADD CONSTRAINT a_not_1 CHECK (a != 1);"#,
+        r#"ALTER TABLE t ADD CHECK (a != 1);"#,
+        r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
@@ -952,6 +955,8 @@ SELECT * from s;"#,
             $$;"#,
         r#"DROP SEQUENCE IF EXISTS seq"#,
         r#"CREATE SEQUENCE seq comment='test'"#,
+        r#"CREATE SEQUENCE seq start = 20 INCREMENT = 100 comment='test'"#,
+        r#"CREATE SEQUENCE seq start WITH 20 INCREMENT BY 100 comment='test'"#,
         r#"DESCRIBE SEQUENCE seq"#,
         r#"SHOW SEQUENCES LIKE '%seq%'"#,
         r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
@@ -1008,6 +1013,11 @@ fn test_statement_error() {
         r#"create table a (c1 decimal(38), c2 int) partition by ();"#,
         r#"CREATE TABLE t(c1 int, c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"=33554432);"#,
         r#"drop table if a.b"#,
+        r#"show table"#,
+        r#"show column"#,
+        r#"show function"#,
+        r#"show database"#,
+        r#"create table if test"#,
         r#"truncate table a.b.c.d"#,
         r#"insert table t select * from t2;"#,
         r#"truncate a"#,
@@ -1124,6 +1134,7 @@ fn test_statement_error() {
                 RETURN sum;
             END;
             $$;"#,
+        r#"copy into t1 from (select a from @data/not_exists where a = 1)"#,
     ];
 
     for case in cases {

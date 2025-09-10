@@ -34,7 +34,7 @@ echo "set default role 'r_0002'" | $TEST_USER_CONNECT
 ## database/table
 echo "=== test db/table ==="
 echo "create database d_0002" | $TEST_USER_CONNECT
-echo "create table d_0002.t(id int)" | $TEST_USER_CONNECT
+echo "create or replace table d_0002.t(id int)" | $TEST_USER_CONNECT
 echo "insert into d_0002.t values(200)" | $TEST_USER_CONNECT
 echo "select * from d_0002.t" | $TEST_USER_CONNECT
 

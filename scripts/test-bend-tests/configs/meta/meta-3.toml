@@ -1,0 +1,20 @@
+# Meta node 3 config for test cluster
+admin_api_address = "0.0.0.0:29003"
+grpc_api_address = "0.0.0.0:9193"
+grpc_api_advertise_host = "127.0.0.1"
+
+[log]
+[log.stderr]
+  on = false
+[log.file]
+  on = true
+  level = "INFO"
+  format = "json"
+  dir = "_databend_data/logs/meta3"
+
+[raft_config]
+id = 3
+raft_dir = "_databend_data/meta3"
+raft_api_port = 27003
+raft_listen_host = "127.0.0.1"
+raft_advertise_host = "127.0.0.1"

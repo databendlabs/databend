@@ -155,6 +155,7 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::spillers;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
@@ -412,11 +413,11 @@ impl QueryContext {
 
     pub fn add_spill_file(
         &self,
-        location: crate::spillers::Location,
-        layout: crate::spillers::Layout,
+        location: spillers::Location,
+        layout: spillers::Layout,
         data_size: usize,
     ) {
-        if matches!(location, crate::spillers::Location::Remote(_)) {
+        if matches!(location, spillers::Location::Remote(_)) {
             let current_id = self.get_cluster().local_id();
             let mut w = self.shared.cluster_spill_progress.write();
             let p = SpillProgress::new(1, data_size);
@@ -458,15 +459,12 @@ impl QueryContext {
         total
     }
 
-    pub fn get_spill_layout(
-        &self,
-        location: &crate::spillers::Location,
-    ) -> Option<crate::spillers::Layout> {
+    pub fn get_spill_layout(&self, location: &spillers::Location) -> Option<spillers::Layout> {
         let r = self.shared.spilled_files.read();
         r.get(location).cloned()
     }
 
-    pub fn get_spilled_files(&self) -> Vec<crate::spillers::Location> {
+    pub fn get_spilled_files(&self) -> Vec<spillers::Location> {
         let r = self.shared.spilled_files.read();
         r.keys().cloned().collect()
     }
@@ -532,7 +530,7 @@ impl QueryContext {
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
-                crate::spillers::Location::Remote(r) => Some(r),
+                spillers::Location::Remote(r) => Some(r),
                 _ => None,
             })
             .cloned()
@@ -1988,10 +1986,11 @@ impl TableContext for QueryContext {
                 .get(OPT_KEY_TEMP_PREFIX)
                 .cloned()
                 .unwrap_or_default();
+            let table_id = table.get_table_info().ident.table_id;
             let drop_table_req = DropTableByIdReq {
                 if_exists: true,
                 tenant: tenant.clone(),
-                tb_id: table.get_table_info().ident.table_id,
+                tb_id: table_id,
                 table_name: table_name.to_string(),
                 db_id: db.get_db_info().database_id.db_id,
                 db_name: db.name().to_string(),
@@ -2003,6 +2002,11 @@ impl TableContext for QueryContext {
                 .is_some()
             {
                 ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+
+                // Clear the temp table state from TxnBuffer
+                let txn_mgr_ref = self.txn_mgr();
+                let mut txn_mgr = txn_mgr_ref.lock();
+                txn_mgr.clear_temp_table_by_id(table_id);
             }
         }
         let mut m_cte_temp_table = self.m_cte_temp_table.write();
@@ -2036,6 +2040,10 @@ impl TableContext for QueryContext {
 
     fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
         self.shared.set_pruned_partitions_stats(plan_id, stats);
+    }
+
+    fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+        self.shared.merge_pruned_partitions_stats(other);
     }
 
     fn get_next_broadcast_id(&self) -> u32 {

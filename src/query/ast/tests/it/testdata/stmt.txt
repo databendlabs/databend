@@ -1995,8 +1995,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2011,11 +2011,14 @@ CreateTable(
                             scale: 0,
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2048,8 +2051,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2064,11 +2067,14 @@ CreateTable(
                             scale: 0,
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2101,8 +2107,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2117,6 +2123,7 @@ CreateTable(
                             scale: 0,
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2130,11 +2137,14 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2191,8 +2201,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2207,11 +2217,14 @@ CreateTable(
                             scale: 0,
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2244,8 +2257,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2257,11 +2270,14 @@ CreateTable(
                         },
                         data_type: UInt32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2303,8 +2319,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2329,6 +2345,7 @@ CreateTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2342,11 +2359,14 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2388,8 +2408,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2414,6 +2434,7 @@ CreateTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2427,11 +2448,14 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2534,8 +2558,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2572,6 +2596,7 @@ CreateTable(
                             ],
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2591,11 +2616,14 @@ CreateTable(
                             ],
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2628,8 +2656,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2670,11 +2698,14 @@ CreateTable(
                             ],
                         },
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2716,8 +2747,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2729,6 +2760,7 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2742,6 +2774,7 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2826,11 +2859,14 @@ CreateTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -2872,8 +2908,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -2885,6 +2921,7 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2898,6 +2935,7 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2958,11 +2996,14 @@ CreateTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -3004,8 +3045,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -3017,6 +3058,7 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -3030,10 +3072,11 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                Some(
+                opt_table_indexes: Some(
                     [
                         TableIndexDefinition {
                             index_name: Identifier {
@@ -3070,7 +3113,9 @@ CreateTable(
                         },
                     ],
                 ),
-            ),
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -3112,8 +3157,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -3125,6 +3170,7 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -3138,10 +3184,11 @@ CreateTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                Some(
+                opt_table_indexes: Some(
                     [
                         TableIndexDefinition {
                             index_name: Identifier {
@@ -3178,7 +3225,9 @@ CreateTable(
                         },
                     ],
                 ),
-            ),
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -3328,8 +3377,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -3341,11 +3390,14 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: Some(
@@ -3742,8 +3794,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -3757,6 +3809,7 @@ CreateTable(
                             Int32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -3772,6 +3825,7 @@ CreateTable(
                             Int32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -3787,11 +3841,14 @@ CreateTable(
                             Int32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -3904,8 +3961,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -3919,6 +3976,7 @@ CreateTable(
                             Timestamp,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -3932,11 +3990,14 @@ CreateTable(
                         },
                         data_type: Timestamp,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -5298,8 +5359,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -5313,6 +5374,7 @@ CreateTable(
                             Int32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -5328,6 +5390,7 @@ CreateTable(
                             Int64,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -5343,11 +5406,14 @@ CreateTable(
                             String,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -5380,8 +5446,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -5395,6 +5461,7 @@ CreateTable(
                             Int32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -5410,6 +5477,7 @@ CreateTable(
                             Int64,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -5425,11 +5493,14 @@ CreateTable(
                             String,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -5462,8 +5533,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -5475,6 +5546,7 @@ CreateTable(
                         },
                         data_type: Binary,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -5488,11 +5560,14 @@ CreateTable(
                         },
                         data_type: Binary,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -5525,8 +5600,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -5549,11 +5624,14 @@ CreateTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -13830,6 +13908,7 @@ AlterTable(
                     Int32,
                 ),
                 expr: None,
+                check: None,
                 comment: None,
             },
             option: End,
@@ -13881,6 +13960,7 @@ AlterTable(
                     Int32,
                 ),
                 expr: None,
+                check: None,
                 comment: None,
             },
             option: End,
@@ -13943,6 +14023,7 @@ AlterTable(
                         },
                     ),
                 ),
+                check: None,
                 comment: Some(
                     "hello",
                 ),
@@ -14005,6 +14086,7 @@ AlterTable(
                         },
                     ),
                 ),
+                check: None,
                 comment: None,
             },
             option: After(
@@ -14503,6 +14585,7 @@ AlterTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -14516,6 +14599,7 @@ AlterTable(
                         },
                         data_type: Float32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
@@ -14581,6 +14665,7 @@ AlterTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -14596,6 +14681,7 @@ AlterTable(
                             Float32,
                         ),
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
@@ -14661,6 +14747,7 @@ AlterTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -14676,6 +14763,7 @@ AlterTable(
                             Float32,
                         ),
                         expr: None,
+                        check: None,
                         comment: Some(
                             "column b",
                         ),
@@ -14743,6 +14831,7 @@ AlterTable(
                                 },
                             ),
                         ),
+                        check: None,
                         comment: Some(
                             "column a",
                         ),
@@ -14760,6 +14849,7 @@ AlterTable(
                             Float32,
                         ),
                         expr: None,
+                        check: None,
                         comment: Some(
                             "column b",
                         ),
@@ -14875,6 +14965,7 @@ AlterTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
@@ -14927,6 +15018,7 @@ AlterTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
@@ -15014,6 +15106,204 @@ AlterTable(
             set_options: {
                 "block_per_segment": "500",
                 "snapshot_location": "1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD CONSTRAINT a_not_1 CHECK (a != 1);
+---------- Output ---------
+ALTER TABLE t ADD CONSTRAINT a_not_1 CHECK (a <> 1)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AddConstraint {
+            constraint: ConstraintDefinition {
+                name: Some(
+                    Identifier {
+                        span: Some(
+                            29..36,
+                        ),
+                        name: "a_not_1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                constraint_type: Check(
+                    BinaryOp {
+                        span: Some(
+                            46..48,
+                        ),
+                        op: NotEq,
+                        left: ColumnRef {
+                            span: Some(
+                                44..45,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            44..45,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                49..50,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t ADD CHECK (a != 1);
+---------- Output ---------
+ALTER TABLE t ADD CHECK (a <> 1)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: AddConstraint {
+            constraint: ConstraintDefinition {
+                name: None,
+                constraint_type: Check(
+                    BinaryOp {
+                        span: Some(
+                            27..29,
+                        ),
+                        op: NotEq,
+                        left: ColumnRef {
+                            span: Some(
+                                25..26,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            25..26,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                30..31,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t DROP CONSTRAINT a_not_1;
+---------- Output ---------
+ALTER TABLE t DROP CONSTRAINT a_not_1
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropConstraint {
+            constraint_name: Identifier {
+                span: Some(
+                    30..37,
+                ),
+                name: "a_not_1",
+                quote: None,
+                ident_type: None,
             },
         },
     },
@@ -15366,8 +15656,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -15379,13 +15669,16 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: Some(
                             "col comment",
                         ),
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -15555,8 +15848,8 @@ CreateTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -15568,13 +15861,16 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: Some(
                             "col comment",
                         ),
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         engine: None,
         uri_location: None,
@@ -22130,8 +22426,8 @@ CreateDynamicTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -22143,6 +22439,7 @@ CreateDynamicTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -22156,11 +22453,14 @@ CreateDynamicTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         cluster_by: None,
         target_lag: IntervalSecs(
@@ -22276,8 +22576,8 @@ CreateDynamicTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -22289,6 +22589,7 @@ CreateDynamicTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -22302,11 +22603,14 @@ CreateDynamicTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         cluster_by: Some(
             ClusterOption {
@@ -22468,8 +22772,8 @@ CreateDynamicTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -22481,6 +22785,7 @@ CreateDynamicTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -22494,11 +22799,14 @@ CreateDynamicTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         cluster_by: Some(
             ClusterOption {
@@ -22704,8 +23012,8 @@ CreateDynamicTable(
             ident_type: None,
         },
         source: Some(
-            Columns(
-                [
+            Columns {
+                columns: [
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
@@ -22717,6 +23025,7 @@ CreateDynamicTable(
                         },
                         data_type: Int32,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -22730,11 +23039,14 @@ CreateDynamicTable(
                         },
                         data_type: String,
                         expr: None,
+                        check: None,
                         comment: None,
                     },
                 ],
-                None,
-            ),
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
         ),
         cluster_by: Some(
             ClusterOption {
@@ -27005,6 +27317,7 @@ CreateDictionary(
                 },
                 data_type: String,
                 expr: None,
+                check: None,
                 comment: None,
             },
             ColumnDefinition {
@@ -27018,6 +27331,7 @@ CreateDictionary(
                 },
                 data_type: Int16,
                 expr: None,
+                check: None,
                 comment: None,
             },
         ],
@@ -27497,6 +27811,66 @@ CreateSequence(
             quote: None,
             ident_type: None,
         },
+        start: None,
+        increment: None,
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SEQUENCE seq start = 20 INCREMENT = 100 comment='test'
+---------- Output ---------
+CREATE SEQUENCE seq START = 20 INCREMENT = 100 COMMENT = 'test'
+---------- AST ------------
+CreateSequence(
+    CreateSequenceStmt {
+        create_option: Create,
+        sequence: Identifier {
+            span: Some(
+                16..19,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SEQUENCE seq start WITH 20 INCREMENT BY 100 comment='test'
+---------- Output ---------
+CREATE SEQUENCE seq START = 20 INCREMENT = 100 COMMENT = 'test'
+---------- AST ------------
+CreateSequence(
+    CreateSequenceStmt {
+        create_option: Create,
+        sequence: Identifier {
+            span: Some(
+                16..19,
+            ),
+            name: "seq",
+            quote: None,
+            ident_type: None,
+        },
+        start: Some(
+            20,
+        ),
+        increment: Some(
+            100,
+        ),
         comment: Some(
             "test",
         ),

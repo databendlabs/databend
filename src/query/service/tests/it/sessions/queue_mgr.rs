@@ -110,6 +110,10 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.abort_notify.clone()
     }
+
+    fn get_retry_timeout(&self) -> Option<Duration> {
+        None
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

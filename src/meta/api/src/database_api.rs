@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::UndropDbHasNoHistory;
 use databend_common_meta_app::app_error::UndropDbWithNoDropTime;
+use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -54,21 +55,21 @@ use log::error;
 use log::warn;
 use seq_marked::SeqValue;
 
-use crate::database_util::db_has_to_not_exist;
+use crate::data_retention_util::is_drop_time_retainable;
 use crate::database_util::drop_database_meta;
 use crate::database_util::get_db_or_err;
 use crate::db_has_to_exist;
+use crate::error_util::db_has_to_not_exist;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_core_util::send_txn;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::util::is_drop_time_retainable;
 
 impl<KV> DatabaseApi for KV
 where
@@ -108,6 +109,8 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
+        let mut old_db_id = None;
+
         loop {
             trials.next().unwrap()?.await;
 
@@ -118,6 +121,7 @@ where
             let mut txn = TxnRequest::default();
 
             if let Some(ref curr_seq_db_id) = curr_seq_db_id {
+                old_db_id = Some(curr_seq_db_id.data.into_inner());
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
@@ -130,6 +134,7 @@ where
                     CreateOption::CreateIfNotExists => {
                         return Ok(CreateDatabaseReply {
                             db_id: curr_seq_db_id.data.into_inner(),
+                            old_db_id: None,
                         });
                     }
                     CreateOption::CreateOrReplace => {
@@ -187,7 +192,10 @@ where
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply { db_id: id_key });
+                    return Ok(CreateDatabaseReply {
+                        db_id: id_key,
+                        old_db_id,
+                    });
                 }
             }
         }
@@ -285,6 +293,19 @@ where
             let mut db_meta = seq_meta.into_value().unwrap();
 
             debug!(db_id = db_id, name_key :? =(name_key); "undrop_database");
+
+            // Ensure that db is not being GC.
+            //
+            // And since later inside the undrop database kv txn, the sequence number of db_meta will
+            // also be checked, it can be ensured that db_meta.gc_in_progress will not transit from
+            // TRUE to FALSE in this kv txn.
+            if db_meta.gc_in_progress {
+                let err = UnknownDatabase::new(
+                    name_key.database_name(),
+                    "undropping database (gc in progress)".to_owned(),
+                );
+                return Err(KVAppError::AppError(AppError::from(err)));
+            }
 
             {
                 // reset drop on time

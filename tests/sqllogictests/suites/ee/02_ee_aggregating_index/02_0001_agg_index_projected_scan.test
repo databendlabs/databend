@@ -106,11 +106,11 @@ export function finish(state) {
 }
 $$;
 
-query IIR
+query I rowsort
 SELECT MAX(a), MIN(b), weighted_avg(a,b) from t group by b;
 ----
-2 2 1.3333334
 1 1 1.0
+2 2 1.3333334
 
 query IIR
 SELECT MAX(a), MIN(b), weighted_avg(a,b) from t;

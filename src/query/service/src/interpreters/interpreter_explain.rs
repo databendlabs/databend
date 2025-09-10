@@ -539,15 +539,11 @@ impl ExplainInterpreter {
 
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
                 executor.execute()?;
-                self.ctx
-                    .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
                 while (executor.pull_data()?).is_some() {}
-                self.ctx
-                    .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
         }
         Ok(self

@@ -114,6 +114,9 @@ statement ok
 set enable_analyze_histogram=1;
 
 statement ok
+set enable_table_snapshot_stats  = 1;
+
+statement ok
 analyze table t1;
 
 query T

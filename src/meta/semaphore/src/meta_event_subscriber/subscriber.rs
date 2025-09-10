@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -24,9 +26,11 @@ use futures::Stream;
 use futures::TryStreamExt;
 use log::error;
 use log::info;
+use log::warn;
 use tonic::Status;
 
 use crate::errors::ConnectionClosed;
+use crate::errors::ProcessorError;
 use crate::meta_event_subscriber::processor::Processor;
 
 /// Watch semaphore events and update local queue, then send semaphore acquired/removed events to the `tx`.
@@ -35,10 +39,13 @@ pub(crate) struct MetaEventSubscriber {
     pub(crate) right: String,
     pub(crate) meta_client: Arc<ClientHandle>,
 
+    /// The duration after which the permit entry will be removed from meta-service.
+    pub(crate) permit_ttl: Duration,
+
     pub(crate) processor: Processor,
 
     /// Contains descriptive information about the context of this watcher.
-    pub(crate) ctx: String,
+    pub(crate) watcher_name: String,
 }
 
 impl MetaEventSubscriber {
@@ -47,24 +54,39 @@ impl MetaEventSubscriber {
         self,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) {
-        let ctx = self.ctx.clone();
+        let watcher_name = self.watcher_name.clone();
         let res = self.do_subscribe(cancel).await;
         if let Err(e) = res {
-            error!("{} watcher error: {}", ctx, e);
+            error!("{} watcher error: {}", watcher_name, e);
         }
     }
 
     async fn do_subscribe(
-        self,
+        mut self,
         cancel: impl Future<Output = ()> + Send + 'static,
     ) -> Result<(), ConnectionClosed> {
-        let strm = self.new_watch_stream().await?;
-        self.process_meta_event_loop(strm, cancel).await
+        let mut c = std::pin::pin!(cancel);
+
+        let strm = self.new_watch_stream("subscriber").await?;
+
+        let res = self.process_meta_event_loop(strm, c.as_mut()).await;
+        match res {
+            Ok(()) => Ok(()),
+            Err(ProcessorError::AcquirerClosed(e)) => {
+                info!("{}: {}", self.watcher_name, e);
+                Ok(())
+            }
+            Err(ProcessorError::ConnectionClosed(e)) => {
+                warn!("{}: {}", self.watcher_name, e);
+                Err(e)
+            }
+        }
     }
 
     /// Create a new watch stream to watch the key-value change event in the interested range.
     pub(crate) async fn new_watch_stream(
         &self,
+        ctx: impl fmt::Display,
     ) -> Result<tonic::Streaming<WatchResponse>, ConnectionClosed> {
         let watch =
             WatchRequest::new(self.left.clone(), Some(self.right.clone())).with_initial_flush(true);
@@ -72,12 +94,12 @@ impl MetaEventSubscriber {
         let strm = self.meta_client.request(watch).await.map_err(|x| {
             ConnectionClosed::new_str(x.to_string())
                 .context("send watch request")
-                .context(&self.ctx)
+                .context(&self.watcher_name)
         })?;
 
         info!(
-            "{} watch stream created: [{}, {})",
-            self.ctx, self.left, self.right
+            "{} {} watch stream created: [{}, {})",
+            self.watcher_name, ctx, self.left, self.right
         );
 
         Ok(strm)
@@ -103,18 +125,28 @@ impl MetaEventSubscriber {
     /// Returns `Ok(())` if terminated normally(i.e., the `cancel` future is ready), or
     /// `Err(ConnectionClosed)` if the metadata connection was closed unexpectedly.
     pub(crate) async fn process_meta_event_loop(
-        mut self,
+        &mut self,
         mut strm: impl Stream<Item = Result<WatchResponse, Status>> + Send + Unpin + 'static,
-        mut cancel: impl Future<Output = ()> + Send + 'static,
-    ) -> Result<(), ConnectionClosed> {
+        mut cancel: impl Future<Output = ()> + Send,
+    ) -> Result<(), ProcessorError> {
         //
         let mut c = std::pin::pin!(cancel);
+        let timeout_duration = self.permit_ttl * 3 / 2;
 
         loop {
+            let timeout_fu = tokio::time::sleep(timeout_duration);
+
             let watch_result = futures::select! {
                 _ = c.as_mut().fuse() => {
-                    info!("Semaphore Subscriber loop canceled by user");
+                    info!("{}: process_meta_event_loop canceled by user", self.watcher_name);
                     return Ok(());
+                }
+
+                _ = timeout_fu.fuse() => {
+                    warn!("{}: process_meta_event_loop timeout waiting for an event", self.watcher_name);
+                    return Err(ProcessorError::ConnectionClosed(
+                        ConnectionClosed::new_str("timeout").context(&self.watcher_name)
+                    ));
                 }
 
                 watch_result = strm.try_next().fuse() => {
@@ -122,23 +154,45 @@ impl MetaEventSubscriber {
                 }
             };
 
-            match &watch_result {
+            let watch_response = match watch_result {
                 Ok(t) => {
                     log::debug!(
                         "{} received event from watch-stream: Ok({})",
-                        self.ctx,
+                        self.watcher_name,
                         t.display()
                     );
+                    t
                 }
                 Err(e) => {
-                    info!("{} received event from watch-stream: Err({})", self.ctx, e);
-                }
-            }
+                    warn!(
+                        "{} received event from watch-stream: Err({})",
+                        self.watcher_name, e
+                    );
 
-            let Some(watch_response) = watch_result? else {
-                // TODO: add retry connecting.
-                error!("watch-stream closed: {}", self.ctx);
-                return Err(ConnectionClosed::new_str("watch-stream closed").context(&self.ctx));
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    self.processor
+                        .tx_to_acquirer
+                        .send(Err(conn_error))
+                        .await
+                        .ok();
+
+                    let conn_error = ConnectionClosed::from(e.clone())
+                        .context("watch-stream closed in process_meta_event_loop")
+                        .context(&self.watcher_name);
+
+                    return Err(conn_error.into());
+                }
+            };
+
+            let Some(watch_response) = watch_response else {
+                warn!("watch-stream closed: {}", self.watcher_name);
+
+                return Err(ProcessorError::ConnectionClosed(
+                    ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name),
+                ));
             };
 
             self.processor

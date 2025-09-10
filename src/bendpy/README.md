@@ -1,6 +1,8 @@
 # Databend Python Binding
 
-This crate intends to build a native python binding.
+Official Python binding for [Databend](https://databend.com) - The AI-Native Data Warehouse.
+
+Databend is the open-source alternative to Snowflake with near 100% SQL compatibility and native AI capabilities. Built in Rust with MPP architecture and S3-native storage, Databend unifies structured tables, JSON documents, and vector embeddings in a single platform.
 
 ## Installation
 
@@ -8,134 +10,68 @@ This crate intends to build a native python binding.
 pip install databend
 ```
 
-## Usage
+## Examples
 
-### Basic:
+### Local Files
+
 ```python
 import databend
-databend.init_service(local_dir = ".databend")
-# or use config
-# databend.init_service( config = "config.toml.sample" )
+ctx = databend.SessionContext()
 
-from databend import SessionContext
-ctx = SessionContext()
-
-df = ctx.sql("select number, number + 1, number::String as number_p_1 from numbers(8)")
-
-df.show()
-# convert to pyarrow
-import pyarrow
-df.to_py_arrow()
-
-# convert to pandas
-import pandas
-df.to_pandas()
+# Query local Parquet files
+ctx.register_parquet("orders", "/path/to/orders/")
+ctx.register_parquet("customers", "/path/to/customers/")
+df = ctx.sql("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id").to_pandas()
 ```
 
-### Register external table:
-
-***supported functions:***
-- register_parquet
-- register_ndjson
-- register_csv
-- register_tsv
+### Local Tables
 
 ```python
+import databend
+ctx = databend.SessionContext()
 
-ctx.register_parquet("pa", "/home/sundy/dataset/hits_p/", pattern = ".*.parquet")
-ctx.sql("select * from pa limit 10").collect()
+# Create and query local tables
+ctx.sql("CREATE TABLE users (id INT, name STRING, age INT)").collect()
+ctx.sql("INSERT INTO users VALUES (1, 'Alice', 25), (2, 'Bob', 30)").collect()
+df = ctx.sql("SELECT * FROM users WHERE age > 25").to_pandas()
 ```
 
-### Tenant separation:
-
-Tenant has it's own catalog and tables
+### S3 Remote Files
 
 ```python
-ctx = SessionContext(tenant = "your_tenant_name")
+import databend
+import os
+ctx = databend.SessionContext()
+
+# Connect to S3 and query remote files
+ctx.create_s3_connection("s3", os.getenv("AWS_ACCESS_KEY_ID"), os.getenv("AWS_SECRET_ACCESS_KEY"))
+ctx.register_parquet("trips", "s3://bucket/trips/", connection="s3")
+df = ctx.sql("SELECT COUNT(*) FROM trips").to_pandas()
 ```
+
+### Remote Tables
+
+```python
+import databend
+import os
+ctx = databend.SessionContext()
+
+# Create S3 connection and table
+ctx.create_s3_connection("s3", os.getenv("AWS_ACCESS_KEY_ID"), os.getenv("AWS_SECRET_ACCESS_KEY"))
+ctx.sql("CREATE TABLE s3_table (id INT, name STRING) 's3://bucket/table/' CONNECTION=(CONNECTION_NAME='s3')").collect()
+df = ctx.sql("SELECT * FROM s3_table").to_pandas()
+```
+
 
 ## Development
 
-Setup virtualenv:
-
-```shell
+```bash
+# Setup environment
 uv sync
-```
-
-Activate venv:
-
-```shell
 source .venv/bin/activate
-````
 
-Install `maturin`:
-
-```shell
-pip install "maturin[patchelf]"
-```
-
-Build bindings:
-
-```shell
-uvx maturin develop
-```
-
-Run tests:
-
-```shell
+# Run tests
 uvx maturin develop -E test
+pytest tests/
 ```
 
-Build API docs:
-
-```shell
-uvx maturin develop -E docs
-uvx pdoc databend
-```
-
-## Service configuration
-
-> Note:
-
-**`databend.init_service`  must be initialized before `SessionContext`**
-
-**`databend.init_service`  must be called only once**
-
-
--  By default, you can init the service by a local directory, then data & catalogs will be stored inside the directory.
-```
-import databend
-
-databend.init_service(local_dir = ".databend")
-```
-
--  You can also init by file
-
-```
-import databend
-databend.init_service( config = "config.toml.sample" )
-```
-
-- And by config str
-```
-import databend
-
-databend.init_service(config = """
-[meta]
-embedded_dir = "./.databend/"
-
-# Storage config.
-[storage]
-# fs | s3 | azblob | obs | oss
-type = "fs"
-allow_insecure = true
-
-[storage.fs]
-data_path = "./.databend/"
-""")
-```
-
-Read more about configs of databend in [docs](https://docs.databend.com/guides/deploy/deploy/production/metasrv-deploy)
-
-## More
-Databend python api is inspired by [arrow-datafusion-python](https://github.com/apache/arrow-datafusion-python), thanks for their great work.

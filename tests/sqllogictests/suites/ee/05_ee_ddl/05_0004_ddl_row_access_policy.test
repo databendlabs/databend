@@ -16,10 +16,16 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
+set global enable_planner_cache = 0;
+
+statement ok
 drop row access policy if exists rap1;
 
 statement ok
 drop row access policy if exists p1;
+
+statement error 2004
+create or replace row access policy rap_it as (empl_id varchar) returns boolean -> empl_id in (select * from t);
 
 statement ok
 create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
@@ -38,7 +44,7 @@ create row access policy IF NOT EXISTS rap_it as (empl_id varchar) returns boole
 statement ok
 create or replace row access policy rap_it as (empl_id string null) returns boolean ->
   case
-      when 'it_admin' = current_role() then false
+      when 'account_admin' = current_role() then false
       else true
   end;
 
@@ -59,7 +65,39 @@ statement error 1114
 alter table t ADD ROW ACCESS POLICY rap_it ON (id);
 
 statement ok
+insert into t values(1,'x');
+
+query T
+select id from t;
+----
+1
+
+statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
+
+## t apply row access policy rpa_it(means if current role == account_admin will return false)
+query T
+select id from t;
+----
+
+statement ok
+create or replace table t1(id int, empl_id string);
+
+statement ok
+insert into t1 values(100,'x');
+
+query T
+select id from t1;
+----
+100
+
+query T
+select id from t1 union select id from t;
+----
+100
+
+
+
 
 statement error 1132
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
@@ -85,6 +123,22 @@ ALTER TABLE t drop row access policy rap_it;
 
 statement ok
 ALTER TABLE t drop all row access policies;
+
+query T
+select id from t;
+----
+1
+
+query T
+select id from t1;
+----
+100
+
+query T
+select id from (select id from t1 union select id from t) order by id;
+----
+1
+100
 
 statement ok
 drop row access policy if exists rap1;

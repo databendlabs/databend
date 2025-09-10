@@ -43,13 +43,13 @@ use log::debug;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::send_txn;
 use crate::sequence_nextval_impl::NextVal;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_eq_seq;
-use crate::txn_cond_seq;
+use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_condition_util::txn_cond_seq;
+use crate::txn_core_util::send_txn;
+use crate::txn_op_builder_util::txn_put_pb;
 use crate::txn_op_del;
-use crate::util::txn_put_pb;
 use crate::SequenceApi;
 
 #[async_trait::async_trait]
@@ -64,7 +64,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let meta: SequenceMeta = req.clone().into();
 
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
-        let storage_value = Id::new_typed(SequenceStorageValue(1));
+        let storage_value = Id::new_typed(SequenceStorageValue(req.start));
 
         let conditions = if req.create_option == CreateOption::CreateOrReplace {
             vec![]

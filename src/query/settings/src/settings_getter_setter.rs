@@ -197,11 +197,6 @@ impl Settings {
         self.try_set_u64("max_block_size", val)
     }
 
-    // Get sequence_step_size.
-    pub fn get_sequence_step_size(&self) -> Result<u64> {
-        self.try_get_u64("sequence_step_size")
-    }
-
     // Max block size for parquet reader
     pub fn get_parquet_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("parquet_max_block_size")
@@ -641,11 +636,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
-    /// used for test
-    pub fn set_enable_analyze_histogram(&self, val: u64) -> Result<()> {
-        self.try_set_u64("enable_analyze_histogram", val)
-    }
-
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
@@ -1072,5 +1062,17 @@ impl Settings {
 
     pub fn get_enable_binary_to_utf8_lossy(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_binary_to_utf8_lossy")? == 1)
+    }
+
+    pub fn get_enable_table_snapshot_stats(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_table_snapshot_stats")? != 0)
+    }
+
+    pub fn set_enable_table_snapshot_stats(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_table_snapshot_stats", val)
+    }
+
+    pub fn get_queries_queue_retry_timeout(&self) -> Result<u64> {
+        self.try_get_u64("queries_queue_retry_timeout")
     }
 }

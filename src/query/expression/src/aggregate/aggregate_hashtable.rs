@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -176,6 +177,20 @@ impl AggregateHashTable {
         agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
+        #[cfg(debug_assertions)]
+        {
+            for (i, group_column) in group_columns.iter().enumerate() {
+                if group_column.data_type() != self.payload.group_types[i] {
+                    return Err(ErrorCode::UnknownException(format!(
+                        "group_column type not match in index {}, expect: {:?}, actual: {:?}",
+                        i,
+                        self.payload.group_types[i],
+                        group_column.data_type()
+                    )));
+                }
+            }
+        }
+
         state.row_count = row_count;
         group_hash_columns(group_columns, &mut state.group_hashes);
 

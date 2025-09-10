@@ -89,6 +89,8 @@ pub trait QueueData: Send + Sync + 'static {
     fn exit_wait_pending(&self, _wait_time: Duration) {}
 
     fn get_abort_notify(&self) -> Arc<WatchNotify>;
+
+    fn get_retry_timeout(&self) -> Option<Duration>;
 }
 
 pub(crate) struct Inner<Data: QueueData> {
@@ -229,17 +231,26 @@ impl<Data: QueueData> QueueManager<Data> {
                     workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
                 }
 
-                data.set_status("[QUERY-QUEUE] Waiting for local workload semaphore");
+                let available_permits = workload_group.semaphore.available_permits();
+                let current_used = permits.saturating_sub(available_permits);
+                let queue_length = self.length();
+
+                data.set_status(&format!(
+                    "[WAITING] Workload group '{}' local limit (max_concurrency={}): {}/{} slots used, {} queries waiting",
+                    workload_group.meta.name, permits, current_used, permits, queue_length
+                ));
 
                 let semaphore = workload_group.semaphore.clone();
-                let acquire = tokio::time::timeout(timeout, semaphore.acquire_owned());
+                let acquire = tokio::time::timeout(timeout, semaphore.clone().acquire_owned());
                 let queue_future = AcquireQueueFuture::create(data.clone(), acquire, self.clone());
 
                 guards.push(queue_future.await?);
 
+                let available_permits_after = workload_group.semaphore.available_permits();
+                let current_used_after = permits.saturating_sub(available_permits_after);
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from local workload semaphore. elapsed: {:?}",
-                    instant.elapsed()
+                    "[ACQUIRED] Workload group '{}' local (max_concurrency={}): {}/{} slots used (waited {:.2}s)",
+                    workload_group.meta.name, permits, current_used_after, permits, instant.elapsed().as_secs_f64()
                 );
 
                 timeout -= instant.elapsed();
@@ -247,7 +258,11 @@ impl<Data: QueueData> QueueManager<Data> {
                 // Prevent concurrent access to meta and serialize the submission of acquire requests.
                 // This ensures that at most permits + nodes acquirers will be in the queue at any given time.
                 let _guard = workload_group.mutex.clone().lock_owned().await;
-                data.set_status("[QUERY-QUEUE] Waiting for global workload semaphore");
+                let queue_length = self.length();
+                data.set_status(&format!(
+                    "[WAITING] Workload group '{}' global limit: acquiring distributed semaphore, {} queries waiting",
+                    workload_group.meta.name, queue_length
+                ));
 
                 let workload_queue_guard = self
                     .acquire_workload_queue(
@@ -267,9 +282,15 @@ impl<Data: QueueData> QueueManager<Data> {
             }
         }
 
-        data.set_status("[QUERY-QUEUE] Waiting for warehouse resource scheduling");
+        let queue_length = self.length();
+        let used_slots = self.permits - self.semaphore.available_permits();
 
-        guards.extend(self.acquire_warehouse_queue(data, timeout).await?);
+        data.set_status(&format!(
+            "[WAITING] Warehouse limit (max_running_queries={}): {}/{} slots used, {} queries waiting",
+            self.permits, used_slots, self.permits, queue_length
+        ));
+
+        guards.extend(self.acquire_warehouse_queue(data, timeout, instant).await?);
 
         inc_session_running_acquired_queries();
         record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
@@ -289,6 +310,7 @@ impl<Data: QueueData> QueueManager<Data> {
             permits,
             data.get_key(), // ID of this acquirer
             data.lock_ttl(),
+            data.get_retry_timeout(),
         );
 
         let acquire_res = AcquireQueueFuture::create(
@@ -321,6 +343,7 @@ impl<Data: QueueData> QueueManager<Data> {
         self: &Arc<Self>,
         data: Arc<Data>,
         timeout: Duration,
+        instant: Instant,
     ) -> Result<Vec<AcquireQueueGuardInner>> {
         let mut guards = vec![];
 
@@ -335,6 +358,7 @@ impl<Data: QueueData> QueueManager<Data> {
                     self.permits as u64,
                     data.get_key(), // ID of this acquirer
                     data.lock_ttl(),
+                    data.get_retry_timeout(),
                 );
 
                 // Prevent concurrent access to meta and serialize the submission of acquire requests.
@@ -351,9 +375,11 @@ impl<Data: QueueData> QueueManager<Data> {
         match acquire_res {
             Ok(v) => {
                 guards.push(v);
+                let queue_length = self.length();
+                let used_slots = self.permits - self.semaphore.available_permits();
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from queue, current length: {}",
-                    self.length()
+                    "[ACQUIRED] Warehouse resource (max_running_queries={}): {}/{} slots used, {} queries waiting (waited {:.2}s)",
+                    self.permits, used_slots, self.permits, queue_length, instant.elapsed().as_secs_f64()
                 );
 
                 Ok(guards)
@@ -539,6 +565,7 @@ pub struct QueryEntry {
     pub timeout: Duration,
     pub lock_ttl: Duration,
     pub need_acquire_to_queue: bool,
+    pub retry_timeout: Option<Duration>,
     pub abort_watch_notify: Arc<WatchNotify>,
 }
 
@@ -549,8 +576,14 @@ impl QueryEntry {
         need_acquire_to_queue: bool,
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
+        let retry_timeout = match settings.get_queries_queue_retry_timeout()? {
+            0 => None,
+            retry_timeout => Some(Duration::from_secs(retry_timeout)),
+        };
+
         Ok(QueryEntry {
             ctx: ctx.clone(),
+            retry_timeout,
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_created_time(),
@@ -705,8 +738,7 @@ impl QueueData for QueryEntry {
     }
 
     fn enter_wait_pending(&self) {
-        self.ctx
-            .set_status_info("[QUERY-QUEUE] Waiting for resource scheduling");
+        // Don't overwrite existing detailed status - just update to show we're now queued
     }
 
     fn set_status(&self, status: &str) {
@@ -726,6 +758,10 @@ impl QueueData for QueryEntry {
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.abort_watch_notify.clone()
+    }
+
+    fn get_retry_timeout(&self) -> Option<Duration> {
+        self.retry_timeout
     }
 }
 

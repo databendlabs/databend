@@ -51,6 +51,7 @@ use poem::web::Path;
 use poem::EndpointExt;
 use poem::IntoResponse;
 use poem::Request;
+use poem::Response;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
@@ -70,6 +71,7 @@ use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::catalog::catalog_stats_handler;
 use crate::servers::http::v1::catalog::get_database_table_handler;
+use crate::servers::http::v1::catalog::list_database_streams_handler;
 use crate::servers::http::v1::catalog::list_database_table_fields_handler;
 use crate::servers::http::v1::catalog::list_database_tables_handler;
 use crate::servers::http::v1::catalog::list_databases_handler;
@@ -165,6 +167,34 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
+    pub(crate) fn removed(query_id: &str, remove_reason: RemoveReason) -> impl IntoResponse {
+        let id = query_id.to_string();
+        let state = match remove_reason {
+            RemoveReason::Finished => ExecuteStateKind::Succeeded,
+            _ => ExecuteStateKind::Failed,
+        };
+        Json(QueryResponse {
+            id: query_id.to_string(),
+            session_id: None,
+            node_id: GlobalConfig::instance().query.node_id.clone(),
+            state,
+            session: None,
+            error: None,
+            warnings: vec![],
+            has_result_set: None,
+            schema: vec![],
+            data: Arc::new(BlocksSerializer::empty()),
+            affect: None,
+            result_timeout_secs: None,
+            stats: Default::default(),
+            stats_uri: None,
+            final_uri: None,
+            next_uri: None,
+            kill_uri: None,
+        })
+        .with_header(HEADER_QUERY_ID, id.clone())
+        .with_header(HEADER_QUERY_STATE, state.to_string())
+    }
     pub(crate) fn from_internal(
         id: String,
         r: HttpQueryResponseInternal,
@@ -337,7 +367,7 @@ async fn query_cancel_handler(
 async fn query_state_handler(
     ctx: &HttpQueryContext,
     Path(query_id): Path<String>,
-) -> PoemResult<impl IntoResponse> {
+) -> PoemResult<Response> {
     ctx.check_node_id(&query_id)?;
     let root = get_http_tracing_span(func_path!(), ctx, &query_id);
 
@@ -346,12 +376,14 @@ async fn query_state_handler(
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
                 if let Some(reason) = query.check_removed() {
-                    Err(query_id_removed(&query_id, reason))
+                    Ok(QueryResponse::removed(&query_id, reason).into_response())
                 } else {
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false).0)
+                    Ok(QueryResponse::from_internal(query_id, response, false)
+                        .0
+                        .into_response())
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -367,13 +399,14 @@ async fn query_page_handler(
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    // tracing in middleware
 
     let http_query_manager = HttpQueryManager::instance();
 
     let Some(query) = http_query_manager.get_query(&query_id) else {
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
+
+    ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();
 
@@ -758,6 +791,11 @@ pub fn query_route() -> Route {
         (
             "/catalog/databases/:database/tables/:table/fields",
             get(list_database_table_fields_handler),
+            EndpointKind::Catalog,
+        ),
+        (
+            "/catalog/databases/:database/streams",
+            get(list_database_streams_handler),
             EndpointKind::Catalog,
         ),
         (

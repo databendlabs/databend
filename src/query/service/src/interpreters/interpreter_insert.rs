@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -24,14 +25,17 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::schema::Constraint;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::binder::ConstraintExprBinder;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
+use databend_common_storages_fuse::operations::TransformConstraintVerify;
 use databend_common_storages_stage::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
@@ -114,11 +118,26 @@ impl Interpreter for InsertInterpreter {
                 .await?
         };
 
+        let mut table_constraints = Vec::new();
         // check mutability
         table.check_mutable()?;
         let table_meta_timestamps = if table.engine() == "FUSE" {
             let fuse_table =
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
+
+            // bind constraints
+            let dest_schema = self.plan.dest_schema();
+            let mut expr_binder = ConstraintExprBinder::try_new(self.ctx.clone(), dest_schema)?;
+            for (constraint_name, constraint) in fuse_table.get_table_info().meta.constraints.iter()
+            {
+                match &constraint {
+                    Constraint::Check(expr) => {
+                        let constraint_expr = expr_binder.get_expr(constraint_name, expr)?;
+                        table_constraints.push((constraint_name.clone(), constraint_expr))
+                    }
+                }
+            }
+
             let snapshot = fuse_table.read_table_snapshot().await?;
             self.ctx
                 .get_table_meta_timestamps(table.as_ref(), snapshot)?
@@ -281,6 +300,17 @@ impl Interpreter for InsertInterpreter {
                 }
             }
         };
+        if !table_constraints.is_empty() {
+            build_res
+                .main_pipeline
+                .try_add_async_accumulating_transformer(|| {
+                    Ok(TransformConstraintVerify::new(
+                        table_constraints.clone(),
+                        self.ctx.get_function_context()?,
+                        table.name().to_string(),
+                    ))
+                })?;
+        }
 
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),

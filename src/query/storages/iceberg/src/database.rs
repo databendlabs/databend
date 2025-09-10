@@ -202,6 +202,7 @@ impl Database for IcebergDatabase {
                             spec_vec: None,
                             prev_table_id: None,
                             orphan_table_name: None,
+                            old_table_id: None,
                         });
                     }
                 }
@@ -255,6 +256,7 @@ impl Database for IcebergDatabase {
             spec_vec: None,
             prev_table_id: None,
             orphan_table_name: None,
+            old_table_id: None,
         })
     }
 

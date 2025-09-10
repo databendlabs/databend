@@ -40,6 +40,7 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
+use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
@@ -298,6 +299,7 @@ pub struct TableMeta {
     // One table only has an unique row access policy
     pub row_access_policy: Option<String>,
     pub indexes: BTreeMap<String, TableIndex>,
+    pub constraints: BTreeMap<String, Constraint>,
 }
 
 #[derive(
@@ -365,6 +367,31 @@ impl TableMeta {
         if self.field_comments.len() < num_fields {
             self.field_comments = vec!["".to_string(); num_fields];
         }
+    }
+
+    pub fn add_constraint(
+        &mut self,
+        constraint_name: String,
+        constraint: Constraint,
+    ) -> Result<()> {
+        if self.constraints.contains_key(&constraint_name) {
+            return Err(ErrorCode::AlterTableError(format!(
+                "constraint {} already exists",
+                constraint_name
+            )));
+        }
+        self.constraints.insert(constraint_name, constraint);
+        Ok(())
+    }
+
+    pub fn drop_constraint(&mut self, constraint_name: &str) -> Result<()> {
+        if self.constraints.remove(constraint_name).is_none() {
+            return Err(ErrorCode::AlterTableError(format!(
+                "constraint {} not exists",
+                constraint_name
+            )));
+        };
+        Ok(())
     }
 }
 
@@ -491,6 +518,7 @@ impl Default for TableMeta {
             column_mask_policy: None,
             row_access_policy: None,
             indexes: BTreeMap::new(),
+            constraints: BTreeMap::new(),
         }
     }
 }
@@ -659,6 +687,7 @@ pub struct CreateTableReply {
     pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
+    pub old_table_id: Option<u64>,
 }
 
 /// Drop table by id.

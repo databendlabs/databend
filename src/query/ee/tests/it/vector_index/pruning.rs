@@ -140,6 +140,7 @@ async fn test_block_pruner() -> Result<()> {
         as_select: None,
         cluster_key: None,
         table_indexes: Some(table_indexes),
+        table_constraints: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,

@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `COMMENT`, or `,`
   | |                                     
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -27,7 +27,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `COMMENT`, or `,`
+  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `COMMENT`, or `,`
   | |                       
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -41,7 +41,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `VECTOR`, `GEOGRAPHY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `NUMERIC`, `SMALLINT`, `DATETIME`, `INTERVAL`, `NULLABLE`, `REAL`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
   | |               |  
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -55,7 +55,7 @@ error:
   | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, <Ident>, <LiteralString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -70,7 +70,7 @@ error:
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -83,7 +83,7 @@ error:
 1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
   | ------         -- ^^^^^^^^ ambiguous NOT NULL constraint
   | |              |   
-  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -121,6 +121,58 @@ error:
   | ----          ^ unexpected `a`, expecting `EXISTS`
   | |              
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
+
+
+---------- Input ----------
+show table
+---------- Output ---------
+error: 
+  --> SQL:1:11
+  |
+1 | show table
+  |           ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?
+
+
+---------- Input ----------
+show column
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show column
+  |      ^^^^^^ unexpected `column`. Did you mean `SHOW COLUMNS`?
+
+
+---------- Input ----------
+show function
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show function
+  |      ^^^^^^^^ unexpected `function`. Did you mean `SHOW FUNCTIONS`?
+
+
+---------- Input ----------
+show database
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | show database
+  |      ^^^^^^^^ unexpected `database`. Did you mean `SHOW DATABASES`?
+
+
+---------- Input ----------
+create table if test
+---------- Output ---------
+error: 
+  --> SQL:1:17
+  |
+1 | create table if test
+  | ------          ^^^^ unexpected `test`, expecting `NOT`
+  | |                
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
 ---------- Input ----------
@@ -187,7 +239,7 @@ error:
   --> SQL:1:19
   |
 1 | show tables format
-  |                   ^ unexpected end of input, expecting <Ident>, <LiteralString>, or `IDENTIFIER`
+  |                   ^ unexpected end of input. Did you mean `SHOW TABLE FUNCTIONS`?
 
 
 ---------- Input ----------
@@ -468,7 +520,7 @@ error:
   --> SQL:1:15
   |
 1 | show settings ilike 'enable%'
-  |               ^^^^^ unexpected `ilike`, expecting `LIKE`, `LIMIT`, `WHERE`, `FORMAT`, or `;`
+  |               ^^^^^ unexpected `ilike`. Did you mean `SHOW SETTINGS`?
 
 
 ---------- Input ----------
@@ -490,7 +542,7 @@ error:
   --> SQL:1:25
   |
 1 | show columns from db1.t from ctl.db
-  |                         ^^^^ unexpected `from`, expecting `FORMAT`, `.`, `LIKE`, `WHERE`, or `;`
+  |                         ^^^^ unexpected `from`. Did you mean `SHOW COLUMNS`?
 
 
 ---------- Input ----------
@@ -1097,7 +1149,7 @@ error:
   |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, <Ident>, <LiteralString>, or `IDENTIFIER`
   |             |         |      
   |             |         while parsing type name
-  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
 
 
 ---------- Input ----------
@@ -1202,5 +1254,24 @@ error:
   | |                  |    
   | |                  while parsing (<var_name> <type_name>, ...)
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
+
+
+---------- Input ----------
+copy into t1 from (select a from @data/not_exists where a = 1)
+---------- Output ---------
+error: 
+  --> SQL:1:51
+  |
+1 | copy into t1 from (select a from @data/not_exists where a = 1)
+  | ----                                              ^^^^^ unexpected `where`, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
+  | |                                                  
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 

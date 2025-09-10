@@ -22,7 +22,6 @@ use databend_common_expression::type_check;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -196,7 +195,7 @@ impl IPhysicalPlan for Window {
             let transform = if self.window_frame.units.is_rows() {
                 let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
                 let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
-                Box::new(TransformWindow::<u64>::try_create_rows(
+                Box::new(TransformWindow::try_create_rows(
                     input,
                     output,
                     func.clone(),
@@ -206,36 +205,25 @@ impl IPhysicalPlan for Window {
                 )?) as Box<dyn Processor>
             } else {
                 if order_by.len() == 1 {
-                    // If the length of order_by is 1, there may be a RANGE frame.
-                    let data_type = input_schema
-                        .field(order_by[0].offset)
-                        .data_type()
-                        .remove_nullable();
-                    with_number_mapped_type!(|NUM_TYPE| match data_type {
-                        DataType::Number(NumberDataType::NUM_TYPE) => {
-                            let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
-                            let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
-                            return Ok(ProcessorPtr::create(Box::new(
-                                TransformWindow::<NUM_TYPE>::try_create_range(
-                                    input,
-                                    output,
-                                    func.clone(),
-                                    partition_by.clone(),
-                                    order_by.clone(),
-                                    (start_bound, end_bound),
-                                )?,
-                            )
-                                as Box<dyn Processor>));
-                        }
-                        _ => {}
-                    })
+                    let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
+                    let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
+                    return Ok(ProcessorPtr::create(
+                        Box::new(TransformWindow::try_create_range(
+                            input,
+                            output,
+                            func.clone(),
+                            partition_by.clone(),
+                            order_by.clone(),
+                            (start_bound, end_bound),
+                        )?) as Box<dyn Processor>,
+                    ));
                 }
 
                 // There is no offset in the RANGE frame. (just CURRENT ROW or UNBOUNDED)
                 // So we can use any number type to create the transform.
                 let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
                 let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
-                Box::new(TransformWindow::<u8>::try_create_range(
+                Box::new(TransformWindow::try_create_range(
                     input,
                     output,
                     func.clone(),
@@ -380,49 +368,74 @@ impl PhysicalPlanBuilder {
             };
 
             let mut common_ty = order_by.type_check(&*input_schema)?.data_type().clone();
-            for scalar in start.iter_mut().chain(end.iter_mut()) {
-                let ty = scalar.as_ref().infer_data_type();
-                common_ty = common_super_type(
-                    common_ty.clone(),
-                    ty.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for {:?} and {:?}",
-                        &common_ty, &ty
-                    ))
-                })?;
-            }
-
-            *order_by = wrap_cast(order_by, &common_ty);
-            for scalar in start.iter_mut().chain(end.iter_mut()) {
-                let raw_expr = RawExpr::<usize>::Cast {
-                    span: w.span,
-                    is_try: false,
-                    expr: Box::new(RawExpr::Constant {
-                        span: w.span,
-                        scalar: scalar.clone(),
-                        data_type: None,
-                    }),
-                    dest_type: common_ty.clone(),
-                };
-                let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                let (expr, _) =
-                    ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let Expr::Constant(Constant {
-                    scalar: new_scalar, ..
-                }) = expr
-                {
-                    if new_scalar.is_positive() {
-                        **scalar = new_scalar;
-                        continue;
+            if common_ty.remove_nullable().is_timestamp() {
+                for scalar in start.iter_mut().chain(end.iter_mut()) {
+                    let scalar_ty = scalar.as_ref().infer_data_type();
+                    if !scalar_ty.is_interval() {
+                        return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Timestamp, Preceding and Following can only be INTERVAL types, but get {}", scalar_ty)));
                     }
                 }
-                return Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(w.span));
+            } else if common_ty.remove_nullable().is_date() {
+                let mut last_ty = None;
+                for scalar in start.iter_mut().chain(end.iter_mut()) {
+                    let scalar_ty = scalar.as_ref().infer_data_type();
+                    if !scalar_ty.is_interval() && !scalar_ty.is_unsigned_numeric() {
+                        return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Date, Preceding and Following can only be INTERVAL or Unsigned Integer types, but get {}", scalar_ty)));
+                    }
+                    if last_ty.as_ref().is_none_or(|ty| ty == &scalar_ty) {
+                        last_ty = Some(scalar_ty);
+                        continue;
+                    }
+                    return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Date, Preceding and Following can only be of the same type, but get {} and {}", last_ty.unwrap(), scalar_ty)));
+                }
+            } else {
+                for scalar in start.iter_mut().chain(end.iter_mut()) {
+                    let ty = scalar.as_ref().infer_data_type();
+                    common_ty = common_super_type(
+                        common_ty.clone(),
+                        ty.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    )
+                    .ok_or_else(|| {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for {:?} and {:?}",
+                            &common_ty, &ty
+                        ))
+                    })?;
+                }
+                *order_by = wrap_cast(order_by, &common_ty);
+
+                for scalar in start.iter_mut().chain(end.iter_mut()) {
+                    let raw_expr = RawExpr::<usize>::Cast {
+                        span: w.span,
+                        is_try: false,
+                        expr: Box::new(RawExpr::Constant {
+                            span: w.span,
+                            scalar: scalar.clone(),
+                            data_type: None,
+                        }),
+                        dest_type: common_ty.clone(),
+                    };
+                    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                    let (expr, _) = ConstantFolder::fold(
+                        &expr,
+                        &FunctionContext::default(),
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    if let Expr::Constant(Constant {
+                        scalar: new_scalar, ..
+                    }) = expr
+                    {
+                        if new_scalar.is_positive() {
+                            **scalar = new_scalar;
+                            continue;
+                        }
+                    }
+                    return Err(ErrorCode::SemanticError(
+                        "Only positive numbers are allowed in RANGE offset".to_string(),
+                    )
+                    .set_span(w.span));
+                }
             }
         }
 

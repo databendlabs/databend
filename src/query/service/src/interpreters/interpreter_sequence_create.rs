@@ -55,6 +55,8 @@ impl Interpreter for CreateSequenceInterpreter {
         let req = CreateSequenceReq {
             create_option: self.plan.create_option,
             ident: self.plan.ident.clone(),
+            start: self.plan.start,
+            increment: self.plan.increment,
             comment: self.plan.comment.clone(),
             create_on: Utc::now(),
             storage_version: 0,

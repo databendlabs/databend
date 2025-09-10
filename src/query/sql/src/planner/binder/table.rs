@@ -20,6 +20,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SampleConfig;
@@ -29,6 +30,10 @@ use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
+use databend_common_ast::parser::expr::expr;
+use databend_common_ast::parser::run_parser;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
@@ -47,6 +52,8 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -54,9 +61,12 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 
+use crate::binder::split_conjunctions;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -69,11 +79,14 @@ use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
+use crate::plans::SecureFilter;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::ScalarBinder;
+use crate::ScalarExpr;
 use crate::VirtualColumn;
 
 impl Binder {
@@ -358,7 +371,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let scan_id = self.metadata.write().next_scan_id();
         log::info!(
-            "[RUNTIME-FILTER] bind_base_table scan_id: {},table_entry: {:?}",
+            "RUNTIME-FILTER: bind_base_table scan_id: {},table_entry: {:?}",
             scan_id,
             table
         );
@@ -427,21 +440,71 @@ impl Binder {
             .write()
             .add_base_column_scan_id(base_column_scan_id);
 
-        Ok((
-            SExpr::create_leaf(Arc::new(
-                Scan {
-                    table_index,
-                    columns: columns.into_iter().map(|col| col.index()).collect(),
-                    statistics: Arc::new(Statistics::default()),
-                    change_type,
-                    sample: sample.clone(),
-                    scan_id,
-                    ..Default::default()
-                }
-                .into(),
-            )),
+        let scan_s_expr = SExpr::create_leaf(Arc::new(
+            Scan {
+                table_index,
+                columns: columns.into_iter().map(|col| col.index()).collect(),
+                statistics: Arc::new(Statistics::default()),
+                change_type,
+                sample: sample.clone(),
+                scan_id,
+                ..Default::default()
+            }
+            .into(),
+        ));
+
+        // Check for row_access_policy and wrap with SecureFilter if present
+        let final_s_expr = if let Some(policy) =
+            &table.table().get_table_info().meta.row_access_policy
+        {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            let handler = get_row_access_policy_handler();
+            let res = databend_common_base::runtime::block_on(handler.get_row_access(
+                meta_api,
+                &self.ctx.get_tenant(),
+                policy.to_string(),
+            ))?;
+            let body = res.1.data.body;
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(&body)?;
+            let ast = run_parser(&tokens, sql_dialect, ParseMode::Default, false, expr)?;
+
+            let res =
+                self.bind_secure_filter(&mut bind_context, &[], &ast, table_index, scan_s_expr)?;
+            res.0
+        } else {
+            scan_s_expr
+        };
+
+        Ok((final_s_expr, bind_context))
+    }
+
+    pub fn bind_secure_filter(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        expr: &Expr,
+        table_index: IndexType,
+        child: SExpr,
+    ) -> Result<(SExpr, ScalarExpr)> {
+        let mut scalar_binder = ScalarBinder::new(
             bind_context,
-        ))
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            aliases,
+        );
+        let (scalar, _) = scalar_binder.bind(expr)?;
+
+        let filter_plan = SecureFilter {
+            predicates: split_conjunctions(&scalar),
+            table_index,
+        };
+        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
+        Ok((new_expr, scalar))
     }
 
     pub fn resolve_data_source(

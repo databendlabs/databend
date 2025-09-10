@@ -459,6 +459,8 @@ pub enum TokenKind {
     CONTINUE,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
+    #[token("CHECK", ignore(ascii_case))]
+    CHECK,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
     #[token("CACHE", ignore(ascii_case))]
@@ -471,6 +473,8 @@ pub enum TokenKind {
     CHARACTER,
     #[token("CONFLICT", ignore(ascii_case))]
     CONFLICT,
+    #[token("CONSTRAINT", ignore(ascii_case))]
+    CONSTRAINT,
     #[token("COMPRESSION", ignore(ascii_case))]
     COMPRESSION,
     #[token("COPY_OPTIONS", ignore(ascii_case))]
@@ -731,6 +735,10 @@ pub enum TokenKind {
     INCLUDE_QUERY_ID,
     #[token("INCREMENTAL", ignore(ascii_case))]
     INCREMENTAL,
+    #[token("INCREMENT", ignore(ascii_case))]
+    INCREMENT,
+    #[token("START", ignore(ascii_case))]
+    START,
     #[token("INDEX", ignore(ascii_case))]
     INDEX,
     #[token("INFORMATION", ignore(ascii_case))]

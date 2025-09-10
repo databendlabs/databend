@@ -20,6 +20,7 @@ use std::io::Write;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
@@ -313,13 +314,21 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
             let mut d = string_to_timestamp(val, &ctx.func_ctx.tz);
             if !ctx.func_ctx.enable_strict_datetime_parser {
-                d = d.or_else(|_| {
-                    parse(val)
-                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                        .and_then(|(naive_dt, _)| {
-                            string_to_timestamp(naive_dt.to_string(), &ctx.func_ctx.tz)
-                        })
-                });
+                d = match catch_unwind(|| {
+                    d.or_else(|_| {
+                        parse(val)
+                            .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                            .and_then(|(naive_dt, _)| {
+                                string_to_timestamp(naive_dt.to_string(), &ctx.func_ctx.tz)
+                            })
+                    })
+                }) {
+                    Ok(result) => result,
+                    Err(_) => Err(ErrorCode::BadArguments(format!(
+                        "TIMESTAMP '{}' is not recognized.",
+                        val
+                    ))),
+                }
             }
 
             match d {
@@ -642,13 +651,21 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
             let mut d = string_to_date(val, &ctx.func_ctx.tz);
             if !ctx.func_ctx.enable_strict_datetime_parser {
-                d = d.or_else(|_| {
-                    parse(val)
-                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                        .and_then(|(naive_dt, _)| {
-                            string_to_date(naive_dt.to_string(), &ctx.func_ctx.tz)
-                        })
-                });
+                d = match catch_unwind(|| {
+                    d.or_else(|_| {
+                        parse(val)
+                            .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                            .and_then(|(naive_dt, _)| {
+                                string_to_date(naive_dt.to_string(), &ctx.func_ctx.tz)
+                            })
+                    })
+                }) {
+                    Ok(result) => result,
+                    Err(_) => Err(ErrorCode::BadArguments(format!(
+                        "Date '{}' is not recognized.",
+                        val
+                    ))),
+                }
             }
 
             match d {

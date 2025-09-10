@@ -15,6 +15,7 @@
 mod account;
 mod catalog;
 mod connection;
+mod constraint;
 mod database;
 mod dictionary;
 mod dynamic_table;
@@ -35,6 +36,7 @@ mod workload;
 pub use account::*;
 pub use catalog::*;
 pub use connection::*;
+pub use constraint::*;
 pub use database::*;
 pub use dictionary::*;
 pub use dynamic_table::*;

@@ -16,6 +16,7 @@ use databend_common_ast::ast::CreateSequenceStmt;
 use databend_common_ast::ast::DropSequenceStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SequenceIdent;
 
@@ -37,8 +38,18 @@ impl Binder {
         let CreateSequenceStmt {
             create_option,
             sequence,
+            start,
+            increment,
             comment,
         } = stmt;
+
+        let start = start.unwrap_or(1);
+        let increment = increment.unwrap_or(1);
+        if increment == 0 {
+            return Err(ErrorCode::InvalidArgument(
+                "Increment is an invalid value '0'",
+            ));
+        }
 
         let tenant = self.ctx.get_tenant();
         let sequence = self.normalize_object_identifier(sequence);
@@ -46,6 +57,8 @@ impl Binder {
         let plan = CreateSequencePlan {
             create_option: create_option.clone().into(),
             ident: SequenceIdent::new(tenant, sequence),
+            start,
+            increment,
             comment: comment.clone(),
         };
         Ok(Plan::CreateSequence(plan.into()))

@@ -580,6 +580,7 @@ pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     max_restore_worker: u64,
+    after_worker: usize,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = NewTransformPartitionBucket::create(input_nums, params.clone())?;
@@ -610,7 +611,7 @@ pub fn build_partition_bucket(
         )?))
     })?;
 
-    pipeline.try_resize(input_nums)?;
+    pipeline.try_resize(after_worker)?;
 
     Ok(())
 }

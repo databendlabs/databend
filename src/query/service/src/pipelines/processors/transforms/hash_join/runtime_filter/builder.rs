@@ -14,7 +14,10 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -60,18 +63,41 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
+        let start = Instant::now();
+
+        let min_max_start = Instant::now();
         let min_max = self
             .enable_min_max(desc)
             .then(|| self.build_min_max())
             .transpose()?;
+        let min_max_time = min_max_start.elapsed();
+
+        let inlist_start = Instant::now();
         let inlist = self
             .enable_inlist(desc)
             .then(|| self.build_inlist())
             .transpose()?;
+        let inlist_time = inlist_start.elapsed();
+
+        let bloom_start = Instant::now();
         let bloom = self
             .enable_bloom(desc)
             .then(|| self.build_bloom(desc))
             .transpose()?;
+        let bloom_time = bloom_start.elapsed();
+
+        let total_time = start.elapsed();
+
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RuntimeFilterBuildTime,
+            total_time.as_nanos() as usize,
+        );
+
+        log::info!(
+            "RUNTIME-FILTER: Built filter {} - total: {:?}, min_max: {:?}, inlist: {:?}, bloom: {:?}, rows: {}",
+            desc.id, total_time, min_max_time, inlist_time, bloom_time, self.build_key_column.len()
+        );
+
         Ok(RuntimeFilterPacket {
             id: desc.id,
             min_max,

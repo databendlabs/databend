@@ -320,6 +320,7 @@ impl Catalog for IcebergMutableCatalog {
                 {
                     return Ok(CreateDatabaseReply {
                         db_id: DatabaseId::new(0),
+                        old_db_id: None,
                     });
                 }
             }
@@ -346,6 +347,8 @@ impl Catalog for IcebergMutableCatalog {
 
         Ok(CreateDatabaseReply {
             db_id: DatabaseId::new(0),
+            // external catalog directly return None
+            old_db_id: None,
         })
     }
 
@@ -687,7 +690,7 @@ impl Catalog for IcebergMutableCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -698,7 +701,7 @@ impl Catalog for IcebergMutableCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

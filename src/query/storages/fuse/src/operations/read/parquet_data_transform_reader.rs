@@ -15,7 +15,10 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -137,16 +140,28 @@ impl Transform for ReadParquetDataTransform<true> {
                 let mut partitions = block_part_meta.part_ptr.clone();
                 debug_assert!(partitions.len() == 1);
                 let part = partitions.pop().unwrap();
+                let prune_start = Instant::now();
                 let mut filters = self.context.get_inlist_runtime_filter_with_id(self.scan_id);
                 filters.extend(
                     self.context
                         .get_min_max_runtime_filter_with_id(self.scan_id),
                 );
 
-                let runtime_filter = ExprRuntimePruner::new(filters.clone());
+                let exists_runtime_filter = !filters.is_empty();
+
+                let runtime_filter = ExprRuntimePruner::new(filters);
 
                 self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
-                if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
+                let prune_result =
+                    runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)?;
+                let prune_duration = prune_start.elapsed();
+                if exists_runtime_filter {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+                        prune_duration.as_nanos() as usize,
+                    );
+                }
+                if prune_result {
                     self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
                     return Ok(DataBlock::empty());
                 }
@@ -215,7 +230,7 @@ impl Transform for ReadParquetDataTransform<true> {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("[RUNTIME-FILTER] ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!("RUNTIME-FILTER: ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
         }
         Ok(())
     }
@@ -240,11 +255,22 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
 
                     let runtime_filter = ExprRuntimePruner::new(filters.clone());
                     for part in parts.into_iter() {
+                        let prune_start = Instant::now();
                         self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
                         if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
                             self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
+                            let prune_duration = prune_start.elapsed();
+                            Profile::record_usize_profile(
+                                ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+                                prune_duration.as_nanos() as usize,
+                            );
                             continue;
                         }
+                        let prune_duration = prune_start.elapsed();
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+                            prune_duration.as_nanos() as usize,
+                        );
 
                         fuse_part_infos.push(part.clone());
                         let block_reader = self.block_reader.clone();
@@ -324,7 +350,7 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("[RUNTIME-FILTER] AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!("RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
         }
         Ok(())
     }

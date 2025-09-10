@@ -91,8 +91,12 @@ pub fn is_temp_error(e: &ErrorCode) -> bool {
         || code == ErrorCode::INVALID_OPERATION
         || code == ErrorCode::STORAGE_OTHER;
 
-    // If acquire semaphore failed, we consider it a temporary error
-    let meta = code == ErrorCode::META_SERVICE_ERROR;
+    let meta = code == ErrorCode::META_SERVICE_ERROR
+        || code == ErrorCode::DUPLICATED_UPSERT_FILES
+        || code == ErrorCode::TABLE_VERSION_MISMATCHED
+        || code == ErrorCode::TABLE_LOCK_EXPIRED
+        || code == ErrorCode::TABLE_ALREADY_LOCKED;
+
     let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;
 
     storage || transaction || meta

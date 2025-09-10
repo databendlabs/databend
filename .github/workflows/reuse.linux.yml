@@ -172,7 +172,7 @@ jobs:
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
-  test_compat_client_standalone:
+  test_compat_client_cluster:
     needs: [ build, check ]
     runs-on:
       - self-hosted
@@ -182,7 +182,7 @@ jobs:
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_compat_client_standalone
+      - uses: ./.github/actions/test_compat_client_cluster
         timeout-minutes: 20
 
   test_logs:

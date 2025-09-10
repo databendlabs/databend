@@ -40,11 +40,13 @@ ENVIRONMENT VARIABLES:
 INTERACTIVE CONTROLS:
     ↑/↓ or k/j       Navigate files
     Enter            Select file
+    r                Manual refresh
     q                Quit
 
 NOTE:
     If a local backup file already exists, it will be used instead of downloading.
     To use a fresh copy, delete the local file first.
+    Files auto-refresh every 30 seconds.
 
 EXAMPLES:
     export BENDSQL_DSN="http://username:password@localhost:8000/database"
@@ -78,93 +80,138 @@ format_size() {
 	fi
 }
 
-# Interactive file selector
+# Interactive file selector with auto-refresh and last_modify column
 interactive_file_selector() {
 	local stage="$1"
 	local dsn="$2"
 
 	echo "Fetching file list from stage @${stage}..."
 
-	# Get raw output from list command
-	local raw_output
-	raw_output=$(bendsql --dsn "${dsn}" --query="list @${stage};" 2>/dev/null)
+	# Function to fetch and parse file data
+	fetch_file_data() {
+		# Get raw output from list command
+		local raw_output
+		raw_output=$(bendsql --dsn "${dsn}" --query="list @${stage};" 2>/dev/null)
 
-	if [[ -z "$raw_output" ]]; then
+		if [[ -z "$raw_output" ]]; then
+			echo "Failed to fetch data from stage"
+			return 1
+		fi
+
+		# Clear arrays
+		files=()
+		sizes=()
+		last_modified=()
+
+		# Process each line to extract filename, size, and last_modified
+		while IFS= read -r line; do
+			# Skip empty lines and headers
+			[[ -z "$line" ]] && continue
+			[[ "$line" =~ ^[[:space:]]*name ]] && continue
+			[[ "$line" =~ ^[[:space:]]*-+ ]] && continue
+
+			# Extract filename (first field), size (second field), and last_modified (rest)
+			local filename=$(echo "$line" | awk '{print $1}')
+			local size=$(echo "$line" | awk '{print $2}')
+			local modify_time=$(echo "$line" | awk '{for(i=3;i<=NF;i++) printf "%s ", $i}' | sed 's/[[:space:]]*$//')
+
+			# Only include tar.gz files
+			if [[ "$filename" =~ \.(tar\.gz|tgz)$ ]]; then
+				files+=("$filename")
+				sizes+=("$(format_size "$size")")
+				last_modified+=("$modify_time")
+			fi
+		done <<<"$raw_output"
+
+		return 0
+	}
+
+	# Declare arrays in parent scope
+	local files=()
+	local sizes=()
+	local last_modified=()
+
+	# Initial data fetch
+	if ! fetch_file_data; then
 		log_error "Failed to get file list from stage @${stage}"
 		return 1
 	fi
-
-	# Parse files and sizes
-	local files=()
-	local sizes=()
-	local file_list=""
-
-	# Process each line to extract filename and size
-	while IFS= read -r line; do
-		# Skip empty lines and headers
-		[[ -z "$line" ]] && continue
-		[[ "$line" =~ ^[[:space:]]*name ]] && continue
-		[[ "$line" =~ ^[[:space:]]*-+ ]] && continue
-
-		# Extract filename (first field) and size (second field)
-		local filename=$(echo "$line" | awk '{print $1}')
-		local size=$(echo "$line" | awk '{print $2}')
-
-		# Only include tar.gz files
-		if [[ "$filename" =~ \.(tar\.gz|tgz)$ ]]; then
-			files+=("$filename")
-			sizes+=("$(format_size "$size")")
-		fi
-	done <<<"$raw_output"
 
 	if [[ ${#files[@]} -eq 0 ]]; then
 		log_error "No .tar.gz files found in stage @${stage}"
 		return 1
 	fi
 
-	# Sort files (and corresponding sizes)
+	# Sort files and sizes (newest first based on filename pattern)
 	local sorted_files=()
 	local sorted_sizes=()
-	local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2 | cut -d: -f1))
+	local sorted_modified=()
+	local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2r | cut -d: -f1))
 
 	for i in "${indices[@]}"; do
 		sorted_files+=("${files[$i]}")
 		sorted_sizes+=("${sizes[$i]}")
+		sorted_modified+=("${last_modified[$i]}")
 	done
 
 	files=("${sorted_files[@]}")
 	sizes=("${sorted_sizes[@]}")
+	last_modified=("${sorted_modified[@]}")
 
-	# Default to last file
-	local selected=$((${#files[@]} - 1))
+	# Default to first file (newest)
+	local selected=0
 	local total=${#files[@]}
+	local last_refresh=$(date +%s)
 
 	echo ""
 	echo "Found $total backup files in stage @${stage}:"
-	echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
+	echo "Use ↑/↓ or k/j to navigate, Enter to select, r to refresh, q to quit"
+	echo "Auto-refresh every 30 seconds"
 	echo ""
 
-	# Calculate max filename length for alignment
-	local max_name_len=0
-	for filename in "${files[@]}"; do
-		if [[ ${#filename} -gt $max_name_len ]]; then
-			max_name_len=${#filename}
-		fi
-	done
-	max_name_len=$((max_name_len + 2))
+	# Calculate column widths for alignment
+	local max_name_len=8 # minimum for "Filename"
+	local max_size_len=4 # minimum for "Size"
+
+	calculate_column_widths() {
+		max_name_len=8
+		max_size_len=4
+
+		for i in "${!files[@]}"; do
+			[[ ${#files[$i]} -gt $max_name_len ]] && max_name_len=${#files[$i]}
+			[[ ${#sizes[$i]} -gt $max_size_len ]] && max_size_len=${#sizes[$i]}
+		done
+
+		# Add padding
+		max_name_len=$((max_name_len + 2))
+		max_size_len=$((max_size_len + 2))
+	}
+
+	calculate_column_widths
 
 	# Display function
 	display_files() {
+		local current_time=$(date +%s)
+		local time_since_refresh=$((current_time - last_refresh))
+		local next_refresh=$((30 - time_since_refresh))
+		[[ $next_refresh -lt 0 ]] && next_refresh=0
+
 		# Clear screen and move to top
 		echo -ne "\033[2J\033[H"
-		echo "Stage: @${stage} ($total files)"
-		echo "Use ↑/↓ or k/j to navigate, Enter to select, q to quit"
+		echo "Stage: @${stage} ($total files) - Next refresh in ${next_refresh}s"
+		echo "Use ↑/↓ or k/j to navigate, Enter to select, r to refresh, q to quit"
 		echo ""
-		printf "%-${max_name_len}s %s\n" "Filename" "Size"
-		printf "%-${max_name_len}s %s\n" "$(printf '%*s' $((max_name_len - 1)) '' | tr ' ' '-')" "----"
 
+		# Header
+		printf "%-${max_name_len}s %-${max_size_len}s %s\n" "Filename" "Size" "Last Modified"
+		printf "%-${max_name_len}s %-${max_size_len}s %s\n" \
+			"$(printf '%*s' $((max_name_len - 1)) '' | tr ' ' '-')" \
+			"$(printf '%*s' $((max_size_len - 1)) '' | tr ' ' '-')" \
+			"-------------"
+
+		# File list
 		for i in "${!files[@]}"; do
-			local display_line="$(printf "%-${max_name_len}s %s" "${files[$i]}" "${sizes[$i]}")"
+			local display_line="$(printf "%-${max_name_len}s %-${max_size_len}s %s" "${files[$i]}" "${sizes[$i]}" "${last_modified[$i]}")"
 			if [[ $i -eq $selected ]]; then
 				echo -e "\033[7m> $display_line\033[0m" # Highlighted
 			else
@@ -173,51 +220,130 @@ interactive_file_selector() {
 		done
 
 		echo ""
-		echo "Selected: ${files[$selected]} (${sizes[$selected]})"
+		echo "Selected: ${files[$selected]} (${sizes[$selected]}) - Modified: ${last_modified[$selected]}"
+	}
+
+	# Refresh data and update display
+	refresh_data() {
+		echo -ne "\033[2J\033[H"
+		echo "Refreshing file list from stage @${stage}..."
+
+		local old_selected_file=""
+		if [[ $selected -lt ${#files[@]} ]]; then
+			old_selected_file="${files[$selected]}"
+		fi
+
+		if fetch_file_data; then
+			if [[ ${#files[@]} -eq 0 ]]; then
+				echo "No .tar.gz files found in stage after refresh."
+				return 1
+			fi
+
+			# Re-sort
+			local sorted_files=()
+			local sorted_sizes=()
+			local sorted_modified=()
+			local indices=($(for i in "${!files[@]}"; do echo "$i:${files[$i]}"; done | sort -t: -k2r | cut -d: -f1))
+
+			for i in "${indices[@]}"; do
+				sorted_files+=("${files[$i]}")
+				sorted_sizes+=("${sizes[$i]}")
+				sorted_modified+=("${last_modified[$i]}")
+			done
+
+			files=("${sorted_files[@]}")
+			sizes=("${sorted_sizes[@]}")
+			last_modified=("${sorted_modified[@]}")
+
+			total=${#files[@]}
+			calculate_column_widths
+			last_refresh=$(date +%s)
+
+			# Try to maintain selection on the same file
+			selected=0 # Default to first
+			if [[ -n "$old_selected_file" ]]; then
+				for i in "${!files[@]}"; do
+					if [[ "${files[$i]}" == "$old_selected_file" ]]; then
+						selected=$i
+						break
+					fi
+				done
+			fi
+
+			# Ensure selected is within bounds
+			if [[ $selected -ge $total ]]; then
+				selected=$((total - 1))
+			fi
+			if [[ $selected -lt 0 ]]; then
+				selected=0
+			fi
+		else
+			echo "Failed to refresh file list. Using cached data."
+			sleep 1
+		fi
 	}
 
 	# Initial display
 	display_files
 
-	# Input loop
+	# Input loop with auto-refresh
 	while true; do
-		# Read single character
-		read -rsn1 key
+		# Check if it's time for auto-refresh (30 seconds)
+		local current_time=$(date +%s)
+		if [[ $((current_time - last_refresh)) -ge 30 ]]; then
+			refresh_data
+			display_files
+			continue
+		fi
 
-		case "$key" in
-		$'\033') # Escape sequence
-			read -rsn2 key
+		# Calculate remaining time for timeout
+		local timeout=$((30 - (current_time - last_refresh)))
+		[[ $timeout -le 0 ]] && timeout=1
+
+		# Read single character with timeout
+		if read -rsn1 -t $timeout key; then
 			case "$key" in
-			'[A') # Up arrow
+			$'\033') # Escape sequence
+				read -rsn2 key
+				case "$key" in
+				'[A') # Up arrow
+					((selected > 0)) && ((selected--))
+					display_files
+					;;
+				'[B') # Down arrow
+					((selected < total - 1)) && ((selected++))
+					display_files
+					;;
+				esac
+				;;
+			'k' | 'K') # Up (vim-style)
 				((selected > 0)) && ((selected--))
 				display_files
 				;;
-			'[B') # Down arrow
+			'j' | 'J') # Down (vim-style)
 				((selected < total - 1)) && ((selected++))
 				display_files
 				;;
+			'r' | 'R') # Manual refresh
+				refresh_data
+				display_files
+				;;
+			'') # Enter
+				echo ""
+				echo "Selected: ${files[$selected]} (${sizes[$selected]}) - Modified: ${last_modified[$selected]}"
+				SELECTED_FILE="${files[$selected]}"
+				return 0
+				;;
+			'q' | 'Q') # Quit
+				echo ""
+				echo "Selection cancelled."
+				return 1
+				;;
 			esac
-			;;
-		'k' | 'K') # Up (vim-style)
-			((selected > 0)) && ((selected--))
-			display_files
-			;;
-		'j' | 'J') # Down (vim-style)
-			((selected < total - 1)) && ((selected++))
-			display_files
-			;;
-		'') # Enter
-			echo ""
-			echo "Selected: ${files[$selected]} (${sizes[$selected]})"
-			SELECTED_FILE="${files[$selected]}"
-			return 0
-			;;
-		'q' | 'Q') # Quit
-			echo ""
-			echo "Selection cancelled."
-			return 1
-			;;
-		esac
+		else
+			# Timeout occurred, trigger refresh next iteration
+			continue
+		fi
 	done
 }
 

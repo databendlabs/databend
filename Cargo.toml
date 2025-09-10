@@ -79,7 +79,6 @@ members = [
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
     "src/query/ee_features/stream_handler",
-    "src/query/ee_features/storage_quota",
     "src/query/ee_features/table_index",
     "src/query/ee_features/virtual_column",
     "src/query/ee_features/resources_management",
@@ -196,7 +195,6 @@ databend-enterprise-query = { path = "src/query/ee" }
 databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-row-access-policy-feature = { path = "src/query/ee_features/row_access_policy" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
-databend-enterprise-storage-quota = { path = "src/query/ee_features/storage_quota" }
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
 databend-enterprise-table-index = { path = "src/query/ee_features/table_index" }
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
@@ -589,7 +587,7 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 
 # Databend Integration Test
 quickcheck = "1.0"
-sqllogictest = "0.28.0"
+sqllogictest = "0.28.4"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"

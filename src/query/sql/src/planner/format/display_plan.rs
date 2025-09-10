@@ -89,6 +89,8 @@ impl Plan {
             Plan::AddTableColumn(_) => Ok("AddTableColumn".to_string()),
             Plan::ModifyTableColumn(_) => Ok("ModifyTableColumn".to_string()),
             Plan::DropTableColumn(_) => Ok("DropTableColumn".to_string()),
+            Plan::AddTableConstraint(_) => Ok("AddTableConstraint".to_string()),
+            Plan::DropTableConstraint(_) => Ok("DropTableConstraint".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),

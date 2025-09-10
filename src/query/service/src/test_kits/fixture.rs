@@ -128,8 +128,8 @@ pub trait Setup {
     async fn setup(&self) -> Result<InnerConfig>;
 }
 
-struct OSSSetup {
-    config: InnerConfig,
+pub struct OSSSetup {
+    pub config: InnerConfig,
 }
 
 #[async_trait::async_trait]
@@ -385,6 +385,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: Some("(id)".to_string()),
             table_indexes: None,
+            table_constraints: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -412,6 +413,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             table_indexes: None,
+            table_constraints: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -451,6 +453,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             table_indexes: None,
+            table_constraints: None,
             attached_columns: None,
             table_partition: None,
         }
@@ -489,6 +492,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             table_indexes: None,
+            table_constraints: None,
             attached_columns: None,
             table_properties: Default::default(),
         }
@@ -535,6 +539,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             table_indexes: None,
+            table_constraints: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -943,7 +948,7 @@ impl TestFixture {
             self.default_table_name()
         );
         let ctx = self.new_query_ctx().await?;
-        ctx.get_settings().set_enable_analyze_histogram(1)?;
+        ctx.get_settings().set_enable_table_snapshot_stats(1)?;
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(&query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;

@@ -101,6 +101,7 @@ fn test_decode_v44_table_meta() -> anyhow::Result<()> {
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         row_access_policy: None,
         indexes: btreemap! {},
+        constraints: btreemap! {},
     };
 
     common::test_load_old(func_name!(), bytes.as_slice(), 44, want())?;

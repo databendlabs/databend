@@ -217,6 +217,7 @@ impl Display for CreateDatabaseReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: DatabaseId,
+    pub old_db_id: Option<DatabaseId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

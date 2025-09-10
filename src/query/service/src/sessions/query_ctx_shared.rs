@@ -78,6 +78,7 @@ use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
+use crate::spillers;
 use crate::storages::Table;
 
 pub struct MemoryUpdater {
@@ -169,8 +170,7 @@ pub struct QueryContextShared {
     pub(super) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
-    pub(super) spilled_files:
-        Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
+    pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
@@ -884,7 +884,18 @@ impl QueryContextShared {
         self.pruned_partitions_stats
             .write()
             .entry(plan_id)
+            .and_modify(|s| s.merge(&stats))
             .or_insert(stats);
+    }
+
+    pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+        let mut guard = self.pruned_partitions_stats.write();
+        for (plan_id, stats) in other.iter() {
+            guard
+                .entry(*plan_id)
+                .and_modify(|s| s.merge(stats))
+                .or_insert_with(|| stats.clone());
+        }
     }
 
     pub fn set_perf_flag(&self, flag: bool) {
