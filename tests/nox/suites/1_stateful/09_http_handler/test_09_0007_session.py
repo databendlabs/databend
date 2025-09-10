@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
-
 import base64
 import json
 import time
-
 import requests
 from pprint import pprint
-
 from requests import Response
+
+from suites.utils import comparison_output
 
 HEADER_SESSION = "X-DATABEND-SESSION"
 HEADER_CAPS = "X-DATABEND-CLIENT-CAPS"
@@ -19,6 +17,8 @@ auth = ("root", "")
 
 
 def check(func):
+    """Decorator to check response - identical to original"""
+
     def wrapper(self, *args, **kwargs):
         print(f"---- {func.__name__}{args[:1]}")
         resp: Response = func(self, *args, **kwargs)
@@ -113,6 +113,24 @@ class Client(object):
         ).decode("ascii")
 
 
+@comparison_output(
+    """
+---- login()
+200
+---- do_query('select 1',)
+200
+[['1']]
+False
+False
+---- do_query('CREATE OR REPLACE TEMP TABLE t(c1 int)',)
+200
+True
+True
+---- do_query('drop TABLE t',)
+200
+False
+False"""
+)
 def test_session():
     client = Client()
     client.login()
@@ -141,6 +159,7 @@ def test_session():
 # without X-DATABEND-CLIENT-CAPS:
 # 1. query still works
 # 2. X-DATABEND-SESSION is ignored
+@comparison_output("")
 def test_no_session():
     client = requests.session()
     payload = {
@@ -187,6 +206,7 @@ def do_query_from_worksheet(client, sql, sid=HEADER_SESSION_ID_V, new_session=Fa
     return resp.json()
 
 
+@comparison_output("")
 def test_worksheet_session():
     client = requests.session()
     resp = do_query_from_worksheet(client, "select * from numbers(100)")
@@ -216,18 +236,3 @@ def test_worksheet_session():
         client, "select * from numbers(10) ", new_session=True
     )
     assert len(resp["data"]) == 2, resp
-
-
-def main():
-    test_no_session()
-    test_session()
-    test_worksheet_session()
-
-
-if __name__ == "__main__":
-    import logging
-
-    try:
-        main()
-    except Exception as e:
-        logging.exception(f"An error occurred: {e}")

@@ -10,6 +10,8 @@ from pprint import pprint
 from http.cookiejar import Cookie
 from requests.cookies import RequestsCookieJar
 
+from suites.utils import comparison_output
+
 # Define the URLs and credentials
 query_url = "http://localhost:8000/v1/query"
 query_url2 = "http://localhost:8002/v1/query"
@@ -142,7 +144,96 @@ def fake_expired_token(ty):
     )
 
 
-def main():
+@comparison_output(
+    """ 
+---- do_login()
+200
+['session_id', 'tokens', 'version']
+---- do_query('select 1',)
+200
+[['1']]
+False
+False
+---- do_query('select count(*) from system.clusters',)
+200
+---- do_query("select 'cluster'",)
+200
+[['cluster']]
+---- do_query('CREATE TEMP TABLE t(c1 int)',)
+200
+True
+True
+---- do_query('drop TABLE t',)
+200
+False
+False
+---- do_query('select 2',)
+401
+{'code': 5100,
+ 'message': '[AUTH] JWT authentication failed: JWT auth is not configured on '
+            'this server'}
+---- do_query('select 3',)
+401
+{'code': 5100,
+ 'message': '[HTTP-SESSION] Failed to decode token: base64 decode error: '
+            'Invalid padding, token: bend-v1-s-xxx'}
+---- do_query('select 4',)
+401
+{'code': 5101,
+ 'message': '[HTTP-SESSION] Authentication failed: session token has expired'}
+---- do_query('select 5',)
+401
+{'code': 5100,
+ 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
+            'this endpoint'}
+---- do_refresh(1,)
+200
+['tokens']
+---- do_query('select 6',)
+200
+[['6']]
+---- do_query('select 7',)
+200
+[['7']]
+---- do_refresh(2,)
+401
+{'code': 5100,
+ 'message': '[AUTH] JWT authentication failed: JWT auth is not configured on '
+            'this server'}
+---- do_refresh(3,)
+401
+{'code': 5100, 'message': "invalid token type 'x'"}
+---- do_refresh(4,)
+401
+{'code': 5102,
+ 'message': '[HTTP-SESSION] Authentication failed: refresh token has expired'}
+---- do_refresh(5,)
+401
+{'code': 5100,
+ 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
+            'this endpoint'}
+---- do_refresh(6,)
+200
+---- do_logout(0,)
+401
+{'code': 5100,
+ 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
+            'this endpoint'}
+---- do_logout(1,)
+200
+---- do_query("select 'after logout'",)
+401
+{'code': 5103,
+ 'message': '[HTTP-SESSION] Authentication failed: session token not found in '
+            'database'}
+---- do_refresh('after_logout',)
+401
+{'code': 5104,
+ 'message': '[HTTP-SESSION] Authentication failed: refresh token not found in '
+            'database'}
+"""
+)
+def test_token():
     login_resp = do_login()
     pprint(sorted(login_resp.keys()))
     session_token = login_resp.get("tokens").get("session_token")
@@ -205,12 +296,3 @@ def main():
 
     do_query("select 'after logout'", new_session_token)
     do_refresh("after_logout", new_refresh_token, session_token)
-
-
-if __name__ == "__main__":
-    import logging
-
-    try:
-        main()
-    except Exception as e:
-        logging.exception(f"An error occurred: {e}")
