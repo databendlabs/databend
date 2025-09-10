@@ -126,10 +126,9 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         .collect::<HashMap<_, _>>();
 
     streams.iter_mut().for_each(|stream| {
-        stream.table_name = match stream.table_id {
-            Some(table_id) => source_table_map.get(&table_id).cloned(),
-            None => None,
-        }
+        stream.table_name = stream
+            .table_id
+            .and_then(|id| source_table_map.get(&id).cloned());
     });
 
     Ok(ListDatabaseStreamsResponse { streams, warnings })
