@@ -2,18 +2,14 @@ import requests
 import time
 from suites.utils import comparison_output
 
-# Define the URLs and credentials
-query_url = "http://localhost:8000/v1/query"
-heartbeat_url = "http://localhost:8000/v1/session/heartbeat"
 auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
-# Session settings for heartbeat testing
+
 session = {"settings": {"http_handler_result_timeout_secs": "3", "max_threads": "32"}}
 
 
 def do_query(query, port=8000):
-    """Execute SQL query via HTTP API with specific session settings"""
     url = f"http://localhost:{port}/v1/query"
     query_payload = {
         "sql": query,
@@ -24,7 +20,9 @@ def do_query(query, port=8000):
         },
         "session": session,
     }
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+    }
 
     response = requests.post(url, headers=headers, json=query_payload, auth=auth)
     return response.json()
@@ -48,44 +46,38 @@ continue fetch 1
 end
 """
 )
-def test_query_heartbeat():
-    """Test query heartbeat functionality to keep queries alive"""
-    # Check if running in cluster mode to determine port
-    cluster_check = do_query("select count(*) from system.clusters")
-    num_nodes = int(cluster_check.get("data", [[1]])[0][0])
-    port = 8002 if num_nodes > 1 else 8000
+def test_heartbeat():
+    query_resp = do_query("select count(*) from system.clusters")
+    num_nodes = int(query_resp.get("data")[0][0])
+    port = 8000 if num_nodes == 1 else 8002
 
-    # Start first query
     resp1 = do_query("select * from numbers(100)")
     print("started query 0")
-
-    # Start second query on specified port
+    # print(resp1.get("node_id"), resp1.get("id"))
     resp2 = do_query("select * from numbers(100)", port=port)
     print("started query 1")
+    # print(resp1.get("node_id"), resp1.get("id"))
+    # print(resp2.get("node_id"), resp2.get("id"))
 
-    # Prepare heartbeat payload
-    node_to_queries = {}
-    node_to_queries.setdefault(resp1.get("node_id"), []).append(resp1.get("id"))
-    node_to_queries.setdefault(resp2.get("node_id"), []).append(resp2.get("id"))
-    payload = {"node_to_queries": node_to_queries}
-    headers = {"Content-Type": "application/json"}
-
-    # Send heartbeats for 10 seconds
+    url = f"http://localhost:8000/v1/session/heartbeat"
+    m = {}
+    m.setdefault(resp1.get("node_id"), []).append(resp1.get("id"))
+    m.setdefault(resp2.get("node_id"), []).append(resp2.get("id"))
+    payload = {"node_to_queries": m}
+    headers = {
+        "Content-Type": "application/json",
+    }
     for i in range(10):
         print(f"sending heartbeat {i}")
-        response = requests.post(
-            heartbeat_url, headers=headers, json=payload, auth=auth
-        ).json()
-        assert len(response.get("queries_to_remove", [])) == 0
+        response = requests.post(url, headers=headers, json=payload, auth=auth).json()
+        assert len(response.get("queries_to_remove")) == 0
         time.sleep(1)
 
-    # Continue fetching results after heartbeats
-    for i, resp in enumerate([resp1, resp2]):
+    for i, r in enumerate([resp1, resp2]):
         print(f"continue fetch {i}")
-        headers = {STICKY_HEADER: resp.get("node_id")}
-        next_uri = f"http://localhost:8000/{resp.get('next_uri')}?"
+        headers = {STICKY_HEADER: r.get("node_id")}
+        next_uri = f"http://localhost:8000/{r.get('next_uri')}?"
         response = requests.get(next_uri, headers=headers, auth=auth)
-        assert response.status_code == 200
-        assert len(response.json().get("data", [])) > 0
-
+        assert response.status_code == 200, f"{response.status_code} {response.text}"
+        assert len(response.json().get("data")) > 0
     print("end")
