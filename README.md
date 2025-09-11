@@ -1,105 +1,112 @@
-<h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
-<h2 align="center">SQL for All Data: structured, semi-structured & unstructured multimodal data</h2>
+<h1 align="center">Databend</h1>
+<h3 align="center">It's not only a Snowflake alternative, but a multimodal data warehouse for the AI era.</h3>
+<p align="center">Snowflake-compatible SQL for structured, semi-structured, geospatial, and vector data</p>
 
 <div align="center">
 
-<h4 align="center">
-  <a href="https://docs.databend.com/guides/cloud">Databend Serverless Cloud (beta)</a>  |
-  <a href="https://docs.databend.com/">Documentation</a>  |
-  <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
-  <a href="https://github.com/databendlabs/databend/issues/11868">Roadmap (v1.3)</a>
-</h4>
+<a href="https://databend.com/">☁️ Try Cloud</a> •
+<a href="#quick-start">🚀 Quick Start</a> •
+<a href="https://docs.databend.com/">📖 Documentation</a>
 
-<div>
+<br><br>
+
 <a href="https://link.databend.com/join-slack">
 <img src="https://img.shields.io/badge/slack-databend-0abd59?logo=slack" alt="slack" />
 </a>
-
 <a href="https://github.com/databendlabs/databend/actions/workflows/release.yml">
 <img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
-
-<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
-
-<a href="https://gurubase.io/g/databend">
-<img src="https://img.shields.io/badge/Gurubase-Ask%20Databend%20Guru-006BFF" alt="Gurubase" />
-</a>
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Platform" />
 
 </div>
-</div>
+
+<br>
 
 <img src="https://github.com/databendlabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
 
-## The AI-Native Data Warehouse
+## Why Databend?
 
-Databend is the **open-source alternative to Snowflake** with **near 100% SQL compatibility** and native AI capabilities. Built in Rust with MPP architecture and S3-native storage, Databend unifies structured tables, JSON documents, and vector embeddings in a single platform. Trusted by **world-class enterprises** managing **800+ petabytes** and **100+ million queries daily**.
+**Multimodal Data Warehouse**: Analyze structured, semi-structured, vector, and geospatial data with unified Snowflake-compatible SQL.
 
-## Key Features
+**AI-Native Platform**: Built-in vector search, AI functions, embedding generation, and full-text search - no separate systems needed.
 
-**Performance & Scale**
-- **10x Faster**: Rust-powered vectorized execution with SIMD optimization
-- **90% Cost Reduction**: S3-native storage eliminates proprietary overhead
-- **Infinite Scale**: True compute-storage separation with elastic scaling
-- **Production-Proven**: Powers financial analytics, ML pipelines, and real-time AI inference
+**10x Faster & 90% Cost Reduction**: Rust-powered vectorized execution with S3-native storage eliminates vendor lock-in and proprietary overhead.
 
-**Enterprise Ready**
-- **Snowflake Compatible**: Migrate with zero SQL rewrites
-- **Multi-Cloud**: Deploy on AWS, Azure, GCP, or on-premise
-- **Security**: Role-based access, data masking, audit logging
-- **No Vendor Lock-in**: Complete data sovereignty and control
+**Deploy Anywhere, Connect Everything**: 100% open source - run locally with `pip install databend`, self-host, or use managed cloud clusters. All instances share the same data seamlessly.
 
-## Performance Benchmarks
+**Production Proven**: Trusted by world-class enterprises managing 800+ petabytes and 100+ million queries daily.
 
-[TPC-H Benchmark: Databend vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch) | [Data Ingestion Benchmark](https://docs.databend.com/guides/benchmark/data-ingest) | [ClickBench Results](https://databend.com/blog/clickbench-databend-top)
+**Enterprise Ready**: Fine-grained access control, data masking, and audit logging with complete data sovereignty.
+
+## Quick Start
+
+### Option 1: Databend Cloud Warehouse (Recommended)
+[Start with Databend Cloud](https://docs.databend.com/guides/cloud/) - Serverless warehouse clusters, production-ready in 60 seconds
+
+### Option 2: Local Development with Python
+```bash
+pip install databend
+```
+
+```python
+import databend
+
+ctx = databend.SessionContext()
+
+# Local table for quick testing
+ctx.sql("CREATE TABLE products (id INT, name STRING, price FLOAT)").collect()
+ctx.sql("INSERT INTO products VALUES (1, 'Laptop', 1299.99), (2, 'Phone', 899.50)").collect()
+ctx.sql("SELECT * FROM products").show()
+
+# S3 remote table (same as cloud warehouse)
+ctx.create_s3_connection("s3", "your_key", "your_secret")
+ctx.sql("CREATE TABLE sales (id INT, revenue FLOAT) 's3://bucket/sales/' CONNECTION=(connection_name='s3')").collect()
+ctx.sql("SELECT COUNT(*) FROM sales").show()
+```
+
+### Option 3: Docker (Self-Host Experience)
+```bash
+docker run -p 8000:8000 datafuselabs/databend
+```
+Experience the full warehouse capabilities locally - same features as cloud clusters.
+
+## Benchmarks
+
+**Performance**: [TPC-H vs Snowflake](https://docs.databend.com/guides/benchmark/tpch) | [ClickBench Results](https://www.databend.com/blog/category-product/clickbench-databend-top)
+**Cost**: [90% Cost Reduction](https://docs.databend.com/guides/benchmark/data-ingest)
 
 ## Architecture
 
 ![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
-**Unified Foundation**: S3-native storage + MPP query engine + elastic compute clusters
+**Multimodal Cloud Warehouse**: Production clusters analyze structured, semi-structured, vector, and geospatial data with Snowflake-compatible SQL. Local development environments can attach to the same warehouse data for seamless development.
 
-### Universal Data Processing by Type
-- **Structured**: Standard SQL with vectorized execution, ACID transactions, enterprise security, and BI integration
-- **Semi-Structured**: [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/variant) with [virtual columns](https://docs.databend.com/guides/performance/virtual-column) for zero-config automatic JSON acceleration
-- **Unstructured**: [Vector data type](https://docs.databend.com/sql/sql-reference/data-types/vector) with HNSW indexing, [AI functions](https://docs.databend.com/sql/sql-functions/ai-functions/), and [full-text search](https://docs.databend.com/guides/performance/fulltext-index) for multimodal workloads
+## Use Cases
 
-## Quick Start
-
-### Cloud
-[Start with Databend Cloud](https://docs.databend.com/guides/cloud/) - Production-ready in 60 seconds
-
-### Self-Hosted
-[Installation Guide](https://docs.databend.com/guides/deploy/QuickStart/) - Deploy anywhere with full control
-
-### Connect
-[BendSQL CLI](https://docs.databend.com/guides/sql-clients/bendsql) | [Developers Guide](https://docs.databend.com/guides/sql-clients/developers/) 
-
-## Products
-
-- **Open Source**: 100% open source, complete data sovereignty
-- **[Databend Cloud](https://databend.com)**: Managed service with serverless autoscaling
-- **Enterprise**: Advanced governance, compliance, and support
+- **Data Analytics**: Snowflake alternative with significant cost reduction
+- **AI/ML Pipelines**: Vector search and AI functions built-in
+- **Real-time Analytics**: High-performance queries on petabyte-scale data
+- **Data Lake Analytics**: Query Parquet, CSV, TSV, NDJSON, Avro, ORC directly from S3
 
 ## Community
 
-For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
+- [📖 Documentation](https://docs.databend.com/) - Complete guides and references
+- [💬 Slack](https://link.databend.com/join-slack) - Live community discussion
+- [🐛 GitHub Issues](https://github.com/databendlabs/databend/issues) - Bug reports and feature requests
+- [🎯 Good First Issues](https://link.databend.com/i-m-feeling-lucky) - Start contributing today
 
-- [Slack](https://link.databend.com/join-slack) (For live discussion with the Community)
-- [GitHub](https://github.com/databendlabs/databend) (Feature/Bug reports, Contributions)
-- [Twitter](https://twitter.com/DatabendLabs/) (Get the news fast)
-- [I'm feeling lucky](https://link.databend.com/i-m-feeling-lucky) (Pick up a good first issue now!)
+**Contributors get immortalized in `system.contributors` table! 🏆**
 
-**Your merged code gets you into the `system.contributors` table. Forever.**
+## 📄 License
 
-## Roadmap & License
-
-- **Roadmap**: [2025 Development Plan](https://github.com/databendlabs/databend/issues/14167)
-- **License**: [Apache License 2.0](licenses/Apache-2.0.txt) + [Elastic License 2.0](licenses/Elastic.txt) | [Licensing FAQs](https://docs.databend.com/guides/products/dee/license)
-
-## Acknowledgement
-
-**Inspiration**: [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture) | **Foundation**: Apache Arrow | **Hosting**: [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss)
+[Apache License 2.0](licenses/Apache-2.0.txt) + [Elastic License 2.0](licenses/Elastic.txt)
+[Licensing FAQs](https://docs.databend.com/guides/products/dee/license)
 
 ---
 
-*Built by engineers who redefine what's possible with data.*
+<div align="center">
+<strong>Built by engineers who redefine what's possible with data</strong><br>
+<a href="https://databend.com">🌐 Website</a> •
+<a href="https://x.com/DatabendLabs">🐦 Twitter</a> •
+<a href="https://github.com/databendlabs/databend/issues/14167">🗺️ Roadmap</a>
+</div>

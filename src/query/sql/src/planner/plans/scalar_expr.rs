@@ -225,54 +225,23 @@ impl ScalarExpr {
 
     /// Returns true if the expression can be evaluated from a row of data.
     pub fn evaluable(&self) -> bool {
-        struct EvaluableVisitor {
-            evaluable: bool,
-        }
-
-        impl<'a> Visitor<'a> for EvaluableVisitor {
-            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
-                if BUILTIN_FUNCTIONS
-                    .get_property(&func.func_name)
-                    .map(|property| property.kind == FunctionKind::SRF)
-                    .unwrap_or(false)
-                {
-                    self.evaluable = false;
-                } else {
-                    for expr in &func.arguments {
-                        self.visit(expr)?;
-                    }
-                }
-                Ok(())
-            }
-            fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-            fn visit_aggregate_function(&mut self, _: &'a AggregateFunction) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-            fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-            fn visit_udf_call(&mut self, _: &'a UDFCall) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-            fn visit_udf_lambda_call(&mut self, _: &'a UDFLambdaCall) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-            fn visit_async_function_call(&mut self, _: &'a AsyncFunctionCall) -> Result<()> {
-                self.evaluable = false;
-                Ok(())
-            }
-        }
-
-        let mut visitor = EvaluableVisitor { evaluable: true };
+        let mut visitor = EvaluableVisitor {
+            evaluable: true,
+            has_nextval: false,
+        };
         visitor.visit(self).unwrap();
-        visitor.evaluable
+        visitor.evaluable && !visitor.has_nextval
+    }
+
+    /// Returns if the expression can be evaluated as default value
+    /// and whether contains `nextval` async function.
+    pub fn default_value_evaluable(&self) -> (bool, bool) {
+        let mut visitor = EvaluableVisitor {
+            evaluable: true,
+            has_nextval: false,
+        };
+        visitor.visit(self).unwrap();
+        (visitor.evaluable, visitor.has_nextval)
     }
 
     pub fn replace_column(&mut self, old: IndexType, new: IndexType) -> Result<()> {
@@ -465,6 +434,60 @@ impl ScalarExpr {
 
         let mut visitor = CollectSubQuery { subquerys: result };
         visitor.visit(self).unwrap();
+    }
+}
+
+struct EvaluableVisitor {
+    evaluable: bool,
+    has_nextval: bool,
+}
+
+impl<'a> Visitor<'a> for EvaluableVisitor {
+    fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+        if BUILTIN_FUNCTIONS
+            .get_property(&func.func_name)
+            .map(|property| property.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
+            self.evaluable = false;
+        } else {
+            for expr in &func.arguments {
+                self.visit(expr)?;
+            }
+        }
+        Ok(())
+    }
+    fn visit_window_function(&mut self, _: &'a WindowFunc) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_aggregate_function(&mut self, _: &'a AggregateFunction) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_udf_call(&mut self, _: &'a UDFCall) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_udaf_call(&mut self, _: &'a UDAFCall) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_udf_lambda_call(&mut self, _: &'a UDFLambdaCall) -> Result<()> {
+        self.evaluable = false;
+        Ok(())
+    }
+    fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
+        if func.func_name == "nextval" {
+            self.has_nextval = true;
+        } else {
+            self.evaluable = false;
+        }
+        Ok(())
     }
 }
 

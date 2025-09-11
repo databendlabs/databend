@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
-
 import requests
+from suites.utils import comparison_output
 
 auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
-
-import logging
-
-logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(levelname)s %(message)s")
 
 
 def do_query(query, port=8000, session=None, node_id=None, wait=100):
@@ -37,6 +32,12 @@ def get_txn_state(resp):
 
 
 def test_txn_success():
+    # only test under cluster mode
+    query_resp = do_query("select count(*) from system.clusters").json()
+    num_nodes = int(query_resp.get("data")[0][0])
+    if num_nodes == 1:
+        return
+
     resp = do_query("create or replace table t1(a int)").json()
     assert not (resp.get("session").get("need_sticky")), resp
 
@@ -57,6 +58,12 @@ def test_txn_success():
 
 
 def test_txn_fail():
+    # only test under cluster mode
+    query_resp = do_query("select count(*) from system.clusters").json()
+    num_nodes = int(query_resp.get("data")[0][0])
+    if num_nodes == 1:
+        return
+
     resp = do_query("create or replace table t1(a int)").json()
     assert not (resp.get("session").get("need_sticky")), resp
 
@@ -89,6 +96,12 @@ def test_txn_fail():
 
 
 def test_query():
+    # only test under cluster mode
+    query_resp = do_query("select count(*) from system.clusters").json()
+    num_nodes = int(query_resp.get("data")[0][0])
+    if num_nodes == 1:
+        return
+
     """each query is sticky"""
     # send SQL to node-1
     initial_resp = do_query("select * from numbers(10)").json()
@@ -127,24 +140,3 @@ def test_initial_response():
     sql = "select * from numbers(1000000000000) ignore_result"
     resp = do_query(sql, wait=1).json()
     assert not (resp.get("session").get("need_sticky")), resp
-
-
-def main():
-    test_initial_response()
-
-    # only test under cluster mode
-    query_resp = do_query("select count(*) from system.clusters").json()
-    num_nodes = int(query_resp.get("data")[0][0])
-    if num_nodes == 1:
-        return
-
-    test_query()
-    test_txn_success()
-    test_txn_fail()
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logging.exception(f"An error occurred: {e}")
