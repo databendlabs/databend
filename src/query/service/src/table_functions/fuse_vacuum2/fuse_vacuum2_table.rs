@@ -41,6 +41,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use log::info;
+use log::warn;
 
 use crate::sessions::TableContext;
 
@@ -191,14 +192,19 @@ impl FuseVacuum2Table {
                 continue;
             }
 
-            info!("Processing db {}, {}/{}", db.name(), idx_db + 1, num_db);
+            info!(
+                "Processing db {}, progress: {}/{}",
+                db.name(),
+                idx_db + 1,
+                num_db
+            );
             let tables = catalog.list_tables(&tenant_id, db.name()).await?;
             info!("Found {} tables in db {}", tables.len(), db.name());
 
             let num_tbl = tables.len();
             for (idx_tbl, table) in tables.iter().enumerate() {
                 info!(
-                    "Processing table {}.{}, {}/{}",
+                    "Processing table {}.{}, db level progress: {}/{}",
                     db.name(),
                     table.get_table_info().name,
                     idx_tbl + 1,
@@ -223,7 +229,16 @@ impl FuseVacuum2Table {
                     continue;
                 }
 
-                let _ = self.handler.do_vacuum2(tbl, ctx.clone(), false).await?;
+                let res = self.handler.do_vacuum2(tbl, ctx.clone(), false).await;
+
+                if let Err(e) = res {
+                    warn!(
+                        "vacuum2 table {}.{} failed: {}",
+                        db.name(),
+                        table.get_table_info().name,
+                        e
+                    );
+                };
             }
         }
 
