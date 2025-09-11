@@ -183,21 +183,26 @@ impl FuseVacuum2Table {
     ) -> Result<Vec<String>> {
         let tenant_id = ctx.get_tenant();
         let dbs = catalog.list_databases(&tenant_id).await?;
-        for db in dbs {
+        let num_db = dbs.len();
+
+        for (idx_db, db) in dbs.iter().enumerate() {
             if db.engine().to_uppercase() == "SYSTEM" {
                 info!("Bypass system database [{}]", db.name());
                 continue;
             }
 
-            info!("Processing db {}", db.name());
+            info!("Processing db {}, {}/{}", db.name(), idx_db + 1, num_db);
             let tables = catalog.list_tables(&tenant_id, db.name()).await?;
             info!("Found {} tables in db {}", tables.len(), db.name());
 
-            for table in tables {
+            let num_tbl = tables.len();
+            for (idx_tbl, table) in tables.iter().enumerate() {
                 info!(
-                    "Processing table {}.{}",
+                    "Processing table {}.{}, {}/{}",
                     db.name(),
-                    table.get_table_info().name
+                    table.get_table_info().name,
+                    idx_tbl + 1,
+                    num_tbl
                 );
 
                 let Ok(tbl) = FuseTable::try_from_table(table.as_ref()) else {
