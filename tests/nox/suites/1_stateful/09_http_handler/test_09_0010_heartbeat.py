@@ -1,13 +1,11 @@
-#!/usr/bin/env python3
-
 import requests
 import time
-import logging
+from suites.utils import comparison_output
 
 auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
-logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(levelname)s %(message)s")
+
 session = {"settings": {"http_handler_result_timeout_secs": "3", "max_threads": "32"}}
 
 
@@ -30,7 +28,29 @@ def do_query(query, port=8000):
     return response.json()
 
 
-def test_heartbeat(port):
+@comparison_output(
+    """started query 0
+started query 1
+sending heartbeat 0
+sending heartbeat 1
+sending heartbeat 2
+sending heartbeat 3
+sending heartbeat 4
+sending heartbeat 5
+sending heartbeat 6
+sending heartbeat 7
+sending heartbeat 8
+sending heartbeat 9
+continue fetch 0
+continue fetch 1
+end
+"""
+)
+def test_heartbeat():
+    query_resp = do_query("select count(*) from system.clusters")
+    num_nodes = int(query_resp.get("data")[0][0])
+    port = 8000 if num_nodes == 1 else 8002
+
     resp1 = do_query("select * from numbers(100)")
     print("started query 0")
     # print(resp1.get("node_id"), resp1.get("id"))
@@ -61,19 +81,3 @@ def test_heartbeat(port):
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         assert len(response.json().get("data")) > 0
     print("end")
-
-
-def main():
-    query_resp = do_query("select count(*) from system.clusters")
-    num_nodes = int(query_resp.get("data")[0][0])
-    if num_nodes == 1:
-        test_heartbeat(8000)
-    else:
-        test_heartbeat(8002)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logging.exception(f"An error occurred: {e}")
