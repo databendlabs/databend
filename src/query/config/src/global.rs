@@ -48,6 +48,8 @@ impl GlobalConfig {
     /// Embedded mode is determined by empty cluster_id and warehouse_id
     pub fn is_embedded_mode() -> bool {
         let config = Self::instance();
-        config.query.cluster_id.is_empty() && config.query.warehouse_id.is_empty()
+        config.query.embedded_mode
+            && config.query.cluster_id.is_empty()
+            && config.query.warehouse_id.is_empty()
     }
 }

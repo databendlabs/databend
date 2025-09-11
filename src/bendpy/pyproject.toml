@@ -7,7 +7,8 @@ build-backend = "maturin"
 version = "0.1.0"
 name = "databend"
 requires-python = ">=3.10"
-description = "Official Python binding for Databend - The AI-Native Data Warehouse. Open-source alternative to Snowflake with near 100% SQL compatibility, native AI capabilities, and unified support for structured, semi-structured, and vector data."
+description = "The multi-modal data warehouse built for the AI era. Unified analytics for structured data, JSON, and vector embeddings with near 100% Snowflake compatibility."
+readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [{name = "Databend Labs", email = "hi@databend.com"}]
 maintainers = [{name = "Databend Community", email = "hi@databend.com"}]
@@ -38,7 +39,7 @@ test = ["pytest", "pandas", "polars", "pyarrow"]
 [project.urls]
 Documentation = "https://pypi.org/project/databend/"
 Homepage =  "https://databend.com"
-Repository = "https://github.com/databendlabs/databend"
+Repository = "https://github.com/databendlabs/databend/tree/main/src/bendpy"
 
 [dependency-groups]
 dev = ["maturin>=1.8.2"]
