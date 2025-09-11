@@ -314,6 +314,7 @@ pub struct AddTableColumnPlan {
     pub comment: String,
     pub option: AddColumnOption,
     pub is_deterministic: bool,
+    pub is_nextval: bool,
 }
 
 impl AddTableColumnPlan {

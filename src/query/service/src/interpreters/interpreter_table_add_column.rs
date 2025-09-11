@@ -104,6 +104,13 @@ impl Interpreter for AddTableColumnInterpreter {
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
+        let num_rows = table_info.meta.statistics.number_of_rows;
+        if self.plan.is_nextval && num_rows > 0 {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
+                &self.plan.field.name, &self.plan.table
+            )));
+        }
         if field.default_expr().is_some() {
             let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }
@@ -117,9 +124,9 @@ impl Interpreter for AddTableColumnInterpreter {
             .meta
             .add_column(&field, &self.plan.comment, index)?;
 
-        // if the new column is a stored computed field,
+        // if the new column is a stored computed field and table is non-empty,
         // need rebuild the table to generate stored computed column.
-        if let Some(ComputedExpr::Stored(_)) = field.computed_expr {
+        if num_rows > 0 && matches!(field.computed_expr, Some(ComputedExpr::Stored(_))) {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
             let base_snapshot = fuse_table.read_table_snapshot().await?;
             let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
@@ -162,8 +169,9 @@ impl Interpreter for AddTableColumnInterpreter {
         )
         .await?;
 
-        // If the column is not deterministic, update to refresh the value with default expr.
-        if !self.plan.is_deterministic {
+        // If the column is not deterministic and table is non-empty,
+        // update to refresh the value with default expr.
+        if num_rows > 0 && !self.plan.is_deterministic {
             self.ctx
                 .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
             let query = format!(
