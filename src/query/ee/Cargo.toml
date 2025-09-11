@@ -68,6 +68,8 @@ uuid = { workspace = true }
 databend-common-functions = { workspace = true }
 jsonb = { workspace = true }
 tantivy = { workspace = true }
+walkdir = { workspace = true }
+
 
 [package.metadata.cargo-machete]
 ignored = ["serde"]
