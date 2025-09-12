@@ -133,16 +133,9 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
 
             MetaGrpcReadReq::MGetKV(req) => {
                 // safe unwrap(): Infallible
-                let values = kv_api.mget_kv(&req.keys).await.unwrap();
+                let strm = kv_api.get_kv_stream(&req.keys).await.unwrap();
 
-                let kv_iter = req
-                    .keys
-                    .clone()
-                    .into_iter()
-                    .zip(values)
-                    .map(|(k, v)| Ok(StreamItem::from((k, v))));
-
-                let strm = futures::stream::iter(kv_iter);
+                let strm = strm.map_err(|e| Status::internal(e.to_string()));
 
                 Ok(strm.boxed())
             }
