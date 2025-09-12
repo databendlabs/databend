@@ -54,6 +54,6 @@ runs:
 
     - name: Run test
       shell: bash
-      run: nox -f tests/nox/noxfile.py
+      run: nox -f tests/nox/noxfile.py -s python_client java_client
       env:
         JDBC_MAIN_VER: ${{env.JDBC_MAIN_VER}}

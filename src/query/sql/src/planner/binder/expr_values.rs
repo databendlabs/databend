@@ -22,7 +22,9 @@ use databend_common_expression::types::UInt8Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_users::Object;
 
@@ -63,41 +65,57 @@ impl ExprValuesRewriter {
 
 impl<'a> VisitorMut<'a> for ExprValuesRewriter {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
-            let tenant = self.ctx.get_tenant();
-            let catalog = self.ctx.get_default_catalog()?;
-            let visibility_checker = if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let ctx = self.ctx.clone();
-                Some(databend_common_base::runtime::block_on(async move {
-                    ctx.get_visibility_checker(false, Object::Sequence).await
-                })?)
-            } else {
-                None
-            };
-            let value = databend_common_base::runtime::block_on(async move {
-                async_func
-                    .generate(tenant.clone(), catalog.clone(), visibility_checker)
-                    .await
-            })?;
+        match &expr {
+            ScalarExpr::AsyncFunctionCall(async_func) => {
+                let tenant = self.ctx.get_tenant();
+                let catalog = self.ctx.get_default_catalog()?;
+                let visibility_checker = if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_sequence_privilege_check()?
+                {
+                    let ctx = self.ctx.clone();
+                    Some(databend_common_base::runtime::block_on(async move {
+                        ctx.get_visibility_checker(false, Object::Sequence).await
+                    })?)
+                } else {
+                    None
+                };
+                let value = databend_common_base::runtime::block_on(async move {
+                    async_func
+                        .generate(tenant.clone(), catalog.clone(), visibility_checker)
+                        .await
+                })?;
 
-            *expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: async_func.span,
-                value,
-            });
-        }
-
-        if matches!(
-            expr,
+                *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: async_func.span,
+                    value,
+                });
+            }
+            ScalarExpr::FunctionCall(func) => {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .map(|property| property.kind == FunctionKind::SRF)
+                    .unwrap_or(false)
+                {
+                    self.scalars.push(expr.clone());
+                    return Ok(());
+                }
+            }
             ScalarExpr::WindowFunction(_)
-                | ScalarExpr::AggregateFunction(_)
-                | ScalarExpr::UDFCall(_)
-        ) {
-            self.scalars.push(expr.clone());
-            return Ok(());
+            | ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::SubqueryExpr(_)
+            | ScalarExpr::UDFCall(_)
+            | ScalarExpr::UDAFCall(_) => {
+                self.scalars.push(expr.clone());
+                return Ok(());
+            }
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _)
+            | ScalarExpr::LambdaFunction(_)
+            | ScalarExpr::CastExpr(_) => {}
+            ScalarExpr::UDFLambdaCall(_) => {}
         }
 
         walk_expr_mut(self, expr)

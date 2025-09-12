@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
 import time
-import logging
 import requests
 from http.cookiejar import Cookie
 from requests.cookies import RequestsCookieJar
 
 auth = ("root", "")
-logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(levelname)s %(message)s")
 
 
 class GlobalCookieJar(RequestsCookieJar):
@@ -101,16 +98,3 @@ def test_no_cookie_if_not_enabled():
     resp = do_query(client, "select 1", enable_cookie=False)
     assert resp.status_code == 200, resp.text
     assert len(client.cookies.items()) == 0
-
-
-def main():
-    test_simple()
-    test_temp_table()
-    test_no_cookie_if_not_enabled()
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logging.exception(f"An error occurred: {e}")

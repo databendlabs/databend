@@ -429,9 +429,10 @@ impl CreateTableInterpreter {
     /// - Update cluster key of table meta.
     fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
+        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for field in fields.iter() {
             if field.default_expr().is_some() {
-                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(field)?;
+                let _ = default_expr_binder.get_scalar(field)?;
             }
             is_valid_column(field.name())?;
         }
