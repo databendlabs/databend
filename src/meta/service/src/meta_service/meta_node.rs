@@ -1393,7 +1393,7 @@ impl MetaNode {
                 Err(e) => MetaOperationError::ForwardToLeader(e),
             };
 
-            // If needs to forward, deal with it. Otherwise return the unhandlable error.
+            // If it needs to forward, deal with it. Otherwise, return the unhandlable error.
             let to_leader = match op_err {
                 MetaOperationError::ForwardToLeader(err) => err,
                 MetaOperationError::DataError(d_err) => {
