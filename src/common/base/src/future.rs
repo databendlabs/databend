@@ -186,6 +186,53 @@ mod tests {
     }
 
     #[test]
+    fn test_timing_future_blocking_operation() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .unwrap();
+
+        // blocking_in_place sleep
+
+        let f = async move {
+            tokio::task::block_in_place(|| {
+                std::thread::sleep(Duration::from_millis(100));
+            })
+        };
+        let f = TimedFuture::new(f, |_output, total, busy| {
+            // println!("total: {:?}, busy: {:?}", total, busy);
+            assert!(total >= Duration::from_millis(100));
+            assert!(total <= Duration::from_millis(200));
+
+            assert!(busy >= Duration::from_millis(100));
+            assert!(busy <= Duration::from_millis(200));
+        });
+
+        rt.block_on(f);
+
+        // blocking_in_place sleep
+
+        let f = async move {
+            tokio::task::spawn_blocking(|| {
+                std::thread::sleep(Duration::from_millis(100));
+            })
+            .await
+            .ok()
+        };
+        let f = TimedFuture::new(f, |_output, total, busy| {
+            // println!("total: {:?}, busy: {:?}", total, busy);
+            assert!(total >= Duration::from_millis(100));
+            assert!(total <= Duration::from_millis(200));
+
+            assert!(busy <= Duration::from_millis(10));
+        });
+
+        rt.block_on(f);
+        Ok(())
+    }
+
+    #[test]
     fn test_timing_future() -> anyhow::Result<()> {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
