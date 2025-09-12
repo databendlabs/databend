@@ -57,6 +57,9 @@ struct SizedChannelBuffer {
     max_rows: usize,
     page_rows: usize,
     pages: VecDeque<Page>,
+    
+    /// The current_page gets moved outside the lock to spilling and then moved back in, or cleared on close.
+    /// There's a lot of unwrap here to make sure there's no unintended behavior that's not by design.
     current_page: Option<PageBuilder>,
     is_recv_stopped: bool,
     is_send_stopped: bool,
