@@ -19,7 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -29,6 +31,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
+use crate::interpreters::DropSequenceInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -148,6 +151,16 @@ impl Interpreter for DropTableInterpreter {
 
             role_api.revoke_ownership(&owner_object).await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
+
+        for field in tbl.get_table_info().schema().fields().iter() {
+            if let Some(auto_increment_name) = &field.auto_increment_name {
+                DropSequenceInterpreter::req_execute(&self.ctx, DropSequenceReq {
+                    if_exists: false,
+                    ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
+                })
+                .await?;
+            }
         }
 
         let mut build_res = PipelineBuildResult::create();

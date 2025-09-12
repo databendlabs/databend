@@ -19,6 +19,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -27,6 +29,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::interpreters::DropSequenceInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -110,6 +113,19 @@ impl Interpreter for DropTableColumnInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let mut new_table_meta = table.get_table_info().meta.clone();
         new_table_meta.drop_column(&self.plan.column)?;
+
+        let field = table
+            .get_table_info()
+            .meta
+            .schema
+            .field_with_name(self.plan.column.as_str())?;
+        if let Some(auto_increment_name) = &field.auto_increment_name {
+            DropSequenceInterpreter::req_execute(&self.ctx, DropSequenceReq {
+                if_exists: false,
+                ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
+            })
+            .await?;
+        }
 
         // update table options
         let opts = &mut new_table_meta.options;

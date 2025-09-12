@@ -3253,6 +3253,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
         CheckExpr(Box<Expr>),
+        AutoIncrement,
     }
 
     let nullable = alt((
@@ -3283,6 +3284,12 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")"
             },
             |(_, _, expr, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
+        ),
+        map(
+            rule! {
+                AUTO ~ ^INCREMENT
+            },
+            |(_, _)| ColumnConstraint::AutoIncrement,
         ),
     ));
 
@@ -3331,6 +3338,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
+                if matches!(def.expr, Some(ColumnExpr::AutoIncrement(_))) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other(
+                            "DEFAULT and AUTO INCREMENT cannot exist at the same time",
+                        ),
+                    )));
+                }
                 def.expr = Some(ColumnExpr::Default(default_expr))
             }
             ColumnConstraint::VirtualExpr(virtual_expr) => {
@@ -3340,6 +3355,20 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
             ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
+            ColumnConstraint::AutoIncrement => {
+                if matches!(def.expr, Some(ColumnExpr::Default(_))) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other(
+                            "DEFAULT and AUTO INCREMENT cannot exist at the same time",
+                        ),
+                    )));
+                }
+                def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
+                    start_num: 0,
+                    step_num: 1,
+                }))
+            }
         }
     }
 
