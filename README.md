@@ -1,6 +1,6 @@
 <h1 align="center">Databend</h1>
-<h3 align="center">It's not only a Snowflake alternative, but a multimodal data warehouse for the AI era.</h3>
-<p align="center">Snowflake-compatible SQL for structured, semi-structured, geospatial, and vector data</p>
+<h2 align="center">ANY DATA. ANY SCALE. ONE DATABASE.</h2>
+<h3 align="center">Multimodal data warehouse for the AI era with Snowflake-compatible SQL</h3>
 
 <div align="center">
 
