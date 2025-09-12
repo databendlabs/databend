@@ -777,7 +777,6 @@ impl HttpQuery {
     }
 
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
-        let span = fastrace::Span::enter_with_local_parent("HttpQuery::start_query");
         let (block_sender, query_context) = {
             let state = &mut self.executor.lock().state;
             let ExecuteState::Starting(state) = state else {
@@ -831,7 +830,9 @@ impl HttpQuery {
                     block_sender_closer.abort();
                 }
             }
-            .in_span(span),
+            .in_span(fastrace::Span::enter_with_local_parent(
+                "HttpQuery::start_query",
+            )),
             None,
         )?;
 

@@ -329,14 +329,7 @@ where S: DataBlockSpill
         let page = match tp {
             Wait::Async => self.try_take_page().await?,
             Wait::Deadline(t) => {
-                let d = match t.checked_duration_since(Instant::now()) {
-                    Some(d) if !d.is_zero() => d,
-                    _ => {
-                        // timeout() will return Ok if the future completes immediately
-                        return Ok((BlocksSerializer::empty(), self.chan.is_close()));
-                    }
-                };
-                match tokio::time::timeout(d, self.chan.recv()).await {
+                match tokio::time::timeout_at((*t).into(), self.chan.recv()).await {
                     Ok(true) => self.try_take_page().await?,
                     Ok(false) => {
                         info!("[HTTP-QUERY] Reached end of data blocks");
@@ -350,14 +343,11 @@ where S: DataBlockSpill
             }
         };
 
-        let page = match page {
-            Some(page) => page,
-            None => BlocksSerializer::empty(),
-        };
-
         // try to report 'no more data' earlier to client to avoid unnecessary http call
-        let block_end = self.chan.is_close();
-        Ok((page, block_end))
+        Ok((
+            page.unwrap_or_else(BlocksSerializer::empty),
+            self.chan.is_close(),
+        ))
     }
 
     #[fastrace::trace(name = "SizedChannelReceiver::try_take_page")]
@@ -405,21 +395,22 @@ where S: DataBlockSpill
         loop {
             let result = self.chan.buffer.lock().unwrap().try_add_block(block);
             match result {
+                Err(SendFail::Closed) => return Ok(false),
                 Ok(_) => {
                     self.chan.notify_on_sent.notify_one();
                     return Ok(true);
                 }
-                Err(SendFail::Closed) => {
-                    self.chan.notify_on_sent.notify_one();
-                    return Ok(false);
-                }
                 Err(SendFail::Full { page, remain }) => {
+                    self.chan.notify_on_sent.notify_one();
                     let mut to_add = self.chan.try_spill_page(page).await?;
                     loop {
                         let result = self.chan.buffer.lock().unwrap().try_add_page(to_add);
                         match result {
-                            Ok(_) => break,
                             Err(SendFail::Closed) => return Ok(false),
+                            Ok(_) => {
+                                self.chan.notify_on_sent.notify_one();
+                                break;
+                            }
                             Err(SendFail::Full { page, .. }) => {
                                 to_add = Page::Memory(page);
                                 self.chan.notify_on_recv.notified().await;
@@ -427,12 +418,10 @@ where S: DataBlockSpill
                         }
                     }
 
-                    match remain {
-                        Some(remain) => {
-                            block = remain;
-                        }
-                        None => return Ok(true),
-                    }
+                    let Some(remain) = remain else {
+                        return Ok(true);
+                    };
+                    block = remain;
                 }
             }
         }
