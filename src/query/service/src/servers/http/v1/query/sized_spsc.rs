@@ -539,7 +539,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_sized_spsc_channel() {
+    async fn test_spsc_channel() {
         let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
 
         let test_data = vec![
@@ -579,6 +579,48 @@ mod tests {
         assert_eq!(received_blocks_size, vec![4, 4, 1]);
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spsc_slow() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
+
+        let test_data = vec![DataBlock::new_from_columns(vec![Int32Type::from_data(
+            vec![1, 2, 3],
+        )])];
+
+        let wait = Arc::new(Notify::new());
+
+        let sender_wait = wait.clone();
+        let sender_data = test_data.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            let format_settings = FormatSettings::default();
+            sender.plan_ready(format_settings, None);
+
+            sender_wait.notified().await;
+
+            for block in sender_data {
+                sender.send(block).await.unwrap();
+            }
+            sender.finish();
+        });
+
+        for _ in 0..10 {
+            let deadline = Instant::now() + Duration::from_millis(1);
+            let (serializer, _) = receiver.next_page(&Wait::Deadline(deadline)).await.unwrap();
+            assert_eq!(serializer.num_rows(), 0);
+        }
+
+        wait.notify_one();
+
+        let (serializer, _) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .await
+            .unwrap();
+        let _ = receiver.close();
+        send_task.await.unwrap();
+
+        assert_eq!(serializer.num_rows(), 3);
+    }
+
     fn data_block_strategy<N>(len: usize) -> impl Strategy<Value = DataBlock>
     where
         N: Number + Arbitrary + 'static,
@@ -604,7 +646,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_sized_spsc_channel_fuzz() {
+    async fn test_spsc_channel_fuzz() {
         let mut runner = TestRunner::default();
         for _ in 0..100 {
             let (has_spiller, max_size, page_size, test_data) = (
