@@ -54,6 +54,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         cluster_key: None,
         table_indexes: None,
         table_constraints: None,
+        auto_increments: vec![],
         attached_columns: None,
         table_partition: None,
         table_properties: None,

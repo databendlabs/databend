@@ -12,19 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-use chrono::TimeZone;
-use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
-use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::Constraint;
 use fastrace::func_name;
-use maplit::btreemap;
-use maplit::btreeset;
 
 use crate::common;
 
@@ -40,21 +31,38 @@ use crate::common;
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
 fn test_decode_v147_field_auto_increment() -> anyhow::Result<()> {
-    let table_schema_v147 = vec![];
+    let table_schema_v147 = vec![
+        10, 59, 10, 1, 97, 26, 19, 154, 2, 9, 42, 0, 160, 6, 147, 1, 168, 6, 24, 160, 6, 147, 1,
+        168, 6, 24, 50, 10, 115, 101, 113, 117, 101, 110, 99, 101, 95, 49, 58, 14, 65, 85, 84, 79,
+        32, 73, 78, 67, 82, 69, 77, 69, 78, 84, 160, 6, 147, 1, 168, 6, 24, 10, 43, 10, 1, 98, 26,
+        19, 154, 2, 9, 42, 0, 160, 6, 147, 1, 168, 6, 24, 160, 6, 147, 1, 168, 6, 24, 50, 10, 115,
+        101, 113, 117, 101, 110, 99, 101, 95, 50, 160, 6, 147, 1, 168, 6, 24, 10, 47, 10, 1, 99,
+        26, 19, 154, 2, 9, 42, 0, 160, 6, 147, 1, 168, 6, 24, 160, 6, 147, 1, 168, 6, 24, 58, 14,
+        65, 85, 84, 79, 32, 73, 78, 67, 82, 69, 77, 69, 78, 84, 160, 6, 147, 1, 168, 6, 24, 10, 31,
+        10, 1, 100, 26, 19, 154, 2, 9, 42, 0, 160, 6, 147, 1, 168, 6, 24, 160, 6, 147, 1, 168, 6,
+        24, 160, 6, 147, 1, 168, 6, 24, 160, 6, 147, 1, 168, 6, 24,
+    ];
 
-    let want = || ce::TableSchema {
-        fields: vec![
-            ce::TableField::new("a", TableDataType::Number(NumberDataType::Int8))
-                .with_auto_increment_name(Some(s("sequence_1")))
-                .with_auto_increment_display(Some(s("AUTO INCREMENT"))),
-            ce::TableField::new("b", TableDataType::Number(NumberDataType::Int8))
-                .with_auto_increment_name(Some(s("sequence_2"))),
-            ce::TableField::new("c", TableDataType::Number(NumberDataType::Int8))
-                .with_auto_increment_display(Some(s("AUTO INCREMENT"))),
-            ce::TableField::new("d", TableDataType::Number(NumberDataType::Int8)),
-        ],
-        metadata: Default::default(),
-        next_column_id: 0,
+    let want = || {
+        let mut field_a = ce::TableField::new("a", TableDataType::Number(NumberDataType::Int8))
+            .with_auto_increment_name(Some(s("sequence_1")))
+            .with_auto_increment_display(Some(s("AUTO INCREMENT")));
+        let mut field_b = ce::TableField::new("b", TableDataType::Number(NumberDataType::Int8))
+            .with_auto_increment_name(Some(s("sequence_2")));
+        let mut field_c = ce::TableField::new("c", TableDataType::Number(NumberDataType::Int8))
+            .with_auto_increment_display(Some(s("AUTO INCREMENT")));
+        let mut field_d = ce::TableField::new("d", TableDataType::Number(NumberDataType::Int8));
+
+        field_a.column_id = 0;
+        field_b.column_id = 1;
+        field_c.column_id = 2;
+        field_d.column_id = 3;
+
+        ce::TableSchema {
+            fields: vec![field_a, field_b, field_c, field_d],
+            metadata: Default::default(),
+            next_column_id: 4,
+        }
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_schema_v147.as_slice(), 147, want())?;
