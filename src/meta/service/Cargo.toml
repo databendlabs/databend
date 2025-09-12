@@ -49,6 +49,7 @@ log = { workspace = true }
 logcall = { workspace = true }
 map-api = { workspace = true }
 maplit = { workspace = true }
+pin-project = { workspace = true}
 poem = { workspace = true }
 prometheus-client = { workspace = true }
 prost = { workspace = true }

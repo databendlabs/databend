@@ -196,8 +196,8 @@ impl SMV003 {
     }
 
     pub async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
-        let view = self.data().to_readonly_view();
-        let got = view.get(UserKey::new(key.to_string())).await?;
+        let readonly_view = self.data().to_readonly_view();
+        let got = readonly_view.get(UserKey::new(key.to_string())).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }
