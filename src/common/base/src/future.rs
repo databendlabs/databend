@@ -213,6 +213,7 @@ mod tests {
 
         // blocking_in_place sleep
 
+        #[allow(clippy::disallowed_methods)]
         let f = async move {
             tokio::task::spawn_blocking(|| {
                 std::thread::sleep(Duration::from_millis(100));
