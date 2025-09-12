@@ -61,4 +61,8 @@ message DataField {
   uint32 column_id = 4;
 
   optional ComputedExpr computed_expr = 5;
+  // auto increment sequence name
+  optional string auto_increment_name = 6;
+  // auto increment sequence display on show create table
+  optional string auto_increment_display = 7;
 }

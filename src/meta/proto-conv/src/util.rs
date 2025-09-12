@@ -176,6 +176,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (144, "2025-08-18: Add: add ScalarUDF"),
     (145, "2025-08-20: Add: Opaque DataType"),
     (146, "2025-09-01: Add: add Constraint on TableMeta"),
+    (147, "2025-09-11: Add: add AutoIncrement name and display on TableField"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

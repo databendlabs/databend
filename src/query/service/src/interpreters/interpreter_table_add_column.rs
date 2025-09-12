@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -23,7 +24,10 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -45,6 +49,7 @@ use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
+use crate::interpreters::CreateSequenceInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -123,6 +128,28 @@ impl Interpreter for AddTableColumnInterpreter {
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;
+
+        if let Some(auto_increment) = &self.plan.auto_increment {
+            let mut schema = TableSchema::clone(&table_info.schema()).clone();
+            let index = schema.index_of(field.name.as_str())?;
+            let sequence_name =
+                auto_increment.sequence_name(db_name, tbl_name, schema.field(index).column_id());
+            schema.fields[index].auto_increment_name = Some(sequence_name.clone());
+            schema.fields[index].auto_increment_display = Some(auto_increment.to_string());
+
+            table_info.meta.schema = Arc::new(schema);
+
+            let req = CreateSequenceReq {
+                create_option: CreateOption::Create,
+                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
+                start: auto_increment.start_num,
+                increment: auto_increment.step_num,
+                comment: None,
+                create_on: Utc::now(),
+                storage_version: 0,
+            };
+            CreateSequenceInterpreter::req_execute(&self.ctx, req).await?;
+        }
 
         // if the new column is a stored computed field and table is non-empty,
         // need rebuild the table to generate stored computed column.

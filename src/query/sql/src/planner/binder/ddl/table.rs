@@ -22,6 +22,7 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::ClusterOption;
 use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
@@ -169,6 +170,7 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) field_comments: Vec<String>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
+    pub(in crate::planner::binder) auto_increments: Vec<(usize, AutoIncrement)>,
 }
 
 impl Binder {
@@ -658,6 +660,7 @@ impl Binder {
                 field_comments,
                 table_indexes,
                 table_constraints,
+                auto_increments,
             },
             as_query_plan,
         ) = match (&source, &as_query) {
@@ -691,6 +694,7 @@ impl Binder {
                         field_comments: vec![],
                         table_indexes: None,
                         table_constraints: None,
+                        auto_increments: vec![],
                     },
                     Some(Box::new(as_query_plan)),
                 )
@@ -738,6 +742,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
+                            auto_increments: vec![],
                         }, as_query_plan)
                     }
                     Engine::Delta => {
@@ -755,6 +760,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
+                            auto_increments: vec![],
                         }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -880,6 +886,7 @@ impl Binder {
             as_select: as_query_plan,
             table_indexes,
             table_constraints,
+            auto_increments,
             attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -949,6 +956,7 @@ impl Binder {
             as_select: None,
             table_indexes: None,
             table_constraints: None,
+            auto_increments: vec![],
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -1091,7 +1099,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment, is_deterministic, is_nextval) =
+                let (field, auto_increment, comment, is_deterministic, is_nextval) =
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
@@ -1106,6 +1114,7 @@ impl Binder {
                     database,
                     table,
                     field,
+                    auto_increment,
                     comment,
                     option,
                     is_deterministic,
@@ -1180,7 +1189,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment, _, _) =
+                            let (field, _, comment, _, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -1657,13 +1666,15 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String, bool, bool)> {
+    ) -> Result<(TableField, Option<AutoIncrement>, String, bool, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
         let mut is_nextval = false;
         let mut field = TableField::new(&name, data_type);
+        let mut auto_increment = None;
+
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
@@ -1693,23 +1704,35 @@ impl Binder {
                     field = field.with_computed_expr(Some(ComputedExpr::Stored(expr)));
                     is_deterministic = false;
                 }
+                ColumnExpr::AutoIncrement(field_sequence) => {
+                    if !matches!(
+                        field.data_type().remove_nullable(),
+                        TableDataType::Number(_)
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
+                        ));
+                    }
+                    auto_increment = Some(field_sequence.clone());
+                }
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment, is_deterministic, is_nextval))
+        Ok((field, auto_increment, comment, is_deterministic, is_nextval))
     }
 
     #[async_backtrace::framed]
     pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-    ) -> Result<(TableSchemaRef, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>, Vec<(usize, AutoIncrement)>)> {
         let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
+        let mut auto_increments = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
-        for column in columns.iter() {
+        for (i, column) in columns.iter().enumerate() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
@@ -1720,6 +1743,17 @@ impl Binder {
                         let (expr, _, _) = default_expr_binder
                             .parse_default_expr_to_string(&field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
+                    }
+                    ColumnExpr::AutoIncrement(field_sequence) => {
+                        if !matches!(
+                            field.data_type().remove_nullable(),
+                            TableDataType::Number(_)
+                        ) {
+                            return Err(ErrorCode::SemanticError(
+                                "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
+                            ));
+                        }
+                        auto_increments.push((i, field_sequence.clone()));
                     }
                     _ => has_computed = true,
                 }
@@ -1773,7 +1807,7 @@ impl Binder {
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_comments))
+        Ok((schema, fields_comments, auto_increments))
     }
 
     #[async_backtrace::framed]
@@ -1892,7 +1926,7 @@ impl Binder {
                 opt_table_constraints,
                 opt_column_constraints,
             } => {
-                let (schema, comments) =
+                let (schema, comments, auto_increments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
                     let table_indexes = self
@@ -1926,6 +1960,7 @@ impl Binder {
                     field_comments: comments,
                     table_indexes,
                     table_constraints,
+                    auto_increments,
                 })
             }
             CreateTableSource::Like {
@@ -1946,6 +1981,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
+                            auto_increments: vec![],
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -1958,6 +1994,7 @@ impl Binder {
                         field_comments: table.field_comments().clone(),
                         table_indexes: None,
                         table_constraints: None,
+                        auto_increments: vec![],
                     })
                 }
             }

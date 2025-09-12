@@ -22,6 +22,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::is_internal_column;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
@@ -33,8 +34,10 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
@@ -80,6 +83,7 @@ use crate::interpreters::common::table_option_validation::is_valid_row_per_block
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
+use crate::interpreters::CreateSequenceInterpreter;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -208,6 +212,9 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         let mut req = self.build_request(None)?;
+        if let Some(new_schema) = self.create_sequences(&req.table_meta.schema).await? {
+            req.table_meta.schema = Arc::new(new_schema);
+        }
 
         // create a dropped table first.
         req.as_dropped = true;
@@ -323,6 +330,36 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
+    async fn create_sequences(&self, table_schema: &TableSchema) -> Result<Option<TableSchema>> {
+        if self.plan.auto_increments.is_empty() {
+            return Ok(None);
+        }
+        let mut table_schema = table_schema.clone();
+
+        for (i, auto_increment) in self.plan.auto_increments.iter() {
+            let field = &mut table_schema.fields[*i];
+            let sequence_name = auto_increment.sequence_name(
+                &self.plan.database,
+                &self.plan.table,
+                field.column_id(),
+            );
+            field.auto_increment_name = Some(sequence_name.clone());
+            field.auto_increment_display = Some(auto_increment.to_string());
+
+            let req = CreateSequenceReq {
+                create_option: self.plan.create_option,
+                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
+                start: auto_increment.start_num,
+                increment: auto_increment.step_num,
+                comment: None,
+                create_on: Utc::now(),
+                storage_version: 0,
+            };
+            CreateSequenceInterpreter::req_execute(&self.ctx, req).await?;
+        }
+        Ok(Some(table_schema))
+    }
+
     async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
         // grant the ownership of the table to the current role.
         let mut invalid_cache = false;
@@ -394,7 +431,7 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
@@ -407,6 +444,9 @@ impl CreateTableInterpreter {
                  "Current Catalog Type is {:?}, only Iceberg Catalog supports CREATE TABLE with PARTITION BY or PROPERTIES",
                  catalog.info().catalog_type()
              )));
+        }
+        if let Some(new_schema) = self.create_sequences(&req.table_meta.schema).await? {
+            req.table_meta.schema = Arc::new(new_schema);
         }
 
         let reply = catalog.create_table(req.clone()).await?;
