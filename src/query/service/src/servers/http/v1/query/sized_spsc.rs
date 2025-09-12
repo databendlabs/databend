@@ -57,7 +57,7 @@ struct SizedChannelBuffer {
     max_rows: usize,
     page_rows: usize,
     pages: VecDeque<Page>,
-    
+
     /// The current_page gets moved outside the lock to spilling and then moved back in, or cleared on close.
     /// There's a lot of unwrap here to make sure there's no unintended behavior that's not by design.
     current_page: Option<PageBuilder>,
@@ -611,6 +611,53 @@ mod tests {
         send_task.await.unwrap();
 
         assert_eq!(serializer.num_rows(), 3);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spsc_abort() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
+
+        let test_data = vec![
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![4, 5, 6, 7, 8])]),
+            DataBlock::new_from_columns(vec![Int32Type::from_data(vec![7, 8, 9])]),
+        ];
+
+        let sender_data = test_data.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            let format_settings = FormatSettings::default();
+            sender.plan_ready(format_settings, None);
+
+            for (i, block) in sender_data.into_iter().enumerate() {
+                sender.send(block).await.unwrap();
+                if i == 3 {
+                    sender.abort();
+                    return;
+                }
+            }
+        });
+
+        let mut received_blocks_size = Vec::new();
+        loop {
+            let (serializer, is_end) = receiver
+                .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+                .await
+                .unwrap();
+
+            if serializer.num_rows() > 0 {
+                received_blocks_size.push(serializer.num_rows());
+            }
+
+            if is_end {
+                break;
+            }
+        }
+
+        send_task.await.unwrap();
+
+        assert_eq!(received_blocks_size, vec![4, 4])
     }
 
     fn data_block_strategy<N>(len: usize) -> impl Strategy<Value = DataBlock>
