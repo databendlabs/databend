@@ -138,3 +138,4 @@ mod v143_udtf;
 mod v144_scalar_udf;
 mod v145_opaque_data_type;
 mod v146_constraint;
+mod v147_field_auto_increment;

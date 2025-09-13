@@ -87,7 +87,8 @@ impl FromToProto for ex::TableField {
             p.column_id,
         )
         .with_default_expr(p.default_expr)
-        .with_computed_expr(computed_expr);
+        .with_computed_expr(computed_expr)
+        .with_auto_increment_display(p.auto_increment_display);
         Ok(v)
     }
 
@@ -104,6 +105,7 @@ impl FromToProto for ex::TableField {
             data_type: Some(self.data_type().to_pb()?),
             column_id: self.column_id(),
             computed_expr,
+            auto_increment_display: self.auto_increment_display().cloned(),
         };
         Ok(p)
     }

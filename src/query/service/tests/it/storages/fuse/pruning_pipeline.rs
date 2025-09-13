@@ -176,6 +176,7 @@ async fn test_snapshot_pruner() -> Result<()> {
         cluster_key: None,
         table_indexes: None,
         table_constraints: None,
+        auto_increments: vec![],
         attached_columns: None,
         table_partition: None,
         table_properties: None,

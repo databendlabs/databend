@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
@@ -34,6 +35,7 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_types::MetaId;
 use parking_lot::RwLock;
 
 use crate::binder::wrap_cast;
@@ -52,6 +54,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct DefaultExprBinder {
+    auto_increment_database_with_table_id: Option<(String, MetaId)>,
     bind_context: BindContext,
     ctx: Arc<dyn TableContext>,
     dialect: Dialect,
@@ -90,6 +93,7 @@ impl DefaultExprBinder {
         let rewriter = DefaultValueRewriter::new();
 
         Ok(DefaultExprBinder {
+            auto_increment_database_with_table_id: None,
             bind_context,
             ctx,
             dialect,
@@ -99,6 +103,15 @@ impl DefaultExprBinder {
             dummy_block,
             func_ctx,
         })
+    }
+
+    pub fn auto_increment_database_with_table_id(
+        mut self,
+        database_name: impl Into<String>,
+        table_id: u64,
+    ) -> Self {
+        self.auto_increment_database_with_table_id = Some((database_name.into(), table_id));
+        self
     }
 
     fn evaluator(&self) -> Evaluator {
@@ -189,6 +202,20 @@ impl DefaultExprBinder {
             } else {
                 Ok(scalar_expr)
             }
+        } else if let (Some((database_name, table_id)), Some(column_id)) = (
+            &self.auto_increment_database_with_table_id,
+            field.auto_increment_column_id(),
+        ) {
+            let sequence_name = AutoIncrement::sequence_name(database_name, *table_id, *column_id);
+
+            Ok(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span: None,
+                func_name: "nextval".to_string(),
+                display_name: "".to_string(),
+                return_type: Box::new(field.data_type().clone()),
+                arguments: vec![],
+                func_arg: AsyncFunctionArgument::SequenceFunction(sequence_name),
+            }))
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {
                 span: None,
@@ -225,6 +252,7 @@ impl DefaultExprBinder {
         schema: &DataSchema,
     ) -> Result<databend_common_expression::Expr> {
         let scalar_expr = self.parse_and_bind(field)?;
+
         scalar_expr
             .as_expr()?
             .project_column_ref(|col| schema.index_of(&col.index.to_string()))
@@ -265,30 +293,38 @@ impl DefaultExprBinder {
         let mut async_fields = vec![];
         let mut async_fields_no_cast = vec![];
 
-        for f in dest_schema.fields().iter() {
-            if !input_schema.has_field(f.name()) {
-                if let Some(default_expr) = f.default_expr() {
-                    if default_expr.contains("nextval(") {
-                        let scalar_expr = self.parse_and_bind(f)?;
-                        if let Some(async_func) = get_nextval(&scalar_expr) {
-                            async_func_descs.push(AsyncFunctionDesc {
-                                func_name: async_func.func_name.clone(),
-                                display_name: async_func.display_name.clone(),
-                                // not used
-                                output_column: 0,
-                                arg_indices: vec![],
-                                data_type: async_func.return_type.clone(),
-                                func_arg: async_func.func_arg.clone(),
-                            });
-                            async_fields.push(f.clone());
-                            async_fields_no_cast.push(DataField::new(
-                                f.name(),
-                                DataType::Number(NumberDataType::UInt64),
-                            ));
-                        }
-                    }
+        let fn_check_field_next_val = |field: &DataField| {
+            if input_schema.has_field(field.name()) {
+                return false;
+            }
+            if let Some(default_expr) = field.default_expr() {
+                if default_expr.contains("nextval(") {
+                    return true;
                 }
-            };
+            }
+            field.auto_increment_display().is_some()
+        };
+        for f in dest_schema.fields().iter() {
+            if !fn_check_field_next_val(f) {
+                continue;
+            }
+            let scalar_expr = self.parse_and_bind(f)?;
+            if let Some(async_func) = get_nextval(&scalar_expr) {
+                async_func_descs.push(AsyncFunctionDesc {
+                    func_name: async_func.func_name.clone(),
+                    display_name: async_func.display_name.clone(),
+                    // not used
+                    output_column: 0,
+                    arg_indices: vec![],
+                    data_type: async_func.return_type.clone(),
+                    func_arg: async_func.func_arg.clone(),
+                });
+                async_fields.push(f.clone());
+                async_fields_no_cast.push(DataField::new(
+                    f.name(),
+                    DataType::Number(NumberDataType::UInt64),
+                ));
+            }
         }
         if async_func_descs.is_empty() {
             Ok(None)

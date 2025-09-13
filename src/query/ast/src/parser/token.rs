@@ -355,6 +355,8 @@ pub enum TokenKind {
     ARGS,
     #[token("AUTO", ignore(ascii_case))]
     AUTO,
+    #[token("AUTOINCREMENT", ignore(ascii_case))]
+    AUTOINCREMENT,
     #[token("SOME", ignore(ascii_case))]
     SOME,
     #[token("ALTER", ignore(ascii_case))]
