@@ -462,7 +462,7 @@ reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
-rotbl = { version = "0.2.8", features = [] }
+rotbl = { version = "0.2.9", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
