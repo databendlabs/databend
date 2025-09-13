@@ -5,55 +5,55 @@ select * from infer_schema(location => '@data/invalid_xxx/tuple.parquet')
 query
 select * from infer_schema(location => '@data/parquet/tuple.parquet')
 ----
-id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+id INT 0 parquet/tuple.parquet 0
+t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
 
 query
 select * from infer_schema(location => '@data/parquet/complex.parquet')
 ----
-resourceType VARCHAR 1 0
-id VARCHAR 1 1
-meta TUPLE(ID STRING, EXTENSION ARRAY(STRING), VERSIONID STRING, LASTUPDATED TIMESTAMP, SOURCE STRING, PROFILE ARRAY(STRING), SECURITY ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TAG ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN))) 1 2
-implicitRules VARCHAR 1 3
-language VARCHAR 1 4
-text TUPLE(ID STRING, EXTENSION ARRAY(STRING), STATUS STRING, DIV STRING) 1 5
-contained ARRAY(STRING) 1 6
-extension ARRAY(STRING) 1 7
-modifierExtension ARRAY(STRING) 1 8
-identifier ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING))) 1 9
-active BOOLEAN 1 10
-name ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TEXT STRING, FAMILY STRING, GIVEN ARRAY(STRING), PREFIX ARRAY(STRING), SUFFIX ARRAY(STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 11
-telecom ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VALUE STRING, USE STRING, RANK INT32, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 12
-gender VARCHAR 1 13
-birthDate DATE 1 14
-deceasedBoolean BOOLEAN 1 15
-deceasedDateTime TIMESTAMP 1 16
-address ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE STRING, TEXT STRING, LINE ARRAY(STRING), CITY STRING, DISTRICT STRING, STATE STRING, POSTALCODE STRING, COUNTRY STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 17
-maritalStatus TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING) 1 18
-multipleBirthBoolean BOOLEAN 1 19
-multipleBirthInteger INT 1 20
-photo ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), CONTENTTYPE STRING, LANGUAGE STRING, DATA BINARY, URL STRING, SIZE INT32, HASH BINARY, TITLE STRING, CREATION TIMESTAMP)) 1 21
-contact ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), RELATIONSHIP ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING)), NAME TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TEXT STRING, FAMILY STRING, GIVEN ARRAY(STRING), PREFIX ARRAY(STRING), SUFFIX ARRAY(STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP)), TELECOM ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VALUE STRING, USE STRING, RANK INT32, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))), ADDRESS TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE STRING, TEXT STRING, LINE ARRAY(STRING), CITY STRING, DISTRICT STRING, STATE STRING, POSTALCODE STRING, COUNTRY STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP)), GENDER STRING, ORGANIZATION TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 22
-communication ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), LANGUAGE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), PREFERRED BOOLEAN)) 1 23
-generalPractitioner ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING)) 1 24
-managingOrganization TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING) 1 25
-link ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), OTHER TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING), TYPE STRING)) 1 26
-yy__version INT 1 27
-yy__us_core_race VARCHAR 1 28
-yy__us_core_ethnicity VARCHAR 1 29
-yy__us_core_birthsex TUPLE(VALUECODE STRING,) 1 30
+resourceType VARCHAR 1 parquet/complex.parquet 0
+id VARCHAR 1 parquet/complex.parquet 1
+meta TUPLE(ID STRING, EXTENSION ARRAY(STRING), VERSIONID STRING, LASTUPDATED TIMESTAMP, SOURCE STRING, PROFILE ARRAY(STRING), SECURITY ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TAG ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN))) 1 parquet/complex.parquet 2                                                                                                                                                                    
+implicitRules VARCHAR 1 parquet/complex.parquet 3
+language VARCHAR 1 parquet/complex.parquet 4
+text TUPLE(ID STRING, EXTENSION ARRAY(STRING), STATUS STRING, DIV STRING) 1 parquet/complex.parquet 5
+contained ARRAY(STRING) 1 parquet/complex.parquet 6
+extension ARRAY(STRING) 1 parquet/complex.parquet 7
+modifierExtension ARRAY(STRING) 1 parquet/complex.parquet 8
+identifier ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING))) 1 parquet/complex.parquet 9                                                                                                                                                                                                                                                                                                 
+active BOOLEAN 1 parquet/complex.parquet 10
+name ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TEXT STRING, FAMILY STRING, GIVEN ARRAY(STRING), PREFIX ARRAY(STRING), SUFFIX ARRAY(STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 parquet/complex.parquet 11
+telecom ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VALUE STRING, USE STRING, RANK INT32, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 parquet/complex.parquet 12
+gender VARCHAR 1 parquet/complex.parquet 13
+birthDate DATE 1 parquet/complex.parquet 14
+deceasedBoolean BOOLEAN 1 parquet/complex.parquet 15
+deceasedDateTime TIMESTAMP 1 parquet/complex.parquet 16
+address ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE STRING, TEXT STRING, LINE ARRAY(STRING), CITY STRING, DISTRICT STRING, STATE STRING, POSTALCODE STRING, COUNTRY STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 parquet/complex.parquet 17                                                                                                                                                                                                                                                                                                  
+maritalStatus TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING) 1 parquet/complex.parquet 18
+multipleBirthBoolean BOOLEAN 1 parquet/complex.parquet 19
+multipleBirthInteger INT 1 parquet/complex.parquet 20
+photo ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), CONTENTTYPE STRING, LANGUAGE STRING, DATA BINARY, URL STRING, SIZE INT32, HASH BINARY, TITLE STRING, CREATION TIMESTAMP)) 1 parquet/complex.parquet 21
+contact ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), RELATIONSHIP ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING)), NAME TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TEXT STRING, FAMILY STRING, GIVEN ARRAY(STRING), PREFIX ARRAY(STRING), SUFFIX ARRAY(STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP)), TELECOM ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VALUE STRING, USE STRING, RANK INT32, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))), ADDRESS TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE STRING, TEXT STRING, LINE ARRAY(STRING), CITY STRING, DISTRICT STRING, STATE STRING, POSTALCODE STRING, COUNTRY STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP)), GENDER STRING, ORGANIZATION TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING), PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP))) 1 parquet/complex.parquet 22                                                                                                                                                                     
+communication ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), LANGUAGE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), PREFERRED BOOLEAN)) 1 parquet/complex.parquet 23                                                                                                                                                                                                                                                       
+generalPractitioner ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING)) 1 parquet/complex.parquet 24                                                        
+managingOrganization TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING) 1 parquet/complex.parquet 25                                                              
+link ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), MODIFIEREXTENSION ARRAY(STRING), OTHER TUPLE(ID STRING, EXTENSION ARRAY(STRING), REFERENCE STRING, TYPE STRING, IDENTIFIER TUPLE(ID STRING, EXTENSION ARRAY(STRING), USE STRING, TYPE TUPLE(ID STRING, EXTENSION ARRAY(STRING), CODING ARRAY(TUPLE(ID STRING, EXTENSION ARRAY(STRING), SYSTEM STRING, VERSION STRING, CODE STRING, DISPLAY STRING, USERSELECTED BOOLEAN)), TEXT STRING), SYSTEM STRING, VALUE STRING, PERIOD TUPLE(ID STRING, EXTENSION ARRAY(STRING), START TIMESTAMP, END TIMESTAMP), ASSIGNER STRING), DISPLAY STRING), TYPE STRING)) 1 parquet/complex.parquet 26                                                                                                                                                                                                                                                                                   
+yy__version INT 1 parquet/complex.parquet 27
+yy__us_core_race VARCHAR 1 parquet/complex.parquet 28
+yy__us_core_ethnicity VARCHAR 1 parquet/complex.parquet 29
+yy__us_core_birthsex TUPLE(VALUECODE STRING,) 1 parquet/complex.parquet 30
 
 query
 select * from infer_schema(location => '@data/parquet/variant.parquet')
 ----
-a INT 0 0
-b VARIANT 0 1
+a INT 0 parquet/variant.parquet 0
+b VARIANT 0 parquet/variant.parquet 1
 
 query
 select * from infer_schema(location => '@data/parquet/', FILE_FORMAT => 'PARQUET',  pattern => 'tuple.*')
 ----
-id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+id INT 0 parquet/tuple.parquet 0
+t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
 
 statement ok
 drop CONNECTION IF EXISTS my_conn
@@ -61,8 +61,195 @@ drop CONNECTION IF EXISTS my_conn
 statement ok
 create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/' region='auto'
 
-query
-select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
+# query
+# select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
+# ----
+# id INT 0 parquet/tuple.parquet 0
+# t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
+
+query T
+select CASE
+               WHEN filenames LIKE '%,%'
+               THEN 'Y'
+               ELSE 'N'
+           END AS format_check
+from infer_schema(location => '@data/parquet/max_file_count', max_file_count => 2)
 ----
-id INT 0 0
-t TUPLE(A INT32, B STRING) 0 1
+Y
+Y
+
+# CSV
+statement ok
+create or replace file format head_csv_format type = 'CSV' field_delimiter = ',' skip_header = 1;
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'CSV');
+----
+column_1 VARCHAR 1 csv/numbers_with_headers.csv 0
+column_2 VARCHAR 1 csv/numbers_with_headers.csv 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 csv/numbers_with_headers.csv 0
+value BIGINT 1 csv/numbers_with_headers.csv 1
+
+statement error
+select * from infer_schema(location => '@data/csv/ragged.csv', file_format => 'head_csv_format');
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format');
+----
+id BIGINT 1 csv/max_records.csv 0
+value VARCHAR 1 csv/max_records.csv 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 csv/max_records.csv 0
+value BIGINT 1 csv/max_records.csv 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 csv/max_records.zip 0
+value BIGINT 1 csv/max_records.zip 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 csv/max_records.zst 0
+value BIGINT 1 csv/max_records.zst 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 csv/max_records.csv 0
+value BIGINT 1 csv/max_records.csv 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
+----
+id BIGINT 1 csv/max_records.xz 0
+value BIGINT 1 csv/max_records.xz 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/types.csv', file_format => 'head_csv_format')
+----
+bool_col BOOLEAN 1 csv/types.csv 0
+int_col BIGINT 1 csv/types.csv 1
+float_col DOUBLE 1 csv/types.csv 2
+date_col DATE 1 csv/types.csv 3
+ts_sec TIMESTAMP 1 csv/types.csv 4
+ts_ms TIMESTAMP 1 csv/types.csv 5
+ts_us TIMESTAMP 1 csv/types.csv 6
+ts_ns TIMESTAMP 1 csv/types.csv 7
+utf8_col VARCHAR 1 csv/types.csv 8
+
+query TTBTI
+select column_name, type, nullable, order_id from infer_schema(location => '@data/csv/merge/', file_format => 'head_csv_format');
+----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4
+
+query T
+select CASE
+               WHEN filenames LIKE '%,%'
+               THEN 'Y'
+               ELSE 'N'
+           END AS format_check
+from infer_schema(location => '@data/csv/max_file_count/', file_format => 'head_csv_format', max_file_count => 2);
+----
+Y
+Y
+Y
+Y
+Y
+
+# NDJSON
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/numbers.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 ndjson/numbers.ndjson 0
+value BIGINT 1 ndjson/numbers.ndjson 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/ragged.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 ndjson/ragged.ndjson 0
+value BIGINT 1 ndjson/ragged.ndjson 1
+comment VARCHAR 1 ndjson/ragged.ndjson 2
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON');
+----
+id BIGINT 1 ndjson/max_records.ndjson 0
+value VARCHAR 1 ndjson/max_records.ndjson 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 ndjson/max_records.ndjson 0
+value BIGINT 1 ndjson/max_records.ndjson 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 ndjson/max_records.zip 0
+value BIGINT 1 ndjson/max_records.zip 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 ndjson/max_records.zst 0
+value BIGINT 1 ndjson/max_records.zst 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+----
+id BIGINT 1 ndjson/max_records.ndjson 0
+value BIGINT 1 ndjson/max_records.ndjson 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_pre_file => 5)
+----
+id BIGINT 1 ndjson/max_records.xz 0
+value BIGINT 1 ndjson/max_records.xz 1
+
+query TTBTI
+select * from infer_schema(location => '@data/ndjson/types.ndjson', file_format => 'NDJSON')
+----
+bool_col BOOLEAN 1 ndjson/types.ndjson 0
+int_col BIGINT 1 ndjson/types.ndjson 1
+float_col DOUBLE 1 ndjson/types.ndjson 2
+date_col VARCHAR 1 ndjson/types.ndjson 3
+ts_sec VARCHAR 1 ndjson/types.ndjson 4
+ts_ms VARCHAR 1 ndjson/types.ndjson 5
+ts_us VARCHAR 1 ndjson/types.ndjson 6
+ts_ns VARCHAR 1 ndjson/types.ndjson 7
+utf8_col VARCHAR 1 ndjson/types.ndjson 8
+arr_col ARRAY(STRING) 1 ndjson/types.ndjson 9
+obj_col TUPLE(A INT64, B STRING) 1 ndjson/types.ndjson 10
+
+query TTBTI
+select column_name, type, nullable, order_id from infer_schema(location => '@data/ndjson/merge/', file_format => 'NDJSON');
+----
+col1 VARCHAR 1 0
+col2 VARCHAR 1 1
+col3 VARCHAR 1 2
+col4 VARCHAR 1 3
+col5 VARCHAR 1 4
+
+query T
+select CASE
+               WHEN filenames LIKE '%,%'
+               THEN 'Y'
+               ELSE 'N'
+           END AS format_check
+from infer_schema(location => '@data/ndjson/max_file_count/', file_format => 'NDJSON', max_file_count => 2);
+----
+Y
+Y
