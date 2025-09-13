@@ -12,31 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
-use std::ops::Range;
 use std::sync::Arc;
-use std::time::Instant;
 
-use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
-use databend_common_io::prelude::FormatSettings;
-use itertools::Itertools;
-use log::debug;
-use log::info;
-use parking_lot::RwLock;
 
 use super::blocks_serializer::BlocksSerializer;
-use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Wait {
-    Async,
-    Deadline(Instant),
-}
+use super::http_query::PaginationConf;
+use super::sized_spsc::sized_spsc;
+use super::sized_spsc::SizedChannelReceiver;
+use super::sized_spsc::SizedChannelSender;
+use super::Wait;
+use crate::spillers::LiteSpiller;
 
 #[derive(Clone)]
 pub struct Page {
@@ -49,34 +36,28 @@ pub struct ResponseData {
 }
 
 pub struct PageManager {
-    max_rows_per_page: usize,
     total_rows: usize,
     total_pages: usize,
     end: bool,
-    block_end: bool,
     last_page: Option<Page>,
-    row_buffer: Option<Vec<Column>>,
-    block_receiver: SizedChannelReceiver<DataBlock>,
-    pub(crate) format_settings: Arc<RwLock<Option<FormatSettings>>>,
+    receiver: SizedChannelReceiver<LiteSpiller>,
 }
 
 impl PageManager {
-    pub fn new(
-        max_rows_per_page: usize,
-        block_receiver: SizedChannelReceiver<DataBlock>,
-        format_settings: Arc<RwLock<Option<FormatSettings>>>,
-    ) -> PageManager {
-        PageManager {
-            total_rows: 0,
-            last_page: None,
-            total_pages: 0,
-            end: false,
-            block_end: false,
-            row_buffer: Default::default(),
-            block_receiver,
-            max_rows_per_page,
-            format_settings,
-        }
+    pub fn create(conf: &PaginationConf) -> (PageManager, SizedChannelSender<LiteSpiller>) {
+        let (sender, receiver) =
+            sized_spsc::<LiteSpiller>(conf.max_rows_in_buffer, conf.max_rows_per_page);
+
+        (
+            PageManager {
+                total_rows: 0,
+                last_page: None,
+                total_pages: 0,
+                end: false,
+                receiver,
+            },
+            sender,
+        )
     }
 
     pub fn next_page_no(&mut self) -> Option<usize> {
@@ -88,13 +69,31 @@ impl PageManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
+    #[fastrace::trace(name = "PageManager::get_a_page")]
+    pub async fn get_a_page(&mut self, page_no: usize, wait: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no {
-            let mut serializer = BlocksSerializer::new(self.format_settings.read().clone());
             if !self.end {
-                let end = self.collect_new_page(&mut serializer, tp).await?;
+                let start_time = std::time::Instant::now();
+                let (serializer, end) = self.receiver.next_page(wait).await?;
                 let num_row = serializer.num_rows();
+                let duration_ms = start_time.elapsed().as_millis();
+
+                log::debug!(num_row, wait_type:? = wait; "collect_new_page");
+                log::info!(
+                    target: "result-set-spill",
+                    "[RESULT-SET-SPILL] Page received page_no={}, rows={}, total_rows={}, end={}, duration_ms={}",
+                    self.total_pages, num_row, self.total_rows + num_row, end, duration_ms
+                );
+
+                if num_row == 0 {
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Empty page page_no={}, end={}",
+                        self.total_pages, end
+                    );
+                }
+
                 self.total_rows += num_row;
                 let page = Page {
                     data: Arc::new(serializer),
@@ -110,7 +109,7 @@ impl PageManager {
                 // but the response may be lost and client will retry,
                 // we simply return an empty page.
                 let page = Page {
-                    data: Arc::new(serializer),
+                    data: Arc::new(BlocksSerializer::empty()),
                 };
                 Ok(page)
             }
@@ -133,136 +132,33 @@ impl PageManager {
         }
     }
 
-    fn append_block(
-        &mut self,
-        serializer: &mut BlocksSerializer,
-        block: DataBlock,
-        remain_rows: &mut usize,
-        remain_size: &mut usize,
-    ) -> Result<()> {
-        assert!(self.row_buffer.is_none());
-        if block.is_empty() {
-            return Ok(());
-        }
-        if !serializer.has_format() {
-            let guard = self.format_settings.read();
-            serializer.set_format(guard.as_ref().unwrap().clone());
-        }
-
-        let columns = block
-            .columns()
-            .iter()
-            .map(BlockEntry::to_column)
-            .collect_vec();
-
-        let block_memory_size = block.memory_size();
-        let mut take_rows = min(
-            *remain_rows,
-            if block_memory_size > *remain_size {
-                (*remain_size * block.num_rows()) / block_memory_size
-            } else {
-                block.num_rows()
-            },
-        );
-        // this means that the data in remaining_size cannot satisfy even one row.
-        if take_rows == 0 {
-            take_rows = 1;
-        }
-
-        if take_rows == block.num_rows() {
-            // theoretically, it should always be smaller than the memory_size of the block.
-            *remain_size -= min(*remain_size, block_memory_size);
-            *remain_rows -= take_rows;
-            serializer.append(columns, block.num_rows());
-        } else {
-            // Since not all rows of the block are used, either the size limit or the row limit must have been exceeded.
-            // simply set any of remain_xxx to end the page.
-            *remain_rows = 0;
-            let fn_slice = |columns: &[Column], range: Range<usize>| {
-                columns
-                    .iter()
-                    .map(|column| column.slice(range.clone()))
-                    .collect_vec()
-            };
-
-            serializer.append(fn_slice(&columns, 0..take_rows), take_rows);
-            self.row_buffer = Some(fn_slice(&columns, take_rows..block.num_rows()));
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn collect_new_page(
-        &mut self,
-        serializer: &mut BlocksSerializer,
-        tp: &Wait,
-    ) -> Result<bool> {
-        let mut remain_size = 10 * 1024 * 1024;
-        let mut remain_rows = self.max_rows_per_page;
-        while remain_rows > 0 && remain_size > 0 {
-            let Some(block) = self.row_buffer.take() else {
-                break;
-            };
-            self.append_block(
-                serializer,
-                DataBlock::new_from_columns(block),
-                &mut remain_rows,
-                &mut remain_size,
-            )?;
-        }
-
-        while remain_rows > 0 && remain_size > 0 {
-            match tp {
-                Wait::Async => match self.block_receiver.try_recv() {
-                    Some(block) => {
-                        self.append_block(serializer, block, &mut remain_rows, &mut remain_size)?
-                    }
-                    None => break,
-                },
-                Wait::Deadline(t) => {
-                    let now = Instant::now();
-                    let d = *t - now;
-                    if d.is_zero() {
-                        // timeout() will return Ok if the future completes immediately
-                        break;
-                    }
-                    match tokio::time::timeout(d, self.block_receiver.recv()).await {
-                        Ok(Some(block)) => {
-                            debug!(
-                                "[HTTP-QUERY] Received new data block with {} rows",
-                                block.num_rows()
-                            );
-                            self.append_block(
-                                serializer,
-                                block,
-                                &mut remain_rows,
-                                &mut remain_size,
-                            )?
-                        }
-                        Ok(None) => {
-                            info!("[HTTP-QUERY] Reached end of data blocks");
-                            break;
-                        }
-                        Err(_) => {
-                            debug!("[HTTP-QUERY] Long polling timeout reached");
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        // try to report 'no more data' earlier to client to avoid unnecessary http call
-        if !self.block_end {
-            self.block_end = self.block_receiver.is_empty();
-        }
-        Ok(self.block_end && self.row_buffer.is_none())
-    }
-
     #[async_backtrace::framed]
     pub async fn detach(&mut self) {
-        self.block_receiver.close();
+        log::info!(
+            target: "result-set-spill",
+            "[RESULT-SET-SPILL] Query completed total_pages={}, total_rows={}",
+            self.total_pages, self.total_rows
+        );
+
         self.last_page = None;
-        self.row_buffer = None;
+        if let Some(spiller) = self.receiver.close() {
+            let start_time = std::time::Instant::now();
+            match spiller.cleanup().await {
+                Ok(_) => {
+                    let duration_ms = start_time.elapsed().as_millis();
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Cleanup completed duration_ms={}",
+                        duration_ms
+                    );
+                }
+                Err(error) => {
+                    log::error!(
+                        target: "result-set-spill",
+                        error:?; "[RESULT-SET-SPILL] Failed to cleanup spilled result set files"
+                    );
+                }
+            }
+        };
     }
 }

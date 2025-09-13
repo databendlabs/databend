@@ -524,9 +524,9 @@ async fn test_client_compatible_query_id() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_active_sessions() -> Result<()> {
-    let max_active_sessions = 2;
     let conf = ConfigBuilder::create()
-        .max_active_sessions(max_active_sessions)
+        .max_active_sessions(2)
+        .off_log()
         .build();
     let _fixture = TestFixture::setup_with_config(&conf).await?;
     let ep = create_endpoint()?;
@@ -542,6 +542,7 @@ async fn test_active_sessions() -> Result<()> {
         .into_iter()
         .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
         .collect::<Vec<_>>();
+    _fixture.keep_alive();
     results.sort();
     let msg = "[HTTP-QUERY] Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
     let expect = vec!["", "", msg];
@@ -1757,19 +1758,21 @@ async fn test_has_result_set() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_max_size_per_page() -> Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let _fixture =
+        TestFixture::setup_with_config(&ConfigBuilder::create().off_log().config()).await?;
 
     let sql = "select repeat('1', 1000) as a, repeat('2', 1000) from numbers(10000)";
     let wait_time_secs = 5;
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
     let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
     assert!(reply.error.is_none(), "{:?}", reply.error);
-    let len = body.len() as i32;
-    let target = 20_080_000;
-    assert!(len > target);
-    assert!(len < target + 2000);
-    assert_eq!(reply.data.len(), 10_000);
-    assert_eq!(reply.data[0].len(), 2);
+    let target = (10_usize * 1024 * 1024) as f64;
+    assert!(
+        (0.9..1.1).contains(&(body.len() as f64 / target)),
+        "body len {} rows {}",
+        body.len(),
+        reply.data.len()
+    );
     Ok(())
 }
 

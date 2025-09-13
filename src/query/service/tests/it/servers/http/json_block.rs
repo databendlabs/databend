@@ -22,7 +22,7 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
-use databend_query::servers::http::v1::BlocksSerializer;
+use databend_query::servers::http::v1::BlocksCollector;
 use pretty_assertions::assert_eq;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -42,8 +42,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     }
 
     let format = FormatSettings::default();
-    let mut serializer = BlocksSerializer::new(Some(format));
-    serializer.append(columns, 3);
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(columns, 3);
+    let serializer = collector.into_serializer(format);
     let expect = [
         vec!["1", "a", "1", "1.1", "1970-01-02"],
         vec!["2", "b", "1", "2.2", "1970-01-03"],
@@ -73,7 +74,8 @@ fn test_data_block_not_nullable() -> Result<()> {
 #[test]
 fn test_empty_block() -> Result<()> {
     let format = FormatSettings::default();
-    let serializer = BlocksSerializer::new(Some(format));
+    let collector = BlocksCollector::new();
+    let serializer = collector.into_serializer(format);
     assert!(serializer.is_empty());
     Ok(())
 }

@@ -689,6 +689,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("result_set_spilling_to_disk_bytes_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of local disk in bytes that result set can use before spilling data to storage during one query execution.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_result_set_spilling", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable spilling result set data to storage when memory usage exceeds the threshold.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("sort_spilling_batch_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(20 * 1024 * 1024),
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
