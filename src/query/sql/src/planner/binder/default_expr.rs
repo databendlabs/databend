@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
@@ -34,6 +35,7 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_types::MetaId;
 use parking_lot::RwLock;
 
 use crate::binder::wrap_cast;
@@ -52,6 +54,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct DefaultExprBinder {
+    auto_increment_database_with_table_id: Option<(String, MetaId)>,
     bind_context: BindContext,
     ctx: Arc<dyn TableContext>,
     dialect: Dialect,
@@ -90,6 +93,7 @@ impl DefaultExprBinder {
         let rewriter = DefaultValueRewriter::new();
 
         Ok(DefaultExprBinder {
+            auto_increment_database_with_table_id: None,
             bind_context,
             ctx,
             dialect,
@@ -99,6 +103,15 @@ impl DefaultExprBinder {
             dummy_block,
             func_ctx,
         })
+    }
+
+    pub fn auto_increment_database_with_table_id(
+        mut self,
+        database_name: impl Into<String>,
+        table_id: u64,
+    ) -> Self {
+        self.auto_increment_database_with_table_id = Some((database_name.into(), table_id));
+        self
     }
 
     fn evaluator(&self) -> Evaluator {
@@ -189,14 +202,19 @@ impl DefaultExprBinder {
             } else {
                 Ok(scalar_expr)
             }
-        } else if let Some(auto_increment_name) = field.auto_increment_name() {
+        } else if let (Some((database_name, table_id)), Some(column_id)) = (
+            &self.auto_increment_database_with_table_id,
+            field.auto_increment_column_id(),
+        ) {
+            let sequence_name = AutoIncrement::sequence_name(database_name, *table_id, *column_id);
+
             Ok(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span: None,
                 func_name: "nextval".to_string(),
                 display_name: "".to_string(),
                 return_type: Box::new(field.data_type().clone()),
                 arguments: vec![],
-                func_arg: AsyncFunctionArgument::SequenceFunction(auto_increment_name.clone()),
+                func_arg: AsyncFunctionArgument::SequenceFunction(sequence_name),
             }))
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {
@@ -284,7 +302,7 @@ impl DefaultExprBinder {
                     return true;
                 }
             }
-            field.auto_increment_name().is_some()
+            field.auto_increment_display().is_some()
         };
         for f in dest_schema.fields().iter() {
             if !fn_check_field_next_val(f) {

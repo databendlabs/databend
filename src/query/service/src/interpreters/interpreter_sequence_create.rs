@@ -39,14 +39,19 @@ impl CreateSequenceInterpreter {
         Ok(CreateSequenceInterpreter { ctx, plan })
     }
 
-    pub async fn req_execute(ctx: &QueryContext, req: CreateSequenceReq) -> Result<()> {
+    pub async fn req_execute(
+        ctx: &QueryContext,
+        req: CreateSequenceReq,
+        skip_privilege_check: bool,
+    ) -> Result<()> {
         let catalog = ctx.get_default_catalog()?;
         let _reply = catalog.create_sequence(req.clone()).await?;
 
         // Grant ownership as the current role
-        if ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
+        if skip_privilege_check
+            && ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
         {
             let tenant = req.ident.tenant();
             let name = req.ident.name().to_string();
@@ -84,7 +89,7 @@ impl Interpreter for CreateSequenceInterpreter {
             storage_version: 0,
         };
 
-        Self::req_execute(&self.ctx, req).await?;
+        Self::req_execute(&self.ctx, req, false).await?;
 
         Ok(PipelineBuildResult::create())
     }

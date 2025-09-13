@@ -39,13 +39,18 @@ impl DropSequenceInterpreter {
         Ok(DropSequenceInterpreter { ctx, plan })
     }
 
-    pub async fn req_execute(ctx: &QueryContext, req: DropSequenceReq) -> Result<()> {
+    pub async fn req_execute(
+        ctx: &QueryContext,
+        req: DropSequenceReq,
+        skip_skip_privilege_check: bool,
+    ) -> Result<()> {
         let catalog = ctx.get_default_catalog()?;
         // we should do `drop ownership` after actually drop object, and object maybe not exists.
         // drop the ownership
-        if ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
+        if skip_skip_privilege_check
+            && ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
         {
             let tenant = req.ident.tenant();
             let name = req.ident.name().to_string();
@@ -83,7 +88,7 @@ impl Interpreter for DropSequenceInterpreter {
             ident: self.plan.ident.clone(),
             if_exists: self.plan.if_exists,
         };
-        Self::req_execute(&self.ctx, req).await?;
+        Self::req_execute(&self.ctx, req, false).await?;
 
         Ok(PipelineBuildResult::create())
     }

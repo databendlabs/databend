@@ -3270,9 +3270,9 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         ),
         map(
             rule! {
-                AUTO ~ ^INCREMENT
+                AUTOINCREMENT
             },
-            |(_, _)| ColumnConstraint::AutoIncrement,
+            |_| ColumnConstraint::AutoIncrement,
         ),
     ));
 
@@ -3350,6 +3350,8 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
                     start_num: 0,
                     step_num: 1,
+                    is_order: true,
+                    is_identity: false,
                 }))
             }
         }

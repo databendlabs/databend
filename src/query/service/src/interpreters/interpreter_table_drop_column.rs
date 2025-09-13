@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -119,11 +120,18 @@ impl Interpreter for DropTableColumnInterpreter {
             .meta
             .schema
             .field_with_name(self.plan.column.as_str())?;
-        if let Some(auto_increment_name) = &field.auto_increment_name {
-            DropSequenceInterpreter::req_execute(&self.ctx, DropSequenceReq {
-                if_exists: false,
-                ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
-            })
+        if field.auto_increment_display.is_some() {
+            let auto_increment_name =
+                AutoIncrement::sequence_name(db_name, table.get_id(), field.column_id());
+
+            DropSequenceInterpreter::req_execute(
+                &self.ctx,
+                DropSequenceReq {
+                    if_exists: false,
+                    ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
+                },
+                true,
+            )
             .await?;
         }
 

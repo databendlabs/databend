@@ -22,17 +22,28 @@ use derive_visitor::DriveMut;
 pub struct AutoIncrement {
     pub start_num: u64,
     pub step_num: u64,
+    pub is_order: bool,
+    pub is_identity: bool,
 }
 
 impl AutoIncrement {
-    pub fn sequence_name(&self, database: &str, table: &str, column_id: u32) -> String {
-        format!("_sequence_{database}_{table}_{column_id}")
+    pub fn sequence_name(database: &str, table_id: u64, column_id: u32) -> String {
+        format!("_sequence_{database}_{table_id}_{column_id}")
     }
 }
 
 impl Display for AutoIncrement {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "AUTO INCREMENT")?;
+        if self.is_identity {
+            write!(f, "IDENTITY ({}, {})", self.start_num, self.step_num)?;
+            if self.is_order {
+                write!(f, " ORDER")?;
+            } else {
+                write!(f, " NOORDER")?;
+            }
+        } else {
+            write!(f, "AUTOINCREMENT")?;
+        }
         Ok(())
     }
 }
