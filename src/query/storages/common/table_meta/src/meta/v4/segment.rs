@@ -211,6 +211,18 @@ pub struct RawBlockMeta {
     pub compression: MetaCompression,
 }
 
+impl RawBlockMeta {
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        let mut reader = Cursor::new(&self.bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.bytes.len() as u64,
+            &self.encoding,
+            &self.compression,
+        )
+    }
+}
+
 #[frozen_api("1b3fc937")]
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, FrozenAPI)]
 pub struct CompactSegmentInfo {
@@ -248,13 +260,7 @@ impl CompactSegmentInfo {
     }
 
     pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
-        let mut reader = Cursor::new(&self.raw_block_metas.bytes);
-        read_and_deserialize(
-            &mut reader,
-            self.raw_block_metas.bytes.len() as u64,
-            &self.raw_block_metas.encoding,
-            &self.raw_block_metas.compression,
-        )
+        self.raw_block_metas.block_metas()
     }
 }
 

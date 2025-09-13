@@ -14,6 +14,7 @@
 
 mod agg_index_sink;
 mod analyze;
+mod analyzes;
 mod append;
 mod changes;
 mod commit;
