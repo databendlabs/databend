@@ -273,7 +273,6 @@ pub struct TableField {
     #[serde(default = "uninit_column_id")]
     pub column_id: ColumnId,
     pub computed_expr: Option<ComputedExpr>,
-    pub auto_increment_name: Option<String>,
     pub auto_increment_display: Option<String>,
 }
 
@@ -1161,7 +1160,6 @@ impl TableField {
             data_type,
             column_id: 0,
             computed_expr: None,
-            auto_increment_name: None,
             auto_increment_display: None,
         }
     }
@@ -1173,7 +1171,6 @@ impl TableField {
             data_type,
             column_id,
             computed_expr: None,
-            auto_increment_name: None,
             auto_increment_display: None,
         }
     }
@@ -1221,7 +1218,6 @@ impl TableField {
             data_type: self.data_type.clone(),
             column_id,
             computed_expr: self.computed_expr.clone(),
-            auto_increment_name: self.auto_increment_name.clone(),
             auto_increment_display: self.auto_increment_display.clone(),
         }
     }
@@ -1268,11 +1264,6 @@ impl TableField {
         self
     }
 
-    pub fn with_auto_increment_name(mut self, auto_increment_name: Option<String>) -> Self {
-        self.auto_increment_name = auto_increment_name;
-        self
-    }
-
     pub fn with_auto_increment_display(mut self, auto_increment_display: Option<String>) -> Self {
         self.auto_increment_display = auto_increment_display;
         self
@@ -1292,10 +1283,6 @@ impl TableField {
 
     pub fn computed_expr(&self) -> Option<&ComputedExpr> {
         self.computed_expr.as_ref()
-    }
-
-    pub fn auto_increment_name(&self) -> Option<&String> {
-        self.auto_increment_name.as_ref()
     }
 
     pub fn auto_increment_display(&self) -> Option<&String> {
