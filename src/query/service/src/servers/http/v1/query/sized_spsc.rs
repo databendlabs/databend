@@ -264,14 +264,54 @@ where S: DataBlockSpill
     }
 
     async fn try_spill_page(&self, page: Vec<DataBlock>) -> Result<Page> {
+        let rows_count = page.iter().map(|b| b.num_rows()).sum::<usize>();
+        let memory_bytes = page.iter().map(|b| b.memory_size()).sum::<usize>();
+
         if !self.should_spill() {
+            log::info!(
+                target: "result-set-spill",
+                "[RESULT-SET-SPILL] Spill disabled, page kept in memory blocks={}, rows={}, memory_bytes={}",
+                page.len(), rows_count, memory_bytes
+            );
             return Ok(Page::Memory(page));
         }
         let spiller = self.spiller.lock().unwrap().clone();
         let Some(spiller) = spiller.as_ref() else {
+            log::warn!(
+                target: "result-set-spill",
+                "[RESULT-SET-SPILL] No spiller configured, page kept in memory blocks={}, rows={}, memory_bytes={}",
+                page.len(), rows_count, memory_bytes
+            );
             return Ok(Page::Memory(page));
         };
-        let location = spiller.merge_and_spill(page).await?;
+
+        let start_time = std::time::Instant::now();
+
+        log::info!(
+            target: "result-set-spill",
+            "[RESULT-SET-SPILL] Starting spill to disk blocks={}, rows={}, memory_bytes={}",
+            page.len(), rows_count, memory_bytes
+        );
+
+        let location = match spiller.merge_and_spill(page).await {
+            Ok(location) => location,
+            Err(e) => {
+                log::error!(
+                    target: "result-set-spill",
+                    "[RESULT-SET-SPILL] Spill failed error={:?}",
+                    e
+                );
+                return Err(e);
+            }
+        };
+        let duration_ms = start_time.elapsed().as_millis();
+
+        log::info!(
+            target: "result-set-spill",
+            "[RESULT-SET-SPILL] Spill completed rows={}, duration_ms={}, location={:?}",
+            rows_count, duration_ms, location
+        );
+
         Ok(Page::Spilled(location))
     }
 
@@ -366,8 +406,26 @@ where S: DataBlockSpill
                 collector
             }
             Some(Page::Spilled(location)) => {
+                let start_time = std::time::Instant::now();
+
+                log::info!(
+                    target: "result-set-spill",
+                    "[RESULT-SET-SPILL] Restoring from disk location={:?}",
+                    location
+                );
+
                 let spiller = self.chan.spiller.lock().unwrap().clone().unwrap();
                 let block = spiller.restore(&location).await?;
+                let rows_count = block.num_rows();
+                let memory_bytes = block.memory_size();
+                let duration_ms = start_time.elapsed().as_millis();
+
+                log::info!(
+                    target: "result-set-spill",
+                    "[RESULT-SET-SPILL] Restore completed rows={}, memory_bytes={}, duration_ms={}",
+                    rows_count, memory_bytes, duration_ms
+                );
+
                 let mut collector = BlocksCollector::new();
                 collector.append_block(block);
                 collector
@@ -404,6 +462,14 @@ where S: DataBlockSpill
                     return Ok(true);
                 }
                 Err(SendFail::Full { page, remain }) => {
+                    let page_rows = page.iter().map(|b| b.num_rows()).sum::<usize>();
+
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Buffer full page_blocks={}, page_rows={}, has_remain={}",
+                        page.len(), page_rows, remain.is_some()
+                    );
+
                     self.chan.notify_on_sent.notify_one();
                     let mut to_add = self.chan.try_spill_page(page).await?;
                     loop {

@@ -74,9 +74,26 @@ impl PageManager {
         let next_no = self.total_pages;
         if page_no == next_no {
             if !self.end {
+                let start_time = std::time::Instant::now();
                 let (serializer, end) = self.receiver.next_page(wait).await?;
                 let num_row = serializer.num_rows();
+                let duration_ms = start_time.elapsed().as_millis();
+
                 log::debug!(num_row, wait_type:? = wait; "collect_new_page");
+                log::info!(
+                    target: "result-set-spill",
+                    "[RESULT-SET-SPILL] Page received page_no={}, rows={}, total_rows={}, end={}, duration_ms={}",
+                    self.total_pages, num_row, self.total_rows + num_row, end, duration_ms
+                );
+
+                if num_row == 0 {
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Empty page page_no={}, end={}",
+                        self.total_pages, end
+                    );
+                }
+
                 self.total_rows += num_row;
                 let page = Page {
                     data: Arc::new(serializer),
@@ -117,10 +134,30 @@ impl PageManager {
 
     #[async_backtrace::framed]
     pub async fn detach(&mut self) {
+        log::info!(
+            target: "result-set-spill",
+            "[RESULT-SET-SPILL] Query completed total_pages={}, total_rows={}",
+            self.total_pages, self.total_rows
+        );
+
         self.last_page = None;
         if let Some(spiller) = self.receiver.close() {
-            if let Err(error) = spiller.cleanup().await {
-                log::error!(error:?; "clean up spilled result set file fail");
+            let start_time = std::time::Instant::now();
+            match spiller.cleanup().await {
+                Ok(_) => {
+                    let duration_ms = start_time.elapsed().as_millis();
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Cleanup completed duration_ms={}",
+                        duration_ms
+                    );
+                }
+                Err(error) => {
+                    log::error!(
+                        target: "result-set-spill",
+                        error:?; "[RESULT-SET-SPILL] Failed to cleanup spilled result set files"
+                    );
+                }
             }
         };
     }
