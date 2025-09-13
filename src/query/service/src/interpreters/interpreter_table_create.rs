@@ -16,13 +16,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::is_internal_column;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
@@ -47,6 +47,7 @@ use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::plans::CreateTablePlan;
@@ -212,9 +213,6 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         let mut req = self.build_request(None)?;
-        if let Some(new_schema) = self.create_sequences(&req.table_meta.schema).await? {
-            req.table_meta.schema = Arc::new(new_schema);
-        }
 
         // create a dropped table first.
         req.as_dropped = true;
@@ -227,6 +225,7 @@ impl CreateTableInterpreter {
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
         }
+        self.create_sequences(reply.table_id).await?;
 
         let table_id = reply.table_id;
         let prev_table_id = reply.prev_table_id;
@@ -330,22 +329,14 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
-    async fn create_sequences(&self, table_schema: &TableSchema) -> Result<Option<TableSchema>> {
+    async fn create_sequences(&self, table_id: MetaId) -> Result<()> {
         if self.plan.auto_increments.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
-        let mut table_schema = table_schema.clone();
 
         for (i, auto_increment) in self.plan.auto_increments.iter() {
-            let field = &mut table_schema.fields[*i];
-            let sequence_name = auto_increment.sequence_name(
-                &self.plan.database,
-                &self.plan.table,
-                field.column_id(),
-            );
-            field.auto_increment_name = Some(sequence_name.clone());
-            field.auto_increment_display = Some(auto_increment.to_string());
-
+            let sequence_name =
+                AutoIncrement::sequence_name(&self.plan.database, table_id, *i as u32);
             let req = CreateSequenceReq {
                 create_option: self.plan.create_option,
                 ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
@@ -355,9 +346,9 @@ impl CreateTableInterpreter {
                 create_on: Utc::now(),
                 storage_version: 0,
             };
-            CreateSequenceInterpreter::req_execute(&self.ctx, req).await?;
+            CreateSequenceInterpreter::req_execute(&self.ctx, req, true).await?;
         }
-        Ok(Some(table_schema))
+        Ok(())
     }
 
     async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
@@ -431,7 +422,7 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
@@ -445,14 +436,12 @@ impl CreateTableInterpreter {
                  catalog.info().catalog_type()
              )));
         }
-        if let Some(new_schema) = self.create_sequences(&req.table_meta.schema).await? {
-            req.table_meta.schema = Arc::new(new_schema);
-        }
 
         let reply = catalog.create_table(req.clone()).await?;
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
         }
+        self.create_sequences(reply.table_id).await?;
 
         // iceberg table do not need to generate ownership.
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {

@@ -1713,6 +1713,7 @@ impl Binder {
                             "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
                         ));
                     }
+                    field.auto_increment_display = Some(field_sequence.to_string());
                     auto_increment = Some(field_sequence.clone());
                 }
             }
@@ -1753,6 +1754,7 @@ impl Binder {
                                 "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
                             ));
                         }
+                        field.auto_increment_display = Some(field_sequence.to_string());
                         auto_increments.push((i, field_sequence.clone()));
                     }
                     _ => has_computed = true,

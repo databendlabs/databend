@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -132,9 +133,11 @@ impl Interpreter for AddTableColumnInterpreter {
         if let Some(auto_increment) = &self.plan.auto_increment {
             let mut schema = TableSchema::clone(&table_info.schema()).clone();
             let index = schema.index_of(field.name.as_str())?;
-            let sequence_name =
-                auto_increment.sequence_name(db_name, tbl_name, schema.field(index).column_id());
-            schema.fields[index].auto_increment_name = Some(sequence_name.clone());
+            let sequence_name = AutoIncrement::sequence_name(
+                db_name,
+                tbl.get_id(),
+                schema.field(index).column_id(),
+            );
             schema.fields[index].auto_increment_display = Some(auto_increment.to_string());
 
             table_info.meta.schema = Arc::new(schema);
@@ -148,7 +151,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 create_on: Utc::now(),
                 storage_version: 0,
             };
-            CreateSequenceInterpreter::req_execute(&self.ctx, req).await?;
+            CreateSequenceInterpreter::req_execute(&self.ctx, req, true).await?;
         }
 
         // if the new column is a stored computed field and table is non-empty,
