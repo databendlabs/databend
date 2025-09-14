@@ -228,6 +228,9 @@ impl RaftStoreInner {
 
         // Pipe entries to the writer.
         {
+            // Count the user keys and expiration keys.
+            let mut key_counts = BTreeMap::<String, u64>::new();
+
             while let Some(ent) = strm
                 .try_next()
                 .await
@@ -236,11 +239,10 @@ impl RaftStoreInner {
                 // The first 4 chars are key space, such as: "kv--/" or "exp-/"
                 // Get the first 4 chars as key space.
                 let prefix = &ent.0.as_str()[..4];
-                let ks = sys_data.key_counts_mut();
-                if let Some(count) = ks.get_mut(prefix) {
+                if let Some(count) = key_counts.get_mut(prefix) {
                     *count += 1;
                 } else {
-                    ks.insert(prefix.to_string(), 1);
+                    key_counts.insert(prefix.to_string(), 1);
                 }
 
                 tx.send(WriteEntry::Data(ent))
@@ -248,6 +250,11 @@ impl RaftStoreInner {
                     .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
 
                 raft_metrics::storage::incr_snapshot_written_entries();
+            }
+
+            {
+                let ks = sys_data.key_counts_mut();
+                *ks = key_counts;
             }
 
             tx.send(WriteEntry::Finish((snapshot_id.clone(), sys_data)))
