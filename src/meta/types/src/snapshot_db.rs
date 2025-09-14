@@ -209,7 +209,7 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", db),
-            r#"DB { storage_path: "a", rel_path: "b", meta: SnapshotMeta { last_log_id: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, snapshot_id: "" }, sys_data: SysData { last_applied: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, nodes: {}, sequence: 0, key_counts: {}, sm_features: {} } }"#
+            r#"DB { storage_path: "a", rel_path: "b", meta: SnapshotMeta { last_log_id: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, snapshot_id: "" }, sys_data: SysData { last_applied: None, last_membership: StoredMembership { log_id: None, membership: Membership { configs: [], nodes: {} } }, nodes: {}, sequence: 0, data_seq: None, key_counts: {}, sm_features: {} } }"#
         );
     }
 }
