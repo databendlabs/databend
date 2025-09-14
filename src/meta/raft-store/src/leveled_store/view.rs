@@ -31,8 +31,12 @@ use crate::leveled_store::types::Key;
 use crate::leveled_store::types::Namespace;
 use crate::leveled_store::types::Value;
 
+/// Type alias for the MVCC view used in the state machine.
 pub(crate) type MvccView = mvcc::View<Namespace, Key, Value, LeveledMap>;
 
+/// A wrapper around `mvcc::View` to provide scoped access to user and expire data.
+///
+/// Traits are bound to `StateMachineView`
 pub(crate) struct StateMachineView {
     inner: MvccView,
 }

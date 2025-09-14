@@ -53,7 +53,6 @@ async fn test_freeze() -> anyhow::Result<()> {
     // Listing entries from all levels see the latest
     let view = l.to_view();
     let got = view
-        // .user_readonly_view()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
