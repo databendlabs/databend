@@ -10068,8 +10068,8 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.4.0"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.4.0#3447b6626af59d98d6fa2c3328505fa28c39446b"
+version = "0.4.1"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.4.1#d3080bc02820b413173ee44ae8646ec7cad643c7"
 dependencies = [
  "async-trait",
  "deepsize",
@@ -14572,8 +14572,8 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.3.0"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.0#e34bb1808656a6c19da9b286399f0df0ee9fe657"
+version = "0.3.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.1#ac9af6a417e7bb7eb712a0ec6df661f3470aa432"
 dependencies = [
  "async-trait",
  "display-more",

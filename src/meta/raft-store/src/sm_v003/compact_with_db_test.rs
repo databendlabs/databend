@@ -38,7 +38,7 @@ use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
-use crate::leveled_store::MapView;
+use crate::leveled_store::ScopedSeqBoundedRead;
 use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
@@ -173,10 +173,11 @@ async fn test_compact() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = mvcc::ScopedSeqBoundedRange::range(&MapView(&db), user_key("").., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got =
+        mvcc::ScopedSeqBoundedRange::range(&ScopedSeqBoundedRead(&db), user_key("").., u64::MAX)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
     assert_eq!(got, vec![
         //
         (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
@@ -184,10 +185,14 @@ async fn test_compact() -> anyhow::Result<()> {
         (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
     ]);
 
-    let got = mvcc::ScopedSeqBoundedRange::range(&MapView(&db), ExpireKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = mvcc::ScopedSeqBoundedRange::range(
+        &ScopedSeqBoundedRead(&db),
+        ExpireKey::default()..,
+        u64::MAX,
+    )
+    .await?
+    .try_collect::<Vec<_>>()
+    .await?;
     assert_eq!(got, vec![]);
 
     Ok(())
@@ -222,7 +227,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(db.last_applied_ref(), &None);
     assert_eq!(db.nodes_ref(), &btreemap! {});
 
-    let got = MapView(&db)
+    let got = ScopedSeqBoundedRead(&db)
         .range(UserKey::default().., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
@@ -243,10 +248,14 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = mvcc::ScopedSeqBoundedRange::range(&MapView(&db), ExpireKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
+    let got = mvcc::ScopedSeqBoundedRange::range(
+        &ScopedSeqBoundedRead(&db),
+        ExpireKey::default()..,
+        u64::MAX,
+    )
+    .await?
+    .try_collect::<Vec<_>>()
+    .await?;
     assert_eq!(got, vec![
         //
         (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),

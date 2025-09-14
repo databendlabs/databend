@@ -29,11 +29,11 @@ pub mod util;
 pub mod value_convert;
 pub mod view;
 
-mod db_map_api_ro_impl;
-#[cfg(test)]
-mod db_map_api_ro_test;
+mod db_impl_scoped_seq_bounded_read;
 mod db_open_snapshot_impl;
+#[cfg(test)]
+mod db_scoped_seq_bounded_read_test;
 mod key_spaces_impl;
 mod rotbl_seq_mark_impl;
 
-pub use db_map_api_ro_impl::MapView;
+pub use db_impl_scoped_seq_bounded_read::ScopedSeqBoundedRead;

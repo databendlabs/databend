@@ -64,6 +64,11 @@ impl StateMachineView {
     pub fn into_inner(self) -> MvccView {
         self.inner
     }
+
+    pub async fn commit(self) -> Result<(), io::Error> {
+        self.into_inner().commit().await?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]

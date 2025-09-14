@@ -35,7 +35,7 @@ use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::value_convert::ValueConvert;
-use crate::leveled_store::MapView;
+use crate::leveled_store::ScopedSeqBoundedRead;
 
 #[derive(Debug, Default, Clone)]
 pub struct ImmutableData {
@@ -124,7 +124,7 @@ where
             return Ok(SeqMarked::new_not_found());
         };
 
-        mvcc::ScopedSeqBoundedGet::get(&MapView(db), key, snapshot_seq).await
+        mvcc::ScopedSeqBoundedGet::get(&ScopedSeqBoundedRead(db), key, snapshot_seq).await
     }
 }
 
@@ -158,7 +158,7 @@ where
         // Bottom db level
 
         if let Some(db) = self.persisted() {
-            let map_view = MapView(db);
+            let map_view = ScopedSeqBoundedRead(db);
             // NOTE: we assume a mvcc version won't use a version that is in a persisted db.
             //       Because we need to wait for a mvcc version to release in order to persist a db.
             //       Because when persisting, it may need to remove tombstone permanently.

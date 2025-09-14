@@ -32,11 +32,11 @@ use crate::leveled_store::value_convert::ValueConvert;
 
 /// A wrapper that implements the `ScopedSnapshot*` trait for the `DB`.
 #[derive(Debug, Clone)]
-pub struct MapView<'a>(pub &'a DB);
+pub struct ScopedSeqBoundedRead<'a>(pub &'a DB);
 
 // TODO: test
 #[async_trait::async_trait]
-impl<K> mvcc::ScopedSeqBoundedGet<K, K::V> for MapView<'_>
+impl<K> mvcc::ScopedSeqBoundedGet<K, K::V> for ScopedSeqBoundedRead<'_>
 where
     K: MapKey,
     K: ViewKey,
@@ -62,7 +62,7 @@ where
 
 // TODO: test
 #[async_trait::async_trait]
-impl<K> mvcc::ScopedSeqBoundedRange<K, K::V> for MapView<'_>
+impl<K> mvcc::ScopedSeqBoundedRange<K, K::V> for ScopedSeqBoundedRead<'_>
 where
     K: MapKey,
     K: ViewKey,

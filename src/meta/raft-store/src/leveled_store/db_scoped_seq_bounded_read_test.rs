@@ -24,11 +24,11 @@ use state_machine_api::KVMeta;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::db_builder::DBBuilder;
-use crate::leveled_store::db_map_api_ro_impl::MapView;
+use crate::leveled_store::db_impl_scoped_seq_bounded_read::ScopedSeqBoundedRead;
 use crate::sm_v003::SMV003;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
-async fn test_db_map_api_ro() -> anyhow::Result<()> {
+async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
     // Build a state machine
     let mut sm = {
         let mut sm = SMV003::default();
@@ -71,7 +71,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
     // Test kv map
 
-    let binding = MapView(&db);
+    let binding = ScopedSeqBoundedRead(&db);
     let smap = binding;
     assert_eq!(
         SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15))), b("a1"))),
@@ -112,7 +112,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
     // Test expire index
 
-    let binding = MapView(&db);
+    let binding = ScopedSeqBoundedRead(&db);
     let emap = binding;
 
     assert_eq!(

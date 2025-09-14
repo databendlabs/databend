@@ -30,7 +30,7 @@ use state_machine_api::ExpireValue;
 use state_machine_api::UserKey;
 
 use crate::key_spaces::SMEntry;
-use crate::leveled_store::db_map_api_ro_impl::MapView;
+use crate::leveled_store::db_impl_scoped_seq_bounded_read::ScopedSeqBoundedRead;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
@@ -93,7 +93,7 @@ impl<'a> DBExporter<'a> {
 
         // expire index
 
-        let strm = MapView(self.db)
+        let strm = ScopedSeqBoundedRead(self.db)
             .range(ExpireKey::default().., u64::MAX)
             .await?;
         let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
@@ -105,7 +105,7 @@ impl<'a> DBExporter<'a> {
 
         // kv
 
-        let strm = MapView(self.db)
+        let strm = ScopedSeqBoundedRead(self.db)
             .range(UserKey::default().., u64::MAX)
             .await?;
         let kv_strm = strm.try_filter_map(|(user_key, seq_marked)| {

@@ -18,7 +18,7 @@ use std::ops::RangeBounds;
 
 use futures_util::StreamExt;
 use map_api::mvcc;
-use map_api::mvcc::ScopedSnapshotIntoRange;
+use map_api::mvcc::ScopedSeqBoundedIntoRange;
 use map_api::mvcc::ViewKey;
 use map_api::mvcc::ViewValue;
 use map_api::util;
@@ -111,7 +111,7 @@ impl<K> mvcc::ScopedSeqBoundedRange<K, K::V> for ImmutableLevels
 where
     K: MapKey,
     K::V: ViewValue,
-    Immutable: mvcc::ScopedSnapshotIntoRange<K, K::V>,
+    Immutable: mvcc::ScopedSeqBoundedIntoRange<K, K::V>,
 {
     async fn range<R>(
         &self,

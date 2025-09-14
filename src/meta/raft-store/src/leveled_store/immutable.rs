@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use map_api::mvcc;
-use map_api::mvcc::ScopedSnapshotIntoRange;
+use map_api::mvcc::ScopedSeqBoundedIntoRange;
 use map_api::mvcc::ViewKey;
 use map_api::mvcc::ViewValue;
 use map_api::IOResultStream;
@@ -137,8 +137,8 @@ mod tests {
     where
         T: mvcc::ScopedSeqBoundedRangeIter<UserKey, MetaValue>,
         T: mvcc::ScopedSeqBoundedRangeIter<ExpireKey, String>,
-        T: mvcc::ScopedSnapshotIntoRange<UserKey, MetaValue>,
-        T: mvcc::ScopedSnapshotIntoRange<ExpireKey, String>,
+        T: mvcc::ScopedSeqBoundedIntoRange<UserKey, MetaValue>,
+        T: mvcc::ScopedSeqBoundedIntoRange<ExpireKey, String>,
         T: mvcc::ScopedSeqBoundedRange<UserKey, MetaValue>,
         T: mvcc::ScopedSeqBoundedRange<ExpireKey, String>,
     {
