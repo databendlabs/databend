@@ -161,7 +161,7 @@ impl AuthMgr {
                             // ensure jwt roles to user if not exists
                             if let Some(ref roles) = ensure_user.roles {
                                 for role in roles.iter() {
-                                    if current_roles.contains(&role) {
+                                    if current_roles.contains(role) {
                                         continue;
                                     }
                                     info!(
@@ -169,9 +169,9 @@ impl AuthMgr {
                                         user_info.name, role
                                     );
                                     user_api
-                                        .grant_role_to_user(tenant, identity.clone(), role)
+                                        .grant_role_to_user(tenant, identity.clone(), role.clone())
                                         .await?;
-                                    user_info.grants.grant_role(role);
+                                    user_info.grants.grant_role(role.clone());
                                 }
                             }
                             // ensure default role to jwt role
