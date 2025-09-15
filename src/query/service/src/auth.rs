@@ -165,7 +165,7 @@ impl AuthMgr {
                                         continue;
                                     }
                                     info!(
-                                        "[AUTH] grant jwt role to user: {} -> {}",
+                                        "[AUTH] JWT grant role to user: {} -> {}",
                                         user_info.name, role
                                     );
                                     user_api
@@ -193,7 +193,7 @@ impl AuthMgr {
                                 }
                                 if need_update_default_role {
                                     info!(
-                                        "[AUTH] update default jwt role to user: {} -> {}",
+                                        "[AUTH] JWT update default role to user: {} -> {}",
                                         user_info.name, jwt_default_role
                                     );
                                     user_api
@@ -240,7 +240,7 @@ impl AuthMgr {
                                 .option
                                 .set_default_role(Some(default_role.clone()));
                         }
-                        info!("[AUTH] create jwt user: {}", user_info.name);
+                        info!("[AUTH] JWT create user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
