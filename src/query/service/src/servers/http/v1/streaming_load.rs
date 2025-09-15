@@ -33,7 +33,6 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_stage::BytesBatch;
 use databend_storages_common_session::TxnState;
-use fastrace::func_path;
 use fastrace::future::FutureExt;
 use futures::StreamExt;
 use http::StatusCode;
@@ -61,6 +60,7 @@ use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::json_header::encode_json_header;
 use crate::servers::http::middleware::sanitize_request_headers;
+use crate::servers::http::v1::http_query_handlers::get_http_tracing_span;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
@@ -93,11 +93,7 @@ fn execute_query(
     tracking_payload.query_id = Some(id.clone());
     tracking_payload.mem_stat = Some(mem_stat);
     let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-    let root = crate::servers::http::v1::http_query_handlers::get_http_tracing_span(
-        func_path!(),
-        &http_query_context,
-        &id,
-    );
+    let root = get_http_tracing_span("http::execute_query", &http_query_context, &id);
     ThreadTracker::tracking_future(fut.in_span(root))
 }
 
@@ -113,11 +109,7 @@ pub async fn streaming_load_handler(
     tracking_payload.query_id = Some(ctx.query_id.clone());
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     let _tracking_guard = ThreadTracker::tracking(tracking_payload);
-    let root = crate::servers::http::v1::http_query_handlers::get_http_tracing_span(
-        func_path!(),
-        ctx,
-        &ctx.query_id,
-    );
+    let root = get_http_tracing_span("http::streaming_load_handler", ctx, &ctx.query_id);
     let mut session_conf: Option<HttpSessionConf> = match req.headers().get(HEADER_QUERY_CONTEXT) {
         Some(v) => {
             let s = v.to_str().unwrap().to_string();

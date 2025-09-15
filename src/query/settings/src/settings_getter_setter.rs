@@ -520,6 +520,14 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
+    pub fn get_result_set_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("result_set_spilling_to_disk_bytes_limit")? as usize)
+    }
+
+    pub fn get_enable_result_set_spilling(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_result_set_spilling")? == 1)
+    }
+
     pub fn get_enable_shuffle_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_shuffle_sort")? == 1)
     }

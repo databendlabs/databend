@@ -38,4 +38,4 @@ pub use http_query_manager::HttpQueryManager;
 pub(crate) use http_query_manager::RemoveReason;
 pub use page_manager::PageManager;
 pub use page_manager::ResponseData;
-pub use page_manager::Wait;
+pub use sized_spsc::Wait;

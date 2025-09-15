@@ -28,12 +28,12 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
 use rand::Rng;
 
-use crate::spillers::new_lite_spiller;
 use crate::spillers::LiteSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
@@ -209,7 +209,7 @@ async fn init() -> Result<LiteSpiller> {
         use_parquet: true,
     };
     let operator = DataOperator::instance().spill_operator();
-    new_lite_spiller(operator, spiller_config)
+    LiteSpiller::new(operator, spiller_config)
 }
 
 #[derive(Debug)]
@@ -225,7 +225,7 @@ async fn run_spill_test(spiller: &LiteSpiller, rows: usize) -> Result<TestResult
     let data_block = MockDataGen::generate_orders_table(rows);
     let memory_size = ByteSize(data_block.memory_size() as _);
 
-    let Location::Local(path) = spiller.spill(vec![data_block]).await? else {
+    let Location::Local(path) = spiller.spill(data_block).await? else {
         unreachable!()
     };
 
