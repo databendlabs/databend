@@ -203,15 +203,15 @@ impl AuthMgr {
                                         "[AUTH] JWT grant default role to user: {} -> {}",
                                         user_info.name, jwt_default_role
                                     );
+                                    user_api
+                                        .grant_role_to_user(
+                                            &tenant,
+                                            user_info.identity(),
+                                            jwt_default_role.clone(),
+                                        )
+                                        .await?;
+                                    user_info.grants.grant_role(jwt_default_role.clone());
                                 }
-                                user_api
-                                    .grant_role_to_user(
-                                        &tenant,
-                                        user_info.identity(),
-                                        jwt_default_role.clone(),
-                                    )
-                                    .await?;
-                                user_info.grants.grant_role(jwt_default_role.clone());
                             }
                         }
                         user_info
