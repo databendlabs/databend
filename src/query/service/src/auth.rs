@@ -170,7 +170,7 @@ impl AuthMgr {
                                     );
                                     user_api
                                         .grant_role_to_user(
-                                            tenant.clone(),
+                                            &tenant,
                                             user_info.identity(),
                                             role.clone(),
                                         )

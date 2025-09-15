@@ -256,7 +256,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_role_to_user(
         &self,
-        tenant: Tenant,
+        tenant: &Tenant,
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
@@ -266,7 +266,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.user_api(&tenant);
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_user_time();
