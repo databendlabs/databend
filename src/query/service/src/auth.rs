@@ -158,6 +158,7 @@ impl AuthMgr {
                         }
                         let ensure_user = match jwt.custom.ensure_user {
                             Some(ensure_user) => ensure_user,
+                            // if ensure_user is not set, do not update user info
                             None => return user_info,
                         };
                         let current_roles = user_info.grants.roles();
