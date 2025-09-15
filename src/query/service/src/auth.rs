@@ -171,6 +171,34 @@ impl AuthMgr {
                                 .await?;
                             user_info.grants.grant_role(role);
                         }
+                        // ensure default role to jwt role
+                        if let Some(jwt_role) = jwt.custom.role {
+                            let mut need_update_default_role = false;
+                            match user_info.option.default_role() {
+                                Some(default_role) => {
+                                    if jwt_role != default_role {
+                                        need_update_default_role = true;
+                                    }
+                                }
+                                None => {
+                                    need_update_default_role = true;
+                                }
+                            }
+                            if need_update_default_role {
+                                info!(
+                                    "[AUTH] update default jwt role to user: {} -> {}",
+                                    user_info.name, jwt_role
+                                );
+                                user_api
+                                    .update_user_default_role(
+                                        &tenant,
+                                        user_info.identity(),
+                                        Some(jwt_role),
+                                    )
+                                    .await?;
+                                user_info.option.set_default_role(Some(jwt_role));
+                            }
+                        }
                         user_info
                     }
                     Err(e) => {
