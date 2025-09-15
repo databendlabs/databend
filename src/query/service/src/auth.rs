@@ -198,7 +198,7 @@ impl AuthMgr {
                                 // ensure default role to jwt role
                                 if user_info.option.default_role() != Some(jwt_default_role) {
                                     info!(
-                                        "[AUTH] JWT update default role to user: {} -> {}",
+                                        "[AUTH] JWT update default role for user: {} -> {}",
                                         user_info.name, jwt_default_role
                                     );
                                     user_api
