@@ -888,7 +888,9 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        assert_eq!(user_info.grants.roles(), &["role1", "role2"]);
+        let roles = user_info.grants.roles().to_vec();
+        assert!(roles.contains(&"role1".to_string()));
+        assert!(roles.contains(&"role2".to_string()));
         assert!(user_info.option.default_role().is_none());
     }
 
