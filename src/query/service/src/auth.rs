@@ -240,7 +240,7 @@ impl AuthMgr {
                                 .option
                                 .set_default_role(Some(default_role.clone()));
                         }
-                        info!("[AUTH] ensure jwt user: {}", user_info.name);
+                        info!("[AUTH] create jwt user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
