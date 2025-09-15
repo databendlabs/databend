@@ -732,3 +732,234 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_mgr_ensure_roles() -> Result<()> {
+    let kid = "test_kid";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
+
+    let mut conf = ConfigBuilder::create().config();
+    conf.query.jwt_key_file = jwks_url.clone();
+
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
+    let auth_mgr = AuthMgr::instance();
+    let user_name = "test-ensure-roles-user";
+
+    // First, create a user with some existing roles
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["existing-role".to_string()]),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles(), &["existing-role"]);
+    }
+
+    // Now test ensure roles - add new roles to existing user
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec![
+                "existing-role".to_string(), // This should not be added again
+                "new-role-1".to_string(),
+                "new-role-2".to_string(),
+            ]),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
+        assert!(roles.contains(&"existing-role".to_string()));
+        assert!(roles.contains(&"new-role-1".to_string()));
+        assert!(roles.contains(&"new-role-2".to_string()));
+        assert_eq!(roles.len(), 3);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_auth_mgr_ensure_default_role() -> Result<()> {
+    let kid = "test_kid";
+    let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);
+    let rsa_components = key_pair.public_key().to_components();
+    let e = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.e);
+    let n = general_purpose::URL_SAFE_NO_PAD.encode(rsa_components.n);
+    let j =
+        serde_json::json!({"keys": [ {"kty": "RSA", "kid": kid, "e": e, "n": n, } ] }).to_string();
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    let template = ResponseTemplate::new(200).set_body_raw(j, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        .mount(&server)
+        .await;
+    let jwks_url = format!("http://{}{}", server.address(), json_path);
+
+    let mut conf = ConfigBuilder::create().config();
+    conf.query.jwt_key_file = jwks_url.clone();
+
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let mut session = TestFixture::create_dummy_session().await;
+    let auth_mgr = AuthMgr::instance();
+    let user_name = "test-ensure-default-role-user";
+
+    // First, create a user with some roles but no default role
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.grants.roles(), &["role1", "role2"]);
+        assert!(user_info.option.default_role().is_none());
+    }
+
+    // Now test ensure default role - set JWT role as default
+    {
+        let custom_claims = CustomClaims::new()
+            .with_ensure_user(EnsureUser {
+                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            })
+            .with_role("role1"); // Set role1 as default
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.option.default_role(), Some(&"role1".to_string()));
+    }
+
+    // Test changing default role to a different role
+    {
+        let custom_claims = CustomClaims::new()
+            .with_ensure_user(EnsureUser {
+                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            })
+            .with_role("role2"); // Change default to role2
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.option.default_role(), Some(&"role2".to_string()));
+    }
+
+    // Test that default role is not changed if it's the same
+    {
+        let custom_claims = CustomClaims::new()
+            .with_ensure_user(EnsureUser {
+                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            })
+            .with_role("role2"); // Same as current default
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        assert_eq!(user_info.option.default_role(), Some(&"role2".to_string()));
+    }
+
+    Ok(())
+}
