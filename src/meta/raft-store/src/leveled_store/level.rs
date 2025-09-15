@@ -108,7 +108,7 @@ impl Level {
     pub(crate) fn new_level(&self) -> Self {
         let level = Self {
             // sys data are cloned
-            sys_data: self.sys_data.clone(),
+            sys_data: Arc::new(Mutex::new(self.sys_data.lock().unwrap().clone())),
 
             // Large data set is referenced.
             kv: Default::default(),
@@ -145,5 +145,25 @@ impl Level {
 
     pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
         self.with_sys_data(|s| s.nodes_mut().clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_level_detach_sys_data() {
+        let level1 = Level::default();
+        let level2 = level1.new_level();
+        level1.with_sys_data(|s: &mut SysData| {
+            s.update_seq(1);
+        });
+        assert_eq!(level1.with_sys_data(|s| s.curr_seq()), 1);
+
+        level2.with_sys_data(|s: &mut SysData| {
+            s.update_seq(10);
+        });
+        assert_eq!(level1.with_sys_data(|s| s.curr_seq()), 1);
     }
 }

@@ -150,7 +150,7 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
     let (sys_data, strm) = compacting_data.compact_into_stream().await?;
     assert_eq!(
-        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":3}"#,
+        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":2}"#,
         serde_json::to_string(&sys_data).unwrap()
     );
 
@@ -182,7 +182,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(
-        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4,"data_seq":2}"#,
+        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4,"data_seq":1}"#,
         serde_json::to_string(&sys_data).unwrap()
     );
 
