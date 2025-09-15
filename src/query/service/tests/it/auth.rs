@@ -972,5 +972,35 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
         assert_eq!(user_info.option.default_role(), Some(&"role2".to_string()));
     }
 
+    // Test changing default role to role3
+    {
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: None,
+            default_role: Some("role3".to_string()),
+        });
+        let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+        let token = key_pair.sign(claims)?;
+
+        auth_mgr
+            .auth(
+                &mut session,
+                &Credential::Jwt {
+                    token,
+                    client_ip: None,
+                },
+                true,
+            )
+            .await?;
+
+        let user_info = session.get_current_user()?;
+        assert_eq!(user_info.name, user_name);
+        let roles = user_info.grants.roles().to_vec();
+        assert!(roles.contains(&"role1".to_string()));
+        assert!(roles.contains(&"role2".to_string()));
+        assert!(roles.contains(&"role3".to_string()));
+        assert_eq!(user_info.option.default_role(), Some(&"role3".to_string()));
+    }
+
     Ok(())
 }
