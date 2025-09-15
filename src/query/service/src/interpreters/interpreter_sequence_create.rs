@@ -40,7 +40,7 @@ impl CreateSequenceInterpreter {
     }
 
     pub async fn req_execute(
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         req: CreateSequenceReq,
         skip_privilege_check: bool,
     ) -> Result<()> {
@@ -89,7 +89,7 @@ impl Interpreter for CreateSequenceInterpreter {
             storage_version: 0,
         };
 
-        Self::req_execute(&self.ctx, req, false).await?;
+        Self::req_execute(self.ctx.as_ref(), req, false).await?;
 
         Ok(PipelineBuildResult::create())
     }

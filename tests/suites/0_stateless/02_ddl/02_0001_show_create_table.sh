@@ -90,7 +90,7 @@ show create table test.tc;
 """ | $BENDSQL_CLIENT_CONNECT
 
 stmt """
-create or replace table test.auto_increment(c1 int, c2 int autoincrement);
+create or replace table test.auto_increment(c1 int, c2 int autoincrement, c3 int identity (2, 3) order);
 """
 
 query "show create table test.auto_increment;"

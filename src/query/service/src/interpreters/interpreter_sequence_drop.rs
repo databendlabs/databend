@@ -40,7 +40,7 @@ impl DropSequenceInterpreter {
     }
 
     pub async fn req_execute(
-        ctx: &QueryContext,
+        ctx: &dyn TableContext,
         req: DropSequenceReq,
         skip_skip_privilege_check: bool,
     ) -> Result<()> {
@@ -88,7 +88,7 @@ impl Interpreter for DropSequenceInterpreter {
             ident: self.plan.ident.clone(),
             if_exists: self.plan.if_exists,
         };
-        Self::req_execute(&self.ctx, req, false).await?;
+        Self::req_execute(self.ctx.as_ref(), req, false).await?;
 
         Ok(PipelineBuildResult::create())
     }

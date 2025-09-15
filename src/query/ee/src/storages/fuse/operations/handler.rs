@@ -52,11 +52,12 @@ impl VacuumHandler for RealVacuumHandler {
 
     async fn do_vacuum_drop_tables(
         &self,
+        ctx: Arc<dyn TableContext>,
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult {
-        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+        vacuum_drop_tables(ctx, threads_nums, tables, dry_run_limit).await
     }
 
     async fn do_vacuum_temporary_files(

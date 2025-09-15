@@ -20,8 +20,8 @@ use derive_visitor::DriveMut;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AutoIncrement {
-    pub start_num: u64,
-    pub step_num: u64,
+    pub start: u64,
+    pub step: u64,
     pub is_order: bool,
     pub is_identity: bool,
 }
@@ -35,14 +35,15 @@ impl AutoIncrement {
 impl Display for AutoIncrement {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.is_identity {
-            write!(f, "IDENTITY ({}, {})", self.start_num, self.step_num)?;
-            if self.is_order {
-                write!(f, " ORDER")?;
-            } else {
-                write!(f, " NOORDER")?;
-            }
+            write!(f, "IDENTITY")?;
         } else {
             write!(f, "AUTOINCREMENT")?;
+        }
+        write!(f, " ({}, {})", self.start, self.step)?;
+        if self.is_order {
+            write!(f, " ORDER")?;
+        } else {
+            write!(f, " NOORDER")?;
         }
         Ok(())
     }

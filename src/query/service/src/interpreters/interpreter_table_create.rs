@@ -340,13 +340,13 @@ impl CreateTableInterpreter {
             let req = CreateSequenceReq {
                 create_option: self.plan.create_option,
                 ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
-                start: auto_increment.start_num,
-                increment: auto_increment.step_num,
+                start: auto_increment.start,
+                increment: auto_increment.step,
                 comment: None,
                 create_on: Utc::now(),
                 storage_version: 0,
             };
-            CreateSequenceInterpreter::req_execute(&self.ctx, req, true).await?;
+            CreateSequenceInterpreter::req_execute(self.ctx.as_ref(), req, true).await?;
         }
         Ok(())
     }

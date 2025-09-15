@@ -3253,13 +3253,33 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
         CheckExpr(Box<Expr>),
-        AutoIncrement,
+        AutoIncrement {
+            start: u64,
+            step: u64,
+            is_identity: bool,
+            is_order: bool,
+        },
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
+    let identity_parmas = alt((
+        map(
+            rule! {
+                "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_u64 ~ ^")"
+            },
+            |(_, start, _, step, _)| (start, step),
+        ),
+        map(
+            rule! {
+                START ~ ^#literal_u64 ~ ^INCREMENT ~ ^#literal_u64
+            },
+            |(_, start, _, step)| (start, step),
+        ),
+    ));
+
     let expr = alt((
         map(
             rule! {
@@ -3287,9 +3307,24 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         ),
         map(
             rule! {
-                AUTOINCREMENT
+                (AUTOINCREMENT | IDENTITY)
+                ~ #identity_parmas?
+                ~ (ORDER | NOORDER)?
             },
-            |_| ColumnConstraint::AutoIncrement,
+            |(identity_token, params, order_token)| {
+                let (start, step) = params.unwrap_or((0, 1));
+                let is_identity = identity_token.text().eq_ignore_ascii_case("identity");
+                let is_order = order_token
+                    .map(|token| token.text().eq_ignore_ascii_case("order"))
+                    .unwrap_or(true);
+
+                ColumnConstraint::AutoIncrement {
+                    start,
+                    step,
+                    is_identity,
+                    is_order,
+                }
+            },
         ),
     ));
 
@@ -3355,7 +3390,12 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
             ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
-            ColumnConstraint::AutoIncrement => {
+            ColumnConstraint::AutoIncrement {
+                start,
+                step,
+                is_identity,
+                is_order,
+            } => {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
@@ -3365,10 +3405,10 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
-                    start_num: 0,
-                    step_num: 1,
-                    is_order: true,
-                    is_identity: false,
+                    start,
+                    step,
+                    is_order,
+                    is_identity,
                 }))
             }
         }
