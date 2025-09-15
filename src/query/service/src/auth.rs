@@ -235,9 +235,11 @@ impl AuthMgr {
                                 user_info.grants.grant_role(role);
                             }
                         }
-                        user_info
-                            .option
-                            .set_default_role(ensure_user.default_role.clone());
+                        if let Some(ref default_role) = ensure_user.default_role {
+                            user_info
+                                .option
+                                .set_default_role(Some(default_role.clone()));
+                        }
                         info!("[AUTH] ensure jwt user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
