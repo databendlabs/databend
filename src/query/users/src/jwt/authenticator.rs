@@ -40,14 +40,19 @@ pub struct JwtAuthenticator {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EnsureUser {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub roles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct CustomClaims {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tenant_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ensure_user: Option<EnsureUser>,
 }
 
