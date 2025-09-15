@@ -180,6 +180,21 @@ impl AuthMgr {
                             }
                             if let Some(ref jwt_default_role) = ensure_user.default_role {
                                 let current_roles = user_info.grants.roles();
+                                // grant default role to user if not exists
+                                if !current_roles.contains(jwt_default_role) {
+                                    info!(
+                                        "[AUTH] JWT grant default role to user: {} -> {}",
+                                        user_info.name, jwt_default_role
+                                    );
+                                    user_api
+                                        .grant_role_to_user(
+                                            &tenant,
+                                            user_info.identity(),
+                                            jwt_default_role.clone(),
+                                        )
+                                        .await?;
+                                    user_info.grants.grant_role(jwt_default_role.clone());
+                                }
                                 // ensure default role to jwt role
                                 if user_info.option.default_role() != Some(jwt_default_role) {
                                     info!(
@@ -196,21 +211,6 @@ impl AuthMgr {
                                     user_info
                                         .option
                                         .set_default_role(Some(jwt_default_role.clone()));
-                                }
-                                // grant default role to user if not exists
-                                if !current_roles.contains(jwt_default_role) {
-                                    info!(
-                                        "[AUTH] JWT grant default role to user: {} -> {}",
-                                        user_info.name, jwt_default_role
-                                    );
-                                    user_api
-                                        .grant_role_to_user(
-                                            &tenant,
-                                            user_info.identity(),
-                                            jwt_default_role.clone(),
-                                        )
-                                        .await?;
-                                    user_info.grants.grant_role(jwt_default_role.clone());
                                 }
                             }
                         }
