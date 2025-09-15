@@ -179,7 +179,7 @@ impl AuthMgr {
                                 let mut need_update_default_role = false;
                                 match user_info.option.default_role() {
                                     Some(default_role) => {
-                                        if jwt_role != default_role {
+                                        if jwt_role != *default_role {
                                             need_update_default_role = true;
                                         }
                                     }
