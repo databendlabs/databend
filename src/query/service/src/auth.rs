@@ -156,54 +156,51 @@ impl AuthMgr {
                         if user_info.auth_info != AuthInfo::JWT {
                             return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
                         }
-                        let ensure_user = match jwt.custom.ensure_user {
-                            Some(ensure_user) => ensure_user,
-                            // if ensure_user is not set, do not update user info
-                            None => return user_info,
-                        };
-                        let current_roles = user_info.grants.roles();
-                        // ensure jwt roles to user if not exists
-                        if let Some(ref roles) = ensure_user.roles {
-                            for role in roles.iter() {
-                                if current_roles.contains(&role) {
-                                    continue;
+                        if let Some(ensure_user) = jwt.custom.ensure_user {
+                            let current_roles = user_info.grants.roles();
+                            // ensure jwt roles to user if not exists
+                            if let Some(ref roles) = ensure_user.roles {
+                                for role in roles.iter() {
+                                    if current_roles.contains(&role) {
+                                        continue;
+                                    }
+                                    info!(
+                                        "[AUTH] grant jwt role to user: {} -> {}",
+                                        user_info.name, role
+                                    );
+                                    user_api
+                                        .grant_role_to_user(tenant, identity.clone(), role)
+                                        .await?;
+                                    user_info.grants.grant_role(role);
                                 }
-                                info!(
-                                    "[AUTH] grant jwt role to user: {} -> {}",
-                                    user_info.name, role
-                                );
-                                user_api
-                                    .grant_role_to_user(tenant, identity.clone(), role)
-                                    .await?;
-                                user_info.grants.grant_role(role);
                             }
-                        }
-                        // ensure default role to jwt role
-                        if let Some(jwt_role) = jwt.custom.role {
-                            let mut need_update_default_role = false;
-                            match user_info.option.default_role() {
-                                Some(default_role) => {
-                                    if jwt_role != default_role {
+                            // ensure default role to jwt role
+                            if let Some(jwt_role) = jwt.custom.role {
+                                let mut need_update_default_role = false;
+                                match user_info.option.default_role() {
+                                    Some(default_role) => {
+                                        if jwt_role != default_role {
+                                            need_update_default_role = true;
+                                        }
+                                    }
+                                    None => {
                                         need_update_default_role = true;
                                     }
                                 }
-                                None => {
-                                    need_update_default_role = true;
+                                if need_update_default_role {
+                                    info!(
+                                        "[AUTH] update default jwt role to user: {} -> {}",
+                                        user_info.name, jwt_role
+                                    );
+                                    user_api
+                                        .update_user_default_role(
+                                            &tenant,
+                                            user_info.identity(),
+                                            Some(jwt_role),
+                                        )
+                                        .await?;
+                                    user_info.option.set_default_role(Some(jwt_role));
                                 }
-                            }
-                            if need_update_default_role {
-                                info!(
-                                    "[AUTH] update default jwt role to user: {} -> {}",
-                                    user_info.name, jwt_role
-                                );
-                                user_api
-                                    .update_user_default_role(
-                                        &tenant,
-                                        user_info.identity(),
-                                        Some(jwt_role),
-                                    )
-                                    .await?;
-                                user_info.option.set_default_role(Some(jwt_role));
                             }
                         }
                         user_info
