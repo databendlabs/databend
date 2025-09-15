@@ -42,7 +42,7 @@ use crate::sessions::QueryContext;
 #[allow(clippy::enum_variant_names)]
 enum HashTable {
     MovedOut,
-    AggregateHashTable(AggregateHashTable),
+    AggregateHashTable(AggregateHashTable<true>),
 }
 
 impl Default for HashTable {

@@ -101,7 +101,7 @@ fn test_agg_hashtable() {
         let params = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
-        let mut hashtable = AggregateHashTable::new(
+        let mut hashtable = AggregateHashTable::<false>::new(
             group_types.clone(),
             aggrs.clone(),
             config.clone(),

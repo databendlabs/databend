@@ -22,8 +22,9 @@ use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
-use crate::read;
-use crate::store;
+use super::row_ptr::RowLayout;
+use super::row_ptr::RowPtr;
+use super::Entry;
 use crate::types::DataType;
 use crate::AggrState;
 use crate::AggregateFunctionRef;
@@ -60,12 +61,7 @@ pub struct Payload {
     // Starts from 1, zero means no page allocated
     pub current_write_page: usize,
 
-    pub group_offsets: Vec<usize>,
-    pub group_sizes: Vec<usize>,
-    pub validity_offsets: Vec<usize>,
-    pub hash_offset: usize,
-    pub state_offset: usize,
-    pub states_layout: Option<StatesLayout>,
+    pub(super) row_layout: RowLayout,
 
     // if set, the payload contains at least duplicate rows
     pub min_cardinality: Option<usize>,
@@ -86,6 +82,10 @@ pub struct Page {
 impl Page {
     pub fn is_partial_state(&self, agg_len: usize) -> bool {
         self.rows * agg_len != self.state_offsets
+    }
+
+    pub(super) fn data_ptr(&self, row: usize, row_size: usize) -> RowPtr {
+        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) as _ })
     }
 }
 
@@ -142,12 +142,14 @@ impl Payload {
             row_per_page,
             min_cardinality: None,
             total_rows: 0,
-            group_offsets,
-            group_sizes,
-            validity_offsets,
-            hash_offset,
-            state_offset,
-            states_layout,
+            row_layout: RowLayout {
+                hash_offset,
+                state_offset,
+                validity_offsets,
+                group_offsets,
+                group_sizes,
+                states_layout,
+            },
         }
     }
 
@@ -164,6 +166,10 @@ impl Payload {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.total_rows * self.tuple_size
+    }
+
+    pub fn states_layout(&self) -> Option<&StatesLayout> {
+        self.row_layout.states_layout.as_ref()
     }
 
     #[inline]
@@ -189,24 +195,23 @@ impl Payload {
         )
     }
 
-    #[inline]
-    pub fn data_ptr(&self, page: &Page, row: usize) -> *const u8 {
-        unsafe { page.data.as_ptr().add(row * self.tuple_size) as _ }
+    pub(super) fn data_ptr(&self, page: &Page, row: usize) -> RowPtr {
+        RowPtr::new(unsafe { page.data.as_ptr().add(row * self.tuple_size) as _ })
     }
 
-    pub fn reserve_append_rows(
+    pub(super) fn reserve_append_rows(
         &mut self,
         select_vector: &SelectVector,
-        group_hashes: &[u64],
-        address: &mut [*const u8],
+        group_hashes: &[Entry; BATCH_SIZE],
+        address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: ProjectedBlock,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
-        for idx in select_vector.iter().take(new_group_rows).copied() {
-            address[idx] = unsafe { page.data.as_ptr().add(page.rows * tuple_size) as *const u8 };
+        for idx in select_vector[..new_group_rows].iter().copied() {
+            address[idx] = page.data_ptr(page.rows, tuple_size);
             page_index[idx] = page_index_value;
             page.rows += 1;
 
@@ -225,11 +230,11 @@ impl Payload {
         )
     }
 
-    pub fn append_rows(
+    fn append_rows(
         &mut self,
         select_vector: &SelectVector,
-        group_hashes: &[u64],
-        address: &mut [*const u8],
+        group_hashes: &[Entry; BATCH_SIZE],
+        address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: ProjectedBlock,
@@ -244,15 +249,13 @@ impl Payload {
                     // faster path
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
-                            let dst = address[idx].add(write_offset);
-                            store::<u8>(&val, dst as *mut u8);
+                            address[idx].write_u8(write_offset, val);
                         }
                     }
                 } else {
                     for idx in select_vector.iter().take(new_group_rows).copied() {
                         unsafe {
-                            let dst = address[idx].add(write_offset);
-                            store::<u8>(&(bitmap.get_bit(idx) as u8), dst as *mut u8);
+                            address[idx].write_u8(write_offset, bitmap.get_bit(idx) as u8);
                         }
                     }
                 }
@@ -262,7 +265,8 @@ impl Payload {
 
         let mut scratch = vec![];
         for (idx, entry) in group_columns.iter().enumerate() {
-            debug_assert!(write_offset == self.group_offsets[idx]);
+            let offset = self.row_layout.group_offsets[idx];
+            assert!(write_offset == offset);
 
             unsafe {
                 serialize_column_to_rowformat(
@@ -271,27 +275,23 @@ impl Payload {
                     select_vector,
                     new_group_rows,
                     address,
-                    write_offset,
+                    offset,
                     &mut scratch,
                 );
             }
-            write_offset += self.group_sizes[idx];
+            write_offset += self.row_layout.group_sizes[idx];
         }
 
         // write group hashes
-        debug_assert!(write_offset == self.hash_offset);
+        debug_assert!(write_offset == self.row_layout.hash_offset);
         for idx in select_vector.iter().take(new_group_rows).copied() {
-            unsafe {
-                let dst = address[idx].add(write_offset);
-                store::<u64>(&group_hashes[idx], dst as *mut u8);
-            }
+            address[idx].set_hash(&self.row_layout, group_hashes[idx]);
         }
 
-        write_offset += 8;
-        debug_assert!(write_offset == self.state_offset);
+        debug_assert!(write_offset + 8 == self.row_layout.state_offset);
         if let Some(StatesLayout {
             layout, states_loc, ..
-        }) = &self.states_layout
+        }) = &self.row_layout.states_layout
         {
             // write states
             let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
@@ -304,12 +304,8 @@ impl Payload {
                 .enumerate()
                 .map(|(i, idx)| (idx, unsafe { place.add(padded_size * i) }))
             {
-                unsafe {
-                    let dst = address[idx].add(write_offset);
-                    store::<u64>(&(place.as_ptr() as u64), dst as *mut u8);
-                }
-
                 let place = StateAddr::from(place);
+                address[idx].set_state_addr(&self.row_layout, &place);
                 let page = &mut self.pages[page_index[idx]];
                 for (aggr, loc) in self.aggrs.iter().zip(states_loc.iter()) {
                     aggr.init_state(AggrState::new(place, loc));
@@ -353,7 +349,7 @@ impl Payload {
         &mut self,
         select_vector: &SelectVector,
         row_count: usize,
-        address: &[*const u8],
+        address: &[RowPtr; BATCH_SIZE],
     ) {
         let tuple_size = self.tuple_size;
         let agg_len = self.aggrs.len();
@@ -363,7 +359,7 @@ impl Payload {
 
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    address[index],
+                    address[index].as_ptr(),
                     page.data.as_mut_ptr().add(page.rows * tuple_size) as _,
                     tuple_size,
                 )
@@ -409,9 +405,9 @@ impl Payload {
         for idx in 0..rows {
             state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
 
-            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
+            let hash = state.addresses[idx].hash(&self.row_layout);
 
-            let partition_idx = (hash % mods) as usize;
+            let partition_idx = (hash.0 % mods) as usize;
 
             let sel = &mut state.probe_state.partition_entries[partition_idx];
             sel[state.probe_state.partition_count[partition_idx]] = idx;
@@ -422,8 +418,12 @@ impl Payload {
     }
 
     pub fn empty_block(&self, fake_rows: usize) -> DataBlock {
-        assert_eq!(self.aggrs.is_empty(), self.states_layout.is_none());
+        assert_eq!(
+            self.aggrs.is_empty(),
+            self.row_layout.states_layout.is_none()
+        );
         let entries = self
+            .row_layout
             .states_layout
             .as_ref()
             .iter()
@@ -451,7 +451,7 @@ impl Drop for Payload {
                 return;
             }
 
-            let Some(states_layout) = self.states_layout.as_ref() else {
+            let Some(states_layout) = self.row_layout.states_layout.as_ref() else {
                 return;
             };
 
@@ -481,10 +481,9 @@ impl Drop for Payload {
                         if is_partial_state && row * self.aggrs.len() + idx >= page.state_offsets {
                             continue 'FOR;
                         }
-                        let ptr = self.data_ptr(page, row);
+                        let addr = self.data_ptr(page, row).state_addr(&self.row_layout);
                         unsafe {
-                            let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;
-                            aggr.drop_state(AggrState::new(StateAddr::new(state_addr), loc));
+                            aggr.drop_state(AggrState::new(addr, loc));
                         }
                     }
                 }

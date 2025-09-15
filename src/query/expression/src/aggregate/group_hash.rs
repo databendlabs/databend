@@ -19,6 +19,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::Entry;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::AccessType;
@@ -58,6 +59,10 @@ use crate::ScalarRef;
 use crate::Value;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
+
+pub(super) fn group_hash_columns_entry(cols: ProjectedBlock, values: &mut [Entry]) {
+    group_hash_columns(cols, unsafe { std::mem::transmute(values) })
+}
 
 pub fn group_hash_columns(cols: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
