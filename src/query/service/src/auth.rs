@@ -152,7 +152,7 @@ impl AuthMgr {
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await
                 {
-                    Ok(user_info) => {
+                    Ok(mut user_info) => {
                         if user_info.auth_info != AuthInfo::JWT {
                             return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
                         }
@@ -169,17 +169,21 @@ impl AuthMgr {
                                         user_info.name, role
                                     );
                                     user_api
-                                        .grant_role_to_user(tenant, identity.clone(), role.clone())
+                                        .grant_role_to_user(
+                                            tenant.clone(),
+                                            user_info.identity(),
+                                            role.clone(),
+                                        )
                                         .await?;
                                     user_info.grants.grant_role(role.clone());
                                 }
                             }
                             // ensure default role to jwt role
-                            if let Some(jwt_role) = jwt.custom.role {
+                            if let Some(ref jwt_role) = jwt.custom.role {
                                 let mut need_update_default_role = false;
                                 match user_info.option.default_role() {
                                     Some(default_role) => {
-                                        if jwt_role != *default_role {
+                                        if jwt_role != default_role {
                                             need_update_default_role = true;
                                         }
                                     }
@@ -196,10 +200,10 @@ impl AuthMgr {
                                         .update_user_default_role(
                                             &tenant,
                                             user_info.identity(),
-                                            Some(jwt_role),
+                                            Some(jwt_role.clone()),
                                         )
                                         .await?;
-                                    user_info.option.set_default_role(Some(jwt_role));
+                                    user_info.option.set_default_role(Some(jwt_role.clone()));
                                 }
                             }
                         }

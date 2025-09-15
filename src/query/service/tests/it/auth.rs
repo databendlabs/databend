@@ -814,7 +814,7 @@ async fn test_auth_mgr_ensure_roles() -> Result<()> {
 
         let user_info = session.get_current_user()?;
         assert_eq!(user_info.name, user_name);
-        let roles: Vec<String> = user_info.grants.roles().iter().cloned().collect();
+        let roles = user_info.grants.roles().to_vec();
         assert!(roles.contains(&"existing-role".to_string()));
         assert!(roles.contains(&"new-role-1".to_string()));
         assert!(roles.contains(&"new-role-2".to_string()));
