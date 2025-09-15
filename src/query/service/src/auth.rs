@@ -240,6 +240,9 @@ impl AuthMgr {
                             }
                         }
                         if let Some(ref default_role) = ensure_user.default_role {
+                            if !user_info.grants.roles().contains(default_role) {
+                                user_info.grants.grant_role(default_role.clone());
+                            }
                             user_info
                                 .option
                                 .set_default_role(Some(default_role.clone()));
