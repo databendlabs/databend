@@ -338,7 +338,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
-    // with create user again
+    // with create user again and grant roles
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["role1".to_string()]),
@@ -359,7 +359,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert!(user_info.grants.roles().is_empty());
+        assert_eq!(user_info.grants.roles(), &["role1"]);
     }
 
     // with create user and grant roles
@@ -574,7 +574,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         assert_eq!(user_info.grants.roles().len(), 0);
     }
 
-    // with create user again
+    // with create user again and grant roles
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["role1".to_string()]),
@@ -595,7 +595,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
             )
             .await?;
         let user_info = session.get_current_user()?;
-        assert!(user_info.grants.roles().is_empty());
+        assert_eq!(user_info.grants.roles(), &["role1"]);
     }
 
     // with create user and grant roles
