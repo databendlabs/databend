@@ -180,18 +180,7 @@ impl AuthMgr {
                             }
                             // ensure default role to jwt role
                             if let Some(ref jwt_default_role) = ensure_user.default_role {
-                                let mut need_update_default_role = false;
-                                match user_info.option.default_role() {
-                                    Some(current_default_role) => {
-                                        if jwt_default_role != current_default_role {
-                                            need_update_default_role = true;
-                                        }
-                                    }
-                                    None => {
-                                        need_update_default_role = true;
-                                    }
-                                }
-                                if need_update_default_role {
+                                if user_info.option.default_role() != Some(jwt_default_role) {
                                     info!(
                                         "[AUTH] JWT update default role to user: {} -> {}",
                                         user_info.name, jwt_default_role
