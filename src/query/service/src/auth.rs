@@ -161,21 +161,20 @@ impl AuthMgr {
                             // ensure jwt roles to user if not exists
                             if let Some(ref roles) = ensure_user.roles {
                                 for role in roles.iter() {
-                                    if current_roles.contains(role) {
-                                        continue;
+                                    if !current_roles.contains(role) {
+                                        info!(
+                                            "[AUTH] JWT grant role to user: {} -> {}",
+                                            user_info.name, role
+                                        );
+                                        user_api
+                                            .grant_role_to_user(
+                                                &tenant,
+                                                user_info.identity(),
+                                                role.clone(),
+                                            )
+                                            .await?;
+                                        user_info.grants.grant_role(role.clone());
                                     }
-                                    info!(
-                                        "[AUTH] JWT grant role to user: {} -> {}",
-                                        user_info.name, role
-                                    );
-                                    user_api
-                                        .grant_role_to_user(
-                                            &tenant,
-                                            user_info.identity(),
-                                            role.clone(),
-                                        )
-                                        .await?;
-                                    user_info.grants.grant_role(role.clone());
                                 }
                             }
                             if let Some(ref jwt_default_role) = ensure_user.default_role {
