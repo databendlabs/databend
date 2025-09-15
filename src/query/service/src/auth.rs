@@ -179,7 +179,7 @@ impl AuthMgr {
                                 }
                             }
                             // ensure default role to jwt role
-                            if let Some(ref jwt_default_role) = jwt.custom.default_role {
+                            if let Some(ref jwt_default_role) = ensure_user.default_role {
                                 let mut need_update_default_role = false;
                                 match user_info.option.default_role() {
                                     Some(current_default_role) => {
