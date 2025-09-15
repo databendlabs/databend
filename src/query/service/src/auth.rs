@@ -179,11 +179,11 @@ impl AuthMgr {
                                 }
                             }
                             // ensure default role to jwt role
-                            if let Some(ref jwt_role) = jwt.custom.role {
+                            if let Some(ref jwt_default_role) = jwt.custom.default_role {
                                 let mut need_update_default_role = false;
                                 match user_info.option.default_role() {
-                                    Some(default_role) => {
-                                        if jwt_role != default_role {
+                                    Some(current_default_role) => {
+                                        if jwt_default_role != current_default_role {
                                             need_update_default_role = true;
                                         }
                                     }
@@ -194,16 +194,18 @@ impl AuthMgr {
                                 if need_update_default_role {
                                     info!(
                                         "[AUTH] update default jwt role to user: {} -> {}",
-                                        user_info.name, jwt_role
+                                        user_info.name, jwt_default_role
                                     );
                                     user_api
                                         .update_user_default_role(
                                             &tenant,
                                             user_info.identity(),
-                                            Some(jwt_role.clone()),
+                                            Some(jwt_default_role.clone()),
                                         )
                                         .await?;
-                                    user_info.option.set_default_role(Some(jwt_role.clone()));
+                                    user_info
+                                        .option
+                                        .set_default_role(Some(jwt_default_role.clone()));
                                 }
                             }
                         }

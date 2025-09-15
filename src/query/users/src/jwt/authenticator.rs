@@ -40,6 +40,7 @@ pub struct JwtAuthenticator {
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct EnsureUser {
+    pub default_role: Option<String>,
     pub roles: Option<Vec<String>>,
 }
 

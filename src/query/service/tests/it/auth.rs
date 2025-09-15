@@ -92,6 +92,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let custom_claims = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
+                default_role: None,
             })
             .with_role("test-auth-role");
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
@@ -121,6 +122,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let claim2 = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
+                default_role: None,
             })
             .with_role("test-auth-role2");
         let user2 = "candidate_by_keypair2";
@@ -182,6 +184,7 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         let claim3 = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
+                default_role: None,
             })
             .with_role("test-auth-role3");
         let user3 = "candidate_by_keypair3";
@@ -339,6 +342,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["role1".to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -364,6 +368,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let role_name = "test-role";
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec![role_name.to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -392,6 +397,7 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         let custom_claims = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
+                default_role: None,
             })
             .with_role("test-auth-role");
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
@@ -572,6 +578,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["role1".to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -597,6 +604,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let role_name = "test-role";
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec![role_name.to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -624,6 +632,7 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         let custom_claims = CustomClaims::new()
             .with_ensure_user(EnsureUser {
                 roles: Some(vec![role_name.to_string()]),
+                default_role: None,
             })
             .with_role("test-auth-role");
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
@@ -767,6 +776,7 @@ async fn test_auth_mgr_ensure_roles() -> Result<()> {
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["existing-role".to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -796,6 +806,7 @@ async fn test_auth_mgr_ensure_roles() -> Result<()> {
                 "new-role-1".to_string(),
                 "new-role-2".to_string(),
             ]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -858,6 +869,7 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
     {
         let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
             roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            default_role: None,
         });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
@@ -882,11 +894,10 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
 
     // Now test ensure default role - set JWT role as default
     {
-        let custom_claims = CustomClaims::new()
-            .with_ensure_user(EnsureUser {
-                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
-            })
-            .with_role("role1"); // Set role1 as default
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            default_role: Some("role1".to_string()),
+        });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
@@ -909,11 +920,10 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
 
     // Test changing default role to a different role
     {
-        let custom_claims = CustomClaims::new()
-            .with_ensure_user(EnsureUser {
-                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
-            })
-            .with_role("role2"); // Change default to role2
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            default_role: Some("role2".to_string()),
+        });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
@@ -936,11 +946,10 @@ async fn test_auth_mgr_ensure_default_role() -> Result<()> {
 
     // Test that default role is not changed if it's the same
     {
-        let custom_claims = CustomClaims::new()
-            .with_ensure_user(EnsureUser {
-                roles: Some(vec!["role1".to_string(), "role2".to_string()]),
-            })
-            .with_role("role2"); // Same as current default
+        let custom_claims = CustomClaims::new().with_ensure_user(EnsureUser {
+            roles: Some(vec!["role1".to_string(), "role2".to_string()]),
+            default_role: Some("role2".to_string()),
+        });
         let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
             .with_subject(user_name.to_string());
         let token = key_pair.sign(claims)?;
