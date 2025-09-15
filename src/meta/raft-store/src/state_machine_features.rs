@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Features that implemented by `StateMachine` that can be enabled or disabled.
+//! Runtime feature toggles for state machine behavior.
 
 use std::fmt;
 

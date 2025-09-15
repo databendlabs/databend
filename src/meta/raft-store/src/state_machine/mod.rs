@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! State machine metadata types and snapshot management.
+
 pub use log_meta::LogMetaKey;
 pub use log_meta::LogMetaValue;
 pub use snapshot_id::MetaSnapshotId;
