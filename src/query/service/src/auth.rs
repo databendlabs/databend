@@ -156,20 +156,26 @@ impl AuthMgr {
                         if user_info.auth_info != AuthInfo::JWT {
                             return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
                         }
+                        let ensure_user = match jwt.custom.ensure_user {
+                            Some(ensure_user) => ensure_user,
+                            None => return user_info,
+                        };
                         let current_roles = user_info.grants.roles();
                         // ensure jwt roles to user if not exists
-                        for role in jwt.custom.ensure_user.roles.iter() {
-                            if current_roles.contains(&role) {
-                                continue;
+                        if let Some(ref roles) = ensure_user.roles {
+                            for role in roles.iter() {
+                                if current_roles.contains(&role) {
+                                    continue;
+                                }
+                                info!(
+                                    "[AUTH] grant jwt role to user: {} -> {}",
+                                    user_info.name, role
+                                );
+                                user_api
+                                    .grant_role_to_user(tenant, identity.clone(), role)
+                                    .await?;
+                                user_info.grants.grant_role(role);
                             }
-                            info!(
-                                "[AUTH] grant jwt role to user: {} -> {}",
-                                user_info.name, role
-                            );
-                            user_api
-                                .grant_role_to_user(tenant, identity.clone(), role)
-                                .await?;
-                            user_info.grants.grant_role(role);
                         }
                         // ensure default role to jwt role
                         if let Some(jwt_role) = jwt.custom.role {
