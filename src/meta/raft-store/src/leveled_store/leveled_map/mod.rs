@@ -55,23 +55,28 @@ pub mod leveled_map_data;
 #[cfg(test)]
 mod leveled_map_test;
 
-/// Similar to leveldb.
+/// Multi-level storage similar to LevelDB with single-writer concurrency control.
 ///
-/// The top level is the newest and writable.
-/// Others are immutable.
+/// ## Concurrency Model
+/// - **Single writer**: Only one writer allowed at a time via write_semaphore
+/// - **Multiple readers**: Concurrent read access across all levels
+/// - **Lock-free compaction**: Compactor clones data out before processing, no long mutex holds
+/// - **At most one candidate writer**: Top level is exclusively writable
 ///
-/// - A writer must acquire a permit to write_semaphore.
-/// - A compactor must:
-///   - acquire the compaction_semaphore first,
-///   - then acquire `write_semaphore` to move `writeable` to `immutable_levels`,
+/// ## Performance Characteristics
+/// - **Read latency**: O(log n) access across levels, newest data first
+/// - **Write performance**: Single writer to top level, no contention
+/// - **Memory usage**: Grows with number of levels and cached data
+/// - **Compaction performance**: Non-blocking, processes cloned data independently
 ///
-/// The top level is the newest and writable and there is **at most one** candidate writer.
-///
+/// ## Level Organization
+/// ```text
 /// |                  | writer_semaphore | compactor_semaphore |
 /// | :--              | :--              | :--                 |
 /// | writable         | RW               |                     |
 /// | immutable_levels | R                | RW                  |
 /// | persisted        | R                | RW                  |
+/// ```
 #[derive(Debug, Clone)]
 pub struct LeveledMap {
     pub data: Arc<Mutex<LeveledMapData>>,

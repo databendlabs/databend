@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Snapshot storage path configuration and management.
+
 use std::fs;
 use std::io;
 use std::time::SystemTime;
