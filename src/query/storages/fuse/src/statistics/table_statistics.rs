@@ -55,6 +55,7 @@ impl TableStatsGenerator {
         Some(AdditionalStatsMeta {
             hll,
             row_count: self.row_count,
+            actual_rows: todo!(),
             ..Default::default()
         })
     }

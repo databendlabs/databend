@@ -18,41 +18,46 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::CompactSegmentInfo;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Table;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 
 use crate::io::read::meta::SegmentStatsReader;
 use crate::io::CompactSegmentInfoReader;
+use crate::io::MetaReaders;
 use crate::operations::analyzes::AnalyzeExtraMeta;
 use crate::operations::analyzes::AnalyzeNDVMeta;
 use crate::operations::analyzes::AnalyzeSegmentMeta;
-use crate::FuseLazyPartInfo;
+use crate::pruning_pipeline::LazySegmentMeta;
+use crate::FuseTable;
 
 enum State {
-    ReadData(Option<PartInfoPtr>),
+    None,
+    ReadData(Location),
     CollectNDV {
         segment_location: Location,
         segment_info: Arc<CompactSegmentInfo>,
         block_hlls: Vec<RawBlockHLL>,
     },
-    Finish,
 }
 
-pub struct ReadHllSource {
+pub struct ReadHllTransform {
     state: State,
+    input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     column_hlls: HashMap<ColumnId, MetaHLL>,
@@ -61,12 +66,34 @@ pub struct ReadHllSource {
     output_data: Option<DataBlock>,
     output_done: Option<Arc<AtomicBool>>,
 
-    ctx: Arc<dyn TableContext>,
     segment_reader: CompactSegmentInfoReader,
     stats_reader: SegmentStatsReader,
 }
 
-impl ReadHllSource {
+impl ReadHllTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        output_done: Option<Arc<AtomicBool>>,
+    ) -> Result<ProcessorPtr> {
+        let table_schema = table.schema();
+        let dal = table.get_operator();
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone(), table_schema.clone());
+        let stats_reader = MetaReaders::segment_stats_reader(dal.clone());
+        Ok(ProcessorPtr::create(Box::new(Self {
+            state: State::None,
+            input,
+            output,
+            column_hlls: HashMap::new(),
+            row_count: 0,
+            output_data: None,
+            output_done,
+            segment_reader,
+            stats_reader,
+        })))
+    }
+
     fn is_done(&self) -> bool {
         self.output_done
             .as_ref()
@@ -82,9 +109,9 @@ impl ReadHllSource {
 }
 
 #[async_trait::async_trait]
-impl Processor for ReadHllSource {
+impl Processor for ReadHllTransform {
     fn name(&self) -> String {
-        "ReadHllSource".to_string()
+        "ReadHllTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -92,9 +119,8 @@ impl Processor for ReadHllSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Finish) {
-            self.output.finish();
-            return Ok(Event::Finished);
+        if matches!(self.state, State::CollectNDV { .. }) {
+            return Ok(Event::Sync);
         }
 
         if self.output.is_finished() {
@@ -110,11 +136,19 @@ impl Processor for ReadHllSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::ReadData(None)) {
-            if let Some(part) = self.ctx.get_partition() {
-                self.state = State::ReadData(Some(part));
-                Ok(Event::Async)
-            } else {
+        if self.input.has_data() {
+            let mut input_data = self.input.pull_data().unwrap()?;
+            let meta = input_data
+                .take_meta()
+                .ok_or(ErrorCode::Internal("It's a bug"))?;
+            let meta = LazySegmentMeta::downcast_from(meta)
+                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            self.state = State::ReadData(meta.segment_location.location);
+            return Ok(Event::Async);
+        }
+
+        if self.input.is_finished() {
+            if !self.column_hlls.is_empty() {
                 self.output
                     .push_data(Ok(DataBlock::empty_with_meta(Box::new(
                         AnalyzeNDVMeta::Extras(AnalyzeExtraMeta {
@@ -122,16 +156,17 @@ impl Processor for ReadHllSource {
                             column_hlls: std::mem::take(&mut self.column_hlls),
                         }),
                     ))));
-                self.state = State::Finish;
-                Ok(Event::NeedConsume)
             }
-        } else {
-            Ok(Event::Sync)
+            self.output.finish();
+            return Ok(Event::Finished);
         }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
+        match std::mem::replace(&mut self.state, State::None) {
             State::CollectNDV {
                 segment_location,
                 segment_info,
@@ -177,7 +212,6 @@ impl Processor for ReadHllSource {
                             .or_insert_with(|| column_hll);
                         self.row_count += segment_info.summary.row_count;
                     }
-                    self.state = State::ReadData(None);
                 }
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -187,12 +221,11 @@ impl Processor for ReadHllSource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadData(Some(part)) => {
-                let part = FuseLazyPartInfo::from_part(&part)?;
-                let (path, ver) = &part.segment_location;
+        match std::mem::replace(&mut self.state, State::None) {
+            State::ReadData(location) => {
+                let (path, ver) = &location;
                 if *ver < 2 {
-                    self.state = State::ReadData(None);
+                    self.state = State::None;
                     return Ok(());
                 }
                 let load_param = LoadParams {
@@ -218,7 +251,7 @@ impl Processor for ReadHllSource {
                     _ => vec![vec![]; block_count],
                 };
                 self.state = State::CollectNDV {
-                    segment_location: part.segment_location.clone(),
+                    segment_location: location,
                     segment_info: compact_segment_info,
                     block_hlls,
                 };

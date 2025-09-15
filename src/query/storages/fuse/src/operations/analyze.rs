@@ -97,15 +97,25 @@ enum AnalyzeStep {
 }
 
 impl FuseTable {
-    pub fn do_analyze(
+    pub fn do_analyzes(
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot_id: SnapshotId,
         pipeline: &mut Pipeline,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_concurrency = std::cmp::max(max_threads * 2, 10);
+        let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
         pipeline.add_source(
-            |output| AnalyzeCollectNDVSource::try_create(output, self, ctx.clone()),
+            |output| {
+                AnalyzeCollectNDVSource::try_create(
+                    output,
+                    self,
+                    ctx.clone(),
+                    io_request_semaphore.clone(),
+                )
+            },
             ctx.get_settings().get_max_threads()? as usize,
         )?;
         pipeline.try_resize(1)?;
@@ -221,7 +231,8 @@ impl SinkAnalyzeState {
         // 3. Generate new table statistics
         new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
             hll: Some(encode_column_hll(&self.ndv_states)?),
-            row_count: snapshot.summary.row_count,
+            row_count: self.row_count,
+            actual_rows: self.row_count,
             ..Default::default()
         });
 
@@ -493,6 +504,7 @@ enum State {
 pub struct AnalyzeCollectNDVSource {
     state: State,
     output: Arc<OutputPort>,
+    io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     row_count: u64,
 
@@ -513,6 +525,7 @@ impl AnalyzeCollectNDVSource {
         output: Arc<OutputPort>,
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
+        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<ProcessorPtr> {
         let table_schema = table.schema();
         let ndv_columns_map = table
@@ -530,6 +543,7 @@ impl AnalyzeCollectNDVSource {
         Ok(ProcessorPtr::create(Box::new(Self {
             state: State::ReadData(None),
             output,
+            io_request_semaphore,
             column_hlls: HashMap::new(),
             row_count: 0,
             segment_with_hll: None,
@@ -635,7 +649,8 @@ impl Processor for AnalyzeCollectNDVSource {
             State::MergeHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
-                for (idx, new) in new_hlls.into_iter().enumerate() {
+                let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
+                for (new, idx) in new_hlls.into_iter().zip(new_indexes.into_iter()) {
                     if let Some(column_hlls) = new {
                         for (column_id, column_hll) in column_hlls.iter() {
                             self.column_hlls
@@ -693,13 +708,10 @@ impl Processor for AnalyzeCollectNDVSource {
             }
             State::BuildHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
-                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-                let max_concurrency = std::cmp::max(max_threads * 2, 10);
-                let semaphore = Arc::new(Semaphore::new(max_concurrency));
                 let runtime = GlobalIORuntime::instance();
                 let mut handlers = Vec::with_capacity(segment_with_hll.block_indexes.len());
                 for &idx in &segment_with_hll.block_indexes {
-                    let permit = acquire_task_permit(semaphore.clone()).await?;
+                    let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
                     let block_reader = self.block_reader.clone();
                     let settings = self.settings;
                     let storage_format = self.storage_format;

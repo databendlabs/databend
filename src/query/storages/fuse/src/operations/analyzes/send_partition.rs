@@ -30,7 +30,7 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
-use crate::operations::analyzes::analyze_meta::AnalyzeNDVMeta;
+use crate::operations::analyzes::ndv_meta::AnalyzeNDVMeta;
 
 pub struct AnalyzeSendPartSink {
     sender: Option<Sender<Result<PartInfoPtr>>>,
@@ -64,22 +64,24 @@ impl AsyncSink for AnalyzeSendPartSink {
             if let Some(data) = AnalyzeNDVMeta::downcast_from(meta) {
                 if let Some(sender) = &self.sender {
                     let info = data.to_part();
+                    println!("send start");
                     let _ = sender.send(Ok(info)).await;
+                    println!("send ok");
                 }
                 return Ok(false);
             }
         }
         Err(ErrorCode::Internal(
-            "Cannot downcast data block meta to BlockPruneResult".to_string(),
+            "Cannot downcast data block meta to AnalyzeNDVMeta".to_string(),
         ))
     }
 }
 
-pub struct PartitionReceiverSource {
+pub struct AnalyzePartRecvSource {
     pub meta_receiver: Option<Receiver<Result<PartInfoPtr>>>,
 }
 
-impl PartitionReceiverSource {
+impl AnalyzePartRecvSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         receiver: Receiver<Result<PartInfoPtr>>,
@@ -92,15 +94,17 @@ impl PartitionReceiverSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for PartitionReceiverSource {
-    const NAME: &'static str = "PartitionReceiverSource";
+impl AsyncSource for AnalyzePartRecvSource {
+    const NAME: &'static str = "AnalyzePartRecvSource";
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        println!("AnalyzePartRecvSource generate recv start");
         if let Some(rx) = &self.meta_receiver {
             match rx.recv().await {
                 Ok(Ok(part)) => {
+                    println!("AnalyzePartRecvSource generate recv ok");
                     let info = AnalyzeNDVMeta::from_part(&part)?;
                     Ok(Some(DataBlock::empty_with_meta(Box::new(info.clone()))))
                 }

@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -25,24 +23,18 @@ use async_channel::Sender;
 use async_trait::async_trait;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::local_block_meta_serde;
-use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableField;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
@@ -52,43 +44,114 @@ use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
 use databend_common_storage::MetaHLL;
-use databend_storages_common_cache::BlockMeta;
-use databend_storages_common_cache::CompactSegmentInfo;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::SegmentStatistics;
-use databend_storages_common_index::RangeIndex;
-use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
-use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
-use databend_storages_common_table_meta::meta::Versioned;
-use opendal::Operator;
 
-use crate::io::build_column_hlls;
-use crate::io::read::meta::SegmentStatsReader;
-use crate::io::BlockReader;
-use crate::io::CachedMetaWriter;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
-use crate::io::TableMetaLocationGenerator;
-use crate::operations::acquire_task_permit;
+use crate::operations::analyzes::analyze_collect_ndv::CollectNDVTransform;
+use crate::operations::analyzes::send_partition::AnalyzePartRecvSource;
+use crate::operations::analyzes::send_partition::AnalyzeSendPartSink;
 use crate::operations::analyzes::AnalyzeExtraMeta;
+use crate::operations::analyzes::ReadHllTransform;
+use crate::pruning::create_segment_location_vector;
+use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
-use crate::FuseLazyPartInfo;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
+
+impl FuseTable {
+    pub fn do_analyze(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
+        pipeline: &mut Pipeline,
+        no_scan: bool,
+        histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+    ) -> Result<Pipeline> {
+        let snapshot_id = snapshot.snapshot_id;
+        let max_io_requests = self.adjust_io_request(&ctx)?;
+        let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
+        let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
+
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let segment_locations = create_segment_location_vector(snapshot.segments.clone(), None);
+        let mut collect_pipeline = Pipeline::create();
+        collect_pipeline.add_source(
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            max_threads,
+        )?;
+        let output_done = if no_scan {
+            Some(Default::default())
+        } else {
+            None
+        };
+        collect_pipeline.add_transform(|input, output| {
+            ReadHllTransform::create(input, output, self, output_done.clone())
+        })?;
+        collect_pipeline
+            .add_sink(|input| AnalyzeSendPartSink::create(input, part_info_tx.clone()))?;
+        collect_pipeline.set_on_init(move || {
+            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+            GlobalIORuntime::instance().spawn(async move {
+                // avoid block global io runtime
+                let runtime =
+                    Runtime::with_worker_threads(2, Some("collect-pipeline".to_string()))?;
+                let join_handler = runtime.spawn(async move {
+                    for segment in segment_locations {
+                        // the sql may be killed or early stop, ignore the error
+                        if let Err(_e) = segment_tx.send(segment).await {
+                            break;
+                        }
+                    }
+                    Ok::<_, ErrorCode>(())
+                });
+
+                if let Err(cause) = join_handler.await {
+                    log::warn!(
+                        "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
+                        cause
+                    );
+                }
+                Ok::<_, ErrorCode>(())
+            });
+            Ok(())
+        });
+
+        let num = if no_scan { 1 } else { max_threads };
+        let max_concurrency = std::cmp::max(max_threads * 2, 10);
+        let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
+        pipeline.add_source(
+            |output| AnalyzePartRecvSource::create(ctx.clone(), part_info_rx.clone(), output),
+            num,
+        )?;
+        pipeline.add_transform(|input, output| {
+            CollectNDVTransform::create(
+                input,
+                output,
+                self,
+                io_request_semaphore.clone(),
+                ctx.clone(),
+            )
+        })?;
+        pipeline.try_resize(1)?;
+        pipeline.add_sink(|input| {
+            SinkAnalyzeState::create(
+                ctx.clone(),
+                self,
+                snapshot_id,
+                input,
+                histogram_info_receivers.clone(),
+            )
+        })?;
+        Ok(collect_pipeline)
+    }
+}
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 enum AnalyzeStep {

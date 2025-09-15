@@ -84,6 +84,9 @@ pub struct AdditionalStatsMeta {
     /// The count of the stats rows.
     #[serde(default)]
     pub row_count: u64,
+    /// The actual count of the stats rows.
+    #[serde(default)]
+    pub actual_rows: u64,
 }
 
 fn default_location() -> Location {

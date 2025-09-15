@@ -13,10 +13,10 @@
 // limitations under the License.
 
 mod analyze_collect_ndv;
-mod analyze_meta;
 mod analyze_ndv_source;
-mod analyze_send_part_sink;
 mod analyze_state_sink;
+mod ndv_meta;
+mod send_partition;
 
-pub use analyze_meta::*;
 pub use analyze_ndv_source::*;
+pub use ndv_meta::*;

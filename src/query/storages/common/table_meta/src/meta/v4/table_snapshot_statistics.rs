@@ -34,6 +34,7 @@ pub struct TableSnapshotStatistics {
     pub format_version: FormatVersion,
 
     pub snapshot_id: SnapshotId,
+
     pub row_count: u64,
     pub hll: HashMap<ColumnId, MetaHLL>,
     pub histograms: HashMap<ColumnId, Histogram>,

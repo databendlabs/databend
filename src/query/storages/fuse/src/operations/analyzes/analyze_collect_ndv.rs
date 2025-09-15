@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,9 +33,12 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_cache::Table;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -54,6 +58,7 @@ use crate::operations::acquire_task_permit;
 use crate::operations::analyzes::AnalyzeExtraMeta;
 use crate::operations::analyzes::AnalyzeNDVMeta;
 use crate::FuseStorageFormat;
+use crate::FuseTable;
 
 struct SegmentWithHLL {
     segment_location: Location,
@@ -73,17 +78,17 @@ enum State {
     WriteMeta,
 }
 
-pub struct AnalyzeCollectNDVSource {
+pub struct CollectNDVTransform {
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     row_count: u64,
 
     segment_with_hll: Option<SegmentWithHLL>,
     called_on_finish: bool,
 
-    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
     dal: Operator,
     settings: ReadSettings,
@@ -91,10 +96,46 @@ pub struct AnalyzeCollectNDVSource {
     ndv_columns_map: BTreeMap<FieldIndex, TableField>,
 }
 
+impl CollectNDVTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        io_request_semaphore: Arc<Semaphore>,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<ProcessorPtr> {
+        let table_schema = table.schema();
+        let ndv_columns_map = table
+            .approx_distinct_cols
+            .distinct_column_fields(table_schema.clone(), RangeIndex::supported_table_type)?;
+        let field_indices = ndv_columns_map.keys().cloned().collect();
+        let projection = Projection::Columns(field_indices);
+        let block_reader =
+            table.create_block_reader(ctx.clone(), projection, false, false, false)?;
+        let dal = table.get_operator();
+        let settings = ReadSettings::from_ctx(&ctx)?;
+        Ok(ProcessorPtr::create(Box::new(Self {
+            state: State::Consume,
+            input,
+            output,
+            io_request_semaphore,
+            column_hlls: HashMap::new(),
+            row_count: 0,
+            segment_with_hll: None,
+            called_on_finish: false,
+            block_reader,
+            dal,
+            settings,
+            storage_format: table.get_storage_format(),
+            ndv_columns_map,
+        })))
+    }
+}
+
 #[async_trait::async_trait]
-impl Processor for AnalyzeCollectNDVSource {
+impl Processor for CollectNDVTransform {
     fn name(&self) -> String {
-        "AnalyzeCollectNDVSource".to_string()
+        "CollectNDVTransform".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -188,11 +229,8 @@ impl Processor for AnalyzeCollectNDVSource {
             State::MergeHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
-                for (idx, new) in segment_with_hll
-                    .block_indexes
-                    .iter()
-                    .zip(new_hlls.into_iter())
-                {
+                let indexes = std::mem::take(&mut segment_with_hll.block_indexes);
+                for (idx, new) in indexes.into_iter().zip(new_hlls.into_iter()) {
                     if let Some(column_hlls) = new {
                         for (column_id, column_hll) in column_hlls.iter() {
                             self.column_hlls
@@ -200,7 +238,7 @@ impl Processor for AnalyzeCollectNDVSource {
                                 .and_modify(|hll| hll.merge(column_hll))
                                 .or_insert_with(|| column_hll.clone());
                         }
-                        segment_with_hll.raw_block_hlls[*idx] = encode_column_hll(&column_hlls)?;
+                        segment_with_hll.raw_block_hlls[idx] = encode_column_hll(&column_hlls)?;
                     }
                 }
                 self.state = State::WriteMeta;
@@ -215,13 +253,10 @@ impl Processor for AnalyzeCollectNDVSource {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::BuildHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
-                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-                let max_concurrency = std::cmp::max(max_threads * 2, 10);
-                let semaphore = Arc::new(Semaphore::new(max_concurrency));
                 let runtime = GlobalIORuntime::instance();
                 let mut handlers = Vec::with_capacity(segment_with_hll.block_indexes.len());
                 for &idx in &segment_with_hll.block_indexes {
-                    let permit = acquire_task_permit(semaphore.clone()).await?;
+                    let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
                     let block_reader = self.block_reader.clone();
                     let settings = self.settings;
                     let storage_format = self.storage_format;
