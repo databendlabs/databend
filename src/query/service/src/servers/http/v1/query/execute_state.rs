@@ -25,8 +25,9 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
+use databend_common_storage::DataOperator;
+use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
@@ -49,6 +50,12 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
+use crate::spillers::LiteSpiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerDiskConfig;
+use crate::spillers::SpillerType;
+
+type Sender = SizedChannelSender<LiteSpiller>;
 
 pub struct ExecutionError;
 
@@ -114,7 +121,7 @@ impl ExecuteState {
 
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) sender: SizedChannelSender<DataBlock>,
+    pub(crate) sender: Option<Sender>,
 }
 
 pub struct ExecuteRunning {
@@ -355,8 +362,7 @@ impl ExecuteState {
         sql: String,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
-        block_sender: SizedChannelSender<DataBlock>,
-        format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>>,
+        mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
@@ -367,11 +373,8 @@ impl ExecuteState {
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
-        {
-            // set_var may change settings
-            let mut guard = format_settings.write();
-            *guard = Some(ctx.get_format_settings().with_context(make_error)?);
-        }
+
+        Self::apply_settings(&ctx, &mut block_sender).with_context(make_error)?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -397,7 +400,7 @@ impl ExecuteState {
         let ctx_clone = ctx.clone();
         let block_sender_closer = block_sender.closer();
 
-        let res = execute(
+        let res = Self::execute(
             interpreter,
             plan.schema(),
             ctx_clone,
@@ -407,60 +410,111 @@ impl ExecuteState {
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
                 Executor::stop(&executor_clone, Err(err.clone()));
-                block_sender_closer.close();
+                block_sender_closer.abort();
             }
             Err(e) => {
                 Executor::stop(&executor_clone, Err(e));
-                block_sender_closer.close();
+                block_sender_closer.abort();
             }
             _ => {}
         }
 
         Ok(())
     }
-}
 
-async fn execute(
-    interpreter: Arc<dyn Interpreter>,
-    schema: DataSchemaRef,
-    ctx: Arc<QueryContext>,
-    block_sender: SizedChannelSender<DataBlock>,
-    executor: Arc<Mutex<Executor>>,
-) -> Result<(), ExecutionError> {
-    let make_error = || format!("failed to execute {}", interpreter.name());
+    #[fastrace::trace(name = "ExecuteState::execute")]
+    async fn execute(
+        interpreter: Arc<dyn Interpreter>,
+        schema: DataSchemaRef,
+        ctx: Arc<QueryContext>,
+        mut sender: Sender,
+        executor: Arc<Mutex<Executor>>,
+    ) -> Result<(), ExecutionError> {
+        let make_error = || format!("failed to execute {}", interpreter.name());
 
-    let mut data_stream = interpreter
-        .execute(ctx.clone())
-        .await
-        .with_context(make_error)?;
-    match data_stream.next().await {
-        None => {
-            let block = DataBlock::empty_with_schema(schema);
-            block_sender.send(block, 0).await;
-            Executor::stop::<()>(&executor, Ok(()));
-            block_sender.close();
-        }
-        Some(Err(err)) => {
-            Executor::stop(&executor, Err(err));
-            block_sender.close();
-        }
-        Some(Ok(block)) => {
-            let size = block.num_rows();
-            block_sender.send(block, size).await;
-            while let Some(block_r) = data_stream.next().await {
-                match block_r {
-                    Ok(block) => {
-                        block_sender.send(block.clone(), block.num_rows()).await;
-                    }
-                    Err(err) => {
-                        block_sender.close();
-                        return Err(err.with_context(make_error()));
-                    }
-                };
+        let mut data_stream = interpreter
+            .execute(ctx.clone())
+            .await
+            .with_context(make_error)?;
+        match data_stream.next().await {
+            None => {
+                Self::send_data_block(&mut sender, &executor, DataBlock::empty_with_schema(schema))
+                    .await
+                    .with_context(make_error)?;
+                Executor::stop::<()>(&executor, Ok(()));
+                sender.finish();
             }
-            Executor::stop::<()>(&executor, Ok(()));
-            block_sender.close();
+            Some(Err(err)) => {
+                Executor::stop(&executor, Err(err));
+                sender.abort();
+            }
+            Some(Ok(block)) => {
+                Self::send_data_block(&mut sender, &executor, block)
+                    .await
+                    .with_context(make_error)?;
+                while let Some(block) = data_stream.next().await {
+                    match block {
+                        Ok(block) => {
+                            Self::send_data_block(&mut sender, &executor, block)
+                                .await
+                                .with_context(make_error)?;
+                        }
+                        Err(err) => {
+                            sender.abort();
+                            return Err(err.with_context(make_error()));
+                        }
+                    };
+                }
+                Executor::stop::<()>(&executor, Ok(()));
+                sender.finish();
+            }
+        }
+        Ok(())
+    }
+
+    async fn send_data_block(
+        sender: &mut Sender,
+        executor: &Arc<Mutex<Executor>>,
+        block: DataBlock,
+    ) -> Result<bool> {
+        match sender.send(block).await {
+            Ok(ok) => Ok(ok),
+            Err(err) => {
+                Executor::stop(executor, Err(err.clone()));
+                sender.abort();
+                Err(err)
+            }
         }
     }
-    Ok(())
+
+    fn apply_settings(ctx: &Arc<QueryContext>, block_sender: &mut Sender) -> Result<()> {
+        let settings = ctx.get_settings();
+
+        let spiller = if settings.get_enable_result_set_spilling()? {
+            let temp_dir_manager = TempDirManager::instance();
+            let disk_bytes_limit = settings.get_result_set_spilling_to_disk_bytes_limit()?;
+            let enable_dio = settings.get_enable_dio()?;
+            let disk_spill = temp_dir_manager
+                .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
+                .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
+                .transpose()?;
+
+            let location_prefix = ctx.query_id_spill_prefix();
+            let config = SpillerConfig {
+                spiller_type: SpillerType::ResultSet,
+                location_prefix,
+                disk_spill,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            };
+            let op = DataOperator::instance().spill_operator();
+            Some(LiteSpiller::new(op, config)?)
+        } else {
+            None
+        };
+
+        // set_var may change settings
+        let format_settings = ctx.get_format_settings()?;
+        block_sender.plan_ready(format_settings, spiller);
+        Ok(())
+    }
 }
