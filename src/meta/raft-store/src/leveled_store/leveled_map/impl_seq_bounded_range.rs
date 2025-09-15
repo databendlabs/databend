@@ -12,49 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
+use std::io::Error;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc;
 use map_api::IOResultStream;
-use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 
-use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
+use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::types::Key;
 use crate::leveled_store::types::Namespace;
 use crate::leveled_store::types::Value;
 
 #[async_trait::async_trait]
-impl mvcc::ViewReadonly<Namespace, Key, Value> for Arc<LeveledMapData> {
-    fn base_seq(&self) -> InternalSeq {
-        let seq = self.with_sys_data(|sys_data| sys_data.curr_seq());
-        InternalSeq::new(seq)
-    }
-
-    async fn get(&self, space: Namespace, key: Key) -> Result<SeqMarked<Value>, io::Error> {
-        match space {
-            Namespace::User => {
-                let key = key.into_user();
-                let got = self.compacted_view_get(key, *self.base_seq()).await?;
-                Ok(got.map(Value::User))
-            }
-            Namespace::Expire => {
-                let key = key.into_expire();
-                let got = self.compacted_view_get(key, *self.base_seq()).await?;
-                Ok(got.map(Value::Expire))
-            }
-        }
-    }
-
+impl mvcc::SeqBoundedRange<Namespace, Key, Value> for LeveledMap {
     async fn range<R>(
         &self,
         space: Namespace,
         range: R,
-    ) -> Result<IOResultStream<(Key, SeqMarked<Value>)>, io::Error>
+        snapshot_seq: u64,
+    ) -> Result<IOResultStream<(Key, SeqMarked<Value>)>, Error>
     where
         R: RangeBounds<Key> + Send + Sync + Clone + 'static,
     {
@@ -66,9 +45,8 @@ impl mvcc::ViewReadonly<Namespace, Key, Value> for Arc<LeveledMapData> {
                 let start = start.map(|k| k.into_user());
                 let end = end.map(|k| k.into_user());
 
-                let strm = self
-                    .compacted_view_range((start, end), *self.base_seq())
-                    .await?;
+                let strm =
+                    mvcc::ScopedSeqBoundedRange::range(self, (start, end), snapshot_seq).await?;
 
                 Ok(strm
                     .map_ok(|(k, v)| (Key::User(k), v.map(Value::User)))
@@ -78,9 +56,8 @@ impl mvcc::ViewReadonly<Namespace, Key, Value> for Arc<LeveledMapData> {
                 let start = start.map(|k| k.into_expire());
                 let end = end.map(|k| k.into_expire());
 
-                let strm = self
-                    .compacted_view_range((start, end), *self.base_seq())
-                    .await?;
+                let strm =
+                    mvcc::ScopedSeqBoundedRange::range(self, (start, end), snapshot_seq).await?;
 
                 Ok(strm
                     .map_ok(|(k, v)| (Key::Expire(k), v.map(Value::Expire)))

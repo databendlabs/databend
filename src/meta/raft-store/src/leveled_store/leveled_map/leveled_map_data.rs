@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use map_api::mvcc;
-use seq_marked::SeqMarked;
-use state_machine_api::MetaValue;
-use state_machine_api::UserKey;
+use std::sync::Arc;
 
-use crate::applier::applier_data::ApplierData;
-use crate::leveled_store::types::Key;
-use crate::leveled_store::types::Namespace;
-use crate::leveled_store::types::Value;
+use crate::leveled_store::level::Level;
+use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 
-#[async_trait::async_trait]
-impl mvcc::ScopedView<UserKey, MetaValue> for ApplierData {
-    fn set(&mut self, key: UserKey, value: Option<MetaValue>) -> SeqMarked<()> {
-        self.view
-            .set(Namespace::User, Key::User(key), value.map(Value::User))
-    }
+/// A container for the leveled map data, including the top mutable level and the immutable data.
+#[derive(Debug, Default)]
+pub struct LeveledMapData {
+    /// The top level is the newest and writable.
+    ///
+    /// It can only be updated with mvcc::Commit
+    pub(crate) writable: Level,
+
+    pub(crate) immutable: Arc<ImmutableData>,
 }

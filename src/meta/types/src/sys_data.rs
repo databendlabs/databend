@@ -41,6 +41,10 @@ pub struct SysData {
     /// A seq is globally unique and monotonically increasing.
     sequence: u64,
 
+    /// The seq number for each new data level created.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data_seq: Option<u64>,
+
     /// The number of keys in each sub key space.
     ///
     /// If it is absent in the serialized data, serde should skip it when deserializing.
@@ -74,6 +78,14 @@ impl SysData {
         // dbg!("next_seq", self.sequence);
 
         self.sequence
+    }
+
+    pub fn incr_data_seq(&mut self) -> u64 {
+        let v = self.data_seq.unwrap_or(0);
+
+        self.data_seq = Some(v + 1);
+        debug!("incr_data_seq: {:?}", self.data_seq);
+        self.data_seq.unwrap()
     }
 
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
@@ -144,6 +156,7 @@ mod tests {
             ),
             nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
             sequence: 5,
+            data_seq: None,
             key_counts: BTreeMap::from([]),
             sm_features: BTreeSet::from([]),
         };
@@ -207,6 +220,7 @@ mod tests {
             ),
             nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
             sequence: 5,
+            data_seq: Some(10),
             key_counts: BTreeMap::from([("foo".to_string(), 5), ("bar".to_string(), 6)]),
             sm_features: BTreeSet::from(["f1".to_string(), "f2".to_string()]),
         };
@@ -252,6 +266,7 @@ mod tests {
     }
   },
   "sequence": 5,
+  "data_seq": 10,
   "key_counts": {
     "bar": 6,
     "foo": 5
@@ -299,6 +314,7 @@ mod tests {
             ),
             nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
             sequence: 5,
+            data_seq: None,
             key_counts: BTreeMap::new(),
             sm_features: BTreeSet::new(),
         };
@@ -343,6 +359,7 @@ mod tests {
             ),
             nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
             sequence: 5,
+            data_seq: None,
             key_counts: BTreeMap::from([("foo".to_string(), 5), ("bar".to_string(), 6)]),
             sm_features: Default::default(),
         };
@@ -388,6 +405,54 @@ mod tests {
             ),
             nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
             sequence: 5,
+            data_seq: None,
+            key_counts: BTreeMap::from([("foo".to_string(), 5), ("bar".to_string(), 6)]),
+            sm_features: BTreeSet::from(["f1".to_string(), "f2".to_string()]),
+        };
+
+        println!("{}", serde_json::to_string_pretty(&want).unwrap());
+
+        let deserialized: SysData = serde_json::from_str(serialized).unwrap();
+        assert_eq!(want, deserialized);
+    }
+
+    /// Test newer program can deserialize 2025-08-31 version: add field `data_seq`
+    #[test]
+    fn test_sys_data_deserialize_2025_08_31() {
+        // The string is serialized with old version SysData, never change it.
+        let serialized = r#"{
+          "last_applied": { "leader_id": { "term": 4, "node_id": 5 }, "index": 6 },
+          "last_membership": {
+            "log_id": { "leader_id": { "term": 1, "node_id": 2 }, "index": 3 },
+            "membership": {
+              "configs": [ [ 7, 8 ] ],
+              "nodes": { "7": {}, "8": {}, "9": {} }
+            }
+          },
+          "nodes": {
+            "2": {
+              "name": "node2",
+              "endpoint": { "addr": "127.0.0.1", "port": 16 },
+              "grpc_api_advertise_address": null
+            }
+          },
+          "sequence": 5,
+          "data_seq": 10,
+          "key_counts": { "bar": 6, "foo": 5 },
+          "sm_features": [ "f1", "f2" ]
+         }
+        "#;
+
+        let want = SysData {
+            last_applied: Some(new_log_id(4, 5, 6)),
+            last_membership: StoredMembership::new(
+                Some(new_log_id(1, 2, 3)),
+                Membership::new(vec![BTreeSet::from([7, 8])], BTreeSet::from([7u64, 8, 9]))
+                    .unwrap(),
+            ),
+            nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
+            sequence: 5,
+            data_seq: Some(10),
             key_counts: BTreeMap::from([("foo".to_string(), 5), ("bar".to_string(), 6)]),
             sm_features: BTreeSet::from(["f1".to_string(), "f2".to_string()]),
         };

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
@@ -37,12 +36,12 @@ pub struct Compactor {
 }
 
 impl Compactor {
-    pub fn immutable_levels(&self) -> Arc<ImmutableLevels> {
-        self.compacting_data.immutable_levels.clone()
+    pub fn immutable_levels(&self) -> ImmutableLevels {
+        self.compacting_data.immutable.levels().clone()
     }
 
-    pub fn db(&self) -> Option<Arc<DB>> {
-        self.compacting_data.persisted.clone()
+    pub fn db(&self) -> Option<DB> {
+        self.compacting_data.immutable.persisted().cloned()
     }
 
     /// Compact in-memory immutable levels(excluding on disk db)
