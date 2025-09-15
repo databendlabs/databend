@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::CheckAbort;
+use databend_common_config::GlobalConfig;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,6 +68,11 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     fixture.create_default_database().await?;
     fixture.create_default_table().await?;
 
+    let ctx = fixture
+        .default_session()
+        .create_query_context(GlobalConfig::version())
+        .await?;
+
     let number_of_block = 1;
     append_sample_data(number_of_block, &fixture).await?;
 
@@ -96,7 +102,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
     // verify dry run never delete files
     {
-        vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
+        vacuum_drop_tables(ctx.clone(), threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -113,7 +119,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        vacuum_drop_tables(threads_nums, vec![table], None).await?;
+        vacuum_drop_tables(ctx, threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(

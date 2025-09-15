@@ -45,6 +45,7 @@ pub trait VacuumHandler: Sync + Send {
 
     async fn do_vacuum_drop_tables(
         &self,
+        ctx: Arc<dyn TableContext>,
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
@@ -100,12 +101,13 @@ impl VacuumHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn do_vacuum_drop_tables(
         &self,
+        ctx: Arc<dyn TableContext>,
         threads_nums: usize,
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult {
         self.handler
-            .do_vacuum_drop_tables(threads_nums, tables, dry_run_limit)
+            .do_vacuum_drop_tables(ctx, threads_nums, tables, dry_run_limit)
             .await
     }
 

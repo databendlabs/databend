@@ -45,23 +45,19 @@ fn test_decode_v147_field_auto_increment() -> anyhow::Result<()> {
 
     let want = || {
         let mut field_a = ce::TableField::new("a", TableDataType::Number(NumberDataType::Int8))
-            .with_auto_increment_name(Some(s("sequence_1")))
             .with_auto_increment_display(Some(s("AUTO INCREMENT")));
         let mut field_b = ce::TableField::new("b", TableDataType::Number(NumberDataType::Int8))
-            .with_auto_increment_name(Some(s("sequence_2")));
-        let mut field_c = ce::TableField::new("c", TableDataType::Number(NumberDataType::Int8))
             .with_auto_increment_display(Some(s("AUTO INCREMENT")));
-        let mut field_d = ce::TableField::new("d", TableDataType::Number(NumberDataType::Int8));
+        let mut field_c = ce::TableField::new("c", TableDataType::Number(NumberDataType::Int8));
 
         field_a.column_id = 0;
         field_b.column_id = 1;
         field_c.column_id = 2;
-        field_d.column_id = 3;
 
         ce::TableSchema {
-            fields: vec![field_a, field_b, field_c, field_d],
+            fields: vec![field_a, field_b, field_c],
             metadata: Default::default(),
-            next_column_id: 4,
+            next_column_id: 3,
         }
     };
     common::test_pb_from_to(func_name!(), want())?;

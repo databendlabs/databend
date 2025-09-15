@@ -145,13 +145,13 @@ impl Interpreter for AddTableColumnInterpreter {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
                 ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
-                start: auto_increment.start_num,
-                increment: auto_increment.step_num,
+                start: auto_increment.start,
+                increment: auto_increment.step,
                 comment: None,
                 create_on: Utc::now(),
                 storage_version: 0,
             };
-            CreateSequenceInterpreter::req_execute(&self.ctx, req, true).await?;
+            CreateSequenceInterpreter::req_execute(self.ctx.as_ref(), req, true).await?;
         }
 
         // if the new column is a stored computed field and table is non-empty,

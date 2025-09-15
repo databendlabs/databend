@@ -110,7 +110,8 @@ create or replace table test.auto_increment(c1 int, c2 int autoincrement);
 >>>> show create table test.auto_increment;
 auto_increment  CREATE TABLE auto_increment (
   c1 INT NULL,
-  c2 INT NULL AUTOINCREMENT
+  c2 INT NULL AUTOINCREMENT (0, 1) ORDER,
+  c3 INT NULL IDENTITY (2, 3) ORDER
 ) ENGINE=FUSE
 <<<<
 >>>> drop database test
