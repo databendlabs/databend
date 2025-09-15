@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Extension trait providing high-level state machine operations.
+//!
+//! Extends [`StateMachineApi`] with conditional KV updates, prefix-based listing,
+//! TTL expiration management, and secondary index maintenance.
+
 use std::future;
 use std::io;
 use std::ops::RangeBounds;
