@@ -27,6 +27,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
+use log::info;
 use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
@@ -151,17 +152,39 @@ impl AuthMgr {
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await
                 {
-                    Ok(user_info) => match user_info.auth_info {
-                        AuthInfo::JWT => user_info,
-                        _ => return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication")),
-                    },
+                    Ok(user_info) => {
+                        if user_info.auth_info != AuthInfo::JWT {
+                            return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
+                        }
+                        let current_roles = user_info.grants.roles();
+                        // ensure jwt roles to user if not exists
+                        for role in jwt.custom.ensure_user.roles.iter() {
+                            if current_roles.contains(&role) {
+                                continue;
+                            }
+                            info!(
+                                "[AUTH] grant jwt role to user: {} -> {}",
+                                user_info.name, role
+                            );
+                            user_api
+                                .grant_role_to_user(tenant, identity.clone(), role)
+                                .await?;
+                            user_info.grants.grant_role(role);
+                        }
+                        user_info
+                    }
                     Err(e) => {
                         match e.code() {
                             ErrorCode::UNKNOWN_USER => {}
                             ErrorCode::META_SERVICE_ERROR => {
                                 return Err(e);
                             }
-                            _ => return Err(ErrorCode::AuthenticateFailure(format!("[AUTH] Authentication failed: {}", e.message()))),
+                            _ => {
+                                return Err(ErrorCode::AuthenticateFailure(format!(
+                                    "[AUTH] Authentication failed: {}",
+                                    e.message()
+                                )))
+                            }
                         }
                         let ensure_user = jwt
                             .custom
@@ -174,6 +197,7 @@ impl AuthMgr {
                                 user_info.grants.grant_role(role);
                             }
                         }
+                        info!("[AUTH] ensure jwt user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
