@@ -3399,9 +3399,13 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other(
-                            "DEFAULT and AUTO INCREMENT cannot exist at the same time",
-                        ),
+                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                    )));
+                }
+                if !is_order {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
