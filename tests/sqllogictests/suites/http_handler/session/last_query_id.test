@@ -1,0 +1,20 @@
+# drivers may execute some SQLs before any use SQL
+# otherwise, this should return NULL for the first query of a session.
+statement
+select last_query_id();
+
+query
+select is_null(last_query_id());
+----
+0
+
+
+query
+select last_query_id(-200000);
+----
+NULL
+
+query
+select last_query_id(100);
+----
+NULL
