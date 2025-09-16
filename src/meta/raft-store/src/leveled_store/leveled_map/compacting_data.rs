@@ -132,7 +132,7 @@ impl CompactingData {
         let immutable_levels = self.immutable.levels();
         let d = immutable_levels.newest().unwrap();
 
-        let sys_data = d.with_sys_data(|s| s.clone());
+        let sys_data = d.sys_data().clone();
 
         // expire index: prefix `exp-/`.
 

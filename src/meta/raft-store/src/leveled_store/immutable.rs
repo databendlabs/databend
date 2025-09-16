@@ -49,7 +49,7 @@ impl Immutable {
         static UNIQ: AtomicU64 = AtomicU64::new(0);
 
         let uniq = UNIQ.fetch_add(1, Ordering::Relaxed);
-        let internal_seq = level.with_sys_data(|s| s.curr_seq());
+        let internal_seq = level.sys_data().curr_seq();
 
         let index = LevelIndex::new(internal_seq, uniq);
 

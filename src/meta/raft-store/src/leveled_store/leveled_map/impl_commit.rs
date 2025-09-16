@@ -151,9 +151,7 @@ mod tests {
         assert_eq!(data.writable.kv.inner.len(), 2);
 
         // Check that sys_data was updated
-        data.writable.with_sys_data(|sys_data| {
-            assert_eq!(sys_data.curr_seq(), *InternalSeq::new(5));
-        });
+        assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(5));
 
         Ok(())
     }
@@ -193,9 +191,7 @@ mod tests {
         assert_eq!(data.writable.expire.inner.len(), 1);
 
         // Check that sys_data was updated
-        data.writable.with_sys_data(|sys_data| {
-            assert_eq!(sys_data.curr_seq(), *InternalSeq::new(3));
-        });
+        assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(3));
 
         Ok(())
     }
@@ -274,9 +270,7 @@ mod tests {
         assert_eq!(data.writable.expire.inner.len(), 1);
 
         // Check that sys_data was updated to the last_seq
-        data.writable.with_sys_data(|sys_data| {
-            assert_eq!(sys_data.curr_seq(), *InternalSeq::new(7));
-        });
+        assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(7));
 
         Ok(())
     }
@@ -291,9 +285,7 @@ mod tests {
 
         // Only sys_data should be updated
         let data = lm.data.lock().unwrap();
-        data.writable.with_sys_data(|sys_data| {
-            assert_eq!(sys_data.curr_seq(), *InternalSeq::new(10));
-        });
+        assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(10));
 
         // Tables should remain at their default seq
         assert_eq!(data.writable.kv.last_seq, SeqMarked::zero());
@@ -355,9 +347,7 @@ mod tests {
         );
         assert_eq!(data.writable.kv.inner.len(), 2);
 
-        data.writable.with_sys_data(|sys_data| {
-            assert_eq!(sys_data.curr_seq(), *InternalSeq::new(4));
-        });
+        assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(4));
 
         Ok(())
     }
@@ -510,9 +500,7 @@ mod tests {
             assert_eq!(data.writable.expire.last_seq, SeqMarked::new_normal(7, ()));
 
             // Check that sys_data was updated
-            data.writable.with_sys_data(|sys_data| {
-                assert_eq!(sys_data.curr_seq(), *InternalSeq::new(7));
-            });
+            assert_eq!(data.writable.sys_data().curr_seq(), *InternalSeq::new(7));
 
             // Verify User namespace has all entries (old and new)
             // Should have: old key1 (seq 1), new key1 tombstone (seq 6),
