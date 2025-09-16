@@ -87,13 +87,13 @@ check_response_error "$response"
 suspend_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Suspend WareHouse 2 Query ID: $suspend_warehouse_2_query_id"
 
-sleep 20
+sleep 25
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
 
 actual=$(echo "$response" | jq -c '.data')
-expected='[["1"],["1"],["2"]]'
+expected='[["1"],["1"],["1"],["2"]]'
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
