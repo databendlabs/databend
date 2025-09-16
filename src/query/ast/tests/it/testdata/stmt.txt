@@ -5747,6 +5747,148 @@ CreateTable(
 
 
 ---------- Input ----------
+create table a.b (c integer autoincrement (10, 20) ORDER)
+---------- Output ---------
+CREATE TABLE a.b (c Int32 AUTOINCREMENT (10, 20) ORDER)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..16,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                18..19,
+                            ),
+                            name: "c",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: Some(
+                            AutoIncrement(
+                                AutoIncrement {
+                                    start: 10,
+                                    step: 20,
+                                    is_order: true,
+                                    is_identity: false,
+                                },
+                            ),
+                        ),
+                        check: None,
+                        comment: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a.b (c integer identity START 10 INCREMENT 20)
+---------- Output ---------
+CREATE TABLE a.b (c Int32 IDENTITY (10, 20) ORDER)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..16,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                18..19,
+                            ),
+                            name: "c",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: Some(
+                            AutoIncrement(
+                                AutoIncrement {
+                                    start: 10,
+                                    step: 20,
+                                    is_order: true,
+                                    is_identity: true,
+                                },
+                            ),
+                        ),
+                        check: None,
+                        comment: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 ALTER USER u1 IDENTIFIED BY '123456';
 ---------- Output ---------
 ALTER USER 'u1'@'%' IDENTIFIED BY '123456'
