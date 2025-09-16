@@ -104,8 +104,8 @@ tc	CREATE TABLE tc (
   id4 INT NULL,
   id5 INT NULL
 ) ENGINE=FUSE
->>>>
-create or replace table test.auto_increment(c1 int, c2 int autoincrement);
+>>>> 
+create or replace table test.auto_increment(c1 int, c2 int autoincrement, c3 int identity (2, 3) order);
 
 >>>> show create table test.auto_increment;
 auto_increment	CREATE TABLE auto_increment (

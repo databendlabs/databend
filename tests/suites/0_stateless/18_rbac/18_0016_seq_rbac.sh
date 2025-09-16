@@ -9,7 +9,6 @@ export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HAND
 export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 for seq in $(echo "select name from show_sequences();" | $BENDSQL_CLIENT_CONNECT); do
-  echo "=== clean exists sequence: $seq ==="
   echo "drop sequence if exists $seq;" | $BENDSQL_CLIENT_CONNECT
 done
 
