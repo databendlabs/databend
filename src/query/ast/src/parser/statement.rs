@@ -3256,7 +3256,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         AutoIncrement {
             start: u64,
             step: u64,
-            is_identity: bool,
             is_order: bool,
         },
     }
@@ -3311,9 +3310,8 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 ~ #identity_parmas?
                 ~ (ORDER | NOORDER)?
             },
-            |(identity_token, params, order_token)| {
+            |(_, params, order_token)| {
                 let (start, step) = params.unwrap_or((0, 1));
-                let is_identity = identity_token.text().eq_ignore_ascii_case("identity");
                 let is_order = order_token
                     .map(|token| token.text().eq_ignore_ascii_case("order"))
                     .unwrap_or(true);
@@ -3321,7 +3319,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 ColumnConstraint::AutoIncrement {
                     start,
                     step,
-                    is_identity,
                     is_order,
                 }
             },
@@ -3393,7 +3390,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ColumnConstraint::AutoIncrement {
                 start,
                 step,
-                is_identity,
                 is_order,
             } => {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
@@ -3412,7 +3408,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                     start,
                     step,
                     is_order,
-                    is_identity,
                 }))
             }
         }

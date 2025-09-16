@@ -23,7 +23,6 @@ pub struct AutoIncrement {
     pub start: u64,
     pub step: u64,
     pub is_order: bool,
-    pub is_identity: bool,
 }
 
 impl AutoIncrement {
@@ -34,12 +33,7 @@ impl AutoIncrement {
 
 impl Display for AutoIncrement {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if self.is_identity {
-            write!(f, "IDENTITY")?;
-        } else {
-            write!(f, "AUTOINCREMENT")?;
-        }
-        write!(f, " ({}, {})", self.start, self.step)?;
+        write!(f, "AUTOINCREMENT ({}, {})", self.start, self.step)?;
         if self.is_order {
             write!(f, " ORDER")?;
         } else {
