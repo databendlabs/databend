@@ -107,6 +107,7 @@ impl CompactingData {
         let levels = ImmutableLevels::new_form_iter([Immutable::new_from_level(data)]);
         let immutable = ImmutableData::new(levels, self.immutable.persisted().cloned());
         self.immutable = Arc::new(immutable);
+
         Ok(())
     }
 

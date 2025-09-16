@@ -135,7 +135,7 @@ impl StateMachineApi<SysData> for ApplierData {
     }
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        self.view.base().data().with_sys_data(f)
+        self.view.snapshot().data().with_sys_data(f)
     }
 
     async fn commit(self) -> Result<(), Error> {
