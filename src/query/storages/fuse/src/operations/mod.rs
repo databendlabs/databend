@@ -57,3 +57,5 @@ pub use util::column_parquet_metas;
 pub use util::read_block;
 pub use util::set_backoff;
 pub use vacuum::vacuum_tables_from_info;
+pub use vacuum::vacuum_all_tables;
+pub use vacuum::vacuum_table;

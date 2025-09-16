@@ -182,6 +182,14 @@ impl FuseVacuum2Table {
         ctx: &Arc<dyn TableContext>,
         catalog: &dyn Catalog,
     ) -> Result<Vec<String>> {
+        databend_common_storages_fuse::operations::vacuum_all_tables(ctx, self.handler.as_ref(), catalog).await
+    }
+
+    async fn apply_all_tables_internal(
+        ctx: &Arc<dyn TableContext>,
+        handler: & VacuumHandlerWrapper,
+        catalog: &dyn Catalog,
+    ) -> Result<Vec<String>> {
         let tenant_id = ctx.get_tenant();
         let dbs = catalog.list_databases(&tenant_id).await?;
         let num_db = dbs.len();
@@ -229,7 +237,7 @@ impl FuseVacuum2Table {
                     continue;
                 }
 
-                let res = self.handler.do_vacuum2(tbl, ctx.clone(), false).await;
+                let res = handler.do_vacuum2(tbl, ctx.clone(), false).await;
 
                 if let Err(e) = res {
                     warn!(
@@ -244,4 +252,5 @@ impl FuseVacuum2Table {
 
         Ok(vec![])
     }
+
 }

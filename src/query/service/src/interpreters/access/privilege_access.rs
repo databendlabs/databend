@@ -38,7 +38,7 @@ use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
-use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::{InsertInputSource, VacuumTarget};
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
@@ -1204,7 +1204,14 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::VacuumTable(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+                match &plan.target {
+                    VacuumTarget::Table(tgt) => {
+                        self.validate_table_access(&tgt.catalog, &tgt.database, &tgt.table, UserPrivilegeType::Super, false, false).await?
+                    }
+                    VacuumTarget::All => {
+                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?
+                    }
+                }
             }
             Plan::VacuumDropTable(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?

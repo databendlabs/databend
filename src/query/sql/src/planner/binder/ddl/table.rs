@@ -119,7 +119,6 @@ use crate::parse_computed_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
-use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
@@ -159,6 +158,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::plans::{AddColumnOption, VacuumTarget, VacuumTargetTable};
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::Planner;
@@ -1503,23 +1503,27 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumTableStmt,
     ) -> Result<Plan> {
-        let VacuumTableStmt {
-            catalog,
-            database,
-            table,
-            option,
-        } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+       let target = match &stmt.target {
+           databend_common_ast::ast::VacuumTarget::Table(tgt) => {
+                       let (catalog, database, table) =
+                           self.normalize_object_identifier_triple(&tgt.catalog, &tgt.database, &tgt.table);
+               VacuumTarget::Table(VacuumTargetTable {
+                  catalog, database, table,
+               })
+           }
+           databend_common_ast::ast::VacuumTarget::All => {
+               VacuumTarget::All
+           }
+       } ;
+
+
 
         let option = VacuumTableOption {
-            dry_run: option.dry_run,
+            dry_run: stmt.option.dry_run,
         };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
-            catalog,
-            database,
-            table,
+            target,
             option,
         })))
     }

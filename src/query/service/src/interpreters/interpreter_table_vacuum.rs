@@ -23,6 +23,9 @@ use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTablePlan;
+use databend_common_sql::plans::VacuumTarget;
+use databend_common_sql::plans::VacuumTargetTable;
+use databend_common_storages_fuse::operations::vacuum_all_tables;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
@@ -95,26 +98,34 @@ impl VacuumTableInterpreter {
             index_files,
         })
     }
-}
 
-#[async_trait::async_trait]
-impl Interpreter for VacuumTableInterpreter {
-    fn name(&self) -> &str {
-        "VacuumTableInterpreter"
+    async fn vacuum_table(&self, target: &VacuumTargetTable) -> Result<PipelineBuildResult> {
+        let handler = get_vacuum_handler();
+        let table = self
+            .ctx
+            .get_table(&target.catalog, &target.database, &target.table)
+            .await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let target_removed = handler
+            .do_vacuum2(fuse_table, self.ctx.clone(), false)
+            .await?;
+        let res_block = DataBlock::new_from_columns(vec![StringType::from_data(target_removed)]);
+        PipelineBuildResult::from_blocks(vec![res_block])
     }
 
-    fn is_ddl(&self) -> bool {
-        true
+    async fn vacuum_all(&self) -> Result<PipelineBuildResult> {
+        let handler = get_vacuum_handler();
+        let catalog = self.ctx.get_default_catalog()?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone() as _;
+        let target_removed = vacuum_all_tables(&ctx, &handler, catalog.as_ref()).await?;
+        let res_block = DataBlock::new_from_columns(vec![StringType::from_data(target_removed)]);
+        PipelineBuildResult::from_blocks(vec![res_block])
     }
 
-    #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
-
-        let catalog_name = self.plan.catalog.clone();
-        let db_name = self.plan.database.clone();
-        let tbl_name = self.plan.table.clone();
+    async fn legacy_vacuum_table(&self, target: &VacuumTargetTable) -> Result<PipelineBuildResult> {
+        let catalog_name = target.catalog.clone();
+        let db_name = target.database.clone();
+        let tbl_name = target.table.clone();
         let table = self
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
@@ -180,6 +191,28 @@ impl Interpreter for VacuumTableInterpreter {
                     ])])
                 }
             }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for VacuumTableInterpreter {
+    fn name(&self) -> &str {
+        "VacuumTableInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        true
+    }
+
+    #[async_backtrace::framed]
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
+
+        match &self.plan.target {
+            VacuumTarget::Table(tgt_table) => self.legacy_vacuum_table(tgt_table).await,
+            VacuumTarget::All => self.vacuum_all().await,
         }
     }
 }

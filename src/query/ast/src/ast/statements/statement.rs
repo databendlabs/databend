@@ -188,6 +188,7 @@ pub enum Statement {
     OptimizeTable(OptimizeTableStmt),
     VacuumTable(VacuumTableStmt),
     VacuumDropTable(VacuumDropTableStmt),
+    VacuumAll(VacuumAllStmt),
     VacuumTemporaryFiles(VacuumTemporaryFiles),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
@@ -477,6 +478,7 @@ impl Statement {
             | Statement::VacuumTable(..)
             | Statement::VacuumDropTable(..)
             | Statement::VacuumTemporaryFiles(..)
+            | Statement::VacuumAll(..)
             | Statement::AnalyzeTable(..)
             | Statement::ExistsTable(..)
             | Statement::ShowCreateDictionary(..)
@@ -1081,6 +1083,9 @@ impl Display for Statement {
             Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::SetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
             Statement::UnsetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumAll(_) => {
+                todo!()
+            }
         }
         Ok(())
     }
