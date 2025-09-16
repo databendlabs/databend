@@ -105,12 +105,24 @@ impl DropTablePlan {
     }
 }
 
-/// Vacuum
+
 #[derive(Clone, Debug)]
-pub struct VacuumTablePlan {
+pub struct VacuumTargetTable {
     pub catalog: String,
     pub database: String,
     pub table: String,
+}
+
+#[derive(Clone, Debug)]
+pub enum VacuumTarget {
+   Table(VacuumTargetTable),
+    All,
+}
+
+/// Vacuum
+#[derive(Clone, Debug)]
+pub struct VacuumTablePlan {
+    pub target: VacuumTarget,
     pub option: VacuumTableOption,
 }
 
