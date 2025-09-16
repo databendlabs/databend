@@ -34,6 +34,7 @@ use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
+use parquet::basic::Encoding;
 use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
@@ -89,6 +90,7 @@ fn create_writer(
         .set_compression(compression)
         .set_created_by(create_by)
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
+        .set_encoding(Encoding::PLAIN)
         .set_statistics_enabled(EnabledStatistics::Chunk)
         .set_dictionary_enabled(true)
         .set_bloom_filter_enabled(false)
