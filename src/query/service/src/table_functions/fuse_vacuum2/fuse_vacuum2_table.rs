@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -40,8 +39,6 @@ use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
-use log::info;
-use log::warn;
 
 use crate::sessions::TableContext;
 
@@ -182,75 +179,11 @@ impl FuseVacuum2Table {
         ctx: &Arc<dyn TableContext>,
         catalog: &dyn Catalog,
     ) -> Result<Vec<String>> {
-        databend_common_storages_fuse::operations::vacuum_all_tables(ctx, self.handler.as_ref(), catalog).await
+        databend_common_storages_fuse::operations::vacuum_all_tables(
+            ctx,
+            self.handler.as_ref(),
+            catalog,
+        )
+        .await
     }
-
-    async fn apply_all_tables_internal(
-        ctx: &Arc<dyn TableContext>,
-        handler: & VacuumHandlerWrapper,
-        catalog: &dyn Catalog,
-    ) -> Result<Vec<String>> {
-        let tenant_id = ctx.get_tenant();
-        let dbs = catalog.list_databases(&tenant_id).await?;
-        let num_db = dbs.len();
-
-        for (idx_db, db) in dbs.iter().enumerate() {
-            if db.engine().to_uppercase() == "SYSTEM" {
-                info!("Bypass system database [{}]", db.name());
-                continue;
-            }
-
-            info!(
-                "Processing db {}, progress: {}/{}",
-                db.name(),
-                idx_db + 1,
-                num_db
-            );
-            let tables = catalog.list_tables(&tenant_id, db.name()).await?;
-            info!("Found {} tables in db {}", tables.len(), db.name());
-
-            let num_tbl = tables.len();
-            for (idx_tbl, table) in tables.iter().enumerate() {
-                info!(
-                    "Processing table {}.{}, db level progress: {}/{}",
-                    db.name(),
-                    table.get_table_info().name,
-                    idx_tbl + 1,
-                    num_tbl
-                );
-
-                let Ok(tbl) = FuseTable::try_from_table(table.as_ref()) else {
-                    info!(
-                        "Bypass non-fuse table {}.{}",
-                        db.name(),
-                        table.get_table_info().name
-                    );
-                    continue;
-                };
-
-                if tbl.is_read_only() {
-                    info!(
-                        "Bypass read only table {}.{}",
-                        db.name(),
-                        table.get_table_info().name
-                    );
-                    continue;
-                }
-
-                let res = handler.do_vacuum2(tbl, ctx.clone(), false).await;
-
-                if let Err(e) = res {
-                    warn!(
-                        "vacuum2 table {}.{} failed: {}",
-                        db.name(),
-                        table.get_table_info().name,
-                        e
-                    );
-                };
-            }
-        }
-
-        Ok(vec![])
-    }
-
 }

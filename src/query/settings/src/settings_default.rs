@@ -1459,6 +1459,17 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+
+                // Note :
+                // - This is a temporary flag which will be removed when legacy vacuum impl is removed from codebase.
+                // - This flag has no effect on `VACUUM TABLE ALL` which will use the vacuum2 impl unconditionally.
+                ("fallback_to_legacy_vacuum", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Using legacy vacuum implementation when vacuum a specific table",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

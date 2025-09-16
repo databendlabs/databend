@@ -666,8 +666,6 @@ impl Display for TruncateTableStmt {
     }
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTargetTable {
     pub catalog: Option<Identifier>,
@@ -694,7 +692,8 @@ impl Display for VacuumTableStmt {
             VacuumTarget::Table(target) => {
                 write_dot_separated_list(
                     f,
-                    target.catalog
+                    target
+                        .catalog
                         .iter()
                         .chain(&target.database)
                         .chain(Some(&target.table)),
@@ -748,7 +747,6 @@ impl Display for VacuumAllStmt {
         Ok(())
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTemporaryFiles {

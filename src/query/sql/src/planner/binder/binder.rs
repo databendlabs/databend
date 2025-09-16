@@ -330,7 +330,7 @@ impl Binder {
                 self.bind_vacuum_temporary_files(bind_context, stmt).await?
             }
 
-            Statement::VacuumAll(stmt) => {
+            Statement::VacuumAll(_stmt) => {
                 todo!()
             }
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
