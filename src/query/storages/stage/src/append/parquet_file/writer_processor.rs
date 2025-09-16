@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
+use arrow_schema::DataType;
 use arrow_schema::Schema;
 use async_trait::async_trait;
 use databend_common_exception::ErrorCode;
@@ -39,6 +40,7 @@ use parquet::basic::ZstdLevel;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
+use parquet::schema::types::ColumnPath;
 
 use super::block_batch::BlockBatch;
 use crate::append::output::DataSummary;
@@ -85,19 +87,28 @@ fn create_writer(
     compression: Compression,
     create_by: String,
 ) -> Result<ArrowWriter<Vec<u8>>> {
-    let props = WriterProperties::builder()
+    let mut builder = WriterProperties::builder()
         .set_writer_version(WriterVersion::PARQUET_2_0)
         .set_compression(compression)
         .set_created_by(create_by)
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
-        // The default encoding must be set to `Plain`,
-        // otherwise, `Decimal` may be encoded as `Delta_Byte_Array`,
-        // read with other databases may report invalid error.
-        .set_encoding(Encoding::PLAIN)
         .set_statistics_enabled(EnabledStatistics::Chunk)
         .set_dictionary_enabled(true)
-        .set_bloom_filter_enabled(false)
-        .build();
+        .set_bloom_filter_enabled(false);
+
+    // Set the encoding of the decimal column to `PLAIN` to avoid
+    // compatibility issues caused by encoding as `Delta_Byte_Array`.
+    for field in arrow_schema.fields() {
+        if matches!(
+            field.data_type(),
+            DataType::Decimal128(_, _) | DataType::Decimal256(_, _)
+        ) {
+            let column = ColumnPath::from(field.name().clone());
+            builder = builder.set_column_encoding(column, Encoding::PLAIN);
+        }
+    }
+
+    let props = builder.build();
     let buf_size = match targe_file_size {
         Some(n) if n < MAX_BUFFER_SIZE => n,
         _ => MAX_BUFFER_SIZE,
