@@ -1,0 +1,16 @@
+query
+select last_query_id();
+----
+NULL
+
+
+query
+select is_null(last_query_id());
+----
+0
+
+
+query
+select last_query_id(-200000);
+----
+NULL
