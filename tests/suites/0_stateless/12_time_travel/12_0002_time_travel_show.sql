@@ -17,7 +17,7 @@ DROP SEQUENCE if exists seq;
 DROP SEQUENCE if exists seq1;
 CREATE SEQUENCE seq;
 CREATE SEQUENCE seq1;
-select interval, current, comment from show_sequences();
+select interval, current, created_on, updated_on, comment from show_sequences();
 desc sequence seq;
 DROP SEQUENCE if exists seq;
 DROP SEQUENCE if exists seq1;
