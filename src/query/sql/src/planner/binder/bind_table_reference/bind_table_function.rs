@@ -622,7 +622,7 @@ fn string_value(value: &Scalar) -> Result<String> {
     match value {
         Scalar::String(val) => Ok(val.clone()),
         other => Err(ErrorCode::BadArguments(format!(
-            "Expected a string value, but found a '{}'.",
+            "RESULT_SCAN(<query_id>) expected a string for <query_id>, but found {}.",
             other
         ))),
     }

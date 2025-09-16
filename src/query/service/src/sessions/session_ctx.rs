@@ -330,7 +330,7 @@ impl SessionContext {
         lock.push((query_id, value))
     }
 
-    pub fn get_last_query_id(&self, index: i32) -> String {
+    pub fn get_last_query_id(&self, index: i32) -> Option<String> {
         let lock = self.query_ids_results.read();
         let query_ids_len = lock.len();
         let idx = if index < 0 {
@@ -340,10 +340,10 @@ impl SessionContext {
         };
 
         if query_ids_len < 1 || idx < 0 || idx > (query_ids_len - 1) as i32 {
-            return "".to_string();
+            return None;
         }
 
-        (*lock)[idx as usize].0.clone()
+        Some((*lock)[idx as usize].0.clone())
     }
 
     pub fn get_query_id_history(&self) -> HashSet<String> {
