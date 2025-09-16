@@ -90,6 +90,9 @@ fn create_writer(
         .set_compression(compression)
         .set_created_by(create_by)
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
+        // The default encoding must be set to `Plain`,
+        // otherwise, `Decimal` may be encoded as `Delta_Byte_Array`,
+        // read with other databases may report invalid error.
         .set_encoding(Encoding::PLAIN)
         .set_statistics_enabled(EnabledStatistics::Chunk)
         .set_dictionary_enabled(true)
