@@ -12,22 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Error;
+
 use map_api::mvcc;
 use seq_marked::SeqMarked;
-use state_machine_api::ExpireKey;
 
-use crate::applier::applier_data::ApplierData;
+use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::types::Key;
 use crate::leveled_store::types::Namespace;
 use crate::leveled_store::types::Value;
 
 #[async_trait::async_trait]
-impl mvcc::ScopedView<ExpireKey, String> for ApplierData {
-    fn set(&mut self, key: ExpireKey, value: Option<String>) -> SeqMarked<()> {
-        self.view.set(
-            Namespace::Expire,
-            Key::Expire(key),
-            value.map(Value::Expire),
-        )
+impl mvcc::SeqBoundedGet<Namespace, Key, Value> for LeveledMap {
+    async fn get(
+        &self,
+        space: Namespace,
+        key: Key,
+        snapshot_seq: u64,
+    ) -> Result<SeqMarked<Value>, Error> {
+        match space {
+            Namespace::User => {
+                let key = key.into_user();
+                let got = mvcc::ScopedSeqBoundedGet::get(self, key, snapshot_seq).await?;
+                Ok(got.map(Value::User))
+            }
+            Namespace::Expire => {
+                let key = key.into_expire();
+                let got = mvcc::ScopedSeqBoundedGet::get(self, key, snapshot_seq).await?;
+                Ok(got.map(Value::Expire))
+            }
+        }
     }
 }

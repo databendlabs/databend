@@ -13,21 +13,22 @@
 // limitations under the License.
 
 use futures_util::TryStreamExt;
-use map_api::map_api_ro::MapApiRO;
-use map_api::mvcc::ScopedView;
-use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ScopedGet;
+use map_api::mvcc::ScopedRange;
+use map_api::mvcc::ScopedSeqBoundedGet;
+use map_api::mvcc::ScopedSeqBoundedRange;
+use map_api::mvcc::ScopedSet;
 use map_api::SeqMarked;
 use state_machine_api::KVMeta;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
 
 #[tokio::test]
 async fn test_freeze() -> anyhow::Result<()> {
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // Insert an entry at level 0
     let (prev, result) = view
@@ -40,7 +41,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     // Insert the same entry at level 1
     l.testing_freeze_writable();
     // println!("{:#?}", l);
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     let (prev, result) = view
         .fetch_and_set(user_key("a1"), Some((None, b("b1"))))
@@ -50,7 +51,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     view.commit().await?;
 
     // Listing entries from all levels see the latest
-    let view = l.to_scoped_view();
+    let view = l.to_view();
     let got = view
         .range(user_key("")..)
         .await?
@@ -69,8 +70,8 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     let mut tmp = LeveledMap::default();
     tmp.with_sys_data(|s| s.update_seq(last_seq));
-    tmp.replace_immutable_levels(immutables.as_ref().clone());
-    let view = tmp.to_scoped_view();
+    tmp.replace_immutable_levels(immutables);
+    let view = tmp.to_view();
 
     let got = view
         .range(user_key("")..)
@@ -88,7 +89,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_single_level() -> anyhow::Result<()> {
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // Write a1
     let (prev, result) = view
@@ -160,7 +161,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     // Create the first level
 
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     view.set(user_key("a1"), Some((None, b("b1"))));
     view.set(user_key("a2"), Some((None, b("b2"))));
@@ -168,7 +169,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     view.set(user_key("x2"), Some((None, b("y2"))));
     view.commit().await?;
 
-    let view = l.to_scoped_view();
+    let view = l.to_view();
     let it = view.range(user_key("")..).await?;
     let got = it.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
@@ -182,7 +183,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     // Create a new level
 
     l.testing_freeze_writable();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // Override
     let (prev, result) = view
@@ -212,7 +213,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     view.commit().await?;
 
     // Range
-    let view = l.to_scoped_view();
+    let view = l.to_view();
     let it = view.range(user_key("")..).await?;
     let got = it.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
@@ -239,9 +240,9 @@ async fn test_two_levels() -> anyhow::Result<()> {
     let immutables = l.immutable_levels();
 
     let mut tmp = LeveledMap::default();
-    tmp.replace_immutable_levels(immutables.as_ref().clone());
+    tmp.replace_immutable_levels(immutables);
 
-    let strm = tmp.as_user_map().range(user_key("")..).await?;
+    let strm = tmp.range(user_key("").., u64::MAX).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -263,7 +264,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 /// ```
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 0
     view.set(user_key("a"), Some((None, b("a0"))));
@@ -273,7 +274,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.commit().await?;
 
     l.testing_freeze_writable();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 4
     view.set(user_key("b"), None);
@@ -282,7 +283,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.commit().await?;
 
     l.testing_freeze_writable();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 6
     view.set(user_key("c"), None);
@@ -296,27 +297,26 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let l = build_3_levels().await?;
 
-    let got = l.as_user_map().get(&user_key("a")).await?;
+    let got = l.get(user_key("a"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_normal(1, (None, b("a0"))));
 
-    let got = l.as_user_map().get(&user_key("b")).await?;
+    let got = l.get(user_key("b"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_tombstone(4));
 
-    let got = l.as_user_map().get(&user_key("c")).await?;
+    let got = l.get(user_key("c"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_tombstone(6));
 
-    let got = l.as_user_map().get(&user_key("d")).await?;
+    let got = l.get(user_key("d"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_normal(7, (None, b("d2"))));
 
-    let got = l.as_user_map().get(&user_key("e")).await?;
+    let got = l.get(user_key("e"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_normal(6, (None, b("e1"))));
 
-    let got = l.as_user_map().get(&user_key("f")).await?;
+    let got = l.get(user_key("f"), u64::MAX).await?;
     assert_eq!(got, SeqMarked::new_tombstone(0));
 
     let got = l
-        .as_user_map()
-        .range(user_key("")..)
+        .range(user_key("").., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -335,7 +335,7 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_three_levels_override() -> anyhow::Result<()> {
     let l = build_3_levels().await?;
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     let (prev, result) = view
         .fetch_and_set(user_key("a"), Some((None, b("x"))))
@@ -374,7 +374,7 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
     assert_eq!(result, SeqMarked::new_normal(13, (None, b("w"))));
     view.commit().await?;
 
-    let view = l.to_scoped_view();
+    let view = l.to_view();
 
     let got = view
         .range(user_key("")..)
@@ -398,7 +398,7 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
 async fn test_three_levels_delete() -> anyhow::Result<()> {
     let l = build_3_levels().await?;
 
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     let (prev, result) = view.fetch_and_set(user_key("a"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("a0"))));
@@ -425,7 +425,7 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
     assert_eq!(result, SeqMarked::new_tombstone(0));
     view.commit().await?;
 
-    let view = l.to_scoped_view();
+    let view = l.to_view();
 
     let got = view
         .range(user_key("")..)
@@ -450,7 +450,7 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
 /// ```
 async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 0
     view.set(
@@ -465,7 +465,7 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     view.commit().await?;
 
     l.testing_freeze_writable();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 3
     view.set(
@@ -483,7 +483,7 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
 #[tokio::test]
 async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
     let lm = build_2_level_consecutive_delete().await?;
-    let strm = lm.as_user_map().range(..).await?;
+    let strm = lm.range(UserKey::default().., u64::MAX).await?;
 
     let got = strm.try_collect::<Vec<_>>().await?;
 
@@ -511,7 +511,7 @@ async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
 /// ```
 async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
     let l = LeveledMap::default();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 0
     view.set(user_key("a"), Some((None, b("a0"))));
@@ -521,7 +521,7 @@ async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
     view.commit().await?;
 
     l.testing_freeze_writable();
-    let mut view = l.to_scoped_view();
+    let mut view = l.to_view();
 
     // internal_seq: 3
     view.set(user_key("b"), None);
@@ -553,7 +553,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(2)), b("a0")))
         );
 
-        let got = l.as_user_map().get(&user_key("a")).await?;
+        let got = l.get(user_key("a"), u64::MAX).await?;
         assert_eq!(
             got,
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(2)), b("a0")))
@@ -572,7 +572,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         );
         assert_eq!(result, SeqMarked::new_normal(6, (None, b("b1"))));
 
-        let got = l.as_user_map().get(&user_key("b")).await?;
+        let got = l.get(user_key("b"), u64::MAX).await?;
         assert_eq!(got, SeqMarked::new_normal(6, (None, b("b1"))));
     }
 
@@ -592,7 +592,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(20)), b("c1")))
         );
 
-        let got = l.as_user_map().get(&user_key("c")).await?;
+        let got = l.get(user_key("c"), u64::MAX).await?;
         assert_eq!(
             got,
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(20)), b("c1")))
@@ -612,7 +612,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         assert_eq!(prev, SeqMarked::new_tombstone(0));
         assert_eq!(result, SeqMarked::new_tombstone(0));
 
-        let got = l.as_user_map().get(&user_key("d")).await?;
+        let got = l.get(user_key("d"), u64::MAX).await?;
         assert_eq!(got, SeqMarked::new_tombstone(0));
     }
 

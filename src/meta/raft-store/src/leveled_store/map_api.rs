@@ -12,27 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! [`MapApi`] and [`MapApiRO`] defines the behavior of a key-value map and readonly key-value map.
-
 use std::fmt;
 use std::fmt::Write;
 use std::io;
 
-use map_api::map_api::MapApi;
-use map_api::map_api_ro::MapApiRO;
 pub use map_api::map_key::MapKey;
 pub use map_api::map_value::MapValue;
 use map_api::mvcc;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
 use seq_marked::SeqMarked;
-use state_machine_api::ExpireKey;
 use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::scoped::Scoped;
 
 pub type MapKeyPrefix = &'static str;
 
@@ -51,36 +45,6 @@ pub trait MapKeyDecode: Sized {
     fn decode(buf: &str) -> Result<Self, io::Error>;
 }
 
-/// A Marked value type of key type.
-pub(crate) type SeqMarkedOf<K> = SeqMarked<<K as MapKey>::V>;
-
-/// A key-value pair used in a map.
-pub(crate) type MapKV<K> = (K, SeqMarkedOf<K>);
-
-/// A stream of result of key-value returned by `range()`.
-pub(crate) type KVResultStream<K> = IOResultStream<MapKV<K>>;
-
-/// Trait for using Self as an implementation of the MapApi.
-#[allow(dead_code)]
-pub trait AsMap {
-    fn as_user_map(&self) -> &impl MapApiRO<UserKey>
-    where Self: MapApiRO<UserKey> + Sized {
-        self
-    }
-
-    fn as_user_map_mut(&mut self) -> &mut impl MapApi<UserKey>
-    where Self: MapApi<UserKey> + Sized {
-        self
-    }
-
-    fn as_expire_map(&self) -> &impl MapApiRO<ExpireKey>
-    where Self: MapApiRO<ExpireKey> + Sized {
-        self
-    }
-}
-
-impl<T> AsMap for T {}
-
 pub(crate) struct MapApiHelper;
 
 impl MapApiHelper {
@@ -90,12 +54,11 @@ impl MapApiHelper {
         key: UserKey,
         meta: Option<KVMeta>,
     ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error> {
-        let view = mvcc::View::new(s.data.clone());
-        let mut scoped = Scoped::new(view);
+        let mut view = s.to_view();
 
-        let got = Self::update_meta(&mut scoped, key, meta).await?;
+        let got = Self::update_meta(&mut view, key, meta).await?;
 
-        scoped.inner.commit().await?;
+        view.commit().await?;
 
         Ok(got)
     }
@@ -108,7 +71,7 @@ impl MapApiHelper {
         meta: Option<KVMeta>,
     ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error>
     where
-        T: mvcc::ScopedView<UserKey, MetaValue> + Send + Sync + 'static,
+        T: mvcc::ScopedSet<UserKey, MetaValue> + Send + Sync + 'static,
     {
         let got = s.get(key.clone()).await?;
         if got.is_tombstone() {

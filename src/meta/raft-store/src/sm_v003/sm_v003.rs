@@ -26,10 +26,8 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::debug;
-use map_api::mvcc;
-use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ScopedGet;
 use openraft::entry::RaftEntry;
-use state_machine_api::ExpireKey;
 use state_machine_api::SeqV;
 use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
@@ -42,10 +40,11 @@ use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
-use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapDataInner;
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::scoped::Scoped;
+use crate::leveled_store::snapshot::StateMachineSnapshot;
+use crate::leveled_store::view::StateMachineView;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
@@ -102,24 +101,24 @@ impl fmt::Debug for SMV003 {
 
 #[async_trait::async_trait]
 impl StateMachineApi<SysData> for ApplierData {
-    type UserMap = ApplierData;
+    type UserMap = StateMachineView;
 
     fn user_map(&self) -> &Self::UserMap {
-        self
+        &self.view
     }
 
     fn user_map_mut(&mut self) -> &mut Self::UserMap {
-        self
+        &mut self.view
     }
 
-    type ExpireMap = ApplierData;
+    type ExpireMap = StateMachineView;
 
     fn expire_map(&self) -> &Self::ExpireMap {
-        self
+        &self.view
     }
 
     fn expire_map_mut(&mut self) -> &mut Self::ExpireMap {
-        self
+        &mut self.view
     }
 
     fn on_change_applied(&mut self, change: (String, Option<SeqV>, Option<SeqV>)) {
@@ -136,7 +135,7 @@ impl StateMachineApi<SysData> for ApplierData {
     }
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        self.view.base().with_sys_data(f)
+        self.view.base().data().with_sys_data(f)
     }
 
     async fn commit(self) -> Result<(), Error> {
@@ -152,12 +151,10 @@ impl SMV003 {
         &mut self.levels
     }
 
-    pub fn expire_view_readonly(&self) -> impl mvcc::ScopedViewReadonly<ExpireKey, String> {
-        Scoped::new(mvcc::View::new(self.levels.data.clone()))
+    pub fn to_state_machine_snapshot(&self) -> StateMachineSnapshot {
+        self.levels.to_state_machine_snapshot()
     }
-}
 
-impl SMV003 {
     pub fn kv_api(&self) -> SMV003KVApi {
         SMV003KVApi { sm: self }
     }
@@ -168,13 +165,10 @@ impl SMV003 {
 
         let new_sm = SMV003 {
             levels: LeveledMap {
-                data: Arc::new(LeveledMapData {
-                    inner: Mutex::new(LeveledMapDataInner {
-                        writable: Default::default(),
-                        immutable_levels: Default::default(),
-                        persisted: Some(Arc::new(db)),
-                    }),
-                }),
+                data: Arc::new(Mutex::new(LeveledMapData {
+                    writable: Default::default(),
+                    immutable: Arc::new(ImmutableData::new(Default::default(), Some(db))),
+                })),
             },
             compaction_semaphore: self.compaction_semaphore.clone(),
             write_semaphore: self.write_semaphore.clone(),
@@ -188,15 +182,15 @@ impl SMV003 {
     }
 
     pub fn get_snapshot(&self) -> Option<DB> {
-        self.levels.persisted().map(|x| x.as_ref().clone())
+        self.levels.persisted()
     }
 
-    pub fn data(&self) -> &Arc<LeveledMapData> {
-        &self.levels.data
+    pub fn data(&self) -> &LeveledMap {
+        &self.levels
     }
 
     pub async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
-        let view = self.data().to_readonly_view();
+        let view = self.data().to_state_machine_snapshot();
         let got = view.get(UserKey::new(key.to_string())).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
@@ -205,7 +199,7 @@ impl SMV003 {
     pub(crate) async fn new_applier(&self) -> Applier<ApplierData> {
         let permit = self.acquire_writer_permit().await;
 
-        let view = mvcc::View::new(self.levels.data.clone());
+        let view = self.levels.to_view();
         let applier_data = ApplierData {
             _permit: permit,
             view,

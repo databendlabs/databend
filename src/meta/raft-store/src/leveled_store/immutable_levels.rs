@@ -13,18 +13,22 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::io;
+use std::io::Error;
 use std::ops::RangeBounds;
 
-use map_api::compact::compacted_get;
-use map_api::compact::compacted_range;
-use map_api::map_api_ro::MapApiRO;
+use futures_util::StreamExt;
+use map_api::mvcc;
+use map_api::mvcc::ScopedSeqBoundedIntoRange;
+use map_api::mvcc::ViewKey;
+use map_api::mvcc::ViewValue;
+use map_api::util;
+use map_api::IOResultStream;
 use seq_marked::SeqMarked;
+use stream_more::KMerge;
+use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
-use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 
 /// A readonly leveled map that owns the data.
@@ -48,14 +52,8 @@ impl ImmutableLevels {
         self.immutables.keys().cloned().collect()
     }
 
-    /// Return an iterator of all Arc of levels from newest to oldest.
-    pub(crate) fn iter_immutable_levels(&self) -> impl Iterator<Item = &Immutable> {
+    pub(crate) fn newest_to_oldest(&self) -> impl Iterator<Item = &Immutable> {
         self.immutables.values().rev()
-    }
-
-    /// Return an iterator of all levels from newest to oldest.
-    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
-        self.immutables.values().map(|x| x.as_ref()).rev()
     }
 
     pub(crate) fn newest(&self) -> Option<&Immutable> {
@@ -67,19 +65,20 @@ impl ImmutableLevels {
     }
 
     pub(crate) fn insert(&mut self, level: Immutable) {
-        let key = *level.level_index();
+        let new_index = *level.level_index();
 
-        let last_key = self.newest_level_index().unwrap_or_default();
+        let last_used_index = self.newest_level_index().unwrap_or_default();
 
         // The newly added must have greater data index or there are no data added.
         assert!(
-            key > last_key || (key == LevelIndex::default() && key == last_key),
+            new_index > last_used_index
+                || (new_index == LevelIndex::default() && new_index == last_used_index),
             "new level to insert {:?} must have greater index than the newest level {:?}",
-            key,
-            last_key
+            new_index,
+            last_used_index
         );
 
-        self.immutables.insert(key, level);
+        self.immutables.insert(new_index, level);
     }
 
     /// Remove all levels up to and including the given level index.
@@ -100,24 +99,64 @@ impl ImmutableLevels {
     pub(crate) fn levels_mut(&mut self) -> &mut BTreeMap<LevelIndex, Immutable> {
         &mut self.immutables
     }
+
+    pub(crate) fn last_seq(&self) -> Option<u64> {
+        self.newest().map(|l| l.with_sys_data(|s| s.curr_seq()))
+    }
 }
 
+// TODO: test
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for ImmutableLevels
+impl<K> mvcc::ScopedSeqBoundedRange<K, K::V> for ImmutableLevels
 where
     K: MapKey,
-    Level: MapApiRO<K>,
-    Immutable: MapApiRO<K>,
+    K::V: ViewValue,
+    Immutable: mvcc::ScopedSeqBoundedIntoRange<K, K::V>,
 {
-    async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
-        let levels = self.iter_immutable_levels();
-        compacted_get::<_, _, Immutable>(key, levels, []).await
-    }
+    async fn range<R>(
+        &self,
+        range: R,
+        snapshot_seq: u64,
+    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, Error>
+    where
+        R: RangeBounds<K> + Send + Sync + Clone + 'static,
+    {
+        let mut kmerge = KMerge::by(util::by_key_seq);
 
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
-        let levels = self.iter_immutable_levels();
-        compacted_range::<_, _, Level, _, Level>(range, None, levels, []).await
+        for level in self.newest_to_oldest() {
+            let strm = level
+                .clone()
+                .into_range(range.clone(), snapshot_seq)
+                .await?;
+
+            kmerge = kmerge.merge(strm);
+        }
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let coalesce = kmerge.coalesce(util::merge_kv_results);
+
+        Ok(coalesce.boxed())
+    }
+}
+
+// TODO: test
+#[async_trait::async_trait]
+impl<K, V> mvcc::ScopedSeqBoundedGet<K, V> for ImmutableLevels
+where
+    K: ViewKey,
+    V: ViewValue,
+    Immutable: mvcc::ScopedSeqBoundedGet<K, V>,
+{
+    async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<V>, Error> {
+        for immutable in self.newest_to_oldest() {
+            let value = immutable.get(key.clone(), snapshot_seq).await?;
+
+            if !value.is_not_found() {
+                return Ok(value);
+            }
+        }
+
+        Ok(SeqMarked::new_not_found())
     }
 }
 
@@ -125,9 +164,58 @@ where
 mod tests {
     use std::sync::Arc;
 
+    use futures_util::StreamExt;
+    use map_api::mvcc;
+    use map_api::mvcc::ScopedSeqBoundedRange;
+    use seq_marked::SeqMarked;
+    use state_machine_api::ExpireKey;
+    use state_machine_api::MetaValue;
+    use state_machine_api::UserKey;
+
     use crate::leveled_store::immutable::Immutable;
     use crate::leveled_store::immutable_levels::ImmutableLevels;
     use crate::leveled_store::level::Level;
+
+    fn assert_scoped_snapshot_range_traits<T>()
+    where
+        T: mvcc::ScopedSeqBoundedRange<UserKey, MetaValue>,
+        T: mvcc::ScopedSeqBoundedRange<ExpireKey, String>,
+    {
+    }
+
+    #[test]
+    fn test_scoped_snapshot_range_iter() {
+        assert_scoped_snapshot_range_traits::<ImmutableLevels>();
+    }
+
+    /// Helper function to convert string to bytes (similar to existing code pattern)
+    fn b(s: &str) -> Vec<u8> {
+        s.as_bytes().to_vec()
+    }
+
+    /// Helper to create a Level with test data
+    fn create_level_with_data(entries: Vec<(UserKey, SeqMarked<MetaValue>)>) -> Level {
+        let mut level = Level::default();
+        let mut max_seq = 0;
+
+        for (key, seq_marked) in entries {
+            let seq = *seq_marked.internal_seq();
+
+            if seq_marked.is_tombstone() {
+                level.kv.insert_tombstone(key, seq).unwrap();
+            } else if let Some(value) = seq_marked.into_data() {
+                level.kv.insert(key, seq, value).unwrap();
+            }
+            max_seq = max_seq.max(seq);
+        }
+
+        // Update sys_data to reflect the maximum sequence number
+        if max_seq > 0 {
+            level.with_sys_data(|s| s.update_seq(max_seq));
+        }
+
+        level
+    }
 
     #[test]
     fn test_remove_levels_upto() {
@@ -143,5 +231,214 @@ mod tests {
         immutables.remove_levels_upto(index);
 
         assert_eq!(immutables.indexes(), vec![left_index]);
+    }
+
+    #[tokio::test]
+    async fn test_into_range_with_multiple_levels_and_tombstones() {
+        // Setup 3 levels with overlapping sequence ranges
+
+        // Level 1 (oldest) - seq 10-30
+        let level1_entries = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(10, (None, b("old_value1"))),
+            ),
+            (
+                UserKey::new("key2"),
+                SeqMarked::new_normal(15, (None, b("old_value2"))),
+            ),
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(25, (None, b("value5_old"))),
+            ),
+            (
+                UserKey::new("key7"),
+                SeqMarked::new_normal(30, (None, b("value7"))),
+            ),
+        ];
+        let level1 = create_level_with_data(level1_entries);
+        let immutable1 = Immutable::new(Arc::new(level1));
+
+        // Level 2 (middle) - seq 20-40 (overlaps with level1 and level3)
+        let level2_entries = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(22, (None, b("updated_value1"))),
+            ), // overwrites key1 from level1
+            (UserKey::new("key3"), SeqMarked::new_tombstone(27)), // tombstone for key3
+            (
+                UserKey::new("key4"),
+                SeqMarked::new_normal(32, (None, b("value4"))),
+            ),
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(35, (None, b("value5_updated"))),
+            ), // overwrites key5 from level1
+        ];
+        let level2 = create_level_with_data(level2_entries);
+        let immutable2 = Immutable::new(Arc::new(level2));
+
+        // Level 3 (newest) - seq 30-50 (overlaps with level2)
+        let level3_entries = vec![
+            (UserKey::new("key2"), SeqMarked::new_tombstone(38)), /* tombstone for key2 (overrides old value) */
+            (
+                UserKey::new("key4"),
+                SeqMarked::new_normal(42, (None, b("value4_newest"))),
+            ), // overwrites key4 from level2
+            (
+                UserKey::new("key6"),
+                SeqMarked::new_normal(45, (None, b("value6"))),
+            ),
+            (
+                UserKey::new("key8"),
+                SeqMarked::new_normal(50, (None, b("value8"))),
+            ),
+        ];
+        let level3 = create_level_with_data(level3_entries);
+        let immutable3 = Immutable::new(Arc::new(level3));
+
+        // Create ImmutableLevels with all 3 levels
+        let mut levels = ImmutableLevels::default();
+        levels.insert(immutable1);
+        levels.insert(immutable2);
+        levels.insert(immutable3);
+
+        // Test 1: snapshot_seq = 20 (should see only data with seq <= 20)
+        let stream = levels.range(UserKey::default().., 20).await.unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(10, (None, b("old_value1"))),
+            ),
+            (
+                UserKey::new("key2"),
+                SeqMarked::new_normal(15, (None, b("old_value2"))),
+            ),
+        ];
+        assert_eq!(results, expected);
+
+        // Test 2: snapshot_seq = 30 (newer data from level2 overwrites level1)
+        let stream = levels.range(UserKey::default().., 30).await.unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(22, (None, b("updated_value1"))),
+            ), // level2 overwrites level1
+            (
+                UserKey::new("key2"),
+                SeqMarked::new_normal(15, (None, b("old_value2"))),
+            ),
+            (UserKey::new("key3"), SeqMarked::new_tombstone(27)),
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(25, (None, b("value5_old"))),
+            ),
+            (
+                UserKey::new("key7"),
+                SeqMarked::new_normal(30, (None, b("value7"))),
+            ),
+        ];
+        assert_eq!(results, expected);
+
+        // Test 3: snapshot_seq = 40 (includes data from all levels up to seq 40)
+        let stream = levels.range(UserKey::default().., 40).await.unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(22, (None, b("updated_value1"))),
+            ),
+            (UserKey::new("key2"), SeqMarked::new_tombstone(38)), /* level3 tombstone overwrites level1 */
+            (UserKey::new("key3"), SeqMarked::new_tombstone(27)),
+            (
+                UserKey::new("key4"),
+                SeqMarked::new_normal(32, (None, b("value4"))),
+            ),
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(35, (None, b("value5_updated"))),
+            ), // level2 overwrites level1
+            (
+                UserKey::new("key7"),
+                SeqMarked::new_normal(30, (None, b("value7"))),
+            ),
+        ];
+        assert_eq!(results, expected);
+
+        // Test 4: snapshot_seq = 50 (all data including newest overwrites)
+        let stream = levels.range(UserKey::default().., 50).await.unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![
+            (
+                UserKey::new("key1"),
+                SeqMarked::new_normal(22, (None, b("updated_value1"))),
+            ),
+            (UserKey::new("key2"), SeqMarked::new_tombstone(38)),
+            (UserKey::new("key3"), SeqMarked::new_tombstone(27)),
+            (
+                UserKey::new("key4"),
+                SeqMarked::new_normal(42, (None, b("value4_newest"))),
+            ), // level3 overwrites level2
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(35, (None, b("value5_updated"))),
+            ),
+            (
+                UserKey::new("key6"),
+                SeqMarked::new_normal(45, (None, b("value6"))),
+            ),
+            (
+                UserKey::new("key7"),
+                SeqMarked::new_normal(30, (None, b("value7"))),
+            ),
+            (
+                UserKey::new("key8"),
+                SeqMarked::new_normal(50, (None, b("value8"))),
+            ),
+        ];
+        assert_eq!(results, expected);
+
+        // Test 5: Range query for specific keys with snapshot_seq = 40
+        let stream = levels
+            .range(UserKey::new("key2")..=UserKey::new("key5"), 40)
+            .await
+            .unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![
+            (UserKey::new("key2"), SeqMarked::new_tombstone(38)),
+            (UserKey::new("key3"), SeqMarked::new_tombstone(27)),
+            (
+                UserKey::new("key4"),
+                SeqMarked::new_normal(32, (None, b("value4"))),
+            ),
+            (
+                UserKey::new("key5"),
+                SeqMarked::new_normal(35, (None, b("value5_updated"))),
+            ),
+        ];
+        assert_eq!(results, expected);
+
+        // Test 6: Early snapshot_seq = 12 (should only see key1)
+        let stream = levels.range(UserKey::default().., 12).await.unwrap();
+        let items: Vec<_> = stream.collect().await;
+        let results: Vec<_> = items.into_iter().map(|r| r.unwrap()).collect();
+
+        let expected = vec![(
+            UserKey::new("key1"),
+            SeqMarked::new_normal(10, (None, b("old_value1"))),
+        )];
+        assert_eq!(results, expected);
     }
 }

@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Extension trait providing high-level state machine operations.
+//!
+//! Extends [`StateMachineApi`] with conditional KV updates, prefix-based listing,
+//! TTL expiration management, and secondary index maintenance.
+
 use std::future;
 use std::io;
 use std::ops::RangeBounds;
@@ -29,8 +34,9 @@ use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
-use map_api::mvcc::ScopedView;
-use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ScopedGet;
+use map_api::mvcc::ScopedRange;
+use map_api::mvcc::ScopedSet;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;

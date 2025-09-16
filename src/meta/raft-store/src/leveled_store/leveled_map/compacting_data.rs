@@ -14,6 +14,7 @@
 
 use std::fmt;
 use std::io;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
@@ -21,8 +22,8 @@ use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use map_api::map_api_ro::MapApiRO;
 use map_api::mvcc;
+use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::IOResultStream;
 use map_api::MapKV;
 use rotbl::v001::SeqMarked;
@@ -33,8 +34,7 @@ use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::level_index::LevelIndex;
-use crate::leveled_store::map_api::AsMap;
+use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::utils::add_cooperative_yielding;
@@ -44,20 +44,31 @@ use crate::utils::add_cooperative_yielding;
 /// Including several in-memory immutable levels and an optional persisted db.
 #[derive(Debug)]
 pub(crate) struct CompactingData {
-    /// Remember the newest level included in this compactor.
-    pub(crate) upto: Option<LevelIndex>,
-    pub(crate) immutable_levels: Arc<ImmutableLevels>,
-    pub(crate) persisted: Option<Arc<DB>>,
+    pub(crate) immutable: Arc<ImmutableData>,
+}
+
+impl Deref for CompactingData {
+    type Target = Arc<ImmutableData>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.immutable
+    }
 }
 
 impl CompactingData {
-    pub fn new(immutable_levels: Arc<ImmutableLevels>, persisted: Option<Arc<DB>>) -> Self {
-        let level_index = immutable_levels.newest_level_index();
+    pub fn new(immutable: Arc<ImmutableData>) -> Self {
+        Self { immutable }
+    }
 
+    // Testing only
+    #[allow(dead_code)]
+    pub(crate) fn new_from_levels_and_persisted(
+        levels: ImmutableLevels,
+        persisted: Option<DB>,
+    ) -> Self {
+        let immutable = ImmutableData::new(levels, persisted);
         Self {
-            upto: level_index,
-            immutable_levels,
-            persisted,
+            immutable: Arc::new(immutable),
         }
     }
 
@@ -69,7 +80,8 @@ impl CompactingData {
     ///
     /// This is only used for test
     pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        let immutable_levels = self.immutable_levels.clone();
+        // TODO: test: after compaction in place, the data should be the same, the base_seq and newest_seq should be the same.
+        let immutable_levels = self.immutable.levels().clone();
 
         let Some(newest) = immutable_levels.newest() else {
             return Ok(());
@@ -79,19 +91,22 @@ impl CompactingData {
         let mut data = newest.new_level();
 
         // Copy all expire data and keep tombstone.
-        let strm = immutable_levels.as_ref().as_expire_map().range(..).await?;
+        let strm = immutable_levels
+            .range(ExpireKey::default().., u64::MAX)
+            .await?;
         let table = mvcc::Table::from_stream(strm).await?;
         data.replace_expire(table);
 
         // Copy all kv data and keep tombstone.
-        let strm = immutable_levels.as_ref().as_user_map().range(..).await?;
+        let strm = immutable_levels
+            .range(UserKey::default().., u64::MAX)
+            .await?;
         let table = mvcc::Table::from_stream(strm).await?;
         data.replace_kv(table);
 
-        self.immutable_levels =
-            Arc::new(ImmutableLevels::new_form_iter([Immutable::new_from_level(
-                data,
-            )]));
+        let levels = ImmutableLevels::new_form_iter([Immutable::new_from_level(data)]);
+        let immutable = ImmutableData::new(levels, self.immutable.persisted().cloned());
+        self.immutable = Arc::new(immutable);
         Ok(())
     }
 
@@ -114,15 +129,16 @@ impl CompactingData {
             )
         }
 
-        // TODO(rotbl): unwrap()???
-        let immutable_levels = self.immutable_levels.clone();
+        let immutable_levels = self.immutable.levels();
         let d = immutable_levels.newest().unwrap();
 
         let sys_data = d.with_sys_data(|s| s.clone());
 
         // expire index: prefix `exp-/`.
 
-        let strm = immutable_levels.as_ref().as_expire_map().range(..).await?;
+        let strm = immutable_levels
+            .range(ExpireKey::default().., u64::MAX)
+            .await?;
         let expire_strm = strm.map(|item: Result<(ExpireKey, SeqMarked<String>), io::Error>| {
             let (expire_key, marked_string) = item?;
 
@@ -132,7 +148,9 @@ impl CompactingData {
 
         // kv: prefix: `kv--/`
 
-        let strm = immutable_levels.as_ref().as_user_map().range(..).await?;
+        let strm = immutable_levels
+            .range(UserKey::default().., u64::MAX)
+            .await?;
         let kv_strm = strm.map(|item: Result<MapKV<UserKey>, io::Error>| {
             let (k, v) = item?;
 
@@ -145,7 +163,7 @@ impl CompactingData {
         let mut kmerge = KMerge::by(util::rotbl_by_key_seq);
         kmerge = kmerge.merge(strm);
 
-        if let Some(db) = self.persisted.clone() {
+        if let Some(db) = self.immutable.persisted() {
             let db_strm = db.inner_range();
             kmerge = kmerge.merge(db_strm);
         }

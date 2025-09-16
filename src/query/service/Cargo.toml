@@ -23,8 +23,10 @@ io-uring = [
 anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
+arrow-csv = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
+arrow-json = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 arrow-udf-runtime = { workspace = true }
@@ -54,6 +56,7 @@ databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-cloud-control = { workspace = true }
 databend-common-column = { workspace = true }
+databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -117,6 +120,7 @@ databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 dyn-clone = { workspace = true }
+either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
@@ -188,6 +192,7 @@ maplit = { workspace = true }
 mysql_async = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = { workspace = true }
 reqwest = { workspace = true }
 serde_json.workspace = true
 serde_yaml = { workspace = true }

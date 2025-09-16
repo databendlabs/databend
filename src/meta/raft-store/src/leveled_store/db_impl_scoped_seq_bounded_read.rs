@@ -13,34 +13,40 @@
 // limitations under the License.
 
 use std::io;
+use std::io::Error;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
 use futures_util::StreamExt;
-use map_api::map_api_ro::MapApiRO;
+use map_api::mvcc;
+use map_api::mvcc::ViewKey;
+use map_api::mvcc::ViewValue;
+use map_api::IOResultStream;
 use rotbl::v001::SeqMarked;
 
-use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::value_convert::ValueConvert;
 
-/// A wrapper that implements the `MapApiRO` trait for the `DB`.
+/// A wrapper that implements the `ScopedSnapshot*` trait for the `DB`.
 #[derive(Debug, Clone)]
-pub struct MapView<'a>(pub &'a DB);
+pub struct ScopedSeqBoundedRead<'a>(pub &'a DB);
 
+// TODO: test
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for MapView<'_>
+impl<K> mvcc::ScopedSeqBoundedGet<K, K::V> for ScopedSeqBoundedRead<'_>
 where
     K: MapKey,
-    K: MapKeyEncode,
-    K: MapKeyDecode,
+    K: ViewKey,
+    K: MapKeyEncode + MapKeyDecode,
+    K::V: ViewValue,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
 {
-    async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
-        let key = RotblCodec::encode_key(key)
+    async fn get(&self, key: K, _snapshot_seq: u64) -> Result<SeqMarked<K::V>, io::Error> {
+        // TODO: DB does not consider snapshot_seq
+        let key = RotblCodec::encode_key(&key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let res = self.0.rotbl.get(&key).await?;
@@ -52,9 +58,28 @@ where
         let marked = SeqMarked::<K::V>::conv_from(seq_marked)?;
         Ok(marked)
     }
+}
 
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
+// TODO: test
+#[async_trait::async_trait]
+impl<K> mvcc::ScopedSeqBoundedRange<K, K::V> for ScopedSeqBoundedRead<'_>
+where
+    K: MapKey,
+    K: ViewKey,
+    K: MapKeyEncode + MapKeyDecode,
+    K::V: ViewValue,
+    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+{
+    async fn range<R>(
+        &self,
+        range: R,
+        _snapshot_seq: u64,
+    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, Error>
+    where
+        R: RangeBounds<K> + Send + Sync + Clone + 'static,
+    {
+        // TODO: DB does not consider snapshot_seq
+
         let rng = RotblCodec::encode_range(&range)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 

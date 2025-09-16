@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::map_api_ro::MapApiRO;
-use map_api::mvcc::ScopedView;
+use map_api::mvcc::ScopedSeqBoundedRange;
+use map_api::mvcc::ScopedSet;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -30,24 +32,26 @@ use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::leveled_store::map_api::AsMap;
 use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     let lm = build_3_levels().await?;
 
-    let immutable_levels = lm.testing_freeze_writable().clone();
+    lm.testing_freeze_writable();
+    let immutable_levels = lm.immutable_levels();
 
     let compacted = {
-        let mut compacting_data = CompactingData::new(immutable_levels.clone(), None);
+        let mut compacting_data =
+            CompactingData::new_from_levels_and_persisted(immutable_levels.clone(), None);
+
         compacting_data.compact_immutable_in_place().await?;
-        compacting_data.immutable_levels.clone()
+        compacting_data.levels().clone()
     };
 
-    let d = compacted.newest().unwrap().as_ref();
+    let d = compacted.newest().unwrap().deref();
 
-    assert_eq!(compacted.iter_immutable_levels().count(), 1);
+    assert_eq!(compacted.newest_to_oldest().count(), 1);
     assert_eq!(
         d.last_membership(),
         StoredMembership::new(
@@ -62,8 +66,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     );
 
     let got = d
-        .as_user_map()
-        .range(..)
+        .range(UserKey::default().., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -77,8 +80,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     ]);
 
     let got = d
-        .as_expire_map()
-        .range(..)
+        .range(ExpireKey::default().., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -98,11 +100,10 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         compactor.immutable_levels()
     };
 
-    let d = compacted.newest().unwrap().as_ref();
+    let d = compacted.newest().unwrap().deref();
 
     let got = d
-        .as_user_map()
-        .range(..)
+        .range(UserKey::default().., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -123,8 +124,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     ]);
 
     let got = d
-        .as_expire_map()
-        .range(..)
+        .range(ExpireKey::default().., u64::MAX)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
@@ -150,7 +150,7 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
     let (sys_data, strm) = compacting_data.compact_into_stream().await?;
     assert_eq!(
-        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7}"#,
+        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":2}"#,
         serde_json::to_string(&sys_data).unwrap()
     );
 
@@ -182,7 +182,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(
-        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4}"#,
+        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4,"data_seq":1}"#,
         serde_json::to_string(&sys_data).unwrap()
     );
 
@@ -214,7 +214,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
     });
 
-    let mut view = lm.to_scoped_view();
+    let mut view = lm.to_view();
 
     // internal_seq: 0
     view.set(user_key("a"), Some((None, b("a0"))));
@@ -234,7 +234,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.last_applied_mut() = Some(log_id(2, 2, 2));
         *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
     });
-    let mut view = lm.to_scoped_view();
+    let mut view = lm.to_view();
 
     // internal_seq: 4
     view.set(user_key("b"), None);
@@ -253,7 +253,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
         *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
     });
 
-    let mut view = lm.to_scoped_view();
+    let mut view = lm.to_view();
 
     // internal_seq: 6
     view.set(user_key("c"), None);

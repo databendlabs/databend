@@ -4870,6 +4870,7 @@ dependencies = [
  "tempfile",
  "typetag",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]
@@ -5086,6 +5087,7 @@ dependencies = [
  "logcall",
  "map-api",
  "maplit",
+ "pin-project",
  "poem",
  "pretty_assertions",
  "prometheus-client 0.22.3",
@@ -5154,8 +5156,10 @@ dependencies = [
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
+ "arrow-csv",
  "arrow-flight",
  "arrow-ipc",
+ "arrow-json",
  "arrow-schema",
  "arrow-select",
  "arrow-udf-runtime",
@@ -5186,6 +5190,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-column",
+ "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
@@ -5249,6 +5254,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "derive-visitor",
  "dyn-clone",
+ "either",
  "enum-as-inner",
  "ethnum",
  "fastrace",
@@ -5287,6 +5293,7 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "prometheus-client 0.22.3",
+ "proptest",
  "prost",
  "rand 0.8.5",
  "recursive",
@@ -10063,12 +10070,13 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.3.1"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.3.1#a5bef778a89f03f85143025e118c568db84eae8f"
+version = "0.4.1"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.4.1#d3080bc02820b413173ee44ae8646ec7cad643c7"
 dependencies = [
  "async-trait",
  "deepsize",
  "futures",
+ "futures-async-stream",
  "futures-util",
  "log",
  "seq-marked",
@@ -13193,9 +13201,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9659467da3a686edc86248421dcebabf2971fbba3ad4679e1da2d63c57f8d5dc"
+checksum = "a2a074786ac3e7b62338fd3c2cdf4ea7bb9b95f6f90011501e25f78ecd7d0312"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -14566,8 +14574,8 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.2.1"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.2.1#e26b56c01e6185b7afd5b1b58b9e19ce734ce08a"
+version = "0.3.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.1#ac9af6a417e7bb7eb712a0ec6df661f3470aa432"
 dependencies = [
  "async-trait",
  "display-more",

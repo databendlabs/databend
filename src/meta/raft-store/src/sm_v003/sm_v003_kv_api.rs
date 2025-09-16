@@ -25,10 +25,12 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ScopedGet;
+use map_api::mvcc::ScopedRange;
 use seq_marked::SeqValue;
 use state_machine_api::UserKey;
 
+use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::sm_v003::SMV003;
 use crate::testing::since_epoch_millis;
 use crate::utils::add_cooperative_yielding;
@@ -50,30 +52,29 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
 
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = since_epoch_millis();
+        let strm = state_machine_snapshot_get_kv_stream(
+            self.sm.to_state_machine_snapshot(),
+            keys.to_vec(),
+            local_now_ms,
+        );
 
-        let mut items = Vec::with_capacity(keys.len());
-
-        for k in keys {
-            let got = self.sm.get_maybe_expired_kv(k).await?;
-            let v = Self::non_expired(got, local_now_ms);
-            items.push(Ok(StreamItem::from((k.clone(), v))));
-        }
-
-        Ok(futures::stream::iter(items).boxed())
+        Ok(strm)
     }
 
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = since_epoch_millis();
 
         // get an unchanging readonly view
-        let view = self.sm.data().to_readonly_view();
+        let snapshot_view = self.sm.data().to_state_machine_snapshot();
 
         let p = prefix.to_string();
 
         let strm = if let Some(right) = prefix_right_bound(&p) {
-            view.range(UserKey::new(&p)..UserKey::new(right)).await?
+            snapshot_view
+                .range(UserKey::new(&p)..UserKey::new(right))
+                .await?
         } else {
-            view.range(UserKey::new(&p)..).await?
+            snapshot_view.range(UserKey::new(&p)..).await?
         };
 
         let strm = add_cooperative_yielding(strm, format!("SMV003KVApi::list_kv: {prefix}"))
@@ -98,5 +99,25 @@ impl SMV003KVApi<'_> {
         } else {
             seq_value
         }
+    }
+}
+
+/// A helper function that get many keys in stream.
+#[futures_async_stream::try_stream(boxed, ok = StreamItem, error = io::Error)]
+async fn state_machine_snapshot_get_kv_stream(
+    state_machine_snapshot: StateMachineSnapshot,
+    keys: Vec<String>,
+    local_now_ms: u64,
+) {
+    for key in keys {
+        let got = state_machine_snapshot
+            .get(UserKey::new(key.clone()))
+            .await?;
+
+        let seqv = Into::<Option<SeqV>>::into(got);
+
+        let non_expired = SMV003KVApi::non_expired(seqv, local_now_ms);
+
+        yield StreamItem::from((key, non_expired));
     }
 }
