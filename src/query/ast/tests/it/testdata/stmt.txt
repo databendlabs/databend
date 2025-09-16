@@ -5792,7 +5792,6 @@ CreateTable(
                                     start: 10,
                                     step: 20,
                                     is_order: true,
-                                    is_identity: false,
                                 },
                             ),
                         ),
@@ -5820,7 +5819,7 @@ CreateTable(
 ---------- Input ----------
 create table a.b (c integer identity START 10 INCREMENT 20)
 ---------- Output ---------
-CREATE TABLE a.b (c Int32 IDENTITY (10, 20) ORDER)
+CREATE TABLE a.b (c Int32 AUTOINCREMENT (10, 20) ORDER)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -5863,7 +5862,6 @@ CreateTable(
                                     start: 10,
                                     step: 20,
                                     is_order: true,
-                                    is_identity: true,
                                 },
                             ),
                         ),
