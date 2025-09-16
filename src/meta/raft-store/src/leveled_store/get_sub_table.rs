@@ -12,29 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod db_builder;
-pub mod db_exporter;
-pub mod get_sub_table;
-pub mod immutable;
-pub mod immutable_levels;
-pub mod level;
-pub mod level_index;
-pub mod leveled_map;
-pub mod map_api;
-pub mod rotbl_codec;
-pub(crate) mod snapshot;
-pub mod sys_data;
-pub mod sys_data_api;
-pub mod types;
-pub mod util;
-pub mod value_convert;
-pub mod view;
+use map_api::mvcc;
 
-mod db_impl_scoped_seq_bounded_read;
-mod db_open_snapshot_impl;
-#[cfg(test)]
-mod db_scoped_seq_bounded_read_test;
-mod key_spaces_impl;
-mod rotbl_seq_mark_impl;
-
-pub use db_impl_scoped_seq_bounded_read::ScopedSeqBoundedRead;
+pub(crate) trait GetSubTable<K, V> {
+    fn get_sub_table(&self) -> &mvcc::Table<K, V>;
+}

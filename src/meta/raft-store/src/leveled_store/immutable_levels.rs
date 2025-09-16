@@ -101,7 +101,7 @@ impl ImmutableLevels {
     }
 
     pub(crate) fn last_seq(&self) -> Option<u64> {
-        self.newest().map(|l| l.with_sys_data(|s| s.curr_seq()))
+        self.newest().map(|l| l.sys_data().curr_seq())
     }
 }
 

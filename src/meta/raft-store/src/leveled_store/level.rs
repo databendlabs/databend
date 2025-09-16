@@ -15,8 +15,6 @@
 use std::collections::BTreeMap;
 use std::io::Error;
 use std::ops::RangeBounds;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::NodeId;
@@ -34,13 +32,15 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
+use crate::leveled_store::get_sub_table::GetSubTable;
+
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
 #[derive(Debug, Default)]
 pub struct Level {
     /// System data(non-user data).
-    pub(crate) sys_data: Arc<Mutex<SysData>>,
+    pub(crate) sys_data: SysData,
 
     /// Generic Key-value store.
     pub(crate) kv: mvcc::Table<UserKey, MetaValue>,
@@ -61,19 +61,15 @@ impl AsRef<mvcc::Table<ExpireKey, String>> for Level {
     }
 }
 
-pub(crate) trait GetTable<K, V> {
-    fn get_table(&self) -> &mvcc::Table<K, V>;
-}
-
-impl GetTable<UserKey, MetaValue> for Level {
-    fn get_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
+impl GetSubTable<UserKey, MetaValue> for Level {
+    fn get_sub_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
         &self.kv
     }
 }
 
 #[async_trait::async_trait]
-impl GetTable<ExpireKey, String> for Level {
-    fn get_table(&self) -> &mvcc::Table<ExpireKey, String> {
+impl GetSubTable<ExpireKey, String> for Level {
+    fn get_sub_table(&self) -> &mvcc::Table<ExpireKey, String> {
         &self.expire
     }
 }
@@ -106,9 +102,9 @@ where
 impl Level {
     /// Create a new level that is based on this level.
     pub(crate) fn new_level(&self) -> Self {
-        let level = Self {
+        let mut level = Self {
             // sys data are cloned
-            sys_data: Arc::new(Mutex::new(self.sys_data.lock().unwrap().clone())),
+            sys_data: self.sys_data.clone(),
 
             // Large data set is referenced.
             kv: Default::default(),
@@ -120,9 +116,12 @@ impl Level {
         level
     }
 
-    pub(crate) fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        let mut sys_data = self.sys_data.lock().unwrap();
-        f(&mut sys_data)
+    pub(crate) fn with_sys_data<T>(&mut self, f: impl FnOnce(&mut SysData) -> T) -> T {
+        f(&mut self.sys_data)
+    }
+
+    pub(crate) fn sys_data(&self) -> &SysData {
+        &self.sys_data
     }
 
     /// Replace the kv store with a new one.
@@ -136,15 +135,15 @@ impl Level {
     }
 
     pub fn last_membership(&self) -> StoredMembership {
-        self.with_sys_data(|s| s.last_membership_ref().clone())
+        self.sys_data().last_membership_ref().clone()
     }
 
     pub fn last_applied(&self) -> Option<LogId> {
-        self.with_sys_data(|s| *s.last_applied_mut())
+        *self.sys_data().last_applied()
     }
 
     pub fn nodes(&self) -> BTreeMap<NodeId, Node> {
-        self.with_sys_data(|s| s.nodes_mut().clone())
+        self.sys_data().nodes().clone()
     }
 }
 
@@ -154,8 +153,8 @@ mod tests {
 
     #[test]
     fn test_new_level_detach_sys_data() {
-        let level1 = Level::default();
-        let level2 = level1.new_level();
+        let mut level1 = Level::default();
+        let mut level2 = level1.new_level();
         level1.with_sys_data(|s: &mut SysData| {
             s.update_seq(1);
         });

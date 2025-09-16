@@ -30,7 +30,7 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::level::GetTable;
+use crate::leveled_store::get_sub_table::GetSubTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 
@@ -49,7 +49,7 @@ impl Immutable {
         static UNIQ: AtomicU64 = AtomicU64::new(0);
 
         let uniq = UNIQ.fetch_add(1, Ordering::Relaxed);
-        let internal_seq = level.with_sys_data(|s| s.curr_seq());
+        let internal_seq = level.sys_data().curr_seq();
 
         let index = LevelIndex::new(internal_seq, uniq);
 
@@ -101,10 +101,10 @@ impl<K, V> mvcc::ScopedSeqBoundedGet<K, V> for Immutable
 where
     K: ViewKey,
     V: ViewValue,
-    Level: GetTable<K, V>,
+    Level: GetSubTable<K, V>,
 {
     async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<V>, io::Error> {
-        let seq_marked = self.level.get_table().get(key, snapshot_seq).cloned();
+        let seq_marked = self.level.get_sub_table().get(key, snapshot_seq).cloned();
         Ok(seq_marked)
     }
 }

@@ -66,7 +66,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     let immutables = l.immutable_levels();
     // println!("{:#?}", immutables);
 
-    let last_seq = immutables.newest().unwrap().with_sys_data(|s| s.curr_seq());
+    let last_seq = immutables.newest().unwrap().sys_data().curr_seq();
 
     let mut tmp = LeveledMap::default();
     tmp.with_sys_data(|s| s.update_seq(last_seq));
