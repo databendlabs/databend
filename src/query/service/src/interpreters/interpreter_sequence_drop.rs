@@ -47,7 +47,7 @@ impl DropSequenceInterpreter {
         let catalog = ctx.get_default_catalog()?;
         // we should do `drop ownership` after actually drop object, and object maybe not exists.
         // drop the ownership
-        if skip_skip_privilege_check
+        if !skip_skip_privilege_check
             && ctx
                 .get_settings()
                 .get_enable_experimental_sequence_privilege_check()?
