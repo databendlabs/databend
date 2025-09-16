@@ -47,7 +47,7 @@ echo 'remove @s4;' | $BENDSQL_CLIENT_CONNECT
 echo 'remove @s1;' | $BENDSQL_CLIENT_CONNECT
 echo "copy into @s4 from (select number a, number::string b, number::decimal(15,2) c from numbers(5000000)) file_format=(type=parquet) single=true;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 
-## 5MB divide by 2MB = 2.5, so we will read 3 partitions
+## 18.8MB divide by 2MB = 9.4, so we will read 10 partitions
 echo """
 set parquet_rowgroup_hint_bytes = 2 * 1024 * 1024;
 explain select * from @s4;
