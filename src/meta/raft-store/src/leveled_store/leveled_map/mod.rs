@@ -177,9 +177,9 @@ impl LeveledMap {
     /// Replace all immutable levels with the given one.
     #[allow(dead_code)]
     pub(crate) fn replace_immutable_levels(&mut self, b: ImmutableLevels) {
-        self.with_inner(|inner| {
-            let persisted = inner.immutable.persisted().cloned();
-            inner.immutable = Arc::new(ImmutableData::new(b, persisted))
+        self.with_inner(|data| {
+            let persisted = data.immutable.persisted().cloned();
+            data.immutable = Arc::new(ImmutableData::new(b, persisted))
         });
     }
 
