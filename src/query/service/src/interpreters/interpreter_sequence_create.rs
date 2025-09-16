@@ -48,7 +48,7 @@ impl CreateSequenceInterpreter {
         let _reply = catalog.create_sequence(req.clone()).await?;
 
         // Grant ownership as the current role
-        if skip_privilege_check
+        if !skip_privilege_check
             && ctx
                 .get_settings()
                 .get_enable_experimental_sequence_privilege_check()?

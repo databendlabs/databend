@@ -685,12 +685,6 @@ select '\'0\'' = a from t
 statement error 1075
 create or replace table t(id int) compression='xxxx';
 
-statement ok
-create database test_autoincrement;
-
-statement ok
-use test_autoincrement;
-
 statement error 1065
 create or replace table t11 (c1 int, c2 string autoincrement);
 
@@ -782,16 +776,3 @@ select interval, current, comment from show_sequences();
 1 4 NULL
 2 9 NULL
 2 9 NULL
-
-statement ok
-set data_retention_time_in_days = 0
-
-statement ok
-vacuum drop table from test_autoincrement;
-
-query TIITTT
-select name, interval, current, comment from show_sequences();
-----
-
-statement ok
-drop database test_autoincrement

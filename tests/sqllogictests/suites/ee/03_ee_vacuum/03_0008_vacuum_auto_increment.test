@@ -1,0 +1,49 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+create database test_autoincrement;
+
+statement ok
+use test_autoincrement;
+
+statement ok
+create or replace table t11 (c1 int, c2 int autoincrement, c3 float autoincrement, c4 int identity (1,2), c5 int autoincrement start 1 increment 2);
+
+statement ok
+insert into t11 (c1) values(0);
+
+statement ok
+drop table t11;
+
+query TIITTT
+select interval, current, comment from show_sequences();
+----
+1 1 NULL
+1 1 NULL
+2 3 NULL
+2 3 NULL
+
+statement ok
+set data_retention_time_in_days = 0
+
+statement ok
+vacuum drop table from test_autoincrement;
+
+query TIITTT
+select interval, current, comment from show_sequences();
+----
+
+statement ok
+drop database test_autoincrement
