@@ -27,6 +27,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
+use log::info;
 use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
@@ -151,17 +152,81 @@ impl AuthMgr {
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await
                 {
-                    Ok(user_info) => match user_info.auth_info {
-                        AuthInfo::JWT => user_info,
-                        _ => return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication")),
-                    },
+                    Ok(mut user_info) => {
+                        if user_info.auth_info != AuthInfo::JWT {
+                            return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
+                        }
+                        if let Some(ensure_user) = jwt.custom.ensure_user {
+                            let current_roles = user_info.grants.roles();
+                            // ensure jwt roles to user if not exists
+                            if let Some(ref roles) = ensure_user.roles {
+                                for role in roles.iter() {
+                                    if !current_roles.contains(role) {
+                                        info!(
+                                            "[AUTH] JWT grant role to user: {} -> {}",
+                                            user_info.name, role
+                                        );
+                                        user_api
+                                            .grant_role_to_user(
+                                                &tenant,
+                                                user_info.identity(),
+                                                role.clone(),
+                                            )
+                                            .await?;
+                                        user_info.grants.grant_role(role.clone());
+                                    }
+                                }
+                            }
+                            if let Some(ref jwt_default_role) = ensure_user.default_role {
+                                let current_roles = user_info.grants.roles();
+                                // grant default role to user if not exists
+                                if !current_roles.contains(jwt_default_role) {
+                                    info!(
+                                        "[AUTH] JWT grant default role to user: {} -> {}",
+                                        user_info.name, jwt_default_role
+                                    );
+                                    user_api
+                                        .grant_role_to_user(
+                                            &tenant,
+                                            user_info.identity(),
+                                            jwt_default_role.clone(),
+                                        )
+                                        .await?;
+                                    user_info.grants.grant_role(jwt_default_role.clone());
+                                }
+                                // ensure default role to jwt role
+                                if user_info.option.default_role() != Some(jwt_default_role) {
+                                    info!(
+                                        "[AUTH] JWT update default role for user: {} -> {}",
+                                        user_info.name, jwt_default_role
+                                    );
+                                    user_api
+                                        .update_user_default_role(
+                                            &tenant,
+                                            user_info.identity(),
+                                            Some(jwt_default_role.clone()),
+                                        )
+                                        .await?;
+                                    user_info
+                                        .option
+                                        .set_default_role(Some(jwt_default_role.clone()));
+                                }
+                            }
+                        }
+                        user_info
+                    }
                     Err(e) => {
                         match e.code() {
                             ErrorCode::UNKNOWN_USER => {}
                             ErrorCode::META_SERVICE_ERROR => {
                                 return Err(e);
                             }
-                            _ => return Err(ErrorCode::AuthenticateFailure(format!("[AUTH] Authentication failed: {}", e.message()))),
+                            _ => {
+                                return Err(ErrorCode::AuthenticateFailure(format!(
+                                    "[AUTH] Authentication failed: {}",
+                                    e.message()
+                                )))
+                            }
                         }
                         let ensure_user = jwt
                             .custom
@@ -174,6 +239,15 @@ impl AuthMgr {
                                 user_info.grants.grant_role(role);
                             }
                         }
+                        if let Some(ref default_role) = ensure_user.default_role {
+                            if !user_info.grants.roles().contains(default_role) {
+                                user_info.grants.grant_role(default_role.clone());
+                            }
+                            user_info
+                                .option
+                                .set_default_role(Some(default_role.clone()));
+                        }
+                        info!("[AUTH] JWT create user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
