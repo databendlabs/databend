@@ -34,6 +34,8 @@ use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
 use state_machine_api::UserKey;
 
+use crate::leveled_store::get_sub_table::GetSubTable;
+
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
@@ -61,19 +63,15 @@ impl AsRef<mvcc::Table<ExpireKey, String>> for Level {
     }
 }
 
-pub(crate) trait GetTable<K, V> {
-    fn get_table(&self) -> &mvcc::Table<K, V>;
-}
-
-impl GetTable<UserKey, MetaValue> for Level {
-    fn get_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
+impl GetSubTable<UserKey, MetaValue> for Level {
+    fn get_sub_table(&self) -> &mvcc::Table<UserKey, MetaValue> {
         &self.kv
     }
 }
 
 #[async_trait::async_trait]
-impl GetTable<ExpireKey, String> for Level {
-    fn get_table(&self) -> &mvcc::Table<ExpireKey, String> {
+impl GetSubTable<ExpireKey, String> for Level {
+    fn get_sub_table(&self) -> &mvcc::Table<ExpireKey, String> {
         &self.expire
     }
 }

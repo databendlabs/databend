@@ -20,8 +20,8 @@ use map_api::mvcc::ViewValue;
 use map_api::MapKey;
 use seq_marked::SeqMarked;
 
+use crate::leveled_store::get_sub_table::GetSubTable;
 use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::MapKeyDecode;
@@ -37,7 +37,7 @@ where
     K: MapKeyEncode + MapKeyDecode,
     K::V: ViewValue,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
-    Level: GetTable<K, K::V>,
+    Level: GetSubTable<K, K::V>,
     Immutable: mvcc::ScopedSeqBoundedGet<K, K::V>,
 {
     async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<K::V>, io::Error> {
@@ -45,7 +45,7 @@ where
             let inner = self.data.lock().unwrap();
             let got = inner
                 .writable
-                .get_table()
+                .get_sub_table()
                 .get(key.clone(), snapshot_seq)
                 .cloned();
             if !got.is_not_found() {
