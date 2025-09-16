@@ -17,7 +17,7 @@ runs:
       shell: bash
       run: |
         bash ./tests/task/test-private-task.sh
-#        bash ./tests/task/test-private-task-warehouse.sh
+        bash ./tests/task/test-private-task-warehouse.sh
 
     - name: Upload failure
       if: failure()
