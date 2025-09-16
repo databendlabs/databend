@@ -147,29 +147,27 @@ impl VacuumTableInterpreter {
 
         match purge_files_opt {
             None => {
-                return {
-                    let stat = self.get_statistics(fuse_table).await?;
-                    let total_files = stat.snapshot_files.0
-                        + stat.segment_files.0
-                        + stat.block_files.0
-                        + stat.index_files.0;
-                    let total_size = stat.snapshot_files.1
-                        + stat.segment_files.1
-                        + stat.block_files.1
-                        + stat.index_files.1;
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                        UInt64Type::from_data(vec![stat.snapshot_files.0]),
-                        UInt64Type::from_data(vec![stat.snapshot_files.1]),
-                        UInt64Type::from_data(vec![stat.segment_files.0]),
-                        UInt64Type::from_data(vec![stat.segment_files.1]),
-                        UInt64Type::from_data(vec![stat.block_files.0]),
-                        UInt64Type::from_data(vec![stat.block_files.1]),
-                        UInt64Type::from_data(vec![stat.index_files.0]),
-                        UInt64Type::from_data(vec![stat.index_files.1]),
-                        UInt64Type::from_data(vec![total_files]),
-                        UInt64Type::from_data(vec![total_size]),
-                    ])])
-                };
+                let stat = self.get_statistics(fuse_table).await?;
+                let total_files = stat.snapshot_files.0
+                    + stat.segment_files.0
+                    + stat.block_files.0
+                    + stat.index_files.0;
+                let total_size = stat.snapshot_files.1
+                    + stat.segment_files.1
+                    + stat.block_files.1
+                    + stat.index_files.1;
+                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![stat.snapshot_files.0]),
+                    UInt64Type::from_data(vec![stat.snapshot_files.1]),
+                    UInt64Type::from_data(vec![stat.segment_files.0]),
+                    UInt64Type::from_data(vec![stat.segment_files.1]),
+                    UInt64Type::from_data(vec![stat.block_files.0]),
+                    UInt64Type::from_data(vec![stat.block_files.1]),
+                    UInt64Type::from_data(vec![stat.index_files.0]),
+                    UInt64Type::from_data(vec![stat.index_files.1]),
+                    UInt64Type::from_data(vec![total_files]),
+                    UInt64Type::from_data(vec![total_size]),
+                ])])
             }
             Some(purge_files) => {
                 let mut file_sizes = vec![];
@@ -211,7 +209,13 @@ impl Interpreter for VacuumTableInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         match &self.plan.target {
-            VacuumTarget::Table(tgt_table) => self.legacy_vacuum_table(tgt_table).await,
+            VacuumTarget::Table(tgt_table) => {
+                if self.plan.use_legacy_vacuum {
+                    self.legacy_vacuum_table(tgt_table).await
+                } else {
+                    self.vacuum_table(tgt_table).await
+                }
+            }
             VacuumTarget::All => self.vacuum_all().await,
         }
     }

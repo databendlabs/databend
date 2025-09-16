@@ -1087,4 +1087,8 @@ impl Settings {
     pub fn get_queries_queue_retry_timeout(&self) -> Result<u64> {
         self.try_get_u64("queries_queue_retry_timeout")
     }
+
+    pub fn get_fallback_to_legacy_vacuum(&self) -> Result<bool> {
+        Ok(self.try_get_u64("fallback_to_legacy_vacuum")? != 1)
+    }
 }

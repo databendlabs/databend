@@ -16,14 +16,16 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table::{Table, TableExt};
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use log::info;
 use log::warn;
-use databend_common_catalog::catalog::Catalog;
+
 use crate::FuseTable;
 
 pub async fn vacuum_table(
@@ -55,7 +57,6 @@ pub async fn vacuum_tables_from_info(
     table_infos: Vec<TableInfo>,
     ctx: Arc<dyn TableContext>,
     vacuum_handler: Arc<VacuumHandlerWrapper>,
-
 ) -> Result<()> {
     for table_info in table_infos {
         let table = FuseTable::do_create(table_info)?
@@ -70,7 +71,7 @@ pub async fn vacuum_tables_from_info(
 
 pub async fn vacuum_all_tables(
     ctx: &Arc<dyn TableContext>,
-    handler: & VacuumHandlerWrapper,
+    handler: &VacuumHandlerWrapper,
     catalog: &dyn Catalog,
 ) -> Result<Vec<String>> {
     let tenant_id = ctx.get_tenant();
@@ -84,39 +85,39 @@ pub async fn vacuum_all_tables(
         }
 
         info!(
-                "Processing db {}, progress: {}/{}",
-                db.name(),
-                idx_db + 1,
-                num_db
-            );
+            "Processing db {}, progress: {}/{}",
+            db.name(),
+            idx_db + 1,
+            num_db
+        );
         let tables = catalog.list_tables(&tenant_id, db.name()).await?;
         info!("Found {} tables in db {}", tables.len(), db.name());
 
         let num_tbl = tables.len();
         for (idx_tbl, table) in tables.iter().enumerate() {
             info!(
-                    "Processing table {}.{}, db level progress: {}/{}",
-                    db.name(),
-                    table.get_table_info().name,
-                    idx_tbl + 1,
-                    num_tbl
-                );
+                "Processing table {}.{}, db level progress: {}/{}",
+                db.name(),
+                table.get_table_info().name,
+                idx_tbl + 1,
+                num_tbl
+            );
 
             let Ok(tbl) = FuseTable::try_from_table(table.as_ref()) else {
                 info!(
-                        "Bypass non-fuse table {}.{}",
-                        db.name(),
-                        table.get_table_info().name
-                    );
+                    "Bypass non-fuse table {}.{}",
+                    db.name(),
+                    table.get_table_info().name
+                );
                 continue;
             };
 
             if tbl.is_read_only() {
                 info!(
-                        "Bypass read only table {}.{}",
-                        db.name(),
-                        table.get_table_info().name
-                    );
+                    "Bypass read only table {}.{}",
+                    db.name(),
+                    table.get_table_info().name
+                );
                 continue;
             }
 
@@ -124,11 +125,11 @@ pub async fn vacuum_all_tables(
 
             if let Err(e) = res {
                 warn!(
-                        "vacuum2 table {}.{} failed: {}",
-                        db.name(),
-                        table.get_table_info().name,
-                        e
-                    );
+                    "vacuum2 table {}.{} failed: {}",
+                    db.name(),
+                    table.get_table_info().name,
+                    e
+                );
             };
         }
     }

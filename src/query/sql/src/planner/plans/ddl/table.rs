@@ -105,7 +105,6 @@ impl DropTablePlan {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct VacuumTargetTable {
     pub catalog: String,
@@ -115,7 +114,7 @@ pub struct VacuumTargetTable {
 
 #[derive(Clone, Debug)]
 pub enum VacuumTarget {
-   Table(VacuumTargetTable),
+    Table(VacuumTargetTable),
     All,
 }
 
@@ -124,10 +123,18 @@ pub enum VacuumTarget {
 pub struct VacuumTablePlan {
     pub target: VacuumTarget,
     pub option: VacuumTableOption,
+    pub use_legacy_vacuum: bool,
 }
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
+        if !self.use_legacy_vacuum {
+            return Arc::new(DataSchema::new(vec![DataField::new(
+                "object_removed",
+                DataType::String,
+            )]));
+        }
+
         if let Some(summary) = self.option.dry_run {
             if summary {
                 Arc::new(DataSchema::new(vec![
