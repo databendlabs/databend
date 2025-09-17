@@ -1089,6 +1089,6 @@ impl Settings {
     }
 
     pub fn get_fallback_to_legacy_vacuum(&self) -> Result<bool> {
-        Ok(self.try_get_u64("fallback_to_legacy_vacuum")? != 1)
+        Ok(self.try_get_u64("fallback_to_legacy_vacuum")? == 1)
     }
 }
