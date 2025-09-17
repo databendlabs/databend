@@ -115,26 +115,6 @@ impl Interpreter for DropTableColumnInterpreter {
         let mut new_table_meta = table.get_table_info().meta.clone();
         new_table_meta.drop_column(&self.plan.column)?;
 
-        let field = table
-            .get_table_info()
-            .meta
-            .schema
-            .field_with_name(self.plan.column.as_str())?;
-        if field.auto_increment_display.is_some() {
-            let auto_increment_name =
-                AutoIncrement::sequence_name(table.get_id(), field.column_id());
-
-            DropSequenceInterpreter::req_execute(
-                self.ctx.as_ref(),
-                DropSequenceReq {
-                    if_exists: false,
-                    ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
-                },
-                true,
-            )
-            .await?;
-        }
-
         // update table options
         let opts = &mut new_table_meta.options;
         if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -156,6 +136,26 @@ impl Interpreter for DropTableColumnInterpreter {
             catalog,
         )
         .await?;
+
+        let field = table
+            .get_table_info()
+            .meta
+            .schema
+            .field_with_name(self.plan.column.as_str())?;
+        if field.auto_increment_display.is_some() {
+            let auto_increment_name =
+                AutoIncrement::sequence_name(table.get_id(), field.column_id());
+
+            DropSequenceInterpreter::req_execute(
+                self.ctx.as_ref(),
+                DropSequenceReq {
+                    if_exists: false,
+                    ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
+                },
+                true,
+            )
+                .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }
