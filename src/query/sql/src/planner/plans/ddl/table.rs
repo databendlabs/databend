@@ -130,8 +130,8 @@ impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         if !self.use_legacy_vacuum {
             return Arc::new(DataSchema::new(vec![DataField::new(
-                "object_removed",
-                DataType::String,
+                "num_object_removed",
+                DataType::Number(NumberDataType::UInt64),
             )]));
         }
 

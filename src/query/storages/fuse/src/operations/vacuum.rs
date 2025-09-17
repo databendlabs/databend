@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// src/query/storages/fuse/src/vacuum/mod.rs
-
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -73,10 +71,12 @@ pub async fn vacuum_all_tables(
     ctx: &Arc<dyn TableContext>,
     handler: &VacuumHandlerWrapper,
     catalog: &dyn Catalog,
-) -> Result<Vec<String>> {
+) -> Result<u64> {
     let tenant_id = ctx.get_tenant();
     let dbs = catalog.list_databases(&tenant_id).await?;
     let num_db = dbs.len();
+
+    let mut num_obj_removed = 0;
 
     for (idx_db, db) in dbs.iter().enumerate() {
         if db.engine().to_uppercase() == "SYSTEM" {
@@ -96,9 +96,10 @@ pub async fn vacuum_all_tables(
         let num_tbl = tables.len();
         for (idx_tbl, table) in tables.iter().enumerate() {
             info!(
-                "Processing table {}.{}, db level progress: {}/{}",
+                "Processing table {}.{}, progress of db {}: {}/{}",
                 db.name(),
                 table.get_table_info().name,
+                db.name(),
                 idx_tbl + 1,
                 num_tbl
             );
@@ -123,16 +124,20 @@ pub async fn vacuum_all_tables(
 
             let res = handler.do_vacuum2(tbl, ctx.clone(), false).await;
 
-            if let Err(e) = res {
-                warn!(
-                    "vacuum2 table {}.{} failed: {}",
-                    db.name(),
-                    table.get_table_info().name,
-                    e
-                );
-            };
+            match res {
+                Ok(removed) => {
+                    num_obj_removed += removed.len() as u64;
+                }
+                Err(e) => {
+                    warn!(
+                        "vacuum2 table {}.{} failed: {}",
+                        db.name(),
+                        table.get_table_info().name,
+                        e
+                    );
+                }
+            }
         }
     }
-
-    Ok(vec![])
+    Ok(num_obj_removed)
 }

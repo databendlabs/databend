@@ -21,7 +21,9 @@ use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -80,7 +82,15 @@ impl SimpleTableFunc for FuseVacuum2Table {
     }
 
     fn schema(&self) -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![TableField::new("vacuumed", TableDataType::String)])
+        match &self.args {
+            Vacuum2TableArgs::SingleTable { .. } => {
+                TableSchemaRefExt::create(vec![TableField::new("vacuumed", TableDataType::String)])
+            }
+            Vacuum2TableArgs::All => TableSchemaRefExt::create(vec![TableField::new(
+                "num_object_removed",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]),
+        }
     }
 
     async fn apply(
@@ -97,20 +107,23 @@ impl SimpleTableFunc for FuseVacuum2Table {
                 arg_table_name,
                 respect_flash_back,
             } => {
-                self.apply_single_table(
-                    ctx,
-                    catalog.as_ref(),
-                    arg_database_name,
-                    arg_table_name,
-                    respect_flash_back.unwrap_or_default(),
-                )
-                .await?
+                let obj_removed = self
+                    .apply_single_table(
+                        ctx,
+                        catalog.as_ref(),
+                        arg_database_name,
+                        arg_table_name,
+                        respect_flash_back.unwrap_or_default(),
+                    )
+                    .await?;
+                DataBlock::new_from_columns(vec![StringType::from_data(obj_removed)])
             }
-            Vacuum2TableArgs::All => self.apply_all_tables(ctx, catalog.as_ref()).await?,
+            Vacuum2TableArgs::All => {
+                let num_obj_removed = self.apply_all_tables(ctx, catalog.as_ref()).await?;
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![num_obj_removed])])
+            }
         };
-        Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(res),
-        ])))
+        Ok(Some(res))
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
@@ -178,7 +191,7 @@ impl FuseVacuum2Table {
         &self,
         ctx: &Arc<dyn TableContext>,
         catalog: &dyn Catalog,
-    ) -> Result<Vec<String>> {
+    ) -> Result<u64> {
         databend_common_storages_fuse::operations::vacuum_all_tables(
             ctx,
             self.handler.as_ref(),
