@@ -51,14 +51,7 @@ impl Elastic {
         &self.entries[self.zone_range(i)]
     }
 
-    pub fn epsilon(&self, i: usize) -> f64 {
-        let r = self.zone_range(i);
-        let size = r.len();
-        let empty = self.entries[r].iter().filter(|x| x.is_none()).count();
-        empty as f64 / size as f64
-    }
-
-    pub fn cur_batch(&mut self) -> Option<usize> {
+    fn cur_batch(&mut self) -> Option<usize> {
         let count = self.count;
 
         if self.i > self.levels() {
@@ -82,7 +75,14 @@ impl Elastic {
         1.max(((1.0 - self.delta) / 2.0 * (n >> i) as f64) as usize + (n >> (i + 3)))
     }
 
-    fn f_value(&self, i: usize) -> f64 {
+    fn epsilon(&self, i: usize) -> f64 {
+        let r = self.zone_range(i);
+        let size = r.len();
+        let empty = self.entries[r].iter().filter(|x| x.is_none()).count();
+        empty as f64 / size as f64
+    }
+
+    fn max_probe(&self, i: usize) -> f64 {
         let t1 = (1.0 / self.epsilon(i)).ln().powi(2);
         let t2 = (1.0 / self.delta).ln();
         self.c * t1.min(t2)
@@ -111,6 +111,20 @@ impl Elastic {
         }
     }
 
+    fn is_case3(&self, i: usize) -> bool {
+        let zone = self.zone(i + 1);
+        let size = zone.len();
+        let empty = zone.iter().filter(|x| x.is_none()).count();
+        empty * 4 <= size
+    }
+
+    fn is_case1(&self, i: usize) -> bool {
+        let zone = self.zone(i);
+        let size = zone.len();
+        let empty = zone.iter().filter(|x| x.is_none()).count();
+        (2 * empty) as f64 > self.delta * size as f64
+    }
+
     pub fn probe(&mut self, value: usize) -> Slot {
         let i = self.cur_batch().unwrap();
         if i == 0 {
@@ -120,19 +134,17 @@ impl Elastic {
             return Slot(range.start + j);
         }
 
-        // case 3
-        if self.epsilon(i + 1) <= 0.25 {
+        if self.is_case3(i) {
             let range = self.zone_range(i);
             let j = value % range.len();
             let j = self.probe_zone(i, j, None).unwrap();
             return Slot(range.start + j);
         }
 
-        // case 1
-        if self.epsilon(i) > 0.5 * self.delta {
+        if self.is_case1(i) {
             let range = self.zone_range(i);
             let j = value % range.len();
-            if let Some(j) = self.probe_zone(i, j, Some(self.f_value(i) as usize)) {
+            if let Some(j) = self.probe_zone(i, j, Some(self.max_probe(i) as usize)) {
                 return Slot(range.start + j);
             }
         }
