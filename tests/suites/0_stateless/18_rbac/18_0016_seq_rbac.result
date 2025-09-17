@@ -13,7 +13,7 @@
 3
 === TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS SEQUENCES PRIVILEGES ===
 --- USER b failed to create conn seq1 because current role is public, can not create ---
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateSequence] is required on *.* for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateSequence] is required on *.* for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 --- success, seq1,2,3 owner role is role1 ---
 1
 1
@@ -21,7 +21,7 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateSequence
 3
 --- transform seq2'ownership from role1 to role2 ---
 --- USER failed to desc conn seq2, seq2 role is role2 ---
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 2
 --- only return one row seq2 ---
 1
@@ -33,7 +33,7 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence
 --- return three rows seq1,2,3 ---
 3
 --- user b can not drop sequence seq2 ---
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq2
@@ -47,8 +47,8 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq3
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq1 for user c
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS SEQUENCE is required on sequence seq3 for user c
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq1 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq3 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq1 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessSequence] is required on SEQUENCE seq3 for user 'c'@'%' with roles [public,role2,role3]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 --- user b can drop/use sequence seq1,3 ---
 1
 1
