@@ -731,24 +731,6 @@ impl Display for VacuumDropTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumAllStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-}
-
-impl Display for VacuumAllStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "VACUUM ALL")?;
-        if self.catalog.is_some() || self.database.is_some() {
-            write!(f, " FROM ")?;
-            write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
-            write!(f, " ")?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTemporaryFiles {
     pub limit: Option<u64>,
     #[drive(skip)]
