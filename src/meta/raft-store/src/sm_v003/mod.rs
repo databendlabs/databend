@@ -28,7 +28,7 @@ pub mod write_entry;
 pub mod writer_stat;
 
 #[cfg(test)]
-mod compact_immutable_levels_test;
+pub(crate) mod compact_immutable_levels_test;
 #[cfg(test)]
 mod compact_with_db_test;
 #[cfg(test)]
