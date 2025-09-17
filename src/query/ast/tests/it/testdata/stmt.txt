@@ -15459,16 +15459,20 @@ VACUUM TABLE t
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
+        target: Table(
+            VacuumTargetTable {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        13..14,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+        ),
         option: VacuumTableOption {
             dry_run: None,
         },
@@ -15483,16 +15487,20 @@ VACUUM TABLE t DRY RUN
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
+        target: Table(
+            VacuumTargetTable {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        13..14,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+        ),
         option: VacuumTableOption {
             dry_run: Some(
                 false,
@@ -15509,16 +15517,20 @@ VACUUM TABLE t DRY RUN SUMMARY
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                13..14,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
+        target: Table(
+            VacuumTargetTable {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        13..14,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+        ),
         option: VacuumTableOption {
             dry_run: Some(
                 true,
