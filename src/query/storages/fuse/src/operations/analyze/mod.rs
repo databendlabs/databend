@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod analyze_collect_ndv;
-mod analyze_ndv_source;
+mod analyze_ndv_meta;
 mod analyze_state_sink;
-mod ndv_meta;
-mod send_partition;
+mod collect_ndv_source;
+mod histogram_info_sink;
 
-pub use analyze_ndv_source::*;
-pub use ndv_meta::*;
+pub use analyze_ndv_meta::AnalyzeNDVMeta;
+pub use collect_ndv_source::AnalyzeCollectNDVSource;
+pub use histogram_info_sink::HistogramInfoSink;

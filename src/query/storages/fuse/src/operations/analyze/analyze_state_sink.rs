@@ -19,12 +19,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::Receiver;
-use async_channel::Sender;
-use async_trait::async_trait;
 use databend_common_base::base::tokio::sync::Semaphore;
-use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -38,12 +34,11 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::Partitions;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -54,102 +49,54 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::io::SegmentsIO;
-use crate::operations::analyzes::analyze_collect_ndv::CollectNDVTransform;
-use crate::operations::analyzes::send_partition::AnalyzePartRecvSource;
-use crate::operations::analyzes::send_partition::AnalyzeSendPartSink;
-use crate::operations::analyzes::AnalyzeExtraMeta;
-use crate::operations::analyzes::ReadHllTransform;
-use crate::pruning::create_segment_location_vector;
-use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::operations::analyze::AnalyzeCollectNDVSource;
+use crate::operations::analyze::AnalyzeNDVMeta;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
+use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub fn do_analyzes(
+    pub fn do_analyze(
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: Arc<TableSnapshot>,
         pipeline: &mut Pipeline,
-        no_scan: bool,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
-    ) -> Result<Pipeline> {
-        let snapshot_id = snapshot.snapshot_id;
-        let max_io_requests = self.adjust_io_request(&ctx)?;
-        let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
-        let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
+        no_scan: bool,
+    ) -> Result<()> {
+        let mut parts = Vec::with_capacity(snapshot.segments.len());
+        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+            parts.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+        }
+        ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let segment_locations = create_segment_location_vector(snapshot.segments.clone(), None);
-        let mut collect_pipeline = Pipeline::create();
-        collect_pipeline.add_source(
-            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
-            max_threads,
-        )?;
-        let output_done = if no_scan {
-            Some(Default::default())
-        } else {
-            None
-        };
-        collect_pipeline.add_transform(|input, output| {
-            ReadHllTransform::create(input, output, self, output_done.clone())
-        })?;
-        collect_pipeline
-            .add_sink(|input| AnalyzeSendPartSink::create(input, part_info_tx.clone()))?;
-        collect_pipeline.set_on_init(move || {
-            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-            GlobalIORuntime::instance().spawn(async move {
-                // avoid block global io runtime
-                let runtime =
-                    Runtime::with_worker_threads(2, Some("collect-pipeline".to_string()))?;
-                let join_handler = runtime.spawn(async move {
-                    for segment in segment_locations {
-                        // the sql may be killed or early stop, ignore the error
-                        if let Err(_e) = segment_tx.send(segment).await {
-                            break;
-                        }
-                    }
-                    Ok::<_, ErrorCode>(())
-                });
-
-                if let Err(cause) = join_handler.await {
-                    log::warn!(
-                        "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
-                        cause
-                    );
-                }
-                Ok::<_, ErrorCode>(())
-            });
-            Ok(())
-        });
-
-        let num = if no_scan { 1 } else { max_threads };
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
         pipeline.add_source(
-            |output| AnalyzePartRecvSource::create(ctx.clone(), part_info_rx.clone(), output),
-            num,
+            |output| {
+                AnalyzeCollectNDVSource::try_create(
+                    output,
+                    self,
+                    ctx.clone(),
+                    io_request_semaphore.clone(),
+                    no_scan,
+                )
+            },
+            ctx.get_settings().get_max_threads()? as usize,
         )?;
-        pipeline.add_transform(|input, output| {
-            CollectNDVTransform::create(
-                input,
-                output,
-                self,
-                io_request_semaphore.clone(),
-                ctx.clone(),
-            )
-        })?;
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| {
             SinkAnalyzeState::create(
                 ctx.clone(),
                 self,
-                snapshot_id,
+                snapshot.snapshot_id,
                 input,
                 histogram_info_receivers.clone(),
             )
         })?;
-        Ok(collect_pipeline)
+        Ok(())
     }
 }
 
@@ -170,6 +117,7 @@ struct SinkAnalyzeState {
     input_data: Option<DataBlock>,
     committed: bool,
     row_count: u64,
+    unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Histogram>,
     step: AnalyzeStep,
@@ -193,6 +141,7 @@ impl SinkAnalyzeState {
             input_data: None,
             committed: false,
             row_count: 0,
+            unstats_rows: 0,
             ndv_states: Default::default(),
             histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
@@ -259,7 +208,8 @@ impl SinkAnalyzeState {
         // 3. Generate new table statistics
         new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
             hll: Some(encode_column_hll(&self.ndv_states)?),
-            row_count: snapshot.summary.row_count,
+            row_count: self.row_count,
+            unstats_rows: self.unstats_rows,
             ..Default::default()
         });
 
@@ -417,7 +367,7 @@ impl Processor for SinkAnalyzeState {
                     assert!(data_block.is_empty());
                     if let Some(meta) = data_block
                         .take_meta()
-                        .and_then(AnalyzeExtraMeta::downcast_from)
+                        .and_then(AnalyzeNDVMeta::downcast_from)
                     {
                         if meta.row_count > 0 {
                             for (column_id, column_hll) in meta.column_hlls.iter() {
@@ -428,6 +378,7 @@ impl Processor for SinkAnalyzeState {
                             }
                             self.row_count += meta.row_count;
                         }
+                        self.unstats_rows += meta.unstats_rows;
                     }
                 }
             }
@@ -471,36 +422,5 @@ impl Processor for SinkAnalyzeState {
             _ => unreachable!(),
         }
         Ok(())
-    }
-}
-
-pub struct HistogramInfoSink {
-    sender: Option<Sender<DataBlock>>,
-}
-
-impl HistogramInfoSink {
-    pub fn create(tx: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> Box<dyn Processor> {
-        AsyncSinker::create(input, HistogramInfoSink { sender: tx })
-    }
-}
-
-#[async_trait]
-impl AsyncSink for HistogramInfoSink {
-    const NAME: &'static str = "HistogramInfoSink";
-
-    #[async_backtrace::framed]
-    async fn on_finish(&mut self) -> Result<()> {
-        drop(self.sender.take());
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        if let Some(sender) = self.sender.as_ref() {
-            if sender.send(data_block).await.is_err() {
-                return Err(ErrorCode::Internal("HistogramInfoSink sender failed"));
-            };
-        }
-        Ok(false)
     }
 }

@@ -20,26 +20,28 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
+use databend_storages_common_cache::CompactSegmentInfo;
+use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::SegmentStatistics;
-use databend_storages_common_cache::Table;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -51,12 +53,15 @@ use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 
 use crate::io::build_column_hlls;
+use crate::io::read::meta::SegmentStatsReader;
 use crate::io::BlockReader;
 use crate::io::CachedMetaWriter;
+use crate::io::CompactSegmentInfoReader;
+use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::acquire_task_permit;
-use crate::operations::analyzes::AnalyzeExtraMeta;
-use crate::operations::analyzes::AnalyzeNDVMeta;
+use crate::operations::analyze::AnalyzeNDVMeta;
+use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
@@ -71,38 +76,46 @@ struct SegmentWithHLL {
 }
 
 enum State {
-    Consume,
-    MergeExtra(AnalyzeExtraMeta),
+    ReadData(Option<PartInfoPtr>),
+    CollectNDV {
+        segment_location: Location,
+        segment_info: Arc<CompactSegmentInfo>,
+        block_hlls: Vec<RawBlockHLL>,
+    },
     BuildHLL,
     MergeHLL,
     WriteMeta,
+    Finish,
 }
 
-pub struct CollectNDVTransform {
+pub struct AnalyzeCollectNDVSource {
     state: State,
-    input: Arc<InputPort>,
     output: Arc<OutputPort>,
     io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     row_count: u64,
+    unstats_rows: u64,
+    no_scan: bool,
 
     segment_with_hll: Option<SegmentWithHLL>,
-    called_on_finish: bool,
 
+    ctx: Arc<dyn TableContext>,
     block_reader: Arc<BlockReader>,
     dal: Operator,
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
+    segment_reader: CompactSegmentInfoReader,
+    stats_reader: SegmentStatsReader,
     ndv_columns_map: BTreeMap<FieldIndex, TableField>,
 }
 
-impl CollectNDVTransform {
-    pub fn create(
-        input: Arc<InputPort>,
+impl AnalyzeCollectNDVSource {
+    pub fn try_create(
         output: Arc<OutputPort>,
         table: &FuseTable,
-        io_request_semaphore: Arc<Semaphore>,
         ctx: Arc<dyn TableContext>,
+        io_request_semaphore: Arc<Semaphore>,
+        no_scan: bool,
     ) -> Result<ProcessorPtr> {
         let table_schema = table.schema();
         let ndv_columns_map = table
@@ -112,30 +125,36 @@ impl CollectNDVTransform {
         let projection = Projection::Columns(field_indices);
         let block_reader =
             table.create_block_reader(ctx.clone(), projection, false, false, false)?;
+
         let dal = table.get_operator();
         let settings = ReadSettings::from_ctx(&ctx)?;
+        let segment_reader = MetaReaders::segment_info_reader(dal.clone(), table_schema.clone());
+        let stats_reader = MetaReaders::segment_stats_reader(dal.clone());
         Ok(ProcessorPtr::create(Box::new(Self {
-            state: State::Consume,
-            input,
+            state: State::ReadData(None),
             output,
             io_request_semaphore,
             column_hlls: HashMap::new(),
             row_count: 0,
             segment_with_hll: None,
-            called_on_finish: false,
+            ctx,
             block_reader,
             dal,
             settings,
             storage_format: table.get_storage_format(),
+            segment_reader,
+            stats_reader,
             ndv_columns_map,
+            no_scan,
+            unstats_rows: 0,
         })))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for CollectNDVTransform {
+impl Processor for AnalyzeCollectNDVSource {
     fn name(&self) -> String {
-        "CollectNDVTransform".to_string()
+        "AnalyzeCollectNDVSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -143,11 +162,9 @@ impl Processor for CollectNDVTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::MergeExtra(_) | State::MergeHLL) {
-            return Ok(Event::Sync);
-        }
-        if matches!(self.state, State::BuildHLL | State::WriteMeta) {
-            return Ok(Event::Async);
+        if matches!(self.state, State::Finish) {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
@@ -158,79 +175,89 @@ impl Processor for CollectNDVTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.input.has_data() {
-            return match !self.called_on_finish {
-                true => {
-                    self.called_on_finish = true;
-                    self.output
-                        .push_data(Ok(DataBlock::empty_with_meta(Box::new(AnalyzeExtraMeta {
-                            row_count: self.row_count,
-                            column_hlls: std::mem::take(&mut self.column_hlls),
-                        }))));
-                    return Ok(Event::NeedConsume);
-                }
-                false => {
-                    self.output.finish();
-                    Ok(Event::Finished)
-                }
-            };
-        }
-
-        let mut input_data = self.input.pull_data().unwrap()?;
-        if let Some(meta) = input_data.take_meta() {
-            if let Some(meta) = AnalyzeNDVMeta::downcast_from(meta) {
-                let extra = match meta {
-                    AnalyzeNDVMeta::Extras(extra) => extra,
-                    AnalyzeNDVMeta::Segment(info) => {
-                        assert!(self.segment_with_hll.is_none());
-                        let row_count = info.origin_summary.row_count;
-                        let new_hlls = Vec::with_capacity(info.block_hll_indexes.len());
-                        self.segment_with_hll = Some(SegmentWithHLL {
-                            segment_location: info.segment_location,
-                            block_metas: info.blocks.block_metas()?,
-                            origin_summary: info.origin_summary,
-                            raw_block_hlls: info.raw_block_hlls,
-                            new_block_hlls: new_hlls,
-                            block_indexes: info.block_hll_indexes,
-                        });
-                        AnalyzeExtraMeta {
-                            row_count,
-                            column_hlls: info.merged_hlls,
-                        }
-                    }
-                };
-                self.state = State::MergeExtra(extra);
-                return Ok(Event::Sync);
+        if matches!(self.state, State::ReadData(None)) {
+            if let Some(part) = self.ctx.get_partition() {
+                self.state = State::ReadData(Some(part));
+            } else {
+                self.output
+                    .push_data(Ok(DataBlock::empty_with_meta(AnalyzeNDVMeta::create(
+                        self.row_count,
+                        self.unstats_rows,
+                        std::mem::take(&mut self.column_hlls),
+                    ))));
+                self.state = State::Finish;
+                return Ok(Event::NeedConsume);
             }
         }
 
-        unreachable!()
+        if matches!(
+            self.state,
+            State::ReadData(_) | State::BuildHLL | State::WriteMeta
+        ) {
+            Ok(Event::Async)
+        } else {
+            Ok(Event::Sync)
+        }
     }
 
     fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Consume) {
-            State::MergeExtra(extra) => {
-                self.row_count += extra.row_count;
-                for (column_id, column_hll) in extra.column_hlls.iter() {
-                    self.column_hlls
-                        .entry(*column_id)
-                        .and_modify(|hll| hll.merge(column_hll))
-                        .or_insert_with(|| column_hll.clone());
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::CollectNDV {
+                segment_location,
+                segment_info,
+                block_hlls,
+            } => {
+                let mut indexes = vec![];
+                let mut merged_hlls: HashMap<ColumnId, MetaHLL> = HashMap::new();
+                for (idx, data) in block_hlls.iter().enumerate() {
+                    let block_hll = decode_column_hll(data)?;
+                    if let Some(column_hlls) = &block_hll {
+                        for (column_id, column_hll) in column_hlls.iter() {
+                            merged_hlls
+                                .entry(*column_id)
+                                .and_modify(|hll| hll.merge(column_hll))
+                                .or_insert_with(|| column_hll.clone());
+                        }
+                    } else {
+                        indexes.push(idx);
+                    }
                 }
-                if self.segment_with_hll.is_some() {
+
+                if !indexes.is_empty() && self.no_scan {
+                    self.unstats_rows += segment_info.summary.row_count;
+                    self.state = State::ReadData(None);
+                    return Ok(());
+                }
+
+                for (column_id, column_hll) in merged_hlls {
+                    self.column_hlls
+                        .entry(column_id)
+                        .and_modify(|hll| hll.merge(&column_hll))
+                        .or_insert_with(|| column_hll);
+                }
+                self.row_count += segment_info.summary.row_count;
+
+                if indexes.is_empty() {
+                    self.state = State::ReadData(None);
+                } else {
+                    assert!(self.segment_with_hll.is_none());
+                    let new_hlls = Vec::with_capacity(indexes.len());
+                    self.segment_with_hll = Some(SegmentWithHLL {
+                        segment_location,
+                        block_metas: segment_info.block_metas()?,
+                        origin_summary: segment_info.summary.clone(),
+                        raw_block_hlls: block_hlls,
+                        new_block_hlls: new_hlls,
+                        block_indexes: indexes,
+                    });
                     self.state = State::BuildHLL;
                 }
             }
             State::MergeHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let new_hlls = std::mem::take(&mut segment_with_hll.new_block_hlls);
-                let indexes = std::mem::take(&mut segment_with_hll.block_indexes);
-                for (idx, new) in indexes.into_iter().zip(new_hlls.into_iter()) {
+                let new_indexes = std::mem::take(&mut segment_with_hll.block_indexes);
+                for (new, idx) in new_hlls.into_iter().zip(new_indexes.into_iter()) {
                     if let Some(column_hlls) = new {
                         for (column_id, column_hll) in column_hlls.iter() {
                             self.column_hlls
@@ -250,7 +277,43 @@ impl Processor for CollectNDVTransform {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Consume) {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(Some(part)) => {
+                let part = FuseLazyPartInfo::from_part(&part)?;
+                let (path, ver) = &part.segment_location;
+                let load_param = LoadParams {
+                    location: path.clone(),
+                    len_hint: None,
+                    ver: *ver,
+                    put_cache: true,
+                };
+                let compact_segment_info = self.segment_reader.read(&load_param).await?;
+                if *ver < 2 {
+                    self.unstats_rows += compact_segment_info.summary.row_count;
+                    self.state = State::ReadData(None);
+                    return Ok(());
+                }
+
+                let block_count = compact_segment_info.summary.block_count as usize;
+                let block_hlls = match compact_segment_info.summary.additional_stats_loc() {
+                    Some((path, ver)) => {
+                        let load_param = LoadParams {
+                            location: path,
+                            len_hint: None,
+                            ver,
+                            put_cache: true,
+                        };
+                        let stats = self.stats_reader.read(&load_param).await?;
+                        stats.block_hlls.clone()
+                    }
+                    _ => vec![vec![]; block_count],
+                };
+                self.state = State::CollectNDV {
+                    segment_location: part.segment_location.clone(),
+                    segment_info: compact_segment_info,
+                    block_hlls,
+                };
+            }
             State::BuildHLL => {
                 let segment_with_hll = self.segment_with_hll.as_mut().unwrap();
                 let runtime = GlobalIORuntime::instance();
@@ -282,7 +345,7 @@ impl Processor for CollectNDVTransform {
                 let new_hlls = joint.into_iter().collect::<Result<Vec<_>>>()?;
                 if new_hlls.iter().all(|v| v.is_none()) {
                     self.segment_with_hll = None;
-                    self.state = State::Consume;
+                    self.state = State::ReadData(None);
                 } else {
                     segment_with_hll.new_block_hlls = new_hlls;
                     self.state = State::MergeHLL;
@@ -314,6 +377,7 @@ impl Processor for CollectNDVTransform {
                 new_segment
                     .write_meta_through_cache(&self.dal, segment_loc)
                     .await?;
+                self.state = State::ReadData(None);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
