@@ -9,12 +9,12 @@ echo "CREATE DATABASE test_vacuum_drop_dry_run" | $BENDSQL_CLIENT_CONNECT
 echo "create table test_vacuum_drop_dry_run.a(c int)" | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_vacuum_drop_dry_run.a VALUES (1)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "drop table test_vacuum_drop_dry_run.a" | $BENDSQL_CLIENT_CONNECT
-count=$(echo "set data_retention_time_in_days=0; settings (fallback_to_legacy_vacuum=1) vacuum drop table dry run" | $BENDSQL_CLIENT_CONNECT | wc -l)
+count=$(echo "set data_retention_time_in_days=0; set fallback_to_legacy_vacuum=1; vacuum drop table dry run" | $BENDSQL_CLIENT_CONNECT | wc -l)
 if [[ ! "$count" ]]; then
   echo "vacuum drop table dry run, count:$count"
   exit 1
 fi
-count=$(echo "set data_retention_time_in_days=0; settings (fallback_to_legacy_vacuum=1) vacuum drop table dry run summary" | $BENDSQL_CLIENT_CONNECT | wc -l)
+count=$(echo "set data_retention_time_in_days=0; set fallback_to_legacy_vacuum=1; vacuum drop table dry run summary" | $BENDSQL_CLIENT_CONNECT | wc -l)
 if [[ ! "$count" ]]; then
   echo "vacuum drop table dry run summary, count:$count"
   exit 1
@@ -44,7 +44,7 @@ echo "INSERT INTO test_vacuum_drop.b VALUES (2)" | $BENDSQL_CLIENT_OUTPUT_NULL
 
 echo "drop table test_vacuum_drop.b" | $BENDSQL_CLIENT_CONNECT
 
-echo "settings (fallback_to_legacy_vacuum=1) vacuum drop table from test_vacuum_drop" | $BENDSQL_CLIENT_CONNECT > /dev/null
+echo "set fallback_to_legacy_vacuum=1; vacuum drop table from test_vacuum_drop" | $BENDSQL_CLIENT_CONNECT > /dev/null
 
 echo "undrop table test_vacuum_drop.b" | $BENDSQL_CLIENT_CONNECT
 
@@ -125,7 +125,7 @@ if [[ "$count" != "4" ]]; then
   echo "vacuum table, count:$count"
   exit 1
 fi
-count=$(echo "set data_retention_time_in_days=0; settings (fallback_to_legacy_vacuum=1) vacuum table test_vacuum_drop_4.c dry run summary" | $BENDSQL_CLIENT_CONNECT | wc -l)
+count=$(echo "set data_retention_time_in_days=0; set fallback_to_legacy_vacuum = 1; vacuum table test_vacuum_drop_4.c dry run summary" | $BENDSQL_CLIENT_CONNECT | wc -l)
 if [[ "$count" != "1" ]]; then
   echo "vacuum table dry run summary, count:$count"
   exit 1
