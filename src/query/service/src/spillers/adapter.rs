@@ -83,8 +83,8 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(p_id) {
+    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
             for loc in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;

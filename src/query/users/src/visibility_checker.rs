@@ -235,8 +235,8 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Sequence(c) => {
                         granted_seq.insert(c.to_string());
                     }
-                    GrantObject::Procedure(p_id) => {
-                        granted_procedures_id.insert(*p_id);
+                    GrantObject::Procedure(procedure_id) => {
+                        granted_procedures_id.insert(*procedure_id);
                     }
                 }
             }
@@ -275,8 +275,8 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::Sequence { name } => {
                     granted_seq.insert(name.to_string());
                 }
-                OwnershipObject::Procedure { p_id } => {
-                    granted_procedures_id.insert(*p_id);
+                OwnershipObject::Procedure { procedure_id } => {
+                    granted_procedures_id.insert(*procedure_id);
                 }
             }
         }

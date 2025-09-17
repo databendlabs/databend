@@ -68,30 +68,18 @@ impl Interpreter for CreateProcedureInterpreter {
             .await?
         {
             Ok(replay) => {
-                // grant the ownership of the table to the current role.
-                let mut invalid_cache = false;
+                // grant the ownership of the procedure to the current role.
                 let current_role = self.ctx.get_current_role();
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 if let Some(current_role) = current_role {
                     role_api
                         .grant_ownership(
                             &OwnershipObject::Procedure {
-                                p_id: replay.procedure_id,
+                                procedure_id: replay.procedure_id,
                             },
                             &current_role.name,
                         )
                         .await?;
-                    invalid_cache = true;
-                }
-
-                // if old_id is some means create or replace is success, we should delete the old id's ownership key
-                if let Some(p_id) = replay.old_id {
-                    role_api
-                        .revoke_ownership(&OwnershipObject::Procedure { p_id })
-                        .await?;
-                    invalid_cache = true;
-                }
-                if invalid_cache {
                     RoleCacheManager::instance().invalidate_cache(&tenant);
                 }
                 Ok(PipelineBuildResult::create())

@@ -10,9 +10,7 @@ export USER_ADMIN_USER_CONNECT="bendsql --user=admin_user --password=123 --host=
 export USER_DEV_USER_CONNECT="bendsql --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_TEST_USER_CONNECT="bendsql --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-# Disable experimental sequence privilege check
-echo "=== Disabling experimental sequence privilege check ==="
-echo "set global enable_experimental_sequence_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT
+echo "set global enable_experimental_procedure=1;" | $BENDSQL_CLIENT_CONNECT
 
 # Create roles
 echo "=== Creating roles ==="
@@ -185,4 +183,5 @@ echo "DROP PROCEDURE IF EXISTS get_current_time();" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS multiply_numbers(int, int);" | $BENDSQL_CLIENT_CONNECT
 echo "DROP PROCEDURE IF EXISTS greet();" | $BENDSQL_CLIENT_CONNECT
 
+echo "unset global enable_experimental_procedure;" | $BENDSQL_CLIENT_CONNECT
 echo "=== Test script completed ==="

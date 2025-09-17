@@ -64,7 +64,6 @@ where
                 name_ident,
                 meta,
                 false,
-                &mut None,
                 |id| {
                     vec![(
                         CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),

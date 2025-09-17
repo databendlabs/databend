@@ -552,10 +552,13 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
-                GrantObject::Procedure(p_id) => {
-                    if let Some(p) = procedure_api.get_procedure_name_by_id(*p_id).await? {
+                GrantObject::Procedure(procedure_id) => {
+                    if let Some(p) = procedure_api
+                        .get_procedure_name_by_id(*procedure_id)
+                        .await?
+                    {
                         object_name.push(p);
-                        object_id.push(Some(p_id.to_string()));
+                        object_id.push(Some(procedure_id.to_string()));
                         privileges.push(get_priv_str(&grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
@@ -671,14 +674,16 @@ async fn show_account_grants(
                                 name, identity
                             ));
                         }
-                        OwnershipObject::Procedure { p_id } => {
-                            if let Some(p) = procedure_api.get_procedure_name_by_id(p_id).await? {
+                        OwnershipObject::Procedure { procedure_id } => {
+                            if let Some(p) =
+                                procedure_api.get_procedure_name_by_id(procedure_id).await?
+                            {
                                 object_name.push(p);
-                                object_id.push(Some(p_id.to_string()));
+                                object_id.push(Some(procedure_id.to_string()));
                                 privileges.push("OWNERSHIP".to_string());
                                 grant_list.push(format!(
                                     "GRANT OWNERSHIP ON PROCEDURE {} TO {}",
-                                    p_id, identity
+                                    procedure_id, identity
                                 ));
                             }
                         }
@@ -940,8 +945,8 @@ async fn show_object_grant(
             )
         }
         "procedure" => {
-            let p_id = name.parse::<u64>()?;
-            if !visibility_checker.check_procedure_visibility(&p_id) {
+            let procedure_id = name.parse::<u64>()?;
+            if !visibility_checker.check_procedure_visibility(&procedure_id) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege ACCESS PROCEDURE is required on procedure {} for user {}",
                     name, current_user
@@ -950,19 +955,19 @@ async fn show_object_grant(
 
             if let Some(p) = UserApiProvider::instance()
                 .procedure_api(&tenant)
-                .get_procedure_name_by_id(p_id)
+                .get_procedure_name_by_id(procedure_id)
                 .await?
             {
                 (
-                    GrantObject::Procedure(p_id),
-                    OwnershipObject::Procedure { p_id },
-                    Some(p_id.to_string()),
+                    GrantObject::Procedure(procedure_id),
+                    OwnershipObject::Procedure { procedure_id },
+                    Some(procedure_id.to_string()),
                     p.to_string(),
                 )
             } else {
                 return Err(ErrorCode::UnknownProcedure(format!(
                     "Unknown procedure id: {}",
-                    p_id
+                    procedure_id
                 )));
             }
         }

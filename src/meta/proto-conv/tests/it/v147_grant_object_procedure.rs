@@ -85,7 +85,7 @@ fn test_decode_v147_ownership() -> anyhow::Result<()> {
 
     let want = || mt::principal::OwnershipInfo {
         role: "r1".to_string(),
-        object: OwnershipObject::Procedure { p_id: 2 },
+        object: OwnershipObject::Procedure { procedure_id: 2 },
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), ownership_info_v147.as_slice(), 147, want())?;

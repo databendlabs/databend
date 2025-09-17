@@ -18,7 +18,9 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
+use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::principal::procedure::ProcedureInfo;
+use databend_common_meta_app::principal::procedure_id_ident;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
 use databend_common_meta_app::principal::procedure_name_ident::ProcedureName;
 use databend_common_meta_app::principal::CreateProcedureReply;
@@ -26,11 +28,13 @@ use databend_common_meta_app::principal::CreateProcedureReq;
 use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ListProcedureReq;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::ProcedureId;
 use databend_common_meta_app::principal::ProcedureIdToNameIdent;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
@@ -70,14 +74,13 @@ impl ProcedureMgr {
         let meta = &req.meta;
         let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
 
-        let mut old_id = None;
+        let tenant = &self.tenant;
         let create_res = self
             .kv_api
-            .create_id_value(
+            .create_id_value_with_cleanup(
                 name_ident,
                 meta,
                 overriding,
-                &mut old_id,
                 |id| {
                     vec![(
                         ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
@@ -86,23 +89,21 @@ impl ProcedureMgr {
                     )]
                 },
                 |_, _| Ok(vec![]),
+                Some(|old_id: DataId<procedure_id_ident::Resource>| {
+                    // Return ownership keys to be deleted when overriding
+                    vec![TenantOwnershipObjectIdent::new(
+                        tenant.clone(),
+                        OwnershipObject::Procedure {
+                            procedure_id: *old_id,
+                        },
+                    )
+                    .to_string_key()]
+                }),
             )
             .await?;
 
         match create_res {
-            Ok(id) => {
-                if let Some(old_id) = old_id {
-                    Ok(Ok(CreateProcedureReply {
-                        procedure_id: *id,
-                        old_id: Some(*old_id),
-                    }))
-                } else {
-                    Ok(Ok(CreateProcedureReply {
-                        procedure_id: *id,
-                        old_id: None,
-                    }))
-                }
-            }
+            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
             Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }

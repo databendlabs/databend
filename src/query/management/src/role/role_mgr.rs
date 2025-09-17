@@ -357,7 +357,7 @@ impl RoleApi for RoleMgr {
     async fn list_procedure_ownerships(
         &self,
     ) -> databend_common_exception::Result<Vec<OwnershipInfo>> {
-        let obj = OwnershipObject::Procedure { p_id: 1 };
+        let obj = OwnershipObject::Procedure { procedure_id: 1 };
 
         let ident = TenantOwnershipObjectIdent::new(self.tenant.clone(), obj);
         let dir_name = DirName::new(ident);
@@ -668,7 +668,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
         OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
         OwnershipObject::Sequence { name } => GrantObject::Sequence(name.to_string()),
-        OwnershipObject::Procedure { p_id } => GrantObject::Procedure(*p_id),
+        OwnershipObject::Procedure { procedure_id } => GrantObject::Procedure(*procedure_id),
     }
 }
 

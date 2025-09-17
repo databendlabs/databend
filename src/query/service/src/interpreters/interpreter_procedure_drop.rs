@@ -67,7 +67,9 @@ impl Interpreter for DropProcedureInterpreter {
         match dropped {
             Some(d) => {
                 let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-                let owner_object = OwnershipObject::Procedure { p_id: d.1.seq };
+                let owner_object = OwnershipObject::Procedure {
+                    procedure_id: d.1.seq,
+                };
                 role_api.revoke_ownership(&owner_object).await?;
                 RoleCacheManager::instance().invalidate_cache(&tenant);
             }

@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_ownership_procedure_list_key() {
         use databend_common_meta_kvapi::kvapi::Key;
-        let obj = OwnershipObject::Procedure { p_id: 1 };
+        let obj = OwnershipObject::Procedure { procedure_id: 1 };
 
         let ident = TenantOwnershipObjectIdent::new(Tenant::new_literal("tenant1"), obj);
         let dir_name = kvapi::DirName::new(ident);

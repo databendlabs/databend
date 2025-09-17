@@ -59,7 +59,7 @@ message OwnershipObject {
   }
 
   message OwnershipProcedureObject {
-    uint64 p_id = 1;
+    uint64 procedure_id = 1;
   }
 
   oneof object {

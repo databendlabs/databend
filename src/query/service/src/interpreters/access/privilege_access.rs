@@ -166,7 +166,9 @@ impl PrivilegeAccess {
             GrantObject::Sequence(name) => OwnershipObject::Sequence {
                 name: name.to_string(),
             },
-            GrantObject::Procedure(p_id) => OwnershipObject::Procedure { p_id: *p_id },
+            GrantObject::Procedure(procedure_id) => OwnershipObject::Procedure {
+                procedure_id: *procedure_id,
+            },
             GrantObject::Global => return Ok(None),
         };
 

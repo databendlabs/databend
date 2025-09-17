@@ -98,8 +98,8 @@ impl FromToProto for mt::principal::OwnershipObject {
                 pb::ownership_object::OwnershipSequenceObject { sequence },
             ) => Ok(mt::principal::OwnershipObject::Sequence { name: sequence }),
             pb::ownership_object::Object::Procedure(
-                pb::ownership_object::OwnershipProcedureObject { p_id },
-            ) => Ok(mt::principal::OwnershipObject::Procedure { p_id }),
+                pb::ownership_object::OwnershipProcedureObject { procedure_id },
+            ) => Ok(mt::principal::OwnershipObject::Procedure { procedure_id }),
         }
     }
 
@@ -154,9 +154,11 @@ impl FromToProto for mt::principal::OwnershipObject {
                     },
                 ))
             }
-            mt::principal::OwnershipObject::Procedure { p_id } => {
+            mt::principal::OwnershipObject::Procedure { procedure_id } => {
                 Some(pb::ownership_object::Object::Procedure(
-                    pb::ownership_object::OwnershipProcedureObject { p_id: *p_id },
+                    pb::ownership_object::OwnershipProcedureObject {
+                        procedure_id: *procedure_id,
+                    },
                 ))
             }
         };
