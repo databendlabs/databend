@@ -4131,7 +4131,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             None => {
                                 return Some(Err(ErrorCode::BadArguments(
-                                    "last_query_id argument only support constant",
+                                    "last_query_id argument only support constant argument",
                                 )
                                 .set_span(span)));
                             }
@@ -4141,11 +4141,17 @@ impl<'a> TypeChecker<'a> {
 
                 Some(match res {
                     Ok(index) => {
-                        let query_id = self.ctx.get_last_query_id(index as i32);
-                        self.resolve(&Expr::Literal {
-                            span,
-                            value: Literal::String(query_id),
-                        })
+                        if let Some(query_id) = self.ctx.get_last_query_id(index as i32) {
+                            self.resolve(&Expr::Literal {
+                                span,
+                                value: Literal::String(query_id),
+                            })
+                        } else {
+                            self.resolve(&Expr::Literal {
+                                span,
+                                value: Literal::Null,
+                            })
+                        }
                     }
                     Err(e) => Err(e),
                 })

@@ -417,11 +417,13 @@ impl HttpSessionConf {
                         );
                     }
                 }
-                if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
-                    session.update_query_ids_results(
-                        id.to_owned(),
-                        state.last_query_result_cache_key.to_owned(),
-                    );
+                if !id.is_empty() {
+                    let key = if state.last_query_result_cache_key.is_empty() {
+                        None
+                    } else {
+                        Some(state.last_query_result_cache_key.clone())
+                    };
+                    session.restore_query_ids_results(id.to_owned(), key);
                 }
             }
             let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
@@ -722,11 +724,7 @@ impl HttpQuery {
             session_state.last_query_result_cache_key,
             has_temp_table,
             Some(HttpQueryManager::instance().server_info.id.clone()),
-            if session_state.last_query_ids.is_empty() {
-                vec![self.id.clone()]
-            } else {
-                session_state.last_query_ids
-            },
+            vec![self.id.clone()],
         );
 
         if is_stopped
