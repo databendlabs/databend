@@ -3239,7 +3239,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         AutoIncrement {
             start: u64,
             step: u64,
-            is_order: bool,
+            is_ordered: bool,
         },
     }
 
@@ -3295,14 +3295,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             },
             |(_, params, order_token)| {
                 let (start, step) = params.unwrap_or((0, 1));
-                let is_order = order_token
+                let is_ordered = order_token
                     .map(|token| token.text().eq_ignore_ascii_case("order"))
                     .unwrap_or(true);
 
                 ColumnConstraint::AutoIncrement {
                     start,
                     step,
-                    is_order,
+                    is_ordered,
                 }
             },
         ),
@@ -3373,7 +3373,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ColumnConstraint::AutoIncrement {
                 start,
                 step,
-                is_order,
+                is_ordered,
             } => {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
@@ -3381,7 +3381,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                         ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
-                if !is_order {
+                if !is_ordered {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
@@ -3390,7 +3390,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
                     start,
                     step,
-                    is_order,
+                    is_ordered,
                 }))
             }
         }
