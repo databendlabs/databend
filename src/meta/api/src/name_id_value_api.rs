@@ -28,7 +28,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use databend_common_proto_conv::FromToProto;
@@ -163,8 +162,7 @@ where
     /// to handle additional cleanup operations when overriding existing resources.
     ///
     /// `cleanup_old_fn` is called with the old id when override_exist is true and an existing
-    /// resource is being replaced. It should return a list of keys for which this function will
-    /// automatically fetch the current sequence numbers and delete them with exact sequence matching.
+    /// resource is being replaced. It should return a list of keys that will be deleted.
     ///
     /// This eliminates the need for callers to manually handle cleanup logic after the fact.
     async fn create_id_value_with_cleanup<A, M, C>(
@@ -221,15 +219,8 @@ where
                         // Apply cleanup function if provided
                         if let Some(ref cleanup_fn) = cleanup_old_fn {
                             let cleanup_keys = cleanup_fn(seq_id.data);
-                            // Fetch current sequence for each cleanup key and add exact sequence condition
                             for key in cleanup_keys {
-                                let seq_result = self.get_kv(&key).await?;
-                                if let Some(seq_value) = seq_result {
-                                    txn.condition
-                                        .push(TxnCondition::eq_seq(key.clone(), seq_value.seq));
-                                    txn.if_then.push(TxnOp::delete(key));
-                                }
-                                // If key doesn't exist, we skip it (no need to delete non-existent key)
+                                txn.if_then.push(TxnOp::delete(key));
                             }
                         }
                     } else {
