@@ -22,7 +22,6 @@ use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use map_api::mvcc;
 use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::IOResultStream;
 use map_api::MapKV;
@@ -32,9 +31,8 @@ use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
-use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::utils::add_cooperative_yielding;
@@ -83,28 +81,7 @@ impl CompactingData {
         // TODO: test: after compaction in place, the data should be the same, the base_seq and newest_seq should be the same.
         let immutable_levels = self.immutable.levels().clone();
 
-        let Some(newest) = immutable_levels.newest() else {
-            return Ok(());
-        };
-
-        // Create an empty level with SysData cloned.
-        let mut data = newest.new_level();
-
-        // Copy all expire data and keep tombstone.
-        let strm = immutable_levels
-            .range(ExpireKey::default().., u64::MAX)
-            .await?;
-        let table = mvcc::Table::from_stream(strm).await?;
-        data.replace_expire(table);
-
-        // Copy all kv data and keep tombstone.
-        let strm = immutable_levels
-            .range(UserKey::default().., u64::MAX)
-            .await?;
-        let table = mvcc::Table::from_stream(strm).await?;
-        data.replace_kv(table);
-
-        let levels = ImmutableLevels::new_form_iter([Immutable::new_from_level(data)]);
+        let levels = immutable_levels.compact_all().await;
         let immutable = ImmutableData::new(levels, self.immutable.persisted().cloned());
         self.immutable = Arc::new(immutable);
 

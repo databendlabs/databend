@@ -31,6 +31,10 @@ use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKey;
 
+mod compact_all;
+mod compact_conductor;
+mod compact_min_adjacent;
+
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
 pub struct ImmutableLevels {

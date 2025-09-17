@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::level::Level;
-use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 
 /// A container for the leveled map data, including the top mutable level and the immutable data.
 #[derive(Debug, Default)]
