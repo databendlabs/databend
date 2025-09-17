@@ -66,6 +66,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 databend-common-functions = { workspace = true }
+goldenfile = { workspace = true }
 jsonb = { workspace = true }
 tantivy = { workspace = true }
 walkdir = { workspace = true }
