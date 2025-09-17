@@ -203,7 +203,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d              // db
-async fn build_3_levels() -> anyhow::Result<LeveledMap> {
+pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     let lm = LeveledMap::default();
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(

@@ -35,12 +35,12 @@ use tokio::sync::Semaphore;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
 use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
-use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
