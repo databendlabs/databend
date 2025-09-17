@@ -208,9 +208,13 @@ impl BlockPartitionStream {
             return Some(data_block.clone());
         }
 
+        if !self.initialize {
+            return None;
+        }
+
         let partition = &mut self.partitions[partition_id];
 
-        if !self.initialize || partition.columns_builder[0].len() == 0 {
+        if partition.columns_builder[0].len() == 0 {
             return None;
         }
 
