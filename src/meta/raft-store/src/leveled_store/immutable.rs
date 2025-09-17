@@ -25,6 +25,7 @@ use map_api::mvcc::ScopedSeqBoundedIntoRange;
 use map_api::mvcc::ViewKey;
 use map_api::mvcc::ViewValue;
 use map_api::IOResultStream;
+use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::MetaValue;
@@ -66,6 +67,16 @@ impl Immutable {
 
     pub fn level_index(&self) -> &LevelIndex {
         &self.index
+    }
+
+    /// Merge two immutable levels into a new immutable level.
+    ///
+    /// Given the seq of the known minimum snapshot, we can remove older versions if the newer version is smaller than
+    /// this seq.
+    pub fn compact(&self, other: &Self, min_snapshot_seq: InternalSeq) -> Self {
+        let new_level = self.level.compact(&other.level, min_snapshot_seq);
+
+        Self::new(Arc::new(new_level))
     }
 }
 

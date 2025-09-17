@@ -10070,14 +10070,15 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.4.1"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.4.1#d3080bc02820b413173ee44ae8646ec7cad643c7"
+version = "0.4.2"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.4.2#0fee58dfa938b7234723dd3d383f71e559c202b4"
 dependencies = [
  "async-trait",
  "deepsize",
  "futures",
  "futures-async-stream",
  "futures-util",
+ "itertools 0.13.0",
  "log",
  "seq-marked",
  "serde",
