@@ -215,6 +215,11 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+
+    pub fn get_max_vacuum_threads(&self) -> Result<u64> {
+        self.try_get_u64("max_vacuum_threads")
+    }
+
     // Get storage_fetch_part_num.
     pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
         match self.try_get_u64("storage_fetch_part_num")? {
