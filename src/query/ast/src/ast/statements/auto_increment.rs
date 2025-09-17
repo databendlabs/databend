@@ -22,7 +22,7 @@ pub struct AutoIncrement {
     pub start: u64,
     pub step: u64,
     // Ensure that the generated sequence values are distributed strictly in the order of insertion time
-    pub is_order: bool,
+    pub is_ordered: bool,
 }
 
 impl AutoIncrement {
@@ -32,7 +32,7 @@ impl AutoIncrement {
 
     pub fn to_sql_string(&self) -> String {
         let string = format!("AUTOINCREMENT ({}, {}) ", self.start, self.step);
-        if self.is_order {
+        if self.is_ordered {
             string.add("ORDER")
         } else {
             string.add("NOORDER")
