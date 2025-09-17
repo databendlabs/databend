@@ -76,7 +76,7 @@ impl Aggregators {
 
         factory.register("min", aggregate_min_function_desc());
         factory.register("max", aggregate_max_function_desc());
-        factory.register("any", aggregate_any_function_desc());
+        factory.register_multi_names(&["any", "any_value"], aggregate_any_function_desc);
         factory.register("arg_min", aggregate_arg_min_function_desc());
         factory.register("arg_max", aggregate_arg_max_function_desc());
 
