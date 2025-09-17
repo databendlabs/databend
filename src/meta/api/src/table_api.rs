@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;
@@ -460,7 +461,7 @@ where
                         current: auto_increment.start,
                         storage_version: 0,
                     };
-                    let sequence_name = format!("_sequence_{table_id}_{}", column_id);
+                    let sequence_name = AutoIncrement::sequence_name(table_id, *column_id as u32);
                     let sequence_ident = SequenceIdent::new(req.tenant(), sequence_name);
                     let storage_ident = SequenceStorageIdent::new_from(sequence_ident.clone());
                     let storage_value = Id::new_typed(SequenceStorageValue(auto_increment.start));

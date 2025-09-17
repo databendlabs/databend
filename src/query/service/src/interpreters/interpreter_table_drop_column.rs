@@ -154,7 +154,7 @@ impl Interpreter for DropTableColumnInterpreter {
                 },
                 true,
             )
-                .await?;
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())
