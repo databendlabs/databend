@@ -66,7 +66,7 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
 
-        mycursor.execute("vacuum table gc_test dry run;")
+        mycursor.execute("settings (fallback_to_legacy_vacuum=1) vacuum table gc_test dry run;")
         datas = mycursor.fetchall()
         print(datas)
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         if old_datas != datas:
             print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
 
-        client1.send("vacuum table gc_test;")
+        client1.send("settings (fallback_to_legacy_vacuum=1) vacuum table gc_test;")
         client1.expect(prompt)
 
         mycursor.execute("select a from gc_test order by a;")

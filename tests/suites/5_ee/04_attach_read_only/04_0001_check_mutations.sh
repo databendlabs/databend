@@ -20,12 +20,12 @@ echo "CREATE INVERTED INDEX IF NOT EXISTS idx1 ON test_attach_only.test_json_rea
 echo "vacuum table"
 
 echo "vacuum table should fail"
-echo "VACUUM TABLE test_attach_only.test_json_read_only;" | $BENDSQL_CLIENT_CONNECT
+echo "settings (fallback_to_legacy_vacuum=1) VACUUM TABLE test_attach_only.test_json_read_only;" | $BENDSQL_CLIENT_CONNECT
 
 echo "vacuum drop table from db should not include the read_only attach table"
 # drop & vacuum
 echo "drop table test_attach_only.test_json_read_only" | $BENDSQL_CLIENT_CONNECT
-echo "vacuum drop table from test_attach_only" | $BENDSQL_CLIENT_CONNECT > /dev/null
+echo "settings (fallback_to_legacy_vacuum=1) vacuum drop table from test_attach_only" | $BENDSQL_CLIENT_CONNECT > /dev/null
 # attach it back
 echo "attach table test_attach_only.test_json_read_only 's3://testbucket/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}')" | $BENDSQL_CLIENT_CONNECT
 echo "expect table data still there"
