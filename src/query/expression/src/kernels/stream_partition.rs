@@ -238,8 +238,9 @@ impl BlockPartitionStream {
     }
 
     pub fn is_partition_empty(&self, partition_id: usize) -> bool {
-        self.partitions[partition_id].columns_builder[0].len() == 0
-            && self.finalize_partitions[partition_id].is_none()
+        self.partitions[partition_id].columns_builder.is_empty()
+            || (self.partitions[partition_id].columns_builder[0].len() == 0
+                && self.finalize_partitions[partition_id].is_none())
     }
 }
 

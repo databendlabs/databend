@@ -29,7 +29,6 @@
 #![feature(slice_ptr_get)]
 #![feature(alloc_layout_extra)]
 #![feature(let_chains)]
-#![feature(sync_unsafe_cell)]
 
 pub mod base;
 pub mod containers;
