@@ -1172,6 +1172,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    let vacuum_all_table = map(
+        rule! {
+            VACUUM ~ TABLE ~ ALL ~ #vacuum_table_option
+        },
+        |(_, _, _, option)| {
+            Statement::VacuumTable(VacuumTableStmt {
+                target: VacuumTarget::All,
+                option,
+            })
+        },
+    );
+
     let vacuum_drop_table = map(
         rule! {
             VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
@@ -1186,19 +1199,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 database,
                 option,
             })
-        },
-    );
-
-    let vacuum_all = map(
-        rule! {
-            VACUUM ~ ALL ~ (FROM ~ ^#dot_separated_idents_1_to_2)?
-        },
-        |(_, _, database_option)| {
-            let (catalog, database) = database_option.map_or_else(
-                || (None, None),
-                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
-            );
-            Statement::VacuumAll(VacuumAllStmt { catalog, database })
         },
     );
 
@@ -2818,9 +2818,9 @@ AS
         rule!(
             #vacuum_temporary_tables
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_all_table : "`VACUUM TABLE ALL [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_all : "`VACUUM ALL [FROM [<catalog>.]<database>]`"
         ),
     ))(i)
 }
