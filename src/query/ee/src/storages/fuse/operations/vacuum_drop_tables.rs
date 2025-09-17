@@ -16,41 +16,28 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::DropSequenceReq;
-use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
-use databend_query::interpreters::DropSequenceInterpreter;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
 use opendal::EntryMode;
 use opendal::Operator;
-
 #[async_backtrace::framed]
 pub async fn do_vacuum_drop_table(
-    ctx: Arc<dyn TableContext>,
     tables: Vec<(TableInfo, Operator)>,
     dry_run_limit: Option<usize>,
 ) -> VacuumDropTablesResult {
     let mut list_files = vec![];
     let mut failed_tables = HashSet::new();
     for (table_info, operator) in tables {
-        let result = vacuum_drop_single_table(
-            ctx.clone(),
-            &table_info,
-            operator,
-            dry_run_limit,
-            &mut list_files,
-        )
-        .await;
+        let result =
+            vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
         if result.is_err() {
             let table_id = table_info.ident.table_id;
             failed_tables.insert(table_id);
@@ -64,7 +51,6 @@ pub async fn do_vacuum_drop_table(
 }
 
 async fn vacuum_drop_single_table(
-    ctx: Arc<dyn TableContext>,
     table_info: &TableInfo,
     operator: Operator,
     dry_run_limit: Option<usize>,
@@ -91,25 +77,6 @@ async fn vacuum_drop_single_table(
                 error!("failed to remove all in directory {}: {}", dir, err);
             }
             result?;
-
-            // clear the sequence associated with auto increment in the table field
-            for table_field in table_info.meta.schema.fields() {
-                if table_field.auto_increment_display().is_none() {
-                    continue;
-                }
-                let sequence_name =
-                    AutoIncrement::sequence_name(table_info.ident.table_id, table_field.column_id);
-
-                DropSequenceInterpreter::req_execute(
-                    ctx.as_ref(),
-                    DropSequenceReq {
-                        if_exists: false,
-                        ident: SequenceIdent::new(ctx.get_tenant(), sequence_name),
-                    },
-                    true,
-                )
-                .await?;
-            }
         }
         Some(dry_run_limit) => {
             let mut ds = operator.lister_with(&dir).recursive(true).await?;
@@ -160,7 +127,6 @@ async fn vacuum_drop_single_table(
 
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables_by_table_info(
-    ctx: Arc<dyn TableContext>,
     num_threads: usize,
     table_infos: Vec<(TableInfo, Operator)>,
     dry_run_limit: Option<usize>,
@@ -182,7 +148,7 @@ pub async fn vacuum_drop_tables_by_table_info(
     );
 
     let result = if batch_size >= table_infos.len() {
-        do_vacuum_drop_table(ctx, table_infos, dry_run_limit).await?
+        do_vacuum_drop_table(table_infos, dry_run_limit).await?
     } else {
         let mut chunks = table_infos.chunks(batch_size);
         let dry_run_limit = dry_run_limit
@@ -190,7 +156,7 @@ pub async fn vacuum_drop_tables_by_table_info(
         let tasks = std::iter::from_fn(move || {
             chunks
                 .next()
-                .map(|tables| do_vacuum_drop_table(ctx.clone(), tables.to_vec(), dry_run_limit))
+                .map(|tables| do_vacuum_drop_table(tables.to_vec(), dry_run_limit))
         });
 
         let result = execute_futures_in_parallel(
@@ -234,7 +200,6 @@ pub async fn vacuum_drop_tables_by_table_info(
 
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables(
-    ctx: Arc<dyn TableContext>,
     threads_nums: usize,
     tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
@@ -259,5 +224,5 @@ pub async fn vacuum_drop_tables(
         table_infos.push((table_info.clone(), operator));
     }
 
-    vacuum_drop_tables_by_table_info(ctx, threads_nums, table_infos, dry_run_limit).await
+    vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await
 }

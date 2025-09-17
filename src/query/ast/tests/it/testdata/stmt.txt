@@ -5791,7 +5791,7 @@ CreateTable(
                                 AutoIncrement {
                                     start: 10,
                                     step: 20,
-                                    is_order: true,
+                                    is_ordered: true,
                                 },
                             ),
                         ),
@@ -5861,7 +5861,7 @@ CreateTable(
                                 AutoIncrement {
                                     start: 10,
                                     step: 20,
-                                    is_order: true,
+                                    is_ordered: true,
                                 },
                             ),
                         ),
