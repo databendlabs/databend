@@ -53,6 +53,11 @@ use crate::utils::seq_marked_to_seqv;
 
 #[async_trait::async_trait]
 pub trait StateMachineApiExt: StateMachineApi<SysData> {
+    fn clean_expired(&mut self, expire_key: ExpireKey, user_key: String) {
+        self.user_map_mut().set(UserKey::new(user_key), None);
+        self.expire_map_mut().set(expire_key, None);
+    }
+
     /// It returns 2 entries: the previous one and the new one after upsert.
     async fn upsert_kv_primary_index(
         &mut self,

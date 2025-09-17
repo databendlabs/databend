@@ -697,9 +697,8 @@ where SM: StateMachineApi<SysData> + 'static
         }
 
         for (expire_key, key) in to_clean {
-            let upsert = UpsertKV::delete(key);
-            self.upsert_kv(&upsert).await?;
-            info!("clean expired: {} {expire_key}", upsert.key);
+            self.sm.clean_expired(expire_key, key.clone());
+            info!("clean expired: {key} {expire_key}");
         }
 
         Ok(())
