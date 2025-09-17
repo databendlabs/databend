@@ -54,7 +54,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct DefaultExprBinder {
-    auto_increment_database_with_table_id: Option<(String, MetaId)>,
+    auto_increment_table_id: Option<MetaId>,
     bind_context: BindContext,
     ctx: Arc<dyn TableContext>,
     dialect: Dialect,
@@ -93,7 +93,7 @@ impl DefaultExprBinder {
         let rewriter = DefaultValueRewriter::new();
 
         Ok(DefaultExprBinder {
-            auto_increment_database_with_table_id: None,
+            auto_increment_table_id: None,
             bind_context,
             ctx,
             dialect,
@@ -105,12 +105,8 @@ impl DefaultExprBinder {
         })
     }
 
-    pub fn auto_increment_database_with_table_id(
-        mut self,
-        database_name: impl Into<String>,
-        table_id: u64,
-    ) -> Self {
-        self.auto_increment_database_with_table_id = Some((database_name.into(), table_id));
+    pub fn auto_increment_table_id(mut self, table_id: u64) -> Self {
+        self.auto_increment_table_id = Some(table_id);
         self
     }
 
@@ -202,11 +198,11 @@ impl DefaultExprBinder {
             } else {
                 Ok(scalar_expr)
             }
-        } else if let (Some((database_name, table_id)), Some(column_id)) = (
-            &self.auto_increment_database_with_table_id,
+        } else if let (Some(table_id), Some(column_id)) = (
+            &self.auto_increment_table_id,
             field.auto_increment_column_id(),
         ) {
-            let sequence_name = AutoIncrement::sequence_name(database_name, *table_id, *column_id);
+            let sequence_name = AutoIncrement::sequence_name(*table_id, *column_id);
 
             Ok(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span: None,

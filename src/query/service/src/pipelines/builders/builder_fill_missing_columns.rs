@@ -47,8 +47,8 @@ impl PipelineBuilder {
 
         // Fill missing default columns and resort the columns.
         if source_schema != default_schema {
-            let mut default_expr_binder = DefaultExprBinder::try_new(ctx.clone())?
-                .auto_increment_database_with_table_id(ctx.get_current_database(), table.get_id());
+            let mut default_expr_binder =
+                DefaultExprBinder::try_new(ctx.clone())?.auto_increment_table_id(table.get_id());
             if let Some((async_funcs, new_default_schema, new_default_schema_no_cast)) =
                 default_expr_binder
                     .split_async_default_exprs(source_schema.clone(), default_schema.clone())?
