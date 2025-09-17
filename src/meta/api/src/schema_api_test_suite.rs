@@ -1522,6 +1522,7 @@ impl SchemaApiTestSuite {
 
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -1638,6 +1639,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: false,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -1888,6 +1890,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: tbl_meta,
                 as_dropped: true,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -3741,6 +3744,7 @@ impl SchemaApiTestSuite {
             name_ident,
             table_meta: create_table_meta.clone(),
             as_dropped: false,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };
@@ -4562,6 +4566,7 @@ impl SchemaApiTestSuite {
 
                     table_meta: table_meta(created_on),
                     as_dropped: false,
+                    auto_increments: Default::default(),
                     table_properties: None,
                     table_partition: None,
                 };
@@ -5049,6 +5054,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };
@@ -5168,6 +5174,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: true,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5187,6 +5194,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5222,6 +5230,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
+                auto_increments: Default::default(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5315,6 +5324,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };
@@ -7817,6 +7827,7 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
             },
             table_meta: table_meta.clone(),
             as_dropped: false,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };
@@ -7842,6 +7853,7 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
             },
             table_meta: table_meta.clone(),
             as_dropped: false,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };

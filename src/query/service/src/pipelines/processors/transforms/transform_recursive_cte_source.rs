@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -287,7 +288,7 @@ async fn create_memory_table_for_cte_scan(
                     as_select: None,
                     table_indexes: None,
                     table_constraints: None,
-                    auto_increments: vec![],
+                    auto_increments: BTreeMap::new(),
                     attached_columns: None,
                 });
             }

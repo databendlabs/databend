@@ -955,7 +955,7 @@ impl Display for ColumnExpr {
                 write!(f, " AS ({expr}) STORED")?;
             }
             ColumnExpr::AutoIncrement(auto_increment) => {
-                write!(f, " {auto_increment}")?;
+                write!(f, " {}", auto_increment.to_sql_string())?;
             }
         }
         Ok(())

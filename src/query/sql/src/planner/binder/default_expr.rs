@@ -54,6 +54,7 @@ use crate::MetadataRef;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct DefaultExprBinder {
+    // the table id of the auto increment column processed by the binder
     auto_increment_table_id: Option<MetaId>,
     bind_context: BindContext,
     ctx: Arc<dyn TableContext>,

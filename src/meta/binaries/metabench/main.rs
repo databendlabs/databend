@@ -225,6 +225,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         })
@@ -271,6 +272,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
+            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         })

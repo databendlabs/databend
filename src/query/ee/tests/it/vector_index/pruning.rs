@@ -141,7 +141,7 @@ async fn test_block_pruner() -> Result<()> {
         cluster_key: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
-        auto_increments: vec![],
+        auto_increments: BTreeMap::new(),
         attached_columns: None,
         table_partition: None,
         table_properties: None,
