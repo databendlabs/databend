@@ -147,6 +147,7 @@ impl StreamHandler for RealStreamHandler {
                 ..Default::default()
             },
             as_dropped: false,
+            auto_increments: BTreeMap::new(),
             table_properties: None,
             table_partition: None,
         };

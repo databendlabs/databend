@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use databend_common_ast::ast::Engine;
 use databend_common_base::base::tokio;
 use databend_common_meta_app::schema::CreateOption;
@@ -54,7 +55,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         cluster_key: None,
         table_indexes: None,
         table_constraints: None,
-        auto_increments: vec![],
+        auto_increments: BTreeMap::new(),
         attached_columns: None,
         table_partition: None,
         table_properties: None,

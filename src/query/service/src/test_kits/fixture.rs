@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
@@ -386,7 +387,7 @@ impl TestFixture {
             cluster_key: Some("(id)".to_string()),
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -415,7 +416,7 @@ impl TestFixture {
             cluster_key: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -456,7 +457,7 @@ impl TestFixture {
             cluster_key: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: None,
             table_partition: None,
         }
@@ -496,7 +497,7 @@ impl TestFixture {
             cluster_key: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: None,
             table_properties: Default::default(),
         }
@@ -544,7 +545,7 @@ impl TestFixture {
             cluster_key: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,

@@ -170,7 +170,7 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) field_comments: Vec<String>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
-    pub(in crate::planner::binder) auto_increments: Vec<(usize, AutoIncrement)>,
+    pub(in crate::planner::binder) auto_increments: BTreeMap<usize, AutoIncrement>,
 }
 
 impl Binder {
@@ -694,7 +694,7 @@ impl Binder {
                         field_comments: vec![],
                         table_indexes: None,
                         table_constraints: None,
-                        auto_increments: vec![],
+                        auto_increments: BTreeMap::new(),
                     },
                     Some(Box::new(as_query_plan)),
                 )
@@ -742,7 +742,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: vec![],
+                            auto_increments: BTreeMap::new(),
                         }, as_query_plan)
                     }
                     Engine::Delta => {
@@ -760,7 +760,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: vec![],
+                            auto_increments: BTreeMap::new(),
                         }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -956,7 +956,7 @@ impl Binder {
             as_select: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: vec![],
+            auto_increments: BTreeMap::new(),
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -1713,7 +1713,7 @@ impl Binder {
                             "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                         ));
                     }
-                    field.auto_increment_display = Some(field_sequence.to_string());
+                    field.auto_increment_display = Some(field_sequence.to_sql_string());
                     auto_increment = Some(field_sequence.clone());
                 }
             }
@@ -1726,11 +1726,11 @@ impl Binder {
     pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-    ) -> Result<(TableSchemaRef, Vec<String>, Vec<(usize, AutoIncrement)>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>, BTreeMap<usize, AutoIncrement>)> {
         let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
-        let mut auto_increments = Vec::with_capacity(columns.len());
+        let mut auto_increments = BTreeMap::new();
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for (i, column) in columns.iter().enumerate() {
@@ -1754,8 +1754,8 @@ impl Binder {
                                 "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                             ));
                         }
-                        field.auto_increment_display = Some(field_sequence.to_string());
-                        auto_increments.push((i, field_sequence.clone()));
+                        field.auto_increment_display = Some(field_sequence.to_sql_string());
+                        auto_increments.insert(i, field_sequence.clone());
                     }
                     _ => has_computed = true,
                 }
@@ -1983,7 +1983,7 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: vec![],
+                            auto_increments: BTreeMap::new(),
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -1996,7 +1996,7 @@ impl Binder {
                         field_comments: table.field_comments().clone(),
                         table_indexes: None,
                         table_constraints: None,
-                        auto_increments: vec![],
+                        auto_increments: BTreeMap::new(),
                     })
                 }
             }

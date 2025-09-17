@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -85,7 +86,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         cluster_key: None,
         table_indexes: None,
         table_constraints: None,
-        auto_increments: vec![],
+        auto_increments: BTreeMap::new(),
         attached_columns: None,
         table_partition: None,
         table_properties: None,

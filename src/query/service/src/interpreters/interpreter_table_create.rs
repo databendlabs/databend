@@ -16,7 +16,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
@@ -34,10 +33,8 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
@@ -47,7 +44,6 @@ use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::plans::CreateTablePlan;
@@ -84,7 +80,6 @@ use crate::interpreters::common::table_option_validation::is_valid_row_per_block
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
-use crate::interpreters::CreateSequenceInterpreter;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -225,7 +220,6 @@ impl CreateTableInterpreter {
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
         }
-        self.create_sequences(reply.table_id).await?;
 
         let table_id = reply.table_id;
         let prev_table_id = reply.prev_table_id;
@@ -329,27 +323,6 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
-    async fn create_sequences(&self, table_id: MetaId) -> Result<()> {
-        if self.plan.auto_increments.is_empty() {
-            return Ok(());
-        }
-
-        for (i, auto_increment) in self.plan.auto_increments.iter() {
-            let sequence_name = AutoIncrement::sequence_name(table_id, *i as u32);
-            let req = CreateSequenceReq {
-                create_option: self.plan.create_option,
-                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
-                start: auto_increment.start,
-                increment: auto_increment.step,
-                comment: None,
-                create_on: Utc::now(),
-                storage_version: 0,
-            };
-            CreateSequenceInterpreter::req_execute(self.ctx.as_ref(), req, true).await?;
-        }
-        Ok(())
-    }
-
     async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
         // grant the ownership of the table to the current role.
         let mut invalid_cache = false;
@@ -440,7 +413,6 @@ impl CreateTableInterpreter {
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
             self.register_temp_table(prefix).await?;
         }
-        self.create_sequences(reply.table_id).await?;
 
         // iceberg table do not need to generate ownership.
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
@@ -548,6 +520,7 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
+            auto_increments: self.plan.auto_increments.clone(),
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
                 TablePartition::Identity {

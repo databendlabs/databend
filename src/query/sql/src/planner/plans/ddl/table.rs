@@ -61,7 +61,7 @@ pub struct CreateTablePlan {
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
-    pub auto_increments: Vec<(usize, AutoIncrement)>,
+    pub auto_increments: BTreeMap<usize, AutoIncrement>,
 
     pub attached_columns: Option<Vec<Identifier>>,
 }

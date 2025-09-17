@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-use std::fmt::Formatter;
+use std::ops::Add;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AutoIncrement {
     pub start: u64,
     pub step: u64,
+    // Ensure that the generated sequence values are distributed strictly in the order of insertion time
     pub is_order: bool,
 }
 
@@ -29,16 +29,13 @@ impl AutoIncrement {
     pub fn sequence_name(table_id: u64, column_id: u32) -> String {
         format!("_sequence_{table_id}_{column_id}")
     }
-}
 
-impl Display for AutoIncrement {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "AUTOINCREMENT ({}, {})", self.start, self.step)?;
+    pub fn to_sql_string(&self) -> String {
+        let string = format!("AUTOINCREMENT ({}, {}) ", self.start, self.step);
         if self.is_order {
-            write!(f, " ORDER")?;
+            string.add("ORDER")
         } else {
-            write!(f, " NOORDER")?;
+            string.add("NOORDER")
         }
-        Ok(())
     }
 }

@@ -50,7 +50,6 @@ use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
-use crate::interpreters::CreateSequenceInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -135,7 +134,7 @@ impl Interpreter for AddTableColumnInterpreter {
             let index = schema.index_of(field.name.as_str())?;
             let sequence_name =
                 AutoIncrement::sequence_name(tbl.get_id(), schema.field(index).column_id());
-            schema.fields[index].auto_increment_display = Some(auto_increment.to_string());
+            schema.fields[index].auto_increment_display = Some(auto_increment.to_sql_string());
 
             table_info.meta.schema = Arc::new(schema);
 
@@ -148,7 +147,8 @@ impl Interpreter for AddTableColumnInterpreter {
                 create_on: Utc::now(),
                 storage_version: 0,
             };
-            CreateSequenceInterpreter::req_execute(self.ctx.as_ref(), req, true).await?;
+            let catalog = self.ctx.get_default_catalog()?;
+            let _reply = catalog.create_sequence(req).await?;
         }
 
         // if the new column is a stored computed field and table is non-empty,
