@@ -97,6 +97,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::Sequence(
                 pb::ownership_object::OwnershipSequenceObject { sequence },
             ) => Ok(mt::principal::OwnershipObject::Sequence { name: sequence }),
+            pb::ownership_object::Object::Procedure(
+                pb::ownership_object::OwnershipProcedureObject { p_id },
+            ) => Ok(mt::principal::OwnershipObject::Procedure { p_id }),
         }
     }
 
@@ -149,6 +152,11 @@ impl FromToProto for mt::principal::OwnershipObject {
                     pb::ownership_object::OwnershipSequenceObject {
                         sequence: name.clone(),
                     },
+                ))
+            }
+            mt::principal::OwnershipObject::Procedure { p_id } => {
+                Some(pb::ownership_object::Object::Procedure(
+                    pb::ownership_object::OwnershipProcedureObject { p_id: *p_id },
                 ))
             }
         };

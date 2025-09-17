@@ -89,6 +89,10 @@ message GrantObject {
     string sequence = 1;
   }
 
+  message GrantProcedureObject {
+    uint64 p_id = 1;
+  }
+
   oneof object {
     GrantGlobalObject global = 1;
     GrantDatabaseObject database = 2;
@@ -100,6 +104,7 @@ message GrantObject {
     GrantWarehouseObject warehouse = 8;
     GrantConnectionObject connection = 9;
     GrantSequenceObject sequence = 10;
+    GrantProcedureObject procedure = 11;
   }
 }
 

@@ -161,17 +161,12 @@ impl Binder {
             .get_procedure(&req)
             .await?;
         if let Some(procedure) = procedure {
-            if arg_types.is_empty() {
-                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-                    script: procedure.procedure_meta.script,
-                })))
-            } else {
-                Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
-                    script: procedure.procedure_meta.script,
-                    arg_names: procedure.procedure_meta.arg_names,
-                    args: arguments.clone(),
-                })))
-            }
+            Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
+                procedure_id: procedure.id,
+                script: procedure.procedure_meta.script,
+                arg_names: procedure.procedure_meta.arg_names,
+                args: arguments.clone(),
+            })))
         } else {
             Err(ErrorCode::UnknownProcedure(format!(
                 "Unknown procedure {}",

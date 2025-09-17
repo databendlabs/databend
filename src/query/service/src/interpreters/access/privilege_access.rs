@@ -25,9 +25,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_management::WarehouseInfo;
+use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
@@ -164,6 +166,7 @@ impl PrivilegeAccess {
             GrantObject::Sequence(name) => OwnershipObject::Sequence {
                 name: name.to_string(),
             },
+            GrantObject::Procedure(p_id) => OwnershipObject::Procedure { p_id: *p_id },
             GrantObject::Global => return Ok(None),
         };
 
@@ -301,7 +304,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Objectr",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -634,6 +637,7 @@ impl PrivilegeAccess {
             | GrantObject::Warehouse(_)
             | GrantObject::Connection(_)
             | GrantObject::Sequence(_)
+            | GrantObject::Procedure(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
         };
@@ -682,6 +686,13 @@ impl PrivilegeAccess {
                 match grant_object {
                     GrantObject::TableById(_, _, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
+                    GrantObject::Procedure(_) => Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege [{:?}] is required on PROCEDURE for user {} with roles [{}]. \
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Object",
+                        privilege,
+                        &current_user.identity().display(),
+                        roles_name,
+                    ))),
                     GrantObject::Global
                     | GrantObject::UDF(_)
                     | GrantObject::Warehouse(_)
@@ -691,7 +702,7 @@ impl PrivilegeAccess {
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -753,6 +764,45 @@ impl PrivilegeAccess {
             .await?;
         }
         Ok(())
+    }
+
+    async fn validate_procedure_access(
+        &self,
+        tenant: &Tenant,
+        name: &ProcedureNameIdent,
+    ) -> Result<()> {
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        let req = GetProcedureReq {
+            inner: name.clone(),
+        };
+
+        let procedure = UserApiProvider::instance()
+            .procedure_api(tenant)
+            .get_procedure(&req)
+            .await?;
+
+        match procedure {
+            Some(procedure) => {
+                self.validate_access(
+                    &GrantObject::Procedure(procedure.id),
+                    UserPrivilegeType::AccessProcedure,
+                    false,
+                    false,
+                )
+                .await
+            }
+            None => Err(ErrorCode::UnknownProcedure(format!(
+                "Unknown procedure {}",
+                name
+            ))),
+        }
     }
 
     async fn validate_table_function_access(&self, table_func_name: &str) -> Result<()> {
@@ -1535,11 +1585,36 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExistsTable(_) => {}
             Plan::DescDatamaskPolicy(_) => {}
             Plan::Begin => {}
+            Plan::CreateProcedure(_) => {
+                if self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
+                    .await.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateProcedure, true, false)
+                        .await?
+                }
+            }
+            Plan::CallProcedure(plan) => {
+                if self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await
+                    .is_err()
+                {
+                    self.validate_access(
+                        &GrantObject::Procedure(plan.procedure_id),
+                        UserPrivilegeType::AccessProcedure,
+                        false,
+                        false,
+                    )
+                        .await?
+                }
+            }
+            Plan::DropProcedure(plan) => {
+                self.validate_procedure_access(&tenant, &plan.name).await?
+            }
+            Plan::DescProcedure(plan) => {
+                self.validate_procedure_access(&tenant, &plan.name).await?
+            }
             Plan::ExecuteImmediate(_)
-            | Plan::CallProcedure(_)
-            | Plan::CreateProcedure(_)
-            | Plan::DropProcedure(_)
-            | Plan::DescProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
             | Plan::RenameProcedure(_)*/ => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
@@ -1648,6 +1723,7 @@ fn check_db_tb_ownership_access(
                 | OwnershipObject::Stage { .. }
                 | OwnershipObject::Warehouse { .. }
                 | OwnershipObject::Connection { .. }
+                | OwnershipObject::Procedure { .. }
                 | OwnershipObject::Sequence { .. } => {}
             }
         }

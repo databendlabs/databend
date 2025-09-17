@@ -86,6 +86,7 @@ impl From<&DropProcedurePlan> for DropProcedureReq {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CallProcedurePlan {
+    pub procedure_id: u64,
     pub script: String,
     pub arg_names: Vec<String>,
     pub args: Vec<Expr>,

@@ -81,6 +81,7 @@ where
         name_ident: &K,
         value: &IdRsc::ValueType,
         override_exist: bool,
+        old_id: &mut Option<DataId<IdRsc>>,
         associated_records: A,
         mark_delete_records: M,
     ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
@@ -108,6 +109,7 @@ where
                         // Override take place only when the id -> value does not change.
                         // If it does not override, no such condition is required.
                         let id_ident = seq_id.data.into_t_ident(tenant);
+                        *old_id = Some(seq_id.data);
                         txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
                         txn.if_then.push(txn_op_del(&id_ident));
 
