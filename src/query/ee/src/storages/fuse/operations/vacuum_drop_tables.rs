@@ -92,15 +92,13 @@ async fn vacuum_drop_single_table(
             }
             result?;
 
+            // clear the sequence associated with auto increment in the table field
             for table_field in table_info.meta.schema.fields() {
                 if table_field.auto_increment_display().is_none() {
                     continue;
                 }
-                let sequence_name = AutoIncrement::sequence_name(
-                    table_info.database_name()?,
-                    table_info.ident.table_id,
-                    table_field.column_id,
-                );
+                let sequence_name =
+                    AutoIncrement::sequence_name(table_info.ident.table_id, table_field.column_id);
 
                 DropSequenceInterpreter::req_execute(
                     ctx.as_ref(),

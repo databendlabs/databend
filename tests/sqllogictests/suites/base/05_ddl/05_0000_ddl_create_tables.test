@@ -692,7 +692,7 @@ statement error 1005
 create or replace table t11 (c1 int, c2 int default 1 autoincrement);
 
 statement ok
-create or replace table t11 (c1 int, c2 int autoincrement, c3 float autoincrement, c4 int identity (1,2), c5 int autoincrement start 1 increment 2);
+create or replace table t11 (c1 int, c2 int autoincrement, c3 float autoincrement, c4 int identity (1,2), c5 int autoincrement start 1 increment 2, c6 decimal(20, 2) autoincrement);
 
 statement ok
 insert into t11 (c1) values(0);
@@ -706,13 +706,14 @@ insert into t11 (c1) values(0);
 query IIF rowsort
 select * from t11;
 ----
-0 0 0.0 1 1
-0 1 1.0 3 3
-0 2 2.0 5 5
+0 0 0.0 1 1 0.00
+0 1 1.0 3 3 1.00
+0 2 2.0 5 5 2.00
 
-query TIITTT
+query TIITTT rowsort
 select interval, current, comment from show_sequences();
 ----
+1 3 NULL
 1 3 NULL
 1 3 NULL
 2 7 NULL
@@ -725,7 +726,7 @@ statement error 1065
 alter table t11 add column c4 int default autoincrement;
 
 statement ok
-alter table t11 add column c6 int autoincrement;
+alter table t11 add column c7 int autoincrement;
 
 statement ok
 insert into t11 (c1) values(0);
@@ -733,15 +734,16 @@ insert into t11 (c1) values(0);
 query IIFI rowsort
 select * from t11;
 ----
-0 0 0.0 1 1 NULL
-0 1 1.0 3 3 NULL
-0 2 2.0 5 5 NULL
-0 3 3.0 7 7 0
+0 0 0.0 1 1 0.00 NULL
+0 1 1.0 3 3 1.00 NULL
+0 2 2.0 5 5 2.00 NULL
+0 3 3.0 7 7 3.00 0
 
 query TIITTT rowsort
 select interval, current, comment from show_sequences();
 ----
 1 1 NULL
+1 4 NULL
 1 4 NULL
 1 4 NULL
 2 9 NULL
@@ -753,15 +755,16 @@ alter table t11 drop column c2;
 query IFI rowsort
 select * from t11;
 ----
-0 0.0 1 1 NULL
-0 1.0 3 3 NULL
-0 2.0 5 5 NULL
-0 3.0 7 7 0
+0 0.0 1 1 0.00 NULL
+0 1.0 3 3 1.00 NULL
+0 2.0 5 5 2.00 NULL
+0 3.0 7 7 3.00 0
 
 query TIITTT rowsort
 select interval, current, comment from show_sequences();
 ----
 1 1 NULL
+1 4 NULL
 1 4 NULL
 2 9 NULL
 2 9 NULL
@@ -773,6 +776,7 @@ query TIITTT rowsort
 select interval, current, comment from show_sequences();
 ----
 1 1 NULL
+1 4 NULL
 1 4 NULL
 2 9 NULL
 2 9 NULL

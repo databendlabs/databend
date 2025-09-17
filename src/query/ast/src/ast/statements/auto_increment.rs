@@ -26,8 +26,8 @@ pub struct AutoIncrement {
 }
 
 impl AutoIncrement {
-    pub fn sequence_name(database: &str, table_id: u64, column_id: u32) -> String {
-        format!("_sequence_{database}_{table_id}_{column_id}")
+    pub fn sequence_name(table_id: u64, column_id: u32) -> String {
+        format!("_sequence_{table_id}_{column_id}")
     }
 }
 

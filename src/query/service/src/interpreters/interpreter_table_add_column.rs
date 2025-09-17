@@ -133,11 +133,8 @@ impl Interpreter for AddTableColumnInterpreter {
         if let Some(auto_increment) = &self.plan.auto_increment {
             let mut schema = TableSchema::clone(&table_info.schema()).clone();
             let index = schema.index_of(field.name.as_str())?;
-            let sequence_name = AutoIncrement::sequence_name(
-                db_name,
-                tbl.get_id(),
-                schema.field(index).column_id(),
-            );
+            let sequence_name =
+                AutoIncrement::sequence_name(tbl.get_id(), schema.field(index).column_id());
             schema.fields[index].auto_increment_display = Some(auto_increment.to_string());
 
             table_info.meta.schema = Arc::new(schema);

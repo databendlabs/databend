@@ -122,7 +122,7 @@ impl Interpreter for DropTableColumnInterpreter {
             .field_with_name(self.plan.column.as_str())?;
         if field.auto_increment_display.is_some() {
             let auto_increment_name =
-                AutoIncrement::sequence_name(db_name, table.get_id(), field.column_id());
+                AutoIncrement::sequence_name(table.get_id(), field.column_id());
 
             DropSequenceInterpreter::req_execute(
                 self.ctx.as_ref(),

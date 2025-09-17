@@ -1707,10 +1707,10 @@ impl Binder {
                 ColumnExpr::AutoIncrement(field_sequence) => {
                     if !matches!(
                         field.data_type().remove_nullable(),
-                        TableDataType::Number(_)
+                        TableDataType::Number(_) | TableDataType::Decimal(_)
                     ) {
                         return Err(ErrorCode::SemanticError(
-                            "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
+                            "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                         ));
                     }
                     field.auto_increment_display = Some(field_sequence.to_string());
@@ -1748,10 +1748,10 @@ impl Binder {
                     ColumnExpr::AutoIncrement(field_sequence) => {
                         if !matches!(
                             field.data_type().remove_nullable(),
-                            TableDataType::Number(_)
+                            TableDataType::Number(_) | TableDataType::Decimal(_)
                         ) {
                             return Err(ErrorCode::SemanticError(
-                                "AUTO INCREMENT only supports Numeric (e.g. INT32) types",
+                                "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                             ));
                         }
                         field.auto_increment_display = Some(field_sequence.to_string());

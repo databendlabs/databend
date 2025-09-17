@@ -335,8 +335,7 @@ impl CreateTableInterpreter {
         }
 
         for (i, auto_increment) in self.plan.auto_increments.iter() {
-            let sequence_name =
-                AutoIncrement::sequence_name(&self.plan.database, table_id, *i as u32);
+            let sequence_name = AutoIncrement::sequence_name(table_id, *i as u32);
             let req = CreateSequenceReq {
                 create_option: self.plan.create_option,
                 ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name),
