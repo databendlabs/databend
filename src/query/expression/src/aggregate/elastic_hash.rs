@@ -23,12 +23,10 @@ impl Elastic {
     }
 
     fn ai_range(&self, i: usize) -> std::ops::Range<usize> {
+        assert!(i >= 1);
         assert!(i <= self.levels());
         // A_i 大小 = n / 2^(i-1)
         let n = self.entries.len();
-        if i == 0 {
-            return 0..n >> 1;
-        }
         let size = n >> (i - 1);
         let start = n - size;
         let end = n - (size >> 1);
@@ -72,12 +70,6 @@ impl Elastic {
             return (self.ai_range(1).len() as f64 * 0.75) as usize;
         }
 
-        // assert!(
-        //     i >= 1 && i + 1 <= self.levels,
-        //     "i must satisfy 1 <= i < levels"
-        // );
-        // assert!((0.0..=1.0).contains(&delta), "delta must be in [0,1]");
-
         let ai = self.ai_range(i).len();
         let ai1 = self.ai_range(i + 1).len();
 
@@ -120,8 +112,8 @@ impl Elastic {
 
     pub fn probe(&self, i: usize, value: usize) -> (u8, usize, usize) {
         if i == 0 {
-            let j = value % self.ai_range(i).len();
-            return (0, i, self.probe_sub(0, j, None).unwrap());
+            let j = value % self.ai_range(1).len();
+            return (0, 1, self.probe_sub(1, j, None).unwrap());
         }
 
         println!("epsilon_i {} {}", self.epsilon_i(i), self.epsilon_i(i + 1));
