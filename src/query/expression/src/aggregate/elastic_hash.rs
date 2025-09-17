@@ -1,13 +1,18 @@
 #[derive(Debug)]
-struct Elastic {
-    entries: Vec<Option<usize>>,
-    count: usize,
+pub struct Elastic {
     delta: f64,
     c: f64,
-    i: usize,
+
+    entries: Vec<Option<usize>>,
+
     batch_limit: usize,
-    load_limit: usize,
+    count: usize,
+    i: usize,
+    // load_limit: usize,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Slot(usize);
 
 impl Elastic {
     pub fn with_capacity(n: usize, delta: f64) -> Self {
@@ -19,16 +24,15 @@ impl Elastic {
             delta,
             i: 0,
             batch_limit: n / 8 * 3,
-            load_limit: n - (n as f64 * delta) as usize,
+            // load_limit: n - (n as f64 * delta) as usize,
         }
     }
 
     fn levels(&self) -> usize {
-        // log2(n) + 1
         self.entries.len().trailing_zeros() as usize + 1
     }
 
-    fn sub_range(&self, i: usize) -> std::ops::Range<usize> {
+    fn zone_range(&self, i: usize) -> std::ops::Range<usize> {
         debug_assert!(i >= 1);
         debug_assert!(i <= self.levels());
 
@@ -39,25 +43,19 @@ impl Elastic {
         start..end
     }
 
-    fn sub_size(&self, i: usize) -> usize {
+    fn zone_size(&self, i: usize) -> usize {
         self.entries.len() >> i
     }
 
-    pub fn sub(&self, i: usize) -> &[Option<usize>] {
-        let r = self.sub_range(i);
-        &self.entries[r]
+    fn zone(&self, i: usize) -> &[Option<usize>] {
+        &self.entries[self.zone_range(i)]
     }
 
-    pub fn sub_mut(&mut self, i: usize) -> &mut [Option<usize>] {
-        let r = self.sub_range(i);
-        &mut self.entries[r]
-    }
-
-    pub fn epsilon_i(&self, i: usize) -> f64 {
-        let r = self.sub_range(i);
-        let sz = r.len();
+    pub fn epsilon(&self, i: usize) -> f64 {
+        let r = self.zone_range(i);
+        let size = r.len();
         let empty = self.entries[r].iter().filter(|x| x.is_none()).count();
-        empty as f64 / sz as f64
+        empty as f64 / size as f64
     }
 
     pub fn cur_batch(&mut self) -> Option<usize> {
@@ -84,66 +82,86 @@ impl Elastic {
         1.max(((1.0 - self.delta) / 2.0 * (n >> i) as f64) as usize + (n >> (i + 3)))
     }
 
-    pub fn f_value(&self, i: usize) -> f64 {
-        let t1 = (1.0 / self.epsilon_i(i)).ln().powi(2);
+    fn f_value(&self, i: usize) -> f64 {
+        let t1 = (1.0 / self.epsilon(i)).ln().powi(2);
         let t2 = (1.0 / self.delta).ln();
         self.c * t1.min(t2)
     }
 
-    pub fn probe_sub(&self, i: usize, mut j: usize, max: Option<usize>) -> Option<usize> {
-        let sub = self.sub(i);
-        let end = max.map(|max| (j + max) % sub.len());
+    fn probe_zone(&self, i: usize, mut j: usize, max: Option<usize>) -> Option<usize> {
+        let zone = self.zone(i);
+        let end = max.map(|max| (j + max) % zone.len());
 
         let mut c = 0;
         loop {
             c += 1;
-            if c > sub.len() {
-                panic!()
-            }
-            if sub[j].is_none() {
-                println!("    probe count {c}");
+            assert!(c < zone.len());
+            if zone[j].is_none() {
                 return Some(j);
             }
 
             j += 1;
-            if j >= sub.len() {
+            if j >= zone.len() {
                 j = 0;
             }
 
             if Some(j) == end {
-                println!("probe count {c}");
                 return None;
             }
         }
     }
 
-    pub fn probe(&self, i: usize, value: usize) -> (u8, usize, usize) {
+    pub fn probe(&mut self, value: usize) -> Slot {
+        let i = self.cur_batch().unwrap();
         if i == 0 {
-            let j = value % self.sub_size(1);
-            return (0, 1, self.probe_sub(1, j, None).unwrap());
+            let range = self.zone_range(1);
+            let j = value % range.len();
+            let j = self.probe_zone(1, j, None).unwrap();
+            return Slot(range.start + j);
         }
 
-        println!("epsilon_i {} {}", self.epsilon_i(i), self.epsilon_i(i + 1));
-
         // case 3
-        if self.epsilon_i(i + 1) <= 0.25 {
-            let j = value % self.sub_size(i);
-            return (30, i, self.probe_sub(i, j, None).unwrap());
+        if self.epsilon(i + 1) <= 0.25 {
+            let range = self.zone_range(i);
+            let j = value % range.len();
+            let j = self.probe_zone(i, j, None).unwrap();
+            return Slot(range.start + j);
         }
 
         // case 1
-        if self.epsilon_i(i) > 0.5 * self.delta {
-            let j = value % self.sub_size(i);
-            if let Some(j) = self.probe_sub(i, j, Some(self.f_value(i) as usize)) {
-                return (10, i, j);
+        if self.epsilon(i) > 0.5 * self.delta {
+            let range = self.zone_range(i);
+            let j = value % range.len();
+            if let Some(j) = self.probe_zone(i, j, Some(self.f_value(i) as usize)) {
+                return Slot(range.start + j);
             }
-            let j = value % self.sub_size(i + 1);
-            return (11, i + 1, self.probe_sub(i + 1, j, None).unwrap());
         }
 
         // case 2
-        let j = value % self.sub_size(i + 1);
-        (20, i + 1, self.probe_sub(i + 1, j, None).unwrap())
+        let range = self.zone_range(i + 1);
+        let j = value % range.len();
+        let j = self.probe_zone(i + 1, j, None).unwrap();
+        Slot(range.start + j)
+    }
+
+    pub fn mut_entry(&mut self, slot: Slot) -> &mut Option<usize> {
+        &mut self.entries[slot.0]
+    }
+
+    pub fn insert(&mut self, slot: Slot, value: usize) {
+        let x = self.entries[slot.0].replace(value);
+        self.count += 1;
+        assert!(x.is_none())
+    }
+
+    pub fn coord(&self, slot: Slot) -> (usize, usize) {
+        for i in 1..self.levels() {
+            let range = self.zone_range(i);
+            if range.contains(&slot.0) {
+                return (i, slot.0 - range.start);
+            }
+        }
+        unreachable!()
     }
 }
 
@@ -152,22 +170,18 @@ mod tests {
 
     #[test]
     fn test_main() {
-        let mut elastic = Elastic::with_capacity(128, 0.75);
+        let mut elastic = Elastic::with_capacity(128, 0.2);
 
-        for value in 200..280 {
-            let i = elastic.cur_batch().unwrap();
-            println!("start {value} {i}");
+        for value in 200..305 {
+            println!("start {value}");
+            let slot = elastic.probe(value);
 
-            let (case, i, j) = elastic.probe(i, value);
-
-            let x = elastic.sub_mut(i)[j].replace(value);
-            elastic.count += 1;
-            assert_eq!(x, None);
-
-            let f = elastic.count as f64 / elastic.entries.len() as f64;
+            let (i, j) = elastic.coord(slot);
+            elastic.insert(slot, value);
 
             if i != 0 {
-                println!("  probe {i} {j} {f:.3} {case}");
+                let f = elastic.count as f64 / elastic.entries.len() as f64;
+                println!("  probe {i} {j} {f:.3}");
             }
         }
 
