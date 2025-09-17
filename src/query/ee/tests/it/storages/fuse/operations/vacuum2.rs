@@ -35,7 +35,6 @@ async fn test_table_function_fuse_vacuum2_all() -> Result<()> {
 
     setup(&fixture).await?;
 
-
     // vacuum them all
     let res = fixture.execute_command("call system$fuse_vacuum2()").await;
 
@@ -88,8 +87,7 @@ async fn test_vacuum_all_stmt() -> Result<()> {
     Ok(())
 }
 
-async fn setup(fixture: &TestFixture) -> Result<()>{
-
+async fn setup(fixture: &TestFixture) -> Result<()> {
     // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
     let session = fixture.default_session();
     session.get_settings().set_data_retention_time_in_days(0)?;
