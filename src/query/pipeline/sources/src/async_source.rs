@@ -123,7 +123,6 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        println!("async_process {:?}", self.name());
         if self.is_finish {
             if !self.called_on_finish {
                 self.called_on_finish = true;
