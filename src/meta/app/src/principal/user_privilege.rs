@@ -86,6 +86,10 @@ pub enum UserPrivilegeType {
     CreateSequence = 1 << 24,
     // Privilege to Access Sequence
     AccessSequence = 1 << 25,
+    // Privilege to Create Procedure
+    CreateProcedure = 1 << 26,
+    // Privilege to Access Procedure
+    AccessProcedure = 1 << 27,
     // Discard Privilege Type
     Set = 1 << 4,
 }
@@ -147,6 +151,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::AccessConnection => "ACCESS CONNECTION",
             UserPrivilegeType::CreateSequence => "CREATE SEQUENCE",
             UserPrivilegeType::AccessSequence => "ACCESS SEQUENCE",
+            UserPrivilegeType::CreateProcedure => "CREATE PROCEDURE",
+            UserPrivilegeType::AccessProcedure => "ACCESS PROCEDURE",
         })
     }
 }
@@ -199,6 +205,12 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             databend_common_ast::ast::UserPrivilegeType::AccessSequence => {
                 UserPrivilegeType::AccessSequence
             }
+            databend_common_ast::ast::UserPrivilegeType::CreateProcedure => {
+                UserPrivilegeType::CreateProcedure
+            }
+            databend_common_ast::ast::UserPrivilegeType::AccessProcedure => {
+                UserPrivilegeType::AccessProcedure
+            }
             databend_common_ast::ast::UserPrivilegeType::Set => UserPrivilegeType::Set,
         }
     }
@@ -235,7 +247,7 @@ impl UserPrivilegeSet {
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse | CreateConnection | CreateSequence });
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
@@ -294,6 +306,14 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{ AccessSequence | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{ AccessSequence }).into()
+        }
+    }
+
+    pub fn available_privileges_on_procedure(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ AccessProcedure | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ AccessProcedure }).into()
         }
     }
 

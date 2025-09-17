@@ -200,6 +200,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Sequence(pb::grant_object::GrantSequenceObject {
                 sequence,
             }) => Ok(mt::principal::GrantObject::Sequence(sequence)),
+            pb::grant_object::Object::Procedure(pb::grant_object::GrantProcedureObject {
+                p_id,
+            }) => Ok(mt::principal::GrantObject::Procedure(p_id)),
         }
     }
 
@@ -256,6 +259,9 @@ impl FromToProto for mt::principal::GrantObject {
                 pb::grant_object::GrantSequenceObject {
                     sequence: s.clone(),
                 },
+            )),
+            mt::principal::GrantObject::Procedure(p) => Some(pb::grant_object::Object::Procedure(
+                pb::grant_object::GrantProcedureObject { p_id: *p },
             )),
         };
         Ok(pb::GrantObject {

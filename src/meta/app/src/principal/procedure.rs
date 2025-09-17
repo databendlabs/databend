@@ -103,6 +103,7 @@ impl Display for CreateProcedureReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateProcedureReply {
     pub procedure_id: u64,
+    pub old_id: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

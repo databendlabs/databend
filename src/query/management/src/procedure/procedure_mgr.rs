@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
@@ -30,6 +31,7 @@ use databend_common_meta_app::principal::ProcedureIdToNameIdent;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -42,11 +44,15 @@ use log::debug;
 
 pub struct ProcedureMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
+    tenant: Tenant,
 }
 
 impl ProcedureMgr {
-    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>) -> Self {
-        ProcedureMgr { kv_api }
+    pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
+        ProcedureMgr {
+            kv_api,
+            tenant: tenant.clone(),
+        }
     }
 
     /// Add a PROCEDURE to /tenant/procedure-name.
@@ -64,12 +70,14 @@ impl ProcedureMgr {
         let meta = &req.meta;
         let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
 
+        let mut old_id = None;
         let create_res = self
             .kv_api
             .create_id_value(
                 name_ident,
                 meta,
                 overriding,
+                &mut old_id,
                 |id| {
                     vec![(
                         ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
@@ -82,7 +90,19 @@ impl ProcedureMgr {
             .await?;
 
         match create_res {
-            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
+            Ok(id) => {
+                if let Some(old_id) = old_id {
+                    Ok(Ok(CreateProcedureReply {
+                        procedure_id: *id,
+                        old_id: Some(*old_id),
+                    }))
+                } else {
+                    Ok(Ok(CreateProcedureReply {
+                        procedure_id: *id,
+                        old_id: None,
+                    }))
+                }
+            }
             Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }
@@ -120,6 +140,38 @@ impl ProcedureMgr {
             id: *seq_id.data,
             procedure_meta: seq_meta.data,
         }))
+    }
+
+    #[fastrace::trace]
+    pub async fn get_procedure_by_id(
+        &self,
+        procedure_id: u64,
+    ) -> Result<Option<SeqV<ProcedureMeta>>, MetaError> {
+        debug!(req :? =(&procedure_id); "SchemaApi: {}", func_name!());
+
+        let id = ProcedureIdIdent::new(&self.tenant, procedure_id);
+        let seq_procedre_meta = self.kv_api.get_pb(&id).await?;
+        Ok(seq_procedre_meta)
+    }
+
+    #[fastrace::trace]
+    pub async fn get_procedure_name_by_id(
+        &self,
+        procedure_id: u64,
+    ) -> Result<Option<String>, MetaError> {
+        debug!(req :? =(&procedure_id); "SchemaApi: {}", func_name!());
+
+        let ident = ProcedureIdToNameIdent::new_generic(
+            self.tenant.clone(),
+            ProcedureId::new(procedure_id),
+        );
+        let seq_meta = self.kv_api.get_pb(&ident).await?;
+
+        debug!(ident :% =(&ident); "get_procedure_name_by_id");
+
+        let name = seq_meta.map(|s| s.data.to_string());
+
+        Ok(name)
     }
 
     #[fastrace::trace]

@@ -100,6 +100,7 @@ where
                 name_ident,
                 meta,
                 overriding,
+                &mut None,
                 |id| {
                     vec![(
                         IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),

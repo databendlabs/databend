@@ -64,6 +64,10 @@ pub enum OwnershipObject {
     Sequence {
         name: String,
     },
+
+    Procedure {
+        p_id: u64,
+    },
 }
 
 impl OwnershipObject {
@@ -95,6 +99,7 @@ impl fmt::Display for OwnershipObject {
             OwnershipObject::Warehouse { id } => write!(f, "WAREHOUSE {id}"),
             OwnershipObject::Connection { name } => write!(f, "CONNECTION {name}"),
             OwnershipObject::Sequence { name } => write!(f, "SEQUENCE {name}"),
+            OwnershipObject::Procedure { p_id } => write!(f, "PROCEDURE {p_id}"),
         }
     }
 }
@@ -137,6 +142,7 @@ impl KeyCodec for OwnershipObject {
             OwnershipObject::Warehouse { id } => b.push_raw("warehouse-by-id").push_str(id),
             OwnershipObject::Connection { name } => b.push_raw("connection-by-name").push_str(name),
             OwnershipObject::Sequence { name } => b.push_raw("sequence-by-name").push_str(name),
+            OwnershipObject::Procedure { p_id } => b.push_raw("procedure-by-id").push_u64(*p_id),
         }
     }
 
@@ -194,6 +200,10 @@ impl KeyCodec for OwnershipObject {
             "sequence-by-name" => {
                 let name = p.next_str()?;
                 Ok(OwnershipObject::Sequence { name })
+            }
+            "procedure-by-id" => {
+                let p_id = p.next_u64()?;
+                Ok(OwnershipObject::Procedure { p_id })
             }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),

@@ -71,6 +71,7 @@ where
                 name_ident,
                 &req.dictionary_meta,
                 false,
+                &mut None,
                 |_| vec![],
                 |_, _| Ok(vec![]),
             )
