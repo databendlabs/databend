@@ -23,6 +23,7 @@ use std::vec;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -5023,7 +5024,19 @@ impl SchemaApiTestSuite {
             Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
                 TableDataType::Number(NumberDataType::UInt64),
-            )]))
+            )
+            .with_auto_increment_display(Some(
+                " AUTOINCREMENT (0, 1) ORDER".to_string(),
+            ))]))
+        };
+        let auto_increments = || {
+            let mut auto_increments = BTreeMap::new();
+            auto_increments.insert(0, AutoIncrement {
+                start: 0,
+                step: 1,
+                is_ordered: true,
+            });
+            auto_increments
         };
 
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -5054,7 +5067,7 @@ impl SchemaApiTestSuite {
             },
             table_meta: drop_table_meta(created_on),
             as_dropped: true,
-            auto_increments: Default::default(),
+            auto_increments: auto_increments(),
             table_properties: None,
             table_partition: None,
         };
@@ -5174,7 +5187,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: table_meta(created_on),
                 as_dropped: true,
-                auto_increments: Default::default(),
+                auto_increments: auto_increments(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5194,7 +5207,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
-                auto_increments: Default::default(),
+                auto_increments: auto_increments(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5230,7 +5243,7 @@ impl SchemaApiTestSuite {
                 },
                 table_meta: drop_table_meta(created_on),
                 as_dropped: true,
-                auto_increments: Default::default(),
+                auto_increments: auto_increments(),
                 table_properties: None,
                 table_partition: None,
             };
@@ -5254,6 +5267,21 @@ impl SchemaApiTestSuite {
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_some() && seqv.unwrap().seq != 0);
 
+            let auto_increment_sequence = SequenceIdent::new(
+                &tenant,
+                AutoIncrement::sequence_name(create_table_as_dropped_resp.table_id, 0),
+            );
+            let auto_increment_sequence_storage =
+                SequenceStorageIdent::new_from(auto_increment_sequence.clone());
+
+            // assert auto increment sequence exists
+            let seqv = mt.get_kv(&auto_increment_sequence.to_string_key()).await?;
+            assert!(seqv.is_some() && seqv.unwrap().seq != 0);
+            let seqv = mt
+                .get_kv(&auto_increment_sequence_storage.to_string_key())
+                .await?;
+            assert!(seqv.is_some() && seqv.unwrap().seq != 0);
+
             // vacuum drop table
             let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5273,6 +5301,14 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
             };
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
+            assert!(seqv.is_none());
+
+            // assert auto increment sequence has been vacuum
+            let seqv = mt.get_kv(&auto_increment_sequence.to_string_key()).await?;
+            assert!(seqv.is_none());
+            let seqv = mt
+                .get_kv(&auto_increment_sequence_storage.to_string_key())
+                .await?;
             assert!(seqv.is_none());
         }
 

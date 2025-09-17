@@ -96,7 +96,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
     // verify dry run never delete files
     {
-        vacuum_drop_tables(ctx.clone(), threads_nums, vec![table.clone()], Some(100)).await?;
+        vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -113,7 +113,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        vacuum_drop_tables(ctx, threads_nums, vec![table], None).await?;
+        vacuum_drop_tables(threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -402,11 +402,9 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
     // but all that we need here is let Operator::remove_all failed
     let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(ctx, tables, None).await?;
+    let result = do_vacuum_drop_table(tables, None).await?;
     assert!(!result.1.is_empty());
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
@@ -428,15 +426,13 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
     {
         let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
 
         let table = (table_info.clone(), operator);
 
         // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
         let tables = vec![table];
         let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(ctx, num_threads, tables, None).await?;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
 
@@ -448,14 +444,12 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
     {
         let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
 
         let table = (table_info, operator);
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
         let tables = vec![table.clone(), table];
         let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(ctx, num_threads, tables, None).await?;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
         // verify that errors of deletions are not swallowed
@@ -479,16 +473,13 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
 
         let table = (table_info.clone(), operator);
 
         // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
         let tables = vec![table];
         let num_threads = 1;
-        let result =
-            vacuum_drop_tables_by_table_info(ctx, num_threads, tables, Some(usize::MAX)).await;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -497,15 +488,12 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
     {
         let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
 
         let table = (table_info, operator);
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
         let tables = vec![table.clone(), table];
         let num_threads = 2;
-        let result =
-            vacuum_drop_tables_by_table_info(ctx, num_threads, tables, Some(usize::MAX)).await;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -532,11 +520,9 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
     use test_accessor::AccessorFaultyDeletion;
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(ctx, tables, None).await?;
+    let result = do_vacuum_drop_table(tables, None).await?;
     assert!(!result.1.is_empty());
 
     // verify that accessor.delete() was called
