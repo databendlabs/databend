@@ -215,7 +215,6 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
-
     pub fn get_max_vacuum_threads(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_threads")
     }
