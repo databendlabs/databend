@@ -27,6 +27,7 @@ use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -55,6 +56,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_cache::CompactSegmentInfo;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Partitions;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
@@ -97,13 +99,20 @@ enum AnalyzeStep {
 }
 
 impl FuseTable {
-    pub fn do_analyzes(
+    pub fn do_analyze(
         &self,
         ctx: Arc<dyn TableContext>,
-        snapshot_id: SnapshotId,
+        snapshot: Arc<TableSnapshot>,
         pipeline: &mut Pipeline,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+        no_scan: bool,
     ) -> Result<()> {
+        let mut parts = Vec::with_capacity(snapshot.segments.len());
+        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+            parts.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+        }
+        ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
+
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let io_request_semaphore = Arc::new(Semaphore::new(max_concurrency));
@@ -114,6 +123,7 @@ impl FuseTable {
                     self,
                     ctx.clone(),
                     io_request_semaphore.clone(),
+                    no_scan,
                 )
             },
             ctx.get_settings().get_max_threads()? as usize,
@@ -123,7 +133,7 @@ impl FuseTable {
             SinkAnalyzeState::create(
                 ctx.clone(),
                 self,
-                snapshot_id,
+                snapshot.snapshot_id,
                 input,
                 histogram_info_receivers.clone(),
             )
@@ -142,6 +152,7 @@ struct SinkAnalyzeState {
     input_data: Option<DataBlock>,
     committed: bool,
     row_count: u64,
+    unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Histogram>,
     step: AnalyzeStep,
@@ -165,6 +176,7 @@ impl SinkAnalyzeState {
             input_data: None,
             committed: false,
             row_count: 0,
+            unstats_rows: 0,
             ndv_states: Default::default(),
             histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
@@ -232,7 +244,7 @@ impl SinkAnalyzeState {
         new_snapshot.summary.additional_stats_meta = Some(AdditionalStatsMeta {
             hll: Some(encode_column_hll(&self.ndv_states)?),
             row_count: self.row_count,
-            actual_rows: self.row_count,
+            unstats_rows: self.unstats_rows,
             ..Default::default()
         });
 
@@ -401,6 +413,7 @@ impl Processor for SinkAnalyzeState {
                             }
                             self.row_count += meta.row_count;
                         }
+                        self.unstats_rows += meta.unstats_rows;
                     }
                 }
             }
@@ -507,6 +520,8 @@ pub struct AnalyzeCollectNDVSource {
     io_request_semaphore: Arc<Semaphore>,
     column_hlls: HashMap<ColumnId, MetaHLL>,
     row_count: u64,
+    unstats_rows: u64,
+    no_scan: bool,
 
     segment_with_hll: Option<SegmentWithHLL>,
 
@@ -526,6 +541,7 @@ impl AnalyzeCollectNDVSource {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         io_request_semaphore: Arc<Semaphore>,
+        no_scan: bool,
     ) -> Result<ProcessorPtr> {
         let table_schema = table.schema();
         let ndv_columns_map = table
@@ -555,6 +571,8 @@ impl AnalyzeCollectNDVSource {
             segment_reader,
             stats_reader,
             ndv_columns_map,
+            no_scan,
+            unstats_rows: 0,
         })))
     }
 }
@@ -590,6 +608,7 @@ impl Processor for AnalyzeCollectNDVSource {
                 self.output
                     .push_data(Ok(DataBlock::empty_with_meta(Box::new(AnalyzeNDVMeta {
                         row_count: self.row_count,
+                        unstats_rows: self.unstats_rows,
                         column_hlls: std::mem::take(&mut self.column_hlls),
                     }))));
                 self.state = State::Finish;
@@ -615,11 +634,12 @@ impl Processor for AnalyzeCollectNDVSource {
                 block_hlls,
             } => {
                 let mut indexes = vec![];
+                let mut merged_hlls: HashMap<ColumnId, MetaHLL> = HashMap::new();
                 for (idx, data) in block_hlls.iter().enumerate() {
                     let block_hll = decode_column_hll(data)?;
                     if let Some(column_hlls) = &block_hll {
                         for (column_id, column_hll) in column_hlls.iter() {
-                            self.column_hlls
+                            merged_hlls
                                 .entry(*column_id)
                                 .and_modify(|hll| hll.merge(column_hll))
                                 .or_insert_with(|| column_hll.clone());
@@ -629,8 +649,23 @@ impl Processor for AnalyzeCollectNDVSource {
                     }
                 }
 
+                if !indexes.is_empty() && self.no_scan {
+                    self.unstats_rows += segment_info.summary.row_count;
+                    self.state = State::ReadData(None);
+                    return Ok(());
+                }
+
+                for (column_id, column_hll) in merged_hlls {
+                    self.column_hlls
+                        .entry(column_id)
+                        .and_modify(|hll| hll.merge(&column_hll))
+                        .or_insert_with(|| column_hll);
+                }
                 self.row_count += segment_info.summary.row_count;
-                if !indexes.is_empty() {
+
+                if indexes.is_empty() {
+                    self.state = State::ReadData(None);
+                } else {
                     assert!(self.segment_with_hll.is_none());
                     let new_hlls = Vec::with_capacity(indexes.len());
                     self.segment_with_hll = Some(SegmentWithHLL {
@@ -642,8 +677,6 @@ impl Processor for AnalyzeCollectNDVSource {
                         block_indexes: indexes,
                     });
                     self.state = State::BuildHLL;
-                } else {
-                    self.state = State::ReadData(None);
                 }
             }
             State::MergeHLL => {
@@ -674,10 +707,6 @@ impl Processor for AnalyzeCollectNDVSource {
             State::ReadData(Some(part)) => {
                 let part = FuseLazyPartInfo::from_part(&part)?;
                 let (path, ver) = &part.segment_location;
-                if *ver < 2 {
-                    self.state = State::ReadData(None);
-                    return Ok(());
-                }
                 let load_param = LoadParams {
                     location: path.clone(),
                     len_hint: None,
@@ -685,6 +714,11 @@ impl Processor for AnalyzeCollectNDVSource {
                     put_cache: true,
                 };
                 let compact_segment_info = self.segment_reader.read(&load_param).await?;
+                if *ver < 2 {
+                    self.unstats_rows += compact_segment_info.summary.row_count;
+                    self.state = State::ReadData(None);
+                    return Ok(());
+                }
 
                 let block_count = compact_segment_info.summary.block_count as usize;
                 let block_hlls = match compact_segment_info.summary.additional_stats_loc() {
@@ -780,6 +814,7 @@ impl Processor for AnalyzeCollectNDVSource {
 #[derive(Clone)]
 pub struct AnalyzeNDVMeta {
     row_count: u64,
+    unstats_rows: u64,
     column_hlls: HashMap<ColumnId, MetaHLL>,
 }
 

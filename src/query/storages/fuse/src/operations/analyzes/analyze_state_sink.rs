@@ -66,7 +66,7 @@ use crate::statistics::reduce_cluster_statistics;
 use crate::FuseTable;
 
 impl FuseTable {
-    pub fn do_analyze(
+    pub fn do_analyzes(
         &self,
         ctx: Arc<dyn TableContext>,
         snapshot: Arc<TableSnapshot>,

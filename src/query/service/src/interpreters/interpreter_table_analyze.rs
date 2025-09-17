@@ -175,14 +175,13 @@ impl Interpreter for AnalyzeTableInterpreter {
                 histogram_info_receivers.insert(col_id, rx);
             }
         }
-        let pipeline = table.do_analyze(
+        table.do_analyze(
             self.ctx.clone(),
             snapshot,
             &mut build_res.main_pipeline,
-            self.plan.no_scan,
             histogram_info_receivers,
+            self.plan.no_scan,
         )?;
-        build_res.sources_pipelines.push(pipeline);
         Ok(build_res)
     }
 }
