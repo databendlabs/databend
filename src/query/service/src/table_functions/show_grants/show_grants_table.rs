@@ -245,7 +245,8 @@ impl AsyncSource for ShowGrantsSource {
             "role" | "user" => {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
-            "table" | "database" | "udf" | "stage" | "warehouse" | "connection" | "sequence" => {
+            "table" | "database" | "udf" | "stage" | "warehouse" | "connection" | "sequence"
+            | "procedure" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -258,7 +259,7 @@ impl AsyncSource for ShowGrantsSource {
             "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|role_grantee', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|procedure|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -469,6 +470,8 @@ async fn show_account_grants(
     let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
     let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
 
+    let procedure_api = UserApiProvider::instance().procedure_api(&tenant);
+
     for grant_entry in grant_entries {
         let object = grant_entry.object();
         let privilege = get_priv_str(&grant_entry);
@@ -548,6 +551,14 @@ async fn show_account_grants(
                     object_id.push(None);
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Procedure(p_id) => {
+                    if let Some(p) = procedure_api.get_procedure_name_by_id(*p_id).await? {
+                        object_name.push(p);
+                        object_id.push(Some(p_id.to_string()));
+                        privileges.push(get_priv_str(&grant_entry));
+                        grant_list.push(format!("{} TO {}", grant_entry, identity));
+                    }
                 }
                 GrantObject::Global => {
                     // grant all on *.* to a
@@ -659,6 +670,17 @@ async fn show_account_grants(
                                 "GRANT OWNERSHIP ON SEQUENCE {} TO {}",
                                 name, identity
                             ));
+                        }
+                        OwnershipObject::Procedure { p_id } => {
+                            if let Some(p) = procedure_api.get_procedure_name_by_id(p_id).await? {
+                                object_name.push(p);
+                                object_id.push(Some(p_id.to_string()));
+                                privileges.push("OWNERSHIP".to_string());
+                                grant_list.push(format!(
+                                    "GRANT OWNERSHIP ON PROCEDURE {} TO {}",
+                                    p_id, identity
+                                ));
+                            }
                         }
                     }
                 }
@@ -797,7 +819,7 @@ async fn show_object_grant(
                     table_id,
                 },
                 Some(table_id.to_string()),
-                name,
+                name.to_string(),
             )
         }
         "database" => {
@@ -822,7 +844,7 @@ async fn show_object_grant(
                     db_id,
                 },
                 Some(db_id.to_string()),
-                name,
+                name.to_string(),
             )
         }
         "udf" => {
@@ -838,7 +860,7 @@ async fn show_object_grant(
                     name: name.to_string(),
                 },
                 None,
-                name,
+                name.to_string(),
             )
         }
         "stage" => {
@@ -854,7 +876,7 @@ async fn show_object_grant(
                     name: name.to_string(),
                 },
                 None,
-                name,
+                name.to_string(),
             )
         }
         "warehouse" => {
@@ -882,7 +904,7 @@ async fn show_object_grant(
                 GrantObject::Warehouse(id.to_string()),
                 OwnershipObject::Warehouse { id: id.to_string() },
                 Some(id),
-                name,
+                name.to_string(),
             )
         }
         "connection" => {
@@ -898,7 +920,7 @@ async fn show_object_grant(
                     name: name.to_string(),
                 },
                 None,
-                name,
+                name.to_string(),
             )
         }
         "sequence" => {
@@ -914,12 +936,39 @@ async fn show_object_grant(
                     name: name.to_string(),
                 },
                 None,
-                name,
+                name.to_string(),
             )
+        }
+        "procedure" => {
+            let p_id = name.parse::<u64>()?;
+            if !visibility_checker.check_procedure_visibility(&p_id) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS PROCEDURE is required on procedure {} for user {}",
+                    name, current_user
+                )));
+            }
+
+            if let Some(p) = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .get_procedure_name_by_id(p_id)
+                .await?
+            {
+                (
+                    GrantObject::Procedure(p_id),
+                    OwnershipObject::Procedure { p_id },
+                    Some(p_id.to_string()),
+                    p.to_string(),
+                )
+            } else {
+                return Err(ErrorCode::UnknownProcedure(format!(
+                    "Unknown procedure id: {}",
+                    p_id
+                )));
+            }
         }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage|warehouse|connection|sequence', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse|connection|sequence|procedure', but got {:?}",
                 grant_type
             )));
         }
@@ -946,7 +995,7 @@ async fn show_object_grant(
     }
 
     let object_ids = vec![object_id; privileges.len()];
-    let object_names = vec![object_name; privileges.len()];
+    let object_names = vec![object_name.as_str(); privileges.len()];
     let grant_tos: Vec<String> = vec!["ROLE".to_string(); privileges.len()];
     let grant_list = vec!["".to_string(); privileges.len()];
     Ok(Some(DataBlock::new_from_columns(vec![
