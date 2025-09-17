@@ -106,10 +106,12 @@ impl VacuumTableInterpreter {
             .get_table(&target.catalog, &target.database, &target.table)
             .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let target_removed = handler
+        let obj_removed = handler
             .do_vacuum2(fuse_table, self.ctx.clone(), false)
             .await?;
-        let res_block = DataBlock::new_from_columns(vec![StringType::from_data(target_removed)]);
+        let num_obj_removed = obj_removed.len() as u64;
+        let res_block =
+            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![num_obj_removed])]);
         PipelineBuildResult::from_blocks(vec![res_block])
     }
 
@@ -117,8 +119,9 @@ impl VacuumTableInterpreter {
         let handler = get_vacuum_handler();
         let catalog = self.ctx.get_default_catalog()?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone() as _;
-        let target_removed = vacuum_all_tables(&ctx, &handler, catalog.as_ref()).await?;
-        let res_block = DataBlock::new_from_columns(vec![StringType::from_data(target_removed)]);
+        let num_obj_removed = vacuum_all_tables(&ctx, &handler, catalog.as_ref()).await?;
+        let res_block =
+            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![num_obj_removed])]);
         PipelineBuildResult::from_blocks(vec![res_block])
     }
 

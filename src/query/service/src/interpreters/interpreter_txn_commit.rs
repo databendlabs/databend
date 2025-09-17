@@ -103,7 +103,7 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
                 if let Err(e) =
                     vacuum_tables_from_info(tables_need_purge, ctx.clone(), handler).await
                 {
-                    warn!( "Failed to vacuum tables after transaction commit (best-effort operation): {e}");
+                    warn!("Failed to vacuum tables after transaction commit : {e}");
                 } else {
                     info!( "{num_tables} tables vacuumed after transaction commit in a best-effort manner" );
                 }
