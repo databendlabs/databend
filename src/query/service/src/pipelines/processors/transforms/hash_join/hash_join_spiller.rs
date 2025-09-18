@@ -86,6 +86,7 @@ impl HashJoinSpiller {
         // if the partition memory size exceeds the threshold.
         let partition_threshold = partition_buffer_threshold * 1024 * 1024 / num_partitions;
 
+        let block_bytes = ctx.get_settings().get_max_block_bytes()? as usize;
         // Create a PartitionBuffer to buffer data before spilling.
         let partition_buffer = PartitionBuffer::create(num_partitions);
 
@@ -102,11 +103,7 @@ impl HashJoinSpiller {
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
-            block_partition_stream: BlockPartitionStream::create(
-                0,
-                partition_threshold,
-                num_partitions,
-            ),
+            block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
         })
     }
 
