@@ -91,22 +91,17 @@ impl ProcedureMgr {
                     )]
                 },
                 |_, _| Ok(vec![]),
-                Some(
-                    |old_id: DataId<procedure_id_ident::Resource>,
-                     txn: &mut TxnRequest|
-                     -> Result<(), MetaError> {
-                        // Add ownership key deletion to transaction when overriding
-                        let key = TenantOwnershipObjectIdent::new(
-                            tenant.clone(),
-                            OwnershipObject::Procedure {
-                                procedure_id: *old_id,
-                            },
-                        )
-                        .to_string_key();
-                        txn.if_then.push(TxnOp::delete(key));
-                        Ok(())
-                    },
-                ),
+                |old_id: DataId<procedure_id_ident::Resource>, txn: &mut TxnRequest| {
+                    // Add ownership key deletion to transaction when overriding
+                    let key = TenantOwnershipObjectIdent::new(
+                        tenant.clone(),
+                        OwnershipObject::Procedure {
+                            procedure_id: *old_id,
+                        },
+                    )
+                    .to_string_key();
+                    txn.if_then.push(TxnOp::delete(key));
+                },
             )
             .await?;
 

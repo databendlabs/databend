@@ -88,7 +88,7 @@ impl Interpreter for CreateProcedureInterpreter {
                 if self.plan.create_option != CreateOption::CreateIfNotExists {
                     Err(ErrorCode::ProcedureAlreadyExists(format!(
                         "Procedure {} already exists",
-                        self.plan.name
+                        self.plan.name.procedure_name()
                     )))
                 } else {
                     Ok(PipelineBuildResult::create())

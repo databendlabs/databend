@@ -71,12 +71,7 @@ where
                     )]
                 },
                 |_, _| Ok(vec![]),
-                None::<
-                    fn(
-                        CatalogId,
-                        &mut databend_common_meta_types::TxnRequest,
-                    ) -> Result<(), MetaError>,
-                >,
+                |_, _| {},
             )
             .await?;
 

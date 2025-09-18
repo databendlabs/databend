@@ -89,12 +89,12 @@ where
         override_exist: bool,
         associated_records: A,
         mark_delete_records: M,
-        on_override_fn: Option<O>,
+        on_override_fn: O,
     ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
         M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
-        O: Fn(DataId<IdRsc>, &mut TxnRequest) -> Result<(), MetaError> + Send,
+        O: Fn(DataId<IdRsc>, &mut TxnRequest) + Send,
     {
         debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
 
@@ -132,11 +132,8 @@ where
                         for (k, v) in kvs {
                             txn.if_then.push(TxnOp::put(k, v));
                         }
-
                         // Apply override function if provided
-                        if let Some(ref on_override_fn) = on_override_fn {
-                            on_override_fn(seq_id.data, &mut txn)?;
-                        }
+                        on_override_fn(seq_id.data, &mut txn);
                     } else {
                         return Ok(Err(seq_id));
                     }
