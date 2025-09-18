@@ -109,7 +109,6 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
-        let mut old_db_id = None;
 
         loop {
             trials.next().unwrap()?.await;
@@ -121,7 +120,6 @@ where
             let mut txn = TxnRequest::default();
 
             if let Some(ref curr_seq_db_id) = curr_seq_db_id {
-                old_db_id = Some(curr_seq_db_id.data.into_inner());
                 match req.create_option {
                     CreateOption::Create => {
                         return Err(KVAppError::AppError(AppError::DatabaseAlreadyExists(
@@ -134,11 +132,18 @@ where
                     CreateOption::CreateIfNotExists => {
                         return Ok(CreateDatabaseReply {
                             db_id: curr_seq_db_id.data.into_inner(),
-                            old_db_id: None,
                         });
                     }
                     CreateOption::CreateOrReplace => {
-                        let _ = drop_database_meta(self, name_key, false, false, &mut txn).await?;
+                        let _ = drop_database_meta(
+                            self,
+                            name_key,
+                            req.catalog_name.clone(),
+                            false,
+                            false,
+                            &mut txn,
+                        )
+                        .await?;
                     }
                 }
             };
@@ -192,10 +197,7 @@ where
                 );
 
                 if succ {
-                    return Ok(CreateDatabaseReply {
-                        db_id: id_key,
-                        old_db_id,
-                    });
+                    return Ok(CreateDatabaseReply { db_id: id_key });
                 }
             }
         }
@@ -215,7 +217,8 @@ where
             let mut txn = TxnRequest::default();
 
             let db_id =
-                drop_database_meta(self, tenant_dbname, req.if_exists, true, &mut txn).await?;
+                drop_database_meta(self, tenant_dbname, None, req.if_exists, true, &mut txn)
+                    .await?;
 
             let (succ, _responses) = send_txn(self, txn).await?;
 
