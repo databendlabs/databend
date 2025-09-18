@@ -80,17 +80,20 @@ impl PageManager {
                 let duration_ms = start_time.elapsed().as_millis();
 
                 log::debug!(num_row, wait_type:? = wait; "collect_new_page");
-                log::info!(
-                    target: "result-set-spill",
-                    "[RESULT-SET-SPILL] Page received page_no={}, rows={}, total_rows={}, end={}, duration_ms={}",
-                    self.total_pages, num_row, self.total_rows + num_row, end, duration_ms
-                );
 
-                if num_row == 0 {
+                // Only log non-empty pages to avoid spam during long SQL waits
+                if num_row > 0 {
                     log::info!(
                         target: "result-set-spill",
-                        "[RESULT-SET-SPILL] Empty page page_no={}, end={}",
-                        self.total_pages, end
+                        "[RESULT-SET-SPILL] Page received page_no={}, rows={}, total_rows={}, end={}, duration_ms={}",
+                        self.total_pages, num_row, self.total_rows + num_row, end, duration_ms
+                    );
+                } else if end {
+                    // Only log empty page when query ends
+                    log::info!(
+                        target: "result-set-spill",
+                        "[RESULT-SET-SPILL] Query completed with empty final page page_no={}, total_rows={}",
+                        self.total_pages, self.total_rows
                     );
                 }
 
