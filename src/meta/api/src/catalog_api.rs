@@ -71,6 +71,7 @@ where
                     )]
                 },
                 |_, _| Ok(vec![]),
+                None::<fn(CatalogId) -> Vec<String>>,
             )
             .await?;
 
