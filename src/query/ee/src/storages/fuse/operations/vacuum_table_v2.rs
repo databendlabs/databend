@@ -98,6 +98,15 @@ pub async fn do_vacuum2(
     }
 
     let fuse_table = FuseTable::try_from_table(table)?;
+
+    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
+        info!(
+            "[FUSE-VACUUM2] Table {} has no snapshot, stopping vacuum",
+            fuse_table.get_table_info().desc
+        );
+        return Ok(vec![]);
+    };
+
     let start = std::time::Instant::now();
 
     let retention_policy = fuse_table.get_data_retention_policy(ctx.as_ref())?;
@@ -122,7 +131,9 @@ pub async fn do_vacuum2(
             // A zero retention period indicates that we should vacuum all the historical snapshots
             is_vacuum_all = retention_period.is_zero();
 
-            let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period).await? else {
+            let Some(lvt) =
+                set_lvt(fuse_table, latest_snapshot, ctx.as_ref(), retention_period).await?
+            else {
                 return Ok(vec![]);
             };
 
@@ -153,6 +164,7 @@ pub async fn do_vacuum2(
                 fuse_table
                     .meta_location_generator()
                     .snapshot_location_prefix(),
+                // Safe to unwrap here: we have checked that `fuse_table` has a snapshot
                 fuse_table.snapshot_loc().unwrap().as_str(),
                 need_one_more,
                 None,
@@ -433,16 +445,10 @@ async fn collect_gc_candidates_by_retention_period(
 /// Return `None` means we stop vacuumming, but don't want to report error to user.
 async fn set_lvt(
     fuse_table: &FuseTable,
+    latest_snapshot: Arc<TableSnapshot>,
     ctx: &dyn TableContext,
     retention_period: TimeDelta,
 ) -> Result<Option<DateTime<Utc>>> {
-    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
-        info!(
-            "[FUSE-VACUUM2] Table {} has no snapshot, stopping vacuum",
-            fuse_table.get_table_info().desc
-        );
-        return Ok(None);
-    };
     if !is_uuid_v7(&latest_snapshot.snapshot_id) {
         info!(
             "[FUSE-VACUUM2] Latest snapshot is not v7, stopping vacuum: {:?}",
