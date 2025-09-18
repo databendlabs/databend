@@ -136,12 +136,6 @@ impl MetaSrvTestContext {
 
         let mut config = configs::Config::default();
 
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-        if cfg!(target_os = "macos") {
-            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.raft_config.no_sync = true;
-        }
-
         config.raft_config.id = id;
 
         config.raft_config.config_id = config_id.to_string();

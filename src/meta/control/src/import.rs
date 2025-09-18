@@ -237,7 +237,7 @@ async fn init_new_cluster(
             payload: EntryPayload::Membership(membership),
         };
 
-        let mut log = sto.log.clone();
+        let mut log = sto.log().clone();
         log.blocking_append([entry]).await?;
 
         // insert AddNodes logs
@@ -261,7 +261,7 @@ async fn init_new_cluster(
 
     // Reset node id
     {
-        let mut log = sto.log.write().await;
+        let mut log = sto.log().write().await;
         log.save_user_data(Some(raft_log_v004::LogStoreMeta {
             node_id: Some(args.id),
         }))?;

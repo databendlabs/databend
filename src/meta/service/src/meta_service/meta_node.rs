@@ -172,8 +172,8 @@ impl MetaNodeBuilder {
 
         let net = NetworkFactory::new(sto.clone());
 
-        let log_store = sto.log.clone();
-        let sm_store = sto.state_machine.clone();
+        let log_store = sto.log().clone();
+        let sm_store = sto.state_machine().clone();
 
         let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
             .await
@@ -374,25 +374,12 @@ impl MetaNode {
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
-        let mut config = config.clone();
-
-        // Always disable fsync on mac.
-        // Because there are some integration tests running on mac VM.
-        //
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-        if cfg!(target_os = "macos") {
-            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.no_sync = true;
-        }
+        let config = config.clone();
 
         let log_store = RaftStore::open(&config).await?;
 
         // config.id only used for the first time
-        let self_node_id = if log_store.is_opened {
-            log_store.id
-        } else {
-            config.id
-        };
+        let self_node_id = log_store.id;
 
         let builder = MetaNode::builder(&config)
             .sto(log_store.clone())
@@ -1264,11 +1251,11 @@ impl MetaNode {
 
     /// Get the size in bytes of the on disk files of the raft log storage.
     async fn get_raft_log_size(&self) -> u64 {
-        self.raft_store.log.read().await.on_disk_size()
+        self.raft_store.log().read().await.on_disk_size()
     }
 
     async fn get_raft_log_stat(&self) -> RaftLogStat {
-        self.raft_store.log.read().await.stat()
+        self.raft_store.log().read().await.stat()
     }
 
     async fn get_snapshot_key_count(&self) -> u64 {
