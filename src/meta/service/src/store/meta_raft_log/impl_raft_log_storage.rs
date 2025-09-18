@@ -42,9 +42,45 @@ use log::info;
 use log::warn;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 
-use crate::store::RaftStore;
+use crate::store::meta_raft_log::MetaRaftLog;
 
-impl RaftLogReader<TypeConfig> for RaftStore {
+impl RaftLogReader<TypeConfig> for MetaRaftLog {
+    #[fastrace::trace]
+    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
+        &mut self,
+        range: RB,
+    ) -> Result<Vec<Entry>, StorageError> {
+        let (start, end) = range_boundary(range);
+
+        let mut io = IODesc::read_logs(format!(
+            "RaftStore(id={})::try_get_log_entries([{},{})",
+            self.id, start, end
+        ));
+
+        let log = self.read().await;
+
+        let entries = log
+            .read(start, end)
+            .map_ok(|(log_id, payload)| Entry {
+                log_id: log_id.0,
+                payload: payload.0,
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| io.err_submit(e))?;
+
+        io.set_done_time();
+        info!("{}", io.ok_done());
+        Ok(entries)
+    }
+
+    #[fastrace::trace]
+    async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
+        let log = self.read().await;
+        let vote = log.log_state().vote().map(Cw::to_inner);
+
+        Ok(vote)
+    }
+
     #[fastrace::trace]
     async fn limited_get_log_entries(
         &mut self,
@@ -65,7 +101,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
                 let size = match &ent.payload {
                     EntryPayload::Blank => 0,
                     EntryPayload::Normal(log_entry) => log_entry.deep_size_of(),
-                    EntryPayload::Membership(_) => std::mem::size_of::<Membership>(),
+                    EntryPayload::Membership(_) => size_of::<Membership>(),
                 };
 
                 debug!(
@@ -95,49 +131,13 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 
         Ok(res)
     }
-
-    #[fastrace::trace]
-    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
-        &mut self,
-        range: RB,
-    ) -> Result<Vec<Entry>, StorageError> {
-        let (start, end) = range_boundary(range);
-
-        let mut io = IODesc::read_logs(format!(
-            "RaftStore(id={})::try_get_log_entries([{},{})",
-            self.id, start, end
-        ));
-
-        let log = self.log.read().await;
-
-        let entries = log
-            .read(start, end)
-            .map_ok(|(log_id, payload)| Entry {
-                log_id: log_id.0,
-                payload: payload.0,
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| io.err_submit(e))?;
-
-        io.set_done_time();
-        info!("{}", io.ok_done());
-        Ok(entries)
-    }
-
-    #[fastrace::trace]
-    async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
-        let log = self.log.read().await;
-        let vote = log.log_state().vote().map(Cw::to_inner);
-
-        Ok(vote)
-    }
 }
 
-impl RaftLogStorage<TypeConfig> for RaftStore {
-    type LogReader = RaftStore;
+impl RaftLogStorage<TypeConfig> for MetaRaftLog {
+    type LogReader = MetaRaftLog;
 
     async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
-        let log = self.log.read().await;
+        let log = self.read().await;
         let state = log.log_state();
 
         let purged = state.purged().map(Cw::to_inner);
@@ -153,6 +153,28 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         self.clone()
     }
 
+    #[fastrace::trace]
+    async fn save_vote(&mut self, vote: &Vote) -> Result<(), StorageError> {
+        let io = IODesc::save_vote(format!("RaftStore(id={})::save_vote({})", self.id, vote));
+
+        let (tx, rx) = oneshot::channel();
+
+        {
+            let mut log = self.write().await;
+
+            log.save_vote(Cw(*vote)).map_err(|e| io.err_submit(e))?;
+            log.flush(raft_log_v004::Callback::new_oneshot(tx, io.clone()))
+                .map_err(|e| io.err_submit_flush(e))?;
+        }
+
+        rx.await
+            .map_err(|e| io.err_await_flush(e))?
+            .map_err(|e| io.err_recv_flush_cb(e))?;
+
+        info!("{}: done", io.ok_done());
+        Ok(())
+    }
+
     async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), StorageError> {
         let io = IODesc::save_committed(format!(
             "RaftStore(id={})::save_committed({})",
@@ -166,7 +188,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         };
 
         {
-            let mut log = self.log.write().await;
+            let mut log = self.write().await;
             log.commit(Cw(committed)).map_err(|e| io.err_submit(e))?;
         }
 
@@ -178,32 +200,10 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
     }
 
     async fn read_committed(&mut self) -> Result<Option<LogId>, StorageError> {
-        let log = self.log.read().await;
+        let log = self.read().await;
         let committed = log.log_state().committed().map(Cw::to_inner);
 
         Ok(committed)
-    }
-
-    #[fastrace::trace]
-    async fn save_vote(&mut self, vote: &Vote) -> Result<(), StorageError> {
-        let io = IODesc::save_vote(format!("RaftStore(id={})::save_vote({})", self.id, vote));
-
-        let (tx, rx) = oneshot::channel();
-
-        {
-            let mut log = self.log.write().await;
-
-            log.save_vote(Cw(*vote)).map_err(|e| io.err_submit(e))?;
-            log.flush(raft_log_v004::Callback::new_oneshot(tx, io.clone()))
-                .map_err(|e| io.err_submit_flush(e))?;
-        }
-
-        rx.await
-            .map_err(|e| io.err_await_flush(e))?
-            .map_err(|e| io.err_recv_flush_cb(e))?;
-
-        info!("{}: done", io.ok_done());
-        Ok(())
     }
 
     #[fastrace::trace]
@@ -225,7 +225,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             first.display()
         ));
 
-        let mut log = self.log.write().await;
+        let mut log = self.write().await;
 
         log.append(entries).map_err(|e| io.err_submit(e))?;
 
@@ -249,7 +249,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             self.id, log_id
         ));
 
-        let mut log = self.log.write().await;
+        let mut log = self.write().await;
 
         {
             let curr_last = log.log_state().last().map(Cw::to_inner);
@@ -274,7 +274,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
     async fn purge(&mut self, log_id: LogId) -> Result<(), StorageError> {
         let io = IODesc::purge(format!("RaftStore(id={})::purge(upto={})", self.id, log_id));
 
-        let mut log = self.log.write().await;
+        let mut log = self.write().await;
 
         {
             let curr_purged = log.log_state().purged().map(Cw::to_inner);
