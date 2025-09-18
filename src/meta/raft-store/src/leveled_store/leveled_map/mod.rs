@@ -30,19 +30,14 @@ use seq_marked::InternalSeq;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::snapshot::MvccSnapshot;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 
-#[cfg(test)]
-mod acquire_compactor_test;
-
-pub mod applier_acquirer;
 pub mod compactor;
-pub mod compactor_acquirer;
 mod impl_commit;
 mod impl_scoped_seq_bounded_get;
 mod impl_scoped_seq_bounded_range;

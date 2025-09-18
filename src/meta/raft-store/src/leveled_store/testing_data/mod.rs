@@ -12,86 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::Node;
 use databend_common_meta_types::UpsertKV;
-use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedSet;
 use maplit::btreemap;
 use openraft::testing::log_id;
-use pretty_assertions::assert_eq;
 use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v003::sm_v003::SMV003;
-
-#[tokio::test]
-async fn test_compact_3_level() -> anyhow::Result<()> {
-    let lm = build_3_levels().await?;
-    println!("{:#?}", lm);
-
-    lm.freeze_writable_without_permit();
-
-    let immutable_data = lm.immutable_data();
-
-    let (sys_data, strm) = immutable_data.compact_into_stream().await?;
-    assert_eq!(
-        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":2}"#,
-        serde_json::to_string(&sys_data).unwrap()
-    );
-
-    let got = strm
-        .map_ok(|x| serde_json::to_string(&x).unwrap())
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    assert_eq!(got, vec![
-        r#"["kv--/a",{"seq":1,"marked":{"Normal":[1,4,110,117,108,108,2,97,48]}}]"#,
-        r#"["kv--/d",{"seq":7,"marked":{"Normal":[1,4,110,117,108,108,2,100,50]}}]"#,
-        r#"["kv--/e",{"seq":6,"marked":{"Normal":[1,4,110,117,108,108,2,101,49]}}]"#,
-    ]);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
-    let sm = build_sm_with_expire().await?;
-    sm.leveled_map().freeze_writable_without_permit();
-
-    let mut compactor = sm.acquire_compactor("").await;
-
-    let (sys_data, strm) = compactor.compact_into_stream().await?;
-    let got = strm
-        .map_ok(|x| serde_json::to_string(&x).unwrap())
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    assert_eq!(
-        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4,"data_seq":1}"#,
-        serde_json::to_string(&sys_data).unwrap()
-    );
-
-    assert_eq!(got, vec![
-        r#"["exp-/00000000000000005000/00000000000000000002",{"seq":2,"marked":{"Normal":[1,4,110,117,108,108,1,98]}}]"#,
-        r#"["exp-/00000000000000015000/00000000000000000004",{"seq":4,"marked":{"Normal":[1,4,110,117,108,108,1,97]}}]"#,
-        r#"["exp-/00000000000000020000/00000000000000000003",{"seq":3,"marked":{"Normal":[1,4,110,117,108,108,1,99]}}]"#,
-        r#"["kv--/a",{"seq":4,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,49,53,125,2,97,49]}}]"#,
-        r#"["kv--/b",{"seq":2,"marked":{"Normal":[1,15,123,34,101,120,112,105,114,101,95,97,116,34,58,53,125,2,98,48]}}]"#,
-        r#"["kv--/c",{"seq":3,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,50,48,125,2,99,48]}}]"#,
-    ]);
-
-    Ok(())
-}
+use crate::sm_v003::SMV003;
 
 /// Create multi levels store:
 ///
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d              // db
-pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
+pub(crate) async fn build_3_levels_leveled_map() -> anyhow::Result<LeveledMap> {
     let lm = LeveledMap::default();
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -158,7 +97,7 @@ pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-pub(crate) async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
+pub(crate) async fn build_2_levels_leveled_map_with_expire() -> anyhow::Result<LeveledMap> {
     let mut sm = SMV003::default();
 
     let mut a = sm.new_applier().await;
@@ -178,7 +117,7 @@ pub(crate) async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
         .await?;
     a.commit().await?;
 
-    Ok(sm)
+    Ok(sm.leveled_map().clone())
 }
 
 fn b(x: impl ToString) -> Vec<u8> {
