@@ -110,7 +110,7 @@ where
                     mark_index_as_deleted(name_ident.tenant(), value.table_id, *index_id)
                         .map(|(k, v)| vec![(k, v)])
                 },
-                None::<fn(IndexId) -> Vec<String>>,
+                None::<fn(IndexId, &mut TxnRequest) -> Result<(), MetaError>>,
             )
             .await?;
 

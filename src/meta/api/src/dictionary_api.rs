@@ -73,7 +73,7 @@ where
                 false,
                 |_| vec![],
                 |_, _| Ok(vec![]),
-                None::<fn(DictionaryId) -> Vec<String>>,
+                None::<fn(DictionaryId, &mut TxnRequest) -> Result<(), MetaError>>,
             )
             .await?;
 

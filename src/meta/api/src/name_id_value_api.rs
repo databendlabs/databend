@@ -77,24 +77,24 @@ where
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
     ///
-    /// `cleanup_old_fn` is called with the old id when override_exist is true and an existing
-    /// resource is being replaced. It should return a list of keys that will be deleted.
+    /// `on_override_fn` is called with the old id and txn when override_exist is true and an existing
+    /// resource is being replaced. It can add custom operations to the transaction.
     ///
     /// This eliminates the need for callers to manually handle cleanup logic after the fact.
     /// For example, when a procedure is dropped by `override_exist`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
-    async fn create_id_value<A, M, C>(
+    async fn create_id_value<A, M, O>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
         override_exist: bool,
         associated_records: A,
         mark_delete_records: M,
-        cleanup_old_fn: Option<C>,
+        on_override_fn: Option<O>,
     ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
         M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
-        C: Fn(DataId<IdRsc>) -> Vec<String> + Send,
+        O: Fn(DataId<IdRsc>, &mut TxnRequest) -> Result<(), MetaError> + Send,
     {
         debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
 
@@ -133,12 +133,9 @@ where
                             txn.if_then.push(TxnOp::put(k, v));
                         }
 
-                        // Apply cleanup function if provided
-                        if let Some(ref cleanup_fn) = cleanup_old_fn {
-                            let cleanup_keys = cleanup_fn(seq_id.data);
-                            for key in cleanup_keys {
-                                txn.if_then.push(TxnOp::delete(key));
-                            }
+                        // Apply override function if provided
+                        if let Some(ref on_override_fn) = on_override_fn {
+                            on_override_fn(seq_id.data, &mut txn)?;
                         }
                     } else {
                         return Ok(Err(seq_id));

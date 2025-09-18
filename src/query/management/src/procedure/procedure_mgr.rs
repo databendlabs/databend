@@ -43,6 +43,8 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
@@ -89,16 +91,22 @@ impl ProcedureMgr {
                     )]
                 },
                 |_, _| Ok(vec![]),
-                Some(|old_id: DataId<procedure_id_ident::Resource>| {
-                    // Return ownership keys to be deleted when overriding
-                    vec![TenantOwnershipObjectIdent::new(
-                        tenant.clone(),
-                        OwnershipObject::Procedure {
-                            procedure_id: *old_id,
-                        },
-                    )
-                    .to_string_key()]
-                }),
+                Some(
+                    |old_id: DataId<procedure_id_ident::Resource>,
+                     txn: &mut TxnRequest|
+                     -> Result<(), MetaError> {
+                        // Add ownership key deletion to transaction when overriding
+                        let key = TenantOwnershipObjectIdent::new(
+                            tenant.clone(),
+                            OwnershipObject::Procedure {
+                                procedure_id: *old_id,
+                            },
+                        )
+                        .to_string_key();
+                        txn.if_then.push(TxnOp::delete(key));
+                        Ok(())
+                    },
+                ),
             )
             .await?;
 

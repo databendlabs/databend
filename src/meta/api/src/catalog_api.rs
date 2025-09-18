@@ -71,7 +71,12 @@ where
                     )]
                 },
                 |_, _| Ok(vec![]),
-                None::<fn(CatalogId) -> Vec<String>>,
+                None::<
+                    fn(
+                        CatalogId,
+                        &mut databend_common_meta_types::TxnRequest,
+                    ) -> Result<(), MetaError>,
+                >,
             )
             .await?;
 
