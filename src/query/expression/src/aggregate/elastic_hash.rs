@@ -1,9 +1,25 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use super::Entry;
+
 #[derive(Debug)]
 pub struct Elastic {
     delta: f64,
     c: f64,
 
-    entries: Vec<Option<usize>>,
+    entries: Vec<Entry>,
 
     batch_limit: usize,
     count: usize,
@@ -18,7 +34,7 @@ impl Elastic {
     pub fn with_capacity(n: usize, delta: f64) -> Self {
         assert!(n.is_power_of_two());
         Self {
-            entries: vec![None; n],
+            entries: vec![Entry::default(); n],
             c: 1000.0,
             count: 0,
             delta,
@@ -47,7 +63,7 @@ impl Elastic {
         self.entries.len() >> i
     }
 
-    fn zone(&self, i: usize) -> &[Option<usize>] {
+    fn zone(&self, i: usize) -> &[Entry] {
         &self.entries[self.zone_range(i)]
     }
 
@@ -78,7 +94,7 @@ impl Elastic {
     fn epsilon(&self, i: usize) -> f64 {
         let r = self.zone_range(i);
         let size = r.len();
-        let empty = self.entries[r].iter().filter(|x| x.is_none()).count();
+        let empty = self.entries[r].iter().filter(|x| !x.is_occupied()).count();
         empty as f64 / size as f64
     }
 
@@ -88,15 +104,23 @@ impl Elastic {
         self.c * t1.min(t2)
     }
 
-    fn probe_zone(&self, i: usize, mut j: usize, max: Option<usize>) -> Option<usize> {
+    fn probe_zone(
+        &self,
+        i: usize,
+        mut j: usize,
+        salt: Option<u64>,
+        max: Option<usize>,
+    ) -> Option<usize> {
         let zone = self.zone(i);
-        let end = max.map(|max| (j + max) % zone.len());
+        let end = max.map(|max| (j + max) & (zone.len() - 1));
 
         let mut c = 0;
         loop {
             c += 1;
             assert!(c < zone.len());
-            if zone[j].is_none() {
+
+            let entry = &zone[j];
+            if !entry.is_occupied() && salt.map(|salt| salt == entry.get_salt()).unwrap_or(true) {
                 return Some(j);
             }
 
@@ -114,56 +138,62 @@ impl Elastic {
     fn is_case3(&self, i: usize) -> bool {
         let zone = self.zone(i + 1);
         let size = zone.len();
-        let empty = zone.iter().filter(|x| x.is_none()).count();
+        let empty = zone.iter().filter(|x| !x.is_occupied()).count();
         empty * 4 <= size
     }
 
     fn is_case1(&self, i: usize) -> bool {
         let zone = self.zone(i);
         let size = zone.len();
-        let empty = zone.iter().filter(|x| x.is_none()).count();
+        let empty = zone.iter().filter(|x| !x.is_occupied()).count();
         (2 * empty) as f64 > self.delta * size as f64
     }
 
-    pub fn probe(&mut self, value: usize) -> Slot {
+    fn init_slot(&self, value: Entry, capacity: usize) -> usize {
+        debug_assert!(capacity.is_power_of_two());
+        value.0 as usize & (capacity - 1)
+    }
+
+    pub fn probe(&mut self, value: Entry) -> Slot {
         let i = self.cur_batch().unwrap();
         if i == 0 {
             let range = self.zone_range(1);
-            let j = value % range.len();
-            let j = self.probe_zone(1, j, None).unwrap();
+            let j = self.init_slot(value, range.len());
+            let j = self.probe_zone(1, j, None, None).unwrap();
             return Slot(range.start + j);
         }
 
         if self.is_case3(i) {
             let range = self.zone_range(i);
-            let j = value % range.len();
-            let j = self.probe_zone(i, j, None).unwrap();
+            let j = self.init_slot(value, range.len());
+            let j = self.probe_zone(i, j, None, None).unwrap();
             return Slot(range.start + j);
         }
 
         if self.is_case1(i) {
             let range = self.zone_range(i);
-            let j = value % range.len();
-            if let Some(j) = self.probe_zone(i, j, Some(self.max_probe(i) as usize)) {
+            let j = self.init_slot(value, range.len());
+            if let Some(j) = self.probe_zone(i, j, None, Some(self.max_probe(i) as usize)) {
                 return Slot(range.start + j);
             }
         }
 
         // case 2
         let range = self.zone_range(i + 1);
-        let j = value % range.len();
-        let j = self.probe_zone(i + 1, j, None).unwrap();
+        let j = self.init_slot(value, range.len());
+        let j = self.probe_zone(i + 1, j, None, None).unwrap();
         Slot(range.start + j)
     }
 
-    pub fn mut_entry(&mut self, slot: Slot) -> &mut Option<usize> {
+    pub fn mut_entry(&mut self, slot: Slot) -> &mut Entry {
         &mut self.entries[slot.0]
     }
 
-    pub fn insert(&mut self, slot: Slot, value: usize) {
-        let x = self.entries[slot.0].replace(value);
+    pub fn insert(&mut self, slot: Slot, value: Entry) {
+        let entry = &mut self.entries[slot.0];
+        assert!(!entry.is_occupied());
+        *entry = value;
         self.count += 1;
-        assert!(x.is_none())
     }
 
     pub fn coord(&self, slot: Slot) -> (usize, usize) {
@@ -186,10 +216,12 @@ mod tests {
 
         for value in 200..305 {
             println!("start {value}");
-            let slot = elastic.probe(value);
+            let mut entry = Entry::default();
+            entry.set_salt(value << 48);
+            let slot = elastic.probe(entry);
 
             let (i, j) = elastic.coord(slot);
-            elastic.insert(slot, value);
+            elastic.insert(slot, entry);
 
             if i != 0 {
                 let f = elastic.count as f64 / elastic.entries.len() as f64;
