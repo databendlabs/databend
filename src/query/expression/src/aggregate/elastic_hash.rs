@@ -41,7 +41,7 @@ impl Elastic {
             count: 0,
             delta,
             i: 0,
-            batch_limit: n / 8 * 3,
+            batch_limit: (n >> 3) * 3,
             // load_limit: n - (n as f64 * delta) as usize,
         }
     }
@@ -61,22 +61,16 @@ impl Elastic {
         start..end
     }
 
-    fn zone_size(&self, i: usize) -> usize {
-        self.entries.len() >> i
-    }
-
     fn zone(&self, i: usize) -> &[Entry] {
         &self.entries[self.zone_range(i)]
     }
 
     fn cur_batch(&mut self) -> Option<usize> {
-        let count = self.count;
-
         if self.i > self.max_batch() {
             return None;
         }
 
-        if count < self.batch_limit {
+        if self.count < self.batch_limit {
             Some(self.i)
         } else {
             self.i += 1;
@@ -189,9 +183,12 @@ impl Elastic {
         (i + 1, j, range)
     }
 
-    fn find(&self, hash: u64, start: Option<(usize, usize)>) -> Option<(usize, usize)> {
+    pub fn find(&self, hash: u64, start: Option<Slot>) -> Option<Slot> {
         let (start_i, mut j) = match start {
-            Some((i, j)) => (i, Some(j)),
+            Some(solt) => {
+                let (i, j) = self.coord(solt);
+                (i, Some(j))
+            }
             None => {
                 let i = 1;
                 (i, None)
@@ -199,7 +196,8 @@ impl Elastic {
         };
 
         for i in start_i..=(self.i + 1) {
-            let zone = self.zone(i);
+            let range = self.zone_range(i);
+            let zone = &self.entries[range.clone()];
             let found = match j.take() {
                 Some(j) => {
                     let size = zone.len();
@@ -218,7 +216,7 @@ impl Elastic {
             if !zone[j].is_occupied() {
                 continue;
             }
-            return Some((i, j));
+            return Some(Slot(range.start + j));
         }
         None
     }
@@ -228,13 +226,6 @@ impl Elastic {
         debug_assert!(!self.entries[range.start + j].is_occupied(), "hash {hash}");
         Slot(range.start + j)
     }
-
-    // pub fn insert(&mut self, curser: Curser) -> (Slot, bool) {
-    //     match curser {
-    //         Curser::Hash(hash) => self.probe_core(hash, Some(Entry::hash_to_salt(hash))),
-    //         Curser::Next { i, j, salt } => {}
-    //     }
-    // }
 
     pub fn probe(&mut self, hash: u64, salt: u16) -> Slot {
         let (_, j, range) = self.probe_core(hash, Some(salt));
@@ -339,8 +330,7 @@ mod tests {
             elastic.insert(slot, entry);
         }
 
-        // println!("{elastic:?}");
-        for i in 1..5 {
+        for i in 1..=elastic.max_batch() {
             println!("{i} {} {:?}\n", elastic.epsilon(i), elastic.zone(i))
         }
 
@@ -372,18 +362,17 @@ mod tests {
         let mut got = Vec::new();
         let mut start = None;
         for _ in 0..20 {
-            let coord = elastic.find(hash, start).unwrap();
-            let entry = elastic.entries[elastic.zone_range(coord.0).start + coord.1];
+            let slot = elastic.find(hash, start).unwrap();
+            let entry = elastic.entries[slot.0];
             assert_eq!(entry.get_salt(), (value % SALT_SIZE) as u16);
             let v = entry.get_pointer().as_ptr() as u64;
-            got.push((coord, v));
+            got.push((elastic.coord(slot), v));
 
             if v == value {
                 break;
             }
-            start = Some(coord);
+            start = Some(slot);
         }
-        println!("{got:?}");
         assert_eq!(want, got);
     }
 
