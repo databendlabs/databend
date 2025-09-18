@@ -187,7 +187,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let tables_count = tables.len();
 
         let handler = get_vacuum_handler();
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
         let (files_opt, failed_tables) = handler
             .do_vacuum_drop_tables(
                 threads_nums,
