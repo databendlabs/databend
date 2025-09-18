@@ -14,10 +14,7 @@
 
 use std::fmt;
 use std::io;
-use std::ops::Deref;
-use std::sync::Arc;
 
-use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
 use futures_util::StreamExt;
@@ -25,69 +22,18 @@ use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::IOResultStream;
 use map_api::MapKV;
-use rotbl::v001::SeqMarked;
+use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
 use crate::leveled_store::immutable_data::ImmutableData;
-use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::utils::add_cooperative_yielding;
 
-/// The data to compact.
-///
-/// Including several in-memory immutable levels and an optional persisted db.
-#[derive(Debug)]
-pub(crate) struct CompactingData {
-    pub(crate) immutable: Arc<ImmutableData>,
-}
-
-impl Deref for CompactingData {
-    type Target = Arc<ImmutableData>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.immutable
-    }
-}
-
-impl CompactingData {
-    pub fn new(immutable: Arc<ImmutableData>) -> Self {
-        Self { immutable }
-    }
-
-    // Testing only
-    #[allow(dead_code)]
-    pub(crate) fn new_from_levels_and_persisted(
-        levels: ImmutableLevels,
-        persisted: Option<DB>,
-    ) -> Self {
-        let immutable = ImmutableData::new(levels, persisted);
-        Self {
-            immutable: Arc::new(immutable),
-        }
-    }
-
-    /// Compact in-memory immutable levels(excluding on disk db)
-    /// into one level and keep tombstone record.
-    ///
-    /// When compact mem levels, do not remove tombstone,
-    /// because tombstones are still required when compacting with the underlying db.
-    ///
-    /// This is only used for test
-    pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        // TODO: test: after compaction in place, the data should be the same, the base_seq and newest_seq should be the same.
-        let immutable_levels = self.immutable.levels().clone();
-
-        let levels = immutable_levels.compact_all().await;
-        let immutable = ImmutableData::new(levels, self.immutable.persisted().cloned());
-        self.immutable = Arc::new(immutable);
-
-        Ok(())
-    }
-
+impl ImmutableData {
     /// Compacted all data into a stream.
     ///
     /// Tombstones are removed because no more compact with lower levels.
@@ -97,6 +43,7 @@ impl CompactingData {
     /// The stream Item is 2 items tuple of key, and value with seq.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
+    // TODO: mvcc snapshot_seq
     pub async fn compact_into_stream(
         &self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
@@ -107,7 +54,7 @@ impl CompactingData {
             )
         }
 
-        let immutable_levels = self.immutable.levels();
+        let immutable_levels = self.levels();
         let d = immutable_levels.newest().unwrap();
 
         let sys_data = d.sys_data().clone();
@@ -141,7 +88,7 @@ impl CompactingData {
         let mut kmerge = KMerge::by(util::rotbl_by_key_seq);
         kmerge = kmerge.merge(strm);
 
-        if let Some(db) = self.immutable.persisted() {
+        if let Some(db) = self.persisted() {
             let db_strm = db.inner_range();
             kmerge = kmerge.merge(db_strm);
         }

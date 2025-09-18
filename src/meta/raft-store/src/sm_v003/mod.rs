@@ -32,7 +32,7 @@ pub(crate) mod compact_immutable_levels_test;
 #[cfg(test)]
 mod compact_with_db_test;
 #[cfg(test)]
-mod sm_v003_test;
+pub(crate) mod sm_v003_test;
 
 pub use sm_v003::OnChange;
 pub use sm_v003::SMV003;

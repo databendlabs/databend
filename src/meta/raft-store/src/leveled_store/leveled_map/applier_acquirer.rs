@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::DropCallback;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -22,6 +24,12 @@ use tokio::sync::Semaphore;
 /// Acquirer is used to acquire a permit for applying, without holding lock to the state machine.
 pub struct WriterAcquirer {
     sem: Arc<Semaphore>,
+}
+
+impl fmt::Display for WriterAcquirer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WriterAcquirer")
+    }
 }
 
 impl WriterAcquirer {
@@ -36,7 +44,9 @@ impl WriterAcquirer {
         let permit = self.sem.acquire_owned().await.unwrap();
         info!("WriterPermit-Acquire: total: {:?}", start.elapsed());
         WriterPermit {
-            start: Instant::now(),
+            _drop: DropCallback::new(move || {
+                info!("WriterPermit-Drop: total: {:?}", start.elapsed());
+            }),
             _permit: permit,
         }
     }
@@ -44,12 +54,6 @@ impl WriterAcquirer {
 
 /// ApplierPermit is used to acquire a permit for applying changes to the state machine.
 pub struct WriterPermit {
-    start: Instant,
     _permit: OwnedSemaphorePermit,
-}
-
-impl Drop for WriterPermit {
-    fn drop(&mut self) {
-        info!("WriterPermit-Drop: total: {:?}", self.start.elapsed());
-    }
+    _drop: DropCallback,
 }

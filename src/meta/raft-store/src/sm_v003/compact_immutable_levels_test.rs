@@ -12,143 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::mvcc::ScopedSet;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
-use seq_marked::SeqMarked;
-use state_machine_api::ExpireKey;
-use state_machine_api::KVMeta;
 use state_machine_api::UserKey;
 
-use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v003::sm_v003::SMV003;
-
-#[tokio::test]
-async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let lm = build_3_levels().await?;
-
-    lm.testing_freeze_writable();
-    let immutable_levels = lm.immutable_levels();
-
-    let compacted = {
-        let mut compacting_data =
-            CompactingData::new_from_levels_and_persisted(immutable_levels.clone(), None);
-
-        compacting_data.compact_immutable_in_place().await?;
-        compacting_data.levels().clone()
-    };
-
-    let d = compacted.newest().unwrap().deref();
-
-    assert_eq!(compacted.newest_to_oldest().count(), 1);
-    assert_eq!(
-        d.last_membership(),
-        StoredMembership::new(
-            Some(log_id(3, 3, 3)),
-            Membership::new_with_defaults(vec![], [])
-        )
-    );
-    assert_eq!(d.last_applied(), Some(log_id(3, 3, 3)));
-    assert_eq!(
-        d.nodes(),
-        btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
-    );
-
-    let got = d
-        .range(UserKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    assert_eq!(got, vec![
-        //
-        (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
-        (user_key("b"), SeqMarked::new_tombstone(4)),
-        (user_key("c"), SeqMarked::new_tombstone(6)),
-        (user_key("d"), SeqMarked::new_normal(7, (None, b("d2")))),
-        (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
-    ]);
-
-    let got = d
-        .range(ExpireKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    assert_eq!(got, vec![]);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_compact_expire_index() -> anyhow::Result<()> {
-    let sm = build_sm_with_expire().await?;
-
-    let compacted = {
-        sm.levels().testing_freeze_writable();
-        let mut compactor = sm.acquire_compactor().await;
-        compactor.compact_immutable_in_place().await?;
-        compactor.immutable_levels()
-    };
-
-    let d = compacted.newest().unwrap().deref();
-
-    let got = d
-        .range(UserKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    assert_eq!(got, vec![
-        //
-        (
-            user_key("a"),
-            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
-        ),
-        (
-            user_key("b"),
-            SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
-        ),
-        (
-            user_key("c"),
-            SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
-        ),
-    ]);
-
-    let got = d
-        .range(ExpireKey::default().., u64::MAX)
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    assert_eq!(got, vec![
-        //
-        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
-        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
-        (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
-        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
-    ]);
-
-    Ok(())
-}
 
 #[tokio::test]
 async fn test_compact_3_level() -> anyhow::Result<()> {
     let lm = build_3_levels().await?;
     println!("{:#?}", lm);
 
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
-    let compacting_data = lm.new_compacting_data();
+    let immutable_data = lm.immutable_data();
 
-    let (sys_data, strm) = compacting_data.compact_into_stream().await?;
+    let (sys_data, strm) = immutable_data.compact_into_stream().await?;
     assert_eq!(
         r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":2}"#,
         serde_json::to_string(&sys_data).unwrap()
@@ -171,9 +59,9 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     let sm = build_sm_with_expire().await?;
-    sm.levels().testing_freeze_writable();
+    sm.leveled_map().freeze_writable_without_permit();
 
-    let mut compactor = sm.acquire_compactor().await;
+    let mut compactor = sm.acquire_compactor("").await;
 
     let (sys_data, strm) = compactor.compact_into_stream().await?;
     let got = strm
@@ -224,7 +112,7 @@ pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 
     view.commit().await?;
 
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -242,7 +130,7 @@ pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -270,7 +158,7 @@ pub(crate) async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
+pub(crate) async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     let mut sm = SMV003::default();
 
     let mut a = sm.new_applier().await;
@@ -281,7 +169,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
 
     a.commit().await?;
 
-    sm.map_mut().testing_freeze_writable();
+    sm.map_mut().freeze_writable_without_permit();
 
     let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
@@ -291,10 +179,6 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     a.commit().await?;
 
     Ok(sm)
-}
-
-fn s(x: impl ToString) -> String {
-    x.to_string()
 }
 
 fn b(x: impl ToString) -> Vec<u8> {

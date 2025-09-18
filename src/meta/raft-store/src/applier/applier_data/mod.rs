@@ -22,7 +22,9 @@ use crate::sm_v003::OnChange;
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.
-    pub(crate) _permit: WriterPermit,
+    ///
+    /// Wrapping it in a Mutex to make it `Sync` while the permit itself is only `Send`.
+    pub(crate) _permit: Mutex<WriterPermit>,
 
     pub(crate) view: StateMachineView,
 

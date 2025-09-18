@@ -39,7 +39,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     view.commit().await?;
 
     // Insert the same entry at level 1
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     // println!("{:#?}", l);
     let mut view = l.to_view();
 
@@ -182,7 +182,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Create a new level
 
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     let mut view = l.to_view();
 
     // Override
@@ -273,7 +273,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("d"), Some((None, b("d0"))));
     view.commit().await?;
 
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     let mut view = l.to_view();
 
     // internal_seq: 4
@@ -282,7 +282,7 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     let mut view = l.to_view();
 
     // internal_seq: 6
@@ -464,7 +464,7 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     );
     view.commit().await?;
 
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     let mut view = l.to_view();
 
     // internal_seq: 3
@@ -520,7 +520,7 @@ async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
     view.set(user_key("b"), None);
     view.commit().await?;
 
-    l.testing_freeze_writable();
+    l.freeze_writable_without_permit();
     let mut view = l.to_view();
 
     // internal_seq: 3
