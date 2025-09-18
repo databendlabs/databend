@@ -30,6 +30,9 @@ pub mod util;
 pub mod value_convert;
 pub mod view;
 
+#[cfg(test)]
+pub(crate) mod testing_data;
+
 mod db_impl_scoped_seq_bounded_read;
 mod db_open_snapshot_impl;
 #[cfg(test)]

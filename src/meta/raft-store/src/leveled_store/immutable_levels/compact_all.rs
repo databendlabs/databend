@@ -71,8 +71,8 @@ mod tests {
     use state_machine_api::KVMeta;
     use state_machine_api::UserKey;
 
-    use crate::sm_v003::compact_immutable_levels_test::build_3_levels;
-    use crate::sm_v003::compact_immutable_levels_test::build_sm_with_expire;
+    use crate::leveled_store::testing_data::build_2_levels_leveled_map_with_expire;
+    use crate::leveled_store::testing_data::build_3_levels_leveled_map;
 
     fn s(x: impl ToString) -> String {
         x.to_string()
@@ -88,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-        let lm = build_3_levels().await?;
+        let lm = build_3_levels_leveled_map().await?;
 
         lm.freeze_writable_without_permit();
         let immutable_levels = lm.immutable_levels();
@@ -143,12 +143,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_compact_expire_index() -> anyhow::Result<()> {
-        let sm = build_sm_with_expire().await?;
+        let leveled_map = build_2_levels_leveled_map_with_expire().await?;
+
+        leveled_map.freeze_writable_without_permit();
 
         let immutable_levels = {
-            sm.leveled_map().freeze_writable_without_permit();
-            let compactor = sm.acquire_compactor("").await;
-            let immutable_levels = compactor.immutable_levels();
+            let immutable_levels = leveled_map.immutable_levels();
             immutable_levels.compact_all().await
         };
 

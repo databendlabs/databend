@@ -16,8 +16,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 use crate::sm_v003::OnChange;
 
 pub(crate) struct ApplierData {

@@ -22,7 +22,7 @@ use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///

@@ -36,16 +36,16 @@ use tokio::sync::Semaphore;
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
 use crate::leveled_store::immutable_data::ImmutableData;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::leveled_map::compactor::Compactor;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::compactor_acquirer::CompactorAcquirer;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
+use crate::sm_v003::writer_acquirer::WriterAcquirer;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 
@@ -147,7 +147,7 @@ impl StateMachineApi<SysData> for ApplierData {
 
 impl SMV003 {
     /// Return a mutable reference to the map that stores app data.
-    pub(in crate::sm_v003) fn map_mut(&mut self) -> &mut LeveledMap {
+    pub(crate) fn map_mut(&mut self) -> &mut LeveledMap {
         &mut self.leveled_map
     }
 

@@ -28,11 +28,13 @@ pub mod write_entry;
 pub mod writer_stat;
 
 #[cfg(test)]
-pub(crate) mod compact_immutable_levels_test;
+mod acquire_compactor_test;
 #[cfg(test)]
 mod compact_with_db_test;
+pub mod compactor_acquirer;
 #[cfg(test)]
 pub(crate) mod sm_v003_test;
+pub mod writer_acquirer;
 
 pub use sm_v003::OnChange;
 pub use sm_v003::SMV003;
