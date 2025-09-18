@@ -23,6 +23,8 @@ use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
@@ -31,6 +33,7 @@ use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDe
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DropContext;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::TableId;
@@ -148,6 +151,7 @@ pub async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: &Tenant,
+    drop_context: DropContext,
     table_id: u64,
     db_id: u64,
     if_exists: bool,
@@ -266,6 +270,17 @@ pub async fn construct_drop_table_txn_operations(
                 serialize_struct(&tb_id_list)?,
             ));
         }
+    }
+
+    if let DropContext::Replace { catalog_name } = drop_context {
+        // Delete ownership key for the table when replacing
+        let ownership_object = OwnershipObject::Table {
+            catalog_name,
+            db_id,
+            table_id,
+        };
+        let ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), ownership_object);
+        txn.if_then.push(txn_op_del(&ownership_key));
     }
     Ok((tb_id_seq, table_id))
 }

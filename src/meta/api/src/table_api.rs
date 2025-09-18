@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DropContext;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
@@ -272,7 +273,6 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
-        let mut old_table_id = None;
 
         loop {
             trials.next().unwrap()?.await;
@@ -324,7 +324,6 @@ where
                                 spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
-                                old_table_id: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
@@ -336,11 +335,18 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
-                                old_table_id = Some(*id.data);
+                                let drop_context = req
+                                    .catalog_name
+                                    .as_ref()
+                                    .map(|name| DropContext::Replace {
+                                        catalog_name: name.into(),
+                                    })
+                                    .unwrap_or_default();
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
+                                    drop_context,
                                     *id.data,
                                     *seq_db_id.data,
                                     true,
@@ -474,7 +480,6 @@ where
                         spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
-                        old_table_id,
                     });
                 } else {
                     // re-run txn with re-fetched data
@@ -502,6 +507,7 @@ where
                 self,
                 req.table_name.clone(),
                 &req.tenant,
+                DropContext::default(),
                 table_id,
                 req.db_id,
                 req.if_exists,

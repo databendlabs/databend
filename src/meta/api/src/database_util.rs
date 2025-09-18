@@ -17,11 +17,14 @@ use std::fmt::Display;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
+use databend_common_meta_app::schema::DropContext;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
@@ -42,6 +45,7 @@ use crate::txn_op_put;
 pub(crate) async fn drop_database_meta(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant_dbname: &DatabaseNameIdent,
+    drop_context: DropContext,
     if_exists: bool,
     drop_name_key: bool,
     txn: &mut TxnRequest,
@@ -122,6 +126,17 @@ pub(crate) async fn drop_database_meta(
         txn.if_then
             .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
     };
+
+    if let DropContext::Replace { catalog_name } = drop_context {
+        // Delete ownership key for the database when replacing
+        let ownership_object = OwnershipObject::Database {
+            catalog_name,
+            db_id: *seq_db_id.data,
+        };
+        let ownership_key =
+            TenantOwnershipObjectIdent::new(tenant_dbname.tenant(), ownership_object);
+        txn.if_then.push(txn_op_del(&ownership_key));
+    }
 
     Ok(*seq_db_id.data)
 }
