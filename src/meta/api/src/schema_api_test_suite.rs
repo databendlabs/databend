@@ -571,6 +571,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -591,6 +592,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 create_option: CreateOption::CreateIfNotExists,
+                catalog_name: None,
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -695,6 +697,7 @@ impl SchemaApiTestSuite {
 
             let req = CreateDatabaseReq {
                 create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
                 name_ident: DatabaseNameIdent::new(&tenant, "db1"),
                 meta: DatabaseMeta {
                     engine: new_engine.to_string(),
@@ -1089,6 +1092,7 @@ impl SchemaApiTestSuite {
             // first create database
             let req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1180,6 +1184,7 @@ impl SchemaApiTestSuite {
             // then create database
             let req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1209,6 +1214,7 @@ impl SchemaApiTestSuite {
             // first create db2
             let req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: new_db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -1514,6 +1520,7 @@ impl SchemaApiTestSuite {
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
                     db_name: db_name.to_string(),
@@ -1631,6 +1638,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
                     db_name: db_name.to_string(),
@@ -1881,6 +1889,7 @@ impl SchemaApiTestSuite {
 
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: TableNameIdent {
                     tenant: tenant.clone(),
                     db_name: db_name.to_string(),
@@ -3539,6 +3548,7 @@ impl SchemaApiTestSuite {
             // first create database
             let req = CreateDatabaseReq {
                 create_option: CreateOption::Create,
+                catalog_name: None,
                 name_ident: db_name_ident.clone(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -3598,6 +3608,7 @@ impl SchemaApiTestSuite {
     ) -> anyhow::Result<()> {
         let req = CreateDatabaseReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: db_name.clone(),
             meta: DatabaseMeta {
                 engine: "github".to_string(),
@@ -3738,6 +3749,7 @@ impl SchemaApiTestSuite {
 
         let req = CreateTableReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident,
             table_meta: create_table_meta.clone(),
             as_dropped: false,
@@ -4554,6 +4566,7 @@ impl SchemaApiTestSuite {
                 let table_name = format!("tb{:?}", i);
                 let req = CreateTableReq {
                     create_option: CreateOption::Create,
+                    catalog_name: None,
                     name_ident: TableNameIdent {
                         tenant: Tenant::new_or_err(tenant, func_name!())?,
                         db_name: db.to_string(),
@@ -4841,7 +4854,6 @@ impl SchemaApiTestSuite {
                 new_table: true,
                 orphan_table_name: None,
                 spec_vec: None,
-                old_table_id: None,
             };
             let cur_db = util.get_database().await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -5042,6 +5054,7 @@ impl SchemaApiTestSuite {
 
         let create_table_req = CreateTableReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: util.tenant(),
                 db_name: db_name.to_string(),
@@ -5161,6 +5174,7 @@ impl SchemaApiTestSuite {
             // replace with a new as_dropped = true and table_meta.as_drop is None table
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: util.tenant(),
                     db_name: db_name.to_string(),
@@ -5180,6 +5194,7 @@ impl SchemaApiTestSuite {
 
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: util.tenant(),
                     db_name: db_name.to_string(),
@@ -5215,6 +5230,7 @@ impl SchemaApiTestSuite {
 
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
+                catalog_name: Some("default".to_string()),
                 name_ident: TableNameIdent {
                     tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                     db_name: db_name.to_string(),
@@ -5308,6 +5324,7 @@ impl SchemaApiTestSuite {
 
         let create_table_req = CreateTableReq {
             create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
             name_ident: TableNameIdent {
                 tenant: Tenant::new_or_err(tenant_name, func_name!())?,
                 db_name: db_name.to_string(),
@@ -7774,6 +7791,7 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
     async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: DatabaseNameIdent::new(self.tenant(), self.db_name()),
             meta: DatabaseMeta {
                 engine: self.engine(),
@@ -7810,6 +7828,7 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
 
         let req = CreateTableReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: self.tenant(),
                 db_name: self.db_name(),
@@ -7835,6 +7854,7 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
         let table_meta = self.table_meta();
         let req = CreateTableReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: self.tenant(),
                 db_name: self.db_name(),

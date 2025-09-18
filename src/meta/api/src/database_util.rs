@@ -17,6 +17,8 @@ use std::fmt::Display;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -42,6 +44,7 @@ use crate::txn_op_put;
 pub(crate) async fn drop_database_meta(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant_dbname: &DatabaseNameIdent,
+    catalog_name: Option<String>,
     if_exists: bool,
     drop_name_key: bool,
     txn: &mut TxnRequest,
@@ -122,6 +125,17 @@ pub(crate) async fn drop_database_meta(
         txn.if_then
             .push(txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?));
     };
+
+    // Clean up ownership if catalog_name is provided (CREATE OR REPLACE case)
+    if let Some(catalog_name) = catalog_name {
+        let ownership_object = OwnershipObject::Database {
+            catalog_name,
+            db_id: *seq_db_id.data,
+        };
+        let ownership_key =
+            TenantOwnershipObjectIdent::new(tenant_dbname.tenant(), ownership_object);
+        txn.if_then.push(txn_op_del(&ownership_key));
+    }
 
     Ok(*seq_db_id.data)
 }
