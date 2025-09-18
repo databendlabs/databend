@@ -16,8 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::DropProcedureReq;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropProcedurePlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -61,21 +64,31 @@ impl Interpreter for DropProcedureInterpreter {
             .procedure_api(&tenant)
             .drop_procedure(&drop_procedure_req.name_ident)
             .await?;
-        if dropped.is_none() && !self.plan.if_exists {
-            {
-                // try drop old name:
-                let old_drop_procedure_req = DropProcedureReq {
-                    name_ident: self.plan.old_name.clone(),
+        match dropped {
+            Some(d) => {
+                let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+                let owner_object = OwnershipObject::Procedure {
+                    procedure_id: d.1.seq,
                 };
-                let dropped = UserApiProvider::instance()
-                    .procedure_api(&tenant)
-                    .drop_procedure(&old_drop_procedure_req.name_ident)
-                    .await?;
-                if dropped.is_none() {
-                    return Err(ErrorCode::UnknownProcedure(format!(
-                        "Unknown procedure '{}' while drop procedure",
-                        drop_procedure_req.name_ident.procedure_name()
-                    )));
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+            None => {
+                if !self.plan.if_exists {
+                    // try drop old name:
+                    let old_drop_procedure_req = DropProcedureReq {
+                        name_ident: self.plan.old_name.clone(),
+                    };
+                    let dropped = UserApiProvider::instance()
+                        .procedure_api(&tenant)
+                        .drop_procedure(&old_drop_procedure_req.name_ident)
+                        .await?;
+                    if dropped.is_none() {
+                        return Err(ErrorCode::UnknownProcedure(format!(
+                            "Unknown procedure '{}' while drop procedure",
+                            drop_procedure_req.name_ident.procedure_name()
+                        )));
+                    }
                 }
             }
         }

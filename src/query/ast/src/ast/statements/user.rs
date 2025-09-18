@@ -22,6 +22,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::AuthType;
 use crate::ast::CreateOption;
 use crate::ast::PrincipalIdentity;
+use crate::ast::ProcedureIdentity;
 use crate::ast::ShowOptions;
 use crate::ast::UserIdentity;
 use crate::ast::UserPrivilegeType;
@@ -167,6 +168,7 @@ pub enum GrantObjectName {
     Warehouse(String),
     Connection(String),
     Sequence(String),
+    Procedure(ProcedureIdentity),
 }
 
 impl Display for GrantObjectName {
@@ -187,6 +189,7 @@ impl Display for GrantObjectName {
             GrantObjectName::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
             GrantObjectName::Connection(c) => write!(f, " CONNECTION {c}"),
             GrantObjectName::Sequence(s) => write!(f, " SEQUENCE {s}"),
+            GrantObjectName::Procedure(p) => write!(f, " PROCEDURE {p}"),
         }
     }
 }
@@ -246,6 +249,7 @@ pub enum AccountMgrLevel {
     Warehouse(String),
     Connection(String),
     Sequence(String),
+    Procedure(ProcedureIdentity),
 }
 
 impl Display for AccountMgrLevel {
@@ -271,6 +275,7 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
             AccountMgrLevel::Connection(c) => write!(f, " CONNECTION {c}"),
             AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
+            AccountMgrLevel::Procedure(p) => write!(f, " PROCEDURE {p}"),
         }
     }
 }

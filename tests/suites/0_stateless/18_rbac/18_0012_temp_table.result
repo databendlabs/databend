@@ -5,7 +5,7 @@
 >>>> create or replace database test
 >>>> grant role role1 to owner
 mysql: [Warning] Using a password on the command line interface can be insecure.
-ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied: privilege [Create] is required on 'default'.'test'.* for user 'owner'@'%' with roles [role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence.
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied: privilege [Create] is required on 'default'.'test'.* for user 'owner'@'%' with roles [role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object.
 mysql: [Warning] Using a password on the command line interface can be insecure.
 2
 1
