@@ -124,7 +124,6 @@ struct SinkAnalyzeState {
 }
 
 impl SinkAnalyzeState {
-    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         table: &FuseTable,

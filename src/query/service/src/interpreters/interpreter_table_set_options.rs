@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
@@ -32,6 +33,7 @@ use databend_common_storages_fuse::segment_format_from_location;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
@@ -57,6 +59,8 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -175,6 +179,12 @@ impl Interpreter for SetOptionsInterpreter {
             );
         }
 
+        if let Some(value) =
+            analyze_table(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
+        {
+            options_map.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(), Some(value));
+        }
+
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),
             seq: MatchSeq::Exact(table_version),
@@ -197,14 +207,14 @@ async fn set_segment_format(
         return Ok(None);
     };
     let segment_format = FuseSegmentFormat::from_str(value)?;
-    let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-        ErrorCode::Unimplemented(format!(
+    let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+        return Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support {}",
             table.name(),
             table.get_table_info().engine(),
             OPT_KEY_SEGMENT_FORMAT,
-        ))
-    })?;
+        )));
+    };
 
     let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
         return Ok(None);
@@ -278,4 +288,53 @@ async fn set_segment_format(
         .write(&location, new_snapshot.to_bytes()?)
         .await?;
     Ok(Some(location))
+}
+
+async fn analyze_table(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    options: &BTreeMap<String, String>,
+) -> Result<Option<String>> {
+    let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE).cloned() else {
+        return Ok(None);
+    };
+
+    let val = value.parse::<u32>().map_err(|e| {
+        let msg = format!(
+            "Failed to parse value [{value}] for table option 'enable_auto_analyze' as type u32: {e}",
+        );
+        ErrorCode::TableOptionInvalid(msg)
+    })?;
+    if val == 0 {
+        return Ok(Some(value));
+    }
+
+    let table = table.refresh(ctx.as_ref()).await?;
+    let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
+        return Err(ErrorCode::Unimplemented(format!(
+            "table {}, engine type {}, does not support {}",
+            table.name(),
+            table.get_table_info().engine(),
+            FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE,
+        )));
+    };
+    let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
+        return Ok(Some(value));
+    };
+
+    let mut pipeline = Pipeline::create();
+    fuse_table.do_analyze(
+        ctx.clone(),
+        table_snapshot,
+        &mut pipeline,
+        HashMap::new(),
+        false,
+    )?;
+    let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+    let pipelines = vec![pipeline];
+    let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+    ctx.set_executor(complete_executor.get_inner())?;
+    complete_executor.execute()?;
+    drop(complete_executor);
+    Ok(Some(value))
 }

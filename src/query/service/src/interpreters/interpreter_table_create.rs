@@ -51,6 +51,7 @@ use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -452,6 +453,13 @@ impl CreateTableInterpreter {
                     "1".to_string(),
                 );
             };
+
+            if options.get(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE).is_none() {
+                options.insert(
+                    FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(),
+                    "1".to_string(),
+                );
+            }
         }
         if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
             FuseStorageFormat::from_str(storage_format)?;
@@ -492,6 +500,8 @@ impl CreateTableInterpreter {
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
+        // check enable auto analyze.
+        is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
