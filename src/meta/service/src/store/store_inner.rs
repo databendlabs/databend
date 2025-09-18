@@ -189,15 +189,18 @@ impl RaftStoreInner {
 
         let _guard = SnapshotBuilding::guard();
 
+        let mut compactor_permit = self
+            .new_compactor_acquirer("build_snapshot")
+            .acquire()
+            .await;
         {
             let mut writer_permit = self.state_machine().acquire_writer_permit().await;
             self.state_machine()
-                .levels()
-                .freeze_writable(&mut writer_permit);
+                .leveled_map()
+                .freeze_writable(&mut writer_permit, &mut compactor_permit);
         }
 
-        let permit = self.new_compactor_acquirer().acquire().await;
-        let mut compactor = self.state_machine().new_compactor(permit);
+        let mut compactor = self.state_machine().new_compactor(compactor_permit);
 
         info!("do_build_snapshot compactor created: {:?}", compactor);
 
@@ -281,7 +284,7 @@ impl RaftStoreInner {
 
         {
             self.state_machine()
-                .levels()
+                .leveled_map()
                 .replace_with_compacted(&mut compactor, db.clone());
             info!("do_build_snapshot-replace_with_compacted returned");
         }
@@ -313,7 +316,7 @@ impl RaftStoreInner {
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
     pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
         let sm = self.state_machine();
-        let db = sm.levels().persisted()?;
+        let db = sm.leveled_map().persisted()?;
         Some(db.stat().key_num)
     }
 
@@ -326,7 +329,7 @@ impl RaftStoreInner {
     /// Returns an empty map if no snapshot exists.
     pub(crate) async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
         let sm = self.state_machine();
-        let Some(db) = sm.levels().persisted() else {
+        let Some(db) = sm.leveled_map().persisted() else {
             return Default::default();
         };
         db.sys_data().key_counts().clone()
@@ -335,7 +338,7 @@ impl RaftStoreInner {
     /// Get the statistics of the snapshot database.
     pub(crate) async fn get_snapshot_db_stat(&self) -> DBStat {
         let sm = self.state_machine();
-        let Some(db) = sm.levels().persisted() else {
+        let Some(db) = sm.leveled_map().persisted() else {
             return Default::default();
         };
         db.db_stat()
@@ -404,7 +407,7 @@ impl RaftStoreInner {
             Ok(line)
         }
 
-        let permit = self.new_compactor_acquirer().acquire().await;
+        let permit = self.new_compactor_acquirer("export").acquire().await;
 
         let mut dump = {
             let log = self.log.read().await;
@@ -533,8 +536,8 @@ impl RaftStoreInner {
         self.state_machine.lock().unwrap().clone()
     }
 
-    fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+    fn new_compactor_acquirer(&self, name: impl ToString) -> CompactorAcquirer {
         let sm = self.state_machine();
-        sm.new_compactor_acquirer()
+        sm.new_compactor_acquirer(name)
     }
 }

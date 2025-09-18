@@ -14,6 +14,7 @@
 
 mod build_info;
 mod dma;
+mod drop_callback;
 mod net;
 mod ordered_float;
 mod profiling;
@@ -37,6 +38,7 @@ pub use dma::dma_write_file_vectored;
 pub use dma::Alignment;
 pub use dma::DmaAllocator;
 pub use dma::DmaWriteBuf;
+pub use drop_callback::DropCallback;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;
 pub use ordered_float::OrderedFloat;

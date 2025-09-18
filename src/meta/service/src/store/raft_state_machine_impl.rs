@@ -128,7 +128,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         info!(id = self.id; "get snapshot start");
 
         let r = self.state_machine();
-        let db = r.levels().persisted();
+        let db = r.leveled_map().persisted();
 
         let snapshot = db.map(|x| Snapshot {
             meta: x.snapshot_meta().clone(),

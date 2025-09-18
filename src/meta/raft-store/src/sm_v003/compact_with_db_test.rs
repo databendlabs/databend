@@ -96,7 +96,7 @@ async fn test_leveled_query_with_db() -> anyhow::Result<()> {
 async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
     let (sm, _g) = build_sm_with_expire().await?;
 
-    let lm = sm.into_levels();
+    let lm = sm.into_leveled_map();
 
     assert_eq!(lm.curr_seq(), 4);
     assert_eq!(
@@ -146,7 +146,7 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_compact() -> anyhow::Result<()> {
     let (mut lm, _g) = build_3_levels().await?;
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
@@ -203,10 +203,12 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     let (sm, _g) = build_sm_with_expire().await?;
     {
         let mut permit = sm.new_writer_acquirer().acquire().await;
-        sm.levels().freeze_writable(&mut permit);
+        let mut compactor_permit = sm.new_compactor_acquirer("").acquire().await;
+        sm.leveled_map()
+            .freeze_writable(&mut permit, &mut compactor_permit);
     }
 
-    let mut lm = sm.into_levels();
+    let mut lm = sm.into_leveled_map();
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
@@ -269,11 +271,11 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_compact_output_3_level() -> anyhow::Result<()> {
     let (lm, _g) = build_3_levels().await?;
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
-    let compacting_data = lm.new_compacting_data();
+    let immutable_data = lm.immutable_data();
 
-    let (sys_data, strm) = compacting_data.compact_into_stream().await?;
+    let (sys_data, strm) = immutable_data.compact_into_stream().await?;
 
     assert_eq!(sys_data.curr_seq(), 7);
     assert_eq!(
@@ -328,7 +330,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     view.set(user_key("d"), Some((None, b("d0"))));
     view.commit().await?;
 
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
             Some(log_id(2, 2, 2)),
@@ -345,7 +347,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     view.set(user_key("e"), Some((None, b("e1"))));
     view.commit().await?;
 
-    lm.testing_freeze_writable();
+    lm.freeze_writable_without_permit();
 
     lm.with_sys_data(|sd| {
         *sd.last_membership_mut() = StoredMembership::new(
@@ -388,7 +390,7 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
         .await?;
     a.commit().await?;
 
-    sm.map_mut().testing_freeze_writable();
+    sm.map_mut().freeze_writable_without_permit();
 
     let mut a = sm.new_applier().await;
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))

@@ -59,6 +59,8 @@ impl ImmutableLevels {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Deref;
+
     use databend_common_meta_types::raft_types::Membership;
     use databend_common_meta_types::raft_types::StoredMembership;
     use futures_util::TryStreamExt;
@@ -66,9 +68,15 @@ mod tests {
     use openraft::testing::log_id;
     use seq_marked::SeqMarked;
     use state_machine_api::ExpireKey;
+    use state_machine_api::KVMeta;
     use state_machine_api::UserKey;
 
     use crate::sm_v003::compact_immutable_levels_test::build_3_levels;
+    use crate::sm_v003::compact_immutable_levels_test::build_sm_with_expire;
+
+    fn s(x: impl ToString) -> String {
+        x.to_string()
+    }
 
     fn b(x: impl ToString) -> Vec<u8> {
         x.to_string().as_bytes().to_vec()
@@ -82,7 +90,7 @@ mod tests {
     async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         let lm = build_3_levels().await?;
 
-        lm.testing_freeze_writable();
+        lm.freeze_writable_without_permit();
         let immutable_levels = lm.immutable_levels();
 
         // Capture the original newest level's index before compaction
@@ -129,6 +137,57 @@ mod tests {
             .try_collect::<Vec<_>>()
             .await?;
         assert_eq!(got, vec![]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_compact_expire_index() -> anyhow::Result<()> {
+        let sm = build_sm_with_expire().await?;
+
+        let immutable_levels = {
+            sm.leveled_map().freeze_writable_without_permit();
+            let compactor = sm.acquire_compactor().await;
+            let immutable_levels = compactor.immutable_levels();
+            immutable_levels.compact_all().await
+        };
+
+        let d = immutable_levels.newest().unwrap().deref();
+
+        let got = d
+            .range(UserKey::default().., u64::MAX)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        assert_eq!(got, vec![
+            //
+            (
+                user_key("a"),
+                SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
+            ),
+            (
+                user_key("b"),
+                SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
+            ),
+            (
+                user_key("c"),
+                SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
+            ),
+        ]);
+
+        let got = d
+            .range(ExpireKey::default().., u64::MAX)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(got, vec![
+            //
+            (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+            (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+            (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
+            (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
+        ]);
 
         Ok(())
     }
