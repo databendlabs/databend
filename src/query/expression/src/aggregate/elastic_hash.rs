@@ -46,13 +46,13 @@ impl Elastic {
         }
     }
 
-    fn levels(&self) -> usize {
+    fn max_batch(&self) -> usize {
         self.entries.len().trailing_zeros() as usize + 1
     }
 
     fn zone_range(&self, i: usize) -> std::ops::Range<usize> {
         debug_assert!(i >= 1);
-        debug_assert!(i <= self.levels());
+        debug_assert!(i <= self.max_batch());
 
         let n = self.entries.len();
         let size = n >> (i - 1);
@@ -72,7 +72,7 @@ impl Elastic {
     fn cur_batch(&mut self) -> Option<usize> {
         let count = self.count;
 
-        if self.i > self.levels() {
+        if self.i > self.max_batch() {
             return None;
         }
 
@@ -88,7 +88,7 @@ impl Elastic {
     fn batch_size(&self, i: usize) -> usize {
         let n = self.entries.len();
         if i == 0 {
-            return n / 8 * 3;
+            return (n >> 3) * 3;
         }
         1.max(((1.0 - self.delta) / 2.0 * (n >> i) as f64) as usize + (n >> (i + 3)))
     }
@@ -223,15 +223,6 @@ impl Elastic {
         None
     }
 
-    fn next_coord(&self, (i, j): (usize, usize)) -> (usize, usize) {
-        let n = self.zone_size(i);
-        if j + 1 > n {
-            (i, 0)
-        } else {
-            (i, j + 1)
-        }
-    }
-
     pub fn probe_slot(&mut self, hash: u64) -> Slot {
         let (_, j, range) = self.probe_core(hash, None);
         debug_assert!(!self.entries[range.start + j].is_occupied(), "hash {hash}");
@@ -262,11 +253,14 @@ impl Elastic {
     }
 
     pub fn coord(&self, slot: Slot) -> (usize, usize) {
-        for i in 1..self.levels() {
-            let range = self.zone_range(i);
-            if range.contains(&slot.0) {
-                return (i, slot.0 - range.start);
+        let mut slot = slot.0;
+        let mut size = self.entries.len();
+        for i in 1..=self.max_batch() {
+            size >>= 1;
+            if slot < size {
+                return (i, slot);
             }
+            slot -= size;
         }
         unreachable!()
     }
@@ -391,5 +385,17 @@ mod tests {
         }
         println!("{got:?}");
         assert_eq!(want, got);
+    }
+
+    #[test]
+    fn test_coord() {
+        let elastic = Elastic::with_capacity(128, 0.2);
+
+        assert_eq!(
+            (1, 10),
+            elastic.coord(Slot(elastic.zone_range(1).start + 10))
+        );
+        assert_eq!((2, 0), elastic.coord(Slot(elastic.zone_range(2).start + 0)));
+        assert_eq!((3, 4), elastic.coord(Slot(elastic.zone_range(3).start + 4)));
     }
 }

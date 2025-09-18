@@ -34,22 +34,11 @@ impl HashIndex {
         }
     }
 
-    pub fn init_slot(&self, hash: u64) -> usize {
+    fn init_slot(&self, hash: u64) -> usize {
         hash as usize & (self.capacity - 1)
     }
 
-    pub fn probe_slot(&mut self, hash: u64) -> usize {
-        let mut slot = self.init_slot(hash);
-        while self.entries[slot].is_occupied() {
-            slot += 1;
-            if slot >= self.capacity {
-                slot = 0;
-            }
-        }
-        slot as _
-    }
-
-    pub fn insert(&mut self, mut slot: usize, salt: u16) -> (usize, bool) {
+    fn find(&mut self, mut slot: usize, salt: u16) -> (usize, bool) {
         loop {
             let entry = &mut self.entries[slot];
             if entry.is_occupied() {
@@ -67,6 +56,17 @@ impl HashIndex {
                 return (slot, true);
             }
         }
+    }
+
+    pub fn probe_slot(&mut self, hash: u64) -> usize {
+        let mut slot = self.init_slot(hash);
+        while self.entries[slot].is_occupied() {
+            slot += 1;
+            if slot >= self.capacity {
+                slot = 0;
+            }
+        }
+        slot as _
     }
 
     pub fn mut_entry(&mut self, slot: usize) -> &mut Entry {
@@ -179,7 +179,7 @@ impl HashIndex {
                 let item = &mut items[row];
 
                 let is_new;
-                (item.slot, is_new) = self.insert(item.slot, Entry::hash_to_salt(item.hash));
+                (item.slot, is_new) = self.find(item.slot, Entry::hash_to_salt(item.hash));
 
                 if is_new {
                     state.empty_vector[new_entry_count] = row;
