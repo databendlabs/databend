@@ -14,7 +14,6 @@
 
 use super::new_sel;
 use super::row_ptr::RowPtr;
-use super::Entry;
 use super::SelectVector;
 use super::StateAddr;
 use super::BATCH_SIZE;
@@ -23,7 +22,7 @@ use super::BATCH_SIZE;
 /// It could be reuse during multiple probe process
 #[derive(Debug)]
 pub struct ProbeState {
-    pub(super) group_hashes: [Entry; BATCH_SIZE],
+    pub(super) group_hashes: [u64; BATCH_SIZE],
     pub(super) addresses: [RowPtr; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
     pub(super) state_places: [StateAddr; BATCH_SIZE],
@@ -40,7 +39,7 @@ pub struct ProbeState {
 impl Default for ProbeState {
     fn default() -> Self {
         Self {
-            group_hashes: [Entry::default(); BATCH_SIZE],
+            group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::new(0); BATCH_SIZE],

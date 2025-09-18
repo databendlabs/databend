@@ -34,11 +34,11 @@ impl HashIndex {
         }
     }
 
-    pub fn init_slot(&self, hash: Entry) -> usize {
-        hash.0 as usize & (self.capacity - 1)
+    pub fn init_slot(&self, hash: u64) -> usize {
+        hash as usize & (self.capacity - 1)
     }
 
-    pub fn probe_slot(&mut self, hash: Entry) -> usize {
+    pub fn probe_slot(&mut self, hash: u64) -> usize {
         let mut slot = self.init_slot(hash);
         while self.entries[slot].is_occupied() {
             slot += 1;
@@ -49,7 +49,7 @@ impl HashIndex {
         slot as _
     }
 
-    pub fn insert(&mut self, mut slot: usize, salt: u64) -> (usize, bool) {
+    pub fn insert(&mut self, mut slot: usize, salt: u16) -> (usize, bool) {
         loop {
             let entry = &mut self.entries[slot];
             if entry.is_occupied() {
@@ -97,12 +97,20 @@ const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
 pub(super) struct Entry(pub(super) u64);
 
 impl Entry {
-    pub fn get_salt(&self) -> u64 {
-        self.0 | POINTER_MASK
+    pub fn hash_to_salt(hash: u64) -> u16 {
+        (hash >> 48) as _
     }
 
-    pub fn set_salt(&mut self, salt: u64) {
-        self.0 = salt;
+    pub fn get_salt(&self) -> u16 {
+        (self.0 >> 48) as _
+    }
+
+    pub fn set_salt(&mut self, salt: u16) {
+        self.0 = POINTER_MASK | (salt as u64) << 48;
+    }
+
+    pub fn set_hash(&mut self, hash: u64) {
+        self.0 = hash | POINTER_MASK
     }
 
     pub fn is_occupied(&self) -> bool {
@@ -145,7 +153,7 @@ impl HashIndex {
         #[derive(Default, Clone, Copy, Debug)]
         struct Item {
             slot: usize,
-            hash: Entry,
+            hash: u64,
         }
 
         let mut items = [Item::default(); BATCH_SIZE];
@@ -171,7 +179,7 @@ impl HashIndex {
                 let item = &mut items[row];
 
                 let is_new;
-                (item.slot, is_new) = self.insert(item.slot, item.hash.get_salt());
+                (item.slot, is_new) = self.insert(item.slot, Entry::hash_to_salt(item.hash));
 
                 if is_new {
                     state.empty_vector[new_entry_count] = row;
@@ -204,7 +212,7 @@ impl HashIndex {
                     let entry = self.mut_entry(items[row].slot);
 
                     debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(entry.get_salt(), items[row].hash.get_salt());
+                    debug_assert_eq!(entry.get_salt(), (items[row].hash >> 48) as u16);
                     state.addresses[row] = entry.get_pointer();
                 }
 
@@ -282,22 +290,20 @@ mod tests {
             let mut state = ProbeState::default();
             state.row_count = self.incoming.len();
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
-                state.group_hashes[i] = Entry(*hash)
+                state.group_hashes[i] = *hash
             }
 
             state
         }
 
         fn init_hash_index(&self, hash_index: &mut HashIndex) {
-            for (i, (_, salt, _)) in self.payload.iter().copied().enumerate() {
-                let mut hash = Entry(0);
-                hash.set_salt(salt);
+            for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
                 let slot = hash_index.probe_slot(hash);
 
                 // set value
                 let entry = hash_index.mut_entry(slot);
                 debug_assert!(!entry.is_occupied());
-                entry.set_salt(hash.get_salt());
+                entry.set_hash(hash);
                 let row_ptr = self.get_row_ptr(false, i);
                 entry.set_pointer(row_ptr);
             }

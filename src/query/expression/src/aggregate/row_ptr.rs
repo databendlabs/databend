@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::Entry;
 use crate::StateAddr;
 use crate::StatesLayout;
 
@@ -72,11 +71,11 @@ impl RowPtr {
         self.write::<u8>(offset, &value);
     }
 
-    pub(super) fn hash(&self, layout: &RowLayout) -> Entry {
-        unsafe { self.read::<Entry>(layout.hash_offset) }
+    pub(super) fn hash(&self, layout: &RowLayout) -> u64 {
+        unsafe { self.read::<u64>(layout.hash_offset) }
     }
 
-    pub(super) fn set_hash(&self, layout: &RowLayout, value: Entry) {
+    pub(super) fn set_hash(&self, layout: &RowLayout, value: u64) {
         unsafe {
             self.write(layout.hash_offset, &value);
         }

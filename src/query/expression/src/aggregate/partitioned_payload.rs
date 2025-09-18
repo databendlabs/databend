@@ -122,7 +122,7 @@ impl PartitionedPayload {
 
             for idx in select_vector.iter().take(new_group_rows).copied() {
                 let hash = state.group_hashes[idx];
-                let partition_idx = ((hash.0 & self.mask_v) >> self.shift_v) as usize;
+                let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
                 let sel = &mut state.partition_entries[partition_idx];
 
                 sel[state.partition_count[partition_idx]] = idx;
@@ -238,7 +238,7 @@ impl PartitionedPayload {
 
             let hash = state.addresses[idx].hash(&self.row_layout);
 
-            let partition_idx = ((hash.0 & self.mask_v) >> self.shift_v) as usize;
+            let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
 
             let sel = &mut state.probe_state.partition_entries[partition_idx];
             sel[state.probe_state.partition_count[partition_idx]] = idx;

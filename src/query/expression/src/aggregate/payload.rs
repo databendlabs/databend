@@ -24,7 +24,6 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
-use super::Entry;
 use crate::types::DataType;
 use crate::AggrState;
 use crate::AggregateFunctionRef;
@@ -202,7 +201,7 @@ impl Payload {
     pub(super) fn reserve_append_rows(
         &mut self,
         select_vector: &SelectVector,
-        group_hashes: &[Entry; BATCH_SIZE],
+        group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
         new_group_rows: usize,
@@ -233,7 +232,7 @@ impl Payload {
     fn append_rows(
         &mut self,
         select_vector: &SelectVector,
-        group_hashes: &[Entry; BATCH_SIZE],
+        group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
         new_group_rows: usize,
@@ -407,7 +406,7 @@ impl Payload {
 
             let hash = state.addresses[idx].hash(&self.row_layout);
 
-            let partition_idx = (hash.0 % mods) as usize;
+            let partition_idx = (hash % mods) as usize;
 
             let sel = &mut state.probe_state.partition_entries[partition_idx];
             sel[state.probe_state.partition_count[partition_idx]] = idx;

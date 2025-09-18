@@ -21,7 +21,7 @@ use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::group_hash_columns_entry;
+use super::group_hash_columns;
 use super::hash_index::AdapterImpl;
 use super::hash_index::HashIndex;
 use super::partitioned_payload::PartitionedPayload;
@@ -186,7 +186,7 @@ impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
         }
 
         state.row_count = row_count;
-        group_hash_columns_entry(group_columns, &mut state.group_hashes);
+        group_hash_columns(group_columns, &mut state.group_hashes);
 
         let new_group_count = if self.direct_append {
             for idx in 0..row_count {
@@ -419,12 +419,12 @@ impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
                     // set value
                     let entry = hash_index.mut_entry(slot);
                     debug_assert!(!entry.is_occupied());
-                    entry.set_salt(hash.get_salt());
+                    entry.set_hash(hash);
                     entry.set_pointer(row_ptr);
 
                     debug_assert!(entry.is_occupied());
                     debug_assert_eq!(entry.get_pointer(), row_ptr);
-                    debug_assert_eq!(entry.get_salt(), hash.get_salt());
+                    debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash));
 
                     hash_index.count += 1;
                 }

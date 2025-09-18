@@ -108,7 +108,7 @@ impl Elastic {
         &self,
         i: usize,
         mut j: usize,
-        salt: Option<u64>,
+        salt: Option<u16>,
         max: Option<usize>,
     ) -> Option<usize> {
         let zone = self.zone(i);
@@ -217,7 +217,7 @@ mod tests {
         for value in 200..305 {
             println!("start {value}");
             let mut entry = Entry::default();
-            entry.set_salt(value << 48);
+            entry.set_salt(value);
             let slot = elastic.probe(entry);
 
             let (i, j) = elastic.coord(slot);
