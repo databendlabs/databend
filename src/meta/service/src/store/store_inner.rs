@@ -202,7 +202,7 @@ impl RaftStoreInner {
 
         let mut compactor = self.state_machine().new_compactor(compactor_permit);
 
-        info!("do_build_snapshot compactor created: {:?}", compactor);
+        info!("do_build_snapshot compactor created");
 
         let (mut sys_data, mut strm) = compactor
             .compact_into_stream()

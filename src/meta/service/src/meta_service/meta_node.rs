@@ -337,7 +337,10 @@ impl MetaNode {
         let socket_addr = ip_port.parse::<std::net::SocketAddr>()?;
         let node_id = meta_node.raft_store.id;
 
-        let srv = tonic::transport::Server::builder().add_service(raft_server);
+        let srv = tonic::transport::Server::builder()
+            // .concurrency_limit_per_connection()
+            // .timeout(Duration::from_secs(60))
+            .add_service(raft_server);
 
         let h = databend_common_base::runtime::spawn(async move {
             srv.serve_with_shutdown(socket_addr, async move {

@@ -14,8 +14,10 @@
 
 use std::io::Error;
 use std::ops::RangeBounds;
+use std::time::Instant;
 
 use futures_util::StreamExt;
+use log::debug;
 use log::warn;
 use map_api::mvcc;
 use map_api::mvcc::ViewKey;
@@ -60,7 +62,24 @@ where
         // writable level
 
         let (vec, immutable) = {
+            let start = Instant::now();
+            debug!(
+                "Level.writable::range(start={:?}, end={:?})",
+                range.start_bound(),
+                range.end_bound()
+            );
+
             let inner = self.data.lock().unwrap();
+
+            debug!(
+                "Level.writable::range(start={:?}, end={:?}) acquired lock, took {:?}, writable: kv.len={}, expire.len={}",
+                range.start_bound(),
+                range.end_bound(),
+                start.elapsed(),
+                inner.writable.kv.inner.len(),
+                inner.writable.expire.inner.len()
+            );
+
             let it = inner
                 .writable
                 .get_sub_table()
