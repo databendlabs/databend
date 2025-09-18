@@ -35,6 +35,7 @@ use super::inner::*;
 use super::serialize::*;
 use super::Location;
 use crate::sessions::QueryContext;
+use crate::spillers::stream_writer::BlockWriter;
 
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
@@ -101,6 +102,39 @@ impl Spiller {
 
     pub fn get_partition_locations(&self, partition_id: &usize) -> Option<&Vec<Location>> {
         self.adapter.partition_location.get(partition_id)
+    }
+
+    pub async fn block_stream_writer(&mut self) -> Result<BlockWriter> {
+        let location = self.create_unique_location();
+        let writer = self.operator.writer_with(&location).await?;
+        Ok(BlockWriter::create(writer, Location::Remote(location)))
+    }
+
+    pub fn inc_progress(&self, progress_val: ProgressValues) {
+        self.adapter
+            .ctx
+            .get_join_spill_progress()
+            .incr(&progress_val);
+    }
+
+    pub fn add_partition_location(
+        &mut self,
+        partition: usize,
+        location: Location,
+        layout: Layout,
+        data_size: usize,
+    ) {
+        self.adapter
+            .add_spill_file(location.clone(), layout, data_size);
+
+        if let Some(v) = self.adapter.partition_location.get_mut(&partition) {
+            v.push(location);
+            return;
+        }
+
+        self.adapter
+            .partition_location
+            .insert(partition, vec![location]);
     }
 
     #[async_backtrace::framed]

@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
@@ -28,6 +31,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
+use crate::spillers::BlockWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::Spiller;
@@ -176,6 +180,9 @@ impl HashJoinSpiller {
         };
 
         let mut unspilled_data_blocks = vec![];
+
+        let mut partitions_writer = HashMap::<usize, BlockWriter>::new();
+
         for data_block in data_blocks {
             let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
 
@@ -191,10 +198,31 @@ impl HashJoinSpiller {
                     continue;
                 }
 
-                self.spiller
-                    .spill_with_partition(partition_id, vec![data_block])
-                    .await?;
+                let progress_val = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+
+                match partitions_writer.entry(partition_id) {
+                    Entry::Occupied(mut entry) => {
+                        let stream_writer = entry.get_mut();
+                        stream_writer.write(data_block).await?;
+                    }
+                    Entry::Vacant(entry) => {
+                        let mut stream_writer = self.spiller.block_stream_writer().await?;
+                        stream_writer.write(data_block).await?;
+                        entry.insert(stream_writer);
+                    }
+                };
+
+                self.spiller.inc_progress(progress_val);
             }
+        }
+
+        for (id, partition_writer) in partitions_writer {
+            let (location, layout, data_size) = partition_writer.close().await?;
+            self.spiller
+                .add_partition_location(id, location, layout, data_size);
         }
 
         if let Some(partition_need_to_spill) = partition_need_to_spill {
