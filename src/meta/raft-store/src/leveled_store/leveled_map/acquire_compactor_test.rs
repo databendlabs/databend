@@ -21,12 +21,12 @@ use crate::sm_v003::SMV003;
 async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
     let lm = SMV003::default();
 
-    let _c = lm.acquire_compactor().await;
+    let _c = lm.acquire_compactor("").await;
 
     let (tx, rx) = oneshot::channel();
 
     let _ = timeout(std::time::Duration::from_secs(1), async {
-        let _got = lm.acquire_compactor().await;
+        let _got = lm.acquire_compactor("").await;
         let _ = tx.send(true);
     })
     .await;
@@ -43,11 +43,11 @@ async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
 async fn test_blocking_wait_ok() -> anyhow::Result<()> {
     let lm = SMV003::default();
 
-    let _c = lm.acquire_compactor().await;
+    let _c = lm.acquire_compactor("").await;
 
     let (tx, rx) = oneshot::channel();
     databend_common_base::runtime::spawn(async move {
-        let _got = lm.acquire_compactor().await;
+        let _got = lm.acquire_compactor("").await;
         let _ = tx.send(true);
     });
 

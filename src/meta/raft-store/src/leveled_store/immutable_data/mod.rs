@@ -37,6 +37,8 @@ use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::value_convert::ValueConvert;
 use crate::leveled_store::ScopedSeqBoundedRead;
 
+mod compact_into_stream;
+
 #[derive(Debug, Default, Clone)]
 pub struct ImmutableData {
     /// The last sequence of the immutable data.
