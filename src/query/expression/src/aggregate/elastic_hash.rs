@@ -105,22 +105,14 @@ impl Elastic {
     }
 
     fn probe_zone(
-        &self,
-        i: usize,
+        zone: &[Entry],
         mut j: usize,
         salt: Option<u16>,
-        max: Option<usize>,
+        end: Option<usize>,
     ) -> Option<usize> {
-        let zone = self.zone(i);
-        let end = max.map(|max| (j + max) & (zone.len() - 1));
-
-        let mut c = 0;
-        loop {
-            c += 1;
-            assert!(c < zone.len());
-
+        for _ in 0..zone.len() {
             let entry = &zone[j];
-            if !entry.is_occupied() && salt.map(|salt| salt == entry.get_salt()).unwrap_or(true) {
+            if !entry.is_occupied() || salt.map(|salt| salt == entry.get_salt()).unwrap_or(true) {
                 return Some(j);
             }
 
@@ -133,6 +125,11 @@ impl Elastic {
                 return None;
             }
         }
+        unreachable!("")
+    }
+
+    fn max_to_end(j: usize, max: usize, capacity: usize) -> usize {
+        (j + max) & (capacity - 1)
     }
 
     fn is_case3(&self, i: usize) -> bool {
@@ -149,40 +146,86 @@ impl Elastic {
         (2 * empty) as f64 > self.delta * size as f64
     }
 
-    fn init_slot(&self, value: Entry, capacity: usize) -> usize {
+    fn init_j(&self, hash: u64, capacity: usize) -> usize {
         debug_assert!(capacity.is_power_of_two());
-        value.0 as usize & (capacity - 1)
+        hash as usize & (capacity - 1)
     }
 
-    pub fn probe(&mut self, value: Entry) -> Slot {
+    fn probe_core(&mut self, hash: u64, salt: Option<u16>) -> Slot {
         let i = self.cur_batch().unwrap();
         if i == 0 {
             let range = self.zone_range(1);
-            let j = self.init_slot(value, range.len());
-            let j = self.probe_zone(1, j, None, None).unwrap();
+            let j = self.init_j(hash, range.len());
+            let j = Self::probe_zone(&self.entries[range.clone()], j, salt, None).unwrap();
             return Slot(range.start + j);
         }
 
         if self.is_case3(i) {
             let range = self.zone_range(i);
-            let j = self.init_slot(value, range.len());
-            let j = self.probe_zone(i, j, None, None).unwrap();
+            let j = self.init_j(hash, range.len());
+            let j = Self::probe_zone(&self.entries[range.clone()], j, salt, None).unwrap();
             return Slot(range.start + j);
         }
 
         if self.is_case1(i) {
             let range = self.zone_range(i);
-            let j = self.init_slot(value, range.len());
-            if let Some(j) = self.probe_zone(i, j, None, Some(self.max_probe(i) as usize)) {
+            let j = self.init_j(hash, range.len());
+
+            let end = Self::max_to_end(j, self.max_probe(i) as usize, range.len());
+            if let Some(j) = Self::probe_zone(&self.entries[range.clone()], j, salt, Some(end)) {
                 return Slot(range.start + j);
             }
         }
 
         // case 2
         let range = self.zone_range(i + 1);
-        let j = self.init_slot(value, range.len());
-        let j = self.probe_zone(i + 1, j, None, None).unwrap();
+        let j = self.init_j(hash, range.len());
+        let j = Self::probe_zone(&self.entries[range.clone()], j, salt, None).unwrap();
         Slot(range.start + j)
+    }
+
+    fn find(&self, hash: u64, start: Option<(usize, usize)>) -> Option<(usize, usize)> {
+        let (start_i, mut j) = match start {
+            Some((i, j)) => (i, Some(j)),
+            None => {
+                let i = 1;
+                (i, None)
+            }
+        };
+
+        for i in start_i..=(self.i + 1) {
+            let zone = self.zone(i);
+            let found = match j.take() {
+                Some(j) => {
+                    let j0 = self.init_j(hash, zone.len());
+                    Self::probe_zone(zone, j, Some(Entry::hash_to_salt(hash)), Some(j0))
+                }
+                None => {
+                    let j = self.init_j(hash, zone.len());
+                    Self::probe_zone(zone, j, Some(Entry::hash_to_salt(hash)), Some(j))
+                }
+            };
+            if let Some(j) = found {
+                return Some((i, j));
+            }
+        }
+        None
+    }
+
+    pub fn probe_slot(&mut self, hash: u64) -> Slot {
+        self.probe_core(hash, None)
+    }
+
+    // pub fn insert(&mut self, curser: Curser) -> (Slot, bool) {
+    //     match curser {
+    //         Curser::Hash(hash) => self.probe_core(hash, Some(Entry::hash_to_salt(hash))),
+    //         Curser::Next { i, j, salt } => {}
+    //     }
+    // }
+
+    pub fn probe(&mut self, value: Entry) -> Slot {
+        todo!()
+        // self.probe_core(value)
     }
 
     pub fn mut_entry(&mut self, slot: Slot) -> &mut Entry {
@@ -205,6 +248,11 @@ impl Elastic {
         }
         unreachable!()
     }
+}
+
+enum Curser {
+    Hash(u64),
+    Next { i: usize, j: usize, salt: u16 },
 }
 
 mod tests {
