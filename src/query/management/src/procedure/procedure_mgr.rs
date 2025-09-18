@@ -77,7 +77,7 @@ impl ProcedureMgr {
         let tenant = &self.tenant;
         let create_res = self
             .kv_api
-            .create_id_value_with_cleanup(
+            .create_id_value(
                 name_ident,
                 meta,
                 overriding,

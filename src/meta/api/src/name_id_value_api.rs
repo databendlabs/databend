@@ -65,7 +65,7 @@ where
     IdRsc: TenantResource + Send + Sync + 'static,
     IdRsc::ValueType: FromToProto + Send + Sync + 'static,
 {
-    /// Create a two level `name -> id -> value` mapping.
+    /// Create a two level `name -> id -> value` mapping with cleanup support for old resources.
     ///
     /// `associated_records` is used to generate additional key-values to add or remove along with the main operation.
     /// Such operations do not have any condition constraints.
@@ -76,96 +76,13 @@ where
     ///
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
-    async fn create_id_value<A, M>(
-        &self,
-        name_ident: &K,
-        value: &IdRsc::ValueType,
-        override_exist: bool,
-        associated_records: A,
-        mark_delete_records: M,
-    ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
-    where
-        A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
-        M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
-    {
-        debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
-
-        let tenant = name_ident.tenant();
-
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let mut txn = TxnRequest::default();
-
-            let mut current_id_seq = 0;
-
-            {
-                let get_res = self.get_id_and_value(name_ident).await?;
-
-                if let Some((seq_id, seq_meta)) = get_res {
-                    if override_exist {
-                        // Override take place only when the id -> value does not change.
-                        // If it does not override, no such condition is required.
-                        let id_ident = seq_id.data.into_t_ident(tenant);
-                        txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
-                        txn.if_then.push(txn_op_del(&id_ident));
-
-                        // Following txn must match this seq to proceed.
-                        current_id_seq = seq_id.seq;
-
-                        // Remove existing associated.
-                        let kvs = associated_records(seq_id.data);
-                        for (k, _v) in kvs {
-                            txn.if_then.push(TxnOp::delete(k));
-                        }
-
-                        let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
-                        for (k, v) in kvs {
-                            txn.if_then.push(TxnOp::put(k, v));
-                        }
-                    } else {
-                        return Ok(Err(seq_id));
-                    }
-                };
-            }
-
-            let idu64 = fetch_id(self, IdGenerator::generic()).await?;
-            let id = DataId::<IdRsc>::new(idu64);
-            let id_ident = id.into_t_ident(name_ident.tenant());
-            debug!(id :? = id,name_ident :? =name_ident; "new id");
-
-            txn.condition
-                .extend(vec![txn_cond_eq_seq(name_ident, current_id_seq)]);
-
-            txn.if_then.push(txn_op_put_pb(name_ident, &id, None)?); // (tenant, name) -> id
-            txn.if_then.push(txn_op_put_pb(&id_ident, value, None)?); // (id) -> value
-
-            // Add associated
-            let kvs = associated_records(id);
-            for (k, v) in kvs {
-                txn.if_then.push(TxnOp::put(k, v));
-            }
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(name_ident :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
-
-            if succ {
-                return Ok(Ok(id));
-            }
-        }
-    }
-
-    /// Create a two level `name -> id -> value` mapping with cleanup support for old resources.
-    ///
-    /// This is an enhanced version of `create_id_value` that accepts an optional cleanup function
-    /// to handle additional cleanup operations when overriding existing resources.
     ///
     /// `cleanup_old_fn` is called with the old id when override_exist is true and an existing
     /// resource is being replaced. It should return a list of keys that will be deleted.
     ///
     /// This eliminates the need for callers to manually handle cleanup logic after the fact.
-    async fn create_id_value_with_cleanup<A, M, C>(
+    /// For example, when a procedure is dropped by `override_exist`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
+    async fn create_id_value<A, M, C>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
