@@ -58,7 +58,7 @@ impl VacuumDropTablesInterpreter {
         drop_ids: Vec<DroppedId>,
     ) -> Result<()> {
         info!(
-            "vacuum drop table from db {:?}, gc_drop_tables",
+            "vacuum metadata of dropped table from db {:?}",
             self.plan.database,
         );
 
@@ -74,6 +74,12 @@ impl VacuumDropTablesInterpreter {
                 }
             }
         }
+
+        info!(
+            "found {} database meta data and {} table metadata need to be cleaned",
+            drop_db_ids.len(),
+            drop_db_table_ids.len()
+        );
 
         let chunk_size = 50;
 
