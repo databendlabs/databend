@@ -18,9 +18,7 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
-use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::principal::procedure::ProcedureInfo;
-use databend_common_meta_app::principal::procedure_id_ident;
 use databend_common_meta_app::principal::procedure_id_ident::ProcedureIdIdent;
 use databend_common_meta_app::principal::procedure_name_ident::ProcedureName;
 use databend_common_meta_app::principal::CreateProcedureReply;
@@ -77,28 +75,28 @@ impl ProcedureMgr {
         let tenant = &self.tenant;
         let create_res = self
             .kv_api
-            .create_id_value_with_cleanup(
+            .create_id_value(
                 name_ident,
                 meta,
                 overriding,
                 |id| {
-                    vec![(
-                        ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
+                    vec![
+                        (
+                            ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
+                                .to_string_key(),
+                            name_ident_raw.clone(),
+                        ),
+                        (
+                            TenantOwnershipObjectIdent::new(
+                                tenant.clone(),
+                                OwnershipObject::Procedure { procedure_id: *id },
+                            )
                             .to_string_key(),
-                        name_ident_raw.clone(),
-                    )]
+                            vec![],
+                        ),
+                    ]
                 },
                 |_, _| Ok(vec![]),
-                Some(|old_id: DataId<procedure_id_ident::Resource>| {
-                    // Return ownership keys to be deleted when overriding
-                    vec![TenantOwnershipObjectIdent::new(
-                        tenant.clone(),
-                        OwnershipObject::Procedure {
-                            procedure_id: *old_id,
-                        },
-                    )
-                    .to_string_key()]
-                }),
             )
             .await?;
 
