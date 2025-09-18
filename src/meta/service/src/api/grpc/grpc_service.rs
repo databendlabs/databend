@@ -333,7 +333,7 @@ impl MetaService for MetaServiceImpl {
         let req_str = format!("ReadRequest: {:?}", req);
 
         ThreadTracker::tracking_future(async move {
-            let _guard = InFlightRead::guard();
+            let guard = InFlightRead::guard();
             let start = Instant::now();
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
@@ -341,11 +341,16 @@ impl MetaService for MetaServiceImpl {
             let count = Arc::new(AtomicU64::new(0));
             let count2 = count.clone();
 
-            let strm = strm.map(move |item| {
-                network_metrics::incr_stream_sent_item(req_typ);
-                count2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                item
-            });
+            let strm = strm
+                .map(move |x| {
+                    let _g = &guard; // hold the guard until the stream is done.
+                    x
+                })
+                .map(move |item| {
+                    network_metrics::incr_stream_sent_item(req_typ);
+                    count2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    item
+                });
 
             // Log the total time and item count when the stream is finished.
             let strm = OnCompleteStream::new(strm, move || {
@@ -404,7 +409,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<databend_common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let _guard = InFlightRead::guard();
+        let guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -415,6 +420,10 @@ impl MetaService for MetaServiceImpl {
         // - Convert Vec<String> to ExportedChunk;
         // - Convert TryChunkError<_, io::Error> to Status;
         let s = strm
+            .map(move |x| {
+                let _g = &guard; // hold the guard until the stream is done.
+                x
+            })
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
@@ -433,7 +442,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<pb::ExportRequest>,
     ) -> Result<Response<Self::ExportV1Stream>, Status> {
-        let _guard = InFlightRead::guard();
+        let guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
@@ -444,6 +453,10 @@ impl MetaService for MetaServiceImpl {
         // - Convert Vec<String> to ExportedChunk;
         // - Convert TryChunkError<_, io::Error> to Status;
         let s = strm
+            .map(move |x| {
+                let _g = &guard; // hold the guard until the stream is done.
+                x
+            })
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
