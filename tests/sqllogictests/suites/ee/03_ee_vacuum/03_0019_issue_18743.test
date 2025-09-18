@@ -1,0 +1,14 @@
+statement ok
+create or replace database issue_18743;
+
+statement ok
+use issue_18743;
+
+statement ok
+CREATE OR REPLACE TABLE t(c int);
+
+statement ok
+call system$fuse_vacuum2('issue_18743', 't');
+
+statement ok
+call system$fuse_vacuum2();
