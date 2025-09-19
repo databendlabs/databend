@@ -14,7 +14,10 @@
 
 use std::ops::Range;
 
+use super::hash_index::TableAdapter;
 use super::Entry;
+use super::BATCH_SIZE;
+use crate::ProbeState;
 
 #[derive(Debug)]
 pub struct Elastic {
@@ -29,7 +32,7 @@ pub struct Elastic {
     // load_limit: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Slot(usize);
 
 impl Elastic {
@@ -65,18 +68,13 @@ impl Elastic {
         &self.entries[self.zone_range(i)]
     }
 
-    fn cur_batch(&mut self) -> Option<usize> {
+    fn cur_batch(&self) -> Option<usize> {
         if self.i > self.max_batch() {
             return None;
         }
 
-        if self.count < self.batch_limit {
-            Some(self.i)
-        } else {
-            self.i += 1;
-            self.batch_limit += self.batch_size(self.i);
-            Some(self.i)
-        }
+        debug_assert!(self.count < self.batch_limit);
+        Some(self.i)
     }
 
     fn batch_size(&self, i: usize) -> usize {
@@ -183,6 +181,14 @@ impl Elastic {
         (i + 1, j, range)
     }
 
+    fn count_inc(&mut self) {
+        self.count += 1;
+        if self.count >= self.batch_limit {
+            self.i += 1;
+            self.batch_limit += self.batch_size(self.i);
+        }
+    }
+
     pub fn find(&self, hash: u64, start: Option<Slot>) -> Option<Slot> {
         let (start_i, mut j) = match start {
             Some(solt) => {
@@ -221,6 +227,50 @@ impl Elastic {
         None
     }
 
+    fn find_or_insert(&mut self, hash: u64, start: Option<Slot>) -> (Slot, bool) {
+        let (start_i, mut j) = match start {
+            Some(solt) => {
+                let (i, j) = self.coord(solt);
+                (i, Some(j))
+            }
+            None => {
+                let i = 1;
+                (i, None)
+            }
+        };
+
+        for i in start_i..=(self.i + 1) {
+            let range = self.zone_range(i);
+            let zone = &self.entries[range.clone()];
+            let found = match j.take() {
+                Some(j) => {
+                    let size = zone.len();
+                    let j0 = self.init_j(hash, size);
+                    let j = if j + 1 >= size { 0 } else { j + 1 };
+                    Self::probe_zone(zone, j, Some(Entry::hash_to_salt(hash)), Some(j0))
+                }
+                None => {
+                    let j = self.init_j(hash, zone.len());
+                    Self::probe_zone(zone, j, Some(Entry::hash_to_salt(hash)), Some(j))
+                }
+            };
+            let Some(j) = found else {
+                continue;
+            };
+            let slot = range.start + j;
+            let entry = &mut self.entries[slot];
+            let is_occupied = entry.is_occupied();
+            if is_occupied {
+                debug_assert_eq!(entry.get_salt(), Entry::hash_to_salt(hash))
+            } else {
+                entry.set_hash(hash);
+                self.count_inc();
+            }
+            return (Slot(slot), !is_occupied);
+        }
+        unreachable!()
+    }
+
     pub fn probe_slot(&mut self, hash: u64) -> Slot {
         let (_, j, range) = self.probe_core(hash, None);
         debug_assert!(!self.entries[range.start + j].is_occupied(), "hash {hash}");
@@ -236,11 +286,11 @@ impl Elastic {
         &mut self.entries[slot.0]
     }
 
-    pub fn insert(&mut self, slot: Slot, value: Entry) {
+    pub fn insert_slot(&mut self, slot: Slot, value: Entry) {
         let entry = &mut self.entries[slot.0];
         assert!(!entry.is_occupied());
         *entry = value;
-        self.count += 1;
+        self.count_inc();
     }
 
     pub fn coord(&self, slot: Slot) -> (usize, usize) {
@@ -254,6 +304,97 @@ impl Elastic {
             slot -= size;
         }
         unreachable!()
+    }
+
+    pub fn init_slot(&self, hash: u64) -> Slot {
+        let i = self.cur_batch().unwrap();
+        let range = self.zone_range(i);
+        let j = self.init_j(hash, range.len());
+        Slot(range.start + j)
+    }
+}
+
+impl Elastic {
+    pub fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        mut adapter: impl TableAdapter,
+    ) -> usize {
+        #[derive(Default, Clone, Copy, Debug)]
+        struct Item {
+            slot: Option<Slot>,
+            hash: u64,
+        }
+
+        let mut items = [Item::default(); BATCH_SIZE];
+
+        for row in 0..row_count {
+            items[row] = Item {
+                slot: None,
+                hash: state.group_hashes[row],
+            };
+            state.no_match_vector[row] = row;
+        }
+
+        let mut new_group_count = 0;
+        let mut remaining_entries = row_count;
+
+        while remaining_entries > 0 {
+            let mut new_entry_count = 0;
+            let mut need_compare_count = 0;
+            let mut no_match_count = 0;
+
+            // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
+            for row in state.no_match_vector[..remaining_entries].iter().copied() {
+                let item = &mut items[row];
+
+                let (slot, is_new) = self.find_or_insert(item.hash, item.slot);
+                item.slot = Some(slot);
+
+                if is_new {
+                    state.empty_vector[new_entry_count] = row;
+                    new_entry_count += 1;
+                } else {
+                    state.group_compare_vector[need_compare_count] = row;
+                    need_compare_count += 1;
+                }
+            }
+
+            // 2. append new_group_count to payload
+            if new_entry_count != 0 {
+                new_group_count += new_entry_count;
+
+                adapter.append_rows(state, new_entry_count);
+
+                for row in state.empty_vector[..new_entry_count].iter().copied() {
+                    let entry = self.mut_entry(items[row].slot.unwrap());
+                    entry.set_pointer(state.addresses[row]);
+                    debug_assert_eq!(entry.get_pointer(), state.addresses[row]);
+                }
+            }
+
+            // 3. set address of compare vector
+            if need_compare_count > 0 {
+                for row in state.group_compare_vector[..need_compare_count]
+                    .iter()
+                    .copied()
+                {
+                    let entry = self.mut_entry(items[row].slot.unwrap());
+
+                    debug_assert!(entry.is_occupied());
+                    debug_assert_eq!(entry.get_salt(), (items[row].hash >> 48) as u16);
+                    state.addresses[row] = entry.get_pointer();
+                }
+
+                // 4. compare
+                no_match_count = adapter.compare(state, need_compare_count, no_match_count);
+            }
+
+            remaining_entries = no_match_count;
+        }
+
+        new_group_count
     }
 }
 
@@ -276,7 +417,7 @@ mod tests {
             let mut entry = Entry::default();
             entry.set_hash(hash);
             let (i, j) = elastic.coord(slot);
-            elastic.insert(slot, entry);
+            elastic.insert_slot(slot, entry);
 
             if i != 0 {
                 let f = elastic.count as f64 / elastic.entries.len() as f64;
@@ -295,9 +436,10 @@ mod tests {
             let mut ls = vec![];
             while index.cur_batch().is_some() {
                 ls.push(index.batch_limit);
-                index.count = index.batch_limit;
+                index.count = index.batch_limit - 1;
+                index.count_inc();
             }
-            assert_eq!(&ls, &[48, 80, 96, 104, 108, 109, 110, 111, 112, 113]);
+            assert_eq!(&ls, &[48, 80, 96, 104, 108, 109, 110, 111, 112]);
         }
 
         {
@@ -305,10 +447,11 @@ mod tests {
             let mut ls = vec![];
             while index.cur_batch().is_some() {
                 ls.push(index.batch_limit);
-                index.count = index.batch_limit;
+                index.count = index.batch_limit - 1;
+                index.count_inc();
             }
             assert_eq!(&ls, &[
-                768, 1356, 1650, 1797, 1870, 1906, 1924, 1933, 1937, 1938, 1939, 1940, 1941, 1942
+                768, 1356, 1650, 1797, 1870, 1906, 1924, 1933, 1937, 1938, 1939, 1940, 1941
             ]);
         }
     }
@@ -327,7 +470,7 @@ mod tests {
             entry.set_pointer(RowPtr::new(value as _));
 
             let slot = elastic.probe_slot(hash);
-            elastic.insert(slot, entry);
+            elastic.insert_slot(slot, entry);
         }
 
         for i in 1..=elastic.max_batch() {
