@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use super::elastic_hash::Elastic;
 use super::hash_index::*;
 use super::RowPtr;
 use crate::ProbeState;
@@ -55,6 +56,19 @@ impl TestTableAdapter {
             entry.set_hash(hash);
             let row_ptr = self.get_row_ptr(false, i);
             entry.set_pointer(row_ptr);
+        }
+    }
+
+    fn init_elastic_hash(&self, hash_index: &mut Elastic) {
+        for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
+            let slot = hash_index.probe_slot(hash);
+
+            let mut entry = Entry::default();
+            entry.set_hash(hash);
+            let row_ptr = self.get_row_ptr(false, i);
+            entry.set_pointer(row_ptr);
+
+            hash_index.insert_slot(slot, entry);
         }
     }
 
@@ -123,7 +137,7 @@ struct TestCase {
 }
 
 impl TestCase {
-    fn run(self) {
+    fn run_hash_index(self) {
         let TestCase {
             capacity,
             incoming,
@@ -153,10 +167,41 @@ impl TestCase {
 
         assert_eq!(want, got);
     }
+
+    fn run_elastic_hash(self) {
+        let TestCase {
+            capacity,
+            incoming,
+            payload,
+            want_count,
+            want,
+        } = self;
+        let mut hash_index = Elastic::with_capacity(capacity, 0.3);
+
+        let mut adapter = TestTableAdapter::new(incoming, payload);
+
+        let mut state = adapter.init_state();
+
+        adapter.init_elastic_hash(&mut hash_index);
+
+        let count = hash_index.probe_and_create(&mut state, adapter.incoming.len(), &mut adapter);
+
+        assert_eq!(want_count, count);
+
+        let got = state.addresses[..state.row_count]
+            .iter()
+            .map(|row_ptr| {
+                let (key, _, value) = adapter.get_payload(*row_ptr);
+                (key, value)
+            })
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(want, got);
+    }
 }
 
 #[test]
-fn test_probe_and_create() {
+fn test_hash_index() {
     TestCase {
         capacity: 16,
         incoming: vec![(1, 123), (2, 456), (3, 123), (4, 44)],
@@ -164,7 +209,7 @@ fn test_probe_and_create() {
         want_count: 3,
         want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
     }
-    .run();
+    .run_hash_index();
 
     TestCase {
         capacity: 16,
@@ -173,5 +218,26 @@ fn test_probe_and_create() {
         want_count: 3,
         want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
     }
-    .run();
+    .run_hash_index();
+}
+
+#[test]
+fn test_elastic_hash() {
+    TestCase {
+        capacity: 16,
+        incoming: vec![(1, 123), (2, 456), (3, 123), (4, 44)],
+        payload: vec![(4, 44, 77)],
+        want_count: 3,
+        want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
+    }
+    .run_elastic_hash();
+
+    TestCase {
+        capacity: 16,
+        incoming: vec![(1, 11 << 48), (2, 22 << 48), (3, 33 << 48), (4, 44 << 48)],
+        payload: vec![(4, 44 << 48, 77)],
+        want_count: 3,
+        want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
+    }
+    .run_elastic_hash();
 }

@@ -282,7 +282,7 @@ impl Elastic {
         Slot(range.start + j)
     }
 
-    pub fn mut_entry(&mut self, slot: Slot) -> &mut Entry {
+    fn mut_entry(&mut self, slot: Slot) -> &mut Entry {
         &mut self.entries[slot.0]
     }
 
