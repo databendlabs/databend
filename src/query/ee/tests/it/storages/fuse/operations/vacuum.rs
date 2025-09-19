@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::TxnRequest;
@@ -709,6 +710,75 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
         panic!("get_database should fail")
     };
     assert_eq!(e.code(), ErrorCode::UNKNOWN_DATABASE);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_drop_create_or_replace() -> Result<()> {
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be available for vacuum immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // 3. Prepare test db and table
+
+    let sqls = vec![
+        "create database db1",
+        "create or replace table db1.t1 (a int)",
+        "create or replace table db1.t1 (a int) as select 1",
+        "create or replace table db1.t1 (a int) as select 2",
+        "create or replace table db1.t1 (a int) as select 3",
+        "create database db2",
+        "create or replace table db2.t1 (a int) as select 1",
+        "create or replace table db2.t1 (a int) as select 2",
+        "create or replace table db2.t1 (a int) as select 3",
+        "create or replace table db2.t1 (a int) as select 4",
+        "drop table db2.t1",
+    ];
+
+    for sql in sqls {
+        fixture.execute_command(sql).await?;
+    }
+
+    // Create or replace 8 times
+    let prefix = "__fd_table_by_id";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 8);
+
+    fixture
+        .execute_command("vacuum drop table from db1")
+        .await?;
+
+    fixture
+        .execute_command("vacuum drop table from db2")
+        .await?;
+
+    // After vacuum, 1 table ids left
+
+    let prefix = "__fd_table_by_id";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 1);
+
+    let prefix = "__fd_table_id_to_name";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 1);
+
+    fixture.execute_command("select * from db1.t1").await?;
+
+    let res = fixture.execute_command("select * from db2.t1").await;
+    assert!(res.is_err());
 
     Ok(())
 }

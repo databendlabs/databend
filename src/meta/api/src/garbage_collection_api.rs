@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -194,11 +195,28 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
+    let mut maybe_current_live_table_ids = HashSet::with_capacity(table_history_kvs.len());
     for (ident, table_history) in table_history_kvs {
-        for table_id in table_history.id_list.iter() {
-            args.push((TableId::new(*table_id), ident.table_name.clone()));
+        let id_list = &table_history.id_list;
+        if !id_list.is_empty() {
+            // Make sure that the last table id is the max one.
+            // Since id_list is not empty, safe to unwrap
+            let last_id = id_list.last().unwrap();
+            {
+                let max_id = id_list.iter().max().unwrap();
+                assert_eq!(max_id, last_id);
+            }
+            maybe_current_live_table_ids.insert(*last_id);
+            for table_id in id_list.iter() {
+                args.push((TableId::new(*table_id), ident.table_name.clone()));
+            }
         }
     }
+
+    eprintln!(
+        "maybe_current_live_table_ids {:#?}",
+        maybe_current_live_table_ids
+    );
 
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
@@ -228,7 +246,16 @@ pub async fn get_history_tables_for_gc(
                 continue;
             };
 
-            if !drop_time_range.contains(&seq_meta.data.drop_on) {
+            // TODO doc this
+            if seq_meta.data.drop_on.is_none()
+                && !maybe_current_live_table_ids.contains(&table_id.table_id)
+            {
+                if !drop_time_range.contains(&Some(seq_meta.data.updated_on)) {
+                    debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                    num_out_of_time_range += 1;
+                    continue;
+                }
+            } else if !drop_time_range.contains(&seq_meta.data.drop_on) {
                 debug!("table {:?} is not in drop_time_range", seq_meta.data);
                 num_out_of_time_range += 1;
                 continue;
