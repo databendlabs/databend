@@ -832,7 +832,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.raft_store.clone().read_vote().await?;
+        want_hs = leader.raft_store.log.clone().read_vote().await?;
 
         leader.stop().await?;
     }
@@ -866,13 +866,18 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.raft_store.clone().read_vote().await?;
+        let hs = leader.raft_store.log.clone().read_vote().await?;
         assert_eq!(want_hs, hs);
     }
 
     info!("--- check logs");
     {
-        let logs = leader.raft_store.clone().try_get_log_entries(..).await?;
+        let logs = leader
+            .raft_store
+            .log
+            .clone()
+            .try_get_log_entries(..)
+            .await?;
         info!("logs: {:?}", logs);
         assert_eq!(log_index as usize + 1, logs.len());
     }
