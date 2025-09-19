@@ -93,6 +93,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
+use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -450,6 +451,7 @@ async fn query_page_handler(
                 if next_is_final {
                     query.wait_for_final()
                 }
+                SessionManager::instance().new_query_request();
                 Ok(resp)
             }
         }
@@ -499,6 +501,7 @@ pub(crate) async fn query_handler(
             client_session_id_info,
             mask_connection_info(&format!("{:?}", req))
         );
+        SessionManager::instance().new_query_request();
         let sql = req.sql.clone();
 
         match HttpQuery::try_create(ctx, req.clone()).await {
