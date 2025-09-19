@@ -31,7 +31,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
-use crate::spillers::BlockWriter;
+use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::Spiller;
@@ -181,7 +181,7 @@ impl HashJoinSpiller {
 
         let mut unspilled_data_blocks = vec![];
 
-        let mut partitions_writer = HashMap::<usize, BlockWriter>::new();
+        let mut partitions_writer = HashMap::<usize, BlocksWriter>::new();
 
         for data_block in data_blocks {
             let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
@@ -220,9 +220,9 @@ impl HashJoinSpiller {
         }
 
         for (id, partition_writer) in partitions_writer {
-            let (location, layout, data_size) = partition_writer.close().await?;
+            let (location, written, written_blocks) = partition_writer.close().await?;
             self.spiller
-                .add_partition_location(id, location, layout, data_size);
+                .add_hash_join_location(id, location, written_blocks, written);
         }
 
         if let Some(partition_need_to_spill) = partition_need_to_spill {
@@ -292,11 +292,11 @@ impl HashJoinSpiller {
 
         // 2. restore data from spilled files.
         if self.need_read_partition() {
-            let partition_data_blocks = self.spiller.read_spilled_partition(&partition_id).await?;
-            if !partition_data_blocks.is_empty() {
-                let spilled_data = DataBlock::concat(&partition_data_blocks)?;
-                if !spilled_data.is_empty() {
-                    data_blocks.push(spilled_data);
+            let mut block_reader = self.spiller.partition_blocks_reader(&partition_id);
+
+            while let Some(data_block) = block_reader.read().await? {
+                if !data_block.is_empty() {
+                    data_blocks.push(data_block);
                 }
             }
         } else {
