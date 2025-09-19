@@ -454,7 +454,7 @@ impl CreateTableInterpreter {
                 );
             };
 
-            if options.get(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE).is_none() {
+            if !options.contains_key(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE) {
                 options.insert(
                     FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(),
                     "1".to_string(),

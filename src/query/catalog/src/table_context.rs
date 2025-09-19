@@ -187,6 +187,12 @@ pub trait TableContext: Send + Sync {
     fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
         unimplemented!()
     }
+    fn get_enable_auto_analyze(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_enable_auto_analyze(&self, _enable: bool) {
+        unimplemented!()
+    }
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);

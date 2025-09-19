@@ -217,7 +217,7 @@ impl SinkAnalyzeState {
                 self.ndv_states.clone(),
                 self.histograms.clone(),
                 self.snapshot_id,
-                snapshot.summary.row_count,
+                self.row_count,
             );
             new_snapshot.table_statistics_location = Some(
                 table

@@ -335,6 +335,5 @@ async fn analyze_table(
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(complete_executor.get_inner())?;
     complete_executor.execute()?;
-    drop(complete_executor);
     Ok(Some(value))
 }

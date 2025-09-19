@@ -22,6 +22,8 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use log::info;
 use log::warn;
 
+use crate::interpreters::hook::analyze_hook::hook_analyze;
+use crate::interpreters::hook::analyze_hook::AnalyzeDesc;
 use crate::interpreters::hook::compact_hook::hook_compact;
 use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
 use crate::interpreters::hook::compact_hook::CompactTargetTableDescription;
@@ -68,6 +70,7 @@ impl HookOperator {
     pub async fn execute(&self, pipeline: &mut Pipeline) {
         self.execute_compact(pipeline).await;
         self.execute_refresh(pipeline).await;
+        self.execute_analyze(pipeline).await;
     }
 
     /// Execute the compact hook operator.
@@ -124,5 +127,18 @@ impl HookOperator {
         };
 
         hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
+    }
+
+    /// Execute the analyze hook operator.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn execute_analyze(&self, pipeline: &mut Pipeline) {
+        let desc = AnalyzeDesc {
+            catalog: self.catalog.to_owned(),
+            database: self.database.to_owned(),
+            table: self.table.to_owned(),
+        };
+
+        hook_analyze(self.ctx.clone(), pipeline, desc).await;
     }
 }
