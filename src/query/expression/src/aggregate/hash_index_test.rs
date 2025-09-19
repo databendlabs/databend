@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
+
+extern crate test;
+use test::Bencher;
 
 use super::elastic_hash::Elastic;
 use super::hash_index::*;
@@ -240,4 +244,45 @@ fn test_elastic_hash() {
         want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
     }
     .run_elastic_hash();
+}
+
+#[bench]
+fn bench_elastic_hash(b: &mut Bencher) {
+    let heap = BinaryHeap::from_iter(1_u64..1536);
+
+    //  345,408.95 ns/iter (+/- 7,637.32)
+    b.iter(|| {
+        let mut elastic = Elastic::with_capacity(2048, 0.25);
+
+        for value in heap.as_slice().iter().copied() {
+            let mut entry = Entry::default();
+            let hash = (value % 20) << 48 | value;
+            entry.set_hash(hash);
+            entry.set_pointer(RowPtr::new(value as _));
+
+            let slot = elastic.probe_slot(hash);
+            elastic.insert_slot(slot, entry);
+        }
+    });
+}
+
+#[bench]
+fn bench_hash_index(b: &mut Bencher) {
+    let heap = BinaryHeap::from_iter(1_u64..1536);
+
+    //  6,215.51 ns/iter (+/- 273.47)
+    b.iter(|| {
+        let mut hash_index = HashIndex::with_capacity(2048);
+
+        for value in heap.as_slice().iter().copied() {
+            let mut entry = Entry::default();
+            let hash = (value % 20) << 48 | value;
+            entry.set_hash(hash);
+            entry.set_pointer(RowPtr::new(value as _));
+
+            let slot = hash_index.probe_slot(hash);
+
+            *hash_index.mut_entry(slot) = entry;
+        }
+    });
 }

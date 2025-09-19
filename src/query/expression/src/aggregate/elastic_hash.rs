@@ -92,10 +92,11 @@ impl Elastic {
         empty as f64 / size as f64
     }
 
-    fn max_probe(&self, i: usize) -> f64 {
-        let t1 = (1.0 / self.epsilon(i)).ln().powi(2);
-        let t2 = (1.0 / self.delta).ln();
-        self.c * t1.min(t2)
+    fn max_probe(&self, i: usize) -> usize {
+        10
+        // let t1 = (1.0 / self.epsilon(i)).ln().powi(2);
+        // let t2 = (1.0 / self.delta).ln();
+        // self.c * t1.min(t2) as _
     }
 
     fn probe_zone(
@@ -168,7 +169,7 @@ impl Elastic {
         if self.is_case1(i) {
             let range = self.zone_range(i);
             let j = self.init_j(hash, range.len());
-            let end = Self::max_to_end(j, self.max_probe(i) as usize, range.len());
+            let end = Self::max_to_end(j, self.max_probe(i), range.len());
             if let Some(j) = Self::probe_zone(&self.entries[range.clone()], j, salt, Some(end)) {
                 return (i, j, range);
             }
