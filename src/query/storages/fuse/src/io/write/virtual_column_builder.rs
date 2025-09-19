@@ -76,6 +76,9 @@ use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::statistics::gen_columns_statistics;
 
+const SAMPLE_ROWS: usize = 10;
+const NULL_PERCENTAGE: f64 = 0.7;
+
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
     pub data: Vec<u8>,
@@ -175,8 +178,8 @@ impl VirtualColumnBuilder {
         }
 
         // use first 10 rows as sample to check whether the block is suitable for generating virtual columns
-        if self.total_rows < 10 {
-            let sample_rows = num_rows.min(10);
+        if self.total_rows < SAMPLE_ROWS {
+            let sample_rows = num_rows.min(SAMPLE_ROWS);
             self.extract_virtual_values(block, 0, sample_rows, &mut hash_to_index);
 
             self.check_sample_virtual_values(self.total_rows + sample_rows);
@@ -531,8 +534,8 @@ impl VirtualColumnBuilder {
     }
 
     fn check_sample_virtual_values(&mut self, sample_rows: usize) {
-        // ignore samll samples
-        if sample_rows < 10 {
+        // ignore small samples
+        if sample_rows < SAMPLE_ROWS {
             return;
         }
 
@@ -546,13 +549,13 @@ impl VirtualColumnBuilder {
                 let value_count = self.virtual_values[*index].len();
                 let null_count = sample_rows - value_count;
                 let null_percentage = null_count as f64 / sample_rows as f64;
-                if null_percentage > 0.7 {
+                if null_percentage > NULL_PERCENTAGE {
                     most_null_count += 1;
                 }
             }
             let most_null_percentage = most_null_count as f64 / self.virtual_paths[i].len() as f64;
             // most virtual values are null
-            if most_null_percentage > 0.7 {
+            if most_null_percentage > NULL_PERCENTAGE {
                 for (_, index) in self.virtual_paths[i].iter() {
                     self.virtual_values[*index].clear();
                 }
