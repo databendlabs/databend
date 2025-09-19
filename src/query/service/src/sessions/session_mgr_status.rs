@@ -22,6 +22,7 @@ pub struct SessionManagerStatus {
     pub last_query_started_at: Option<SystemTime>,
     pub last_query_finished_at: Option<SystemTime>,
     pub instance_started_at: SystemTime,
+    pub last_query_request_at: Option<u64>,
 }
 
 impl SessionManagerStatus {
@@ -47,6 +48,7 @@ impl Default for SessionManagerStatus {
             last_query_started_at: None,
             last_query_finished_at: None,
             instance_started_at: SystemTime::now(),
+            last_query_request_at: None,
         }
     }
 }
