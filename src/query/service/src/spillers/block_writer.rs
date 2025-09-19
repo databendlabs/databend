@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use byteorder::BigEndian;
+use byteorder::WriteBytesExt;
+use bytes::BufMut;
+use bytes::BytesMut;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::Alignment;
 use databend_common_exception::Result;
@@ -21,20 +25,21 @@ use opendal::Buffer;
 use opendal::Writer;
 
 use crate::spillers::serialize::BlocksEncoder;
-use crate::spillers::Layout;
 
-pub struct BlockWriter {
+pub struct BlocksWriter {
     writer: Writer,
     location: Location,
     written: usize,
+    offsets: Vec<usize>,
 }
 
-impl BlockWriter {
-    pub fn create(writer: Writer, location: Location) -> BlockWriter {
-        BlockWriter {
+impl BlocksWriter {
+    pub fn create(writer: Writer, location: Location) -> BlocksWriter {
+        BlocksWriter {
             writer,
             location,
             written: 0,
+            offsets: vec![],
         }
     }
     pub async fn write(&mut self, block: DataBlock) -> Result<()> {
@@ -50,11 +55,24 @@ impl BlockWriter {
 
         self.written += buf.len();
         self.writer.write(buf).await?;
+        self.offsets.push(self.written);
         Ok(())
     }
 
-    pub async fn close(mut self) -> Result<(Location, Layout, usize)> {
+    pub async fn close(mut self) -> Result<(Location, usize, usize)> {
+        let bytes = BytesMut::new();
+
+        let mut offset_writer = bytes.writer();
+        let written_blocks = self.offsets.len();
+        for offset in self.offsets {
+            offset_writer.write_u64::<BigEndian>(offset as u64)?;
+        }
+
+        let bytes = offset_writer.into_inner().freeze();
+        self.written += bytes.len();
+        self.writer.write(bytes).await?;
         self.writer.close().await?;
-        Ok((self.location, Layout::Parquet, self.written))
+
+        Ok((self.location, self.written, written_blocks))
     }
 }
