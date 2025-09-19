@@ -23,6 +23,8 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Node;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
 use log::info;
 use map_api::mvcc;
 use seq_marked::InternalSeq;
@@ -30,6 +32,7 @@ use seq_marked::InternalSeq;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::snapshot::MvccSnapshot;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
@@ -122,10 +125,15 @@ impl LeveledMap {
         inner.immutable = Arc::new(new_immutable_data);
 
         info!(
-            "do_freeze_writable: after writable: {:?}, immutables: {:?}",
-            inner.writable,
-            levels.indexes()
+            "do_freeze_writable: after writable: {}, immutables: {}",
+            inner.writable.stat(),
+            levels.indexes().display_n(265)
         );
+    }
+
+    /// Return the kv count and expire count in the writable level.
+    pub fn writable_stat(&self) -> LevelStat {
+        self.with_inner(|inner| inner.writable.stat())
     }
 
     pub fn persisted(&self) -> Option<DB> {
@@ -172,8 +180,7 @@ impl LeveledMap {
 
     /// For testing only.
     /// Replace all immutable levels with the given one.
-    #[allow(dead_code)]
-    pub(crate) fn replace_immutable_levels(&mut self, b: ImmutableLevels) {
+    pub(crate) fn replace_immutable_levels(&self, b: ImmutableLevels) {
         self.with_inner(|data| {
             let persisted = data.immutable.persisted().cloned();
             data.immutable = Arc::new(ImmutableData::new(b, persisted))
@@ -192,10 +199,10 @@ impl LeveledMap {
             let mut levels = inner.immutable.levels().clone();
 
             info!(
-                "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
-                upto,
-                levels.indexes(),
-                compactor_indexes,
+                "replace_with_compacted: compacted upto {} immutable levels; my levels: {}; compacted levels: {}",
+                upto.display(),
+                levels.indexes().display_n(265),
+                compactor_indexes.display_n(265),
             );
 
             // If there is immutable levels compacted, remove them.

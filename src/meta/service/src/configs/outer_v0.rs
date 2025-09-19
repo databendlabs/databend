@@ -308,6 +308,7 @@ pub struct ConfigViaEnv {
     pub raft_snapshot_db_block_cache_item: u64,
     pub raft_snapshot_db_block_cache_size: u64,
 
+    pub metasrv_compact_immutables_ms: Option<u64>,
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub metasrv_learner: bool,
@@ -365,6 +366,7 @@ impl From<Config> for ConfigViaEnv {
             raft_snapshot_db_block_cache_item: cfg.raft_config.snapshot_db_block_cache_item,
             raft_snapshot_db_block_cache_size: cfg.raft_config.snapshot_db_block_cache_size,
 
+            metasrv_compact_immutables_ms: cfg.raft_config.compact_immutables_ms,
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             metasrv_learner: cfg.raft_config.learner,
@@ -401,6 +403,7 @@ impl Into<Config> for ConfigViaEnv {
             snapshot_db_block_cache_item: self.raft_snapshot_db_block_cache_item,
             snapshot_db_block_cache_size: self.raft_snapshot_db_block_cache_size,
 
+            compact_immutables_ms: self.metasrv_compact_immutables_ms,
             single: self.kvsrv_single,
             join: self.metasrv_join,
             learner: self.metasrv_learner,
@@ -499,7 +502,7 @@ pub struct RaftConfig {
     #[clap(long, default_value = "1024")]
     pub snapshot_logs_since_last: u64,
 
-    /// The interval in milli seconds at which a leader send heartbeat message to followers.
+    /// The interval in milliseconds at which a leader send heartbeat message to followers.
     /// Different value of this setting on leader and followers may cause unexpected behavior.
     /// This value `t` also affect the election timeout:
     /// Election timeout is a random between `[t*2, t*3)`,
@@ -508,7 +511,7 @@ pub struct RaftConfig {
     #[clap(long, default_value = "500")]
     pub heartbeat_interval: u64,
 
-    /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
+    /// The max time in milliseconds that a leader wait for install-snapshot ack from a follower or non-voter.
     #[clap(long, default_value = "4000")]
     pub install_snapshot_timeout: u64,
 
@@ -541,15 +544,23 @@ pub struct RaftConfig {
     #[clap(long, default_value = "1073741824")]
     pub snapshot_db_block_cache_size: u64,
 
+    /// Interval in milliseconds to compact the in memory immutable levels.
+    ///
+    /// Set to 0 to disable automatic compaction. Default is 1000 ms
+    ///
+    /// This reduces the writable level and improves read performance.
+    #[clap(long)]
+    pub compact_immutables_ms: Option<u64>,
+
     /// Start databend-meta in single node mode.
-    /// It initialize a single node cluster, if meta data is not initialized.
+    /// It initializes a single node cluster, if meta data is not initialized.
     /// If on-disk data is already initialized, this argument has no effect.
     #[clap(long)]
     pub single: bool,
 
     /// Bring up a databend-meta node and join a cluster.
     ///
-    /// It will take effect only when the meta data is not initialized.
+    /// It will take effect only when the metadata is not initialized.
     /// If on-disk data is already initialized, this argument has no effect.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
@@ -576,7 +587,7 @@ pub struct RaftConfig {
 
     /// The node id. Only used when this server is not initialized,
     ///  e.g. --single for the first time.
-    ///  Otherwise this argument is ignored.
+    ///  Otherwise, this argument is ignored.
     #[clap(long, default_value = "0")]
     pub id: u64,
 
@@ -585,7 +596,7 @@ pub struct RaftConfig {
     #[clap(long, default_value = "foo_cluster")]
     pub cluster_name: String,
 
-    /// Max timeout(in milli seconds) when waiting a cluster leader.
+    /// Max timeout(in milliseconds) when waiting a cluster leader.
     #[clap(long, default_value = "180000")]
     pub wait_leader_timeout: u64,
 }
@@ -622,6 +633,7 @@ impl From<RaftConfig> for InnerRaftConfig {
             snapshot_db_block_cache_item: x.snapshot_db_block_cache_item,
             snapshot_db_block_cache_size: x.snapshot_db_block_cache_size,
 
+            compact_immutables_ms: x.compact_immutables_ms,
             single: x.single,
             join: x.join,
             learner: x.learner,
@@ -658,6 +670,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             snapshot_db_block_cache_item: inner.snapshot_db_block_cache_item,
             snapshot_db_block_cache_size: inner.snapshot_db_block_cache_size,
 
+            compact_immutables_ms: inner.compact_immutables_ms,
             single: inner.single,
             join: inner.join,
             learner: inner.learner,
