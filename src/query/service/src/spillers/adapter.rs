@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -82,8 +83,8 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(p_id) {
+    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
             for loc in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;
@@ -385,12 +386,41 @@ impl SpillAdapter for LiteAdapter {
     }
 }
 
-pub type LiteSpiller = Arc<SpillerInner<LiteAdapter>>;
+#[derive(Clone)]
+pub struct LiteSpiller(Arc<SpillerInner<LiteAdapter>>);
 
-pub fn new_lite_spiller(operator: Operator, config: SpillerConfig) -> Result<LiteSpiller> {
-    Ok(Arc::new(SpillerInner::new(
-        Default::default(),
-        operator,
-        config,
-    )?))
+impl LiteSpiller {
+    pub fn new(operator: Operator, config: SpillerConfig) -> Result<LiteSpiller> {
+        Ok(LiteSpiller(Arc::new(SpillerInner::new(
+            Default::default(),
+            operator,
+            config,
+        )?)))
+    }
+
+    pub async fn cleanup(self) -> Result<()> {
+        let files = std::mem::take(self.0.adapter.files.write().unwrap().deref_mut());
+        let files: Vec<_> = files
+            .into_keys()
+            .filter_map(|location| match location {
+                Location::Remote(path) => Some(path),
+                Location::Local(_) => None,
+            })
+            .collect();
+        let op = self.0.local_operator.as_ref().unwrap_or(&self.0.operator);
+
+        op.delete_iter(files).await?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl DataBlockSpill for LiteSpiller {
+    async fn merge_and_spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+        self.0.spill(data_block).await
+    }
+
+    async fn restore(&self, location: &Location) -> Result<DataBlock> {
+        self.0.read_spilled_file(location).await
+    }
 }

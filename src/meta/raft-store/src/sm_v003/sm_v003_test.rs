@@ -17,7 +17,7 @@ use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
-use map_api::mvcc::ScopedViewReadonly;
+use map_api::mvcc::ScopedRange;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
@@ -97,7 +97,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     a.upsert_kv(&UpsertKV::update("c", b"c0")).await?;
     a.commit().await?;
 
-    sm.map_mut().testing_freeze_writable();
+    sm.map_mut().freeze_writable_without_permit();
     let mut a = sm.new_applier().await;
 
     // internal_seq = 3
@@ -180,7 +180,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
 
     a.commit().await?;
 
-    sm.map_mut().testing_freeze_writable();
+    sm.map_mut().freeze_writable_without_permit();
     let mut a = sm.new_applier().await;
 
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
@@ -203,7 +203,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .expire_view_readonly()
+        .to_state_machine_snapshot()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -312,7 +312,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .expire_view_readonly()
+        .to_state_machine_snapshot()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()

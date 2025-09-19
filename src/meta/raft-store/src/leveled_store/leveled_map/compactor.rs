@@ -20,9 +20,9 @@ use databend_common_meta_types::sys_data::SysData;
 use map_api::IOResultStream;
 use rotbl::v001::SeqMarked;
 
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::compacting_data::CompactingData;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///
@@ -33,16 +33,20 @@ pub struct Compactor {
     ///
     /// This is used to ensure that only one compactor can run at a time.
     pub(crate) _permit: CompactorPermit,
-    pub(crate) compacting_data: CompactingData,
+    pub(crate) immutable_data: Arc<ImmutableData>,
 }
 
 impl Compactor {
-    pub fn immutable_levels(&self) -> Arc<ImmutableLevels> {
-        self.compacting_data.immutable_levels.clone()
+    pub fn immutable_data(&self) -> Arc<ImmutableData> {
+        self.immutable_data.clone()
     }
 
-    pub fn db(&self) -> Option<Arc<DB>> {
-        self.compacting_data.persisted.clone()
+    pub fn immutable_levels(&self) -> ImmutableLevels {
+        self.immutable_data.levels().clone()
+    }
+
+    pub fn db(&self) -> Option<DB> {
+        self.immutable_data.persisted().cloned()
     }
 
     /// Compact in-memory immutable levels(excluding on disk db)
@@ -51,7 +55,13 @@ impl Compactor {
     /// When compact mem levels, do not remove tombstone,
     /// because tombstones are still required when compacting with the underlying db.
     pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        self.compacting_data.compact_immutable_in_place().await
+        let immutable_levels = self.immutable_data.levels().clone();
+
+        let levels = immutable_levels.compact_all().await;
+        let immutable = ImmutableData::new(levels, self.immutable_data.persisted().cloned());
+        self.immutable_data = Arc::new(immutable);
+
+        Ok(())
     }
 
     /// Compacted all data into a stream.
@@ -65,6 +75,6 @@ impl Compactor {
     pub async fn compact_into_stream(
         &mut self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
-        self.compacting_data.compact_into_stream().await
+        self.immutable_data.compact_into_stream().await
     }
 }

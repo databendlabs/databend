@@ -31,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
-use fastrace::func_path;
 use fastrace::prelude::*;
 use http::HeaderMap;
 use http::HeaderValue;
@@ -94,6 +93,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
+use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -296,7 +296,7 @@ async fn query_final_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+    let root = get_http_tracing_span("http::query_final_handler", ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
@@ -337,7 +337,7 @@ async fn query_cancel_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+    let root = get_http_tracing_span("http::query_cancel_handler", ctx, &query_id);
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
@@ -369,7 +369,7 @@ async fn query_state_handler(
     Path(query_id): Path<String>,
 ) -> PoemResult<Response> {
     ctx.check_node_id(&query_id)?;
-    let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+    let root = get_http_tracing_span("http::query_state_handler", ctx, &query_id);
 
     async {
         let http_query_manager = HttpQueryManager::instance();
@@ -451,13 +451,14 @@ async fn query_page_handler(
                 if next_is_final {
                     query.wait_for_final()
                 }
+                SessionManager::instance().new_query_request();
                 Ok(resp)
             }
         }
     };
 
     let query_page_handle = {
-        let root = get_http_tracing_span(func_path!(), ctx, &query_id);
+        let root = get_http_tracing_span("http::query_page_handler", ctx, &query_id);
         let _t = SlowRequestLogTracker::new(ctx);
         query_page_handle.in_span(root)
     };
@@ -500,6 +501,7 @@ pub(crate) async fn query_handler(
             client_session_id_info,
             mask_connection_info(&format!("{:?}", req))
         );
+        SessionManager::instance().new_query_request();
         let sql = req.sql.clone();
 
         match HttpQuery::try_create(ctx, req.clone()).await {
@@ -556,7 +558,7 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let root = get_http_tracing_span(func_path!(), ctx, &ctx.query_id);
+        let root = get_http_tracing_span("http::query_handler", ctx, &ctx.query_id);
         let _t = SlowRequestLogTracker::new(ctx);
         query_handle.in_span(root)
     };

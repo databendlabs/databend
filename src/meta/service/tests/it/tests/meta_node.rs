@@ -199,8 +199,6 @@ pub(crate) async fn start_meta_node_non_voter(
     // // Log index becomes non-deterministic.
     // mn.raft.enable_heartbeat(false);
 
-    assert!(!mn.raft_store.is_opened);
-
     tc.meta_node = Some(mn.clone());
 
     {

@@ -658,7 +658,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_last_query_id(&self, _index: i32) -> String {
+    fn get_last_query_id(&self, _index: i32) -> Option<String> {
         todo!()
     }
     fn get_query_id_history(&self) -> HashSet<String> {

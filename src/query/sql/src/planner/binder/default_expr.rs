@@ -36,12 +36,12 @@ use databend_common_expression::TableField;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use parking_lot::RwLock;
 
-use crate::binder::expr_values::ExprValuesRewriter;
 use crate::binder::wrap_cast;
 use crate::binder::AsyncFunctionDesc;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::walk_expr_mut;
 use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::ConstantExpr;
@@ -58,7 +58,7 @@ pub struct DefaultExprBinder {
     name_resolution_ctx: NameResolutionContext,
     metadata: MetadataRef,
 
-    rewriter: ExprValuesRewriter,
+    rewriter: DefaultValueRewriter,
     dummy_block: DataBlock,
     func_ctx: FunctionContext,
 }
@@ -87,7 +87,7 @@ impl DefaultExprBinder {
 
         let dummy_block = DataBlock::new(vec![], 1);
         let func_ctx = ctx.get_function_context()?;
-        let rewriter = ExprValuesRewriter::new(ctx.clone());
+        let rewriter = DefaultValueRewriter::new();
 
         Ok(DefaultExprBinder {
             bind_context,
@@ -109,16 +109,36 @@ impl DefaultExprBinder {
         &mut self,
         field: &TableField,
         ast: &AExpr,
-    ) -> Result<(String, bool)> {
+    ) -> Result<(String, bool, bool)> {
         let data_field: DataField = field.into();
-        let scalar_expr = self.bind(ast, data_field.data_type())?;
-        let is_nextval = get_nextval(&scalar_expr).is_some();
-        if !scalar_expr.evaluable() && !is_nextval {
+        let (scalar_expr, data_type) = self.bind(ast)?;
+        let (evaluable, is_nextval) = scalar_expr.default_value_evaluable();
+        // The nextval can not work with other expressions.
+        if !evaluable || (is_nextval && !matches!(scalar_expr, ScalarExpr::AsyncFunctionCall(_))) {
             return Err(ErrorCode::SemanticError(format!(
                 "default value expression `{:#}` is invalid",
                 ast
             )));
         }
+        let dest_type = data_field.data_type();
+        // The data type of nextval must be number or decimal.
+        if is_nextval
+            && !matches!(
+                dest_type.remove_nullable(),
+                DataType::Number(_) | DataType::Decimal(_)
+            )
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "default data type does not match data type for column {}",
+                data_field.name()
+            )));
+        }
+
+        let scalar_expr = if data_type != *dest_type {
+            wrap_cast(&scalar_expr, dest_type)
+        } else {
+            scalar_expr
+        };
         let expr = scalar_expr.as_expr()?;
         let (expr, is_deterministic) = if is_nextval {
             (expr, false)
@@ -129,7 +149,7 @@ impl DefaultExprBinder {
         } else {
             (expr, false)
         };
-        Ok((expr.sql_display(), is_deterministic))
+        Ok((expr.sql_display(), is_deterministic, is_nextval))
     }
 
     pub fn parse(&mut self, default_expr: &str) -> Result<AExpr> {
@@ -138,7 +158,7 @@ impl DefaultExprBinder {
         Ok(ast)
     }
 
-    pub fn bind(&mut self, ast: &AExpr, dest_type: &DataType) -> Result<ScalarExpr> {
+    pub fn bind(&mut self, ast: &AExpr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create(
             &mut self.bind_context,
             self.ctx.clone(),
@@ -147,11 +167,8 @@ impl DefaultExprBinder {
             &[],
             true,
         )?;
-        let (mut scalar, data_type) = *type_checker.resolve(ast)?;
-        if &data_type != dest_type {
-            scalar = wrap_cast(&scalar, dest_type);
-        }
-        Ok(scalar)
+        let (scalar_expr, data_type) = *type_checker.resolve(ast)?;
+        Ok((scalar_expr, data_type))
     }
 
     pub fn parse_and_bind(&mut self, field: &DataField) -> Result<ScalarExpr> {
@@ -165,7 +182,13 @@ impl DefaultExprBinder {
                     e
                 )
             })?;
-            self.bind(&ast, field.data_type())
+            let (scalar_expr, data_type) = self.bind(&ast)?;
+            let dest_type = field.data_type();
+            if data_type != *dest_type {
+                Ok(wrap_cast(&scalar_expr, dest_type))
+            } else {
+                Ok(scalar_expr)
+            }
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {
                 span: None,
@@ -279,5 +302,29 @@ impl DefaultExprBinder {
             let schema = Arc::new(DataSchema::new(fields));
             Ok(Some((async_func_descs, schema, schema_no_cast)))
         }
+    }
+}
+
+struct DefaultValueRewriter {}
+
+impl DefaultValueRewriter {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl<'a> VisitorMut<'a> for DefaultValueRewriter {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
+            if async_func.func_name == "nextval" {
+                // Don't generate a new sequence next value,
+                // because the default value is not used for new inserted values.
+                *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: async_func.span,
+                    value: Scalar::default_value(&async_func.return_type),
+                });
+            }
+        }
+        walk_expr_mut(self, expr)
     }
 }

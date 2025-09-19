@@ -1107,7 +1107,7 @@ error:
   --> SQL:1:16
   |
 1 | SHOW GRANTS ON task t1;
-  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, or `CONNECTION`
+  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, `CONNECTION`, or `PROCEDURE`
 
 
 ---------- Input ----------

@@ -89,6 +89,7 @@ fn create_embedded_config(
 
     // Query configuration
     conf.query.tenant_id = Tenant::new_literal("python_binding");
+    conf.query.embedded_mode = true;
     conf.query.cluster_id = "".to_string();
     conf.query.warehouse_id = "".to_string();
     conf.query.node_id = "embedded_node".to_string();

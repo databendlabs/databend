@@ -15,8 +15,10 @@
 use std::future;
 use std::io;
 use std::pin::Pin;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
@@ -64,7 +66,7 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
-use map_api::mvcc::scoped_view_readonly::ScopedViewReadonly;
+use map_api::mvcc::ScopedRange;
 use prost::Message;
 use state_machine_api::UserKey;
 use tokio_stream;
@@ -83,6 +85,7 @@ use watcher::util::try_forward;
 use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
 
+use crate::api::grpc::OnCompleteStream;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_service::watcher::DispatcherHandle;
@@ -327,17 +330,41 @@ impl MetaService for MetaServiceImpl {
 
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
         let req_typ = req.type_name();
+        let req_str = format!("ReadRequest: {:?}", req);
 
         ThreadTracker::tracking_future(async move {
-            let _guard = InFlightRead::guard();
+            let guard = InFlightRead::guard();
+            let start = Instant::now();
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
+            // Counter to track total items sent
+            let count = Arc::new(AtomicU64::new(0));
+            let count2 = count.clone();
+
             let strm = strm
+                .map(move |x| {
+                    let _g = &guard; // hold the guard until the stream is done.
+                    x
+                })
                 .map(move |item| {
                     network_metrics::incr_stream_sent_item(req_typ);
+                    count2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     item
-                })
-                .boxed();
+                });
+
+            // Log the total time and item count when the stream is finished.
+            let strm = OnCompleteStream::new(strm, move || {
+                let total = start.elapsed();
+                let total_items = count.load(std::sync::atomic::Ordering::Relaxed);
+                let items_per_ms = total_items / (total.as_millis() as u64 + 1);
+                let latency = total / (total_items.max(1) as u32);
+                info!(
+                    "StreamElapsed: total: {:?}; items: {}, items/ms: {}, item_latency: {:?}; {}",
+                    total, total_items, items_per_ms, latency, req_str
+                );
+            });
+
+            let strm = strm.boxed();
 
             let mut resp = Response::new(strm);
             GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
@@ -382,17 +409,21 @@ impl MetaService for MetaServiceImpl {
         &self,
         _request: Request<databend_common_meta_types::protobuf::Empty>,
     ) -> Result<Response<Self::ExportStream>, Status> {
-        let _guard = InFlightRead::guard();
+        let guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
-        let strm = meta_node.raft_store.inner().export();
+        let strm = meta_node.raft_store.clone().export();
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
         // - Convert Vec<String> to ExportedChunk;
         // - Convert TryChunkError<_, io::Error> to Status;
         let s = strm
+            .map(move |x| {
+                let _g = &guard; // hold the guard until the stream is done.
+                x
+            })
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
@@ -411,17 +442,21 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<pb::ExportRequest>,
     ) -> Result<Response<Self::ExportV1Stream>, Status> {
-        let _guard = InFlightRead::guard();
+        let guard = InFlightRead::guard();
 
         let meta_node = self.try_get_meta_node()?;
 
-        let strm = meta_node.raft_store.inner().export();
+        let strm = meta_node.raft_store.clone().export();
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
         // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
         // - Convert Vec<String> to ExportedChunk;
         // - Convert TryChunkError<_, io::Error> to Status;
         let s = strm
+            .map(move |x| {
+                let _g = &guard; // hold the guard until the stream is done.
+                x
+            })
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
@@ -463,7 +498,7 @@ impl MetaService for MetaServiceImpl {
         // This approach prevents race conditions and guarantees that no events will be
         // delivered out of order to the watcher.
         let stream = {
-            let sm = mn.raft_store.state_machine();
+            let sm = mn.raft_store.state_machine().get_inner();
 
             let sender = mn.new_watch_sender(watch, tx.clone())?;
             let sender_str = sender.to_string();
@@ -489,7 +524,7 @@ impl MetaService for MetaServiceImpl {
             if flush {
                 let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
-                let strm = sm.levels().data.to_readonly_view().range(key_range).await?;
+                let strm = sm.to_state_machine_snapshot().range(key_range).await?;
                 let strm = strm
                     .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));
 

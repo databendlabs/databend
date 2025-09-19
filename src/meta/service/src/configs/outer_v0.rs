@@ -290,7 +290,6 @@ pub struct ConfigViaEnv {
     pub kvsrv_advertise_host: String,
     pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
-    pub kvsrv_no_sync: bool,
 
     pub kvsrv_log_cache_max_items: u64,
     pub kvsrv_log_cache_capacity: u64,
@@ -348,7 +347,6 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_advertise_host: cfg.raft_config.raft_advertise_host,
             kvsrv_api_port: cfg.raft_config.raft_api_port,
             kvsrv_raft_dir: cfg.raft_config.raft_dir,
-            kvsrv_no_sync: cfg.raft_config.no_sync,
 
             kvsrv_log_cache_max_items: 1_000_000,
             kvsrv_log_cache_capacity: 1024 * 1024 * 1024,
@@ -385,7 +383,6 @@ impl Into<Config> for ConfigViaEnv {
             raft_advertise_host: self.kvsrv_advertise_host,
             raft_api_port: self.kvsrv_api_port,
             raft_dir: self.kvsrv_raft_dir,
-            no_sync: self.kvsrv_no_sync,
 
             log_cache_max_items: self.kvsrv_log_cache_max_items,
             log_cache_capacity: self.kvsrv_log_cache_capacity,
@@ -481,12 +478,6 @@ pub struct RaftConfig {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long, default_value = "./.databend/meta")]
     pub raft_dir: String,
-
-    /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).
-    /// No-sync brings risks of data loss during a crash.
-    /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
-    #[clap(long)]
-    pub no_sync: bool,
 
     /// The maximum number of log entries for log entries cache. Default value is 1_000_000.
     #[clap(long, default_value = "1000000")]
@@ -614,7 +605,6 @@ impl From<RaftConfig> for InnerRaftConfig {
             raft_advertise_host: x.raft_advertise_host,
             raft_api_port: x.raft_api_port,
             raft_dir: x.raft_dir,
-            no_sync: x.no_sync,
 
             log_cache_max_items: x.log_cache_max_items,
             log_cache_capacity: x.log_cache_capacity,
@@ -651,7 +641,6 @@ impl From<InnerRaftConfig> for RaftConfig {
             raft_advertise_host: inner.raft_advertise_host,
             raft_api_port: inner.raft_api_port,
             raft_dir: inner.raft_dir,
-            no_sync: inner.no_sync,
 
             log_cache_max_items: inner.log_cache_max_items,
             log_cache_capacity: inner.log_cache_capacity,

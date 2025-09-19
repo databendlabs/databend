@@ -32,8 +32,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
+use databend_common_meta_app::principal::ProcedureIdentity;
+use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
@@ -196,6 +199,26 @@ impl Binder {
             AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
             AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
+            AccountMgrLevel::Procedure(p) => {
+                let procedure = UserApiProvider::instance()
+                    .procedure_api(&tenant)
+                    .get_procedure(&GetProcedureReq {
+                        inner: ProcedureNameIdent::new(
+                            tenant.clone(),
+                            ProcedureIdentity::from(p.clone()),
+                        ),
+                    })
+                    .await?;
+
+                if let Some(p) = procedure {
+                    Ok(GrantObject::Procedure(p.id))
+                } else {
+                    Err(ErrorCode::UnknownProcedure(format!(
+                        "Unknown procedure {}",
+                        p
+                    )))
+                }
+            }
         }
     }
 
@@ -259,6 +282,26 @@ impl Binder {
             AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
             AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
+            AccountMgrLevel::Procedure(p) => {
+                let procedure = UserApiProvider::instance()
+                    .procedure_api(&tenant)
+                    .get_procedure(&GetProcedureReq {
+                        inner: ProcedureNameIdent::new(
+                            tenant.clone(),
+                            ProcedureIdentity::from(p.clone()),
+                        ),
+                    })
+                    .await?;
+
+                if let Some(p) = procedure {
+                    Ok(vec![GrantObject::Procedure(p.id)])
+                } else {
+                    Err(ErrorCode::UnknownProcedure(format!(
+                        "Unknown procedure {}",
+                        p
+                    )))
+                }
+            }
         }
     }
 
@@ -497,6 +540,24 @@ impl Binder {
             }
             GrantObjectName::Sequence(name) => {
                 format!("SELECT * FROM show_grants('sequence', '{}')", name)
+            }
+            GrantObjectName::Procedure(p) => {
+                let procedure_ident = ProcedureIdentity::from(p.clone());
+                let tenant = self.ctx.get_tenant();
+                let procedure = UserApiProvider::instance()
+                    .procedure_api(&tenant)
+                    .get_procedure(&GetProcedureReq {
+                        inner: ProcedureNameIdent::new(tenant, procedure_ident),
+                    })
+                    .await?;
+                if let Some(procedure) = procedure {
+                    format!("SELECT * FROM show_grants('procedure', '{}')", procedure.id)
+                } else {
+                    return Err(ErrorCode::UnknownProcedure(format!(
+                        "Unknown procedure {}",
+                        p
+                    )));
+                }
             }
         };
 

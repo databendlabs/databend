@@ -55,3 +55,41 @@ def run_jdbc_test(session, driver_version, main_version):
         external=True,
         env=env,
     )
+
+
+@nox.session
+def test_suites(session):
+    session.install("pytest", "requests", "pytest-asyncio")
+    # Usage: nox -s test_suites -- suites/1_stateful/09_http_handler/test_09_0007_session.py::test_session
+    session.run("pytest", *session.posargs)
+
+
+@nox.session
+@nox.parametrize("driver_version", ["100.0.0", "0.8.3"])
+def go_client(session, driver_version):
+    env = {"DATABEND_GO_VERSION": driver_version}
+    test_dir = f"cache/databend-go/tests"
+    with session.cd(test_dir):
+        if driver_version == "100.0.0":
+            if os.path.exists("go.mod"):
+                os.remove("go.mod")
+        else:
+            session.run("go", "mod", "init", f"it", external=True)
+            session.run(
+                "go",
+                "get",
+                f"github.com/datafuselabs/databend-go@v{driver_version}",
+                external=True,
+            )
+            session.run("go", "get", "-t", "./", external=True)
+
+        session.run(
+            "go",
+            "test",
+            "-v",
+            "-timeout",
+            "5m",
+            "./",
+            external=True,
+            env=env,
+        )

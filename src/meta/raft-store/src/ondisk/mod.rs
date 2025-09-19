@@ -160,7 +160,7 @@ impl OnDisk {
 
         let db = init_get_sled_db(config.raft_dir.clone(), 1024 * 1024 * 1024);
 
-        let tree = SledTree::open(&db, TREE_HEADER, config.is_sync())?;
+        let tree = SledTree::open(&db, TREE_HEADER)?;
         let ks = tree.key_space::<DataHeader>();
 
         let header = ks.get(&Self::KEY_HEADER.to_string()).map_err(|e| {

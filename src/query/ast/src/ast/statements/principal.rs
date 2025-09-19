@@ -160,6 +160,10 @@ pub enum UserPrivilegeType {
     AccessSequence,
     // Privilege to Create sequence
     CreateSequence,
+    // Privilege to Access Procedure
+    AccessProcedure,
+    // Privilege to Create Procedure
+    CreateProcedure,
     // Discard Privilege Type
     Set,
 }
@@ -193,6 +197,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::AccessConnection => "ACCESS CONNECTION",
             UserPrivilegeType::CreateSequence => "CREATE SEQUENCE",
             UserPrivilegeType::AccessSequence => "ACCESS SEQUENCE",
+            UserPrivilegeType::CreateProcedure => "CREATE PROCEDURE",
+            UserPrivilegeType::AccessProcedure => "ACCESS PROCEDURE",
         })
     }
 }

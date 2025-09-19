@@ -81,7 +81,6 @@ cluster_name = "foo_cluster"
         assert_eq!(cfg.raft_config.raft_listen_host, "127.0.0.1");
         assert_eq!(cfg.raft_config.raft_api_port, 11000);
         assert_eq!(cfg.raft_config.raft_dir, "raft dir");
-        assert!(cfg.raft_config.no_sync);
         assert_eq!(cfg.raft_config.snapshot_logs_since_last, 1000);
         assert_eq!(cfg.raft_config.heartbeat_interval, 2000);
         assert_eq!(cfg.raft_config.install_snapshot_timeout, 3000);

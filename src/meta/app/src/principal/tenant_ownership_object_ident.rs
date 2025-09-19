@@ -289,6 +289,19 @@ mod tests {
     }
 
     #[test]
+    fn test_ownership_procedure_list_key() {
+        use databend_common_meta_kvapi::kvapi::Key;
+        let obj = OwnershipObject::Procedure { procedure_id: 1 };
+
+        let ident = TenantOwnershipObjectIdent::new(Tenant::new_literal("tenant1"), obj);
+        let dir_name = kvapi::DirName::new(ident);
+        assert_eq!(
+            dir_name.to_string_key(),
+            "__fd_object_owners/tenant1/procedure-by-id"
+        );
+    }
+
+    #[test]
     fn test_tenant_ownership_object_with_key_space() {
         // TODO(xp): implement this test
         // let tenant = Tenant::new_literal("test");

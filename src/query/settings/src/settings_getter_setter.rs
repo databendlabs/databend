@@ -215,6 +215,10 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+    pub fn get_max_vacuum_threads(&self) -> Result<u64> {
+        self.try_get_u64("max_vacuum_threads")
+    }
+
     // Get storage_fetch_part_num.
     pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
         match self.try_get_u64("storage_fetch_part_num")? {
@@ -518,6 +522,14 @@ impl Settings {
 
     pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
+    }
+
+    pub fn get_result_set_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("result_set_spilling_to_disk_bytes_limit")? as usize)
+    }
+
+    pub fn get_enable_result_set_spilling(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_result_set_spilling")? == 1)
     }
 
     pub fn get_enable_shuffle_sort(&self) -> Result<bool> {

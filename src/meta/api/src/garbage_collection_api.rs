@@ -48,8 +48,10 @@ use display_more::DisplaySliceExt;
 use fastrace::func_name;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
@@ -178,6 +180,11 @@ pub async fn get_history_tables_for_gc(
     db_id: u64,
     limit: usize,
 ) -> Result<Vec<TableNIV>, KVAppError> {
+    info!(
+        "get_history_tables_for_gc: db_id {}, limit {}",
+        db_id, limit
+    );
+
     let ident = TableIdHistoryIdent {
         database_id: db_id,
         table_name: "dummy".to_string(),
@@ -196,6 +203,15 @@ pub async fn get_history_tables_for_gc(
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
 
+    let args_len = args.len();
+    let mut num_out_of_time_range = 0;
+    let mut num_processed = 0;
+
+    info!(
+        "get_history_tables_for_gc: {} items to process in db {}",
+        args_len, db_id
+    );
+
     // Process in batches to avoid performance issues
     for chunk in args.chunks(BATCH_SIZE) {
         // Get table metadata for current batch
@@ -205,7 +221,7 @@ pub async fn get_history_tables_for_gc(
         // Filter by drop_time_range for current batch
         for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
             let Some(seq_meta) = seq_meta else {
-                error!(
+                warn!(
                     "batch_filter_table_info cannot find {:?} table_meta",
                     table_id
                 );
@@ -213,7 +229,8 @@ pub async fn get_history_tables_for_gc(
             };
 
             if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                info!("table {:?} is not in drop_time_range", seq_meta.data);
+                debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                num_out_of_time_range += 1;
                 continue;
             }
 
@@ -225,9 +242,20 @@ pub async fn get_history_tables_for_gc(
 
             // Check if we have reached the limit
             if filter_tb_infos.len() >= limit {
+                info!(
+                    "get_history_tables_for_gc: reach limit {}, so far collected {}",
+                    limit,
+                    filter_tb_infos.len()
+                );
                 return Ok(filter_tb_infos);
             }
         }
+
+        num_processed += chunk.len();
+        info!(
+            "get_history_tables_for_gc: process: {}/{}, {} items filtered by time range condition",
+            num_processed, args_len, num_out_of_time_range
+        );
     }
 
     Ok(filter_tb_infos)

@@ -7,17 +7,17 @@ create table t1 (c1 int, c2 int, c3 int64, c4 string default 'ok')
 query 
 select * from infer_schema(location => '@data/parquet/diff_schema/f1.parquet')
 ----
-c1 BIGINT 1 0
-c2 SMALLINT 1 1
-c3 BIGINT 1 2
+c1 BIGINT 1 parquet/diff_schema/f1.parquet 0
+c2 SMALLINT 1 parquet/diff_schema/f1.parquet 1
+c3 BIGINT 1 parquet/diff_schema/f1.parquet 2
 
 query 
 select * from infer_schema(location => '@data/parquet/diff_schema/f2.parquet')
 ----
-c6 BIGINT 1 0
-c5 BIGINT 1 1
-c2 BIGINT 1 2
-c4 VARCHAR 1 3
+c6 BIGINT 1 parquet/diff_schema/f2.parquet 0
+c5 BIGINT 1 parquet/diff_schema/f2.parquet 1
+c2 BIGINT 1 parquet/diff_schema/f2.parquet 2
+c4 VARCHAR 1 parquet/diff_schema/f2.parquet 3
 
 query error
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet) pattern='.*[.]parquet'

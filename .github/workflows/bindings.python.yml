@@ -44,12 +44,12 @@ jobs:
             echo "Error: No version provided for workflow_call"
             exit 1
           fi
-          
+
           # Validate version format
           if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
             echo "Warning: Version $VERSION may not follow semantic versioning (vX.Y.Z)"
           fi
-          
+
           echo "Final version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -104,29 +104,44 @@ jobs:
           retention-days: 7
 
   macos:
-    name: Build macOS Universal Wheel
+    name: Build macOS Wheels
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
     needs: [get-version, test]
     runs-on: macos-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          # Install OpenSSL and necessary tools
+          brew install openssl@3
+
+          # Use vendored OpenSSL to avoid cross-compilation issues
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+          echo "OPENSSL_VENDORED=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+
       - uses: ./.github/actions/build_bindings_python
         with:
-          target: universal2-apple-darwin
+          target: ${{ matrix.target }}
           version: ${{ needs.get-version.outputs.version }}
       - name: Upload macOS wheel
         uses: actions/upload-artifact@v4
         with:
-          name: python-macos-universal
+          name: python-macos-${{ matrix.target }}
           path: src/bendpy/dist/*.whl
           retention-days: 7
 
   publish:
     name: Publish to PyPI
     if: (github.event_name == 'workflow_call' && inputs.version != '') || github.event_name == 'workflow_dispatch'
-    needs: [get-version, test, linux, macos]
+    needs: [get-version, test, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,12 +150,13 @@ jobs:
           pattern: python-*
           merge-multiple: true
           path: src/bendpy/dist
+        continue-on-error: true
 
       - name: Show packages to publish
         run: |
           echo "Publishing packages for version: ${{ needs.get-version.outputs.version }}"
           echo "Packages found:"
-          ls -la src/bendpy/dist/
+          ls -la src/bendpy/dist/ || echo "No packages found"
           echo "Total packages: $(ls src/bendpy/dist/*.whl 2>/dev/null | wc -l)"
 
       - name: Publish to PyPI
@@ -148,7 +164,12 @@ jobs:
         run: |
           pip install twine
           echo "Publishing to PyPI..."
-          twine upload --skip-existing --verbose src/bendpy/dist/*.whl
+          if [ -n "$(find src/bendpy/dist -name "*.whl" 2>/dev/null)" ]; then
+            twine upload --skip-existing --verbose src/bendpy/dist/*.whl
+          else
+            echo "No wheel files found to publish"
+            exit 1
+          fi
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}

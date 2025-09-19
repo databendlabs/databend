@@ -135,6 +135,17 @@ pub async fn validate_grant_object_exists(
                 Err(e) => Err(e),
             };
         }
+        GrantObject::Procedure(p) => {
+            let procedure = UserApiProvider::instance()
+                .procedure_api(&tenant)
+                .get_procedure_by_id(*p)
+                .await?;
+            if procedure.is_none() {
+                return Err(databend_common_exception::ErrorCode::UnknownProcedure(
+                    format!("Unknown procedure id {}", p),
+                ));
+            }
+        }
         GrantObject::Global => (),
     }
 

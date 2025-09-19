@@ -23,6 +23,8 @@ use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
@@ -148,6 +150,7 @@ pub async fn construct_drop_table_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_name: String,
     tenant: &Tenant,
+    catalog_name: Option<String>,
     table_id: u64,
     db_id: u64,
     if_exists: bool,
@@ -267,6 +270,18 @@ pub async fn construct_drop_table_txn_operations(
             ));
         }
     }
+
+    // Clean up ownership if catalog_name is provided (CREATE OR REPLACE case)
+    if let Some(catalog_name) = catalog_name {
+        let ownership_object = OwnershipObject::Table {
+            catalog_name,
+            db_id,
+            table_id,
+        };
+        let ownership_key = TenantOwnershipObjectIdent::new(tenant.clone(), ownership_object);
+        txn.if_then.push(txn_op_del(&ownership_key));
+    }
+
     Ok((tb_id_seq, table_id))
 }
 

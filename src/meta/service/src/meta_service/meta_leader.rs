@@ -91,17 +91,22 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
 
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.sto.state_machine();
-                let res = sm.kv_api().get_kv(&req.key).await.unwrap();
+                let res = sm.get_inner().kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
                 let sm = self.sto.state_machine();
-                let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
+                let res = sm.get_inner().kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.sto.state_machine();
-                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
+                let res = sm
+                    .get_inner()
+                    .kv_api()
+                    .list_kv_collect(&req.prefix)
+                    .await
+                    .unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -117,7 +122,7 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
         debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
 
-        let sm = self.sto.state_machine();
+        let sm = self.sto.state_machine().get_inner();
         let kv_api = sm.kv_api();
 
         match req.body {
@@ -133,16 +138,9 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
 
             MetaGrpcReadReq::MGetKV(req) => {
                 // safe unwrap(): Infallible
-                let values = kv_api.mget_kv(&req.keys).await.unwrap();
+                let strm = kv_api.get_kv_stream(&req.keys).await.unwrap();
 
-                let kv_iter = req
-                    .keys
-                    .clone()
-                    .into_iter()
-                    .zip(values)
-                    .map(|(k, v)| Ok(StreamItem::from((k, v))));
-
-                let strm = futures::stream::iter(kv_iter);
+                let strm = strm.map_err(|e| Status::internal(e.to_string()));
 
                 Ok(strm.boxed())
             }
@@ -246,6 +244,7 @@ impl<'a> MetaLeader<'a> {
         let membership = self
             .sto
             .state_machine()
+            .get_inner()
             .with_sys_data(|s| s.last_membership_ref().membership().clone());
 
         let msg = if membership.voter_ids().any(|id| id == node_id) {
@@ -302,7 +301,11 @@ impl<'a> MetaLeader<'a> {
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
             let sm = self.sto.state_machine();
-            sm.sys_data().last_membership_ref().membership().clone()
+            sm.get_inner()
+                .sys_data()
+                .last_membership_ref()
+                .membership()
+                .clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
 

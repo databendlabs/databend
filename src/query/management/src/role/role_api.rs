@@ -44,6 +44,7 @@ pub trait RoleApi: Sync + Send {
     async fn list_udf_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_stage_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_seq_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
+    async fn list_procedure_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_connection_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
     async fn list_warehouse_ownerships(&self) -> Result<Vec<OwnershipInfo>>;
 

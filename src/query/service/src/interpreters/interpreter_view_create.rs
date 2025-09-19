@@ -108,6 +108,11 @@ impl Interpreter for CreateViewInterpreter {
 
         let plan = CreateTableReq {
             create_option: self.plan.create_option,
+            catalog_name: if self.plan.create_option.is_overriding() {
+                Some(self.plan.catalog.to_string())
+            } else {
+                None
+            },
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.clone(),

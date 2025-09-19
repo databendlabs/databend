@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Raft log entry application to state machine.
+//!
+//! Applies committed raft log entries to the state machine including membership changes,
+//! KV operations, transactions, and TTL cleanup.
+
 use std::future::ready;
 use std::io;
 use std::time::Duration;

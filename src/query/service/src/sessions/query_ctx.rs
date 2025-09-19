@@ -1140,7 +1140,7 @@ impl TableContext for QueryContext {
         self.shared.get_stage_attachment()
     }
 
-    fn get_last_query_id(&self, index: i32) -> String {
+    fn get_last_query_id(&self, index: i32) -> Option<String> {
         self.shared.session.session_ctx.get_last_query_id(index)
     }
 
