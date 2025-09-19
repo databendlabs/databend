@@ -43,6 +43,8 @@ impl BlocksWriter {
         }
     }
     pub async fn write(&mut self, block: DataBlock) -> Result<()> {
+        assert!(!block.is_empty());
+
         let mut block_encoder = BlocksEncoder::new(true, Alignment::MIN, 8 * 1024 * 1024);
         block_encoder.add_blocks(vec![block]);
 
@@ -60,6 +62,8 @@ impl BlocksWriter {
     }
 
     pub async fn close(mut self) -> Result<(Location, usize, usize)> {
+        assert!(self.written > 0);
+
         let bytes = BytesMut::new();
 
         let mut offset_writer = bytes.writer();
