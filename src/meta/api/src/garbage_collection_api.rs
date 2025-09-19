@@ -195,7 +195,7 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
-    let mut maybe_current_live_table_ids = HashSet::with_capacity(table_history_kvs.len());
+    let mut maybe_live_table_ids = HashSet::with_capacity(table_history_kvs.len());
     for (ident, table_history) in table_history_kvs {
         let id_list = &table_history.id_list;
         if !id_list.is_empty() {
@@ -206,17 +206,13 @@ pub async fn get_history_tables_for_gc(
                 let max_id = id_list.iter().max().unwrap();
                 assert_eq!(max_id, last_id);
             }
-            maybe_current_live_table_ids.insert(*last_id);
+            // last_id might still be visible
+            maybe_live_table_ids.insert(*last_id);
             for table_id in id_list.iter() {
                 args.push((TableId::new(*table_id), ident.table_name.clone()));
             }
         }
     }
-
-    eprintln!(
-        "maybe_current_live_table_ids {:#?}",
-        maybe_current_live_table_ids
-    );
 
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
@@ -248,15 +244,14 @@ pub async fn get_history_tables_for_gc(
 
             // TODO doc this
             if seq_meta.data.drop_on.is_none()
-                && !maybe_current_live_table_ids.contains(&table_id.table_id)
+                && !maybe_live_table_ids.contains(&table_id.table_id)
+                && !drop_time_range.contains(&Some(seq_meta.data.updated_on))
             {
-                if !drop_time_range.contains(&Some(seq_meta.data.updated_on)) {
-                    debug!("table {:?} is not in drop_time_range", seq_meta.data);
-                    num_out_of_time_range += 1;
-                    continue;
-                }
+                debug!("table {:?} is not in drop_time_range by updated_on", seq_meta.data);
+                num_out_of_time_range += 1;
+                continue;
             } else if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                debug!("table {:?} is not in drop_time_range by drop_on", seq_meta.data);
                 num_out_of_time_range += 1;
                 continue;
             }
