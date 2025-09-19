@@ -18,11 +18,8 @@
 mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
-mod elastic_hash;
 mod group_hash;
 mod hash_index;
-#[cfg(test)]
-mod hash_index_test;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;

@@ -40,7 +40,7 @@ use crate::ProjectedBlock;
 
 const BATCH_ADD_SIZE: usize = 2048;
 
-pub struct AggregateHashTable<const PARTIAL: bool> {
+pub struct AggregateHashTable {
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
@@ -50,17 +50,16 @@ pub struct AggregateHashTable<const PARTIAL: bool> {
     hash_index: HashIndex,
 }
 
-unsafe impl<const PARTIAL: bool> Send for AggregateHashTable<PARTIAL> {}
-unsafe impl<const PARTIAL: bool> Sync for AggregateHashTable<PARTIAL> {}
+unsafe impl Send for AggregateHashTable {}
+unsafe impl Sync for AggregateHashTable {}
 
-impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
+impl AggregateHashTable {
     pub fn new(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         config: HashTableConfig,
         arena: Arc<Bump>,
     ) -> Self {
-        assert_eq!(config.partial_agg, PARTIAL);
         let capacity = Self::initial_capacity();
         Self::new_with_capacity(group_types, aggrs, config, capacity, arena)
     }
@@ -228,7 +227,7 @@ impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
             }
         }
 
-        if PARTIAL {
+        if self.config.partial_agg {
             // check size
             if self.hash_index.count + BATCH_ADD_SIZE > self.hash_index.resize_threshold()
                 && self.hash_index.capacity >= self.config.max_partial_capacity
@@ -345,7 +344,7 @@ impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
 
     fn maybe_repartition(&mut self) -> bool {
         // already final stage or the max radix bits
-        if !PARTIAL || (self.current_radix_bits == self.config.max_radix_bits) {
+        if !self.config.partial_agg || (self.current_radix_bits == self.config.max_radix_bits) {
             return false;
         }
 
@@ -397,7 +396,7 @@ impl<const PARTIAL: bool> AggregateHashTable<PARTIAL> {
 
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
-        if PARTIAL {
+        if self.config.partial_agg {
             if self.hash_index.capacity == self.config.max_partial_capacity {
                 return;
             }

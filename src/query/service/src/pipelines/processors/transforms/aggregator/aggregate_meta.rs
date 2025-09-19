@@ -21,6 +21,7 @@ use bumpalo::Bump;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggregateFunction;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
@@ -30,8 +31,6 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-
-type AggregateHashTable = databend_common_expression::AggregateHashTable<false>;
 
 pub struct SerializedPayload {
     pub bucket: isize,
