@@ -208,7 +208,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.log().clone().blocking_append(logs.clone()).await?;
-    sto.state_machine().get_inner().apply_entries(logs).await?;
+    sto.get_sm_v003().apply_entries(logs).await?;
 
     let curr_snap = sto.state_machine().clone().build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -257,8 +257,8 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     sto.log().clone().blocking_append(logs.clone()).await?;
     {
-        let sm = sto.state_machine();
-        sm.get_inner().apply_entries(logs).await?;
+        let sm = sto.get_sm_v003();
+        sm.apply_entries(logs).await?;
     }
 
     sto.state_machine().clone().build_snapshot().await?;
@@ -306,7 +306,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.log().clone().blocking_append(logs.clone()).await?;
-        sto.state_machine().get_inner().apply_entries(logs).await?;
+        sto.get_sm_v003().apply_entries(logs).await?;
 
         snap = sto.state_machine().clone().build_snapshot().await?;
     }
@@ -329,12 +329,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- check installed meta");
         {
-            let mem = sto
-                .state_machine()
-                .get_inner()
-                .sys_data()
-                .last_membership_ref()
-                .clone();
+            let mem = sto.get_sm_v003().sys_data().last_membership_ref().clone();
 
             assert_eq!(
                 StoredMembership::new(
@@ -344,11 +339,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 mem
             );
 
-            let last_applied = *sto
-                .state_machine()
-                .get_inner()
-                .sys_data()
-                .last_applied_ref();
+            let last_applied = *sto.get_sm_v003().sys_data().last_applied_ref();
             assert_eq!(Some(log_id(1, 0, 9)), last_applied);
         }
 

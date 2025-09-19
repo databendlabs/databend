@@ -27,7 +27,7 @@ mod impl_raft_log_storage;
 pub struct MetaRaftLog {
     pub(crate) id: NodeId,
     #[allow(dead_code)]
-    pub(crate) config: RaftConfig,
+    pub(crate) config: Arc<RaftConfig>,
     inner: Arc<RwLock<RaftLogV004>>,
 }
 
@@ -40,7 +40,7 @@ impl Deref for MetaRaftLog {
 }
 
 impl MetaRaftLog {
-    pub fn new(id: NodeId, config: RaftConfig, inner: RaftLogV004) -> Self {
+    pub fn new(id: NodeId, config: Arc<RaftConfig>, inner: RaftLogV004) -> Self {
         Self {
             id,
             config,
