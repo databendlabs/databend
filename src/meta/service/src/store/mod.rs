@@ -16,7 +16,5 @@ pub mod meta_raft_log;
 pub mod meta_raft_state_machine;
 #[allow(clippy::module_inception)]
 mod store;
-mod store_inner;
 
 pub use store::RaftStore;
-pub use store_inner::RaftStoreInner;
