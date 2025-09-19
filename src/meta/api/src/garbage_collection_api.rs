@@ -247,11 +247,17 @@ pub async fn get_history_tables_for_gc(
                 && !maybe_live_table_ids.contains(&table_id.table_id)
                 && !drop_time_range.contains(&Some(seq_meta.data.updated_on))
             {
-                debug!("table {:?} is not in drop_time_range by updated_on", seq_meta.data);
+                debug!(
+                    "table {:?} is not in drop_time_range by updated_on",
+                    seq_meta.data
+                );
                 num_out_of_time_range += 1;
                 continue;
             } else if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                debug!("table {:?} is not in drop_time_range by drop_on", seq_meta.data);
+                debug!(
+                    "table {:?} is not in drop_time_range by drop_on",
+                    seq_meta.data
+                );
                 num_out_of_time_range += 1;
                 continue;
             }
