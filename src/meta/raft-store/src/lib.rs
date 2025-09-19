@@ -41,6 +41,7 @@
 
 pub mod applier;
 pub mod config;
+pub mod immutable_compactor;
 pub mod key_spaces;
 pub mod leveled_store;
 pub mod ondisk;

@@ -138,7 +138,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let sm = mn1.raft_store.state_machine().get_inner();
+        let sm = mn1.raft_store.get_sm_v003();
         let got = sm.get_maybe_expired_kv(&key).await?;
         match got {
             None => {

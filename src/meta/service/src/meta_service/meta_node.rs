@@ -202,8 +202,7 @@ impl MetaNodeBuilder {
             }
         };
 
-        sto.state_machine()
-            .get_inner()
+        sto.get_sm_v003()
             .set_on_change_applied(Box::new(on_change_applied));
 
         let meta_node = Arc::new(MetaNode {
@@ -1054,13 +1053,21 @@ impl MetaNode {
         };
         let mut raft_client = RaftServiceClient::new(chan);
 
+        let join_req = JoinRequest::new(
+            conf.id,
+            advertise_endpoint.clone(),
+            grpc_api_advertise_address.clone(),
+        );
+
+        let join_req = if conf.learner {
+            join_req.with_role_learner()
+        } else {
+            join_req
+        };
+
         let req = ForwardRequest {
             forward_to_leader: 1,
-            body: ForwardRequestBody::Join(JoinRequest::new(
-                conf.id,
-                advertise_endpoint.clone(),
-                grpc_api_advertise_address.clone(),
-            )),
+            body: ForwardRequestBody::Join(join_req),
         };
 
         let join_res = raft_client.forward(req.clone()).await;
@@ -1115,12 +1122,8 @@ impl MetaNode {
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
-            let sm = &self.raft_store.state_machine();
-            sm.get_inner()
-                .sys_data()
-                .last_membership_ref()
-                .membership()
-                .clone()
+            let sm = &self.raft_store.get_sm_v003();
+            sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
 
@@ -1229,8 +1232,11 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine();
-        let n = sm.get_inner().sys_data().nodes_ref().get(node_id).cloned();
+        let sm = self.raft_store.get_sm_v003();
+        let sys_data = sm.sys_data();
+        info!("get_node: node_id: {}, sys_data: {:?}", node_id, sys_data);
+
+        let n = sys_data.nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -1238,9 +1244,8 @@ impl MetaNode {
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine();
+        let sm = self.raft_store.get_sm_v003();
         let nodes = sm
-            .get_inner()
             .sys_data()
             .nodes_ref()
             .values()
@@ -1327,8 +1332,8 @@ impl MetaNode {
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
-        let sm = self.raft_store.state_machine();
-        sm.get_inner().sys_data().curr_seq()
+        let sm = self.raft_store.get_sm_v003();
+        sm.sys_data().curr_seq()
     }
 
     #[fastrace::trace]
@@ -1336,9 +1341,8 @@ impl MetaNode {
         // Maybe stale get: from local state machine
 
         let nodes = {
-            let sm = self.raft_store.state_machine();
-            sm.get_inner()
-                .sys_data()
+            let sm = self.raft_store.get_sm_v003();
+            sm.sys_data()
                 .nodes_ref()
                 .values()
                 .cloned()

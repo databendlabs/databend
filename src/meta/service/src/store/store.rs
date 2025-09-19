@@ -17,6 +17,7 @@ use std::fs;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::AnyError;
 use databend_common_meta_raft_store::config::RaftConfig;
@@ -57,7 +58,7 @@ use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 pub struct RaftStore {
     pub id: NodeId,
 
-    pub(crate) config: RaftConfig,
+    pub(crate) config: Arc<RaftConfig>,
 
     log: MetaRaftLog,
 
@@ -68,6 +69,8 @@ impl RaftStore {
     /// Open an existent raft-store or create a new one.
     #[fastrace::trace]
     pub async fn open(config: &RaftConfig) -> Result<Self, MetaStartupError> {
+        let config = Arc::new(config.clone());
+
         info!("open_or_create StoreInner: id={}", config.id);
 
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
@@ -111,7 +114,7 @@ impl RaftStore {
                 .map_err(to_startup_err)?;
         }
 
-        let ss_store = SnapshotStoreV004::new(config.clone());
+        let ss_store = SnapshotStoreV004::new(config.as_ref().clone());
         let loader = ss_store.new_loader();
         let last = loader.load_last_snapshot().await.map_err(to_startup_err)?;
 
@@ -136,12 +139,24 @@ impl RaftStore {
 
         info!("State machine built: {:?}", sm);
 
-        let store = Self {
+        let mut store = Self {
             id,
             config: config.clone(),
             log: MetaRaftLog::new(id, config.clone(), log),
-            state_machine: MetaRaftStateMachine::new(id, config.clone(), Arc::new(sm)),
+            state_machine: MetaRaftStateMachine::new(id, config, Arc::new(sm)),
         };
+
+        {
+            let interval_ms = store.config.compact_immutables_ms.unwrap_or(1000);
+
+            if interval_ms == 0 {
+                info!("spawn in-memory compactor, is disabled: interval_ms: 0");
+            } else {
+                let interval = Duration::from_millis(interval_ms);
+                info!("spawn in-memory compactor, interval: {:?}", interval);
+                store.state_machine.spawn_in_memory_compactor(interval);
+            }
+        }
 
         Ok(store)
     }
@@ -152,6 +167,10 @@ impl RaftStore {
 
     pub fn state_machine(&self) -> &MetaRaftStateMachine {
         &self.state_machine
+    }
+
+    pub fn get_sm_v003(&self) -> Arc<SMV003> {
+        self.state_machine.get_inner()
     }
 
     async fn rebuild_state_machine(id: &MetaSnapshotId, snapshot: DB) -> Result<SMV003, io::Error> {
@@ -167,8 +186,8 @@ impl RaftStore {
     ///
     /// It returns None if there is no snapshot or there is an error parsing snapshot meta or id.
     pub(crate) async fn try_get_snapshot_key_count(&self) -> Option<u64> {
-        let sm = self.state_machine();
-        let db = sm.get_inner().leveled_map().persisted()?;
+        let sm = self.get_sm_v003();
+        let db = sm.leveled_map().persisted()?;
         Some(db.stat().key_num)
     }
 
@@ -180,8 +199,8 @@ impl RaftStore {
     ///
     /// Returns an empty map if no snapshot exists.
     pub(crate) async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
-        let sm = self.state_machine();
-        let Some(db) = sm.get_inner().leveled_map().persisted() else {
+        let sm = self.get_sm_v003();
+        let Some(db) = sm.leveled_map().persisted() else {
             return Default::default();
         };
         db.sys_data().key_counts().clone()
@@ -189,8 +208,8 @@ impl RaftStore {
 
     /// Get the statistics of the snapshot database.
     pub(crate) async fn get_snapshot_db_stat(&self) -> DBStat {
-        let sm = self.state_machine();
-        let Some(db) = sm.get_inner().leveled_map().persisted() else {
+        let sm = self.get_sm_v003();
+        let Some(db) = sm.leveled_map().persisted() else {
             return Default::default();
         };
         db.db_stat()
@@ -225,7 +244,7 @@ impl RaftStore {
 
         // Log is dumped thus there won't be a gap between sm and log.
         // It is now safe to release the compactor.
-        let db = self.state_machine().get_inner().get_snapshot();
+        let db = self.get_sm_v003().get_snapshot();
         drop(permit);
 
         // Export data header first
@@ -312,8 +331,8 @@ impl RaftStore {
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
-        let sm = self.state_machine();
-        let n = sm.get_inner().sys_data().nodes_ref().get(node_id).cloned();
+        let sm = self.get_sm_v003();
+        let n = sm.sys_data().nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -322,13 +341,8 @@ impl RaftStore {
         &self,
         list_ids: impl Fn(&Membership) -> Vec<NodeId>,
     ) -> Vec<Node> {
-        let sm = self.state_machine();
-        let membership = sm
-            .get_inner()
-            .sys_data()
-            .last_membership_ref()
-            .membership()
-            .clone();
+        let sm = self.get_sm_v003();
+        let membership = sm.sys_data().last_membership_ref().membership().clone();
 
         debug!("in-statemachine membership: {:?}", membership);
 
@@ -337,7 +351,7 @@ impl RaftStore {
         let mut ns = vec![];
 
         for id in ids {
-            let node = sm.get_inner().sys_data().nodes_ref().get(&id).cloned();
+            let node = sm.sys_data().nodes_ref().get(&id).cloned();
             if let Some(x) = node {
                 ns.push(x);
             }
@@ -346,7 +360,7 @@ impl RaftStore {
         ns
     }
     fn new_compactor_acquirer(&self, name: impl ToString) -> CompactorAcquirer {
-        let sm = self.state_machine();
-        sm.get_inner().new_compactor_acquirer(name)
+        let sm = self.get_sm_v003();
+        sm.new_compactor_acquirer(name)
     }
 }
