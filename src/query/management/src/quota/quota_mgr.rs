@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_app::tenant::TenantQuotaIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
