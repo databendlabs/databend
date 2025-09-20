@@ -18,6 +18,7 @@ use std::time::Duration;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::BlockLimit;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {
@@ -26,6 +27,7 @@ pub struct ExecutorSettings {
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
+    pub block_limit: Arc<BlockLimit>,
 }
 
 impl ExecutorSettings {
@@ -45,12 +47,20 @@ impl ExecutorSettings {
             config_enable_queries_executor
         };
 
+        let max_block_rows = settings.get_max_block_size()?;
+        let max_block_bytes = settings.get_max_block_bytes()?;
+        let block_limit = Arc::new(BlockLimit::new(
+            max_block_rows as usize,
+            max_block_bytes as usize,
+        ));
+
         Ok(ExecutorSettings {
             enable_queries_executor,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),
+            block_limit,
         })
     }
 }
