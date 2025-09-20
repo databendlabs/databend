@@ -1646,6 +1646,26 @@ impl DecimalDataType {
     }
 }
 
+impl PartialOrd for DecimalDataType {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DecimalDataType {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let self_precision = self.precision();
+        let other_precision = other.precision();
+        let self_scale = self.scale();
+        let other_scale = other.scale();
+        if self_precision == other_precision {
+            self_scale.cmp(&other_scale)
+        } else {
+            self_precision.cmp(&other_precision)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecimalDataKind {
     Decimal64,

@@ -789,10 +789,6 @@ impl Settings {
         }
     }
 
-    pub fn get_enable_refresh_virtual_column_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
-    }
-
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
     }

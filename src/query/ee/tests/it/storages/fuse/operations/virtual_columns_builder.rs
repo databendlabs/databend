@@ -16,6 +16,8 @@ use std::str::FromStr;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::ColumnId;
@@ -247,7 +249,10 @@ async fn test_virtual_column_builder() -> Result<()> {
         "['geo']['lat']",
     )
     .unwrap();
-    assert_eq!(meta_geo_lat.data_type, VariantDataType::Jsonb);
+    assert_eq!(
+        meta_geo_lat.data_type,
+        VariantDataType::Decimal(DecimalDataType::from(DecimalSize::new_unchecked(18, 1)))
+    );
 
     let entries = vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
