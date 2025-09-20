@@ -195,19 +195,34 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
-    let mut maybe_live_table_ids = HashSet::with_capacity(table_history_kvs.len());
+    // For table ids of each table with the same name, we keep the largest one, e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    // ```
+    // table_id 2 will be kept for table t (we do not care about the table name though),
+    //
+    // Please note that the largest table id might be "invisible", e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    //  drop table t ... ;
+    // ```
+    // In this case, table_id 2 is marked as dropped.
+
+    let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
+
     for (ident, table_history) in table_history_kvs {
         let id_list = &table_history.id_list;
         if !id_list.is_empty() {
-            // Make sure that the last table id is the max one.
-            // Since id_list is not empty, safe to unwrap
+            // Make sure that the last table id is also the max one (of each table name).
             let last_id = id_list.last().unwrap();
             {
                 let max_id = id_list.iter().max().unwrap();
                 assert_eq!(max_id, last_id);
             }
-            // last_id might still be visible
-            maybe_live_table_ids.insert(*last_id);
+            latest_table_ids.insert(*last_id);
+
             for table_id in id_list.iter() {
                 args.push((TableId::new(*table_id), ident.table_name.clone()));
             }
@@ -242,23 +257,35 @@ pub async fn get_history_tables_for_gc(
                 continue;
             };
 
-            // TODO doc this
-            if seq_meta.data.drop_on.is_none() && !maybe_live_table_ids.contains(&table_id.table_id)
+            // We shall not vacuum it if the table id is the largest table id of some table, but not marked with drop_on,
             {
-                if !drop_time_range.contains(&Some(seq_meta.data.updated_on)) {
+                let is_visible_last_active_table = seq_meta.data.drop_on.is_none()
+                    && latest_table_ids.contains(&table_id.table_id);
+
+                if is_visible_last_active_table {
                     debug!(
-                        "table {:?} is not in drop_time_range by updated_on",
-                        seq_meta.data
+                        "Table id {:?} of {} is the last visible one, not available for vacuum",
+                        table_id, table_name,
                     );
                     num_out_of_time_range += 1;
                     continue;
                 }
-                // Otherwise pick this table id as vacuum target
-            } else if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                debug!(
-                    "table {:?} is not in drop_time_range by drop_on",
-                    seq_meta.data
-                );
+            }
+
+            // Now the table id is
+            // - Either marked with drop_on
+            //   We use its `drop_on` to do the time range filtering
+            // - Or has no drop_on, but is not the last visible one of the table
+            //   It is still available for vacuum, and we use its `updated_on` to do the time range
+
+            let time_point = if seq_meta.drop_on.is_none() {
+                &Some(seq_meta.updated_on)
+            } else {
+                &seq_meta.drop_on
+            };
+
+            if !drop_time_range.contains(time_point) {
+                debug!("table {:?} is not in drop_time_range", seq_meta.data);
                 num_out_of_time_range += 1;
                 continue;
             }
