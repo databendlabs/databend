@@ -1,0 +1,58 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+create or replace database test_procedure_dedup_label;
+
+statement ok
+use test_procedure_dedup_label;
+
+statement ok
+CREATE TABLE t1(a Int, b bool);
+
+statement ok
+drop procedure if exists test_dedup_operations();
+
+# Test procedure with deduplication labels within transaction
+statement ok
+CREATE PROCEDURE test_dedup_operations() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
+    UPDATE /*+ SET_VAR(deduplicate_label='databend') */ t1 SET a = 20 WHERE b = false;
+    RETURN 'dedup operations completed';
+END;
+$$;
+
+statement ok
+begin;
+
+statement ok
+call procedure test_dedup_operations();
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+statement ok
+commit;
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+# Test REPLACE with deduplication label outside procedure
+statement ok
+REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
+
+query II
+SELECT * FROM t1;
+----
+1 0
+
+statement ok
+drop procedure if exists test_dedup_operations();
+
+statement ok
+drop database test_procedure_dedup_label;

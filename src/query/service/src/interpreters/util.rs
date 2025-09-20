@@ -33,6 +33,7 @@ use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 
+use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
@@ -129,7 +130,10 @@ impl Client for ScriptClient {
 
         let mut planner = Planner::new(ctx.clone());
         // In script ignore query level settings.
-        let (plan, _) = planner.plan_sql(query).await?;
+        let extras = planner.parse_sql(query)?;
+        auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
+
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;

@@ -1,0 +1,93 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+create or replace database test_auto_commit;
+
+statement ok
+use test_auto_commit;
+
+statement ok
+create table test_table (id int, data string);
+
+statement ok
+drop procedure if exists proc_create_table();
+
+statement ok
+CREATE PROCEDURE proc_create_table() RETURNS int LANGUAGE SQL AS $$
+BEGIN
+    CREATE TABLE new_table (x int);
+    INSERT INTO new_table VALUES (42);
+    RETURN 1;
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_drop_table();
+
+statement ok
+CREATE PROCEDURE proc_drop_table() RETURNS int LANGUAGE SQL AS $$
+BEGIN
+    DROP TABLE IF EXISTS new_table;
+    RETURN 1;
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_only_dml();
+
+statement ok
+CREATE PROCEDURE proc_only_dml() RETURNS int LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO test_table VALUES (2, 'from_proc');
+    UPDATE test_table SET data = 'updated' WHERE id = 1;
+    RETURN 1;
+END;
+$$;
+
+statement ok
+begin;
+
+statement ok
+insert into test_table values (10, 'txn_data');
+
+statement ok
+call procedure proc_create_table();
+
+query I
+select count(*) from test_table;
+----
+1
+
+statement ok
+rollback;
+
+query I
+select count(*) from test_table;
+----
+1
+
+statement ok
+call procedure proc_drop_table();
+
+statement ok
+begin;
+
+statement ok
+insert into test_table values (11, 'txn_data2');
+
+statement ok
+call procedure proc_only_dml();
+
+query I
+select count(*) from test_table;
+----
+3
+
+statement ok
+rollback;
+
+query I
+select count(*) from test_table;
+----
+1
