@@ -209,7 +209,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                     .map(|seq| seq.map(|meta| SequenceMeta::clone(&meta))),
             };
             let Some(seq_meta) = seq_meta else {
-                return Err(AppError::SequenceError(ident.unknow_error(func_name!())).into());
+                return Err(AppError::SequenceError(ident.unknown_error(func_name!())).into());
             };
             let sequence_meta = seq_meta.data.clone();
 

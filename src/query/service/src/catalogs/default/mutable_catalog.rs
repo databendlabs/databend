@@ -842,7 +842,7 @@ impl Catalog for MutableCatalog {
         let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
 
         let Some(seq_meta) = seq_meta else {
-            return Err(KVAppError::AppError(req.ident.unknow_error(func_name!()).into()).into());
+            return Err(KVAppError::AppError(req.ident.unknown_error(func_name!()).into()).into());
         };
         Ok(GetSequenceReply {
             meta: seq_meta.data,

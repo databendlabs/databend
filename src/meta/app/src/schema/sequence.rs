@@ -98,7 +98,7 @@ impl SequenceIdentType {
         }
     }
 
-    pub fn unknow_error(&self, ctx: impl Display) -> SequenceError {
+    pub fn unknown_error(&self, ctx: impl Display) -> SequenceError {
         match self {
             SequenceIdentType::Normal(ident) => {
                 SequenceError::UnknownSequence(ident.unknown_error(ctx))
