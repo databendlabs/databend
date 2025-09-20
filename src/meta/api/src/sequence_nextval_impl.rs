@@ -15,13 +15,15 @@
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::OutOfSequenceRange;
 use databend_common_meta_app::app_error::SequenceError;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
-use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::AutoIncrementMeta;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
@@ -42,7 +44,7 @@ pub(crate) struct NextVal<'a, KV>
 where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 {
     pub(crate) kv_api: &'a KV,
-    pub(crate) ident: SequenceIdent,
+    pub(crate) ident: SequenceIdentType,
     pub(crate) sequence_meta: SeqV<SequenceMeta>,
 }
 
@@ -75,9 +77,9 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         // update meta
         self.sequence_meta.current += count;
 
-        let condition = vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)];
+        let condition = vec![self.txn_cond_eq_seq()];
         let if_then = vec![
-            txn_op_put_pb(&self.ident, &self.sequence_meta.data, None)?, // name -> meta
+            self.txn_op_put_pb()?, // name -> meta
         ];
 
         let txn_req = TxnRequest::new(condition, if_then);
@@ -98,6 +100,28 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         }
     }
 
+    fn txn_op_put_pb(&self) -> Result<TxnOp, InvalidArgument> {
+        match &self.ident {
+            SequenceIdentType::Normal(ident) => {
+                txn_op_put_pb(ident, &self.sequence_meta.data, None)
+            }
+            SequenceIdentType::AutoIncrement(ident) => txn_op_put_pb(
+                ident,
+                &AutoIncrementMeta(self.sequence_meta.data.clone()),
+                None,
+            ),
+        }
+    }
+
+    fn txn_cond_eq_seq(&self) -> TxnCondition {
+        match &self.ident {
+            SequenceIdentType::Normal(ident) => txn_cond_eq_seq(ident, self.sequence_meta.seq),
+            SequenceIdentType::AutoIncrement(ident) => {
+                txn_cond_eq_seq(ident, self.sequence_meta.seq)
+            }
+        }
+    }
+
     /// Sequence number v1 stores the value in standalone key that support `FetchAddU64`.
     pub(crate) async fn next_val_v1(
         self,
@@ -106,17 +130,17 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         debug!("{}", func_name!());
 
         // Key for the sequence number value.
-        let storage_ident = SequenceStorageIdent::new_from(self.ident.clone());
+        let storage_ident = self.ident.to_storage_ident();
         let storage_key = storage_ident.to_string_key();
 
         let sequence_meta = &self.sequence_meta.data;
 
         let delta = count * (self.sequence_meta.step as u64);
 
-        let txn = TxnRequest::new(
-            vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)],
-            vec![TxnOp::fetch_add_u64(&storage_key, delta as i64)],
-        );
+        let txn = TxnRequest::new(vec![self.txn_cond_eq_seq()], vec![TxnOp::fetch_add_u64(
+            &storage_key,
+            delta as i64,
+        )]);
 
         let (succ, responses) = send_txn(self.kv_api, txn).await?;
 

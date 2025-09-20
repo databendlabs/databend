@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod auto_increment;
 mod call;
 mod catalog;
 mod columns;
@@ -60,6 +61,7 @@ mod virtual_column;
 mod warehouse;
 mod workload;
 
+pub use auto_increment::*;
 pub use call::*;
 pub use catalog::*;
 pub use columns::*;

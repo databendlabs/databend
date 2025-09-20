@@ -3584,6 +3584,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",

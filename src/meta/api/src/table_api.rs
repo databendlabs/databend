@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::AutoIncrement;
 use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;
@@ -45,9 +46,14 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::primitive::Id;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::schema::AutoIncrementMeta;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -69,6 +75,7 @@ use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -141,6 +148,7 @@ use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_get;
 use crate::txn_op_put;
+use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 use crate::DEFAULT_MGET_SIZE;
@@ -441,6 +449,26 @@ where
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
                         .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                }
+
+                for (column_id, auto_increment) in req.auto_increments.iter() {
+                    let sequence_meta = SequenceMeta {
+                        create_on: Utc::now(),
+                        update_on: Utc::now(),
+                        comment: None,
+                        step: auto_increment.step as i64,
+                        current: auto_increment.start,
+                        storage_version: 0,
+                    };
+                    let auto_increment_key = AutoIncrementKey::new(table_id, *column_id as u32);
+                    let auto_increment_ident =
+                        AutoIncrementIdent::new_generic(req.tenant(), auto_increment_key);
+                    let storage_ident = auto_increment_ident.to_storage_ident();
+                    let storage_value = Id::new_typed(SequenceStorageValue(auto_increment.start));
+                    txn.if_then.extend(vec![
+                        txn_put_pb(&auto_increment_ident, &AutoIncrementMeta(sequence_meta))?,
+                        txn_put_pb(&storage_ident, &storage_value)?,
+                    ]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;

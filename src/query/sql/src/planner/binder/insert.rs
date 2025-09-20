@@ -207,6 +207,7 @@ impl Binder {
                         let default_exprs = if file_format_params.need_field_default() {
                             Some(
                                 DefaultExprBinder::try_new(self.ctx.clone())?
+                                    .auto_increment_table_id(table.get_id())
                                     .prepare_default_values(&required_values_schema)?,
                             )
                         } else {

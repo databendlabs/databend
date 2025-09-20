@@ -197,6 +197,12 @@ impl ShowCreateTableInterpreter {
                     }
                     _ => "".to_string(),
                 };
+                let auto_increment = if let Some(sequence_display) = &field.auto_increment_display {
+                    format!(" {sequence_display}")
+                } else {
+                    "".to_string()
+                };
+
                 let comment = if field_comments.len() == schema.fields().len()
                     && !field_comments[idx].is_empty()
                 {
@@ -212,8 +218,9 @@ impl ShowCreateTableInterpreter {
                     sql_dialect,
                 );
                 let data_type = field.data_type().sql_name_explicit_null();
-                let column_str =
-                    format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
+                let column_str = format!(
+                    "  {ident} {data_type}{default_expr}{computed_expr}{auto_increment}{comment}"
+                );
 
                 create_defs.push(column_str);
             }

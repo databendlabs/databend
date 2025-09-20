@@ -116,6 +116,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
@@ -5384,7 +5385,10 @@ impl<'a> TypeChecker<'a> {
 
         let catalog = self.ctx.get_default_catalog()?;
         let req = GetSequenceReq {
-            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+            ident: SequenceIdentType::Normal(SequenceIdent::new(
+                self.ctx.get_tenant(),
+                sequence_name.clone(),
+            )),
         };
 
         let visibility_checker = if self

@@ -37,6 +37,7 @@ mod user_stage;
 
 mod ownership_object;
 
+mod auto_increment;
 pub mod client_session;
 pub mod client_session_ident;
 pub mod connection_ident;
@@ -59,6 +60,7 @@ pub mod user_stage_ident;
 pub mod user_token;
 pub mod user_token_ident;
 
+pub use auto_increment::AutoIncrementKey;
 pub use connection::*;
 pub use file_format::*;
 pub use network_policy::NetworkPolicy;

@@ -20,11 +20,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -42,6 +44,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::txn_op_response::Response;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
@@ -57,6 +60,7 @@ use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_cond_seq;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
@@ -571,6 +575,25 @@ async fn remove_data_for_dropped_table(
         txn_delete_exact(txn, &id_to_name, seq_name.seq);
     }
 
+    // Remove table auto increment sequences
+    {
+        // clear the sequence associated with auto increment in the table field
+        let auto_increment_key = AutoIncrementKey::new(table_id.table_id, 0);
+        let dir_name = DirName::new(AutoIncrementIdent::new_generic(tenant, auto_increment_key));
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
+
+        while let Some(auto_increment_ident) = auto_increments.next().await {
+            let auto_increment_ident = auto_increment_ident?;
+            let storage_ident = auto_increment_ident.to_storage_ident();
+
+            txn.condition
+                .push(txn_cond_seq(&auto_increment_ident, ConditionResult::Gt, 0));
+            txn.condition
+                .push(txn_cond_seq(&storage_ident, ConditionResult::Gt, 0));
+            txn.if_then.push(txn_op_del(&auto_increment_ident));
+            txn.if_then.push(txn_op_del(&storage_ident));
+        }
+    }
     // Remove table ownership
     {
         let table_ownership = OwnershipObject::Table {

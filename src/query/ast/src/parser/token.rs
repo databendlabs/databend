@@ -355,6 +355,8 @@ pub enum TokenKind {
     ARGS,
     #[token("AUTO", ignore(ascii_case))]
     AUTO,
+    #[token("AUTOINCREMENT", ignore(ascii_case))]
+    AUTOINCREMENT,
     #[token("SOME", ignore(ascii_case))]
     SOME,
     #[token("ALTER", ignore(ascii_case))]
@@ -725,6 +727,8 @@ pub enum TokenKind {
     IDENTIFIED,
     #[token("IDENTIFIER", ignore(ascii_case))]
     IDENTIFIER,
+    #[token("IDENTITY", ignore(ascii_case))]
+    IDENTITY,
     #[token("IF", ignore(ascii_case))]
     IF,
     #[token("IMMUTABLE", ignore(ascii_case))]
@@ -884,6 +888,8 @@ pub enum TokenKind {
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]
     NONE,
+    #[token("NOORDER", ignore(ascii_case))]
+    NOORDER,
     #[token("NOSCAN", ignore(ascii_case))]
     NOSCAN,
     #[token("NOT", ignore(ascii_case))]
