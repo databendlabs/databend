@@ -13,6 +13,8 @@
 // limitations under the License.
 
 mod adapter;
+mod block_reader;
+mod block_writer;
 mod inner;
 mod partition_buffer;
 mod serialize;
@@ -20,6 +22,7 @@ mod serialize;
 mod test_memory;
 
 pub use adapter::*;
+pub use block_writer::*;
 pub use databend_common_pipeline_transforms::traits::Location;
 pub use inner::*;
 pub use partition_buffer::PartitionBuffer;
