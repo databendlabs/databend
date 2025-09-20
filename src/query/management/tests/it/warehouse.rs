@@ -23,7 +23,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use databend_common_management::*;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
