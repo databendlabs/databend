@@ -57,7 +57,7 @@ ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_sg/ | wc -l
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_i_b_v2/ | wc -l
 
 
-stmt "set data_retention_time_in_days=0; vacuum table test_vacuum_table_only_orphans.a" > /dev/null
+stmt "set data_retention_time_in_days=0; settings (fallback_to_legacy_vacuum=1) vacuum table test_vacuum_table_only_orphans.a" > /dev/null
 
 echo "after vacuum"
 

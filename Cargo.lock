@@ -4861,6 +4861,7 @@ dependencies = [
  "derive-visitor",
  "futures",
  "futures-util",
+ "goldenfile",
  "jsonb",
  "jwt-simple",
  "log",

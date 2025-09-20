@@ -667,23 +667,42 @@ impl Display for TruncateTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct VacuumTableStmt {
+pub struct VacuumTargetTable {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum VacuumTarget {
+    Table(VacuumTargetTable),
+    All,
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct VacuumTableStmt {
+    pub target: VacuumTarget,
     pub option: VacuumTableOption,
 }
 
 impl Display for VacuumTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        match &self.target {
+            VacuumTarget::Table(target) => {
+                write_dot_separated_list(
+                    f,
+                    target
+                        .catalog
+                        .iter()
+                        .chain(&target.database)
+                        .chain(Some(&target.table)),
+                )?;
+            }
+            VacuumTarget::All => {
+                write!(f, " ALL")?;
+            }
+        }
         write!(f, " {}", &self.option)?;
 
         Ok(())

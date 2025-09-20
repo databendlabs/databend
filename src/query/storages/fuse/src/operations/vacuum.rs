@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// src/query/storages/fuse/src/vacuum/mod.rs
-
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -65,4 +65,79 @@ pub async fn vacuum_tables_from_info(
     }
 
     Ok(())
+}
+
+pub async fn vacuum_all_tables(
+    ctx: &Arc<dyn TableContext>,
+    handler: &VacuumHandlerWrapper,
+    catalog: &dyn Catalog,
+) -> Result<u64> {
+    let tenant_id = ctx.get_tenant();
+    let dbs = catalog.list_databases(&tenant_id).await?;
+    let num_db = dbs.len();
+
+    let mut num_obj_removed = 0;
+
+    for (idx_db, db) in dbs.iter().enumerate() {
+        if db.engine().to_uppercase() == "SYSTEM" {
+            info!("Bypass system database [{}]", db.name());
+            continue;
+        }
+
+        info!(
+            "Processing db {}, progress: {}/{}",
+            db.name(),
+            idx_db + 1,
+            num_db
+        );
+        let tables = catalog.list_tables(&tenant_id, db.name()).await?;
+        info!("Found {} tables in db {}", tables.len(), db.name());
+
+        let num_tbl = tables.len();
+        for (idx_tbl, table) in tables.iter().enumerate() {
+            info!(
+                "Processing table {}.{}, progress of db {}: {}/{}",
+                db.name(),
+                table.get_table_info().name,
+                db.name(),
+                idx_tbl + 1,
+                num_tbl
+            );
+
+            let Ok(tbl) = FuseTable::try_from_table(table.as_ref()) else {
+                info!(
+                    "Bypass non-fuse table {}.{}",
+                    db.name(),
+                    table.get_table_info().name
+                );
+                continue;
+            };
+
+            if tbl.is_read_only() {
+                info!(
+                    "Bypass read only table {}.{}",
+                    db.name(),
+                    table.get_table_info().name
+                );
+                continue;
+            }
+
+            let res = handler.do_vacuum2(tbl, ctx.clone(), false).await;
+
+            match res {
+                Ok(removed) => {
+                    num_obj_removed += removed.len() as u64;
+                }
+                Err(e) => {
+                    warn!(
+                        "vacuum2 table {}.{} failed: {}",
+                        db.name(),
+                        table.get_table_info().name,
+                        e
+                    );
+                }
+            }
+        }
+    }
+    Ok(num_obj_removed)
 }
