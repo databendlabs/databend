@@ -20,6 +20,7 @@ mod partition_buffer;
 mod serialize;
 #[cfg(test)]
 mod test_memory;
+mod async_buffer;
 
 pub use adapter::*;
 pub use block_writer::*;
