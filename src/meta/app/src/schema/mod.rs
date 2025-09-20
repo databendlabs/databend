@@ -35,6 +35,7 @@ pub mod sequence_storage;
 pub mod table_lock_ident;
 pub mod table_niv;
 
+mod auto_incremnt;
 mod constraint;
 mod create_option;
 mod database;
@@ -47,6 +48,7 @@ mod ownership;
 mod sequence;
 mod table;
 
+pub use auto_incremnt::*;
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
 pub use catalog_id_to_name_ident::CatalogIdToNameIdent;

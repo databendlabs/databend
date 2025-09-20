@@ -14,14 +14,11 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::DropSequenceReq;
-use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -30,7 +27,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
-use crate::interpreters::DropSequenceInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -136,26 +132,6 @@ impl Interpreter for DropTableColumnInterpreter {
             catalog,
         )
         .await?;
-
-        let field = table
-            .get_table_info()
-            .meta
-            .schema
-            .field_with_name(self.plan.column.as_str())?;
-        if field.auto_increment_display.is_some() {
-            let auto_increment_name =
-                AutoIncrement::sequence_name(table.get_id(), field.column_id());
-
-            DropSequenceInterpreter::req_execute(
-                self.ctx.as_ref(),
-                DropSequenceReq {
-                    if_exists: false,
-                    ident: SequenceIdent::new(self.ctx.get_tenant(), auto_increment_name),
-                },
-                true,
-            )
-            .await?;
-        }
 
         Ok(PipelineBuildResult::create())
     }

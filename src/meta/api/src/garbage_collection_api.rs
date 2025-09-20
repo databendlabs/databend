@@ -16,17 +16,17 @@ use std::ops::Range;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -35,7 +35,6 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -551,21 +550,19 @@ async fn remove_data_for_dropped_table(
     // Remove table auto increment sequences
     {
         // clear the sequence associated with auto increment in the table field
-        for table_field in seq_meta.schema.fields() {
-            if table_field.auto_increment_display().is_none() {
-                continue;
-            }
-            let sequence_name =
-                AutoIncrement::sequence_name(table_id.table_id, table_field.column_id);
+        let auto_increment_key = AutoIncrementKey::new(table_id.table_id, 0);
+        let dir_name = DirName::new(AutoIncrementIdent::new_generic(tenant, auto_increment_key));
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
 
-            let sequence_ident = SequenceIdent::new(tenant, sequence_name);
-            let storage_ident = SequenceStorageIdent::new_from(sequence_ident.clone());
+        while let Some(auto_increment_ident) = auto_increments.next().await {
+            let auto_increment_ident = auto_increment_ident?;
+            let storage_ident = auto_increment_ident.to_storage_ident();
 
             txn.condition
-                .push(txn_cond_seq(&sequence_ident, ConditionResult::Gt, 0));
+                .push(txn_cond_seq(&auto_increment_ident, ConditionResult::Gt, 0));
             txn.condition
                 .push(txn_cond_seq(&storage_ident, ConditionResult::Gt, 0));
-            txn.if_then.push(txn_op_del(&sequence_ident));
+            txn.if_then.push(txn_op_del(&auto_increment_ident));
             txn.if_then.push(txn_op_del(&storage_ident));
         }
     }

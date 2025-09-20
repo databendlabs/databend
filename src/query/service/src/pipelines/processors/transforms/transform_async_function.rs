@@ -22,9 +22,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
@@ -123,7 +125,7 @@ impl TransformAsyncFunction {
         ctx: Arc<QueryContext>,
         data_block: &mut DataBlock,
         counter_lock: Arc<RwLock<SequenceCounter>>,
-        sequence_name: &String,
+        sequence_ident: SequenceIdentType,
     ) -> Result<()> {
         let count = data_block.num_rows() as u64;
         let column = if count == 0 {
@@ -149,7 +151,6 @@ impl TransformAsyncFunction {
                         UInt64Type::from_data(range.collect::<Vec<u64>>())
                     } else {
                         // We need to fetch more sequence numbers
-                        let tenant = ctx.get_tenant();
                         let catalog = ctx.get_default_catalog()?;
 
                         // Get current state of the counter
@@ -170,7 +171,7 @@ impl TransformAsyncFunction {
                         };
 
                         let req = GetSequenceReq {
-                            ident: SequenceIdent::new(&tenant, sequence_name),
+                            ident: sequence_ident.clone(),
                         };
                         let resp = catalog.get_sequence(req, &visibility_checker).await?;
                         let step_size = resp.meta.step as u64;
@@ -180,7 +181,7 @@ impl TransformAsyncFunction {
 
                         // Calculate batch size - take the larger of count or step_size
                         let req = GetSequenceNextValueReq {
-                            ident: SequenceIdent::new(&tenant, sequence_name),
+                            ident: sequence_ident,
                             count: batch_size,
                         };
 
@@ -242,7 +243,22 @@ impl AsyncTransform for TransformAsyncFunction {
                         self.ctx.clone(),
                         &mut data_block,
                         self.sequence_counters[i].clone(),
-                        sequence_name,
+                        SequenceIdentType::Normal(SequenceIdent::new(
+                            self.ctx.get_tenant(),
+                            sequence_name,
+                        )),
+                    )
+                    .await?;
+                }
+                AsyncFunctionArgument::AutoIncrement(auto_increment_key) => {
+                    Self::transform_sequence(
+                        self.ctx.clone(),
+                        &mut data_block,
+                        self.sequence_counters[i].clone(),
+                        SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
+                            self.ctx.get_tenant(),
+                            auto_increment_key.clone(),
+                        )),
                     )
                     .await?;
                 }

@@ -38,38 +38,6 @@ impl DropSequenceInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: DropSequencePlan) -> Result<Self> {
         Ok(DropSequenceInterpreter { ctx, plan })
     }
-
-    pub async fn req_execute(
-        ctx: &dyn TableContext,
-        req: DropSequenceReq,
-        skip_skip_privilege_check: bool,
-    ) -> Result<()> {
-        let catalog = ctx.get_default_catalog()?;
-        // we should do `drop ownership` after actually drop object, and object maybe not exists.
-        // drop the ownership
-        if !skip_skip_privilege_check
-            && ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-        {
-            let tenant = req.ident.tenant();
-            let name = req.ident.name().to_string();
-            let role_api = UserApiProvider::instance().role_api(tenant);
-            let owner_object = OwnershipObject::Sequence { name };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(tenant);
-        }
-
-        let reply = catalog.drop_sequence(req.clone()).await?;
-
-        if !reply.success && !req.if_exists {
-            return Err(ErrorCode::UnknownSequence(format!(
-                "unknown sequence {:?}",
-                req.ident.name()
-            )));
-        }
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -88,7 +56,30 @@ impl Interpreter for DropSequenceInterpreter {
             ident: self.plan.ident.clone(),
             if_exists: self.plan.if_exists,
         };
-        Self::req_execute(self.ctx.as_ref(), req, false).await?;
+        let catalog = self.ctx.get_default_catalog()?;
+        // we should do `drop ownership` after actually drop object, and object maybe not exists.
+        // drop the ownership
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            let tenant = self.plan.ident.tenant();
+            let name = self.plan.ident.name().to_string();
+            let role_api = UserApiProvider::instance().role_api(tenant);
+            let owner_object = OwnershipObject::Sequence { name };
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(tenant);
+        }
+
+        let reply = catalog.drop_sequence(req).await?;
+
+        if !reply.success && !self.plan.if_exists {
+            return Err(ErrorCode::UnknownSequence(format!(
+                "unknown sequence {:?}",
+                self.plan.ident.name()
+            )));
+        }
 
         Ok(PipelineBuildResult::create())
     }

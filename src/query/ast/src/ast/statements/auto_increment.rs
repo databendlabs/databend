@@ -26,10 +26,6 @@ pub struct AutoIncrement {
 }
 
 impl AutoIncrement {
-    pub fn sequence_name(table_id: u64, column_id: u32) -> String {
-        format!("_sequence_{table_id}_{column_id}")
-    }
-
     pub fn to_sql_string(&self) -> String {
         let string = format!("AUTOINCREMENT ({}, {}) ", self.start, self.step);
         if self.is_ordered {

@@ -774,7 +774,7 @@ impl Catalog for DatabaseCatalog {
         visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = &visibility_checker {
-            if !vi.check_seq_visibility(req.ident.name()) {
+            if !vi.check_seq_visibility(&req.ident.name()) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
                     req.ident.name()
@@ -796,7 +796,7 @@ impl Catalog for DatabaseCatalog {
         visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = &visibility_checker {
-            if !vi.check_seq_visibility(req.ident.name()) {
+            if !vi.check_seq_visibility(&req.ident.name()) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
                     req.ident.name()

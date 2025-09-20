@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::fmt;
+use std::fmt::Display;
 
 use chrono::DateTime;
 use chrono::Utc;
 pub use kvapi_impl::SequenceRsc;
 
+use super::AutoIncrementIdent;
 use super::CreateOption;
+use crate::app_error::SequenceError;
+use crate::schema::sequence_storage::SequenceStorageIdent;
 use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 
@@ -66,7 +71,7 @@ impl From<CreateSequenceReq> for SequenceMeta {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequenceReq {
     pub create_option: CreateOption,
-    pub ident: SequenceIdent,
+    pub ident: SequenceIdentType,
     pub create_on: DateTime<Utc>,
     pub start: u64,
     pub increment: u64,
@@ -79,9 +84,53 @@ pub struct CreateSequenceReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateSequenceReply {}
 
+#[derive(Clone, Debug, PartialEq, Eq, derive_more::Display)]
+pub enum SequenceIdentType {
+    Normal(SequenceIdent),
+    AutoIncrement(AutoIncrementIdent),
+}
+
+impl SequenceIdentType {
+    pub fn name(&self) -> Cow<String> {
+        match self {
+            SequenceIdentType::Normal(ident) => Cow::Borrowed(ident.name()),
+            SequenceIdentType::AutoIncrement(ident) => Cow::Owned(format!("{:?}", ident.name())),
+        }
+    }
+
+    pub fn unknow_error(&self, ctx: impl Display) -> SequenceError {
+        match self {
+            SequenceIdentType::Normal(ident) => {
+                SequenceError::UnknownSequence(ident.unknown_error(ctx))
+            }
+            SequenceIdentType::AutoIncrement(ident) => {
+                SequenceError::UnknownAutoIncrement(ident.unknown_error(ctx))
+            }
+        }
+    }
+
+    pub fn exist_error(&self, ctx: impl Display) -> SequenceError {
+        match self {
+            SequenceIdentType::Normal(ident) => {
+                SequenceError::SequenceAlreadyExists(ident.exist_error(ctx))
+            }
+            SequenceIdentType::AutoIncrement(ident) => {
+                SequenceError::AutoIncrementAlreadyExists(ident.exist_error(ctx))
+            }
+        }
+    }
+
+    pub fn to_storage_ident(&self) -> SequenceStorageIdent {
+        match self {
+            SequenceIdentType::Normal(ident) => SequenceStorageIdent::new_from(ident.clone()),
+            SequenceIdentType::AutoIncrement(ident) => ident.to_storage_ident(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReq {
-    pub ident: SequenceIdent,
+    pub ident: SequenceIdentType,
     pub count: u64,
 }
 
@@ -100,7 +149,7 @@ pub struct GetSequenceNextValueReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceReq {
-    pub ident: SequenceIdent,
+    pub ident: SequenceIdentType,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

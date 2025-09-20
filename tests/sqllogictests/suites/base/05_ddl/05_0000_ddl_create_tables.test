@@ -713,11 +713,6 @@ select * from t11;
 query TIITTT rowsort
 select interval, current, comment from show_sequences();
 ----
-1 3 NULL
-1 3 NULL
-1 3 NULL
-2 7 NULL
-2 7 NULL
 
 statement error 1065
 alter table t11 add column c4 string autoincrement;
@@ -739,16 +734,6 @@ select * from t11;
 0 2 2.0 5 5 2.00 NULL
 0 3 3.0 7 7 3.00 0
 
-query TIITTT rowsort
-select interval, current, comment from show_sequences();
-----
-1 1 NULL
-1 4 NULL
-1 4 NULL
-1 4 NULL
-2 9 NULL
-2 9 NULL
-
 statement ok
 alter table t11 drop column c2;
 
@@ -760,23 +745,5 @@ select * from t11;
 0 2.0 5 5 2.00 NULL
 0 3.0 7 7 3.00 0
 
-query TIITTT rowsort
-select interval, current, comment from show_sequences();
-----
-1 1 NULL
-1 4 NULL
-1 4 NULL
-2 9 NULL
-2 9 NULL
-
 statement ok
 drop table t11;
-
-query TIITTT rowsort
-select interval, current, comment from show_sequences();
-----
-1 1 NULL
-1 4 NULL
-1 4 NULL
-2 9 NULL
-2 9 NULL

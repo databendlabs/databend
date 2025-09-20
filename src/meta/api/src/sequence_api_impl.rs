@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::WrongSequenceCount;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
+use databend_common_meta_app::schema::AutoIncrementMeta;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -29,6 +30,7 @@ use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
@@ -63,17 +65,25 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         let meta: SequenceMeta = req.clone().into();
 
-        let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
+        let storage_ident = req.ident.to_storage_ident();
         let storage_value = Id::new_typed(SequenceStorageValue(req.start));
 
         let conditions = if req.create_option == CreateOption::CreateOrReplace {
             vec![]
         } else {
-            vec![txn_cond_eq_seq(&req.ident, 0)]
+            vec![match &req.ident {
+                SequenceIdentType::Normal(ident) => txn_cond_eq_seq(ident, 0),
+                SequenceIdentType::AutoIncrement(ident) => txn_cond_eq_seq(ident, 0),
+            }]
         };
 
         let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta)?,
+            match &req.ident {
+                SequenceIdentType::Normal(ident) => txn_put_pb(ident, &meta)?,
+                SequenceIdentType::AutoIncrement(ident) => {
+                    txn_put_pb(ident, &AutoIncrementMeta(meta))?
+                }
+            },
             txn_put_pb(&storage_ident, &storage_value)?,
         ]);
 
@@ -85,7 +95,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         match req.create_option {
             CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
-                SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
+                req.ident.exist_error(func_name!()),
             ))),
             CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
             CreateOption::CreateOrReplace => {
@@ -96,10 +106,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
     async fn get_sequence(
         &self,
-        name_ident: &SequenceIdent,
+        name_ident: &SequenceIdentType,
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError> {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
-        let seq_meta = self.get_pb(name_ident).await?;
+        let seq_meta = match name_ident {
+            SequenceIdentType::Normal(ident) => self.get_pb(ident).await?,
+            SequenceIdentType::AutoIncrement(ident) => self
+                .get_pb(ident)
+                .await?
+                .map(|seq| seq.map(|meta| SequenceMeta::clone(&meta))),
+        };
 
         let Some(mut seq_meta) = seq_meta else {
             return Ok(None);
@@ -111,7 +127,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         // V1 sequence stores the value in a separate key.
 
-        let storage_ident = SequenceStorageIdent::new_from(name_ident.clone());
+        let storage_ident = name_ident.to_storage_ident();
         let storage_value = self.get_pb(&storage_ident).await?;
 
         // If the storage value is removed, the sequence meta must also be removed.
@@ -185,12 +201,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let seq_meta = self.get_pb(&ident).await?;
+            let seq_meta = match &ident {
+                SequenceIdentType::Normal(ident) => self.get_pb(ident).await?,
+                SequenceIdentType::AutoIncrement(ident) => self
+                    .get_pb(ident)
+                    .await?
+                    .map(|seq| seq.map(|meta| SequenceMeta::clone(&meta))),
+            };
             let Some(seq_meta) = seq_meta else {
-                return Err(AppError::SequenceError(SequenceError::UnknownSequence(
-                    ident.unknown_error(func_name!()),
-                ))
-                .into());
+                return Err(AppError::SequenceError(ident.unknow_error(func_name!())).into());
             };
             let sequence_meta = seq_meta.data.clone();
 

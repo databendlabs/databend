@@ -831,7 +831,7 @@ impl Catalog for MutableCatalog {
         visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
-            if !vi.check_seq_visibility(req.ident.name()) {
+            if !vi.check_seq_visibility(&req.ident.name()) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
                     req.ident.name()
@@ -842,10 +842,7 @@ impl Catalog for MutableCatalog {
         let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
 
         let Some(seq_meta) = seq_meta else {
-            return Err(KVAppError::AppError(AppError::SequenceError(
-                req.ident.unknown_error(func_name!()).into(),
-            ))
-            .into());
+            return Err(KVAppError::AppError(req.ident.unknow_error(func_name!()).into()).into());
         };
         Ok(GetSequenceReply {
             meta: seq_meta.data,
@@ -864,7 +861,7 @@ impl Catalog for MutableCatalog {
         visibility_checker: &Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
-            if !vi.check_seq_visibility(req.ident.name()) {
+            if !vi.check_seq_visibility(&req.ident.name()) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
                     req.ident.name()

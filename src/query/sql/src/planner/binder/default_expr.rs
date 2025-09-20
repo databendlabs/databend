@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
@@ -35,6 +34,7 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_types::MetaId;
 use parking_lot::RwLock;
 
@@ -203,7 +203,7 @@ impl DefaultExprBinder {
             &self.auto_increment_table_id,
             field.auto_increment_column_id(),
         ) {
-            let sequence_name = AutoIncrement::sequence_name(*table_id, *column_id);
+            let auto_increment_key = AutoIncrementKey::new(*table_id, *column_id);
 
             Ok(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span: None,
@@ -211,7 +211,7 @@ impl DefaultExprBinder {
                 display_name: "".to_string(),
                 return_type: Box::new(field.data_type().clone()),
                 arguments: vec![],
-                func_arg: AsyncFunctionArgument::SequenceFunction(sequence_name),
+                func_arg: AsyncFunctionArgument::AutoIncrement(auto_increment_key),
             }))
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {
@@ -265,6 +265,9 @@ impl DefaultExprBinder {
             let expr = if let Some(async_func) = get_nextval(&scalar_expr) {
                 let name = match async_func.func_arg {
                     AsyncFunctionArgument::SequenceFunction(name) => name,
+                    AsyncFunctionArgument::AutoIncrement(_) => {
+                        unreachable!("expect AsyncFunctionArgument::SequenceFunction")
+                    }
                     AsyncFunctionArgument::DictGetFunction(_) => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }

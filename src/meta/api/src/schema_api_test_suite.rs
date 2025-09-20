@@ -43,6 +43,7 @@ use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
@@ -55,8 +56,8 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -112,6 +113,7 @@ use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
@@ -5267,12 +5269,11 @@ impl SchemaApiTestSuite {
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_some() && seqv.unwrap().seq != 0);
 
-            let auto_increment_sequence = SequenceIdent::new(
-                &tenant,
-                AutoIncrement::sequence_name(create_table_as_dropped_resp.table_id, 0),
-            );
-            let auto_increment_sequence_storage =
-                SequenceStorageIdent::new_from(auto_increment_sequence.clone());
+            let auto_increment_key =
+                AutoIncrementKey::new(create_table_as_dropped_resp.table_id, 0);
+            let auto_increment_sequence =
+                AutoIncrementIdent::new_generic(&tenant, auto_increment_key);
+            let auto_increment_sequence_storage = auto_increment_sequence.to_storage_ident();
 
             // assert auto increment sequence exists
             let seqv = mt.get_kv(&auto_increment_sequence.to_string_key()).await?;
@@ -5627,7 +5628,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                ident: SequenceIdent::new(&tenant, sequence_name),
+                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5640,7 +5641,7 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence");
         {
-            let req = SequenceIdent::new(&tenant, sequence_name);
+            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, Some("seq".to_string()));
@@ -5651,7 +5652,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                ident: SequenceIdent::new(&tenant, "seq1"),
+                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, "seq1")),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5671,7 +5672,7 @@ impl SchemaApiTestSuite {
         info!("--- get sequence nextval");
         {
             let req = GetSequenceNextValueReq {
-                ident: SequenceIdent::new(&tenant, sequence_name),
+                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
                 count: 10,
             };
             let resp = mt.get_sequence_next_value(req).await?;
@@ -5681,7 +5682,7 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence after nextval");
         {
-            let req = SequenceIdent::new(&tenant, sequence_name);
+            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, Some("seq".to_string()));
@@ -5702,7 +5703,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::CreateOrReplace,
-                ident: SequenceIdent::new(&tenant, sequence_name),
+                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5712,7 +5713,7 @@ impl SchemaApiTestSuite {
 
             mt.create_sequence(req).await?;
 
-            let req = SequenceIdent::new(&tenant, sequence_name);
+            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
 
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
@@ -5729,11 +5730,11 @@ impl SchemaApiTestSuite {
 
             mt.drop_sequence(req).await?;
 
-            let req = SequenceIdent::new(&tenant, sequence_name);
+            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             assert!(resp.is_none());
 
-            let storage_ident = SequenceStorageIdent::new_from(req);
+            let storage_ident = req.to_storage_ident();
             let got = mt.get_kv(&storage_ident.to_string_key()).await?;
             assert!(
                 got.is_none(),

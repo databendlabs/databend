@@ -15,10 +15,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SourceSchemaIndex;
+use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 
@@ -68,7 +72,23 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                         self.ctx.clone(),
                         &mut block,
                         counter_lock,
-                        sequence_name,
+                        SequenceIdentType::Normal(SequenceIdent::new(
+                            self.ctx.get_tenant(),
+                            sequence_name.clone(),
+                        )),
+                    )
+                    .await?;
+                }
+                AsyncFunctionArgument::AutoIncrement(auto_increment_key) => {
+                    let counter_lock = sequence_counters[i].clone();
+                    TransformAsyncFunction::transform_sequence(
+                        self.ctx.clone(),
+                        &mut block,
+                        counter_lock,
+                        SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
+                            self.ctx.get_tenant(),
+                            auto_increment_key.clone(),
+                        )),
                     )
                     .await?;
                 }

@@ -19,11 +19,13 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
+use crate::principal::AutoIncrementKey;
 use crate::principal::ProcedureIdentity;
 use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
+use crate::schema::AutoIncrementRsc;
 use crate::schema::DictionaryIdentity;
 use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
@@ -1204,7 +1206,13 @@ pub enum SequenceError {
     SequenceAlreadyExists(#[from] ExistError<SequenceRsc>),
 
     #[error(transparent)]
+    AutoIncrementAlreadyExists(#[from] ExistError<AutoIncrementRsc, AutoIncrementKey>),
+
+    #[error(transparent)]
     UnknownSequence(#[from] UnknownError<SequenceRsc>),
+
+    #[error(transparent)]
+    UnknownAutoIncrement(#[from] UnknownError<AutoIncrementRsc, AutoIncrementKey>),
 
     #[error(transparent)]
     OutOfSequenceRange(#[from] OutOfSequenceRange),
@@ -1554,7 +1562,13 @@ impl AppErrorMessage for SequenceError {
             SequenceError::SequenceAlreadyExists(e) => {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
+            SequenceError::AutoIncrementAlreadyExists(e) => {
+                format!("AutoIncrementAlreadyExists: '{}'", e.message())
+            }
             SequenceError::UnknownSequence(e) => format!("UnknownSequence: '{}'", e.message()),
+            SequenceError::UnknownAutoIncrement(e) => {
+                format!("UnknownAutoIncrement: '{}'", e.message())
+            }
             SequenceError::OutOfSequenceRange(e) => {
                 format!("OutOfSequenceRange: '{}'", e.message())
             }
@@ -1707,6 +1721,10 @@ impl From<SequenceError> for ErrorCode {
             SequenceError::OutOfSequenceRange(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::UnsupportedSequenceStorageVersion(err) => {
+                ErrorCode::SequenceError(err.message())
+            }
+            SequenceError::UnknownAutoIncrement(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::AutoIncrementAlreadyExists(err) => {
                 ErrorCode::SequenceError(err.message())
             }
         }

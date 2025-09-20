@@ -1,0 +1,65 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::ops::Deref;
+
+use databend_common_meta_kvapi::kvapi::Key;
+pub use kvapi_impl::AutoIncrementRsc;
+
+use crate::principal::AutoIncrementKey;
+use crate::schema::sequence_storage::SequenceStorageIdent;
+use crate::schema::SequenceMeta;
+use crate::tenant_key::ident::TIdent;
+use crate::KeyWithTenant;
+
+pub type AutoIncrementIdent = TIdent<AutoIncrementRsc, AutoIncrementKey>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutoIncrementMeta(pub SequenceMeta);
+
+impl Deref for AutoIncrementMeta {
+    type Target = SequenceMeta;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AutoIncrementIdent {
+    pub fn to_storage_ident(&self) -> SequenceStorageIdent {
+        SequenceStorageIdent::new_generic(self.tenant(), self.name().to_string())
+    }
+}
+
+mod kvapi_impl {
+
+    use databend_common_meta_kvapi::kvapi;
+
+    use crate::schema::auto_incremnt::AutoIncrementMeta;
+    use crate::tenant_key::resource::TenantResource;
+
+    pub struct AutoIncrementRsc;
+    impl TenantResource for AutoIncrementRsc {
+        const PREFIX: &'static str = "__fd_auto_increment";
+        const HAS_TENANT: bool = true;
+        type ValueType = AutoIncrementMeta;
+    }
+
+    impl kvapi::Value for AutoIncrementMeta {
+        type KeyType = super::AutoIncrementIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+}
