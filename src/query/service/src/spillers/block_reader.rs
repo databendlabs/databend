@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::mem::size_of;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
