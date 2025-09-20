@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::TxnRequest;
@@ -713,17 +714,101 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_drop_create_or_replace() -> Result<()> {
+    // vacuum dropped tables by specific database names
+    test_vacuum_drop_create_or_replace_impl(&[
+        "vacuum drop table from db1",
+        "vacuum drop table from db2",
+    ])
+    .await?;
+
+    // vacuum dropped tables all
+    test_vacuum_drop_create_or_replace_impl(&["vacuum drop table"]).await?;
+    Ok(())
+}
+
+async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> Result<()> {
+    // Setup
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be available for vacuum immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // Prepare test dbs and tables
+    //   - 2 db ids
+    //   - 6 table ids
+    //   - db2.t1 explicitly dropped
+
+    let sqls = vec![
+        "create database db1",
+        "create or replace table db1.t1 (a int)",
+        "create or replace table db1.t1 (a int) as select 1",
+        "create or replace table db1.t1 (a int) as select 2",
+        "create database db2",
+        "create or replace table db2.t1 (a int) as select 1",
+        "create or replace table db2.t1 (a int) as select 2",
+        "create or replace table db2.t1 (a int) as select 3",
+        "DROP TABLE DB2.T1",
+    ];
+
+    for sql in sqls {
+        fixture.execute_command(sql).await?;
+    }
+
+    // there should be 6 table ids : create or replace table 6 times
+    let prefix = "__fd_table_by_id";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 6);
+
+    // there should be ownerships for 2 db ids and 5 table ids, one of the ownership is revoked by drop table
+    let prefix = "__fd_object_owners";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 7);
+
+    for sql in vacuum_stmts {
+        fixture.execute_command(sql).await?;
+    }
+
+    // After vacuum, 1 table ids left
+    let prefix = "__fd_table_by_id";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 1);
+
+    let prefix = "__fd_table_id_to_name";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 1);
+
+    // There are ownership objs of  2 dbs and 1 tables
+    let prefix = "__fd_object_owners";
+    let items = meta.list_kv_collect(prefix).await?;
+    assert_eq!(items.len(), 3);
+
+    // db1.t1 should still be accessible
+    fixture.execute_command("select * from db1.t1").await?;
+    // db2.t1 should not exist
+    assert!(fixture
+        .execute_command("select * from db2.t1")
+        .await
+        .is_err());
+    Ok(())
+}
+
 async fn new_local_meta() -> MetaStore {
     let version = &BUILD_INFO;
     let meta_config = MetaConfig::default();
     let meta = {
         let config = meta_config.to_meta_grpc_client_conf(version);
         let provider = Arc::new(MetaStoreProvider::new(config));
-        provider
-            .create_meta_store()
-            .await
-            .map_err(|e| ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e)))
-            .unwrap()
+        provider.create_meta_store().await.unwrap()
     };
     meta
 }

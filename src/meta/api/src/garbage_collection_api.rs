@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -179,6 +180,7 @@ pub async fn get_history_tables_for_gc(
     drop_time_range: Range<Option<DateTime<Utc>>>,
     db_id: u64,
     limit: usize,
+    db_is_dropped: bool,
 ) -> Result<Vec<TableNIV>, KVAppError> {
     info!(
         "get_history_tables_for_gc: db_id {}, limit {}",
@@ -194,9 +196,37 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
+    // For table ids of each table with the same name, we keep the largest one, e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    // ```
+    // table_id 2 will be kept for table t (we do not care about the table name though),
+    //
+    // Please note that the largest table id might be "invisible", e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    //  drop table t ... ;
+    // ```
+    // In this case, table_id 2 is marked as dropped.
+
+    let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
+
     for (ident, table_history) in table_history_kvs {
-        for table_id in table_history.id_list.iter() {
-            args.push((TableId::new(*table_id), ident.table_name.clone()));
+        let id_list = &table_history.id_list;
+        if !id_list.is_empty() {
+            // Make sure that the last table id is also the max one (of each table name).
+            let last_id = id_list.last().unwrap();
+            {
+                let max_id = id_list.iter().max().unwrap();
+                assert_eq!(max_id, last_id);
+            }
+            latest_table_ids.insert(*last_id);
+
+            for table_id in id_list.iter() {
+                args.push((TableId::new(*table_id), ident.table_name.clone()));
+            }
         }
     }
 
@@ -228,10 +258,39 @@ pub async fn get_history_tables_for_gc(
                 continue;
             };
 
-            if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                debug!("table {:?} is not in drop_time_range", seq_meta.data);
-                num_out_of_time_range += 1;
-                continue;
+            if !db_is_dropped {
+                // We shall not vacuum it if the table id is the largest table id of some table, but not marked with drop_on,
+                {
+                    let is_visible_last_active_table = seq_meta.data.drop_on.is_none()
+                        && latest_table_ids.contains(&table_id.table_id);
+
+                    if is_visible_last_active_table {
+                        debug!(
+                            "Table id {:?} of {} is the last visible one, not available for vacuum",
+                            table_id, table_name,
+                        );
+                        num_out_of_time_range += 1;
+                        continue;
+                    }
+                }
+
+                // Now the table id is
+                // - Either marked with drop_on
+                //   We use its `drop_on` to do the time range filtering
+                // - Or has no drop_on, but is not the last visible one of the table
+                //   It is still available for vacuum, and we use its `updated_on` to do the time range filtering
+
+                let time_point = if seq_meta.drop_on.is_none() {
+                    &Some(seq_meta.updated_on)
+                } else {
+                    &seq_meta.drop_on
+                };
+
+                if !drop_time_range.contains(time_point) {
+                    debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                    num_out_of_time_range += 1;
+                    continue;
+                }
             }
 
             filter_tb_infos.push(TableNIV::new(
