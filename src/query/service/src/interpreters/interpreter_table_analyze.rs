@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -25,11 +24,8 @@ use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::AnalyzeLightMutator;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
-use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_cache::Partitions;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use log::info;
@@ -114,32 +110,6 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         };
 
-        if self.plan.no_scan {
-            let operator = table.get_operator();
-            let cluster_key_id = table.cluster_key_id();
-            let table_meta_timestamps = self
-                .ctx
-                .get_table_meta_timestamps(table, Some(snapshot.clone()))?;
-            if let Some(mut mutator) = AnalyzeLightMutator::try_new(
-                self.ctx.clone(),
-                operator,
-                snapshot,
-                cluster_key_id,
-                table_meta_timestamps,
-            ) {
-                mutator.target_select().await?;
-                mutator.try_commit(table).await?;
-            }
-            return Ok(PipelineBuildResult::create());
-        }
-
-        let mut parts = Vec::with_capacity(snapshot.segments.len());
-        for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-            parts.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
-        }
-        self.ctx
-            .set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
-
         let mut build_res = PipelineBuildResult::create();
         // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
         // It's possible to OOM if the table is too large and spilling isn't enabled.
@@ -207,9 +177,10 @@ impl Interpreter for AnalyzeTableInterpreter {
         }
         table.do_analyze(
             self.ctx.clone(),
-            snapshot.snapshot_id,
+            snapshot,
             &mut build_res.main_pipeline,
             histogram_info_receivers,
+            self.plan.no_scan,
         )?;
         Ok(build_res)
     }

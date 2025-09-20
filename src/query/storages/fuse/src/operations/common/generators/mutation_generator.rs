@@ -35,7 +35,8 @@ use crate::statistics::TableStatsGenerator;
 pub struct MutationGenerator {
     base_snapshot: Option<Arc<TableSnapshot>>,
     conflict_resolve_ctx: ConflictResolveContext,
-    mutation_kind: MutationKind,
+
+    pub(crate) mutation_kind: MutationKind,
 }
 
 impl MutationGenerator {

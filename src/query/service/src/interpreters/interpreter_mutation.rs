@@ -156,14 +156,7 @@ impl MutationInterpreter {
             mutation_kind,
             hook_lock_opt,
         );
-        match mutation.mutation_type {
-            MutationType::Update | MutationType::Delete => {
-                hook_operator
-                    .execute_refresh(&mut build_res.main_pipeline)
-                    .await
-            }
-            MutationType::Merge => hook_operator.execute(&mut build_res.main_pipeline).await,
-        };
+        hook_operator.execute(&mut build_res.main_pipeline).await;
     }
 
     pub async fn build_physical_plan(

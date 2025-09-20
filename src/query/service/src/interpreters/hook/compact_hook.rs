@@ -149,13 +149,6 @@ async fn compact_table(
     compaction_limits: CompactionLimits,
     lock_opt: LockTableOption,
 ) -> Result<()> {
-    let table = ctx
-        .get_table(
-            &compact_target.catalog,
-            &compact_target.database,
-            &compact_target.table,
-        )
-        .await?;
     let settings = ctx.get_settings();
 
     // evict the table from cache
@@ -213,6 +206,13 @@ async fn compact_table(
     }
 
     {
+        let table = ctx
+            .get_table(
+                &compact_target.catalog,
+                &compact_target.database,
+                &compact_target.table,
+            )
+            .await?;
         // do recluster.
         if let Some(cluster_type) = table.cluster_type() {
             if cluster_type == ClusterType::Linear {

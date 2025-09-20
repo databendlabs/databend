@@ -30,6 +30,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
@@ -69,6 +70,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
+    r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
