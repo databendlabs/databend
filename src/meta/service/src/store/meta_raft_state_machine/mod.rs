@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Weak;
 use std::time::Duration;
 
 use databend_common_base::runtime::spawn_named;
@@ -71,12 +72,17 @@ impl MetaRaftStateMachine {
 
         self.in_memory_compactor_cancel = Some(Arc::new(tx));
 
-        let fu = Self::compact_loop(self.clone(), interval, rx);
+        let weak = Arc::downgrade(&self.get_inner());
+        let fu = Self::compact_loop(weak, interval, rx);
 
         let _j = spawn_named(fu, "in_memory_compactor".to_string());
     }
 
-    async fn compact_loop(self, interval: Duration, cancel: oneshot::Receiver<()>) {
+    async fn compact_loop(
+        weak_sm: Weak<SMV003>,
+        interval: Duration,
+        cancel: oneshot::Receiver<()>,
+    ) {
         let mut c = std::pin::pin!(cancel);
 
         loop {
@@ -93,7 +99,12 @@ impl MetaRaftStateMachine {
 
             }
 
-            Self::in_memory_compact_once(self.get_inner()).await
+            let Some(sm) = weak_sm.upgrade() else {
+                info!("in_memory_compact canceled as state machine dropped");
+                return;
+            };
+
+            Self::in_memory_compact_once(sm).await
         }
     }
 
