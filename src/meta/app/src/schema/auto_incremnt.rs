@@ -14,7 +14,6 @@
 
 use std::ops::Deref;
 
-use databend_common_meta_kvapi::kvapi::Key;
 pub use kvapi_impl::AutoIncrementRsc;
 
 use crate::principal::AutoIncrementKey;
