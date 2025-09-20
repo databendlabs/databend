@@ -60,9 +60,9 @@ pub fn compress_binary(
                 offsets.clone()
             } else {
                 let first = offsets.first().unwrap();
-                let mut zero_offsets = Vec::with_capacity(offsets.len());
-                for offset in offsets.iter() {
-                    zero_offsets.push(*offset - *first);
+                let mut zero_offsets = vec![0_u64; offsets.len()];
+                for (idx, offset) in offsets.iter().enumerate() {
+                    zero_offsets[idx] = *offset - *first;
                 }
                 zero_offsets.into()
             };
