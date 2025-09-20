@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 /// Represents a unique identifier for a level.
 ///
 /// The magnitude of the index indicates the relative freshness of the level.
@@ -22,6 +24,12 @@ pub struct LevelIndex {
 
     /// A unique number within the process.
     uniq: u64,
+}
+
+impl fmt::Display for LevelIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "LVL-{}-{}", self.internal_seq, self.uniq)
+    }
 }
 
 impl LevelIndex {

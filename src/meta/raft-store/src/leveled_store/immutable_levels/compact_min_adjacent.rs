@@ -25,7 +25,7 @@ impl ImmutableLevels {
     /// # Returns
     /// A new `ImmutableLevels` with the two smallest adjacent levels compacted into one.
     /// If there are 0 or 1 levels, returns a clone of self.
-    pub async fn compact_min_adjacent(&self, min_snapshot_seq: InternalSeq) -> Self {
+    pub fn compact_min_adjacent(&self, min_snapshot_seq: InternalSeq) -> Self {
         let n = self.immutables.len();
         if n <= 1 {
             return self.clone();
@@ -83,7 +83,7 @@ mod tests {
     #[tokio::test]
     async fn test_compact_min_adjacent_empty() {
         let empty_levels = ImmutableLevels::default();
-        let result = empty_levels.compact_min_adjacent(InternalSeq::new(0)).await;
+        let result = empty_levels.compact_min_adjacent(InternalSeq::new(0));
         assert_eq!(result.immutables.len(), 0);
         assert!(result.immutables.is_empty());
     }
@@ -98,7 +98,7 @@ mod tests {
         let original_index = *immutable.level_index();
         let levels = ImmutableLevels::new_form_iter([immutable]);
 
-        let result = levels.compact_min_adjacent(InternalSeq::new(0)).await;
+        let result = levels.compact_min_adjacent(InternalSeq::new(0));
         assert_eq!(result.immutables.len(), 1);
 
         let result_indexes: Vec<_> = result.immutables.keys().cloned().collect();
@@ -131,7 +131,7 @@ mod tests {
 
         let levels = ImmutableLevels::new_form_iter([immutable1, immutable2, immutable3]);
 
-        let result = levels.compact_min_adjacent(InternalSeq::new(0)).await;
+        let result = levels.compact_min_adjacent(InternalSeq::new(0));
 
         assert_eq!(result.immutables.len(), 2);
 
@@ -169,7 +169,7 @@ mod tests {
         let level2_index = *immutable2.level_index();
         let levels = ImmutableLevels::new_form_iter([immutable1, immutable2]);
 
-        let result = levels.compact_min_adjacent(InternalSeq::new(0)).await;
+        let result = levels.compact_min_adjacent(InternalSeq::new(0));
         assert_eq!(result.immutables.len(), 1);
 
         let result_indexes: Vec<_> = result.immutables.keys().cloned().collect();
@@ -203,7 +203,7 @@ mod tests {
         let immutable2 = Immutable::new_from_level(level2);
         let levels = ImmutableLevels::new_form_iter([immutable1, immutable2]);
 
-        let result = levels.compact_min_adjacent(InternalSeq::new(18)).await;
+        let result = levels.compact_min_adjacent(InternalSeq::new(18));
         assert_eq!(result.immutables.len(), 1);
 
         assert_eq!(

@@ -33,8 +33,8 @@ impl mvcc::Commit<Namespace, Key, Value> for LeveledMap {
         mut changes: BTreeMap<Namespace, Table<Key, Value>>,
     ) -> Result<(), Error> {
         info!(
-            "Committing changes to leveled map data: last_seq={}, changes = {:?}",
-            last_seq, changes
+            "Committing changes to leveled map data: last_seq={}",
+            last_seq
         );
         let mut inner = self.data.lock().unwrap();
 

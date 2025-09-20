@@ -94,7 +94,7 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
 
         let sig = meta.signature();
 
-        let ss_store = SnapshotStoreV004::new(self.config.clone());
+        let ss_store = SnapshotStoreV004::new(self.config.as_ref().clone());
         let (storage_path, rel_path) = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())
