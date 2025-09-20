@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;

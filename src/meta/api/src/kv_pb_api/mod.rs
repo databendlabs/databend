@@ -27,6 +27,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
@@ -521,6 +522,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_meta_kvapi::kvapi::DirName;
     use databend_common_meta_kvapi::kvapi::KVApi;
+    
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_types::protobuf::StreamItem;
