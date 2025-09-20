@@ -91,15 +91,3 @@ query I
 select count(*) from test_table;
 ----
 1
-
-statement ok
-drop procedure proc_create_table();
-
-statement ok
-drop procedure proc_drop_table();
-
-statement ok
-drop procedure proc_only_dml();
-
-statement ok
-drop database test_auto_commit;
