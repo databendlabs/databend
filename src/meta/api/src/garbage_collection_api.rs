@@ -276,7 +276,7 @@ pub async fn get_history_tables_for_gc(
             // - Either marked with drop_on
             //   We use its `drop_on` to do the time range filtering
             // - Or has no drop_on, but is not the last visible one of the table
-            //   It is still available for vacuum, and we use its `updated_on` to do the time range
+            //   It is still available for vacuum, and we use its `updated_on` to do the time range filtering
 
             let time_point = if seq_meta.drop_on.is_none() {
                 &Some(seq_meta.updated_on)

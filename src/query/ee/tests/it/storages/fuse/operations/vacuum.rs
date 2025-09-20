@@ -717,14 +717,14 @@ async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_drop_create_or_replace() -> Result<()> {
     // vacuum dropped tables by specific database names
-    test_vacuum_drop_create_or_replace_impl(&vec![
+    test_vacuum_drop_create_or_replace_impl(&[
         "vacuum drop table from db1",
         "vacuum drop table from db2",
     ])
     .await?;
 
     // vacuum dropped tables all
-    test_vacuum_drop_create_or_replace_impl(&vec!["vacuum drop table"]).await?;
+    test_vacuum_drop_create_or_replace_impl(&["vacuum drop table"]).await?;
     Ok(())
 }
 
