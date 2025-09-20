@@ -180,6 +180,7 @@ pub async fn get_history_tables_for_gc(
     drop_time_range: Range<Option<DateTime<Utc>>>,
     db_id: u64,
     limit: usize,
+    db_is_dropped: bool,
 ) -> Result<Vec<TableNIV>, KVAppError> {
     info!(
         "get_history_tables_for_gc: db_id {}, limit {}",
@@ -257,37 +258,39 @@ pub async fn get_history_tables_for_gc(
                 continue;
             };
 
-            // We shall not vacuum it if the table id is the largest table id of some table, but not marked with drop_on,
-            {
-                let is_visible_last_active_table = seq_meta.data.drop_on.is_none()
-                    && latest_table_ids.contains(&table_id.table_id);
+            if !db_is_dropped {
+                // We shall not vacuum it if the table id is the largest table id of some table, but not marked with drop_on,
+                {
+                    let is_visible_last_active_table = seq_meta.data.drop_on.is_none()
+                        && latest_table_ids.contains(&table_id.table_id);
 
-                if is_visible_last_active_table {
-                    debug!(
-                        "Table id {:?} of {} is the last visible one, not available for vacuum",
-                        table_id, table_name,
-                    );
+                    if is_visible_last_active_table {
+                        debug!(
+                            "Table id {:?} of {} is the last visible one, not available for vacuum",
+                            table_id, table_name,
+                        );
+                        num_out_of_time_range += 1;
+                        continue;
+                    }
+                }
+
+                // Now the table id is
+                // - Either marked with drop_on
+                //   We use its `drop_on` to do the time range filtering
+                // - Or has no drop_on, but is not the last visible one of the table
+                //   It is still available for vacuum, and we use its `updated_on` to do the time range filtering
+
+                let time_point = if seq_meta.drop_on.is_none() {
+                    &Some(seq_meta.updated_on)
+                } else {
+                    &seq_meta.drop_on
+                };
+
+                if !drop_time_range.contains(time_point) {
+                    debug!("table {:?} is not in drop_time_range", seq_meta.data);
                     num_out_of_time_range += 1;
                     continue;
                 }
-            }
-
-            // Now the table id is
-            // - Either marked with drop_on
-            //   We use its `drop_on` to do the time range filtering
-            // - Or has no drop_on, but is not the last visible one of the table
-            //   It is still available for vacuum, and we use its `updated_on` to do the time range filtering
-
-            let time_point = if seq_meta.drop_on.is_none() {
-                &Some(seq_meta.updated_on)
-            } else {
-                &seq_meta.drop_on
-            };
-
-            if !drop_time_range.contains(time_point) {
-                debug!("table {:?} is not in drop_time_range", seq_meta.data);
-                num_out_of_time_range += 1;
-                continue;
             }
 
             filter_tb_infos.push(TableNIV::new(
