@@ -41,6 +41,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::ConditionResult::Eq;

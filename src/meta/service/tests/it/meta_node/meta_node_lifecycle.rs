@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio::time::sleep;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::ServerState;

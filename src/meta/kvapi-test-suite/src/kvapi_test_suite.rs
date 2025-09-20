@@ -16,6 +16,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;

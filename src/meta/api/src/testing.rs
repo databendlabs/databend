@@ -15,6 +15,7 @@
 //! Supporting utilities for tests.
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaDataError;
