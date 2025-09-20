@@ -90,7 +90,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
             payload.arena.clone(),
             group_types.clone(),
             aggrs.clone(),
-            payload.states_layout.clone(),
+            payload.states_layout().cloned(),
         );
         buckets.push(p);
     }
@@ -139,7 +139,7 @@ fn scatter_partitioned_payload(
             Arc::new(Bump::new()),
             group_types.clone(),
             aggrs.clone(),
-            partitioned_payload.states_layout.clone(),
+            partitioned_payload.states_layout().cloned(),
         ));
     }
 
