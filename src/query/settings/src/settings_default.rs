@@ -1079,13 +1079,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
                 }),
-                ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh virtual column after new data written",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh aggregating index after new data written",
@@ -1446,7 +1439,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
