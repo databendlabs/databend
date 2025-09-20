@@ -24,59 +24,57 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use opendal::Writer;
 
-/**
- * Buffer Pool Workflow for Spill Operations:
- *
- * Context: During query execution, when memory pressure is high, intermediate
- * results (hash tables, sorted data, aggregation states) need to be spilled
- * to disk/object storage to free up memory. This buffer pool provides a
- * synchronous Write interface with async I/O underneath, specifically designed
- * for spill scenarios where backpressure control is more important than latency.
- *
- * 1. Initialization:
- *    - Create a fixed number of BytesMut buffers (4MB each) based on memory limit
- *    - Spawn worker threads that listen for write operations via async channels
- *    - Pre-allocate buffers are placed in the available_write_buffers channel
- *
- * 2. Spill Write Operation:
- *    - During spill, BufferWriter.write() fills the current buffer with serialized data
- *    - When buffer is full, it's frozen to Bytes and added to pending_buffers queue
- *    - Writer tries to acquire a new buffer from the pool (non-blocking first)
- *    - If no buffer available, triggers async write operation and BLOCKS (crucial for spill)
- *
- * 3. Async Spill Write Process:
- *    - Background worker receives BufferWriteOperator containing:
- *      - OpenDAL Writer instance (to disk/S3/etc.)
- *      - Queue of Bytes buffers containing spilled data
- *      - Response channel for completion notification
- *    - Worker writes all buffers sequentially to storage via writer.write(buffers)
- *    - After writing, attempts to recycle buffers back to pool:
- *      - Converts Bytes back to BytesMut (if unique reference)
- *      - Clears buffer content and returns to available pool
- *    - Notifies completion via condvar to unblock waiting spill thread
- *
- * 4. Spill Backpressure Control (Key Feature):
- *    - When pool is exhausted, spill write() BLOCKS until async write completes
- *    - This throttles spill speed to match storage I/O capacity
- *    - Prevents memory explosion during high-volume spill operations
- *    - Query execution naturally pauses when spill storage is slower than data generation
- *
- * 5. Buffer Lifecycle in Spill:
- *    - BytesMut (mutable) -> fill with spill data -> freeze to Bytes (immutable)
- *    - Bytes -> async write to spill storage -> try_into_mut() -> clear -> back to pool
- *
- * 6. Spill Resource Cleanup:
- *    - flush() ensures all pending spill data is written before spill operation completes
- *    - Drop trait recycles any remaining buffers back to pool
- *    - Critical for spill scenarios where partial writes could corrupt spilled data
- *
- * Spill-Specific Benefits:
- * - Memory-bounded operation prevents OOM during large spills
- * - Synchronous blocking behavior allows query threads to naturally pause
- * - Buffer reuse minimizes GC pressure during intensive spill operations
- * - Automatic flow control matches spill rate to storage bandwidth
- * - Works with any OpenDAL-supported storage (local disk, S3, etc.)
- */
+/// Buffer Pool Workflow for Spill Operations:
+///
+/// Context: During query execution, when memory pressure is high, intermediate
+/// results (hash tables, sorted data, aggregation states) need to be spilled
+/// to disk/object storage to free up memory. This buffer pool provides a
+/// synchronous Write interface with async I/O underneath, specifically designed
+/// for spill scenarios where backpressure control is more important than latency.
+///
+/// 1. Initialization:
+///    - Create a fixed number of BytesMut buffers (4MB each) based on memory limit
+///    - Spawn worker threads that listen for write operations via async channels
+///    - Pre-allocate buffers are placed in the available_write_buffers channel
+///
+/// 2. Spill Write Operation:
+///    - During spill, BufferWriter.write() fills the current buffer with serialized data
+///    - When buffer is full, it's frozen to Bytes and added to pending_buffers queue
+///    - Writer tries to acquire a new buffer from the pool (non-blocking first)
+///    - If no buffer available, triggers async write operation and BLOCKS (crucial for spill)
+///
+/// 3. Async Spill Write Process:
+///    - Background worker receives BufferWriteOperator containing:
+///      - OpenDAL Writer instance (to disk/S3/etc.)
+///      - Queue of Bytes buffers containing spilled data
+///      - Response channel for completion notification
+///    - Worker writes all buffers sequentially to storage via writer.write(buffers)
+///    - After writing, attempts to recycle buffers back to pool:
+///      - Converts Bytes back to BytesMut (if unique reference)
+///      - Clears buffer content and returns to available pool
+///    - Notifies completion via condvar to unblock waiting spill thread
+///
+/// 4. Spill Backpressure Control (Key Feature):
+///    - When pool is exhausted, spill write() BLOCKS until async write completes
+///    - This throttles spill speed to match storage I/O capacity
+///    - Prevents memory explosion during high-volume spill operations
+///    - Query execution naturally pauses when spill storage is slower than data generation
+///
+/// 5. Buffer Lifecycle in Spill:
+///    - BytesMut (mutable) -> fill with spill data -> freeze to Bytes (immutable)
+///    - Bytes -> async write to spill storage -> try_into_mut() -> clear -> back to pool
+///
+/// 6. Spill Resource Cleanup:
+///    - flush() ensures all pending spill data is written before spill operation completes
+///    - Drop trait recycles any remaining buffers back to pool
+///    - Critical for spill scenarios where partial writes could corrupt spilled data
+///
+/// Spill-Specific Benefits:
+/// - Memory-bounded operation prevents OOM during large spills
+/// - Synchronous blocking behavior allows query threads to naturally pause
+/// - Buffer reuse minimizes GC pressure during intensive spill operations
+/// - Automatic flow control matches spill rate to storage bandwidth
+/// - Works with any OpenDAL-supported storage (local disk, S3, etc.)
 pub struct BufferPool {
     working_queue: async_channel::Sender<BufferOperator>,
     available_write_buffers: async_channel::Receiver<BytesMut>,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod adapter;
+mod async_buffer;
 mod block_reader;
 mod block_writer;
 mod inner;
@@ -20,7 +21,6 @@ mod partition_buffer;
 mod serialize;
 #[cfg(test)]
 mod test_memory;
-mod async_buffer;
 
 pub use adapter::*;
 pub use block_writer::*;
