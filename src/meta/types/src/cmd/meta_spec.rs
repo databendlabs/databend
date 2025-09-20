@@ -37,7 +37,7 @@ pub struct MetaSpec {
     /// - Values > `100_000_000_000`: treated as milliseconds since epoch
     /// - Values ≤ `100_000_000_000`: treated as seconds since epoch
     ///
-    /// See [`adaptable_timestamp_to_duration`]
+    /// See [`flexible_timestamp_to_duration`]
     pub(crate) expire_at: Option<u64>,
 
     /// Relative expiration time interval since when the raft log is applied.
