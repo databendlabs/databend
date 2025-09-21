@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod join;
-mod memory;
-mod transform_hash_join;
+mod cstyle_cell;
+mod squash_blocks;
 
-pub use transform_hash_join::TransformHashJoin;
+pub use cstyle_cell::CStyleCell;
+pub use squash_blocks::SquashBlocks;

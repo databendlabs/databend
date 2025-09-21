@@ -16,20 +16,17 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use itertools::Itertools;
+use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
-
-enum Stage {
-    Build,
-    BuildFinal,
-    Probe,
-    ProbeFinal,
-}
+use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,
@@ -39,6 +36,8 @@ pub struct TransformHashJoin {
 
     stage: Stage,
     join: Box<dyn Join>,
+    joined_data: Option<DataBlock>,
+    stage_sync_barrier: Arc<Barrier>,
 }
 
 impl TransformHashJoin {
@@ -47,12 +46,19 @@ impl TransformHashJoin {
         probe_port: Arc<InputPort>,
         joined_port: Arc<OutputPort>,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(TransformHashJoin {
-            build_port,
-            probe_port,
-            joined_port,
-        }))
+        // ProcessorPtr::create(Box::new(TransformHashJoin {
+        //     build_port,
+        //     probe_port,
+        //     joined_port,
+        //     stage: Stage::Build,
+        //     join: Box::new(()),
+        // }))
+        unimplemented!()
     }
+
+    // fn build_event(&mut self, state: &mut BuildState) -> Result<Event> {
+    //
+    // }
 }
 
 #[async_trait::async_trait]
@@ -74,24 +80,203 @@ impl Processor for TransformHashJoin {
 
         if !self.joined_port.can_push() {
             match self.stage {
-                Stage::Build => self.build_port.set_not_need_data(),
-                Stage::Probe => self.probe_port.set_not_need_data(),
-                Stage::BuildFinal | Stage::ProbeFinal => (),
+                Stage::Build(_) => self.build_port.set_not_need_data(),
+                Stage::Probe(_) => self.probe_port.set_not_need_data(),
+                Stage::BuildFinal(_) | Stage::ProbeFinal(_) | Stage::Finished => (),
             }
 
             return Ok(Event::NeedConsume);
         }
 
-        if !self.build_port.is_finished() {
-            // build stage
+        if let Some(joined_data) = self.joined_data.take() {
+            self.joined_port.push_data(Ok(joined_data));
+            return Ok(Event::NeedConsume);
+        }
+
+        match &mut self.stage {
+            Stage::Build(state) => state.event(&self.build_port),
+            Stage::BuildFinal(state) => state.event(),
+            Stage::Probe(state) => state.event(&self.probe_port),
+            Stage::ProbeFinal(state) => state.event(),
+            Stage::Finished => {
+                self.joined_port.finish();
+                Ok(Event::Finished)
+            }
         }
     }
 
     fn process(&mut self) -> Result<()> {
-        todo!()
+        match &mut self.stage {
+            Stage::Finished => Ok(()),
+            Stage::Build(state) => {
+                let Some(data_block) = state.build_data.take() else {
+                    if !state.finished {
+                        state.finished = true;
+                        self.join.add_block(None)?;
+                    }
+                    return Ok(());
+                };
+
+                self.join.add_block(Some(data_block))
+            }
+            Stage::BuildFinal(state) => {
+                state.finished = self.join.final_build()?.is_none();
+                Ok(())
+            }
+            Stage::Probe(state) => {
+                if let Some(probe_data) = state.input_data.take() {
+                    let stream = self.join.probe_block(probe_data)?;
+                    state.stream = Some(stream);
+                }
+
+                if let Some(mut stream) = state.stream.take() {
+                    if let Some(joined_data) = stream.next()? {
+                        self.joined_data = Some(joined_data);
+                        state.stream = Some(stream);
+                    }
+                }
+
+                Ok(())
+            }
+            Stage::ProbeFinal(state) => {
+                if !state.initialized {
+                    state.initialized = true;
+                    state.stream = Some(self.join.final_probe()?);
+                }
+
+                if let Some(mut stream) = state.stream.take() {
+                    if let Some(joined_data) = stream.next()? {
+                        self.joined_data = Some(joined_data);
+                        state.stream = Some(stream);
+                    }
+                }
+
+                Ok(())
+            }
+        }
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        todo!()
+        let _wait_res = self.stage_sync_barrier.wait().await;
+
+        self.stage = match self.stage {
+            Stage::Build(_) => Stage::BuildFinal(BuildFinalState::new()),
+            Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
+            Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
+            Stage::ProbeFinal(_) => Stage::Finished,
+            Stage::Finished => Stage::Finished,
+        };
+
+        Ok(())
+    }
+}
+
+enum Stage {
+    Build(BuildState),
+    BuildFinal(BuildFinalState),
+    Probe(ProbeState),
+    ProbeFinal(ProbeFinalState),
+    Finished,
+}
+
+struct BuildState {
+    finished: bool,
+    build_data: Option<DataBlock>,
+}
+
+impl BuildState {
+    pub fn event(&mut self, input: &InputPort) -> Result<Event> {
+        if self.build_data.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if input.has_data() {
+            self.build_data = Some(input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        }
+
+        if input.is_finished() {
+            return match self.finished {
+                true => Ok(Event::Async),
+                false => Ok(Event::Sync),
+            };
+        }
+
+        input.set_need_data();
+        Ok(Event::NeedData)
+    }
+}
+
+struct BuildFinalState {
+    finished: bool,
+}
+
+impl BuildFinalState {
+    pub fn new() -> BuildFinalState {
+        BuildFinalState { finished: false }
+    }
+
+    pub fn event(&mut self) -> Result<Event> {
+        match self.finished {
+            true => Ok(Event::Async),
+            false => Ok(Event::Sync),
+        }
+    }
+}
+
+struct ProbeState {
+    input_data: Option<DataBlock>,
+    stream: Option<Box<dyn JoinStream>>,
+}
+
+impl ProbeState {
+    pub fn new() -> ProbeState {
+        ProbeState {
+            input_data: None,
+            stream: None,
+        }
+    }
+
+    pub fn event(&mut self, input: &InputPort) -> Result<Event> {
+        if self.input_data.is_some() || self.stream.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if input.has_data() {
+            self.input_data = Some(input.pull_data().unwrap()?);
+            return Ok(Event::Sync);
+        }
+
+        if input.is_finished() {
+            return Ok(Event::Async);
+        }
+
+        input.set_need_data();
+        Ok(Event::NeedData)
+    }
+}
+
+struct ProbeFinalState {
+    initialized: bool,
+    stream: Option<Box<dyn JoinStream>>,
+}
+
+impl ProbeFinalState {
+    pub fn new() -> ProbeFinalState {
+        ProbeFinalState {
+            initialized: false,
+            stream: None,
+        }
+    }
+
+    pub fn event(&mut self) -> Result<Event> {
+        if self.stream.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        match self.initialized {
+            true => Ok(Event::Async),
+            false => Ok(Event::Sync),
+        }
     }
 }

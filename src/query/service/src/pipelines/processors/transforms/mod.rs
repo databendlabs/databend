@@ -17,6 +17,7 @@ pub mod aggregator;
 mod broadcast;
 mod hash_join;
 mod materialized_cte;
+mod new_hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
 pub mod sort;
@@ -42,13 +43,13 @@ mod transform_srf;
 mod transform_udf_script;
 mod transform_udf_server;
 mod window;
-mod new_hash_join;
 
 pub use broadcast::BroadcastSinkProcessor;
 pub use broadcast::BroadcastSourceProcessor;
 pub use hash_join::*;
 pub use materialized_cte::CTESource;
 pub use materialized_cte::MaterializedCteSink;
+pub use new_hash_join::TransformHashJoin;
 pub use sort::*;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
@@ -78,5 +79,3 @@ pub use transform_srf::TransformSRF;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;
-
-pub use new_hash_join::TransformHashJoin;

@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::Progress;
-use databend_common_base::base::ProgressValues;
-use databend_common_exception::Result;
+use std::collections::VecDeque;
+use std::sync::Mutex;
+
 use databend_common_expression::DataBlock;
 
-pub trait JoinStream: Send + Sync + 'static {
-    fn next(&mut self) -> Result<Option<DataBlock>>;
-}
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
 
-pub trait Join : Send + Sync + 'static {
-    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()>;
+pub struct HashJoinMemoryState {
+    pub mutex: Mutex<()>,
+    pub build_rows: CStyleCell<usize>,
+    pub chunks: CStyleCell<Vec<DataBlock>>,
+    pub build_queue: CStyleCell<VecDeque<usize>>,
 
-    fn final_build(&mut self) -> Result<Option<ProgressValues>>;
-
-    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>>;
-
-    fn final_probe(&mut self) -> Result<Box<dyn JoinStream>>;
+    pub hash_table: CStyleCell<HashJoinHashTable>,
 }
