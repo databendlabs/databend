@@ -14,8 +14,10 @@
 
 use std::io::Error;
 use std::ops::RangeBounds;
+use std::time::Instant;
 
 use futures_util::StreamExt;
+use log::debug;
 use log::warn;
 use map_api::mvcc;
 use map_api::mvcc::ViewKey;
@@ -27,8 +29,8 @@ use seq_marked::SeqMarked;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
+use crate::leveled_store::get_sub_table::GetSubTable;
 use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::level::GetTable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::MapKeyDecode;
@@ -44,7 +46,7 @@ where
     K: MapKeyEncode + MapKeyDecode,
     K::V: ViewValue,
     SeqMarked<K::V>: ValueConvert<SeqMarked>,
-    Level: GetTable<K, K::V>,
+    Level: GetSubTable<K, K::V>,
     Immutable: mvcc::ScopedSeqBoundedRange<K, K::V>,
 {
     async fn range<R>(
@@ -60,10 +62,27 @@ where
         // writable level
 
         let (vec, immutable) = {
+            let start = Instant::now();
+            debug!(
+                "Level.writable::range(start={:?}, end={:?})",
+                range.start_bound(),
+                range.end_bound()
+            );
+
             let inner = self.data.lock().unwrap();
+
+            debug!(
+                "Level.writable::range(start={:?}, end={:?}) acquired lock, took {:?}, writable: kv.len={}, expire.len={}",
+                range.start_bound(),
+                range.end_bound(),
+                start.elapsed(),
+                inner.writable.kv.inner.len(),
+                inner.writable.expire.inner.len()
+            );
+
             let it = inner
                 .writable
-                .get_table()
+                .get_sub_table()
                 .range(range.clone(), snapshot_seq);
             let vec = it.map(|(k, v)| (k.clone(), v.cloned())).collect::<Vec<_>>();
 

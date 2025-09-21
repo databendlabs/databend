@@ -144,9 +144,9 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 Some(table_name) => {
                     let start = std::time::Instant::now();
                     info!("loading table {}", table_name);
-                    let table = db.get_table(table_name.as_str()).await?;
+                    let table = db.get_table_history(table_name.as_str()).await?;
                     info!("get_table cost: {:?}", start.elapsed());
-                    vec![table]
+                    table
                 }
                 None => {
                     let start = std::time::Instant::now();

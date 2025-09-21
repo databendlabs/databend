@@ -12,30 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::base::DropCallback;
+use log::info;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-/// Acquirer is used to acquire a permit for compaction, without holding lock to the state machine.
-pub struct CompactorAcquirer {
+/// Acquirer is used to acquire a permit for applying, without holding lock to the state machine.
+pub struct WriterAcquirer {
     sem: Arc<Semaphore>,
 }
 
-impl CompactorAcquirer {
-    pub fn new(sem: Arc<Semaphore>) -> Self {
-        CompactorAcquirer { sem }
-    }
-
-    pub async fn acquire(self) -> CompactorPermit {
-        // Safe unwrap: it returns error only when semaphore is closed.
-        // This semaphore does not close.
-        let permit = self.sem.acquire_owned().await.unwrap();
-        CompactorPermit { _permit: permit }
+impl fmt::Display for WriterAcquirer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WriterAcquirer")
     }
 }
 
-#[derive(Debug)]
-pub struct CompactorPermit {
+impl WriterAcquirer {
+    pub fn new(sem: Arc<Semaphore>) -> Self {
+        WriterAcquirer { sem }
+    }
+
+    pub async fn acquire(self) -> WriterPermit {
+        // Safe unwrap: it returns error only when semaphore is closed.
+        // This semaphore does not close.
+        let start = Instant::now();
+        let permit = self.sem.acquire_owned().await.unwrap();
+        info!("WriterPermit-Acquire: total: {:?}", start.elapsed());
+        WriterPermit {
+            _drop: DropCallback::new(move || {
+                info!("WriterPermit-Drop: total: {:?}", start.elapsed());
+            }),
+            _permit: permit,
+        }
+    }
+}
+
+/// ApplierPermit is used to acquire a permit for applying changes to the state machine.
+pub struct WriterPermit {
     _permit: OwnedSemaphorePermit,
+    _drop: DropCallback,
 }

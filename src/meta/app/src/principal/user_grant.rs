@@ -62,6 +62,7 @@ pub enum GrantObject {
     Warehouse(String),
     Connection(String),
     Sequence(String),
+    Procedure(u64),
 }
 
 impl GrantObject {
@@ -97,6 +98,7 @@ impl GrantObject {
             (GrantObject::Warehouse(w), GrantObject::Warehouse(rw)) => w == rw,
             (GrantObject::Connection(c), GrantObject::Connection(rc)) => c == rc,
             (GrantObject::Sequence(s), GrantObject::Sequence(rs)) => s == rs,
+            (GrantObject::Procedure(p), GrantObject::Procedure(rp)) => p == rp,
             _ => false,
         }
     }
@@ -126,6 +128,9 @@ impl GrantObject {
             GrantObject::Sequence(_) => {
                 UserPrivilegeSet::available_privileges_on_sequence(available_ownership)
             }
+            GrantObject::Procedure(_) => {
+                UserPrivilegeSet::available_privileges_on_procedure(available_ownership)
+            }
         }
     }
 
@@ -136,6 +141,7 @@ impl GrantObject {
             | GrantObject::UDF(_)
             | GrantObject::Warehouse(_)
             | GrantObject::Sequence(_)
+            | GrantObject::Procedure(_)
             | GrantObject::Connection(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
@@ -160,6 +166,7 @@ impl fmt::Display for GrantObject {
             GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
             GrantObject::Connection(c) => write!(f, "CONNECTION {c}"),
             GrantObject::Sequence(s) => write!(f, "SEQUENCE {s}"),
+            GrantObject::Procedure(p) => write!(f, "PROCEDURE {p}"),
         }
     }
 }

@@ -43,6 +43,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_global_ws: bool,
     granted_global_c: bool,
     granted_global_seq: bool,
+    granted_global_procedure: bool,
     granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
@@ -59,6 +60,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_ws: HashSet<String>,
     granted_c: HashSet<String>,
     granted_seq: HashSet<String>,
+    granted_procedures_id: HashSet<u64>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -71,6 +73,7 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global_ws = false;
         let mut granted_global_c = false;
         let mut granted_global_seq = false;
+        let mut granted_global_procedure = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
@@ -80,6 +83,7 @@ impl GrantObjectVisibilityChecker {
         let mut granted_ws = HashSet::new();
         let mut granted_c = HashSet::new();
         let mut granted_seq = HashSet::new();
+        let mut granted_procedures_id = HashSet::new();
         let mut granted_write_stages = HashSet::new();
         let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
@@ -139,6 +143,15 @@ impl GrantObjectVisibilityChecker {
                             ent.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_sequence(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_procedure,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_procedure(false)
                                     .has_privilege(privilege)
                             },
                         );
@@ -222,6 +235,9 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Sequence(c) => {
                         granted_seq.insert(c.to_string());
                     }
+                    GrantObject::Procedure(procedure_id) => {
+                        granted_procedures_id.insert(*procedure_id);
+                    }
                 }
             }
         }
@@ -259,6 +275,9 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::Sequence { name } => {
                     granted_seq.insert(name.to_string());
                 }
+                OwnershipObject::Procedure { procedure_id } => {
+                    granted_procedures_id.insert(*procedure_id);
+                }
             }
         }
 
@@ -267,6 +286,7 @@ impl GrantObjectVisibilityChecker {
             granted_global_ws,
             granted_global_c,
             granted_global_seq,
+            granted_global_procedure,
             granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
@@ -286,6 +306,7 @@ impl GrantObjectVisibilityChecker {
             granted_ws,
             granted_c,
             granted_seq,
+            granted_procedures_id,
         }
     }
 
@@ -328,6 +349,17 @@ impl GrantObjectVisibilityChecker {
         }
 
         if self.granted_ws.contains(id) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_procedure_visibility(&self, id: &u64) -> bool {
+        if self.granted_global_procedure {
+            return true;
+        }
+
+        if self.granted_procedures_id.contains(id) {
             return true;
         }
         false

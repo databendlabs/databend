@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Raft log entry application to state machine.
+//!
+//! Applies committed raft log entries to the state machine including membership changes,
+//! KV operations, transactions, and TTL cleanup.
+
 use std::future::ready;
 use std::io;
 use std::time::Duration;
@@ -164,7 +169,25 @@ where SM: StateMachineApi<SysData> + 'static
                 node_id,
                 node,
                 overriding,
-            } => self.apply_add_node(node_id, node, *overriding),
+            } => {
+                info!(
+                    "applying AddNode: {}={:?}, overriding: {}, sys_data: {:?}",
+                    node_id,
+                    node,
+                    overriding,
+                    self.sm.with_sys_data(|s| s.clone())
+                );
+
+                let res = self.apply_add_node(node_id, node, *overriding);
+
+                info!(
+                    "applied AddNode: {}={:?}, sys_data: {:?}",
+                    node_id,
+                    node,
+                    self.sm.with_sys_data(|s| s.clone())
+                );
+                res
+            }
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
 

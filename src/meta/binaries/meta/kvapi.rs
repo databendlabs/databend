@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;

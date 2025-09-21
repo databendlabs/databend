@@ -38,6 +38,11 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             create_option: p.create_option,
+            catalog_name: if p.create_option.is_overriding() {
+                Some(p.catalog.to_string())
+            } else {
+                None
+            },
             name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
             meta: p.meta,
         }
@@ -48,6 +53,11 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             create_option: p.create_option,
+            catalog_name: if p.create_option.is_overriding() {
+                Some(p.catalog.to_string())
+            } else {
+                None
+            },
             name_ident: DatabaseNameIdent::new(&p.tenant, &p.database),
             meta: p.meta.clone(),
         }

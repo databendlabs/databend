@@ -28,8 +28,13 @@ use stream_more::KMerge;
 use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKey;
+
+mod compact_all;
+mod compact_conductor;
+mod compact_min_adjacent;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
@@ -46,6 +51,13 @@ impl ImmutableLevels {
                 .map(|immu| (*immu.level_index(), immu))
                 .collect(),
         }
+    }
+
+    /// Get statistics of all levels from newest to oldest.
+    pub fn stat(&self) -> Vec<LevelStat> {
+        self.newest_to_oldest()
+            .map(|imm| imm.inner().stat().with_index(*imm.level_index()))
+            .collect()
     }
 
     pub(crate) fn indexes(&self) -> Vec<LevelIndex> {
@@ -101,7 +113,7 @@ impl ImmutableLevels {
     }
 
     pub(crate) fn last_seq(&self) -> Option<u64> {
-        self.newest().map(|l| l.with_sys_data(|s| s.curr_seq()))
+        self.newest().map(|l| l.sys_data().curr_seq())
     }
 }
 

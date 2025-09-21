@@ -58,6 +58,10 @@ message OwnershipObject {
     string sequence = 1;
   }
 
+  message OwnershipProcedureObject {
+    uint64 procedure_id = 1;
+  }
+
   oneof object {
     OwnershipDatabaseObject database = 1;
     OwnershipTableObject table = 2;
@@ -66,5 +70,6 @@ message OwnershipObject {
     OwnershipWarehouseObject warehouse = 5;
     OwnershipConnectionObject connection = 6;
     OwnershipSequenceObject sequence = 7;
+    OwnershipProcedureObject procedure = 8;
   }
 }

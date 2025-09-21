@@ -16,13 +16,15 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 use crate::sm_v003::OnChange;
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.
-    pub(crate) _permit: WriterPermit,
+    ///
+    /// Wrapping it in a Mutex to make it `Sync` while the permit itself is only `Send`.
+    pub(crate) _permit: Mutex<WriterPermit>,
 
     pub(crate) view: StateMachineView,
 

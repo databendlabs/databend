@@ -26,6 +26,7 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::debug;
+use log::info;
 use map_api::mvcc::ScopedGet;
 use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
@@ -35,22 +36,22 @@ use tokio::sync::Semaphore;
 
 use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterAcquirer;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::compactor::Compactor;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
-use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
-use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::compactor_acquirer::CompactorAcquirer;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
+use crate::sm_v003::writer_acquirer::WriterAcquirer;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 
 pub type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 
 pub struct SMV003 {
-    levels: LeveledMap,
+    leveled_map: LeveledMap,
 
     /// A semaphore that permits at most one compactor to run.
     pub(crate) compaction_semaphore: Arc<Semaphore>,
@@ -72,7 +73,7 @@ pub struct SMV003 {
 impl Default for SMV003 {
     fn default() -> Self {
         Self {
-            levels: Default::default(),
+            leveled_map: Default::default(),
             // Only one compactor is allowed a time.
             compaction_semaphore: Arc::new(Semaphore::new(1)),
             // Only one writer is allowed a time.
@@ -86,7 +87,7 @@ impl Default for SMV003 {
 impl fmt::Debug for SMV003 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("SMV003")
-            .field("levels", &self.levels)
+            .field("levels", &self.leveled_map)
             .field(
                 "on_change_applied",
                 &self
@@ -135,7 +136,7 @@ impl StateMachineApi<SysData> for ApplierData {
     }
 
     fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        self.view.base().data().with_sys_data(f)
+        self.view.snapshot().data().with_sys_data(f)
     }
 
     async fn commit(self) -> Result<(), Error> {
@@ -147,12 +148,12 @@ impl StateMachineApi<SysData> for ApplierData {
 
 impl SMV003 {
     /// Return a mutable reference to the map that stores app data.
-    pub(in crate::sm_v003) fn map_mut(&mut self) -> &mut LeveledMap {
-        &mut self.levels
+    pub(crate) fn map_mut(&mut self) -> &mut LeveledMap {
+        &mut self.leveled_map
     }
 
     pub fn to_state_machine_snapshot(&self) -> StateMachineSnapshot {
-        self.levels.to_state_machine_snapshot()
+        self.leveled_map.to_state_machine_snapshot()
     }
 
     pub fn kv_api(&self) -> SMV003KVApi {
@@ -164,7 +165,7 @@ impl SMV003 {
         let sys_data = db.sys_data().clone();
 
         let new_sm = SMV003 {
-            levels: LeveledMap {
+            leveled_map: LeveledMap {
                 data: Arc::new(Mutex::new(LeveledMapData {
                     writable: Default::default(),
                     immutable: Arc::new(ImmutableData::new(Default::default(), Some(db))),
@@ -176,17 +177,17 @@ impl SMV003 {
             on_change_applied: self.on_change_applied.clone(),
         };
 
-        new_sm.levels.with_sys_data(|s| *s = sys_data);
+        new_sm.leveled_map.with_sys_data(|s| *s = sys_data);
 
         new_sm
     }
 
     pub fn get_snapshot(&self) -> Option<DB> {
-        self.levels.persisted()
+        self.leveled_map.persisted()
     }
 
     pub fn data(&self) -> &LeveledMap {
-        &self.levels
+        &self.leveled_map
     }
 
     pub async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
@@ -199,9 +200,9 @@ impl SMV003 {
     pub(crate) async fn new_applier(&self) -> Applier<ApplierData> {
         let permit = self.acquire_writer_permit().await;
 
-        let view = self.levels.to_view();
+        let view = self.leveled_map.to_view();
         let applier_data = ApplierData {
-            _permit: permit,
+            _permit: Mutex::new(permit),
             view,
             cleanup_start_time: self.cleanup_start_time.clone(),
             on_change_applied: self.get_on_change_applied(),
@@ -217,7 +218,6 @@ impl SMV003 {
     pub async fn acquire_writer_permit(&self) -> WriterPermit {
         let acquirer = self.new_writer_acquirer();
         let permit = acquirer.acquire().await;
-        debug!("WriterPermit acquired");
         permit
     }
 
@@ -251,19 +251,19 @@ impl SMV003 {
     }
 
     pub fn sys_data(&self) -> SysData {
-        self.levels.with_sys_data(|x| x.clone())
+        self.leveled_map.with_sys_data(|x| x.clone())
     }
 
     pub fn with_sys_data<T>(&self, f: impl FnOnce(&mut SysData) -> T) -> T {
-        self.levels.with_sys_data(f)
+        self.leveled_map.with_sys_data(f)
     }
 
-    pub fn into_levels(self) -> LeveledMap {
-        self.levels
+    pub fn into_leveled_map(self) -> LeveledMap {
+        self.leveled_map
     }
 
-    pub fn levels(&self) -> &LeveledMap {
-        &self.levels
+    pub fn leveled_map(&self) -> &LeveledMap {
+        &self.leveled_map
     }
 
     pub fn levels_mut(&mut self) -> &mut LeveledMap {
@@ -276,19 +276,26 @@ impl SMV003 {
     }
 
     /// Get a singleton `Compactor` instance specific to `self`.
-    pub async fn acquire_compactor(&self) -> Compactor {
-        let permit = self.new_compactor_acquirer().acquire().await;
+    pub async fn acquire_compactor(&self, name: impl ToString) -> Compactor {
+        let permit = self.new_compactor_acquirer(name).acquire().await;
         self.new_compactor(permit)
     }
 
     pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        let immutable_data = self.leveled_map.immutable_data();
+
+        info!(
+            "new_compactor: with immutable data: {}",
+            immutable_data.stat()
+        );
+
         Compactor {
             _permit: permit,
-            compacting_data: self.levels.new_compacting_data(),
+            immutable_data,
         }
     }
 
-    pub fn new_compactor_acquirer(&self) -> CompactorAcquirer {
-        CompactorAcquirer::new(self.compaction_semaphore.clone())
+    pub fn new_compactor_acquirer(&self, name: impl ToString) -> CompactorAcquirer {
+        CompactorAcquirer::new(self.compaction_semaphore.clone(), name)
     }
 }

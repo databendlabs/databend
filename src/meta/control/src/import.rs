@@ -198,10 +198,10 @@ async fn init_new_cluster(
 
     let raft_config: RaftConfig = args.clone().into();
 
-    let mut sto = RaftStore::open(&raft_config).await?;
+    let sto = RaftStore::open(&raft_config).await?;
 
     let last_applied = {
-        let sm2 = sto.state_machine();
+        let sm2 = sto.get_sm_v003();
         *sm2.sys_data().last_applied_ref()
     };
 
@@ -213,7 +213,7 @@ async fn init_new_cluster(
 
     // Update snapshot: Replace nodes set and membership config.
     {
-        let sm2 = sto.state_machine();
+        let sm2 = sto.get_sm_v003();
 
         // It must set membership to state machine because
         // the snapshot may contain more logs than the last_log_id.
@@ -225,7 +225,7 @@ async fn init_new_cluster(
     }
 
     // Build snapshot to persist state machine.
-    sto.build_snapshot().await?;
+    sto.state_machine().clone().build_snapshot().await?;
 
     // Update logs: add nodes and override membership
     {
@@ -237,7 +237,8 @@ async fn init_new_cluster(
             payload: EntryPayload::Membership(membership),
         };
 
-        sto.blocking_append([entry]).await?;
+        let mut log = sto.log().clone();
+        log.blocking_append([entry]).await?;
 
         // insert AddNodes logs
         for (node_id, node) in nodes {
@@ -254,13 +255,13 @@ async fn init_new_cluster(
                 payload: EntryPayload::Normal(LogEntry::new(cmd)),
             };
 
-            sto.blocking_append([entry]).await?;
+            log.blocking_append([entry]).await?;
         }
     }
 
     // Reset node id
     {
-        let mut log = sto.log.write().await;
+        let mut log = sto.log().write().await;
         log.save_user_data(Some(raft_log_v004::LogStoreMeta {
             node_id: Some(args.id),
         }))?;

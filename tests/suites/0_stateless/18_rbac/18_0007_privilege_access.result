@@ -114,10 +114,10 @@ Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table roo
 Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table root_table for user b.
 1	1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 0
 1

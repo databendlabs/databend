@@ -110,6 +110,11 @@ impl AttachTableHandler for RealAttachTableHandler {
         };
         let req = CreateTableReq {
             create_option: plan.create_option,
+            catalog_name: if plan.create_option.is_overriding() {
+                Some(plan.catalog.to_string())
+            } else {
+                None
+            },
             name_ident: TableNameIdent {
                 tenant: plan.tenant.clone(),
                 db_name: plan.database.to_string(),

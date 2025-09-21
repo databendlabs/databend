@@ -206,10 +206,13 @@ impl UserApiProvider {
         // We can allow grant connection|seq to user in 2026.07
         if matches!(
             object,
-            GrantObject::Warehouse(_) | GrantObject::Connection(_) | GrantObject::Sequence(_)
+            GrantObject::Warehouse(_)
+                | GrantObject::Connection(_)
+                | GrantObject::Sequence(_)
+                | GrantObject::Procedure(_)
         ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse|connection|Sequence privileges to user `{}`",
+                "Cannot grant warehouse|connection|Sequence|Procedure privileges to user `{}`",
                 user.username
             )));
         }
@@ -256,7 +259,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn grant_role_to_user(
         &self,
-        tenant: Tenant,
+        tenant: &Tenant,
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
@@ -266,7 +269,7 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.user_api(&tenant);
+        let client = self.user_api(tenant);
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_user_time();

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::DerefMut;
@@ -35,13 +36,15 @@ use super::inner::*;
 use super::serialize::*;
 use super::Location;
 use crate::sessions::QueryContext;
+use crate::spillers::block_reader::BlocksReader;
+use crate::spillers::block_writer::BlocksWriter;
 
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
     private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
     /// 1 partition -> N partition files
-    partition_location: HashMap<usize, Vec<Location>>,
+    partition_location: HashMap<usize, Vec<(Location, usize, usize)>>,
 }
 
 impl SpillAdapter for PartitionAdapter {
@@ -81,12 +84,21 @@ impl Spiller {
         self.adapter.partition_location.keys().copied().collect()
     }
 
+    pub fn partition_blocks_reader(&mut self, id: &usize) -> BlocksReader<'_> {
+        let locations: &[_] = match self.adapter.partition_location.get(id) {
+            None => &[],
+            Some(locations) => locations,
+        };
+
+        BlocksReader::new(locations, self.operator.clone())
+    }
+
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, p_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(p_id) {
+    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
-            for loc in locs.iter() {
+            for (loc, _data_size, _blocks_num) in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;
 
                 if block.num_rows() != 0 {
@@ -99,8 +111,42 @@ impl Spiller {
         }
     }
 
-    pub fn get_partition_locations(&self, partition_id: &usize) -> Option<&Vec<Location>> {
-        self.adapter.partition_location.get(partition_id)
+    pub fn get_partition_locations(&self, partition_id: &usize) -> Option<Vec<Location>> {
+        let locations = self.adapter.partition_location.get(partition_id)?;
+        Some(locations.iter().map(|(loc, _, _)| loc.clone()).collect())
+    }
+
+    pub async fn block_stream_writer(&mut self) -> Result<BlocksWriter> {
+        let location = self.create_unique_location();
+        let writer = self.operator.writer_with(&location).await?;
+        Ok(BlocksWriter::create(writer, Location::Remote(location)))
+    }
+
+    pub fn inc_progress(&self, progress_val: ProgressValues) {
+        self.adapter
+            .ctx
+            .get_join_spill_progress()
+            .incr(&progress_val);
+    }
+
+    pub fn add_hash_join_location(
+        &mut self,
+        partition: usize,
+        location: Location,
+        block_num: usize,
+        data_size: usize,
+    ) {
+        self.adapter
+            .add_spill_file(location.clone(), Layout::Parquet, data_size);
+
+        if let Some(v) = self.adapter.partition_location.get_mut(&partition) {
+            v.push((location, data_size, block_num));
+            return;
+        }
+
+        self.adapter
+            .partition_location
+            .insert(partition, vec![(location, data_size, block_num)]);
     }
 
     #[async_backtrace::framed]
@@ -122,13 +168,15 @@ impl Spiller {
         };
 
         let location = self.spill(data).await?;
-        self.adapter
-            .partition_location
-            .entry(partition_id)
-            .and_modify(|locs| {
-                locs.push(location.clone());
-            })
-            .or_insert(vec![location.clone()]);
+
+        match self.adapter.partition_location.entry(partition_id) {
+            Entry::Vacant(v) => {
+                v.insert(vec![(location, 0, 0)]);
+            }
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().push((location, 0, 0));
+            }
+        };
 
         self.adapter
             .ctx

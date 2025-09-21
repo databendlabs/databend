@@ -31,20 +31,20 @@ use log::error;
 use log::info;
 
 use crate::metrics::raft_metrics;
-use crate::store::RaftStore;
+use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 
-impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
+impl RaftSnapshotBuilder<TypeConfig> for MetaRaftStateMachine {
     #[fastrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
     }
 }
 
-impl RaftStateMachine<TypeConfig> for RaftStore {
-    type SnapshotBuilder = RaftStore;
+impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
+    type SnapshotBuilder = MetaRaftStateMachine;
 
     async fn applied_state(&mut self) -> Result<(Option<LogId>, StoredMembership), StorageError> {
-        let sm = self.state_machine();
+        let sm = self.get_inner();
         let last_applied = *sm.sys_data().last_applied_ref();
         let last_membership = sm.sys_data().last_membership_ref().clone();
 
@@ -62,7 +62,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         I: IntoIterator<Item = Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
-        let sm = self.state_machine();
+        let sm = self.get_inner();
         let res = sm.apply_entries(entries).await?;
 
         Ok(res)
@@ -94,7 +94,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
 
         let sig = meta.signature();
 
-        let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
+        let ss_store = SnapshotStoreV004::new(self.config.as_ref().clone());
         let (storage_path, rel_path) = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())
@@ -104,7 +104,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
             storage_path,
             rel_path,
             meta.snapshot_id.clone(),
-            self.inner.config.to_rotbl_config(),
+            self.config.to_rotbl_config(),
         )
         .map_err(|e| StorageError::read_snapshot(Some(sig.clone()), &e))?;
 
@@ -127,8 +127,8 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
 
-        let r = self.state_machine();
-        let db = r.levels().persisted();
+        let r = self.get_inner();
+        let db = r.leveled_map().persisted();
 
         let snapshot = db.map(|x| Snapshot {
             meta: x.snapshot_meta().clone(),

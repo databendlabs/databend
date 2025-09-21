@@ -88,12 +88,20 @@ impl SysData {
         self.data_seq.unwrap()
     }
 
+    pub fn last_applied(&self) -> &Option<LogId> {
+        &self.last_applied
+    }
+
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
         &mut self.last_applied
     }
 
     pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
         &mut self.last_membership
+    }
+
+    pub fn nodes(&self) -> &BTreeMap<NodeId, Node> {
+        &self.nodes
     }
 
     pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {

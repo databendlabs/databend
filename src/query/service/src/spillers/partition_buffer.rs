@@ -20,10 +20,6 @@ pub enum PartitionBufferFetchOption {
     ReadPartition,
     /// Pick data from the partition when the available data reaches or exceeds a certain threshold.
     PickPartitionWithThreshold(usize),
-    /// Pick one data block from the partition.
-    PickOneDataBlock,
-    /// Pick at least `usize` bytes from the partition.
-    PickPartitionBytes(usize),
 }
 
 // The PartitionBuffer is used to buffer partitioned data blocks in the HashJoin and Window operator.
@@ -74,31 +70,6 @@ impl PartitionBuffer {
                 } else {
                     None
                 }
-            }
-            PartitionBufferFetchOption::PickOneDataBlock => {
-                if let Some(data_block) = self.partition_data[partition_id].pop() {
-                    let memory_size = data_block.memory_size();
-                    self.memory_size -= memory_size;
-                    self.partition_size[partition_id] -= memory_size;
-                    Some(vec![data_block])
-                } else {
-                    None
-                }
-            }
-            PartitionBufferFetchOption::PickPartitionBytes(required_bytes) => {
-                let partition_data = &mut self.partition_data[partition_id];
-                let mut accumulated_bytes = 0;
-                let mut data_blocks = Vec::new();
-                while let Some(data_block) = partition_data.pop() {
-                    accumulated_bytes += data_block.memory_size();
-                    data_blocks.push(data_block);
-                    if accumulated_bytes >= *required_bytes {
-                        break;
-                    }
-                }
-                self.memory_size -= accumulated_bytes;
-                self.partition_size[partition_id] -= accumulated_bytes;
-                Some(data_blocks)
             }
         };
         Ok(data_blocks)

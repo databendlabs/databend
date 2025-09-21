@@ -14,6 +14,7 @@
 
 pub mod db_builder;
 pub mod db_exporter;
+pub mod get_sub_table;
 pub mod immutable;
 pub mod immutable_levels;
 pub mod level;
@@ -29,10 +30,14 @@ pub mod util;
 pub mod value_convert;
 pub mod view;
 
+#[cfg(test)]
+pub(crate) mod testing_data;
+
 mod db_impl_scoped_seq_bounded_read;
 mod db_open_snapshot_impl;
 #[cfg(test)]
 mod db_scoped_seq_bounded_read_test;
+pub mod immutable_data;
 mod key_spaces_impl;
 mod rotbl_seq_mark_impl;
 

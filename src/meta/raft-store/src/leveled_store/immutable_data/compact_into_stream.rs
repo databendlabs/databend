@@ -14,102 +14,26 @@
 
 use std::fmt;
 use std::io;
-use std::ops::Deref;
-use std::sync::Arc;
 
-use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use map_api::mvcc;
 use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::IOResultStream;
 use map_api::MapKV;
-use rotbl::v001::SeqMarked;
+use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
 use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
-use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::immutable_data::ImmutableData;
+use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::utils::add_cooperative_yielding;
 
-/// The data to compact.
-///
-/// Including several in-memory immutable levels and an optional persisted db.
-#[derive(Debug)]
-pub(crate) struct CompactingData {
-    pub(crate) immutable: Arc<ImmutableData>,
-}
-
-impl Deref for CompactingData {
-    type Target = Arc<ImmutableData>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.immutable
-    }
-}
-
-impl CompactingData {
-    pub fn new(immutable: Arc<ImmutableData>) -> Self {
-        Self { immutable }
-    }
-
-    // Testing only
-    #[allow(dead_code)]
-    pub(crate) fn new_from_levels_and_persisted(
-        levels: ImmutableLevels,
-        persisted: Option<DB>,
-    ) -> Self {
-        let immutable = ImmutableData::new(levels, persisted);
-        Self {
-            immutable: Arc::new(immutable),
-        }
-    }
-
-    /// Compact in-memory immutable levels(excluding on disk db)
-    /// into one level and keep tombstone record.
-    ///
-    /// When compact mem levels, do not remove tombstone,
-    /// because tombstones are still required when compacting with the underlying db.
-    ///
-    /// This is only used for test
-    pub async fn compact_immutable_in_place(&mut self) -> Result<(), io::Error> {
-        // TODO: test: after compaction in place, the data should be the same, the base_seq and newest_seq should be the same.
-        let immutable_levels = self.immutable.levels().clone();
-
-        let Some(newest) = immutable_levels.newest() else {
-            return Ok(());
-        };
-
-        // Create an empty level with SysData cloned.
-        let mut data = newest.new_level();
-
-        // Copy all expire data and keep tombstone.
-        let strm = immutable_levels
-            .range(ExpireKey::default().., u64::MAX)
-            .await?;
-        let table = mvcc::Table::from_stream(strm).await?;
-        data.replace_expire(table);
-
-        // Copy all kv data and keep tombstone.
-        let strm = immutable_levels
-            .range(UserKey::default().., u64::MAX)
-            .await?;
-        let table = mvcc::Table::from_stream(strm).await?;
-        data.replace_kv(table);
-
-        let levels = ImmutableLevels::new_form_iter([Immutable::new_from_level(data)]);
-        let immutable = ImmutableData::new(levels, self.immutable.persisted().cloned());
-        self.immutable = Arc::new(immutable);
-        Ok(())
-    }
-
+impl ImmutableData {
     /// Compacted all data into a stream.
     ///
     /// Tombstones are removed because no more compact with lower levels.
@@ -119,6 +43,7 @@ impl CompactingData {
     /// The stream Item is 2 items tuple of key, and value with seq.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
+    // TODO: mvcc snapshot_seq
     pub async fn compact_into_stream(
         &self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
@@ -129,10 +54,10 @@ impl CompactingData {
             )
         }
 
-        let immutable_levels = self.immutable.levels();
+        let immutable_levels = self.levels();
         let d = immutable_levels.newest().unwrap();
 
-        let sys_data = d.with_sys_data(|s| s.clone());
+        let sys_data = d.sys_data().clone();
 
         // expire index: prefix `exp-/`.
 
@@ -163,7 +88,7 @@ impl CompactingData {
         let mut kmerge = KMerge::by(util::rotbl_by_key_seq);
         kmerge = kmerge.merge(strm);
 
-        if let Some(db) = self.immutable.persisted() {
+        if let Some(db) = self.persisted() {
             let db_strm = db.inner_range();
             kmerge = kmerge.merge(db_strm);
         }
@@ -176,5 +101,71 @@ impl CompactingData {
         let normal_strm = add_cooperative_yielding(normal_strm, "compact");
 
         Ok((sys_data, normal_strm.boxed()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::leveled_store::testing_data::build_2_levels_leveled_map_with_expire;
+    use crate::leveled_store::testing_data::build_3_levels_leveled_map;
+
+    #[tokio::test]
+    async fn test_compact_3_level() -> anyhow::Result<()> {
+        let lm = build_3_levels_leveled_map().await?;
+        println!("{:#?}", lm);
+
+        lm.freeze_writable_without_permit();
+
+        let immutable_data = lm.immutable_data();
+
+        let (sys_data, strm) = immutable_data.compact_into_stream().await?;
+        assert_eq!(
+            r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7,"data_seq":2}"#,
+            serde_json::to_string(&sys_data).unwrap()
+        );
+
+        let got = strm
+            .map_ok(|x| serde_json::to_string(&x).unwrap())
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        assert_eq!(got, vec![
+            r#"["kv--/a",{"seq":1,"marked":{"Normal":[1,4,110,117,108,108,2,97,48]}}]"#,
+            r#"["kv--/d",{"seq":7,"marked":{"Normal":[1,4,110,117,108,108,2,100,50]}}]"#,
+            r#"["kv--/e",{"seq":6,"marked":{"Normal":[1,4,110,117,108,108,2,101,49]}}]"#,
+        ]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
+        let leveled_map = build_2_levels_leveled_map_with_expire().await?;
+        leveled_map.freeze_writable_without_permit();
+
+        let immutable_data = leveled_map.immutable_data();
+
+        let (sys_data, strm) = immutable_data.compact_into_stream().await?;
+        let got = strm
+            .map_ok(|x| serde_json::to_string(&x).unwrap())
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        assert_eq!(
+            r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4,"data_seq":1}"#,
+            serde_json::to_string(&sys_data).unwrap()
+        );
+
+        assert_eq!(got, vec![
+            r#"["exp-/00000000000000005000/00000000000000000002",{"seq":2,"marked":{"Normal":[1,4,110,117,108,108,1,98]}}]"#,
+            r#"["exp-/00000000000000015000/00000000000000000004",{"seq":4,"marked":{"Normal":[1,4,110,117,108,108,1,97]}}]"#,
+            r#"["exp-/00000000000000020000/00000000000000000003",{"seq":3,"marked":{"Normal":[1,4,110,117,108,108,1,99]}}]"#,
+            r#"["kv--/a",{"seq":4,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,49,53,125,2,97,49]}}]"#,
+            r#"["kv--/b",{"seq":2,"marked":{"Normal":[1,15,123,34,101,120,112,105,114,101,95,97,116,34,58,53,125,2,98,48]}}]"#,
+            r#"["kv--/c",{"seq":3,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,50,48,125,2,99,48]}}]"#,
+        ]);
+
+        Ok(())
     }
 }

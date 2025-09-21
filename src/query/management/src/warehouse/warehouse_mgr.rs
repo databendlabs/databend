@@ -26,6 +26,7 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::txn_op_response::Response;

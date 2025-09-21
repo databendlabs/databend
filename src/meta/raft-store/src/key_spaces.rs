@@ -12,8 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines application key spaces that are defined by raft-store.
-//! All the key spaces stores key-value pairs in the underlying sled db.
+//! Storage partitioning by data type with unique prefixes.
+//!
+//! Each key space stores a specific data type:
+//! - **Logs** (V003): Raft log entries by index
+//! - **Nodes**: Cluster membership by node ID
+//! - **StateMachineMeta**: Last applied log and metadata
+//! - **RaftStateKV** (V003): Node state (ID, vote, committed log)
+//! - **Expire**: TTL expiration index by time
+//! - **GenericKV**: User data with sequence numbers
+//! - **Sequences**: Monotonic sequence generators
+//! - **LogMeta** (V003): Log metadata for purging
+//!
+//! V003 uses sled storage (legacy), V004 uses separate raft log with leveled state machine.
 
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledKeySpace;
@@ -42,7 +53,12 @@ use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
-/// Types for raft log in SledTree
+/// Raft log entries storage key space (V003 only).
+///
+/// Maps log index to raft entries. In V004, logs are stored separately
+/// in WAL format for better performance.
+/// - Key: [`LogIndex`] (u64) - Sequential log entry index
+/// - Value: [`Entry`] - Complete raft log entry with payload
 pub struct Logs {}
 impl SledKeySpace for Logs {
     const PREFIX: u8 = 1;
@@ -51,7 +67,12 @@ impl SledKeySpace for Logs {
     type V = Entry;
 }
 
-/// Types for raft log meta data in SledTree
+/// Log metadata storage key space (V003 only).
+///
+/// Stores metadata about raft logs for purging and management.
+/// Used to track log ranges and cleanup operations.
+/// - Key: [`LogMetaKey`] - Metadata type identifier
+/// - Value: [`LogMetaValue`] - Log metadata information
 pub struct LogMeta {}
 impl SledKeySpace for LogMeta {
     const PREFIX: u8 = 13;
@@ -60,7 +81,12 @@ impl SledKeySpace for LogMeta {
     type V = LogMetaValue;
 }
 
-/// Types for Node in SledTree
+/// Cluster node information storage key space.
+///
+/// Maps node IDs to node configuration and endpoint information.
+/// Used for cluster membership management and node discovery.
+/// - Key: [`NodeId`] (u64) - Unique node identifier
+/// - Value: [`Node`] - Node configuration with endpoint and metadata
 pub struct Nodes {}
 impl SledKeySpace for Nodes {
     const PREFIX: u8 = 2;
@@ -69,7 +95,12 @@ impl SledKeySpace for Nodes {
     type V = Node;
 }
 
-/// Key-Value Types for storing meta data of a raft state machine in sled::Tree, e.g. the last applied log id.
+/// State machine metadata storage key space.
+///
+/// Stores critical state machine metadata like last applied log ID
+/// and other operational state required for consistency.
+/// - Key: [`StateMachineMetaKey`] - Metadata type identifier
+/// - Value: [`StateMachineMetaValue`] - State machine metadata
 pub struct StateMachineMeta {}
 impl SledKeySpace for StateMachineMeta {
     const PREFIX: u8 = 3;
@@ -78,8 +109,12 @@ impl SledKeySpace for StateMachineMeta {
     type V = StateMachineMetaValue;
 }
 
-/// Key-Value Types for storing meta data of a raft in sled::Tree:
-/// node_id, vote
+/// Raft consensus state storage key space (V003 only).
+///
+/// Stores core raft state including node ID, vote information,
+/// and committed log index. Critical for raft consensus protocol.
+/// - Key: [`RaftStateKey`] - State type identifier
+/// - Value: [`RaftStateValue`] - Raft state data
 pub struct RaftStateKV {}
 impl SledKeySpace for RaftStateKV {
     const PREFIX: u8 = 4;
@@ -88,9 +123,12 @@ impl SledKeySpace for RaftStateKV {
     type V = RaftStateValue;
 }
 
-/// Stores a index for kv records with expire time.
+/// TTL expiration index storage key space.
 ///
-/// It stores them in expire time order.
+/// Secondary index for records with expiration times, ordered by expire time.
+/// Enables efficient cleanup of expired entries during log application.
+/// - Key: [`ExpireKey`] - Expiration time and sequence
+/// - Value: [`ExpireValue`] - Original key that expires
 pub struct Expire {}
 impl SledKeySpace for Expire {
     const PREFIX: u8 = 5;
@@ -99,7 +137,12 @@ impl SledKeySpace for Expire {
     type V = ExpireValue;
 }
 
-/// Key-Value Types for storing general purpose kv in sled::Tree:
+/// User data storage key space.
+///
+/// Primary storage for application key-value data with sequence numbers
+/// for versioning and consistency. Supports TTL and conditional operations.
+/// - Key: [`String`] - User-defined key
+/// - Value: [`SeqV<Vec<u8>>`] - Sequenced value with metadata
 pub struct GenericKV {}
 impl SledKeySpace for GenericKV {
     const PREFIX: u8 = 6;
@@ -108,7 +151,12 @@ impl SledKeySpace for GenericKV {
     type V = SeqV<Vec<u8>>;
 }
 
-/// Key-Value Types for sequence number generator in sled::Tree:
+/// Monotonic sequence generator storage key space.
+///
+/// Provides atomic sequence number generation for various purposes
+/// like auto-incrementing IDs and sequential key generation.
+/// - Key: [`String`] - Sequence name identifier
+/// - Value: [`SeqNum`] - Current sequence number
 pub struct Sequences {}
 impl SledKeySpace for Sequences {
     const PREFIX: u8 = 7;
@@ -119,6 +167,12 @@ impl SledKeySpace for Sequences {
 
 // Reserved: removed: `pub struct ClientLastResps {}`, PREFIX = 10;
 
+/// Storage metadata header key space.
+///
+/// Stores version information and metadata about the storage format
+/// for compatibility checking and data migration purposes.
+/// - Key: [`String`] - Header type identifier
+/// - Value: [`Header`] - Storage format metadata
 pub struct DataHeader {}
 impl SledKeySpace for DataHeader {
     const PREFIX: u8 = 11;

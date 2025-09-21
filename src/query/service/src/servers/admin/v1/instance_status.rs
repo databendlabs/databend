@@ -40,6 +40,8 @@ pub struct InstanceStatus {
     pub instance_started_at: u64,
     // the local timestamp, may be useful to avoid the clock drift issues
     pub instance_timestamp: u64,
+    // the timestamp on last valid request to /v1/query
+    pub last_query_request_at: Option<u64>,
 }
 
 // lightweight way to get status
@@ -59,6 +61,7 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
         max_running_query_executed_secs: status.max_running_query_executed_secs,
         instance_started_at: unix_timestamp_secs(status.instance_started_at),
         instance_timestamp: unix_timestamp_secs(SystemTime::now()),
+        last_query_request_at: status.last_query_request_at,
     };
     Ok(Json(status))
 }

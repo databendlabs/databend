@@ -430,14 +430,11 @@ impl Processor for TransformHashJoinProbe {
                     .partition_id
                     .load(Ordering::Acquire);
                 build_spilled_partitions.insert(next_partition_id_to_restore);
+                let data_blocks = std::mem::take(&mut self.data_blocks_need_to_spill);
                 let unspilled_data_blocks = self
                     .spiller
-                    .spill(
-                        &self.data_blocks_need_to_spill,
-                        Some(&build_spilled_partitions),
-                    )
+                    .spill(data_blocks, Some(&build_spilled_partitions))
                     .await?;
-                self.data_blocks_need_to_spill.clear();
                 if !self.can_fast_return() {
                     Self::add_split_data_blocks(
                         &mut self.unspilled_data_blocks_need_to_probe,
