@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::group_hash_columns;
@@ -174,12 +173,14 @@ impl AggregateHashTable {
         {
             for (i, group_column) in group_columns.iter().enumerate() {
                 if group_column.data_type() != self.payload.group_types[i] {
-                    return Err(ErrorCode::UnknownException(format!(
-                        "group_column type not match in index {}, expect: {:?}, actual: {:?}",
-                        i,
-                        self.payload.group_types[i],
-                        group_column.data_type()
-                    )));
+                    return Err(databend_common_exception::ErrorCode::UnknownException(
+                        format!(
+                            "group_column type not match in index {}, expect: {:?}, actual: {:?}",
+                            i,
+                            self.payload.group_types[i],
+                            group_column.data_type()
+                        ),
+                    ));
                 }
             }
         }
