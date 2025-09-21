@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod adapter;
+mod async_buffer;
 mod block_reader;
 mod block_writer;
 mod inner;
