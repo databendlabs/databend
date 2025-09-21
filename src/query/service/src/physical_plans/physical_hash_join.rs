@@ -28,7 +28,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
@@ -50,7 +54,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::HashJoinProbeState;
+use crate::pipelines::processors::transforms::{HashJoinProbeState, TransformHashJoin};
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinBuildState;
@@ -246,6 +250,11 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
+        if self.join_type == JoinType::Inner && experimental_new_join {
+            return self.build_new_join_pipeline(builder);
+        }
+
         // Create the join state with optimization flags
         let state = self.build_state(builder)?;
 
@@ -363,6 +372,59 @@ impl HashJoin {
             .pipelines
             .push(build_res.main_pipeline.finalize(None));
         builder.pipelines.extend(build_res.sources_pipelines);
+        Ok(())
+    }
+
+    fn build_new_join_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.build.build_pipeline(builder)?;
+        let mut build_sinks = builder.main_pipeline.take_sinks();
+
+        self.probe.build_pipeline(builder)?;
+
+        // Aligning hash join build and probe parallelism
+        let output_len = std::cmp::max(build_sinks.len(), builder.main_pipeline.output_len());
+        builder.main_pipeline.resize(output_len, false)?;
+
+        let probe_sinks = builder.main_pipeline.take_sinks();
+
+        if output_len != build_sinks.len() {
+            builder.main_pipeline.extend_sinks(build_sinks);
+            builder.main_pipeline.resize(output_len, false)?;
+            build_sinks = builder.main_pipeline.take_sinks();
+        }
+
+        debug_assert_eq!(build_sinks.len(), probe_sinks.len());
+
+        // let params = JoinParams::create();
+        // let settings = JoinSettings::create();
+
+        let mut join_sinks = Vec::with_capacity(output_len * 2);
+        let mut join_pipe_items = Vec::with_capacity(output_len);
+        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
+            join_sinks.push(build_sink);
+            join_sinks.push(probe_sink);
+
+            let build_input = InputPort::create();
+            let probe_input = InputPort::create();
+            let joined_output = OutputPort::create();
+            let hash_join = TransformHashJoin::create(
+                build_input.clone(),
+                probe_input.clone(),
+                joined_output.clone(),
+                // params.clone(),
+                // settings.clone(),
+            );
+
+            join_pipe_items.push(PipeItem::create(
+                hash_join,
+                vec![build_input, probe_input],
+                vec![joined_output],
+            ))
+        }
+
+        builder.main_pipeline.extend_sinks(join_sinks);
+        let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
+        builder.main_pipeline.add_pipe(join_pipe);
         Ok(())
     }
 }

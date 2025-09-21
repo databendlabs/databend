@@ -42,6 +42,7 @@ mod transform_srf;
 mod transform_udf_script;
 mod transform_udf_server;
 mod window;
+mod new_hash_join;
 
 pub use broadcast::BroadcastSinkProcessor;
 pub use broadcast::BroadcastSourceProcessor;
@@ -77,3 +78,5 @@ pub use transform_srf::TransformSRF;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;
+
+pub use new_hash_join::TransformHashJoin;
