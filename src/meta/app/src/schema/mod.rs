@@ -48,7 +48,9 @@ mod ownership;
 mod sequence;
 mod table;
 
-pub use auto_incremnt::*;
+pub use auto_incremnt::AutoIncrementIdent;
+pub use auto_incremnt::AutoIncrementMeta;
+pub use auto_incremnt::AutoIncrementRsc;
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
 pub use catalog_id_to_name_ident::CatalogIdToNameIdent;

@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;

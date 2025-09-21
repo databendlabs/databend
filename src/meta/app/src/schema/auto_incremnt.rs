@@ -22,6 +22,8 @@ use crate::schema::SequenceMeta;
 use crate::tenant_key::ident::TIdent;
 use crate::KeyWithTenant;
 
+/// AutoIncrementIdent is the Ident of Sequence in AutoIncrement,
+/// which is used to distinguish SequenceIdent and manage resource recycling and show meta separately.
 pub type AutoIncrementIdent = TIdent<AutoIncrementRsc, AutoIncrementKey>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,5 +62,26 @@ mod kvapi_impl {
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_kvapi::kvapi::Key;
+
+    use crate::principal::AutoIncrementKey;
+    use crate::schema::AutoIncrementIdent;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_auto_increment_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let key = AutoIncrementKey::new(2, 3);
+        let ident = AutoIncrementIdent::new_generic(tenant, key);
+
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_auto_increment/dummy/2/3");
+
+        assert_eq!(ident, AutoIncrementIdent::from_str_key(&key).unwrap());
     }
 }

@@ -554,8 +554,7 @@ async fn remove_data_for_dropped_table(
         let dir_name = DirName::new(AutoIncrementIdent::new_generic(tenant, auto_increment_key));
         let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
 
-        while let Some(auto_increment_ident) = auto_increments.next().await {
-            let auto_increment_ident = auto_increment_ident?;
+        while let Some(auto_increment_ident) = auto_increments.try_next().await? {
             let storage_ident = auto_increment_ident.to_storage_ident();
 
             txn.condition
