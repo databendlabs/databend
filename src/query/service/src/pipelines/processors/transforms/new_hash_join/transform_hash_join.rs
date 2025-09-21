@@ -15,16 +15,30 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_pipeline_core::processors::{Event, InputPort, Processor};
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+
+use crate::pipelines::processors::transforms::new_hash_join::join::Join;
+
+enum Stage {
+    Build,
+    BuildFinal,
+    Probe,
+    ProbeFinal,
+}
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,
     probe_port: Arc<InputPort>,
 
     joined_port: Arc<OutputPort>,
+
+    stage: Stage,
+    join: Box<dyn Join>,
 }
 
 impl TransformHashJoin {
@@ -41,6 +55,7 @@ impl TransformHashJoin {
     }
 }
 
+#[async_trait::async_trait]
 impl Processor for TransformHashJoin {
     fn name(&self) -> String {
         String::from("TransformHashJoin")
@@ -51,6 +66,32 @@ impl Processor for TransformHashJoin {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if self.joined_port.is_finished() {
+            self.build_port.finish();
+            self.probe_port.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.joined_port.can_push() {
+            match self.stage {
+                Stage::Build => self.build_port.set_not_need_data(),
+                Stage::Probe => self.probe_port.set_not_need_data(),
+                Stage::BuildFinal | Stage::ProbeFinal => (),
+            }
+
+            return Ok(Event::NeedConsume);
+        }
+
+        if !self.build_port.is_finished() {
+            // build stage
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        todo!()
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
         todo!()
     }
 }

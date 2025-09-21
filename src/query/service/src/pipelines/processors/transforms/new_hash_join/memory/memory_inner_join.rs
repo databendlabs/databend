@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
+use crate::pipelines::processors::HashJoinDesc;
 
-pub struct MemoryInnerJoin {}
+pub struct MemoryInnerJoin {
+    desc: Arc<HashJoinDesc>,
+}
 
 impl MemoryInnerJoin {
     pub fn create() -> Box<dyn Join> {
