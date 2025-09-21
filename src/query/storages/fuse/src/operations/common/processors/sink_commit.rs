@@ -599,7 +599,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             self.ctx.add_written_segment_location(segment_loc)?;
                         }
 
-                        self.ctx.set_enable_auto_analyze(enable_auto_analyze);
+                        if enable_auto_analyze {
+                            self.ctx.set_enable_auto_analyze(true);
+                        }
                         let target_descriptions = {
                             let table_info = self.table.get_table_info();
                             let tbl = (&table_info.name, table_info.ident, &table_info.meta.engine);

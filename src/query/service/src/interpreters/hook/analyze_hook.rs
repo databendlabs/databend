@@ -81,6 +81,7 @@ async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
         HashMap::new(),
         true,
     )?;
+    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
     let pipelines = vec![pipeline];
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;

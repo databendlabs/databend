@@ -150,6 +150,8 @@ impl Interpreter for SetOptionsInterpreter {
             options_map.insert(key, Some(table_option.1.clone()));
         }
 
+        let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
+
         let table_version = table.get_table_info().ident.seq;
         if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
             let change_tracking = value.to_lowercase().parse::<bool>()?;
@@ -177,12 +179,6 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_SNAPSHOT_LOCATION.to_string(),
                 Some(new_snapshot_location),
             );
-        }
-
-        if let Some(value) =
-            analyze_table(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
-        {
-            options_map.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(), Some(value));
         }
 
         let req = UpsertTableOptionReq {
@@ -294,9 +290,9 @@ async fn analyze_table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     options: &BTreeMap<String, String>,
-) -> Result<Option<String>> {
+) -> Result<Arc<dyn Table>> {
     let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE).cloned() else {
-        return Ok(None);
+        return Ok(table);
     };
 
     let val = value.parse::<u32>().map_err(|e| {
@@ -306,10 +302,9 @@ async fn analyze_table(
         ErrorCode::TableOptionInvalid(msg)
     })?;
     if val == 0 {
-        return Ok(Some(value));
+        return Ok(table);
     }
 
-    let table = table.refresh(ctx.as_ref()).await?;
     let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) else {
         return Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support {}",
@@ -319,7 +314,7 @@ async fn analyze_table(
         )));
     };
     let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
-        return Ok(Some(value));
+        return Ok(table);
     };
 
     let mut pipeline = Pipeline::create();
@@ -330,10 +325,12 @@ async fn analyze_table(
         HashMap::new(),
         false,
     )?;
+    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
     let pipelines = vec![pipeline];
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(complete_executor.get_inner())?;
     complete_executor.execute()?;
-    Ok(Some(value))
+    let table = table.refresh(ctx.as_ref()).await?;
+    Ok(table)
 }
