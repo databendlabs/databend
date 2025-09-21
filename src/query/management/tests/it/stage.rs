@@ -25,7 +25,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_version::BUILD_INFO;

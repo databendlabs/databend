@@ -21,6 +21,7 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
 use log::info;
