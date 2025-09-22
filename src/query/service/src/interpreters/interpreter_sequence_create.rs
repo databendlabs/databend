@@ -55,7 +55,7 @@ impl Interpreter for CreateSequenceInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = CreateSequenceReq {
             create_option: self.plan.create_option,
-            ident: SequenceIdentType::Normal(self.plan.ident.clone()),
+            ident: SequenceIdentType::Sequence(self.plan.ident.clone()),
             start: self.plan.start,
             increment: self.plan.increment,
             comment: self.plan.comment.clone(),

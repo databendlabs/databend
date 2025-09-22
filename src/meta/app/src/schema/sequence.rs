@@ -23,7 +23,6 @@ pub use kvapi_impl::SequenceRsc;
 use super::AutoIncrementIdent;
 use super::CreateOption;
 use crate::app_error::SequenceError;
-use crate::schema::sequence_storage::SequenceStorageIdent;
 use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 
@@ -86,21 +85,21 @@ pub struct CreateSequenceReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq, derive_more::Display)]
 pub enum SequenceIdentType {
-    Normal(SequenceIdent),
+    Sequence(SequenceIdent),
     AutoIncrement(AutoIncrementIdent),
 }
 
 impl SequenceIdentType {
     pub fn name(&self) -> Cow<String> {
         match self {
-            SequenceIdentType::Normal(ident) => Cow::Borrowed(ident.name()),
+            SequenceIdentType::Sequence(ident) => Cow::Borrowed(ident.name()),
             SequenceIdentType::AutoIncrement(ident) => Cow::Owned(format!("{:?}", ident.name())),
         }
     }
 
     pub fn unknown_error(&self, ctx: impl Display) -> SequenceError {
         match self {
-            SequenceIdentType::Normal(ident) => {
+            SequenceIdentType::Sequence(ident) => {
                 SequenceError::UnknownSequence(ident.unknown_error(ctx))
             }
             SequenceIdentType::AutoIncrement(ident) => {
@@ -111,19 +110,12 @@ impl SequenceIdentType {
 
     pub fn exist_error(&self, ctx: impl Display) -> SequenceError {
         match self {
-            SequenceIdentType::Normal(ident) => {
+            SequenceIdentType::Sequence(ident) => {
                 SequenceError::SequenceAlreadyExists(ident.exist_error(ctx))
             }
             SequenceIdentType::AutoIncrement(ident) => {
                 SequenceError::AutoIncrementAlreadyExists(ident.exist_error(ctx))
             }
-        }
-    }
-
-    pub fn to_storage_ident(&self) -> SequenceStorageIdent {
-        match self {
-            SequenceIdentType::Normal(ident) => SequenceStorageIdent::new_from(ident.clone()),
-            SequenceIdentType::AutoIncrement(ident) => ident.to_storage_ident(),
         }
     }
 }

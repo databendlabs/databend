@@ -129,7 +129,7 @@ pub async fn validate_grant_object_exists(
         GrantObject::Sequence(c) => {
             let catalog = ctx.get_default_catalog()?;
             let req = GetSequenceReq {
-                ident: SequenceIdentType::Normal(SequenceIdent::new(
+                ident: SequenceIdentType::Sequence(SequenceIdent::new(
                     ctx.get_tenant(),
                     c.to_string(),
                 )),

@@ -5385,7 +5385,7 @@ impl<'a> TypeChecker<'a> {
 
         let catalog = self.ctx.get_default_catalog()?;
         let req = GetSequenceReq {
-            ident: SequenceIdentType::Normal(SequenceIdent::new(
+            ident: SequenceIdentType::Sequence(SequenceIdent::new(
                 self.ctx.get_tenant(),
                 sequence_name.clone(),
             )),

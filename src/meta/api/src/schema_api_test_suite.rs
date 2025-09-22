@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::CatalogMeta;
@@ -5628,7 +5629,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
+                ident: SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name)),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5639,12 +5640,37 @@ impl SchemaApiTestSuite {
             mt.create_sequence(req).await?;
         }
 
+        info!("--- create autoincrement");
+        {
+            let key = AutoIncrementKey::new(0, 1);
+            let req = CreateSequenceReq {
+                create_option: CreateOption::Create,
+                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key)),
+                create_on,
+                start: 1,
+                increment: 1,
+                comment: None,
+                storage_version,
+            };
+
+            mt.create_sequence(req).await?;
+        }
+
         info!("--- get sequence");
         {
-            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
+            let req = SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 1);
+        }
+        info!("--- get autoincrement");
+        {
+            let key = AutoIncrementKey::new(0, 1);
+            let req = SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, None);
             assert_eq!(resp.current, 1);
         }
 
@@ -5652,7 +5678,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, "seq1")),
+                ident: SequenceIdentType::Sequence(SequenceIdent::new(&tenant, "seq1")),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5672,7 +5698,7 @@ impl SchemaApiTestSuite {
         info!("--- get sequence nextval");
         {
             let req = GetSequenceNextValueReq {
-                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
+                ident: SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name)),
                 count: 10,
             };
             let resp = mt.get_sequence_next_value(req).await?;
@@ -5682,10 +5708,32 @@ impl SchemaApiTestSuite {
 
         info!("--- get sequence after nextval");
         {
-            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
+            let req = SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, Some("seq".to_string()));
+            assert_eq!(resp.current, 11);
+        }
+
+        info!("--- get autoincrement nextval");
+        {
+            let key = AutoIncrementKey::new(0, 1);
+            let req = GetSequenceNextValueReq {
+                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key)),
+                count: 10,
+            };
+            let resp = mt.get_sequence_next_value(req).await?;
+            assert_eq!(resp.start, 1);
+            assert_eq!(resp.end, 11);
+        }
+
+        info!("--- get autoincrement after nextval");
+        {
+            let key = AutoIncrementKey::new(0, 1);
+            let req = SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
+            let resp = mt.get_sequence(&req).await?;
+            let resp = resp.unwrap().data;
+            assert_eq!(resp.comment, None);
             assert_eq!(resp.current, 11);
         }
 
@@ -5703,7 +5751,7 @@ impl SchemaApiTestSuite {
         {
             let req = CreateSequenceReq {
                 create_option: CreateOption::CreateOrReplace,
-                ident: SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name)),
+                ident: SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name)),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5713,7 +5761,7 @@ impl SchemaApiTestSuite {
 
             mt.create_sequence(req).await?;
 
-            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
+            let req = SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name));
 
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
@@ -5730,11 +5778,12 @@ impl SchemaApiTestSuite {
 
             mt.drop_sequence(req).await?;
 
-            let req = SequenceIdentType::Normal(SequenceIdent::new(&tenant, sequence_name));
+            let sequence_ident = SequenceIdent::new(&tenant, sequence_name);
+            let req = SequenceIdentType::Sequence(SequenceIdent::new(&tenant, sequence_name));
             let resp = mt.get_sequence(&req).await?;
             assert!(resp.is_none());
 
-            let storage_ident = req.to_storage_ident();
+            let storage_ident = SequenceStorageIdent::new_from(sequence_ident);
             let got = mt.get_kv(&storage_ident.to_string_key()).await?;
             assert!(
                 got.is_none(),

@@ -243,7 +243,7 @@ impl AsyncTransform for TransformAsyncFunction {
                         self.ctx.clone(),
                         &mut data_block,
                         self.sequence_counters[i].clone(),
-                        SequenceIdentType::Normal(SequenceIdent::new(
+                        SequenceIdentType::Sequence(SequenceIdent::new(
                             self.ctx.get_tenant(),
                             sequence_name,
                         )),

@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-
 pub use kvapi_impl::AutoIncrementRsc;
 
 use crate::principal::AutoIncrementKey;
-use crate::schema::sequence_storage::SequenceStorageIdent;
+use crate::schema::AutoIncrementStorageIdent;
 use crate::schema::SequenceMeta;
 use crate::tenant_key::ident::TIdent;
 use crate::KeyWithTenant;
@@ -27,19 +25,34 @@ use crate::KeyWithTenant;
 pub type AutoIncrementIdent = TIdent<AutoIncrementRsc, AutoIncrementKey>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AutoIncrementMeta(pub SequenceMeta);
+pub struct AutoIncrementMeta {
+    pub step: i64,
+    pub current: u64,
+}
 
-impl Deref for AutoIncrementMeta {
-    type Target = SequenceMeta;
+impl From<AutoIncrementMeta> for SequenceMeta {
+    fn from(auto_increment: AutoIncrementMeta) -> Self {
+        SequenceMeta {
+            create_on: Default::default(),
+            update_on: Default::default(),
+            comment: None,
+            step: auto_increment.step,
+            // ignore, storage_version always 0
+            current: auto_increment.current,
+            storage_version: 0,
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl From<&SequenceMeta> for AutoIncrementMeta {
+    fn from(m: &SequenceMeta) -> Self {
+        Self { step: m.step, current: m.current }
     }
 }
 
 impl AutoIncrementIdent {
-    pub fn to_storage_ident(&self) -> SequenceStorageIdent {
-        SequenceStorageIdent::new_generic(self.tenant(), self.name().to_string())
+    pub fn to_storage_ident(&self) -> AutoIncrementStorageIdent {
+        AutoIncrementStorageIdent::new_generic(self.tenant(), self.name().to_string())
     }
 }
 
@@ -47,7 +60,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::auto_incremnt::AutoIncrementMeta;
+    use crate::schema::auto_increment::AutoIncrementMeta;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct AutoIncrementRsc;

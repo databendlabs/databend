@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
@@ -22,6 +20,7 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::schema::AutoIncrementMeta;
+use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -65,27 +64,36 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         let meta: SequenceMeta = req.clone().into();
 
-        let storage_ident = req.ident.to_storage_ident();
-        let storage_value = Id::new_typed(SequenceStorageValue(req.start));
-
         let conditions = if req.create_option == CreateOption::CreateOrReplace {
             vec![]
         } else {
             vec![match &req.ident {
-                SequenceIdentType::Normal(ident) => txn_cond_eq_seq(ident, 0),
+                SequenceIdentType::Sequence(ident) => txn_cond_eq_seq(ident, 0),
                 SequenceIdentType::AutoIncrement(ident) => txn_cond_eq_seq(ident, 0),
             }]
         };
 
-        let txn = TxnRequest::new(conditions, vec![
-            match &req.ident {
-                SequenceIdentType::Normal(ident) => txn_put_pb(ident, &meta)?,
-                SequenceIdentType::AutoIncrement(ident) => {
-                    txn_put_pb(ident, &AutoIncrementMeta(meta))?
-                }
-            },
-            txn_put_pb(&storage_ident, &storage_value)?,
-        ]);
+        let ops = match &req.ident {
+            SequenceIdentType::Sequence(ident) => {
+                let storage_ident = SequenceStorageIdent::new_from(ident.clone());
+                let storage_value = Id::new_typed(SequenceStorageValue(req.start));
+
+                vec![
+                    txn_put_pb(ident, &meta)?,
+                    txn_put_pb(&storage_ident, &storage_value)?,
+                ]
+            }
+            SequenceIdentType::AutoIncrement(ident) => {
+                let storage_ident = ident.to_storage_ident();
+                let storage_value = Id::new_typed(AutoIncrementStorageValue(req.start));
+
+                vec![
+                    txn_put_pb(ident, &AutoIncrementMeta::from(&meta))?,
+                    txn_put_pb(&storage_ident, &storage_value)?,
+                ]
+            }
+        };
+        let txn = TxnRequest::new(conditions, ops);
 
         let (succ, _response) = send_txn(self, txn).await?;
 
@@ -110,11 +118,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError> {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
         let seq_meta = match name_ident {
-            SequenceIdentType::Normal(ident) => self.get_pb(ident).await?,
+            SequenceIdentType::Sequence(ident) => self.get_pb(ident).await?,
             SequenceIdentType::AutoIncrement(ident) => self
                 .get_pb(ident)
                 .await?
-                .map(|seq| seq.map(|meta| SequenceMeta::clone(&meta))),
+                .map(|seq| seq.map(AutoIncrementMeta::into)),
         };
 
         let Some(mut seq_meta) = seq_meta else {
@@ -127,17 +135,27 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         // V1 sequence stores the value in a separate key.
 
-        let storage_ident = name_ident.to_storage_ident();
-        let storage_value = self.get_pb(&storage_ident).await?;
+        let next_available = match name_ident {
+            SequenceIdentType::Sequence(ident) => {
+                let storage_ident = SequenceStorageIdent::new_from(ident.clone());
+                self.get_pb(&storage_ident)
+                    .await?
+                    .map(|seq| seq.map(|value| value.inner().0))
+            }
+            SequenceIdentType::AutoIncrement(ident) => {
+                let storage_ident = ident.to_storage_ident();
+                self.get_pb(&storage_ident)
+                    .await?
+                    .map(|seq| seq.map(|value| value.inner().0))
+            }
+        };
 
         // If the storage value is removed, the sequence meta must also be removed.
-        let Some(storage_value) = storage_value else {
+        let Some(next_available) = next_available else {
             return Ok(None);
         };
 
-        let next_available = *storage_value.data.deref();
-
-        seq_meta.data.current = next_available;
+        seq_meta.data.current = next_available.data;
         Ok(Some(seq_meta))
     }
 
@@ -202,11 +220,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         loop {
             trials.next().unwrap()?.await;
             let seq_meta = match &ident {
-                SequenceIdentType::Normal(ident) => self.get_pb(ident).await?,
+                SequenceIdentType::Sequence(ident) => self.get_pb(ident).await?,
                 SequenceIdentType::AutoIncrement(ident) => self
                     .get_pb(ident)
                     .await?
-                    .map(|seq| seq.map(|meta| SequenceMeta::clone(&meta))),
+                    .map(|seq| seq.map(AutoIncrementMeta::into)),
             };
             let Some(seq_meta) = seq_meta else {
                 return Err(AppError::SequenceError(ident.unknown_error(func_name!())).into());

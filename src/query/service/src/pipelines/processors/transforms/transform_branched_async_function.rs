@@ -72,7 +72,7 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                         self.ctx.clone(),
                         &mut block,
                         counter_lock,
-                        SequenceIdentType::Normal(SequenceIdent::new(
+                        SequenceIdentType::Sequence(SequenceIdent::new(
                             self.ctx.get_tenant(),
                             sequence_name.clone(),
                         )),

@@ -34,7 +34,7 @@ impl AutoIncrementKey {
 
 impl Display for AutoIncrementKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AutoIncrement_{}_{}", self.table_id, self.column_id)
+        write!(f, "{}/{}", self.table_id, self.column_id)
     }
 }
 

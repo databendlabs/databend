@@ -1258,7 +1258,7 @@ impl AsyncFunctionCall {
                     }
                 }
                 let req = GetSequenceNextValueReq {
-                    ident: SequenceIdentType::Normal(SequenceIdent::new(
+                    ident: SequenceIdentType::Sequence(SequenceIdent::new(
                         &tenant,
                         sequence_name.clone(),
                     )),

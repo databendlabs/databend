@@ -54,7 +54,7 @@ impl Interpreter for DescSequenceInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = GetSequenceReq {
-            ident: SequenceIdentType::Normal(self.plan.ident.clone()),
+            ident: SequenceIdentType::Sequence(self.plan.ident.clone()),
         };
         let catalog = self.ctx.get_default_catalog()?;
         // Already check seq privilege before interpreter

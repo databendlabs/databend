@@ -35,7 +35,8 @@ pub mod sequence_storage;
 pub mod table_lock_ident;
 pub mod table_niv;
 
-mod auto_incremnt;
+mod auto_increment;
+mod auto_increment_storage;
 mod constraint;
 mod create_option;
 mod database;
@@ -48,9 +49,12 @@ mod ownership;
 mod sequence;
 mod table;
 
-pub use auto_incremnt::AutoIncrementIdent;
-pub use auto_incremnt::AutoIncrementMeta;
-pub use auto_incremnt::AutoIncrementRsc;
+pub use auto_increment::AutoIncrementIdent;
+pub use auto_increment::AutoIncrementMeta;
+pub use auto_increment::AutoIncrementRsc;
+pub use auto_increment_storage::AutoIncrementStorageIdent;
+pub use auto_increment_storage::AutoIncrementStorageRsc;
+pub use auto_increment_storage::AutoIncrementStorageValue;
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
 pub use catalog_id_to_name_ident::CatalogIdToNameIdent;

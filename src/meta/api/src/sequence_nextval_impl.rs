@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::OutOfSequenceRange;
 use databend_common_meta_app::app_error::SequenceError;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementMeta;
 use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::SequenceMeta;
@@ -102,12 +105,12 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 
     fn txn_op_put_pb(&self) -> Result<TxnOp, InvalidArgument> {
         match &self.ident {
-            SequenceIdentType::Normal(ident) => {
+            SequenceIdentType::Sequence(ident) => {
                 txn_op_put_pb(ident, &self.sequence_meta.data, None)
             }
             SequenceIdentType::AutoIncrement(ident) => txn_op_put_pb(
                 ident,
-                &AutoIncrementMeta(self.sequence_meta.data.clone()),
+                &AutoIncrementMeta::from(self.sequence_meta.deref()),
                 None,
             ),
         }
@@ -115,7 +118,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
 
     fn txn_cond_eq_seq(&self) -> TxnCondition {
         match &self.ident {
-            SequenceIdentType::Normal(ident) => txn_cond_eq_seq(ident, self.sequence_meta.seq),
+            SequenceIdentType::Sequence(ident) => txn_cond_eq_seq(ident, self.sequence_meta.seq),
             SequenceIdentType::AutoIncrement(ident) => {
                 txn_cond_eq_seq(ident, self.sequence_meta.seq)
             }
@@ -130,8 +133,16 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         debug!("{}", func_name!());
 
         // Key for the sequence number value.
-        let storage_ident = self.ident.to_storage_ident();
-        let storage_key = storage_ident.to_string_key();
+        let storage_key = match &self.ident {
+            SequenceIdentType::Sequence(ident) => {
+                let storage_ident = SequenceStorageIdent::new_from(ident.clone());
+                storage_ident.to_string_key()
+            }
+            SequenceIdentType::AutoIncrement(ident) => {
+                let storage_ident = ident.to_storage_ident();
+                storage_ident.to_string_key()
+            }
+        };
 
         let sequence_meta = &self.sequence_meta.data;
 

@@ -49,10 +49,10 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::AutoIncrementIdent;
 use databend_common_meta_app::schema::AutoIncrementMeta;
+use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -74,7 +74,6 @@ use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -453,21 +452,19 @@ where
                 }
 
                 for (column_id, auto_increment) in req.auto_increments.iter() {
-                    let sequence_meta = SequenceMeta {
-                        create_on: Utc::now(),
-                        update_on: Utc::now(),
-                        comment: None,
+                    let autoincrement_meta = AutoIncrementMeta {
                         step: auto_increment.step as i64,
                         current: auto_increment.start,
-                        storage_version: 0,
                     };
                     let auto_increment_key = AutoIncrementKey::new(table_id, *column_id as u32);
                     let auto_increment_ident =
                         AutoIncrementIdent::new_generic(req.tenant(), auto_increment_key);
+
                     let storage_ident = auto_increment_ident.to_storage_ident();
-                    let storage_value = Id::new_typed(SequenceStorageValue(auto_increment.start));
+                    let storage_value =
+                        Id::new_typed(AutoIncrementStorageValue(auto_increment.start));
                     txn.if_then.extend(vec![
-                        txn_put_pb(&auto_increment_ident, &AutoIncrementMeta(sequence_meta))?,
+                        txn_put_pb(&auto_increment_ident, &autoincrement_meta)?,
                         txn_put_pb(&storage_ident, &storage_value)?,
                     ]);
                 }
