@@ -141,6 +141,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
             table_info.meta.schema = Arc::new(schema);
 
+            // TODO: It is best to do this in the same transaction as `commit_table_meta`, the current `commit_table_meta` code structure is complex and not easy to change.
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
                 ident: SequenceIdentType::AutoIncrement(auto_increment_ident),
