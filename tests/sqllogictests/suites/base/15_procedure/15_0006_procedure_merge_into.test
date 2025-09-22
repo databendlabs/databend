@@ -1,0 +1,191 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+create or replace database test_procedure_merge_into;
+
+statement ok
+use test_procedure_merge_into;
+
+statement ok
+CREATE TABLE employees (
+    employee_id INT,
+    employee_name VARCHAR(255),
+    department VARCHAR(255)
+);
+
+statement ok
+CREATE TABLE salaries (
+    employee_id INT,
+    salary DECIMAL(10, 2)
+);
+
+statement ok
+drop procedure if exists test_merge_operations();
+
+# Test procedure performing complex merge operations within transaction
+statement ok
+CREATE PROCEDURE test_merge_operations() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO employees VALUES
+        (1, 'Alice', 'HR'),
+        (2, 'Bob', 'IT'),
+        (3, 'Charlie', 'Finance'),
+        (4, 'David', 'HR');
+    
+    INSERT INTO salaries VALUES
+        (1, 50000.00),
+        (2, 60000.00);
+    
+    MERGE INTO salaries
+        USING (SELECT * FROM employees) AS employees
+        ON salaries.employee_id = employees.employee_id
+        WHEN MATCHED AND employees.department = 'HR' THEN
+            UPDATE SET
+                salaries.salary = salaries.salary + 1000.00
+        WHEN MATCHED THEN
+            UPDATE SET
+                salaries.salary = salaries.salary + 500.00
+        WHEN NOT MATCHED THEN
+            INSERT (employee_id, salary)
+                VALUES (employees.employee_id, 55000.00);
+                
+    RETURN 'merge completed';
+END;
+$$;
+
+statement ok
+BEGIN;
+
+statement ok
+call procedure test_merge_operations();
+
+query I
+select count(*) from fuse_snapshot('test_procedure_merge_into','employees');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_procedure_merge_into','salaries');
+----
+1
+
+query IF
+SELECT employee_id, salary FROM salaries order by employee_id;
+----
+1   51000.00
+2   60500.00
+3   55000.00
+4   55000.00
+
+statement ok
+COMMIT;
+
+query I
+select count(*) from fuse_snapshot('test_procedure_merge_into','salaries');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_procedure_merge_into','employees');
+----
+1
+
+query IF
+SELECT employee_id, salary FROM salaries order by employee_id;
+----
+1   51000.00
+2   60500.00
+3   55000.00
+4   55000.00
+
+statement ok
+drop database test_procedure_merge_into;
+
+# Test second scenario with BEGIN TRANSACTION
+statement ok
+create or replace database test_procedure_merge_into;
+
+statement ok
+use test_procedure_merge_into;
+
+statement ok
+CREATE TABLE employees (
+    employee_id INT,
+    employee_name VARCHAR(255),
+    department VARCHAR(255)
+);
+
+statement ok
+CREATE TABLE salaries (
+    employee_id INT,
+    salary DECIMAL(10, 2)
+);
+
+statement ok
+drop procedure if exists test_merge_operations_v2();
+
+# Test procedure performing merge operations with BEGIN TRANSACTION syntax
+statement ok
+CREATE PROCEDURE test_merge_operations_v2() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO employees VALUES
+        (1, 'Alice', 'HR'),
+        (2, 'Bob', 'IT'),
+        (3, 'Charlie', 'Finance'),
+        (4, 'David', 'HR');
+    
+    INSERT INTO salaries VALUES
+        (1, 50000.00),
+        (2, 60000.00);
+    
+    MERGE INTO salaries
+        USING (SELECT * FROM employees) AS employees
+        ON salaries.employee_id = employees.employee_id
+        WHEN MATCHED AND employees.department = 'HR' THEN
+            UPDATE SET
+                salaries.salary = salaries.salary + 1000.00
+        WHEN MATCHED THEN
+            UPDATE SET
+                salaries.salary = salaries.salary + 500.00
+        WHEN NOT MATCHED THEN
+            INSERT (employee_id, salary)
+                VALUES (employees.employee_id, 55000.00);
+                
+    RETURN 'merge completed v2';
+END;
+$$;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+call procedure test_merge_operations_v2();
+
+query IF
+SELECT employee_id, salary FROM salaries order by employee_id;
+----
+1   51000.00
+2   60500.00
+3   55000.00
+4   55000.00
+
+statement ok
+COMMIT;
+
+query IF
+SELECT employee_id, salary FROM salaries order by employee_id;
+----
+1   51000.00
+2   60500.00
+3   55000.00
+4   55000.00
+
+statement ok
+drop procedure if exists test_merge_operations();
+
+statement ok
+drop procedure if exists test_merge_operations_v2();
+
+statement ok
+drop database test_procedure_merge_into;
