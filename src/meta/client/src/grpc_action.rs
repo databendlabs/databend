@@ -25,6 +25,7 @@ use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -43,6 +44,7 @@ use crate::message::ExportReq;
 use crate::message::GetClientInfo;
 use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
+use crate::message::GetMemberList;
 use crate::message::MakeEstablishedClient;
 use crate::message::Streamed;
 use crate::InitFlag;
@@ -203,6 +205,10 @@ impl RequestFor for TxnRequest {
 
 impl RequestFor for GetClusterStatus {
     type Reply = ClusterStatus;
+}
+
+impl RequestFor for GetMemberList {
+    type Reply = MemberListReply;
 }
 
 impl RequestFor for GetClientInfo {
