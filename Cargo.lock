@@ -4830,6 +4830,7 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-metrics",
