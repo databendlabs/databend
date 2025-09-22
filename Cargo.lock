@@ -9451,7 +9451,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.4"
-source = "git+https://github.com/b41sh/jsonb?rev=3dc665f34d3dd3ab1ecd5c43f072d0be2af4bacf#3dc665f34d3dd3ab1ecd5c43f072d0be2af4bacf"
+source = "git+https://github.com/databendlabs/jsonb?rev=425aae9#425aae9cbf567dd7e523d4657e8290268480953c"
 dependencies = [
  "byteorder",
  "ethnum",
