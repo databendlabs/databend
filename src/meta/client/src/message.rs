@@ -23,6 +23,7 @@ use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
@@ -116,6 +117,9 @@ pub enum Request {
     /// Get cluster status, for metactl
     GetClusterStatus(GetClusterStatus),
 
+    /// Get member list, for metactl
+    GetMemberList(GetMemberList),
+
     /// Get info about the client
     GetClientInfo(GetClientInfo),
 }
@@ -133,6 +137,7 @@ impl Request {
             Request::MakeEstablishedClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
             Request::GetClusterStatus(_) => "GetClusterStatus",
+            Request::GetMemberList(_) => "GetMemberList",
             Request::GetClientInfo(_) => "GetClientInfo",
         }
     }
@@ -151,6 +156,7 @@ pub enum Response {
     MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
     GetClusterStatus(Result<ClusterStatus, MetaClientError>),
+    GetMemberList(Result<MemberListReply, MetaClientError>),
     GetClientInfo(Result<ClientInfo, MetaClientError>),
 }
 
@@ -187,6 +193,9 @@ impl fmt::Debug for Response {
             Response::GetClusterStatus(x) => {
                 write!(f, "GetClusterStatus({:?})", x)
             }
+            Response::GetMemberList(x) => {
+                write!(f, "GetMemberList({:?})", x)
+            }
             Response::GetClientInfo(x) => {
                 write!(f, "GetClientInfo({:?})", x)
             }
@@ -215,6 +224,7 @@ impl Response {
             Response::MakeEstablishedClient(res) => to_err(res),
             Response::GetEndpoints(res) => to_err(res),
             Response::GetClusterStatus(res) => to_err(res),
+            Response::GetMemberList(res) => to_err(res),
             Response::GetClientInfo(res) => to_err(res),
         };
 
@@ -244,6 +254,10 @@ pub struct GetEndpoints {}
 /// Get cluster status
 #[derive(Clone, Debug)]
 pub struct GetClusterStatus {}
+
+/// Get member list
+#[derive(Clone, Debug)]
+pub struct GetMemberList {}
 
 /// Get info about client
 #[derive(Clone, Debug)]
