@@ -56,7 +56,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         0,
     ); // Dummy location
 
-    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(ctx.clone(), schema.clone()).unwrap();
 
     let block = DataBlock::new(
         vec![
@@ -314,6 +314,91 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     // all columns should be discarded due to > 70% nulls
     assert!(result.data.is_empty());
+
+    // Test consecutive blocks with different JSON virtual columns
+    // This test verifies that when adding consecutive blocks with completely different
+    // JSON structures, both blocks can correctly generate virtual column data
+    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+
+    // First block with one set of JSON fields
+    let block1 = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).into(),
+            VariantType::from_opt_data(vec![
+                Some(
+                    OwnedJsonb::from_str(
+                        r#"{"product_id": 101, "price": 19.99, "category": "electronics"}"#,
+                    )
+                    .unwrap()
+                    .to_vec(),
+                );
+                10
+            ])
+            .into(),
+        ],
+        10,
+    );
+
+    builder.add_block(&block1)?;
+    let result = builder.finalize(&write_settings, &location)?;
+    assert!(!result.data.is_empty());
+
+    // We expect to find virtual columns from block1: product_id, price, category
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        3
+    );
+
+    // Check that the expected columns from the first block exist
+    let expected_columns = vec!["['product_id']", "['price']", "['category']"];
+    for expected_column in expected_columns.into_iter() {
+        let column_meta = find_virtual_col(
+            &result.draft_virtual_block_meta.virtual_column_metas,
+            1,
+            expected_column,
+        );
+        assert!(column_meta.is_some());
+    }
+
+    // Second block with completely different JSON fields
+    let block2 = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![11, 12, 13, 14, 15, 16, 17, 18, 19, 20]).into(),
+            VariantType::from_opt_data(vec![
+                Some(
+                    OwnedJsonb::from_str(
+                        r#"{"user_id": 201, "email": "user1@example.com", "active": true}"#,
+                    )
+                    .unwrap()
+                    .to_vec(),
+                );
+                10
+            ])
+            .into(),
+        ],
+        10,
+    );
+
+    builder.add_block(&block2)?;
+    let result = builder.finalize(&write_settings, &location)?;
+    assert!(!result.data.is_empty());
+
+    // We expect to find virtual columns from block2: user_id, email, active
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        3
+    );
+
+    // Check that the expected columns from the second block exist
+    let expected_columns = vec!["['user_id']", "['email']", "['active']"];
+    for expected_column in expected_columns.into_iter() {
+        let column_meta = find_virtual_col(
+            &result.draft_virtual_block_meta.virtual_column_metas,
+            1,
+            expected_column,
+        );
+        assert!(column_meta.is_some());
+    }
 
     Ok(())
 }

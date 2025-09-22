@@ -579,7 +579,6 @@ impl VirtualColumnBuilder {
         }
 
         // 1. Discard virtual columns with most values are Null values.
-        // let mut keys_to_remove_none = Vec::new();
         for values in virtual_values.iter_mut() {
             if values.is_empty() {
                 continue;
@@ -590,7 +589,7 @@ impl VirtualColumnBuilder {
                 .count();
             let null_count = num_rows - not_null_count;
             let null_percentage = null_count as f64 / num_rows as f64;
-            if null_percentage > 0.7 {
+            if null_percentage > NULL_PERCENTAGE {
                 values.clear();
             }
         }
