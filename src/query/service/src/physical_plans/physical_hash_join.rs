@@ -399,6 +399,7 @@ impl HashJoin {
         // let params = JoinParams::create();
         // let settings = JoinSettings::create();
 
+        let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
         for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
@@ -408,12 +409,13 @@ impl HashJoin {
             let build_input = InputPort::create();
             let probe_input = InputPort::create();
             let joined_output = OutputPort::create();
+
             let hash_join = TransformHashJoin::create(
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                // params.clone(),
-                // settings.clone(),
+                self.create_join(),
+                stage_sync_barrier.clone(),
             );
 
             join_pipe_items.push(PipeItem::create(
@@ -427,6 +429,10 @@ impl HashJoin {
         let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
         builder.main_pipeline.add_pipe(join_pipe);
         Ok(())
+    }
+
+    fn create_join(&self) -> Box<dyn crate::pipelines::processors::transforms::Join> {
+        unimplemented!()
     }
 }
 

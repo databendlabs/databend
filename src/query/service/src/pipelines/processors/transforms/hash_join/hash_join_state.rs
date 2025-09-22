@@ -328,3 +328,9 @@ impl HashJoinState {
         }
     }
 }
+
+impl<T: HashtableKeyable> FixedKeyHashJoinHashTable<T> {
+    pub fn insert(&mut self, data_block: DataBlock) -> Result<()> {
+        
+    }
+}

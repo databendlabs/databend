@@ -32,6 +32,7 @@ use databend_common_hashtable::HashJoinHashMap;
 use ethnum::U256;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
+use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::memory_state::HashJoinMemoryState;
@@ -45,8 +46,8 @@ pub struct MemoryInnerJoin {
     desc: Arc<HashJoinDesc>,
     squash_block: SquashBlocks,
 
-    state: Arc<HashJoinMemoryState>,
     method: HashMethodKind,
+    state: Arc<HashJoinMemoryState>,
 }
 
 impl MemoryInnerJoin {
@@ -117,7 +118,18 @@ impl MemoryInnerJoin {
         }
     }
 
-    fn build_hash_table(&self, data_block: DataBlock) -> Result<()> {
+    fn build_hash_table(&self, data_block: &DataBlock) -> Result<()> {
+        match self.state.hash_table.deref() {
+            HashJoinHashTable::Null => {}
+            HashJoinHashTable::Serializer(_) => {}
+            HashJoinHashTable::SingleBinary(_) => {}
+            HashJoinHashTable::KeysU8(v) => {}
+            HashJoinHashTable::KeysU16(v) => {}
+            HashJoinHashTable::KeysU32(v) => {}
+            HashJoinHashTable::KeysU64(v) => {}
+            HashJoinHashTable::KeysU128(v) => {}
+            HashJoinHashTable::KeysU256(v) => {}
+        }
         // self.state.h
         Ok(())
     }
@@ -174,7 +186,7 @@ impl Join for MemoryInnerJoin {
     }
 
     fn final_probe(&mut self) -> Result<Box<dyn JoinStream>> {
-        todo!()
+        Ok(Box::new(EmptyJoinStream))
     }
 }
 

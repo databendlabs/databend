@@ -21,7 +21,7 @@ pub trait JoinStream: Send + Sync + 'static {
     fn next(&mut self) -> Result<Option<DataBlock>>;
 }
 
-pub trait Join : Send + Sync + 'static {
+pub trait Join: Send + Sync + 'static {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()>;
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
@@ -29,4 +29,12 @@ pub trait Join : Send + Sync + 'static {
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>>;
 
     fn final_probe(&mut self) -> Result<Box<dyn JoinStream>>;
+}
+
+pub struct EmptyJoinStream;
+
+impl JoinStream for EmptyJoinStream {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        Ok(None)
+    }
 }

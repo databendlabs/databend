@@ -45,6 +45,8 @@ impl TransformHashJoin {
         build_port: Arc<InputPort>,
         probe_port: Arc<InputPort>,
         joined_port: Arc<OutputPort>,
+        join: Box<dyn Join>,
+        stage_sync_barrier: Arc<Barrier>,
     ) -> ProcessorPtr {
         // ProcessorPtr::create(Box::new(TransformHashJoin {
         //     build_port,
@@ -55,10 +57,6 @@ impl TransformHashJoin {
         // }))
         unimplemented!()
     }
-
-    // fn build_event(&mut self, state: &mut BuildState) -> Result<Event> {
-    //
-    // }
 }
 
 #[async_trait::async_trait]
