@@ -21,6 +21,7 @@ use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;

@@ -26,6 +26,7 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::debug;
+use log::info;
 use map_api::mvcc::ScopedGet;
 use openraft::entry::RaftEntry;
 use state_machine_api::SeqV;
@@ -281,9 +282,16 @@ impl SMV003 {
     }
 
     pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        let immutable_data = self.leveled_map.immutable_data();
+
+        info!(
+            "new_compactor: with immutable data: {}",
+            immutable_data.stat()
+        );
+
         Compactor {
             _permit: permit,
-            immutable_data: self.leveled_map.immutable_data(),
+            immutable_data,
         }
     }
 
