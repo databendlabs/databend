@@ -1180,13 +1180,28 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, (catalog, database, table), option)| {
             Statement::VacuumTable(VacuumTableStmt {
-                catalog,
-                database,
-                table,
+                target: VacuumTarget::Table(VacuumTargetTable {
+                    catalog,
+                    database,
+                    table,
+                }),
                 option,
             })
         },
     );
+
+    let vacuum_all_table = map(
+        rule! {
+            VACUUM ~ TABLE ~ ALL ~ #vacuum_table_option
+        },
+        |(_, _, _, option)| {
+            Statement::VacuumTable(VacuumTableStmt {
+                target: VacuumTarget::All,
+                option,
+            })
+        },
+    );
+
     let vacuum_drop_table = map(
         rule! {
             VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_drop_table_option
@@ -1203,6 +1218,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
     let analyze_table = map(
         rule! {
             ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
@@ -2589,7 +2605,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_indexes : "`SHOW INDEXES`"
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
@@ -2693,8 +2708,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
-            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -2818,7 +2831,14 @@ AS
             | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
         rule!(#comment),
-        rule!(#vacuum_temporary_tables),
+        // Vacuum
+        rule!(
+            #vacuum_temporary_tables
+            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_all_table : "`VACUUM TABLE ALL [DRY RUN | DRY RUN SUMMARY]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
+        ),
     ))(i)
 }
 

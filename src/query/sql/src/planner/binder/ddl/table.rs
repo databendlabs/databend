@@ -158,6 +158,8 @@ use crate::plans::VacuumDropTableOption;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTarget;
+use crate::plans::VacuumTargetTable;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::DefaultExprBinder;
@@ -1503,24 +1505,31 @@ impl Binder {
         _bind_context: &mut BindContext,
         stmt: &VacuumTableStmt,
     ) -> Result<Plan> {
-        let VacuumTableStmt {
-            catalog,
-            database,
-            table,
-            option,
-        } = stmt;
+        let use_legacy_vacuum = self.ctx.get_settings().get_fallback_to_legacy_vacuum()?;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let target = match &stmt.target {
+            databend_common_ast::ast::VacuumTarget::Table(tgt) => {
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &tgt.catalog,
+                    &tgt.database,
+                    &tgt.table,
+                );
+                VacuumTarget::Table(VacuumTargetTable {
+                    catalog,
+                    database,
+                    table,
+                })
+            }
+            databend_common_ast::ast::VacuumTarget::All => VacuumTarget::All,
+        };
 
         let option = VacuumTableOption {
-            dry_run: option.dry_run,
+            dry_run: stmt.option.dry_run,
         };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
-            catalog,
-            database,
-            table,
+            target,
             option,
+            use_legacy_vacuum,
         })))
     }
 
