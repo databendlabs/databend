@@ -78,6 +78,7 @@ use crate::statistics::gen_columns_statistics;
 
 const SAMPLE_ROWS: usize = 10;
 const NULL_PERCENTAGE: f64 = 0.7;
+const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
 
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
@@ -131,9 +132,9 @@ impl VirtualColumnBuilder {
         }
         let mut virtual_paths = Vec::with_capacity(variant_fields.len());
         for _ in 0..variant_fields.len() {
-            virtual_paths.push(HashMap::with_capacity(32));
+            virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
         }
-        let virtual_values = Vec::with_capacity(32);
+        let virtual_values = Vec::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER);
         let ignored_fields = HashSet::new();
         Ok(VirtualColumnBuilder {
             variant_offsets,
@@ -339,10 +340,13 @@ impl VirtualColumnBuilder {
         write_settings: &WriteSettings,
         location: &Location,
     ) -> Result<VirtualColumnState> {
-        let mut virtual_values = Vec::with_capacity(self.virtual_values.len());
-        for _ in 0..self.virtual_values.len() {
-            virtual_values.push(Vec::new());
+        let mut virtual_paths = Vec::with_capacity(self.variant_fields.len());
+        for _ in 0..self.variant_fields.len() {
+            virtual_paths.push(HashMap::with_capacity(DEFAULT_VIRTUAL_COLUMN_NUMBER));
         }
+        std::mem::swap(&mut self.virtual_paths, &mut virtual_paths);
+
+        let mut virtual_values = Vec::with_capacity(self.virtual_values.len());
         std::mem::swap(&mut self.virtual_values, &mut virtual_values);
 
         let total_rows = self.total_rows;
@@ -350,7 +354,8 @@ impl VirtualColumnBuilder {
         self.ignored_fields.clear();
 
         // Process the collected virtual values
-        let virtual_field_num = self.discard_virtual_values(total_rows, &mut virtual_values);
+        let virtual_field_num =
+            Self::discard_virtual_values(total_rows, &virtual_paths, &mut virtual_values);
 
         // If after discarding, no virtual values remain, return empty state
         if virtual_field_num == 0 {
@@ -373,16 +378,16 @@ impl VirtualColumnBuilder {
         // use a tmp column id to generate statistics for virtual columns.
         let mut tmp_column_id = 0;
         for (source_field, field_virtual_paths) in
-            self.variant_fields.iter().zip(self.virtual_paths.iter())
+            self.variant_fields.iter().zip(virtual_paths.into_iter())
         {
             // Collect virtual paths and index as BTreeMap to keep order
-            let sorted_virtual_paths: BTreeMap<_, _> = field_virtual_paths.iter().collect();
+            let sorted_virtual_paths: BTreeMap<_, _> = field_virtual_paths.into_iter().collect();
 
             for (field_virtual_path, index) in sorted_virtual_paths {
-                if virtual_values[*index].is_empty() {
+                if virtual_values[index].is_empty() {
                     continue;
                 }
-                let val_type = Self::inference_data_type(&virtual_values[*index]);
+                let val_type = Self::inference_data_type(&virtual_values[index]);
                 let virtual_type = match val_type {
                     VariantDataType::Jsonb => DataType::Nullable(Box::new(DataType::Variant)),
                     VariantDataType::Boolean => DataType::Nullable(Box::new(DataType::Boolean)),
@@ -407,14 +412,14 @@ impl VirtualColumnBuilder {
                 };
 
                 let mut last_row = 0;
-                let first_row = virtual_values[*index][0].row;
+                let first_row = virtual_values[index][0].row;
                 let column = if matches!(val_type, VariantDataType::Jsonb) {
                     let mut bitmap = MutableBitmap::from_len_zeroed(total_rows);
                     let mut builder = BinaryColumnBuilder::with_capacity(total_rows, 0);
                     for _ in 0..first_row {
                         builder.commit_row();
                     }
-                    for val in &virtual_values[*index] {
+                    for val in &virtual_values[index] {
                         if val.row - last_row > 1 {
                             for _ in last_row..val.row {
                                 builder.commit_row();
@@ -443,7 +448,7 @@ impl VirtualColumnBuilder {
                         builder.push_repeat(&ScalarRef::Null, default_len);
                         last_row = first_row;
                     }
-                    for val in &virtual_values[*index] {
+                    for val in &virtual_values[index] {
                         if val.row - last_row > 1 {
                             let default_len = val.row - last_row - 1;
                             builder.push_repeat(&ScalarRef::Null, default_len);
@@ -565,8 +570,8 @@ impl VirtualColumnBuilder {
     }
 
     fn discard_virtual_values(
-        &mut self,
         num_rows: usize,
+        virtual_paths: &[HashMap<OwnedKeyPaths, usize>],
         virtual_values: &mut [Vec<JsonbScalarValue>],
     ) -> usize {
         if virtual_values.is_empty() {
@@ -595,7 +600,7 @@ impl VirtualColumnBuilder {
         // {"k1":{"k2":"val"}}
         // {"k1":100}
         // we should not create virtual column for `k1`.
-        for virtual_paths in &self.virtual_paths {
+        for virtual_paths in virtual_paths {
             for (virtual_path, index) in virtual_paths {
                 if virtual_values[*index].is_empty() {
                     continue;
