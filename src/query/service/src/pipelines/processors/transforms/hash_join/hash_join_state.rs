@@ -27,7 +27,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::{BlockEntry, Column, HashMethod, KeysState, ProjectedBlock};
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -35,7 +35,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_hashtable::BinaryHashJoinHashMap;
+use databend_common_hashtable::{BinaryHashJoinHashMap, RawEntry, StringRawEntry, STRING_EARLY_SIZE};
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RowPtr;
@@ -330,7 +330,151 @@ impl HashJoinState {
 }
 
 impl<T: HashtableKeyable> FixedKeyHashJoinHashTable<T> {
-    pub fn insert(&mut self, data_block: DataBlock) -> Result<()> {
-        
+    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+        let num_rows = keys.num_rows();
+        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
+        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
+
+        let entry_size = std::mem::size_of::<RawEntry<T>>();
+        arena.reserve(num_rows * entry_size);
+
+        let mut raw_entry_ptr =
+            unsafe { std::mem::transmute::<*mut u8, *mut RawEntry<T>>(arena.as_mut_ptr()) };
+
+        for (row_index, key) in build_keys_iter.enumerate() {
+            let row_ptr = RowPtr {
+                chunk_index: chunk as u32,
+                row_index: row_index as u32,
+            };
+
+            // # Safety
+            // The memory address of `raw_entry_ptr` is valid.
+            unsafe {
+                *raw_entry_ptr = RawEntry {
+                    row_ptr,
+                    key: *key,
+                    next: 0,
+                }
+            }
+
+            self.hash_table.insert(*key, raw_entry_ptr);
+            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+        }
+
+        Ok(())
+    }
+}
+
+impl SerializerHashJoinHashTable {
+    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+        let num_rows = keys.num_rows();
+        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
+        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
+
+        let space_size = match &keys_state {
+            // safe to unwrap(): offset.len() >= 1.
+            KeysState::Column(Column::Bitmap(col)) => col.data().len(),
+            KeysState::Column(Column::Binary(col)) => col.data().len(),
+            KeysState::Column(Column::Variant(col)) => col.data().len(),
+            KeysState::Column(Column::String(col)) => col.total_bytes_len(),
+            _ => unreachable!(),
+        };
+
+        static ENTRY_SIZE: usize = std::mem::size_of::<StringRawEntry>();
+        arena.reserve(num_rows * ENTRY_SIZE + space_size);
+
+        let (mut raw_entry_ptr, mut string_local_space_ptr) = unsafe {
+            (
+                std::mem::transmute::<*mut u8, *mut StringRawEntry>(arena.as_mut_ptr()),
+                arena.as_mut_ptr().add(num_rows * ENTRY_SIZE),
+            )
+        };
+
+        for (row_index, key) in build_keys_iter.enumerate() {
+            let row_ptr = RowPtr {
+                chunk_index: chunk as u32,
+                row_index: row_index as u32,
+            };
+
+            // # Safety
+            // The memory address of `raw_entry_ptr` is valid.
+            // string_offset + key.len() <= space_size.
+            unsafe {
+                (*raw_entry_ptr).row_ptr = row_ptr;
+                (*raw_entry_ptr).length = key.len() as u32;
+                (*raw_entry_ptr).next = 0;
+                (*raw_entry_ptr).key = string_local_space_ptr;
+                // The size of `early` is 4.
+                std::ptr::copy_nonoverlapping(
+                    key.as_ptr(),
+                    (*raw_entry_ptr).early.as_mut_ptr(),
+                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                );
+                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                string_local_space_ptr = string_local_space_ptr.add(key.len());
+            }
+
+            self.hash_table.insert(key, raw_entry_ptr);
+            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+        }
+
+        Ok(())
+    }
+}
+
+impl SingleBinaryHashJoinHashTable {
+    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+        let num_rows = keys.num_rows();
+        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
+        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
+
+        let space_size = match &keys_state {
+            // safe to unwrap(): offset.len() >= 1.
+            KeysState::Column(Column::Bitmap(col)) => col.data().len(),
+            KeysState::Column(Column::Binary(col)) => col.data().len(),
+            KeysState::Column(Column::Variant(col)) => col.data().len(),
+            KeysState::Column(Column::String(col)) => col.total_bytes_len(),
+            _ => unreachable!(),
+        };
+
+        static ENTRY_SIZE: usize = std::mem::size_of::<StringRawEntry>();
+        arena.reserve(num_rows * ENTRY_SIZE + space_size);
+
+        let (mut raw_entry_ptr, mut string_local_space_ptr) = unsafe {
+            (
+                std::mem::transmute::<*mut u8, *mut StringRawEntry>(arena.as_mut_ptr()),
+                arena.as_mut_ptr().add(num_rows * ENTRY_SIZE),
+            )
+        };
+
+        for (row_index, key) in build_keys_iter.enumerate() {
+            let row_ptr = RowPtr {
+                chunk_index: chunk as u32,
+                row_index: row_index as u32,
+            };
+
+            // # Safety
+            // The memory address of `raw_entry_ptr` is valid.
+            // string_offset + key.len() <= space_size.
+            unsafe {
+                (*raw_entry_ptr).row_ptr = row_ptr;
+                (*raw_entry_ptr).length = key.len() as u32;
+                (*raw_entry_ptr).next = 0;
+                (*raw_entry_ptr).key = string_local_space_ptr;
+                // The size of `early` is 4.
+                std::ptr::copy_nonoverlapping(
+                    key.as_ptr(),
+                    (*raw_entry_ptr).early.as_mut_ptr(),
+                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
+                );
+                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                string_local_space_ptr = string_local_space_ptr.add(key.len());
+            }
+
+            self.hash_table.insert(key, raw_entry_ptr);
+            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
+        }
+
+        Ok(())
     }
 }
