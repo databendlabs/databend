@@ -161,20 +161,35 @@ impl HashJoinDesc {
             .collect::<Result<_>>()
     }
 
-    pub fn filter_null_by_keys(
-        &self,
-        block: DataBlock,
-        keys: &mut [BlockEntry],
-    ) -> Result<DataBlock> {
+    pub fn probe_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
+        let build_keys = &self.probe_keys;
+        let evaluator = Evaluator::new(&block, ctx, &BUILTIN_FUNCTIONS);
+        build_keys
+            .iter()
+            .map(|expr| {
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), block.num_rows())
+                    .into())
+            })
+            .collect::<Result<_>>()
+    }
+
+    pub fn build_valids_by_keys(&self, keys: &mut [BlockEntry]) -> Result<Option<Bitmap>> {
         let is_null_equal = &self.is_null_equal;
         let mut valids = None;
+
+        let num_rows = match keys.is_empty() {
+            true => 0,
+            false => keys[0].len(),
+        };
 
         for (entry, null_equals) in keys.iter().zip(is_null_equal.iter()) {
             if !null_equals {
                 let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
 
                 if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, block.num_rows()));
+                    valids = Some(Bitmap::new_constant(false, num_rows));
                     break;
                 }
 
@@ -198,12 +213,6 @@ impl HashJoinDesc {
             }
         }
 
-        if let Some(bitmap) = valids {
-            if bitmap.null_count() != bitmap.len() {
-                return block.filter_with_bitmap(&bitmap);
-            }
-        }
-
-        Ok(block)
+        Ok(valids)
     }
 }

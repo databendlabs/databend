@@ -20,7 +20,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
-use databend_common_expression::BlockEntry;
+use databend_common_expression::{with_join_hash_method, BlockEntry, HashMethod};
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
@@ -29,7 +29,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::ProjectedBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::BinaryHashJoinHashMap;
+use databend_common_hashtable::{BinaryHashJoinHashMap, HashJoinHashtableLike};
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
@@ -52,7 +52,10 @@ pub struct MemoryInnerJoin {
     method: HashMethodKind,
     state: Arc<HashJoinMemoryState>,
     build_projection: ColumnSet,
+    probe_projections: ColumnSet,
     function_ctx: FunctionContext,
+    num_matched: usize,
+    processed_probe_rows: usize,
 }
 
 impl MemoryInnerJoin {
@@ -192,9 +195,12 @@ impl Join for MemoryInnerJoin {
 
         let mut keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
         chunk_block = chunk_block.project(&self.build_projection);
-        chunk_block = self
-            .desc
-            .filter_null_by_keys(chunk_block, &mut keys_entries)?;
+
+        if let Some(bitmap) = self.desc.build_valids_by_keys(&mut keys_entries)? {
+            if bitmap.null_count() != bitmap.len() {
+                chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
+            }
+        }
 
         let num_rows = chunk_block.num_rows();
         let num_bytes = chunk_block.memory_size();
@@ -213,7 +219,104 @@ impl Join for MemoryInnerJoin {
         }))
     }
 
-    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>> {
+    fn probe_block(&mut self, mut data: DataBlock) -> Result<Box<dyn JoinStream>> {
+        let mut probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+
+        let valids = match self.desc.from_correlated_subquery {
+            true => None,
+            false => self.desc.build_valids_by_keys(&mut probe_keys)?,
+        };
+
+        // Adaptive early filtering.
+        // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
+        // when all keys have matches. This allows us to achieve the same performance as before.
+        self.processed_probe_rows += match valids.as_ref() {
+            None => data.num_rows(),
+            Some(valids) => valids.len() - valids.null_count(),
+        };
+
+        // We use the information from the probed data to predict the matching state of this probe.
+        let enable_early_filtering =
+            (self.num_matched as f64) / (self.processed_probe_rows as f64) < 0.8;
+
+        let probe_key = ProjectedBlock::from(&probe_keys);
+        let mut hashes = Vec::with_capacity(data.num_rows());
+        // let mut selection = Vec::with_capacity(data.num_rows());
+        with_join_hash_method!(|T| match self.state.hash_table.deref() {
+            HashJoinHashTable::T(table) => {
+                // Build `keys` and get the hashes of `keys`.
+                let keys_state = table.hash_method.build_keys_state(probe_key, data.num_rows())?;
+                table.hash_method.build_keys_hashes(&keys_state, &mut hashes);
+                let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
+
+                // probe_state.process_state = Some(ProcessState {
+                //     input,
+                //     probe_has_null,
+                //     keys_state,
+                //     next_idx: 0,
+                // });
+
+                match enable_early_filtering {
+                    true => table.hash_table.early_filtering_matched_probe(
+                            &mut hashes,
+                            valids,
+                            &mut selection,
+                        ),
+                    false => table.hash_table.probe(&mut hashes, valids)
+                }
+
+                // Perform a round of hash table probe.
+                // probe_state.probe_with_selection = prefer_early_filtering;
+                probe_state.selection_count = if !Self::need_unmatched_selection(
+                    &self.hash_join_state.hash_join_desc.join_type,
+                    probe_state.with_conjunction,
+                ) {
+                    if prefer_early_filtering {
+                        // Early filtering, use selection to get better performance.
+                        table.hash_table.early_filtering_matched_probe(
+                            &mut probe_state.hashes,
+                            valids,
+                            &mut probe_state.selection,
+                        )
+                    } else {
+                        // If don't do early filtering, don't use selection.
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    }
+                } else {
+                    if prefer_early_filtering {
+                        // Early filtering, use matched selection and unmatched selection to get better performance.
+                        let unmatched_selection =
+                            probe_state.probe_unmatched_indexes.as_mut().unwrap();
+                        let (matched_count, unmatched_count) =
+                            table.hash_table.early_filtering_probe(
+                                &mut probe_state.hashes,
+                                valids,
+                                &mut probe_state.selection,
+                                unmatched_selection,
+                            );
+                        probe_state.probe_unmatched_indexes_count = unmatched_count;
+                        matched_count
+                    } else {
+                        // If don't do early filtering, don't use selection.
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    }
+                };
+                probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
+
+                // Continue to probe hash table and process data blocks.
+                self.result_blocks(probe_state, keys, &table.hash_table)
+            }
+            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the hash table is uninitialized.",
+            )),
+        })
+        // let keys_state = self.method.build_keys_state(probe_keys, input_num_rows)?;
+        table
+            .hash_method
+            .build_keys_hashes(&keys_state, &mut probe_state.hashes);
+        let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
+        data = data.project(&self.probe_projections)?;
+
         todo!()
     }
 
