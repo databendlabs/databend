@@ -27,4 +27,5 @@ pub struct HashJoinMemoryState {
     pub build_queue: CStyleCell<VecDeque<usize>>,
 
     pub hash_table: CStyleCell<HashJoinHashTable>,
+    pub arenas: CStyleCell<Vec<Vec<u8>>>,
 }

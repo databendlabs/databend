@@ -23,12 +23,15 @@ use databend_common_expression::arrow::and_validities;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
+use databend_common_expression::ProjectedBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
+use databend_common_sql::ColumnSet;
 use ethnum::U256;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
@@ -48,10 +51,12 @@ pub struct MemoryInnerJoin {
 
     method: HashMethodKind,
     state: Arc<HashJoinMemoryState>,
+    build_projection: ColumnSet,
+    function_ctx: FunctionContext,
 }
 
 impl MemoryInnerJoin {
-    pub fn create() -> Box<dyn Join> {
+    pub fn create() -> Self {
         unimplemented!()
     }
 
@@ -118,19 +123,28 @@ impl MemoryInnerJoin {
         }
     }
 
-    fn build_hash_table(&self, data_block: &DataBlock) -> Result<()> {
+    fn build_hash_table(&self, keys: Vec<BlockEntry>, chunk_idx: usize) -> Result<()> {
+        let mut arena = Vec::new();
+        let keys = ProjectedBlock::from(&keys);
+
         match self.state.hash_table.deref() {
-            HashJoinHashTable::Null => {}
-            HashJoinHashTable::Serializer(_) => {}
-            HashJoinHashTable::SingleBinary(_) => {}
-            HashJoinHashTable::KeysU8(v) => {}
-            HashJoinHashTable::KeysU16(v) => {}
-            HashJoinHashTable::KeysU32(v) => {}
-            HashJoinHashTable::KeysU64(v) => {}
-            HashJoinHashTable::KeysU128(v) => {}
-            HashJoinHashTable::KeysU256(v) => {}
+            HashJoinHashTable::Null => (),
+            HashJoinHashTable::Serializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::SingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU16(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU32(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU64(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU128(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::KeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
+        };
+
+        if !arena.is_empty() {
+            let locked = self.state.mutex.lock();
+            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+            self.state.arenas.as_mut().push(arena);
         }
-        // self.state.h
+
         Ok(())
     }
 
@@ -168,17 +182,35 @@ impl Join for MemoryInnerJoin {
             return Ok(None);
         };
 
-        let data_block = &self.state.chunks[chunk_index];
+        let mut chunk_block = DataBlock::empty();
 
-        let num_rows = data_block.num_rows();
-        let num_bytes = data_block.memory_size();
+        // take storage block
+        {
+            let chunks = self.state.chunks.as_mut();
+            std::mem::swap(&mut chunks[chunk_block], &mut chunk_block);
+        }
 
-        let progress_values = ProgressValues {
+        let mut keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
+        chunk_block = chunk_block.project(&self.build_projection);
+        chunk_block = self
+            .desc
+            .filter_null_by_keys(chunk_block, &mut keys_entries)?;
+
+        let num_rows = chunk_block.num_rows();
+        let num_bytes = chunk_block.memory_size();
+
+        // restore storage block
+        {
+            let chunks = self.state.chunks.as_mut();
+            std::mem::swap(&mut chunks[chunk_block], &mut chunk_block);
+        }
+
+        self.build_hash_table(keys_entries, chunk_index)?;
+
+        Ok(Some(ProgressValues {
             rows: num_rows,
             bytes: num_bytes,
-        };
-
-        Ok(Some(progress_values))
+        }))
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>> {
@@ -190,74 +222,4 @@ impl Join for MemoryInnerJoin {
     }
 }
 
-// pub fn build_join_keys(block: DataBlock, desc: &HashJoinDesc) -> Result<DataBlock> {
-//     let build_keys = &desc.build_keys;
-//
-//     let evaluator = Evaluator::new(&block, &desc.func_ctx, &BUILTIN_FUNCTIONS);
-//     let keys_entries: Vec<BlockEntry> = build_keys
-//         .iter()
-//         .map(|expr| {
-//             Ok(evaluator
-//                 .run(expr)?
-//                 .convert_to_full_column(expr.data_type(), block.num_rows())
-//                 .into())
-//         })
-//         .collect::<Result<_>>()?;
-//
-//     // projection data blocks
-//     let column_nums = block.num_columns();
-//     let mut block_entries = Vec::with_capacity(desc.build_projections.len());
-//
-//     for index in 0..column_nums {
-//         if !desc.build_projections.contains(&index) {
-//             continue;
-//         }
-//
-//         block_entries.push(block.get_by_offset(index).clone());
-//     }
-//
-//     let mut projected_block = DataBlock::new(block_entries, block.num_rows());
-//     // After computing complex join key expressions, we discard unnecessary columns as soon as possible to expect the release of memory.
-//     drop(block);
-//
-//     let is_null_equal = &desc.is_null_equal;
-//     let mut valids = None;
-//
-//     for (entry, null_equals) in keys_entries.iter().zip(is_null_equal.iter()) {
-//         if !null_equals {
-//             let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
-//
-//             if is_all_null {
-//                 valids = Some(Bitmap::new_constant(false, projected_block.num_rows()));
-//                 break;
-//             }
-//
-//             valids = and_validities(valids, column_valids.cloned());
-//
-//             if let Some(bitmap) = valids.as_ref() {
-//                 if bitmap.null_count() == bitmap.len() {
-//                     break;
-//                 }
-//
-//                 if bitmap.null_count() == 0 {
-//                     valids = None;
-//                 }
-//             }
-//         }
-//     }
-//
-//     for (entry, is_null) in keys_entries.into_iter().zip(is_null_equal.iter()) {
-//         projected_block.add_entry(match !is_null && entry.data_type().is_nullable() {
-//             true => entry.remove_nullable(),
-//             false => entry,
-//         });
-//     }
-//
-//     if let Some(bitmap) = valids {
-//         if bitmap.null_count() != bitmap.len() {
-//             return projected_block.filter_with_bitmap(&bitmap);
-//         }
-//     }
-//
-//     Ok(projected_block)
-// }
+struct MemoryInnerJoinStream {}

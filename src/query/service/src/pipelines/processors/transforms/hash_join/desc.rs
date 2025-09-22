@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::arrow::and_validities;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::ColumnSet;
 use parking_lot::RwLock;
+use petgraph::visit::Walker;
 
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::PhysicalRuntimeFilter;
@@ -136,5 +145,65 @@ impl HashJoinDesc {
             },
             other => other,
         }
+    }
+
+    pub fn build_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
+        let build_keys = &self.build_keys;
+        let evaluator = Evaluator::new(&block, ctx, &BUILTIN_FUNCTIONS);
+        build_keys
+            .iter()
+            .map(|expr| {
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), block.num_rows())
+                    .into())
+            })
+            .collect::<Result<_>>()
+    }
+
+    pub fn filter_null_by_keys(
+        &self,
+        block: DataBlock,
+        keys: &mut [BlockEntry],
+    ) -> Result<DataBlock> {
+        let is_null_equal = &self.is_null_equal;
+        let mut valids = None;
+
+        for (entry, null_equals) in keys.iter().zip(is_null_equal.iter()) {
+            if !null_equals {
+                let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
+
+                if is_all_null {
+                    valids = Some(Bitmap::new_constant(false, block.num_rows()));
+                    break;
+                }
+
+                valids = and_validities(valids, column_valids.cloned());
+
+                if let Some(bitmap) = valids.as_ref() {
+                    if bitmap.null_count() == bitmap.len() {
+                        break;
+                    }
+
+                    if bitmap.null_count() == 0 {
+                        valids = None;
+                    }
+                }
+            }
+        }
+
+        for (entry, is_null) in keys.iter_mut().zip(is_null_equal.iter()) {
+            if !is_null && entry.data_type().is_nullable() {
+                *entry = entry.remove_nullable();
+            }
+        }
+
+        if let Some(bitmap) = valids {
+            if bitmap.null_count() != bitmap.len() {
+                return block.filter_with_bitmap(&bitmap);
+            }
+        }
+
+        Ok(block)
     }
 }
