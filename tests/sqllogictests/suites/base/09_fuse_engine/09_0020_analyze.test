@@ -97,7 +97,7 @@ delete from t where a=5
 query T
 select * from fuse_statistic('db_09_0020', 't')
 ----
-a 3 0 8 (empty)
+a 2 0 8 (empty)
 
 statement ok
 analyze table `t`
@@ -199,8 +199,8 @@ delete from t2 where a=1;
 query T
 show statistics from table db_09_0020.t2;
 ----
-db_09_0020 t2 a 4 3 3 0 4 (empty)
-db_09_0020 t2 b 4 3 3 0 4 (empty)
+db_09_0020 t2 a 3 3 2 0 4 (empty)
+db_09_0020 t2 b 3 3 2 0 4 (empty)
 
 statement ok
 analyze table t2;
@@ -209,12 +209,12 @@ query T
 show statistics from table db_09_0020.t2;
 ----
 db_09_0020 t2 a 3 3 2 0 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
-db_09_0020 t2 b 3 3 3 0 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
+db_09_0020 t2 b 3 3 2 0 4 [bucket id: 0, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "4", max: "4", ndv: 1.0, count: 1.0]
 
 query I
 select count() from fuse_snapshot('db_09_0020','t2');
 ----
-4
+6
 
 statement ok
 DROP TABLE t2;
