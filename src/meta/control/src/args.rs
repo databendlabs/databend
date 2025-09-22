@@ -276,3 +276,9 @@ pub struct MetricsArgs {
     #[clap(long, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct MemberListArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+}
