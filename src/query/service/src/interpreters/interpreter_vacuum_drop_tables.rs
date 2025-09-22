@@ -52,11 +52,14 @@ impl VacuumDropTablesInterpreter {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
     }
 
+    /// Vacuum metadata of dropped tables and databases.
+    ///
+    /// Returns the approximate number of metadata keys removed.
     async fn gc_drop_tables(
         &self,
         catalog: Arc<dyn Catalog>,
         drop_ids: Vec<DroppedId>,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         info!(
             "vacuum metadata of dropped table from db {:?}",
             self.plan.database,
@@ -83,6 +86,7 @@ impl VacuumDropTablesInterpreter {
 
         let chunk_size = 50;
 
+        let mut num_meta_keys_removed = 0;
         // first gc drop table ids
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);
@@ -91,7 +95,7 @@ impl VacuumDropTablesInterpreter {
                 catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
-            catalog.gc_drop_tables(req).await?;
+            num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
         }
 
         // then gc drop db ids
@@ -102,10 +106,10 @@ impl VacuumDropTablesInterpreter {
                 catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
-            catalog.gc_drop_tables(req).await?;
+            num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
         }
 
-        Ok(())
+        Ok(num_meta_keys_removed)
     }
 }
 
@@ -224,6 +228,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .map(|id| *containing_db.get(id).unwrap())
             .collect::<HashSet<_>>();
 
+        let mut num_meta_keys_removed = 0;
         // gc metadata only when not dry run
         if self.plan.option.dry_run.is_none() {
             let mut success_dropped_ids = vec![];
@@ -253,15 +258,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 info!("failed table ids: {:?}", failed_tables);
             }
 
-            self.gc_drop_tables(catalog, success_dropped_ids).await?;
+            num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }
 
         let success_count = tables_count as u64 - failed_tables.len() as u64;
         let failed_count = failed_tables.len() as u64;
 
         info!(
-            "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}",
-            success_count, failed_count, tables_count
+            "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
+            success_count, failed_count, tables_count, num_meta_keys_removed
         );
 
         match files_opt {
