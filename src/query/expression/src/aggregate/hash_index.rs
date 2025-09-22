@@ -39,8 +39,9 @@ impl HashIndex {
     }
 
     fn find_or_insert(&mut self, mut slot: usize, salt: u16) -> (usize, bool) {
+        let entries = self.entries.as_mut_slice();
         loop {
-            let entry = &mut self.entries[slot];
+            let entry = &mut entries[slot];
             if entry.is_occupied() {
                 if entry.get_salt() == salt {
                     return (slot, false);
@@ -60,7 +61,8 @@ impl HashIndex {
 
     pub fn probe_slot(&mut self, hash: u64) -> usize {
         let mut slot = self.init_slot(hash);
-        while self.entries[slot].is_occupied() {
+        let entries = self.entries.as_mut_slice();
+        while entries[slot].is_occupied() {
             slot += 1;
             if slot >= self.capacity {
                 slot = 0;
