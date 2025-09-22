@@ -34,6 +34,7 @@ use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::MemberListArgs;
 use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
@@ -45,7 +46,7 @@ use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_control::lua_support;
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
@@ -286,6 +287,17 @@ return metrics, nil
         }
     }
 
+    async fn member_list(&self, args: &MemberListArgs) -> anyhow::Result<()> {
+        let addresses = vec![args.grpc_api_address.clone()];
+        let client = self.new_grpc_client(addresses)?;
+
+        let res = client.get_member_list().await?;
+        for member in res.data {
+            println!("{}", member);
+        }
+        Ok(())
+    }
+
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
         lua_support::new_grpc_client(addresses, &BUILD_INFO)
     }
@@ -305,6 +317,7 @@ enum CtlCommand {
     Upsert(UpsertArgs),
     Get(GetArgs),
     Lua(LuaArgs),
+    MemberList(MemberListArgs),
     Metrics(MetricsArgs),
 }
 
@@ -379,6 +392,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Lua(args) => {
                 app.run_lua(args).await?;
+            }
+            CtlCommand::MemberList(args) => {
+                app.member_list(args).await?;
             }
             CtlCommand::Metrics(args) => {
                 app.get_metrics(args).await?;

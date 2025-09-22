@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
@@ -28,6 +31,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
+use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::Spiller;
@@ -87,6 +91,7 @@ impl HashJoinSpiller {
         let partition_threshold = partition_buffer_threshold * 1024 * 1024 / num_partitions;
 
         let block_bytes = ctx.get_settings().get_max_block_bytes()? as usize;
+
         // Create a PartitionBuffer to buffer data before spilling.
         let partition_buffer = PartitionBuffer::create(num_partitions);
 
@@ -176,6 +181,9 @@ impl HashJoinSpiller {
         };
 
         let mut unspilled_data_blocks = vec![];
+
+        let mut partitions_writer = HashMap::<usize, BlocksWriter>::new();
+
         for data_block in data_blocks {
             let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
 
@@ -191,10 +199,35 @@ impl HashJoinSpiller {
                     continue;
                 }
 
-                self.spiller
-                    .spill_with_partition(partition_id, vec![data_block])
-                    .await?;
+                if data_block.is_empty() {
+                    continue;
+                }
+
+                let progress_val = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+
+                match partitions_writer.entry(partition_id) {
+                    Entry::Occupied(mut entry) => {
+                        let stream_writer = entry.get_mut();
+                        stream_writer.write(data_block).await?;
+                    }
+                    Entry::Vacant(entry) => {
+                        let mut stream_writer = self.spiller.block_stream_writer().await?;
+                        stream_writer.write(data_block).await?;
+                        entry.insert(stream_writer);
+                    }
+                };
+
+                self.spiller.inc_progress(progress_val);
             }
+        }
+
+        for (id, partition_writer) in partitions_writer {
+            let (location, written, written_blocks) = partition_writer.close().await?;
+            self.spiller
+                .add_hash_join_location(id, location, written_blocks, written);
         }
 
         if let Some(partition_need_to_spill) = partition_need_to_spill {
@@ -264,11 +297,11 @@ impl HashJoinSpiller {
 
         // 2. restore data from spilled files.
         if self.need_read_partition() {
-            let partition_data_blocks = self.spiller.read_spilled_partition(&partition_id).await?;
-            if !partition_data_blocks.is_empty() {
-                let spilled_data = DataBlock::concat(&partition_data_blocks)?;
-                if !spilled_data.is_empty() {
-                    data_blocks.push(spilled_data);
+            let mut block_reader = self.spiller.partition_blocks_reader(&partition_id);
+
+            while let Some(data_block) = block_reader.read().await? {
+                if !data_block.is_empty() {
+                    data_blocks.push(data_block);
                 }
             }
         } else {

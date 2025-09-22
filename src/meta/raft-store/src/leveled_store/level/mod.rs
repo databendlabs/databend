@@ -35,6 +35,9 @@ use state_machine_api::UserKey;
 
 use crate::leveled_store::get_sub_table::GetSubTable;
 
+mod stat;
+pub use stat::LevelStat;
+
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
@@ -115,6 +118,14 @@ impl Level {
         level.with_sys_data(|s| s.incr_data_seq());
 
         level
+    }
+
+    pub fn stat(&self) -> LevelStat {
+        LevelStat {
+            level_index: None,
+            user_count: self.kv.inner.len() as u64,
+            expire_count: self.expire.inner.len() as u64,
+        }
     }
 
     pub(crate) fn with_sys_data<T>(&mut self, f: impl FnOnce(&mut SysData) -> T) -> T {

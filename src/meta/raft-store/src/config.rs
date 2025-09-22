@@ -127,6 +127,9 @@ pub struct RaftConfig {
     /// Default: 1GB (1,073,741,824 bytes).
     pub snapshot_db_block_cache_size: u64,
 
+    /// Interval in milliseconds to compact the in memory immutable levels.
+    pub compact_immutables_ms: Option<u64>,
+
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
@@ -200,6 +203,7 @@ impl Default for RaftConfig {
             snapshot_db_block_cache_item: 1024,
             snapshot_db_block_cache_size: 1073741824,
 
+            compact_immutables_ms: None,
             single: false,
             join: vec![],
             learner: false,

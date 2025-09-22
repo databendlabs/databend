@@ -192,5 +192,3 @@ call procedure p2('x');
 statement ok
 drop procedure p2(string);
 
-statement ok
-unset global enable_experimental_procedure;

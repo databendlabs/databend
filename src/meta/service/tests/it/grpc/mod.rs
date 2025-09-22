@@ -20,6 +20,7 @@ pub mod metasrv_grpc_handshake;
 pub mod metasrv_grpc_kv_api;
 pub mod metasrv_grpc_kv_api_restart_cluster;
 pub mod metasrv_grpc_kv_read_v1;
+pub mod metasrv_grpc_member_list;
 pub mod metasrv_grpc_schema_api;
 pub mod metasrv_grpc_schema_api_follower_follower;
 pub mod metasrv_grpc_schema_api_leader_follower;

@@ -201,7 +201,7 @@ async fn init_new_cluster(
     let sto = RaftStore::open(&raft_config).await?;
 
     let last_applied = {
-        let sm2 = sto.state_machine().get_inner();
+        let sm2 = sto.get_sm_v003();
         *sm2.sys_data().last_applied_ref()
     };
 
@@ -213,7 +213,7 @@ async fn init_new_cluster(
 
     // Update snapshot: Replace nodes set and membership config.
     {
-        let sm2 = sto.state_machine().get_inner();
+        let sm2 = sto.get_sm_v003();
 
         // It must set membership to state machine because
         // the snapshot may contain more logs than the last_log_id.

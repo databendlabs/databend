@@ -13,10 +13,15 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::Weak;
+use std::time::Duration;
 
+use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::immutable_compactor::InMemoryCompactor;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::SMV003;
@@ -28,9 +33,12 @@ use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_metrics::count::Count;
+use futures::FutureExt;
 use futures::TryStreamExt;
 use log::error;
 use log::info;
+use seq_marked::InternalSeq;
+use tokio::sync::oneshot;
 
 use crate::metrics::raft_metrics;
 use crate::metrics::SnapshotBuilding;
@@ -42,27 +50,86 @@ mod raft_state_machine_impl;
 pub struct MetaRaftStateMachine {
     pub(crate) id: NodeId,
 
-    pub(crate) config: RaftConfig,
+    pub(crate) config: Arc<RaftConfig>,
+
+    pub(crate) in_memory_compactor_cancel: Option<Arc<oneshot::Sender<()>>>,
 
     inner: Arc<Mutex<Arc<SMV003>>>,
 }
 
 impl MetaRaftStateMachine {
-    pub fn new(id: NodeId, config: RaftConfig, inner: Arc<SMV003>) -> Self {
+    pub fn new(id: NodeId, config: Arc<RaftConfig>, inner: Arc<SMV003>) -> Self {
         Self {
             id,
             config,
+            in_memory_compactor_cancel: None,
             inner: Arc::new(Mutex::new(inner)),
         }
     }
 
-    pub fn get_inner(&self) -> Arc<SMV003> {
-        self.inner.lock().unwrap().clone()
+    pub(crate) fn spawn_in_memory_compactor(&mut self, interval: Duration) {
+        let (tx, rx) = oneshot::channel();
+
+        self.in_memory_compactor_cancel = Some(Arc::new(tx));
+
+        let weak = Arc::downgrade(&self.get_inner());
+        let fu = Self::compact_loop(weak, interval, rx);
+
+        let _j = spawn_named(fu, "in_memory_compactor".to_string());
     }
 
-    pub fn set_inner(&self, inner: Arc<SMV003>) {
+    async fn compact_loop(
+        weak_sm: Weak<SMV003>,
+        interval: Duration,
+        cancel: oneshot::Receiver<()>,
+    ) {
+        let mut c = std::pin::pin!(cancel);
+
+        loop {
+            let timeout_fu = tokio::time::sleep(interval);
+            futures::select! {
+                _ = c.as_mut().fuse() => {
+                    info!("in_memory_compact canceled by user");
+                    return;
+                }
+
+                _ = timeout_fu.fuse() => {
+                    info!("in_memory_compact is woken up, try to compact");
+                }
+
+            }
+
+            let Some(sm) = weak_sm.upgrade() else {
+                info!("in_memory_compact canceled as state machine dropped");
+                return;
+            };
+
+            Self::in_memory_compact_once(sm).await
+        }
+    }
+
+    async fn in_memory_compact_once(sm: Arc<SMV003>) {
+        let compactor = InMemoryCompactor::new(sm, "in_memory_compactor").await;
+
+        // 1. freeze the writable
+        let immutable_compactor = compactor.freeze();
+
+        // 2. compact two adjacent levels if needed.
+        // TODO: add snapshot seq when a mvcc is created.
+        //       currently, use the max value to eliminate all older records.
+        let min_snapshot_seq = InternalSeq::new(u64::MAX);
+        immutable_compactor.compact(min_snapshot_seq);
+
+        info!("in_memory_compact completed");
+    }
+
+    pub fn get_inner(&self) -> Arc<SMV003> {
+        self.inner.lock().unwrap().deref().clone()
+    }
+
+    pub fn set_inner(&self, sm: Arc<SMV003>) {
         let mut guard = self.inner.lock().unwrap();
-        *guard = inner;
+        *guard = sm;
     }
 
     #[fastrace::trace]
@@ -73,19 +140,19 @@ impl MetaRaftStateMachine {
 
         let _guard = SnapshotBuilding::guard();
 
-        let mut compactor_permit = self
-            .get_inner()
+        let sm_v003 = self.get_inner();
+        let mut compactor_permit = sm_v003
             .new_compactor_acquirer("build_snapshot")
             .acquire()
             .await;
         {
-            let mut writer_permit = self.get_inner().acquire_writer_permit().await;
-            self.get_inner()
+            let mut writer_permit = sm_v003.acquire_writer_permit().await;
+            sm_v003
                 .leveled_map()
                 .freeze_writable(&mut writer_permit, &mut compactor_permit);
         }
 
-        let mut compactor = self.get_inner().new_compactor(compactor_permit);
+        let mut compactor = sm_v003.new_compactor(compactor_permit);
 
         info!("do_build_snapshot compactor created");
 
@@ -168,7 +235,7 @@ impl MetaRaftStateMachine {
             snapshot_stat :% = db.stat(); "do_build_snapshot complete");
 
         {
-            self.get_inner()
+            sm_v003
                 .leveled_map()
                 .replace_with_compacted(&mut compactor, db.clone());
             info!("do_build_snapshot-replace_with_compacted returned");
@@ -198,7 +265,7 @@ impl MetaRaftStateMachine {
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
     #[fastrace::trace]
-    pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
+    pub async fn do_install_snapshot(&mut self, db: DB) -> Result<(), MetaStorageError> {
         let data_size = db.inner().file_size();
         let sys_data = db.sys_data().clone();
 
@@ -231,16 +298,13 @@ impl MetaRaftStateMachine {
 
         let new_sm = sm.install_snapshot_v003(db);
 
-        {
-            let mut g = self.inner.lock().unwrap();
-            *g = Arc::new(new_sm);
-        }
+        self.set_inner(Arc::new(new_sm));
 
         Ok(())
     }
 
     /// Return a snapshot store of this instance.
     pub fn snapshot_store(&self) -> SnapshotStoreV004 {
-        SnapshotStoreV004::new(self.config.clone())
+        SnapshotStoreV004::new(self.config.as_ref().clone())
     }
 }

@@ -28,6 +28,7 @@ use stream_more::KMerge;
 use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
+use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKey;
 
@@ -50,6 +51,13 @@ impl ImmutableLevels {
                 .map(|immu| (*immu.level_index(), immu))
                 .collect(),
         }
+    }
+
+    /// Get statistics of all levels from newest to oldest.
+    pub fn stat(&self) -> Vec<LevelStat> {
+        self.newest_to_oldest()
+            .map(|imm| imm.inner().stat().with_index(*imm.level_index()))
+            .collect()
     }
 
     pub(crate) fn indexes(&self) -> Vec<LevelIndex> {

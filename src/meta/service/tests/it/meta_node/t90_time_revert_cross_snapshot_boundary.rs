@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -127,8 +127,7 @@ async fn write_two_logs(
     // Check final state
     let result = meta_node
         .raft_store
-        .state_machine()
-        .get_inner()
+        .get_sm_v003()
         .kv_api()
         .get_kv("k1")
         .await?;
