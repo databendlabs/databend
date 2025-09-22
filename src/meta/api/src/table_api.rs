@@ -1601,6 +1601,7 @@ where
                     table_drop_time_range,
                     db_info.database_id.db_id,
                     capacity,
+                    vacuum_db,
                 )
                 .await?;
 
@@ -1647,9 +1648,14 @@ where
         };
 
         let database_id = seq_db_id.data;
-        let table_nivs =
-            get_history_tables_for_gc(self, drop_time_range.clone(), database_id.db_id, the_limit)
-                .await?;
+        let table_nivs = get_history_tables_for_gc(
+            self,
+            drop_time_range.clone(),
+            database_id.db_id,
+            the_limit,
+            false,
+        )
+        .await?;
 
         let mut drop_ids = vec![];
         let mut vacuum_tables = vec![];
