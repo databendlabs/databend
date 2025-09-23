@@ -71,7 +71,11 @@ impl FromToProto for AutoIncrementMeta {
     fn from_pb(p: pb::AutoIncrementMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        Ok(AutoIncrementMeta { step: p.step, current: p.current })
+        Ok(AutoIncrementMeta {
+            step: p.step,
+            current: p.current,
+            storage_version: p.storage_version,
+        })
     }
 
     fn to_pb(&self) -> Result<pb::AutoIncrementMeta, Incompatible> {
@@ -79,7 +83,8 @@ impl FromToProto for AutoIncrementMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             step: self.step,
-            current: self.current
+            current: self.current,
+            storage_version: self.storage_version,
         };
         Ok(p)
     }

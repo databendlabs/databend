@@ -48,4 +48,10 @@ message AutoIncrementMeta {
 
   int64 step = 1;
   uint64 current = 2;
+  
+  // Storage version:
+  //
+  // - By default the version is 0, which stores the value in `current` field.
+  // - With version == 1, it stores the value of the sequence in standalone key that support `FetchAddU64`.
+  uint64 storage_version = 3;
 }

@@ -455,6 +455,7 @@ where
                     let autoincrement_meta = AutoIncrementMeta {
                         step: auto_increment.step as i64,
                         current: auto_increment.start,
+                        storage_version: 0,
                     };
                     let auto_increment_key = AutoIncrementKey::new(table_id, *column_id as u32);
                     let auto_increment_ident =

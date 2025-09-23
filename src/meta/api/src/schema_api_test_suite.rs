@@ -5645,7 +5645,9 @@ impl SchemaApiTestSuite {
             let key = AutoIncrementKey::new(0, 1);
             let req = CreateSequenceReq {
                 create_option: CreateOption::Create,
-                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key)),
+                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
+                    &tenant, key,
+                )),
                 create_on,
                 start: 1,
                 increment: 1,
@@ -5667,7 +5669,8 @@ impl SchemaApiTestSuite {
         info!("--- get autoincrement");
         {
             let key = AutoIncrementKey::new(0, 1);
-            let req = SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
+            let req =
+                SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, None);
@@ -5719,7 +5722,9 @@ impl SchemaApiTestSuite {
         {
             let key = AutoIncrementKey::new(0, 1);
             let req = GetSequenceNextValueReq {
-                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key)),
+                ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
+                    &tenant, key,
+                )),
                 count: 10,
             };
             let resp = mt.get_sequence_next_value(req).await?;
@@ -5730,7 +5735,8 @@ impl SchemaApiTestSuite {
         info!("--- get autoincrement after nextval");
         {
             let key = AutoIncrementKey::new(0, 1);
-            let req = SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
+            let req =
+                SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(&tenant, key));
             let resp = mt.get_sequence(&req).await?;
             let resp = resp.unwrap().data;
             assert_eq!(resp.comment, None);

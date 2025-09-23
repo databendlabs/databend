@@ -28,6 +28,12 @@ pub type AutoIncrementIdent = TIdent<AutoIncrementRsc, AutoIncrementKey>;
 pub struct AutoIncrementMeta {
     pub step: i64,
     pub current: u64,
+
+    /// Storage version:
+    ///
+    /// - By default the version is 0, which stores the value in `current` field.
+    /// - With version == 1, it stores the value of the sequence in standalone key that support `FetchAddU64`.
+    pub storage_version: u64,
 }
 
 impl From<AutoIncrementMeta> for SequenceMeta {
@@ -39,14 +45,18 @@ impl From<AutoIncrementMeta> for SequenceMeta {
             step: auto_increment.step,
             // ignore, storage_version always 0
             current: auto_increment.current,
-            storage_version: 0,
+            storage_version: auto_increment.storage_version,
         }
     }
 }
 
 impl From<&SequenceMeta> for AutoIncrementMeta {
     fn from(m: &SequenceMeta) -> Self {
-        Self { step: m.step, current: m.current }
+        Self {
+            step: m.step,
+            current: m.current,
+            storage_version: m.storage_version,
+        }
     }
 }
 
