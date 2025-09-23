@@ -32,13 +32,6 @@ use crate::SledKeySpace;
 pub struct SledTree {
     pub name: String,
 
-    /// Whether to fsync after an write operation.
-    /// With sync==false, it WONT fsync even when user tell it to sync.
-    /// This is only used for testing when fsync is quite slow.
-    /// E.g. File::sync_all takes 10 ~ 30 ms on a Mac.
-    /// See: https://github.com/drmingdrmer/sledtest/blob/500929ab0b89afe547143a38fde6fe85d88f1f80/src/ben_sync.rs
-    sync: bool,
-
     pub tree: sled::Tree,
 }
 
@@ -80,7 +73,6 @@ impl SledTree {
     pub fn open<N: AsRef<[u8]> + Display>(
         db: &sled::Db,
         tree_name: N,
-        sync: bool,
     ) -> Result<Self, MetaStorageError> {
         // During testing, every tree name must be unique.
         if cfg!(test) {
@@ -94,7 +86,6 @@ impl SledTree {
 
         let rl = SledTree {
             name: tree_name.to_string(),
-            sync,
             tree: t,
         };
         Ok(rl)
@@ -164,7 +155,7 @@ impl SledTree {
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
         debug!("{}: flush: {}", func_name!(), flush);
 
-        if flush && self.sync {
+        if flush {
             self.tree.flush_async().await?;
         }
         debug!("{}: flush: {} Done", func_name!(), flush);

@@ -18,6 +18,7 @@ use std::any::type_name;
 
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;

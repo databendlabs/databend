@@ -52,13 +52,16 @@ impl VacuumDropTablesInterpreter {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
     }
 
+    /// Vacuum metadata of dropped tables and databases.
+    ///
+    /// Returns the approximate number of metadata keys removed.
     async fn gc_drop_tables(
         &self,
         catalog: Arc<dyn Catalog>,
         drop_ids: Vec<DroppedId>,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         info!(
-            "vacuum drop table from db {:?}, gc_drop_tables",
+            "vacuum metadata of dropped table from db {:?}",
             self.plan.database,
         );
 
@@ -75,8 +78,15 @@ impl VacuumDropTablesInterpreter {
             }
         }
 
+        info!(
+            "found {} database meta data and {} table metadata need to be cleaned",
+            drop_db_ids.len(),
+            drop_db_table_ids.len()
+        );
+
         let chunk_size = 50;
 
+        let mut num_meta_keys_removed = 0;
         // first gc drop table ids
         for c in drop_db_table_ids.chunks(chunk_size) {
             info!("vacuum drop {} table ids: {:?}", c.len(), c);
@@ -85,7 +95,7 @@ impl VacuumDropTablesInterpreter {
                 catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
-            catalog.gc_drop_tables(req).await?;
+            num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
         }
 
         // then gc drop db ids
@@ -96,10 +106,10 @@ impl VacuumDropTablesInterpreter {
                 catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
-            catalog.gc_drop_tables(req).await?;
+            num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
         }
 
-        Ok(())
+        Ok(num_meta_keys_removed)
     }
 }
 
@@ -124,8 +134,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
-            "vacuum drop table from db {:?}, duration: {:?}, retention_time: {:?}",
-            self.plan.database, duration, retention_time
+            "=== VACUUM DROP TABLE STARTED === db: {:?}, retention_days: {}, retention_time: {:?}",
+            self.plan.database,
+            ctx.get_settings().get_data_retention_time_in_days()?,
+            retention_time
         );
         // if database if empty, vacuum all tables
         let database_name = if self.plan.database.is_empty() {
@@ -153,13 +165,18 @@ impl Interpreter for VacuumDropTablesInterpreter {
         }
 
         info!(
-            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?},tables.len: {:?}, drop_ids: {:?}",
+            "vacuum drop table from db {:?}, found {} tables: [{}], drop_ids: {:?}",
             self.plan.database,
+            tables.len(),
             tables
                 .iter()
-                .map(|t| t.get_table_info())
-                .collect::<Vec<_>>(),
-            tables.len(),
+                .map(|t| format!(
+                    "{}(id:{})",
+                    t.get_table_info().name,
+                    t.get_table_info().ident.table_id
+                ))
+                .collect::<Vec<_>>()
+                .join(", "),
             drop_ids
         );
 
@@ -176,12 +193,17 @@ impl Interpreter for VacuumDropTablesInterpreter {
         }
 
         info!(
-            "after filter read-only tables: {:?}, tables.len: {:?}",
+            "after filter read-only tables: {} tables remain: [{}]",
+            tables.len(),
             tables
                 .iter()
-                .map(|t| t.get_table_info())
-                .collect::<Vec<_>>(),
-            tables.len()
+                .map(|t| format!(
+                    "{}(id:{})",
+                    t.get_table_info().name,
+                    t.get_table_info().ident.table_id
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         let tables_count = tables.len();
@@ -206,6 +228,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             .map(|id| *containing_db.get(id).unwrap())
             .collect::<HashSet<_>>();
 
+        let mut num_meta_keys_removed = 0;
         // gc metadata only when not dry run
         if self.plan.option.dry_run.is_none() {
             let mut success_dropped_ids = vec![];
@@ -226,17 +249,30 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 }
             }
             info!(
-                "failed dbs:{:?}, failed_tables:{:?}, success_drop_ids:{:?}",
-                failed_db_ids, failed_tables, success_dropped_ids
+                "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
+                failed_db_ids.len(),
+                failed_tables.len(),
+                success_dropped_ids.len()
             );
+            if !failed_tables.is_empty() {
+                info!("failed table ids: {:?}", failed_tables);
+            }
 
-            self.gc_drop_tables(catalog, success_dropped_ids).await?;
+            num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
         }
+
+        let success_count = tables_count as u64 - failed_tables.len() as u64;
+        let failed_count = failed_tables.len() as u64;
+
+        info!(
+            "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
+            success_count, failed_count, tables_count, num_meta_keys_removed
+        );
 
         match files_opt {
             None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                UInt64Type::from_data(vec![tables_count as u64 - failed_tables.len() as u64]),
-                UInt64Type::from_data(vec![failed_tables.len() as u64]),
+                UInt64Type::from_data(vec![success_count]),
+                UInt64Type::from_data(vec![failed_count]),
             ])]),
             Some(purge_files) => {
                 let mut len = min(purge_files.len(), DRY_RUN_LIMIT);

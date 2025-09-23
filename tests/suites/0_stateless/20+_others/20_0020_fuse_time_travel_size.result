@@ -8,6 +8,9 @@ Size difference is less than 10 bytes
 >>>> select is_dropped from fuse_time_travel_size('test_fuse_time_travel_size')
 true
 <<<<
+>>>> select is_dropped from fuse_time_travel_size('test_fuse_time_travel_size', 't')
+true
+<<<<
 >>>> select data_retention_period_in_hours from fuse_time_travel_size('test_fuse_time_travel_size')
 240
 <<<<

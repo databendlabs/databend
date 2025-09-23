@@ -17,6 +17,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -55,6 +57,7 @@ use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
+use futures::TryStreamExt;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::sleep;
@@ -84,6 +87,12 @@ struct Config {
     /// "get_table": single get_table() rpc;
     /// "table_copy_file": upsert table with copy file.
     /// "table_copy_file:{"file_cnt":100}": upsert table with 100 copy files. After ":" is a json config string
+    /// "list": list all keys with default prefix pattern;
+    /// "list:{"limit":50}": list up to 50 keys with default prefix pattern;
+    /// "list:{"prefix":"custom_prefix"}": list all keys with custom prefix;
+    /// "list:{"prefix":"custom_prefix","limit":50}": list up to 50 keys with custom prefix;
+    /// "list:{"interval_ms":100}": add 100ms delay between reading each item (slow client simulation);
+    /// "list:{"prefix":"custom_prefix","limit":50,"interval_ms":100}": combine all options;
     #[clap(long, default_value = "upsert_kv")]
     pub rpc: String,
 }
@@ -117,12 +126,23 @@ async fn main() {
         return;
     }
 
+    let client = MetaGrpcClient::try_create_with_features(
+        vec![config.grpc_api_address.clone()],
+        &BUILD_INFO,
+        "root",
+        "xxx",
+        None,
+        None,
+        None,
+        required::read_write(),
+    )
+    .unwrap();
+
     let start = Instant::now();
     let mut client_num = 0;
     let mut handles = Vec::new();
     while client_num < config.client {
         client_num += 1;
-        let addr = config.grpc_api_address.clone();
         let rpc = config.rpc.clone();
         let prefix = config.prefix;
 
@@ -130,26 +150,9 @@ async fn main() {
         let cmd = cmd_and_param[0].to_string();
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
+        let client = client.clone();
+
         let handle = runtime::spawn(async move {
-            let client = MetaGrpcClient::try_create_with_features(
-                vec![addr.to_string()],
-                &BUILD_INFO,
-                "root",
-                "xxx",
-                None,
-                None,
-                None,
-                required::read_write(),
-            );
-
-            let client = match client {
-                Ok(client) => client,
-                Err(e) => {
-                    eprintln!("Failed to create client: {}", e);
-                    return;
-                }
-            };
-
             for i in 0..config.number {
                 if cmd == "upsert_kv" {
                     benchmark_upsert(&client, prefix, client_num, i).await;
@@ -161,6 +164,8 @@ async fn main() {
                     benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
                 } else if cmd == "semaphore" {
                     benchmark_semaphore(&client, prefix, client_num, i, &param).await;
+                } else if cmd == "list" {
+                    benchmark_list(&client, prefix, client_num, i, &param).await;
                 } else {
                     unreachable!("Invalid config.rpc: {}", rpc);
                 }
@@ -208,6 +213,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     let res = client
         .create_database(CreateDatabaseReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: DatabaseNameIdent::new(tenant(), db_name()),
             meta: Default::default(),
         })
@@ -222,6 +228,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     let res = client
         .create_table(CreateTableReq {
             create_option: CreateOption::CreateIfNotExists,
+            catalog_name: None,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
@@ -269,6 +276,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     let res = client
         .create_table(CreateTableReq {
             create_option: CreateOption::CreateIfNotExists,
+            catalog_name: None,
             name_ident: tb_name_ident(),
             table_meta: Default::default(),
             as_dropped: false,
@@ -444,6 +452,93 @@ async fn benchmark_semaphore(
     fn print_sem_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
         println!("{:>10}-th {} result: {:?}", i, typ, res);
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+struct ListConfig {
+    /// Maximum number of keys to return in the list operation.
+    /// If None, all matching keys are returned.
+    limit: Option<usize>,
+    /// The prefix to search for. If None, uses the default pattern "{prefix}-{client_num}".
+    prefix: Option<String>,
+    /// Interval in milliseconds to wait between reading each item from the stream.
+    /// This simulates a slow client. If None or 0, no delay is added.
+    interval_ms: Option<u64>,
+}
+
+/// Benchmark listing keys with a prefix.
+async fn benchmark_list(
+    client: &Arc<ClientHandle>,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) {
+    let name = format!("client[{:>05}]-{}th", client_num, i);
+
+    let config = if param.is_empty() {
+        ListConfig::default()
+    } else {
+        serde_json::from_str(param).unwrap()
+    };
+
+    let key_prefix = config
+        .prefix
+        .clone()
+        .unwrap_or_else(|| format!("{}-{}", prefix, client_num));
+
+    if i % 100 == 0 {
+        println!("{:>10}-th list using prefix: '{}'", name, key_prefix);
+    }
+
+    let start_time = Instant::now();
+    let stream_res = client.list(&key_prefix).await;
+    let stream_returned_time = Instant::now();
+
+    static TOTAL: AtomicU64 = AtomicU64::new(0);
+    TOTAL.fetch_add(1, Ordering::Relaxed);
+
+    println!(
+        "{:>10}-th list stream returned in {:?}, err: {:?}, total streams: {}",
+        name,
+        stream_returned_time.duration_since(start_time),
+        stream_res.as_ref().err(),
+        TOTAL.load(Ordering::Relaxed)
+    );
+
+    let mut strm = match stream_res {
+        Ok(stream) => stream,
+        Err(e) => {
+            println!("{:>10}-th list error: {:?}", name, e);
+            return;
+        }
+    };
+
+    let mut count = 0;
+
+    while let Ok(Some(_item)) = strm.try_next().await {
+        count += 1;
+
+        // Apply interval delay if specified (simulate slow client)
+        if let Some(interval_ms) = config.interval_ms {
+            if interval_ms > 0 {
+                sleep(Duration::from_millis(interval_ms)).await;
+            }
+        }
+
+        // Apply limit if specified
+        if let Some(limit) = config.limit {
+            if count >= limit {
+                break;
+            }
+        }
+
+        if count % 10 == 0 {
+            println!("{:>10}-th list found {} keys", name, count);
+        }
+    }
+
+    println!("{:>10}-th list found {} keys", name, count);
 }
 
 fn print_res<D: Debug>(i: u64, typ: impl Display, res: &D) {

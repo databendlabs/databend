@@ -73,6 +73,7 @@ async fn test_catalogs_database() -> Result<()> {
     {
         let req = CreateDatabaseReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: DatabaseNameIdent::new(&tenant, "db1"),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -154,6 +155,7 @@ async fn test_catalogs_table() -> Result<()> {
 
         let req = CreateTableReq {
             create_option: CreateOption::Create,
+            catalog_name: None,
             name_ident: TableNameIdent {
                 tenant: tenant.clone(),
                 db_name: "default".to_string(),

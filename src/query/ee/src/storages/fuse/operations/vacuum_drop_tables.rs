@@ -189,9 +189,13 @@ pub async fn vacuum_drop_tables_by_table_info(
         }
     };
 
+    let (_, failed_tables) = &result;
+    let (success_count, failed_count) = (num_tables - failed_tables.len(), failed_tables.len());
     info!(
-        "vacuum {} dropped tables, cost:{:?}",
+        "vacuum {} dropped tables completed - success: {}, failed: {}, total_cost: {:?}",
         num_tables,
+        success_count,
+        failed_count,
         start.elapsed()
     );
 

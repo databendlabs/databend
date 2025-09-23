@@ -181,6 +181,7 @@ impl Display for DbIdList {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatabaseReq {
     pub create_option: CreateOption,
+    pub catalog_name: Option<String>,
     pub name_ident: DatabaseNameIdent,
     pub meta: DatabaseMeta,
 }
@@ -217,7 +218,6 @@ impl Display for CreateDatabaseReq {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: DatabaseId,
-    pub old_db_id: Option<DatabaseId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

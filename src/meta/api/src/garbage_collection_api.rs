@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -43,6 +44,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
@@ -51,8 +53,10 @@ use display_more::DisplaySliceExt;
 use fastrace::func_name;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
@@ -78,19 +82,26 @@ where
     Self: Send + Sync,
     Self: kvapi::KVApi<Error = MetaError>,
 {
+    /// Garbage collect dropped tables.
+    ///
+    /// Returns the approximate number of metadata keys removed.
+    /// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
     #[fastrace::trace]
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<(), KVAppError> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize, KVAppError> {
+        let mut num_meta_key_removed = 0;
         for drop_id in req.drop_ids {
             match drop_id {
                 DroppedId::Db { db_id, db_name } => {
-                    gc_dropped_db_by_id(self, db_id, &req.tenant, &req.catalog, db_name).await?
+                    num_meta_key_removed +=
+                        gc_dropped_db_by_id(self, db_id, &req.tenant, &req.catalog, db_name).await?
                 }
                 DroppedId::Table { name, id } => {
-                    gc_dropped_table_by_id(self, &req.tenant, &req.catalog, &name, &id).await?
+                    num_meta_key_removed +=
+                        gc_dropped_table_by_id(self, &req.tenant, &req.catalog, &name, &id).await?
                 }
             }
         }
-        Ok(())
+        Ok(num_meta_key_removed)
     }
 }
 
@@ -108,12 +119,15 @@ pub const ORPHAN_POSTFIX: &str = "orphan";
 ///
 /// Dropped table can not be accessed by any query,
 /// so it is safe to remove all the copied files in multiple sub transactions.
+///
+/// Returns the number of copied file entries removed.
 async fn remove_copied_files_for_dropped_table(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: &TableId,
-) -> Result<(), MetaError> {
+) -> Result<usize, MetaError> {
     let batch_size = 1024;
 
+    let mut num_removed_copied_files = 0;
     // Loop until:
     // - all cleaned
     // - or table is removed from meta-service
@@ -123,7 +137,7 @@ async fn remove_copied_files_for_dropped_table(
 
         let seq_meta = kv_api.get_pb(table_id).await?;
         let Some(seq_table_meta) = seq_meta else {
-            return Ok(());
+            return Ok(num_removed_copied_files);
         };
 
         // TODO: enable this check. Currently when gc db, the table may not be dropped.
@@ -146,7 +160,7 @@ async fn remove_copied_files_for_dropped_table(
         let copied_files = key_stream.take(batch_size).try_collect::<Vec<_>>().await?;
 
         if copied_files.is_empty() {
-            return Ok(());
+            return Ok(num_removed_copied_files);
         }
 
         for copied_ident in copied_files.iter() {
@@ -163,6 +177,8 @@ async fn remove_copied_files_for_dropped_table(
             copied_files.len(),
             copied_files.display()
         );
+
+        num_removed_copied_files += copied_files.len();
 
         // Txn failures are ignored for simplicity, since copied files kv pairs are put with ttl,
         // they will not be leaked permanently, will be cleaned eventually.
@@ -181,7 +197,13 @@ pub async fn get_history_tables_for_gc(
     drop_time_range: Range<Option<DateTime<Utc>>>,
     db_id: u64,
     limit: usize,
+    db_is_dropped: bool,
 ) -> Result<Vec<TableNIV>, KVAppError> {
+    info!(
+        "get_history_tables_for_gc: db_id {}, limit {}",
+        db_id, limit
+    );
+
     let ident = TableIdHistoryIdent {
         database_id: db_id,
         table_name: "dummy".to_string(),
@@ -191,14 +213,51 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
+    // For table ids of each table with the same name, we keep the largest one, e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    // ```
+    // table_id 2 will be kept for table t (we do not care about the table name though),
+    //
+    // Please note that the largest table id might be "invisible", e.g.
+    // ```
+    //  create or replace table t ... ; -- table_id 1
+    //  create or replace table t ... ; -- table_id 2
+    //  drop table t ... ;
+    // ```
+    // In this case, table_id 2 is marked as dropped.
+
+    let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
+
     for (ident, table_history) in table_history_kvs {
-        for table_id in table_history.id_list.iter() {
-            args.push((TableId::new(*table_id), ident.table_name.clone()));
+        let id_list = &table_history.id_list;
+        if !id_list.is_empty() {
+            // Make sure that the last table id is also the max one (of each table name).
+            let last_id = id_list.last().unwrap();
+            {
+                let max_id = id_list.iter().max().unwrap();
+                assert_eq!(max_id, last_id);
+            }
+            latest_table_ids.insert(*last_id);
+
+            for table_id in id_list.iter() {
+                args.push((TableId::new(*table_id), ident.table_name.clone()));
+            }
         }
     }
 
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
+
+    let args_len = args.len();
+    let mut num_out_of_time_range = 0;
+    let mut num_processed = 0;
+
+    info!(
+        "get_history_tables_for_gc: {} items to process in db {}",
+        args_len, db_id
+    );
 
     // Process in batches to avoid performance issues
     for chunk in args.chunks(BATCH_SIZE) {
@@ -209,16 +268,46 @@ pub async fn get_history_tables_for_gc(
         // Filter by drop_time_range for current batch
         for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
             let Some(seq_meta) = seq_meta else {
-                error!(
+                warn!(
                     "batch_filter_table_info cannot find {:?} table_meta",
                     table_id
                 );
                 continue;
             };
 
-            if !drop_time_range.contains(&seq_meta.data.drop_on) {
-                info!("table {:?} is not in drop_time_range", seq_meta.data);
-                continue;
+            if !db_is_dropped {
+                // We shall not vacuum it if the table id is the largest table id of some table, but not marked with drop_on,
+                {
+                    let is_visible_last_active_table = seq_meta.data.drop_on.is_none()
+                        && latest_table_ids.contains(&table_id.table_id);
+
+                    if is_visible_last_active_table {
+                        debug!(
+                            "Table id {:?} of {} is the last visible one, not available for vacuum",
+                            table_id, table_name,
+                        );
+                        num_out_of_time_range += 1;
+                        continue;
+                    }
+                }
+
+                // Now the table id is
+                // - Either marked with drop_on
+                //   We use its `drop_on` to do the time range filtering
+                // - Or has no drop_on, but is not the last visible one of the table
+                //   It is still available for vacuum, and we use its `updated_on` to do the time range filtering
+
+                let time_point = if seq_meta.drop_on.is_none() {
+                    &Some(seq_meta.updated_on)
+                } else {
+                    &seq_meta.drop_on
+                };
+
+                if !drop_time_range.contains(time_point) {
+                    debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                    num_out_of_time_range += 1;
+                    continue;
+                }
             }
 
             filter_tb_infos.push(TableNIV::new(
@@ -229,9 +318,20 @@ pub async fn get_history_tables_for_gc(
 
             // Check if we have reached the limit
             if filter_tb_infos.len() >= limit {
+                info!(
+                    "get_history_tables_for_gc: reach limit {}, so far collected {}",
+                    limit,
+                    filter_tb_infos.len()
+                );
                 return Ok(filter_tb_infos);
             }
         }
+
+        num_processed += chunk.len();
+        info!(
+            "get_history_tables_for_gc: process: {}/{}, {} items filtered by time range condition",
+            num_processed, args_len, num_out_of_time_range
+        );
     }
 
     Ok(filter_tb_infos)
@@ -239,29 +339,36 @@ pub async fn get_history_tables_for_gc(
 
 /// Permanently remove a dropped database from the meta-service.
 /// then remove all **dropped and non-dropped** tables in the database.
+///
+/// Returns the approximate number of metadata keys removed.
+/// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
 async fn gc_dropped_db_by_id(
     kv_api: &(impl GarbageCollectionApi + IndexApi + ?Sized),
     db_id: u64,
     tenant: &Tenant,
     catalog: &String,
     db_name: String,
-) -> Result<(), KVAppError> {
+) -> Result<usize, KVAppError> {
+    let mut num_meta_keys_removed = 0;
     // List tables by tenant, db_id, table_name.
     let db_id_history_ident = DatabaseIdHistoryIdent::new(tenant, db_name.clone());
     let Some(seq_dbid_list) = kv_api.get_pb(&db_id_history_ident).await? else {
-        return Ok(());
+        info!("db_id_history_ident not found for db_id {}", db_id);
+        return Ok(num_meta_keys_removed);
     };
 
     let mut db_id_list = seq_dbid_list.data;
 
     // If the db_id is not in the list, return.
     if db_id_list.id_list.remove_first(&db_id).is_none() {
-        return Ok(());
+        info!("db_id_history_ident of db_id {} is empty", db_id);
+        return Ok(num_meta_keys_removed);
     }
 
     let dbid = DatabaseId { db_id };
     let Some(seq_db_meta) = kv_api.get_pb(&dbid).await? else {
-        return Ok(());
+        info!("database meta of db_id {} is empty", db_id);
+        return Ok(num_meta_keys_removed);
     };
 
     if seq_db_meta.drop_on.is_none() {
@@ -269,7 +376,8 @@ async fn gc_dropped_db_by_id(
         // In subsequent KV transactions, we also verify that db_meta hasn't changed
         // to ensure we don't reclaim metadata of the given database that might have been
         // successfully undropped in a parallel operation.
-        return Ok(());
+        info!("database of db_id {} is not marked as dropped", db_id);
+        return Ok(num_meta_keys_removed);
     }
 
     // Mark database meta as gc_in_progress if necessary
@@ -314,6 +422,7 @@ async fn gc_dropped_db_by_id(
         };
         let dir_name = DirName::new_with_level(db_id_table_name, 1);
 
+        let mut num_db_id_table_name_keys_removed = 0;
         let batch_size = 1024;
         let key_stream = kv_api.list_pb_keys(&dir_name).await?;
         let mut chunks = key_stream.chunks(batch_size);
@@ -321,6 +430,7 @@ async fn gc_dropped_db_by_id(
             let mut txn = TxnRequest::default();
             use itertools::Itertools;
             let targets: Vec<DBIdTableName> = targets.into_iter().try_collect()?;
+            num_db_id_table_name_keys_removed += targets.len();
             for target in &targets {
                 txn.if_then.push(txn_op_del(target));
             }
@@ -340,11 +450,17 @@ async fn gc_dropped_db_by_id(
                 );
             }
         }
+        info!(
+            "{} DbIdTableNames cleaned for database {}[{}]",
+            num_db_id_table_name_keys_removed, db_name, db_id,
+        );
+        num_meta_keys_removed += num_db_id_table_name_keys_removed;
     }
 
     let id_to_name = DatabaseIdToName { db_id };
     let Some(seq_name) = kv_api.get_pb(&id_to_name).await? else {
-        return Ok(());
+        info!("id_to_name not found for db_id {}", db_id);
+        return Ok(num_meta_keys_removed);
     };
 
     let table_history_ident = TableIdHistoryIdent {
@@ -361,7 +477,8 @@ async fn gc_dropped_db_by_id(
         for tb_id in table_history.id_list.iter() {
             let table_id_ident = TableId { table_id: *tb_id };
 
-            remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
+            let num_removed_copied_files =
+                remove_copied_files_for_dropped_table(kv_api, &table_id_ident).await?;
             let _ = remove_data_for_dropped_table(
                 kv_api,
                 tenant,
@@ -371,7 +488,7 @@ async fn gc_dropped_db_by_id(
                 &mut txn,
             )
             .await?;
-            remove_index_for_dropped_table(kv_api, tenant, &table_id_ident, &mut txn).await?;
+            num_meta_keys_removed += num_removed_copied_files;
         }
 
         txn.condition
@@ -398,24 +515,35 @@ async fn gc_dropped_db_by_id(
         .push(txn_cond_eq_seq(&id_to_name, seq_name.seq));
     txn.if_then.push(txn_op_del(&id_to_name));
 
+    // Count removed keys (approximate for DeleteByPrefix operations)
+    for op in &txn.if_then {
+        if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
+            num_meta_keys_removed += 1;
+        }
+    }
+
     let _resp = kv_api.transaction(txn).await?;
 
-    Ok(())
+    Ok(num_meta_keys_removed)
 }
 
 /// Permanently remove a dropped table from the meta-service.
 ///
 /// The data of the table should already have been removed before calling this method.
+///
+/// Returns the approximate number of metadata keys removed.
+/// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
 async fn gc_dropped_table_by_id(
     kv_api: &(impl GarbageCollectionApi + IndexApi + ?Sized),
     tenant: &Tenant,
     catalog: &String,
     db_id_table_name: &DBIdTableName,
     table_id_ident: &TableId,
-) -> Result<(), KVAppError> {
+) -> Result<usize, KVAppError> {
     // First remove all copied files for the dropped table.
     // These markers are not part of the table and can be removed in separate transactions.
-    remove_copied_files_for_dropped_table(kv_api, table_id_ident).await?;
+    let num_removed_copied_files =
+        remove_copied_files_for_dropped_table(kv_api, table_id_ident).await?;
 
     let mut trials = txn_backoff(None, func_name!());
     loop {
@@ -449,12 +577,22 @@ async fn gc_dropped_table_by_id(
         .await?;
 
         // 3)
+
         remove_index_for_dropped_table(kv_api, tenant, table_id_ident, &mut txn).await?;
+
+        // Count removed keys (approximate for DeleteByPrefix operations)
+        let mut num_meta_keys_removed = 0;
+        for op in &txn.if_then {
+            if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
+                num_meta_keys_removed += 1;
+            }
+        }
+        num_meta_keys_removed += num_removed_copied_files;
 
         let (succ, _responses) = send_txn(kv_api, txn).await?;
 
         if succ {
-            return Ok(());
+            return Ok(num_meta_keys_removed);
         }
     }
 }

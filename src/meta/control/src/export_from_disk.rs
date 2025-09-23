@@ -14,10 +14,9 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_meta::store::RaftStoreInner;
+use databend_meta::store::RaftStore;
 use futures::TryStreamExt;
 
 use crate::args::ExportArgs;
@@ -36,8 +35,8 @@ pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
     eprintln!();
     eprintln!("Export:");
 
-    let sto_inn = RaftStoreInner::open(&raft_config).await?;
-    let mut lines = Arc::new(sto_inn).export();
+    let sto = RaftStore::open(&raft_config).await?;
+    let mut lines = sto.clone().export();
 
     eprintln!("    From: {}", raft_config.raft_dir);
 

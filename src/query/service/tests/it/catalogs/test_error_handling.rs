@@ -66,6 +66,7 @@ async fn test_get_table_error_handling() -> Result<()> {
     // Create a test database and table
     let req = CreateDatabaseReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "test_db"),
         meta: DatabaseMeta::default(),
     };
@@ -78,6 +79,7 @@ async fn test_get_table_error_handling() -> Result<()> {
 
     let table_req = CreateTableReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: TableNameIdent {
             tenant: tenant.clone(),
             db_name: "test_db".to_string(),
@@ -128,6 +130,7 @@ async fn test_get_table_history_error_handling() -> Result<()> {
     // Create a test database
     let req = CreateDatabaseReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "history_test_db"),
         meta: DatabaseMeta::default(),
     };
@@ -198,6 +201,7 @@ async fn test_get_table_by_info_error_handling() -> Result<()> {
     // Create a test database and table
     let req = CreateDatabaseReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "info_test_db"),
         meta: DatabaseMeta::default(),
     };
@@ -210,6 +214,7 @@ async fn test_get_table_by_info_error_handling() -> Result<()> {
 
     let table_req = CreateTableReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: TableNameIdent {
             tenant: tenant.clone(),
             db_name: "info_test_db".to_string(),
@@ -254,6 +259,7 @@ async fn test_delegation_between_catalogs() -> Result<()> {
     // Test that user-created databases are handled by mutable catalog
     let req = CreateDatabaseReq {
         create_option: CreateOption::Create,
+        catalog_name: None,
         name_ident: DatabaseNameIdent::new(&tenant, "user_db"),
         meta: DatabaseMeta::default(),
     };

@@ -106,10 +106,12 @@ use crate::metrics::server_metrics;
 use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
+use crate::store::meta_raft_log::MetaRaftLog;
+use crate::store::meta_raft_state_machine::MetaRaftStateMachine;
 use crate::store::RaftStore;
 
-pub type LogStore = RaftStore;
-pub type SMStore = RaftStore;
+pub type LogStore = MetaRaftLog;
+pub type SMStore = MetaRaftStateMachine;
 
 /// MetaRaft is an implementation of the generic Raft handling metadata R/W.
 pub type MetaRaft = Raft<TypeConfig>;
@@ -170,8 +172,8 @@ impl MetaNodeBuilder {
 
         let net = NetworkFactory::new(sto.clone());
 
-        let log_store = sto.clone();
-        let sm_store = sto.clone();
+        let log_store = sto.log().clone();
+        let sm_store = sto.state_machine().clone();
 
         let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
             .await
@@ -200,7 +202,7 @@ impl MetaNodeBuilder {
             }
         };
 
-        sto.state_machine()
+        sto.get_sm_v003()
             .set_on_change_applied(Box::new(on_change_applied));
 
         let meta_node = Arc::new(MetaNode {
@@ -337,7 +339,10 @@ impl MetaNode {
         let socket_addr = ip_port.parse::<std::net::SocketAddr>()?;
         let node_id = meta_node.raft_store.id;
 
-        let srv = tonic::transport::Server::builder().add_service(raft_server);
+        let srv = tonic::transport::Server::builder()
+            // .concurrency_limit_per_connection()
+            // .timeout(Duration::from_secs(60))
+            .add_service(raft_server);
 
         let h = databend_common_base::runtime::spawn(async move {
             srv.serve_with_shutdown(socket_addr, async move {
@@ -368,25 +373,12 @@ impl MetaNode {
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!("MetaNode::open, config: {:?}", config);
 
-        let mut config = config.clone();
-
-        // Always disable fsync on mac.
-        // Because there are some integration tests running on mac VM.
-        //
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-        if cfg!(target_os = "macos") {
-            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.no_sync = true;
-        }
+        let config = config.clone();
 
         let log_store = RaftStore::open(&config).await?;
 
         // config.id only used for the first time
-        let self_node_id = if log_store.is_opened {
-            log_store.id
-        } else {
-            config.id
-        };
+        let self_node_id = log_store.id;
 
         let builder = MetaNode::builder(&config)
             .sto(log_store.clone())
@@ -1061,13 +1053,21 @@ impl MetaNode {
         };
         let mut raft_client = RaftServiceClient::new(chan);
 
+        let join_req = JoinRequest::new(
+            conf.id,
+            advertise_endpoint.clone(),
+            grpc_api_advertise_address.clone(),
+        );
+
+        let join_req = if conf.learner {
+            join_req.with_role_learner()
+        } else {
+            join_req
+        };
+
         let req = ForwardRequest {
             forward_to_leader: 1,
-            body: ForwardRequestBody::Join(JoinRequest::new(
-                conf.id,
-                advertise_endpoint.clone(),
-                grpc_api_advertise_address.clone(),
-            )),
+            body: ForwardRequestBody::Join(join_req),
         };
 
         let join_res = raft_client.forward(req.clone()).await;
@@ -1122,7 +1122,7 @@ impl MetaNode {
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
-            let sm = &self.raft_store.state_machine();
+            let sm = &self.raft_store.get_sm_v003();
             sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
@@ -1232,8 +1232,11 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine();
-        let n = sm.sys_data().nodes_ref().get(node_id).cloned();
+        let sm = self.raft_store.get_sm_v003();
+        let sys_data = sm.sys_data();
+        info!("get_node: node_id: {}, sys_data: {:?}", node_id, sys_data);
+
+        let n = sys_data.nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -1241,7 +1244,7 @@ impl MetaNode {
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.raft_store.state_machine();
+        let sm = self.raft_store.get_sm_v003();
         let nodes = sm
             .sys_data()
             .nodes_ref()
@@ -1253,11 +1256,11 @@ impl MetaNode {
 
     /// Get the size in bytes of the on disk files of the raft log storage.
     async fn get_raft_log_size(&self) -> u64 {
-        self.raft_store.log.read().await.on_disk_size()
+        self.raft_store.log().read().await.on_disk_size()
     }
 
     async fn get_raft_log_stat(&self) -> RaftLogStat {
-        self.raft_store.log.read().await.stat()
+        self.raft_store.log().read().await.stat()
     }
 
     async fn get_snapshot_key_count(&self) -> u64 {
@@ -1329,7 +1332,7 @@ impl MetaNode {
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
-        let sm = self.raft_store.state_machine();
+        let sm = self.raft_store.get_sm_v003();
         sm.sys_data().curr_seq()
     }
 
@@ -1338,7 +1341,7 @@ impl MetaNode {
         // Maybe stale get: from local state machine
 
         let nodes = {
-            let sm = self.raft_store.state_machine();
+            let sm = self.raft_store.get_sm_v003();
             sm.sys_data()
                 .nodes_ref()
                 .values()

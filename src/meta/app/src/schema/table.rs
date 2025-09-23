@@ -618,6 +618,7 @@ impl Display for TableIdList {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub create_option: CreateOption,
+    pub catalog_name: Option<String>,
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 
@@ -690,7 +691,6 @@ pub struct CreateTableReply {
     pub spec_vec: Option<(u64, u64)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
-    pub old_table_id: Option<u64>,
 }
 
 /// Drop table by id.

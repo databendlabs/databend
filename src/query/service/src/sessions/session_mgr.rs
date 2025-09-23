@@ -16,10 +16,12 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::ops::DerefMut;
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
@@ -57,6 +59,7 @@ pub struct SessionManager {
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
+    pub last_query_request_at: AtomicU64,
 }
 
 impl SessionManager {
@@ -78,6 +81,7 @@ impl SessionManager {
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             metrics_collector: SessionManagerMetricsCollector::new(),
+            last_query_request_at: Default::default(),
         });
         mgr.metrics_collector.attach_session_manager(mgr.clone());
         mgr
@@ -332,6 +336,13 @@ impl SessionManager {
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
         status_t.max_running_query_executed_secs = max_running_query_executed_secs;
+
+        let last_query_request_at = self.last_query_request_at.load(Ordering::Acquire);
+        status_t.last_query_request_at = if last_query_request_at == 0 {
+            None
+        } else {
+            Some(last_query_request_at)
+        };
         status_t
     }
 
@@ -484,5 +495,13 @@ impl SessionManager {
             }
         }
         Ok(all_temp_tables)
+    }
+
+    pub fn new_query_request(&self) {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        self.last_query_request_at.store(now, Ordering::Relaxed);
     }
 }

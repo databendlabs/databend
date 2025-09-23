@@ -68,7 +68,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     let last_seq = immutables.newest().unwrap().sys_data().curr_seq();
 
-    let mut tmp = LeveledMap::default();
+    let tmp = LeveledMap::default();
     tmp.with_sys_data(|s| s.update_seq(last_seq));
     tmp.replace_immutable_levels(immutables);
     let view = tmp.to_view();
@@ -239,7 +239,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     let immutables = l.immutable_levels();
 
-    let mut tmp = LeveledMap::default();
+    let tmp = LeveledMap::default();
     tmp.replace_immutable_levels(immutables);
 
     let strm = tmp.range(user_key("").., u64::MAX).await?;

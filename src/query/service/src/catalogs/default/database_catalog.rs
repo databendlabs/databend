@@ -761,7 +761,7 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.get_drop_table_infos(req).await
     }
 
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<()> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {
         self.mutable_catalog.gc_drop_tables(req).await
     }
 

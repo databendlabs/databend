@@ -53,11 +53,6 @@ pub struct RaftConfig {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     pub raft_dir: String,
 
-    /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).
-    /// No-sync brings risks of data loss during a crash.
-    /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
-    pub no_sync: bool,
-
     /// Maximum log entries to cache in memory.
     ///
     /// Higher values improve read performance but use more memory.
@@ -132,6 +127,9 @@ pub struct RaftConfig {
     /// Default: 1GB (1,073,741,824 bytes).
     pub snapshot_db_block_cache_size: u64,
 
+    /// Interval in milliseconds to compact the in memory immutable levels.
+    pub compact_immutables_ms: Option<u64>,
+
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
@@ -188,7 +186,6 @@ impl Default for RaftConfig {
             raft_advertise_host: get_default_raft_advertise_host(),
             raft_api_port: 28004,
             raft_dir: "./.databend/meta".to_string(),
-            no_sync: false,
 
             log_cache_max_items: 1_000_000,
             log_cache_capacity: 1024 * 1024 * 1024,
@@ -206,6 +203,7 @@ impl Default for RaftConfig {
             snapshot_db_block_cache_item: 1024,
             snapshot_db_block_cache_size: 1073741824,
 
+            compact_immutables_ms: None,
             single: false,
             join: vec![],
             learner: false,
@@ -281,11 +279,6 @@ impl RaftConfig {
                 Ok(Endpoint::new(_ip_addrs[0], self.raft_api_port))
             }
         }
-    }
-
-    /// Returns true to fsync after a write operation to meta.
-    pub fn is_sync(&self) -> bool {
-        !self.no_sync
     }
 
     /// Returns the min and max election timeout, in milli seconds.
