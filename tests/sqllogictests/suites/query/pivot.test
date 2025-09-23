@@ -115,8 +115,107 @@ SELECT * FROM test_table PIVOT(avg("VALUE") FOR "METRIC_CODE" IN ('0101'));
 ----
 2024-09-30 14:09:36.000000	3.5128
 
+# Test cases for CTE PIVOT bug fix
+statement ok
+CREATE OR REPLACE TABLE test_tag_list (
+    material_name VARCHAR,
+    max_cost_source_url VARCHAR,
+    set_category VARCHAR,
+    customize_creative_start_date DATE,
+    customize_creative_end_date DATE,
+    tag_category VARCHAR,
+    tag_list ARRAY(STRING),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+statement ok
+INSERT INTO test_tag_list VALUES
+    ('material1', 'url1', 'cat1', '2024-01-01', '2024-01-31', 'character', ['hero', 'villain'], '2024-01-01 00:00:00', '2024-01-01 00:00:00'),
+    ('material1', 'url1', 'cat1', '2024-01-01', '2024-01-31', 'scene', ['outdoor', 'city'], '2024-01-01 00:00:00', '2024-01-01 00:00:00'),
+    ('material2', 'url2', 'cat2', '2024-02-01', '2024-02-28', 'character', ['monster'], '2024-02-01 00:00:00', '2024-02-01 00:00:00'),
+    ('material2', 'url2', 'cat2', '2024-02-01', '2024-02-28', 'theme', ['action'], '2024-02-01 00:00:00', '2024-02-01 00:00:00');
+
+# Test CTE with max_cost_source_url column - this was the original failing case
+query T?T
+WITH cte_0 AS (
+    SELECT
+        max_cost_source_url,
+        tag_category,
+        tag_list
+    FROM test_tag_list
+)
+SELECT * FROM cte_0 PIVOT (
+    MAX(tag_list) FOR tag_category IN ('character', 'scene', 'theme')
+)
+ORDER BY max_cost_source_url;
+----
+url1 ['hero','villain'] ['outdoor','city'] NULL
+url2 ['monster'] NULL ['action']
+
+# Test CTE with material_name column - this was working case
+query T?T
+WITH cte_0 AS (
+    SELECT
+        material_name,
+        tag_category,
+        tag_list
+    FROM test_tag_list
+)
+SELECT * FROM cte_0 PIVOT (
+    MAX(tag_list) FOR tag_category IN ('character', 'scene', 'theme')
+)
+ORDER BY material_name;
+----
+material1 ['hero','villain'] ['outdoor','city'] NULL
+material2 ['monster'] NULL ['action']
+
+# Test materialized CTE (create table) - this was working case
+statement ok
+CREATE OR REPLACE TABLE cte_0_materialized AS
+SELECT
+    max_cost_source_url,
+    tag_category,
+    tag_list
+FROM test_tag_list;
+
+query T?T
+SELECT * FROM cte_0_materialized PIVOT (
+    MAX(tag_list) FOR tag_category IN ('character', 'scene', 'theme')
+)
+ORDER BY max_cost_source_url;
+----
+url1 ['hero','villain'] ['outdoor','city'] NULL
+url2 ['monster'] NULL ['action']
+
+# Test multiple levels of CTE nesting
+query T?T
+WITH cte_level1 AS (
+    SELECT
+        max_cost_source_url,
+        tag_category,
+        tag_list
+    FROM test_tag_list
+),
+cte_level2 AS (
+    SELECT * FROM cte_level1
+)
+SELECT * FROM cte_level2 PIVOT (
+    MAX(tag_list) FOR tag_category IN ('character', 'scene', 'theme')
+)
+ORDER BY max_cost_source_url;
+----
+url1 ['hero','villain'] ['outdoor','city'] NULL
+url2 ['monster'] NULL ['action']
+
 statement ok
 drop table monthly_sales;
 
 statement ok
 drop table test_table;
+
+statement ok
+drop table test_tag_list;
+
+statement ok
+drop table cte_0_materialized;

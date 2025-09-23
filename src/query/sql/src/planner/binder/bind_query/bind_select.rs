@@ -441,16 +441,21 @@ impl<'a> SelectRewriter<'a> {
             GroupBy::Normal(
                 self.column_binding
                     .iter()
-                    .filter(|col_bind| {
+                    .enumerate()
+                    .filter(|(_, col_bind)| {
                         !self
                             .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
                             && !aggregate_args_names.iter().any(|col| {
                                 self.compare_unquoted_ident(&col.name, &col_bind.column_name)
                             })
                     })
-                    .map(|col| Expr::Literal {
-                        span: Span::default(),
-                        value: Literal::UInt64(col.index as u64 + 1),
+                    .map(|(pos, _col)| {
+                        // Use position in column_binding instead of original table index
+                        // Position is 0-based, GROUP BY positions are 1-based
+                        Expr::Literal {
+                            span: Span::default(),
+                            value: Literal::UInt64(pos as u64 + 1),
+                        }
                     })
                     .collect(),
             )
