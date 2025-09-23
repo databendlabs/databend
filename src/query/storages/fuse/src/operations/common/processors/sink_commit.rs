@@ -528,7 +528,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             snapshot.summary.row_count.saturating_sub(meta.unstats_rows);
                         let stats_rows = meta.row_count;
                         let diff = stats_rows.abs_diff(actual_rows);
-                        enable_auto_analyze = diff * 10 >= actual_rows;
+                        enable_auto_analyze = diff * 20 >= actual_rows;
                     }
                 }
 

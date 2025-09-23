@@ -575,7 +575,7 @@ pub struct CacheConfig {
     /// Note that a segment may contain multiple block metadata entries.
     pub segment_block_metas_count: u64,
 
-    /// Max number of cached table segment
+    /// Max number of cached table statistics
     pub table_meta_statistic_count: u64,
 
     /// Max number of cached segment statistics

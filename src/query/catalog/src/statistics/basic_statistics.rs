@@ -105,7 +105,7 @@ impl BasicColumnStatistics {
     }
 
     // Get useful statistics: min, max and ndv are all `Some(_)`.
-    pub fn get_useful_stat(&self, num_rows: u64) -> Option<Self> {
+    pub fn get_useful_stat(&self, num_rows: u64, stats_row_count: u64) -> Option<Self> {
         if self.min.is_none() || self.max.is_none() {
             return None;
         }
@@ -119,9 +119,8 @@ impl BasicColumnStatistics {
             self.max.clone().unwrap(),
         );
         let ndv = match ndv {
-            Some(0) => Some(num_rows),
             None => Some(num_rows),
-            _ => ndv,
+            Some(v) => Some(Self::estimate_ndv(v, stats_row_count, num_rows)),
         };
         Some(Self {
             min: self.min.clone(),
@@ -130,5 +129,25 @@ impl BasicColumnStatistics {
             null_count: self.null_count,
             in_memory_size: self.in_memory_size,
         })
+    }
+
+    fn estimate_ndv(ndv: u64, stats_row_count: u64, num_rows: u64) -> u64 {
+        if stats_row_count == 0 || ndv == 0 {
+            return num_rows;
+        }
+
+        if stats_row_count >= num_rows {
+            return ndv.min(num_rows);
+        }
+
+        let s = stats_row_count as f64;
+        let n = num_rows as f64;
+        let u = ndv.min(stats_row_count) as f64;
+
+        let u1 = (u / s).powi(2) * u;
+        // Good–Turing Estimation
+        let estimate = u + u1 / s * (n - s);
+
+        estimate.round().clamp(0.0, n) as u64
     }
 }
