@@ -30,9 +30,12 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_enterprise_vacuum_handler::vacuum_handler::DroppedTableDesc;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDroppedTablesCtx;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -55,9 +58,10 @@ impl VacuumDropTablesInterpreter {
     /// Vacuum metadata of dropped tables and databases.
     ///
     /// Returns the approximate number of metadata keys removed.
-    async fn gc_drop_tables(
+    async fn gc_drop_db_table_metas(
         &self,
         catalog: Arc<dyn Catalog>,
+        tenant: &Tenant,
         drop_ids: Vec<DroppedId>,
     ) -> Result<usize> {
         info!(
@@ -87,22 +91,24 @@ impl VacuumDropTablesInterpreter {
         let chunk_size = 50;
 
         let mut num_meta_keys_removed = 0;
-        // first gc drop table ids
-        for c in drop_db_table_ids.chunks(chunk_size) {
-            info!("vacuum drop {} table ids: {:?}", c.len(), c);
-            let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
-                catalog: self.plan.catalog.clone(),
-                drop_ids: c.to_vec(),
-            };
-            num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
-        }
+
+        // Table's meta data vacuumed individually
+        //  // first gc drop table ids
+        //  for c in drop_db_table_ids.chunks(chunk_size) {
+        //      info!("vacuum drop {} table ids: {:?}", c.len(), c);
+        //      let req = GcDroppedTableReq {
+        //          tenant: tenant.clone(),
+        //          catalog: self.plan.catalog.clone(),
+        //          drop_ids: c.to_vec(),
+        //      };
+        //      num_meta_keys_removed += catalog.gc_drop_tables(req).await?;
+        //  }
 
         // then gc drop db ids
         for c in drop_db_ids.chunks(chunk_size) {
             info!("vacuum drop {} db ids: {:?}", c.len(), c);
             let req = GcDroppedTableReq {
-                tenant: self.ctx.get_tenant(),
+                tenant: tenant.clone(),
                 catalog: self.plan.catalog.clone(),
                 drop_ids: c.to_vec(),
             };
@@ -160,7 +166,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let mut containing_db = BTreeMap::new();
         for drop_id in drop_ids.iter() {
             if let DroppedId::Table { name, id } = drop_id {
-                containing_db.insert(id.table_id, name.db_id);
+                containing_db.insert(id.table_id, name);
             }
         }
 
@@ -210,22 +216,39 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-        let (files_opt, failed_tables) = handler
-            .do_vacuum_drop_tables(
-                threads_nums,
-                tables,
-                if self.plan.option.dry_run.is_some() {
-                    Some(DRY_RUN_LIMIT)
-                } else {
-                    None
-                },
-            )
-            .await?;
+
+        let tenant = self.ctx.get_tenant();
+
+        let drop_ctx = VacuumDroppedTablesCtx {
+            tenant: tenant.clone(),
+            catalog: catalog.clone(),
+            threads_nums,
+            tables: tables
+                .into_iter()
+                .map(|table| {
+                    let db_id_table_name = containing_db
+                        .get(&table.get_table_info().ident.table_id)
+                        .unwrap();
+                    DroppedTableDesc {
+                        table,
+                        db_id: db_id_table_name.db_id,
+                        table_name: db_id_table_name.table_name.clone(),
+                    }
+                })
+                .collect(),
+            dry_run_limit: if self.plan.option.dry_run.is_some() {
+                Some(DRY_RUN_LIMIT)
+            } else {
+                None
+            },
+        };
+
+        let (files_opt, failed_tables) = handler.do_vacuum_drop_tables(drop_ctx).await?;
 
         let failed_db_ids = failed_tables
             .iter()
             // Safe unwrap: the map is built from drop_ids
-            .map(|id| *containing_db.get(id).unwrap())
+            .map(|id| containing_db.get(id).unwrap().db_id)
             .collect::<HashSet<_>>();
 
         let mut num_meta_keys_removed = 0;
@@ -258,7 +281,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 info!("failed table ids: {:?}", failed_tables);
             }
 
-            num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
+            num_meta_keys_removed = self
+                .gc_drop_db_table_metas(catalog, &tenant, success_dropped_ids)
+                .await?;
         }
 
         let success_count = tables_count as u64 - failed_tables.len() as u64;
