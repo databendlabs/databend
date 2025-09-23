@@ -182,7 +182,6 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         field,
-        auto_increment: None,
         comment: "".to_string(),
         option: AddColumnOption::End,
         is_deterministic: true,

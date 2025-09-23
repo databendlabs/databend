@@ -169,7 +169,6 @@ async fn test_catalogs_table() -> Result<()> {
                 ..TableMeta::default()
             },
             as_dropped: false,
-            auto_increments: Default::default(),
             table_properties: None,
             table_partition: None,
         };

@@ -91,7 +91,6 @@ async fn test_get_table_error_handling() -> Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
-        auto_increments: Default::default(),
         table_properties: None,
         table_partition: None,
     };
@@ -226,7 +225,6 @@ async fn test_get_table_by_info_error_handling() -> Result<()> {
             ..TableMeta::default()
         },
         as_dropped: false,
-        auto_increments: Default::default(),
         table_properties: None,
         table_partition: None,
     };

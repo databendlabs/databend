@@ -28,7 +28,7 @@ use databend_common_meta_api::txn_core_util::txn_replace_exact;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
-use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
@@ -592,11 +592,9 @@ async fn test_vacuum_dropped_table_clean_sequences() -> Result<()> {
         .await?;
 
     let auto_increment_key_0 = AutoIncrementKey::new(table.get_id(), 0);
-    let sequence_ident_0 = AutoIncrementIdent::new_generic(tenant.clone(), auto_increment_key_0);
-    let sequence_storage_ident_0 = sequence_ident_0.to_storage_ident();
+    let sequence_storage_ident_0 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_0);
 
-    let v = meta.get_pb(&sequence_ident_0).await?;
-    assert!(v.is_some());
     let v = meta.get_pb(&sequence_storage_ident_0).await?;
     assert!(v.is_some());
 
@@ -612,21 +610,15 @@ async fn test_vacuum_dropped_table_clean_sequences() -> Result<()> {
         .await?;
 
     let auto_increment_key_1 = AutoIncrementKey::new(table.get_id(), 0);
-    let sequence_ident_1 = AutoIncrementIdent::new_generic(tenant.clone(), auto_increment_key_1);
-    let sequence_storage_ident_1 = sequence_ident_1.to_storage_ident();
+    let sequence_storage_ident_1 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_1);
     let auto_increment_key_2 = AutoIncrementKey::new(table.get_id(), 1);
-    let sequence_ident_2 = AutoIncrementIdent::new_generic(tenant.clone(), auto_increment_key_2);
-    let sequence_storage_ident_2 = sequence_ident_2.to_storage_ident();
+    let sequence_storage_ident_2 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_2);
 
-    let v = meta.get_pb(&sequence_ident_0).await?;
-    assert!(v.is_some());
     let v = meta.get_pb(&sequence_storage_ident_0).await?;
     assert!(v.is_some());
-    let v = meta.get_pb(&sequence_ident_1).await?;
-    assert!(v.is_some());
     let v = meta.get_pb(&sequence_storage_ident_1).await?;
-    assert!(v.is_some());
-    let v = meta.get_pb(&sequence_ident_2).await?;
     assert!(v.is_some());
     let v = meta.get_pb(&sequence_storage_ident_2).await?;
     assert!(v.is_some());
@@ -635,8 +627,6 @@ async fn test_vacuum_dropped_table_clean_sequences() -> Result<()> {
     fixture
         .execute_command(format!("alter table {db_name}.{tbl_name} drop column b").as_str())
         .await?;
-    let v = meta.get_pb(&sequence_ident_2).await?;
-    assert!(v.is_some());
     let v = meta.get_pb(&sequence_storage_ident_2).await?;
     assert!(v.is_some());
 
@@ -649,15 +639,9 @@ async fn test_vacuum_dropped_table_clean_sequences() -> Result<()> {
     fixture.execute_command("vacuum drop table").await?;
 
     // 9. Ensure that table auto increment sequence is cleaned up
-    let v = meta.get_pb(&sequence_ident_0).await?;
-    assert!(v.is_none());
     let v = meta.get_pb(&sequence_storage_ident_0).await?;
     assert!(v.is_none());
-    let v = meta.get_pb(&sequence_ident_1).await?;
-    assert!(v.is_none());
     let v = meta.get_pb(&sequence_storage_ident_1).await?;
-    assert!(v.is_none());
-    let v = meta.get_pb(&sequence_ident_2).await?;
     assert!(v.is_none());
     let v = meta.get_pb(&sequence_storage_ident_2).await?;
     assert!(v.is_none());
