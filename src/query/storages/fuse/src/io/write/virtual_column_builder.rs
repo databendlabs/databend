@@ -411,17 +411,22 @@ impl VirtualColumnBuilder {
                     _ => unreachable!(),
                 };
 
-                let mut last_row = 0;
-                let first_row = virtual_values[index][0].row;
+                let mut last_row = virtual_values[index][0].row;
                 let column = if matches!(val_type, VariantDataType::Jsonb) {
+                    // Use `BinaryColumnBuilder` to build jsonb variant column,
+                    // because we can directly insert jsonb data into the builder buffer
+                    // without the need for additional memory allocation
                     let mut bitmap = MutableBitmap::from_len_zeroed(total_rows);
-                    let mut builder = BinaryColumnBuilder::with_capacity(total_rows, 0);
-                    for _ in 0..first_row {
+                    let mut builder = BinaryColumnBuilder::with_capacity(
+                        total_rows,
+                        virtual_values[index].len() * 10,
+                    );
+                    for _ in 0..last_row {
                         builder.commit_row();
                     }
                     for val in &virtual_values[index] {
                         if val.row - last_row > 1 {
-                            for _ in last_row..val.row {
+                            for _ in (last_row + 1)..val.row {
                                 builder.commit_row();
                             }
                         }
@@ -431,8 +436,8 @@ impl VirtualColumnBuilder {
                         builder.commit_row();
                         last_row = val.row;
                     }
-                    if last_row < total_rows - 1 {
-                        for _ in last_row..total_rows {
+                    if total_rows - last_row > 1 {
+                        for _ in (last_row + 1)..total_rows {
                             builder.commit_row();
                         }
                     }
@@ -443,10 +448,8 @@ impl VirtualColumnBuilder {
                     Column::Nullable(Box::new(nullable_column))
                 } else {
                     let mut builder = ColumnBuilder::with_capacity(&virtual_type, total_rows);
-                    if first_row != 0 {
-                        let default_len = first_row;
-                        builder.push_repeat(&ScalarRef::Null, default_len);
-                        last_row = first_row;
+                    if last_row != 0 {
+                        builder.push_repeat(&ScalarRef::Null, last_row);
                     }
                     for val in &virtual_values[index] {
                         if val.row - last_row > 1 {
@@ -456,7 +459,7 @@ impl VirtualColumnBuilder {
                         builder.push(val.scalar.as_ref());
                         last_row = val.row;
                     }
-                    if last_row < total_rows - 1 {
+                    if total_rows - last_row > 1 {
                         let default_len = total_rows - last_row - 1;
                         builder.push_repeat(&ScalarRef::Null, default_len);
                     }
