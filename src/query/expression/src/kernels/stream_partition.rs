@@ -116,6 +116,10 @@ impl BlockPartitionStream {
 
         for (column_idx, column) in columns.into_iter().enumerate() {
             for (partition_id, indices) in scatter_indices.iter().enumerate() {
+                if indices.is_empty() {
+                    continue;
+                }
+
                 let partition = &mut self.partitions[partition_id];
                 let column_builder = &mut partition.columns_builder[column_idx];
                 copy_column(indices, &column, column_builder);
@@ -136,7 +140,10 @@ impl BlockPartitionStream {
                 .map(|x| x.memory_size())
                 .sum::<usize>();
 
-            let rows = partition.columns_builder[0].len();
+            let rows = match partition.columns_builder.is_empty() {
+                true => 0,
+                false => partition.columns_builder[0].len(),
+            };
 
             if memory_size >= self.bytes_threshold || rows >= self.rows_threshold {
                 let mut columns = Vec::with_capacity(partition.columns_builder.len());
@@ -166,7 +173,7 @@ impl BlockPartitionStream {
         }
 
         for (partition_id, data) in self.partitions.iter().enumerate() {
-            if data.columns_builder[0].len() != 0 {
+            if !data.columns_builder.is_empty() && data.columns_builder[0].len() != 0 {
                 partition_ids.push(partition_id);
             }
         }
@@ -221,9 +228,8 @@ impl BlockPartitionStream {
         partition.columns_builder.reserve(columns_builder.len());
 
         for column_builder in columns_builder {
-            let historical_size = column_builder.len();
             let data_type = column_builder.data_type();
-            let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
+            let new_builder = ColumnBuilder::with_capacity(&data_type, 0);
             partition.columns_builder.push(new_builder);
             columns.push(column_builder.build());
         }
