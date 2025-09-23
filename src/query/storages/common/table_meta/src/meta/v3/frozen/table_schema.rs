@@ -38,7 +38,6 @@ pub struct TableField {
     data_type: TableDataType,
     #[serde(default = "uninit_column_id")]
     column_id: ColumnId,
-    auto_increment_display: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -101,7 +100,7 @@ mod converters {
                 data_type: value.data_type.into(),
                 column_id: value.column_id,
                 computed_expr: None,
-                auto_increment_display: value.auto_increment_display,
+                auto_increment_display: None,
             }
         }
     }
