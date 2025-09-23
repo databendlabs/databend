@@ -108,11 +108,7 @@ impl HashJoinSpiller {
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
-            block_partition_stream: BlockPartitionStream::create(
-                0,
-                block_bytes,
-                num_partitions,
-            ),
+            block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
         })
     }
 
