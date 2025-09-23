@@ -3931,6 +3931,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rotbl",
+ "seq-marked",
  "serde",
  "serde_json",
  "state-machine-api",

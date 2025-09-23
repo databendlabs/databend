@@ -160,10 +160,6 @@ impl RaftServiceImpl {
 
         let (write_tx, jh) = writer.spawn_writer_thread("install_snapshot_v004");
 
-        // Process stream entries
-        let mut proto_vote = None;
-        let mut sys_data_str = None;
-        let mut snapshot_id_str = None;
         let mut commit = None;
 
         while let Some(entry) = strm
@@ -188,7 +184,7 @@ impl RaftServiceImpl {
                 }
             }
 
-            if let Some(mut c) = entry.commit {
+            if let Some(c) = entry.commit {
                 commit = Some(c.clone());
                 break;
             }
