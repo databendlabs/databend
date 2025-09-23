@@ -15,10 +15,11 @@
 pub use kvapi_impl::AutoIncrementStorageRsc;
 pub use kvapi_impl::AutoIncrementStorageValue;
 
+use crate::principal::AutoIncrementKey;
 use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for sequence.
-pub type AutoIncrementStorageIdent = TIdent<AutoIncrementStorageRsc>;
+pub type AutoIncrementStorageIdent = TIdent<AutoIncrementStorageRsc, AutoIncrementKey>;
 
 mod kvapi_impl {
 
@@ -63,16 +64,18 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use crate::principal::AutoIncrementKey;
     use crate::schema::auto_increment_storage::AutoIncrementStorageIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_auto_increment_storage_ident() {
         let tenant = Tenant::new_literal("dummy");
-        let ident = AutoIncrementStorageIdent::new_generic(tenant, "3".to_string());
+        let key = AutoIncrementKey::new(0, 3);
+        let ident = AutoIncrementStorageIdent::new_generic(tenant, key);
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_autoincrement_storage/dummy/3");
+        assert_eq!(key, "__fd_autoincrement_storage/dummy/0/3");
 
         assert_eq!(
             ident,

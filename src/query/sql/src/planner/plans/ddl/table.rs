@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Identifier;
 use databend_common_expression::types::DataType;
@@ -61,7 +60,6 @@ pub struct CreateTablePlan {
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
-    pub auto_increments: BTreeMap<usize, AutoIncrement>,
 
     pub attached_columns: Option<Vec<Identifier>>,
 }
@@ -313,7 +311,6 @@ pub struct AddTableColumnPlan {
     pub database: String,
     pub table: String,
     pub field: TableField,
-    pub auto_increment: Option<AutoIncrement>,
     pub comment: String,
     pub option: AddColumnOption,
     pub is_deterministic: bool,

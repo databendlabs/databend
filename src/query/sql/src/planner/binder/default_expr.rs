@@ -199,11 +199,11 @@ impl DefaultExprBinder {
             } else {
                 Ok(scalar_expr)
             }
-        } else if let (Some(table_id), Some(column_id)) = (
-            &self.auto_increment_table_id,
-            field.auto_increment_column_id(),
-        ) {
-            let auto_increment_key = AutoIncrementKey::new(*table_id, *column_id);
+        } else if let (Some(table_id), Some(auto_increment_expr)) =
+            (&self.auto_increment_table_id, field.auto_increment_expr())
+        {
+            let auto_increment_key =
+                AutoIncrementKey::new(*table_id, auto_increment_expr.column_id);
 
             Ok(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span: None,
@@ -211,7 +211,10 @@ impl DefaultExprBinder {
                 display_name: "".to_string(),
                 return_type: Box::new(field.data_type().clone()),
                 arguments: vec![],
-                func_arg: AsyncFunctionArgument::AutoIncrement(auto_increment_key),
+                func_arg: AsyncFunctionArgument::AutoIncrement {
+                    key: auto_increment_key,
+                    expr: auto_increment_expr.clone(),
+                },
             }))
         } else {
             Ok(ScalarExpr::ConstantExpr(ConstantExpr {
@@ -265,7 +268,7 @@ impl DefaultExprBinder {
             let expr = if let Some(async_func) = get_nextval(&scalar_expr) {
                 let name = match async_func.func_arg {
                     AsyncFunctionArgument::SequenceFunction(name) => name,
-                    AsyncFunctionArgument::AutoIncrement(_) => {
+                    AsyncFunctionArgument::AutoIncrement { .. } => {
                         unreachable!("expect AsyncFunctionArgument::SequenceFunction")
                     }
                     AsyncFunctionArgument::DictGetFunction(_) => {
@@ -293,7 +296,7 @@ impl DefaultExprBinder {
         let mut async_fields = vec![];
         let mut async_fields_no_cast = vec![];
 
-        let fn_check_field_next_val = |field: &DataField| {
+        let fn_check_auto_increment = |field: &DataField| {
             if input_schema.has_field(field.name()) {
                 return false;
             }
@@ -302,10 +305,10 @@ impl DefaultExprBinder {
                     return true;
                 }
             }
-            field.auto_increment_display().is_some()
+            field.auto_increment_expr().is_some()
         };
         for f in dest_schema.fields().iter() {
-            if !fn_check_field_next_val(f) {
+            if !fn_check_auto_increment(f) {
                 continue;
             }
             let scalar_expr = self.parse_and_bind(f)?;

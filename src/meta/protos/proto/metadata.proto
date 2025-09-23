@@ -43,6 +43,17 @@ message ComputedExpr {
   }
 }
 
+// AutoIncrement expression
+message AutoIncrementExpr {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 start = 1;
+  int64 step = 2;
+  bool is_ordered = 3;
+  uint32 column_id = 4;
+}
+
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
@@ -61,6 +72,6 @@ message DataField {
   uint32 column_id = 4;
 
   optional ComputedExpr computed_expr = 5;
-  // auto increment sequence display on show create table
-  optional string auto_increment_display = 6;
+
+  optional AutoIncrementExpr auto_increment_expr = 6;
 }

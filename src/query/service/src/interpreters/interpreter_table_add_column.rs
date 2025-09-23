@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -24,12 +23,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_app::schema::AutoIncrementIdent;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -129,31 +123,6 @@ impl Interpreter for AddTableColumnInterpreter {
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;
-
-        if let Some(auto_increment) = &self.plan.auto_increment {
-            let mut schema = TableSchema::clone(&table_info.schema()).clone();
-            let index = schema.index_of(field.name.as_str())?;
-            let auto_increment_key =
-                AutoIncrementKey::new(tbl.get_id(), schema.field(index).column_id());
-            let auto_increment_ident =
-                AutoIncrementIdent::new_generic(self.ctx.get_tenant(), auto_increment_key);
-            schema.fields[index].auto_increment_display = Some(auto_increment.to_sql_string());
-
-            table_info.meta.schema = Arc::new(schema);
-
-            // TODO: It is best to do this in the same transaction as `commit_table_meta`, the current `commit_table_meta` code structure is complex and not easy to change.
-            let req = CreateSequenceReq {
-                create_option: CreateOption::Create,
-                ident: SequenceIdentType::AutoIncrement(auto_increment_ident),
-                start: auto_increment.start,
-                increment: auto_increment.step,
-                comment: None,
-                create_on: Utc::now(),
-                storage_version: 0,
-            };
-            let catalog = self.ctx.get_default_catalog()?;
-            let _reply = catalog.create_sequence(req).await?;
-        }
 
         // if the new column is a stored computed field and table is non-empty,
         // need rebuild the table to generate stored computed column.

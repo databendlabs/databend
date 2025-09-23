@@ -21,7 +21,6 @@ use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
@@ -129,10 +128,7 @@ pub async fn validate_grant_object_exists(
         GrantObject::Sequence(c) => {
             let catalog = ctx.get_default_catalog()?;
             let req = GetSequenceReq {
-                ident: SequenceIdentType::Sequence(SequenceIdent::new(
-                    ctx.get_tenant(),
-                    c.to_string(),
-                )),
+                ident: SequenceIdent::new(ctx.get_tenant(), c.to_string()),
             };
             return match catalog.get_sequence(req, &None).await {
                 Ok(_c) => Ok(()),

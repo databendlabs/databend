@@ -27,7 +27,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -687,14 +687,14 @@ async fn remove_data_for_dropped_table(
     {
         // clear the sequence associated with auto increment in the table field
         let auto_increment_key = AutoIncrementKey::new(table_id.table_id, 0);
-        let dir_name = DirName::new(AutoIncrementIdent::new_generic(tenant, auto_increment_key));
+        let dir_name = DirName::new(AutoIncrementStorageIdent::new_generic(
+            tenant,
+            auto_increment_key,
+        ));
         let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
 
         while let Some(auto_increment_ident) = auto_increments.try_next().await? {
-            let storage_ident = auto_increment_ident.to_storage_ident();
-
             txn.if_then.push(txn_op_del(&auto_increment_ident));
-            txn.if_then.push(txn_op_del(&storage_ident));
         }
     }
     // Remove table ownership

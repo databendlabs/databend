@@ -122,7 +122,6 @@ impl AttachTableHandler for RealAttachTableHandler {
             },
             table_meta,
             as_dropped: false,
-            auto_increments: plan.auto_increments.clone(),
             table_properties: None,
             table_partition: None,
         };

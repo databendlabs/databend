@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Add;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -247,8 +248,27 @@ pub struct DataField {
     default_expr: Option<String>,
     data_type: DataType,
     computed_expr: Option<ComputedExpr>,
-    auto_increment_column_id: Option<ColumnId>,
-    auto_increment_display: Option<String>,
+    auto_increment_expr: Option<AutoIncrementExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AutoIncrementExpr {
+    pub column_id: ColumnId,
+    pub start: u64,
+    pub step: i64,
+    // Ensure that the generated sequence values are distributed strictly in the order of insertion time
+    pub is_ordered: bool,
+}
+
+impl AutoIncrementExpr {
+    pub fn to_sql_string(&self) -> String {
+        let string = format!("AUTOINCREMENT ({}, {}) ", self.start, self.step);
+        if self.is_ordered {
+            string.add("ORDER")
+        } else {
+            string.add("NOORDER")
+        }
+    }
 }
 
 fn uninit_column_id() -> ColumnId {
@@ -273,7 +293,7 @@ pub struct TableField {
     #[serde(default = "uninit_column_id")]
     pub column_id: ColumnId,
     pub computed_expr: Option<ComputedExpr>,
-    pub auto_increment_display: Option<String>,
+    pub auto_increment_expr: Option<AutoIncrementExpr>,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -1077,8 +1097,7 @@ impl DataField {
             default_expr: None,
             data_type,
             computed_expr: None,
-            auto_increment_column_id: None,
-            auto_increment_display: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1088,8 +1107,7 @@ impl DataField {
             default_expr: None,
             data_type: data_type.wrap_nullable(),
             computed_expr: None,
-            auto_increment_column_id: None,
-            auto_increment_display: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1104,16 +1122,11 @@ impl DataField {
         self
     }
 
-    pub fn with_auto_increment_column_id(
+    pub fn with_auto_increment_expr(
         mut self,
-        auto_increment_column_id: Option<ColumnId>,
+        auto_increment_expr: Option<AutoIncrementExpr>,
     ) -> Self {
-        self.auto_increment_column_id = auto_increment_column_id;
-        self
-    }
-
-    pub fn with_auto_increment_display(mut self, auto_increment_display: Option<String>) -> Self {
-        self.auto_increment_display = auto_increment_display;
+        self.auto_increment_expr = auto_increment_expr;
         self
     }
 
@@ -1133,12 +1146,8 @@ impl DataField {
         self.computed_expr.as_ref()
     }
 
-    pub fn auto_increment_column_id(&self) -> Option<&ColumnId> {
-        self.auto_increment_column_id.as_ref()
-    }
-
-    pub fn auto_increment_display(&self) -> Option<&String> {
-        self.auto_increment_display.as_ref()
+    pub fn auto_increment_expr(&self) -> Option<&AutoIncrementExpr> {
+        self.auto_increment_expr.as_ref()
     }
 
     #[inline]
@@ -1160,7 +1169,7 @@ impl TableField {
             data_type,
             column_id: 0,
             computed_expr: None,
-            auto_increment_display: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1171,7 +1180,7 @@ impl TableField {
             data_type,
             column_id,
             computed_expr: None,
-            auto_increment_display: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1218,7 +1227,7 @@ impl TableField {
             data_type: self.data_type.clone(),
             column_id,
             computed_expr: self.computed_expr.clone(),
-            auto_increment_display: self.auto_increment_display.clone(),
+            auto_increment_expr: self.auto_increment_expr.clone(),
         }
     }
 
@@ -1264,8 +1273,11 @@ impl TableField {
         self
     }
 
-    pub fn with_auto_increment_display(mut self, auto_increment_display: Option<String>) -> Self {
-        self.auto_increment_display = auto_increment_display;
+    pub fn with_auto_increment_expr(
+        mut self,
+        auto_increment_expr: Option<AutoIncrementExpr>,
+    ) -> Self {
+        self.auto_increment_expr = auto_increment_expr;
         self
     }
 
@@ -1285,8 +1297,8 @@ impl TableField {
         self.computed_expr.as_ref()
     }
 
-    pub fn auto_increment_display(&self) -> Option<&String> {
-        self.auto_increment_display.as_ref()
+    pub fn auto_increment_expr(&self) -> Option<&AutoIncrementExpr> {
+        self.auto_increment_expr.as_ref()
     }
 
     #[inline]
@@ -1587,10 +1599,7 @@ impl From<&TableField> for DataField {
         DataField::new(&name, DataType::from(&data_type))
             .with_default_expr(f.default_expr.clone())
             .with_computed_expr(f.computed_expr.clone())
-            .with_auto_increment_column_id(
-                f.auto_increment_display.is_some().then_some(f.column_id),
-            )
-            .with_auto_increment_display(f.auto_increment_display.clone())
+            .with_auto_increment_expr(f.auto_increment_expr.clone())
     }
 }
 
@@ -1614,7 +1623,7 @@ impl From<&DataField> for TableField {
         TableField::new(&name, ty)
             .with_default_expr(f.default_expr.clone())
             .with_computed_expr(f.computed_expr.clone())
-            .with_auto_increment_display(f.auto_increment_display.clone())
+            .with_auto_increment_expr(f.auto_increment_expr.clone())
     }
 }
 
@@ -1688,7 +1697,7 @@ pub fn infer_table_schema(data_schema: &DataSchema) -> Result<TableSchemaRef> {
             TableField::new(field.name(), field_type)
                 .with_default_expr(field.default_expr.clone())
                 .with_computed_expr(field.computed_expr.clone())
-                .with_auto_increment_display(field.auto_increment_display.clone()),
+                .with_auto_increment_expr(field.auto_increment_expr.clone()),
         );
     }
     Ok(TableSchemaRefExt::create(fields))

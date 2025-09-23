@@ -22,7 +22,6 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_ast::ast::ClusterOption;
 use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
@@ -74,6 +73,8 @@ use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AutoIncrementExpr;
+use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
@@ -170,7 +171,6 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) field_comments: Vec<String>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
-    pub(in crate::planner::binder) auto_increments: BTreeMap<usize, AutoIncrement>,
 }
 
 impl Binder {
@@ -660,7 +660,6 @@ impl Binder {
                 field_comments,
                 table_indexes,
                 table_constraints,
-                auto_increments,
             },
             as_query_plan,
         ) = match (&source, &as_query) {
@@ -694,7 +693,6 @@ impl Binder {
                         field_comments: vec![],
                         table_indexes: None,
                         table_constraints: None,
-                        auto_increments: BTreeMap::new(),
                     },
                     Some(Box::new(as_query_plan)),
                 )
@@ -742,7 +740,6 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: BTreeMap::new(),
                         }, as_query_plan)
                     }
                     Engine::Delta => {
@@ -760,7 +757,6 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: BTreeMap::new(),
                         }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -886,7 +882,6 @@ impl Binder {
             as_select: as_query_plan,
             table_indexes,
             table_constraints,
-            auto_increments,
             attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -956,7 +951,6 @@ impl Binder {
             as_select: None,
             table_indexes: None,
             table_constraints: None,
-            auto_increments: BTreeMap::new(),
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -1099,7 +1093,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, auto_increment, comment, is_deterministic, is_nextval) =
+                let (field, comment, is_deterministic, is_nextval) =
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
@@ -1114,7 +1108,6 @@ impl Binder {
                     database,
                     table,
                     field,
-                    auto_increment,
                     comment,
                     option,
                     is_deterministic,
@@ -1189,7 +1182,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, _, comment, _, _) =
+                            let (field, comment, _, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -1666,14 +1659,13 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, Option<AutoIncrement>, String, bool, bool)> {
+    ) -> Result<(TableField, String, bool, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
         let mut is_nextval = false;
         let mut field = TableField::new(&name, data_type);
-        let mut auto_increment = None;
 
         if let Some(expr) = &column.expr {
             match expr {
@@ -1704,7 +1696,11 @@ impl Binder {
                     field = field.with_computed_expr(Some(ComputedExpr::Stored(expr)));
                     is_deterministic = false;
                 }
-                ColumnExpr::AutoIncrement(field_sequence) => {
+                ColumnExpr::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                } => {
                     if !matches!(
                         field.data_type().remove_nullable(),
                         TableDataType::Number(_) | TableDataType::Decimal(_)
@@ -1713,24 +1709,27 @@ impl Binder {
                             "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                         ));
                     }
-                    field.auto_increment_display = Some(field_sequence.to_sql_string());
-                    auto_increment = Some(field_sequence.clone());
+                    field.auto_increment_expr = Some(AutoIncrementExpr {
+                        column_id: table_schema.fields().len() as ColumnId,
+                        start: *start,
+                        step: *step,
+                        is_ordered: *is_ordered,
+                    });
                 }
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, auto_increment, comment, is_deterministic, is_nextval))
+        Ok((field, comment, is_deterministic, is_nextval))
     }
 
     #[async_backtrace::framed]
     pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-    ) -> Result<(TableSchemaRef, Vec<String>, BTreeMap<usize, AutoIncrement>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>)> {
         let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
-        let mut auto_increments = BTreeMap::new();
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for (i, column) in columns.iter().enumerate() {
@@ -1745,7 +1744,11 @@ impl Binder {
                             .parse_default_expr_to_string(&field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
-                    ColumnExpr::AutoIncrement(field_sequence) => {
+                    ColumnExpr::AutoIncrement {
+                        start,
+                        step,
+                        is_ordered,
+                    } => {
                         if !matches!(
                             field.data_type().remove_nullable(),
                             TableDataType::Number(_) | TableDataType::Decimal(_)
@@ -1754,8 +1757,12 @@ impl Binder {
                                 "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                             ));
                         }
-                        field.auto_increment_display = Some(field_sequence.to_sql_string());
-                        auto_increments.insert(i, field_sequence.clone());
+                        field.auto_increment_expr = Some(AutoIncrementExpr {
+                            column_id: i as ColumnId,
+                            start: *start,
+                            step: *step,
+                            is_ordered: *is_ordered,
+                        });
                     }
                     _ => has_computed = true,
                 }
@@ -1809,7 +1816,7 @@ impl Binder {
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_comments, auto_increments))
+        Ok((schema, fields_comments))
     }
 
     #[async_backtrace::framed]
@@ -1928,7 +1935,7 @@ impl Binder {
                 opt_table_constraints,
                 opt_column_constraints,
             } => {
-                let (schema, comments, auto_increments) =
+                let (schema, comments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
                     let table_indexes = self
@@ -1962,7 +1969,6 @@ impl Binder {
                     field_comments: comments,
                     table_indexes,
                     table_constraints,
-                    auto_increments,
                 })
             }
             CreateTableSource::Like {
@@ -1983,7 +1989,6 @@ impl Binder {
                             field_comments: vec![],
                             table_indexes: None,
                             table_constraints: None,
-                            auto_increments: BTreeMap::new(),
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -1996,7 +2001,6 @@ impl Binder {
                         field_comments: table.field_comments().clone(),
                         table_indexes: None,
                         table_constraints: None,
-                        auto_increments: BTreeMap::new(),
                     })
                 }
             }

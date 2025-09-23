@@ -25,7 +25,6 @@ use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
-use crate::schema::AutoIncrementRsc;
 use crate::schema::DictionaryIdentity;
 use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
@@ -969,6 +968,34 @@ impl UnsupportedSequenceStorageVersion {
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("WrongAutoIncrementCount: `{key}`")]
+pub struct WrongAutoIncrementCount {
+    key: AutoIncrementKey,
+}
+
+impl WrongAutoIncrementCount {
+    pub fn new(key: AutoIncrementKey) -> Self {
+        Self { key }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("OutOfAutoIncrementRange: `{key}` while `{context}`")]
+pub struct OutOfAutoIncrementRange {
+    key: AutoIncrementKey,
+    context: String,
+}
+
+impl OutOfAutoIncrementRange {
+    pub fn new(key: AutoIncrementKey, context: impl ToString) -> Self {
+        Self {
+            key,
+            context: context.to_string(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1151,6 +1178,9 @@ pub enum AppError {
     SequenceError(#[from] SequenceError),
 
     #[error(transparent)]
+    AutoIncrementError(#[from] AutoIncrementError),
+
+    #[error(transparent)]
     UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 
     #[error(transparent)]
@@ -1206,13 +1236,7 @@ pub enum SequenceError {
     SequenceAlreadyExists(#[from] ExistError<SequenceRsc>),
 
     #[error(transparent)]
-    AutoIncrementAlreadyExists(#[from] ExistError<AutoIncrementRsc, AutoIncrementKey>),
-
-    #[error(transparent)]
     UnknownSequence(#[from] UnknownError<SequenceRsc>),
-
-    #[error(transparent)]
-    UnknownAutoIncrement(#[from] UnknownError<AutoIncrementRsc, AutoIncrementKey>),
 
     #[error(transparent)]
     OutOfSequenceRange(#[from] OutOfSequenceRange),
@@ -1222,6 +1246,15 @@ pub enum SequenceError {
 
     #[error(transparent)]
     UnsupportedSequenceStorageVersion(#[from] UnsupportedSequenceStorageVersion),
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum AutoIncrementError {
+    #[error(transparent)]
+    OutOfAutoIncrementRange(#[from] OutOfAutoIncrementRange),
+
+    #[error(transparent)]
+    WrongAutoIncrementCount(#[from] WrongAutoIncrementCount),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1562,13 +1595,7 @@ impl AppErrorMessage for SequenceError {
             SequenceError::SequenceAlreadyExists(e) => {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
-            SequenceError::AutoIncrementAlreadyExists(e) => {
-                format!("AutoIncrementAlreadyExists: '{}'", e.message())
-            }
             SequenceError::UnknownSequence(e) => format!("UnknownSequence: '{}'", e.message()),
-            SequenceError::UnknownAutoIncrement(e) => {
-                format!("UnknownAutoIncrement: '{}'", e.message())
-            }
             SequenceError::OutOfSequenceRange(e) => {
                 format!("OutOfSequenceRange: '{}'", e.message())
             }
@@ -1577,6 +1604,31 @@ impl AppErrorMessage for SequenceError {
             }
             SequenceError::UnsupportedSequenceStorageVersion(e) => {
                 format!("UnsupportedSequenceStorageVersion: '{}'", e.message())
+            }
+        }
+    }
+}
+
+impl AppErrorMessage for WrongAutoIncrementCount {
+    fn message(&self) -> String {
+        format!("Require zero AutoIncrement count for '{}'", self.key)
+    }
+}
+
+impl AppErrorMessage for OutOfAutoIncrementRange {
+    fn message(&self) -> String {
+        format!("AutoIncrement '{}' out of range", self.key)
+    }
+}
+
+impl AppErrorMessage for AutoIncrementError {
+    fn message(&self) -> String {
+        match self {
+            AutoIncrementError::OutOfAutoIncrementRange(e) => {
+                format!("OutOfAutoIncrementRange: '{}'", e.message())
+            }
+            AutoIncrementError::WrongAutoIncrementCount(e) => {
+                format!("WrongAutoIncrementCount: '{}'", e.message())
             }
         }
     }
@@ -1709,6 +1761,7 @@ impl From<AppError> for ErrorCode {
             AppError::CleanDbIdTableNamesFailed(err) => {
                 ErrorCode::GeneralDbGcFailure(err.message())
             }
+            AppError::AutoIncrementError(err) => ErrorCode::AutoIncrementError(err.message()),
         }
     }
 }
@@ -1721,10 +1774,6 @@ impl From<SequenceError> for ErrorCode {
             SequenceError::OutOfSequenceRange(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::UnsupportedSequenceStorageVersion(err) => {
-                ErrorCode::SequenceError(err.message())
-            }
-            SequenceError::UnknownAutoIncrement(err) => ErrorCode::SequenceError(err.message()),
-            SequenceError::AutoIncrementAlreadyExists(err) => {
                 ErrorCode::SequenceError(err.message())
             }
         }

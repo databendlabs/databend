@@ -509,7 +509,6 @@ impl CreateTableInterpreter {
             },
             table_meta,
             as_dropped: false,
-            auto_increments: self.plan.auto_increments.clone(),
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
                 TablePartition::Identity {

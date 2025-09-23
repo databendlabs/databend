@@ -274,7 +274,7 @@ impl Binder {
         let options = validate_dictionary_options(&source, source_options)?;
 
         // Check for data source fields.
-        let (schema, _, _) = self.analyze_create_table_schema_by_columns(columns).await?;
+        let (schema, _) = self.analyze_create_table_schema_by_columns(columns).await?;
         match source.as_str() {
             "redis" => validate_redis_fields(&schema)?,
             "mysql" => validate_mysql_fields(&schema)?,

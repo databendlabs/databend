@@ -50,8 +50,7 @@ use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::AutoIncrementIdent;
-use databend_common_meta_app::schema::AutoIncrementMeta;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -450,23 +449,19 @@ where
                         .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
                 }
 
-                for (column_id, auto_increment) in req.auto_increments.iter() {
-                    let autoincrement_meta = AutoIncrementMeta {
-                        step: auto_increment.step as i64,
-                        current: auto_increment.start,
-                        storage_version: 0,
+                for table_field in req.table_meta.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
                     };
-                    let auto_increment_key = AutoIncrementKey::new(table_id, *column_id as u32);
-                    let auto_increment_ident =
-                        AutoIncrementIdent::new_generic(req.tenant(), auto_increment_key);
 
-                    let storage_ident = auto_increment_ident.to_storage_ident();
+                    let auto_increment_key =
+                        AutoIncrementKey::new(table_id, table_field.column_id());
+                    let storage_ident =
+                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
                     let storage_value =
-                        Id::new_typed(AutoIncrementStorageValue(auto_increment.start));
-                    txn.if_then.extend(vec![
-                        txn_put_pb(&auto_increment_ident, &autoincrement_meta)?,
-                        txn_put_pb(&storage_ident, &storage_value)?,
-                    ]);
+                        Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
+                    txn.if_then
+                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;

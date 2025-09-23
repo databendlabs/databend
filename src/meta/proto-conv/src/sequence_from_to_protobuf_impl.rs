@@ -17,7 +17,6 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_meta_app::schema::AutoIncrementMeta;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_protos::pb;
 
@@ -57,33 +56,6 @@ impl FromToProto for SequenceMeta {
             #[allow(deprecated)]
             current: self.current,
             step: self.step,
-            storage_version: self.storage_version,
-        };
-        Ok(p)
-    }
-}
-
-impl FromToProto for AutoIncrementMeta {
-    type PB = pb::AutoIncrementMeta;
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-    fn from_pb(p: pb::AutoIncrementMeta) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        Ok(AutoIncrementMeta {
-            step: p.step,
-            current: p.current,
-            storage_version: p.storage_version,
-        })
-    }
-
-    fn to_pb(&self) -> Result<pb::AutoIncrementMeta, Incompatible> {
-        let p = pb::AutoIncrementMeta {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            step: self.step,
-            current: self.current,
             storage_version: self.storage_version,
         };
         Ok(p)

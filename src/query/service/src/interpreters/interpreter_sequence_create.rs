@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_sql::plans::CreateSequencePlan;
 use databend_common_storages_fuse::TableContext;
@@ -55,7 +54,7 @@ impl Interpreter for CreateSequenceInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = CreateSequenceReq {
             create_option: self.plan.create_option,
-            ident: SequenceIdentType::Sequence(self.plan.ident.clone()),
+            ident: self.plan.ident.clone(),
             start: self.plan.start,
             increment: self.plan.increment,
             comment: self.plan.comment.clone(),

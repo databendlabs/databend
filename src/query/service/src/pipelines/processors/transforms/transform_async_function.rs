@@ -18,15 +18,17 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::principal::AutoIncrementKey;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
@@ -121,11 +123,11 @@ impl TransformAsyncFunction {
     }
 
     // transform add sequence nextval column.
-    pub async fn transform_sequence(
+    pub async fn transform<T: NextValFetcher>(
         ctx: Arc<QueryContext>,
         data_block: &mut DataBlock,
         counter_lock: Arc<RwLock<SequenceCounter>>,
-        sequence_ident: SequenceIdentType,
+        fetcher: T,
     ) -> Result<()> {
         let count = data_block.num_rows() as u64;
         let column = if count == 0 {
@@ -161,34 +163,7 @@ impl TransformAsyncFunction {
                         let remaining = max.saturating_sub(current);
                         let to_fetch = count.saturating_sub(remaining);
 
-                        let visibility_checker = if ctx
-                            .get_settings()
-                            .get_enable_experimental_sequence_privilege_check()?
-                        {
-                            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
-                        } else {
-                            None
-                        };
-
-                        let req = GetSequenceReq {
-                            ident: sequence_ident.clone(),
-                        };
-                        let resp = catalog.get_sequence(req, &visibility_checker).await?;
-                        let step_size = resp.meta.step as u64;
-
-                        // Calculate batch size - take the larger of count or step_size
-                        let batch_size = to_fetch.max(step_size);
-
-                        // Calculate batch size - take the larger of count or step_size
-                        let req = GetSequenceNextValueReq {
-                            ident: sequence_ident,
-                            count: batch_size,
-                        };
-
-                        let resp = catalog
-                            .get_sequence_next_value(req, &visibility_checker)
-                            .await?;
-                        let start = resp.start;
+                        let (start, batch_size) = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
 
                         // If we have remaining numbers, use them first
                         if remaining > 0 {
@@ -230,6 +205,89 @@ impl TransformAsyncFunction {
     }
 }
 
+pub trait NextValFetcher {
+    async fn fetch(
+        self,
+        ctx: &QueryContext,
+        catalog: &Arc<dyn Catalog>,
+        to_fetch: u64,
+    ) -> Result<(u64 /* start */, u64 /* batch */)>;
+}
+
+pub struct SequenceNextValFetcher {
+    pub(crate) sequence_ident: SequenceIdent,
+}
+
+impl NextValFetcher for SequenceNextValFetcher {
+    async fn fetch(
+        self,
+        ctx: &QueryContext,
+        catalog: &Arc<dyn Catalog>,
+        to_fetch: u64,
+    ) -> Result<(u64, u64)> {
+        let visibility_checker = if ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
+        } else {
+            None
+        };
+
+        let req = GetSequenceReq {
+            ident: self.sequence_ident.clone(),
+        };
+        let resp = catalog.get_sequence(req, &visibility_checker).await?;
+        let step_size = resp.meta.step as u64;
+
+        // Calculate batch size - take the larger of count or step_size
+        let batch_size = to_fetch.max(step_size);
+
+        // Calculate batch size - take the larger of count or step_size
+        let req = GetSequenceNextValueReq {
+            ident: self.sequence_ident,
+            count: batch_size,
+        };
+
+        let resp = catalog
+            .get_sequence_next_value(req, &visibility_checker)
+            .await?;
+        Ok((resp.start, batch_size))
+    }
+}
+
+pub struct AutoIncrementNextValFetcher {
+    pub(crate) key: AutoIncrementKey,
+    pub(crate) expr: AutoIncrementExpr,
+}
+
+impl NextValFetcher for AutoIncrementNextValFetcher {
+    async fn fetch(
+        self,
+        ctx: &QueryContext,
+        catalog: &Arc<dyn Catalog>,
+        to_fetch: u64,
+    ) -> Result<(u64, u64)> {
+        let step_size = self.expr.step as u64;
+
+        // Calculate batch size - take the larger of count or step_size
+        let batch_size = to_fetch.max(step_size);
+
+        // Calculate batch size - take the larger of count or step_size
+        let req = GetAutoIncrementNextValueReq {
+            tenant: ctx.get_tenant(),
+            key: self.key,
+            expr: self.expr,
+            // FIXME: count * step
+            // count: batch_size,
+            count: 1,
+        };
+
+        let resp = catalog.get_autoincrement_next_value(req).await?;
+        Ok((resp.start, batch_size))
+    }
+}
+
 #[async_trait::async_trait]
 impl AsyncTransform for TransformAsyncFunction {
     const NAME: &'static str = "AsyncFunction";
@@ -239,26 +297,28 @@ impl AsyncTransform for TransformAsyncFunction {
         for (i, async_func_desc) in self.async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
-                    Self::transform_sequence(
+                    Self::transform(
                         self.ctx.clone(),
                         &mut data_block,
                         self.sequence_counters[i].clone(),
-                        SequenceIdentType::Sequence(SequenceIdent::new(
-                            self.ctx.get_tenant(),
-                            sequence_name,
-                        )),
+                        SequenceNextValFetcher {
+                            sequence_ident: SequenceIdent::new(
+                                self.ctx.get_tenant(),
+                                sequence_name,
+                            ),
+                        },
                     )
                     .await?;
                 }
-                AsyncFunctionArgument::AutoIncrement(auto_increment_key) => {
-                    Self::transform_sequence(
+                AsyncFunctionArgument::AutoIncrement { key, expr } => {
+                    Self::transform(
                         self.ctx.clone(),
                         &mut data_block,
                         self.sequence_counters[i].clone(),
-                        SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
-                            self.ctx.get_tenant(),
-                            auto_increment_key.clone(),
-                        )),
+                        AutoIncrementNextValFetcher {
+                            key: key.clone(),
+                            expr: expr.clone(),
+                        },
                     )
                     .await?;
                 }

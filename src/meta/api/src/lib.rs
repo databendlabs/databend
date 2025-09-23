@@ -51,6 +51,9 @@ pub mod txn_op_builder_util;
 pub mod txn_retry_util;
 pub mod util;
 
+mod auto_increment_api;
+mod auto_increment_impl;
+pub(crate) mod auto_increment_nextval_impl;
 pub mod crud;
 mod errors;
 mod row_access_policy_api;
@@ -58,6 +61,7 @@ mod row_access_policy_api_impl;
 mod sequence_api_impl;
 pub(crate) mod sequence_nextval_impl;
 
+pub use auto_increment_api::AutoIncrementApi;
 pub use catalog_api::CatalogApi;
 pub use data_mask_api::DatamaskApi;
 // Re-export from new data_retention_util module for backward compatibility

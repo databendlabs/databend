@@ -3255,7 +3255,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         CheckExpr(Box<Expr>),
         AutoIncrement {
             start: u64,
-            step: u64,
+            step: i64,
             is_ordered: bool,
         },
     }
@@ -3267,13 +3267,13 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     let identity_parmas = alt((
         map(
             rule! {
-                "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_u64 ~ ^")"
+                "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_i64 ~ ^")"
             },
             |(_, start, _, step, _)| (start, step),
         ),
         map(
             rule! {
-                START ~ ^#literal_u64 ~ ^INCREMENT ~ ^#literal_u64
+                START ~ ^#literal_u64 ~ ^INCREMENT ~ ^#literal_i64
             },
             |(_, start, _, step)| (start, step),
         ),
@@ -3370,7 +3370,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
-                if matches!(def.expr, Some(ColumnExpr::AutoIncrement(_))) {
+                if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other(
@@ -3404,11 +3404,11 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                         ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
                     )));
                 }
-                def.expr = Some(ColumnExpr::AutoIncrement(AutoIncrement {
+                def.expr = Some(ColumnExpr::AutoIncrement {
                     start,
                     step,
                     is_ordered,
-                }))
+                })
             }
         }
     }

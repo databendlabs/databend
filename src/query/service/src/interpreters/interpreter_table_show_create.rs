@@ -197,8 +197,8 @@ impl ShowCreateTableInterpreter {
                     }
                     _ => "".to_string(),
                 };
-                let auto_increment = if let Some(sequence_display) = &field.auto_increment_display {
-                    format!(" {sequence_display}")
+                let auto_increment = if let Some(auto_increment_expr) = &field.auto_increment_expr {
+                    format!(" {}", auto_increment_expr.to_sql_string())
                 } else {
                     "".to_string()
                 };

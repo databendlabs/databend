@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -37,10 +38,9 @@ use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::AutoIncrementIdent;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
 use educe::Educe;
@@ -1173,7 +1173,10 @@ pub enum AsyncFunctionArgument {
     // to get incremental values.
     SequenceFunction(String),
     // used for auto increment calling sequence
-    AutoIncrement(AutoIncrementKey),
+    AutoIncrement {
+        key: AutoIncrementKey,
+        expr: AutoIncrementExpr,
+    },
     // The dictionary argument is connection URL of remote source, like Redis, MySQL ...
     // Used by `dict_get` function to connect source and read data.
     DictGetFunction(DictGetFunctionArgument),
@@ -1258,10 +1261,7 @@ impl AsyncFunctionCall {
                     }
                 }
                 let req = GetSequenceNextValueReq {
-                    ident: SequenceIdentType::Sequence(SequenceIdent::new(
-                        &tenant,
-                        sequence_name.clone(),
-                    )),
+                    ident: SequenceIdent::new(&tenant, sequence_name.clone()),
                     count: 1,
                 };
                 // Call meta's api to generate an incremental value.
@@ -1270,18 +1270,15 @@ impl AsyncFunctionCall {
                     .await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
-            AsyncFunctionArgument::AutoIncrement(key) => {
-                let req = GetSequenceNextValueReq {
-                    ident: SequenceIdentType::AutoIncrement(AutoIncrementIdent::new_generic(
-                        &tenant,
-                        key.clone(),
-                    )),
+            AsyncFunctionArgument::AutoIncrement { key, expr } => {
+                let req = GetAutoIncrementNextValueReq {
+                    tenant,
+                    expr: expr.clone(),
+                    key: key.clone(),
                     count: 1,
                 };
                 // Call meta's api to generate an incremental value.
-                let reply = catalog
-                    .get_sequence_next_value(req, &visibility_checker)
-                    .await?;
+                let reply = catalog.get_autoincrement_next_value(req).await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {

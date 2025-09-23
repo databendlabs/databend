@@ -27,7 +27,6 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
-use crate::ast::AutoIncrement;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -939,7 +938,11 @@ pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
     Stored(Box<Expr>),
-    AutoIncrement(AutoIncrement),
+    AutoIncrement {
+        start: u64,
+        step: i64,
+        is_ordered: bool,
+    },
 }
 
 impl Display for ColumnExpr {
@@ -954,8 +957,17 @@ impl Display for ColumnExpr {
             ColumnExpr::Stored(expr) => {
                 write!(f, " AS ({expr}) STORED")?;
             }
-            ColumnExpr::AutoIncrement(auto_increment) => {
-                write!(f, " {}", auto_increment.to_sql_string())?;
+            ColumnExpr::AutoIncrement {
+                start,
+                step,
+                is_ordered,
+            } => {
+                write!(f, " AUTOINCREMENT ({}, {}) ", start, step)?;
+                if *is_ordered {
+                    write!(f, "ORDER")?;
+                } else {
+                    write!(f, "NOORDER")?;
+                }
             }
         }
         Ok(())

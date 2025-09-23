@@ -22,7 +22,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_meta_app::schema::GetSequenceReq;
-use databend_common_meta_app::schema::SequenceIdentType;
 use databend_common_sql::plans::DescSequencePlan;
 use databend_common_storages_fuse::TableContext;
 
@@ -54,7 +53,7 @@ impl Interpreter for DescSequenceInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let req = GetSequenceReq {
-            ident: SequenceIdentType::Sequence(self.plan.ident.clone()),
+            ident: self.plan.ident.clone(),
         };
         let catalog = self.ctx.get_default_catalog()?;
         // Already check seq privilege before interpreter

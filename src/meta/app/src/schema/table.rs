@@ -26,7 +26,6 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_ast::ast::AutoIncrement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
@@ -629,8 +628,6 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
-    /// column id with auto increments
-    pub auto_increments: BTreeMap<usize, AutoIncrement>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,
