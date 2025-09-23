@@ -106,6 +106,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -685,6 +687,14 @@ impl Catalog for MutableCatalog {
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
         db.rename_table(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        let db = self
+            .get_database(&req.origin_table.tenant, &req.origin_table.db_name)
+            .await?;
+        db.swap_table(req).await
     }
 
     #[async_backtrace::framed]

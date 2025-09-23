@@ -163,6 +163,7 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
+use crate::plans::SwapTablePlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
@@ -267,6 +268,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    SwapTable(Box<SwapTablePlan>),
     ModifyTableComment(Box<ModifyTableCommentPlan>),
     RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),

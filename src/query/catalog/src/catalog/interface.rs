@@ -86,6 +86,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -343,6 +345,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
+
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply>;
 
     // Check a db.table is exists or not.
     #[async_backtrace::framed]

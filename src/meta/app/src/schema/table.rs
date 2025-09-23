@@ -816,6 +816,21 @@ impl RenameTableReq {
     }
 }
 
+impl Display for SwapTableReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "swap_table:{}/{}-{}<==>{}/{}-{}",
+            self.origin_table.tenant.tenant_name(),
+            self.origin_table.db_name,
+            self.origin_table.table_name,
+            self.origin_table.tenant.tenant_name(),
+            self.origin_table.db_name,
+            self.target_table_name
+        )
+    }
+}
+
 impl Display for RenameTableReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
@@ -834,6 +849,23 @@ impl Display for RenameTableReq {
 pub struct RenameTableReply {
     pub table_id: u64,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapTableReq {
+    pub if_exists: bool,
+    pub origin_table: TableNameIdent,
+    pub target_table_name: String,
+}
+
+impl SwapTableReq {
+    pub fn tenant(&self) -> &Tenant {
+        &self.origin_table.tenant
+    }
+}
+
+// Keep this structure for future compatibility, even if currently empty.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReq {

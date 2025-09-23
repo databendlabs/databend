@@ -1168,6 +1168,8 @@ pub enum TokenKind {
     SHARES,
     #[token("SUPER", ignore(ascii_case))]
     SUPER,
+    #[token("SWAP", ignore(ascii_case))]
+    SWAP,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
     #[token("STORED", ignore(ascii_case))]
