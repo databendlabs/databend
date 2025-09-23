@@ -414,6 +414,10 @@ impl MetaGrpcClient {
                 let resp = self.get_cluster_status().await;
                 Response::GetClusterStatus(resp)
             }
+            message::Request::GetMemberList(_) => {
+                let resp = self.get_member_list().await;
+                Response::GetMemberList(resp)
+            }
             message::Request::GetClientInfo(_) => {
                 let resp = self.get_client_info().await;
                 Response::GetClientInfo(resp)
@@ -823,6 +827,19 @@ impl MetaGrpcClient {
         let mut client = self.get_established_client().await?;
         client.ensure_feature("get_cluster_status")?;
         let res = client.get_cluster_status(Empty {}).await?;
+        Ok(res.into_inner())
+    }
+
+    /// Get member list
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn get_member_list(&self) -> Result<MemberListReply, MetaClientError> {
+        debug!("{}::get_member_list", self);
+        let mut client = self.get_established_client().await?;
+        let req = MemberListRequest {
+            data: "".to_string(),
+        };
+        let res = client.member_list(req).await?;
         Ok(res.into_inner())
     }
 

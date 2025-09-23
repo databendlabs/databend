@@ -637,7 +637,7 @@ impl Catalog for MutableCatalog {
         Ok((tables, drop_ids))
     }
 
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<()> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {
         let meta = self.ctx.meta.clone();
         let resp = meta.gc_drop_tables(req).await?;
         Ok(resp)
