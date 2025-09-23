@@ -272,7 +272,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Decimal(Decimal(18, 1))
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
@@ -299,7 +299,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Decimal(Decimal(18, 1))
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
@@ -688,7 +688,7 @@ CREATE OR REPLACE TABLE test2 (
 );
 
 statement ok
-INSERT INTO test2 (id, data1, data2) VALUES
+INSERT INTO test2 (id, data1, data2) VALUES 
 (1, '{"name": "John", "address": {"city": "New York", "district": "Manhattan"}}', '{"product_id": 101}'),
 (2, '{"name": "Alice", "address": {"city": "San Francisco", "district": "Mission"}}', '{"product_id": 102, "price": 10.2}'),
 (3, '{"name": "Bob", "age": 28, "address": {"city": "Chicago", "district": "Loop"}}', '{"product_id": 103, "price": 10.3}'),
@@ -710,8 +710,8 @@ test_virtual_column test2 data1 3000000003 ['name'] String
 test_virtual_column test2 data2 3000000004 ['price'] Jsonb
 test_virtual_column test2 data2 3000000005 ['product_id'] Jsonb
 
-query ITTTTTT
-SELECT
+query ITTTTT
+SELECT 
     id,
     data1:name AS name,
     data1:age AS age,

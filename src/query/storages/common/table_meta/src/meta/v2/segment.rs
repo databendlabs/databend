@@ -18,10 +18,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::Decimal;
-use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -77,13 +73,6 @@ const VIRTUAL_COLUMN_UINT64_TYPE: u8 = 2;
 const VIRTUAL_COLUMN_INT64_TYPE: u8 = 3;
 const VIRTUAL_COLUMN_FLOAT64_TYPE: u8 = 4;
 const VIRTUAL_COLUMN_STRING_TYPE: u8 = 5;
-const VIRTUAL_COLUMN_DECIMAL64_TYPE: u8 = 6;
-const VIRTUAL_COLUMN_DECIMAL128_TYPE: u8 = 7;
-const VIRTUAL_COLUMN_DECIMAL256_TYPE: u8 = 8;
-const VIRTUAL_COLUMN_BINARY_TYPE: u8 = 9;
-const VIRTUAL_COLUMN_DATE_TYPE: u8 = 10;
-const VIRTUAL_COLUMN_TIMESTAMP_TYPE: u8 = 11;
-const VIRTUAL_COLUMN_INTERVAL_TYPE: u8 = 12;
 
 /// The column meta of virtual columns.
 /// Virtual column is the internal field values extracted from variant type values,
@@ -104,16 +93,7 @@ pub struct VirtualColumnMeta {
     // 3 => int64
     // 4 => float64
     // 5 => string
-    // 6 => decimal64
-    // 7 => decimal128
-    // 8 => decimal256
-    // 9 => binary
-    // 10 => date
-    // 11 => timestamp
-    // 12 => interval
     pub data_type: u8,
-    /// the scale size, only used for decimal type
-    pub scale: Option<u8>,
     /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
 }
@@ -128,7 +108,6 @@ impl VirtualColumnMeta {
     }
 
     pub fn data_type(&self) -> TableDataType {
-        let scale = self.scale.unwrap_or_default();
         match self.data_type {
             VIRTUAL_COLUMN_JSONB_TYPE => TableDataType::Nullable(Box::new(TableDataType::Variant)),
             VIRTUAL_COLUMN_BOOL_TYPE => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
@@ -142,60 +121,20 @@ impl VirtualColumnMeta {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64)))
             }
             VIRTUAL_COLUMN_STRING_TYPE => TableDataType::Nullable(Box::new(TableDataType::String)),
-            VIRTUAL_COLUMN_DECIMAL64_TYPE => {
-                let size = DecimalSize::new_unchecked(i64::MAX_PRECISION, scale);
-                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
-                    size,
-                ))))
-            }
-            VIRTUAL_COLUMN_DECIMAL128_TYPE => {
-                let size = DecimalSize::new_unchecked(i128::MAX_PRECISION, scale);
-                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
-                    size,
-                ))))
-            }
-            VIRTUAL_COLUMN_DECIMAL256_TYPE => {
-                let size = DecimalSize::new_unchecked(i256::MAX_PRECISION, scale);
-                TableDataType::Nullable(Box::new(TableDataType::Decimal(DecimalDataType::from(
-                    size,
-                ))))
-            }
-            VIRTUAL_COLUMN_BINARY_TYPE => TableDataType::Nullable(Box::new(TableDataType::Binary)),
-            VIRTUAL_COLUMN_DATE_TYPE => TableDataType::Nullable(Box::new(TableDataType::Date)),
-            VIRTUAL_COLUMN_TIMESTAMP_TYPE => {
-                TableDataType::Nullable(Box::new(TableDataType::Timestamp))
-            }
-            VIRTUAL_COLUMN_INTERVAL_TYPE => {
-                TableDataType::Nullable(Box::new(TableDataType::Interval))
-            }
             _ => unreachable!(),
         }
     }
 
-    pub fn data_type_code(variant_type: &VariantDataType) -> (u8, Option<u8>) {
-        let ty = match variant_type {
+    pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
+        match variant_type {
             VariantDataType::Jsonb => VIRTUAL_COLUMN_JSONB_TYPE,
             VariantDataType::Boolean => VIRTUAL_COLUMN_BOOL_TYPE,
             VariantDataType::UInt64 => VIRTUAL_COLUMN_UINT64_TYPE,
             VariantDataType::Int64 => VIRTUAL_COLUMN_INT64_TYPE,
             VariantDataType::Float64 => VIRTUAL_COLUMN_FLOAT64_TYPE,
             VariantDataType::String => VIRTUAL_COLUMN_STRING_TYPE,
-            VariantDataType::Decimal(ty) => match ty {
-                DecimalDataType::Decimal64(_) => VIRTUAL_COLUMN_DECIMAL64_TYPE,
-                DecimalDataType::Decimal128(_) => VIRTUAL_COLUMN_DECIMAL128_TYPE,
-                DecimalDataType::Decimal256(_) => VIRTUAL_COLUMN_DECIMAL256_TYPE,
-            },
-            VariantDataType::Binary => VIRTUAL_COLUMN_BINARY_TYPE,
-            VariantDataType::Date => VIRTUAL_COLUMN_DATE_TYPE,
-            VariantDataType::Timestamp => VIRTUAL_COLUMN_TIMESTAMP_TYPE,
-            VariantDataType::Interval => VIRTUAL_COLUMN_INTERVAL_TYPE,
             _ => unreachable!(),
-        };
-        let scale = match variant_type {
-            VariantDataType::Decimal(ty) => Some(ty.scale()),
-            _ => None,
-        };
-        (ty, scale)
+        }
     }
 }
 

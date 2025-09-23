@@ -28,7 +28,6 @@ use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::MutableBitmap;
@@ -401,13 +400,6 @@ impl VirtualColumnBuilder {
                         DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)))
                     }
                     VariantDataType::String => DataType::Nullable(Box::new(DataType::String)),
-                    VariantDataType::Decimal(ty) => {
-                        DataType::Nullable(Box::new(DataType::Decimal(ty.size())))
-                    }
-                    VariantDataType::Binary => DataType::Nullable(Box::new(DataType::Binary)),
-                    VariantDataType::Date => DataType::Nullable(Box::new(DataType::Date)),
-                    VariantDataType::Timestamp => DataType::Nullable(Box::new(DataType::Timestamp)),
-                    VariantDataType::Interval => DataType::Nullable(Box::new(DataType::Interval)),
                     _ => unreachable!(),
                 };
 
@@ -642,22 +634,19 @@ impl VirtualColumnBuilder {
                 Scalar::Number(NumberScalar::UInt64(_)) => VariantDataType::UInt64,
                 Scalar::Number(NumberScalar::Int64(_)) => VariantDataType::Int64,
                 Scalar::Number(NumberScalar::Float64(_)) => VariantDataType::Float64,
-                Scalar::Decimal(decimal_scalar) => {
-                    let size = decimal_scalar.size();
-                    VariantDataType::Decimal(DecimalDataType::from(size))
-                }
                 Scalar::String(_) => VariantDataType::String,
-                Scalar::Binary(_) => VariantDataType::Binary,
-                Scalar::Date(_) => VariantDataType::Date,
-                Scalar::Timestamp(_) => VariantDataType::Timestamp,
-                Scalar::Interval(_) => VariantDataType::Interval,
-                _ => VariantDataType::Jsonb,
+                // Decimal, binary, date, timestamp, and interval types will not
+                // be generated for now, because older meta cannot recognize these types.
+                // Support for these types will be added after the meta upgrade.
+                _ => {
+                    return VariantDataType::Jsonb;
+                }
             };
             if !val_type_set.contains(&ty) {
                 val_type_set.insert(ty);
             }
             if val_type_set.len() == 2 {
-                return VariantDataType::Jsonb;
+                break;
             }
         }
         if val_type_set.len() == 1 {
@@ -704,15 +693,13 @@ impl VirtualColumnBuilder {
                     );
                     let num_values = chunk_meta.num_values as u64;
 
-                    let (variant_type_code, scale) =
-                        VirtualColumnMeta::data_type_code(&variant_type);
+                    let variant_type_code = VirtualColumnMeta::data_type_code(&variant_type);
                     let column_stat = columns_statistics.remove(&tmp_column_id);
                     let virtual_column_meta = VirtualColumnMeta {
                         offset: col_start as u64,
                         len: col_len as u64,
                         num_values,
                         data_type: variant_type_code,
-                        scale,
                         column_stat,
                     };
 
