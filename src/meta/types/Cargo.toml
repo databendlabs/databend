@@ -24,7 +24,6 @@ openraft = { workspace = true }
 pretty_assertions = { workspace = true }
 prost = { workspace = true }
 rotbl = { workspace = true }
-seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state-machine-api = { workspace = true }
