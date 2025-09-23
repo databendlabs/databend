@@ -108,7 +108,11 @@ impl HashJoinSpiller {
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
-            block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
+            block_partition_stream: BlockPartitionStream::create(
+                0,
+                block_bytes,
+                num_partitions,
+            ),
         })
     }
 
@@ -122,9 +126,6 @@ impl HashJoinSpiller {
             return self.cross_buffer(data_blocks);
         }
 
-        self.block_partition_stream.set_row_threshold(usize::MAX);
-        self.block_partition_stream.set_bytes_threshold(usize::MAX);
-
         for data_block in data_blocks {
             let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
 
@@ -132,7 +133,9 @@ impl HashJoinSpiller {
                 *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
             }
 
-            let ready_partitions = self.block_partition_stream.partition(hashes, data_block);
+            let ready_partitions = self
+                .block_partition_stream
+                .partition(hashes, data_block, false);
             assert_eq!(ready_partitions.len(), 0);
         }
 
@@ -191,7 +194,9 @@ impl HashJoinSpiller {
                 *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
             }
 
-            let ready_partitions = self.block_partition_stream.partition(hashes, data_block);
+            let ready_partitions = self
+                .block_partition_stream
+                .partition(hashes, data_block, true);
 
             for (partition_id, data_block) in ready_partitions {
                 if !need_spill(partition_id) {
@@ -324,14 +329,7 @@ impl HashJoinSpiller {
     }
 
     fn restore_buffer(&mut self, partition_id: usize) -> Option<DataBlock> {
-        match self.can_pick_buffer() {
-            true => {
-                self.block_partition_stream.finalize_partition(partition_id);
-                self.block_partition_stream
-                    .destroy_finalize_partition(partition_id)
-            }
-            false => self.block_partition_stream.finalize_partition(partition_id),
-        }
+        self.block_partition_stream.finalize_partition(partition_id)
     }
 
     fn restore_cross_buffer(&mut self, partition_id: usize) -> Result<Option<Vec<DataBlock>>> {
@@ -388,7 +386,6 @@ impl HashJoinSpiller {
         let mut partition_ids = self.spiller.spilled_partitions();
 
         partition_ids.extend(self.cross_spilled_partitions());
-
         partition_ids.extend(self.block_partition_stream.partition_ids());
 
         partition_ids
@@ -400,9 +397,7 @@ impl HashJoinSpiller {
 
     pub fn has_next_restore_file(&self) -> bool {
         self.next_restore_file < self.spiller.private_spilled_files().len()
-            || (self.next_restore_file == 0
-                && (!self.partition_buffer.is_partition_empty(0)
-                    || !self.block_partition_stream.is_partition_empty(0)))
+            || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
     }
 
     pub fn reset_next_restore_file(&mut self) {

@@ -52,7 +52,6 @@ pub struct BlockPartitionStream {
     rows_threshold: usize,
     bytes_threshold: usize,
     partitions: Vec<PartitionBlockBuilder>,
-    finalize_partitions: Vec<Option<DataBlock>>,
 }
 
 impl BlockPartitionStream {
@@ -75,12 +74,17 @@ impl BlockPartitionStream {
             bytes_threshold,
             initialize: false,
             partitions: vec![],
-            finalize_partitions: vec![None; scatter_size],
         }
     }
 
-    pub fn partition(&mut self, indices: Vec<u64>, block: DataBlock) -> Vec<(usize, DataBlock)> {
-        if block.num_rows() == 0 || block.is_empty() {
+    pub fn partition(
+        &mut self,
+        indices: Vec<u64>,
+        block: DataBlock,
+        out_ready: bool,
+    ) -> Vec<(usize, DataBlock)> {
+        let row_num = block.num_rows();
+        if row_num == 0 || block.is_empty() {
             return vec![];
         }
 
@@ -118,6 +122,10 @@ impl BlockPartitionStream {
             }
 
             drop(column);
+        }
+
+        if !out_ready {
+            return vec![];
         }
 
         let mut ready_blocks = Vec::with_capacity(self.partitions.len());
@@ -158,9 +166,7 @@ impl BlockPartitionStream {
         }
 
         for (partition_id, data) in self.partitions.iter().enumerate() {
-            if data.columns_builder[0].len() != 0
-                || self.finalize_partitions[partition_id].is_some()
-            {
+            if data.columns_builder[0].len() != 0 {
                 partition_ids.push(partition_id);
             }
         }
@@ -199,15 +205,7 @@ impl BlockPartitionStream {
         take_blocks
     }
 
-    pub fn destroy_finalize_partition(&mut self, partition_id: usize) -> Option<DataBlock> {
-        self.finalize_partitions[partition_id].take()
-    }
-
     pub fn finalize_partition(&mut self, partition_id: usize) -> Option<DataBlock> {
-        if let Some(data_block) = &self.finalize_partitions[partition_id] {
-            return Some(data_block.clone());
-        }
-
         if !self.initialize {
             return None;
         }
@@ -223,32 +221,14 @@ impl BlockPartitionStream {
         partition.columns_builder.reserve(columns_builder.len());
 
         for column_builder in columns_builder {
+            let historical_size = column_builder.len();
             let data_type = column_builder.data_type();
-            let new_builder = ColumnBuilder::with_capacity(&data_type, 0);
+            let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
             partition.columns_builder.push(new_builder);
             columns.push(column_builder.build());
         }
 
-        self.finalize_partitions[partition_id] = Some(DataBlock::new_from_columns(columns));
-        self.finalize_partitions[partition_id].clone()
-    }
-
-    pub fn set_row_threshold(&mut self, row_threshold: usize) {
-        self.rows_threshold = row_threshold;
-    }
-
-    pub fn set_bytes_threshold(&mut self, bytes_threshold: usize) {
-        self.bytes_threshold = bytes_threshold;
-    }
-
-    pub fn is_partition_empty(&self, partition_id: usize) -> bool {
-        if !self.initialize || self.partitions.is_empty() {
-            return true;
-        }
-
-        (self.partitions[partition_id].columns_builder.is_empty()
-            || self.partitions[partition_id].columns_builder[0].len() == 0)
-            && self.finalize_partitions[partition_id].is_none()
+        Some(DataBlock::new_from_columns(columns))
     }
 }
 
@@ -325,7 +305,6 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
         (ColumnBuilder::Nullable(builder), Column::Nullable(column)) => {
             copy_nullable(builder, column, indices);
         }
-
         (ColumnBuilder::Vector(builder), Column::Vector(column)) => {
             copy_vector(indices, builder, column);
         }
@@ -343,6 +322,11 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
 
 fn copy_boolean<I: Index>(to: &mut MutableBitmap, from: &Bitmap, indices: &[I]) {
     let num_rows = indices.len();
+
+    if num_rows == 0 {
+        return;
+    }
+
     // Fast path: avoid iterating column to generate a new bitmap.
     // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
     // we can just slice it.
