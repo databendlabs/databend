@@ -421,7 +421,7 @@ impl Catalog for SessionCatalog {
         self.inner.get_drop_table_infos(req).await
     }
 
-    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<()> {
+    async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {
         self.inner.gc_drop_tables(req).await
     }
 
