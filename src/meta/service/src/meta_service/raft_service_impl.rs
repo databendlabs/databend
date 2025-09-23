@@ -26,6 +26,7 @@ use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
 use databend_common_meta_raft_store::sm_v003::WriterV003;
 use databend_common_meta_raft_store::snapshot_config::SnapshotConfig;
+use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
@@ -39,6 +40,7 @@ use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::AppendEntriesRequest;
 use databend_common_meta_types::raft_types::Snapshot;
+use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
@@ -52,6 +54,7 @@ use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
+use raft_metrics::network::incr_snapshot_recvfrom_result;
 use seq_marked::SeqMarked;
 use state_machine_api::MetaValue;
 use state_machine_api::SeqV;
@@ -126,12 +129,12 @@ impl RaftServiceImpl {
             .await
             .map_err(GrpcHelper::internal_err);
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+        incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
         let resp = res?;
 
         let resp = SnapshotResponseV003::new(resp.vote);
-        Ok(tonic::Response::new(resp))
+        Ok(Response::new(resp))
     }
 
     /// Install snapshot using V004 streaming protocol.
@@ -161,6 +164,7 @@ impl RaftServiceImpl {
         let mut proto_vote = None;
         let mut sys_data_str = None;
         let mut snapshot_id_str = None;
+        let mut commit = None;
 
         while let Some(entry) = strm
             .try_next()
@@ -184,33 +188,31 @@ impl RaftServiceImpl {
                 }
             }
 
-            if let Some(commit) = entry.commit {
-                proto_vote = commit.vote;
-                sys_data_str = Some(commit.sys_data);
-                snapshot_id_str = Some(commit.snapshot_id);
+            if let Some(mut c) = entry.commit {
+                commit = Some(c.clone());
                 break;
             }
         }
 
-        // Parse commit data
-        let req_proto_vote = proto_vote
-            .ok_or_else(|| Status::invalid_argument("No vote received from snapshot stream"))?;
+        let Some(commit) = commit else {
+            return Err(Status::invalid_argument(
+                "No commit received from snapshot stream",
+            ));
+        };
 
-        let sys_data_str = sys_data_str
-            .ok_or_else(|| Status::invalid_argument("No sys_data received from snapshot stream"))?;
-
-        let snapshot_id_str = snapshot_id_str.ok_or_else(|| {
-            Status::invalid_argument("No snapshot_id received from snapshot stream")
+        let pb_vote = commit.vote.ok_or_else(|| {
+            Status::invalid_argument("None vote received from commit in snapshot stream")
         })?;
 
-        // Parse sys_data and snapshot_id
-        let sys_data: SysData = serde_json::from_str(&sys_data_str)
+        let req_vote = Vote::from(pb_vote);
+
+        let sys_data: SysData = serde_json::from_str(&commit.sys_data)
             .map_err(|e| Status::invalid_argument(format!("Invalid sys_data JSON: {}", e)))?;
 
-        let snapshot_id: databend_common_meta_raft_store::state_machine::MetaSnapshotId =
-            snapshot_id_str
-                .parse()
-                .map_err(|e| Status::invalid_argument(format!("Invalid snapshot_id: {}", e)))?;
+        let snapshot_id: MetaSnapshotId = commit
+            .snapshot_id
+            .parse()
+            .map_err(|e| Status::invalid_argument(format!("Invalid snapshot_id: {}", e)))?;
 
         // Send finish signal to writer (with empty data for now)
         let finish_entry = WriteEntry::Finish((snapshot_id.clone(), sys_data.clone()));
@@ -225,17 +227,14 @@ impl RaftServiceImpl {
             .map_err(|e| Status::internal(format!("Writer thread panicked: {:?}", e)))?
             .map_err(|e| Status::internal(format!("Writer failed: {}", e)))?;
 
-        // Convert protobuf Vote back to internal Vote for raft call
-        let req_vote = Vote::from(req_proto_vote);
-
         // Create the snapshot with proper metadata from sys_data
-        let snapshot_meta = databend_common_meta_types::raft_types::SnapshotMeta {
+        let snapshot_meta = SnapshotMeta {
             last_log_id: *sys_data.last_applied_ref(),
             last_membership: sys_data.last_membership_ref().clone(),
             snapshot_id: snapshot_id.to_string(),
         };
 
-        let snapshot = databend_common_meta_types::raft_types::Snapshot {
+        let snapshot = Snapshot {
             meta: snapshot_meta,
             snapshot: db,
         };
@@ -248,19 +247,17 @@ impl RaftServiceImpl {
             .await
             .map_err(|e| Status::internal(format!("Failed to install snapshot: {}", e)));
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+        incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
-        let raft_response = res?;
+        let snapshot_response = res?;
 
         info!("V004 snapshot installation completed successfully");
 
         // Use the response vote from raft instead of the request vote
         let resp = InstallSnapshotResponseV004 {
-            vote: Some(databend_common_meta_types::protobuf::Vote::from(
-                raft_response.vote,
-            )),
+            vote: Some(pb::Vote::from(snapshot_response.vote)),
         };
-        Ok(tonic::Response::new(resp))
+        Ok(Response::new(resp))
     }
 
     /// Receive a single file snapshot in binary chunks.
