@@ -695,10 +695,6 @@ async fn remove_data_for_dropped_table(
         while let Some(auto_increment_ident) = auto_increments.try_next().await? {
             let storage_ident = auto_increment_ident.to_storage_ident();
 
-            txn.condition
-                .push(txn_cond_seq(&auto_increment_ident, ConditionResult::Gt, 0));
-            txn.condition
-                .push(txn_cond_seq(&storage_ident, ConditionResult::Gt, 0));
             txn.if_then.push(txn_op_del(&auto_increment_ident));
             txn.if_then.push(txn_op_del(&storage_ident));
         }
