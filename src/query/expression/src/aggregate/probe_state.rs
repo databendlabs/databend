@@ -12,23 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::new_sel;
-use crate::SelectVector;
-use crate::StateAddr;
-use crate::BATCH_SIZE;
+use super::new_sel;
+use super::row_ptr::RowPtr;
+use super::SelectVector;
+use super::StateAddr;
+use super::BATCH_SIZE;
 
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
+#[derive(Debug)]
 pub struct ProbeState {
-    pub group_hashes: [u64; BATCH_SIZE],
-    pub addresses: [*const u8; BATCH_SIZE],
-    pub page_index: [usize; BATCH_SIZE],
-    pub state_places: [StateAddr; BATCH_SIZE],
-    pub group_compare_vector: SelectVector,
-    pub no_match_vector: SelectVector,
-    pub empty_vector: SelectVector,
-    pub temp_vector: SelectVector,
-    pub row_count: usize,
+    pub(super) group_hashes: [u64; BATCH_SIZE],
+    pub(super) addresses: [RowPtr; BATCH_SIZE],
+    pub(super) page_index: [usize; BATCH_SIZE],
+    pub(super) state_places: [StateAddr; BATCH_SIZE],
+    pub(super) group_compare_vector: SelectVector,
+    pub(super) no_match_vector: SelectVector,
+    pub(super) empty_vector: SelectVector,
+    pub(super) temp_vector: SelectVector,
+    pub(super) row_count: usize,
 
     pub partition_entries: Vec<SelectVector>,
     pub partition_count: Vec<usize>,
@@ -37,8 +39,8 @@ pub struct ProbeState {
 impl Default for ProbeState {
     fn default() -> Self {
         Self {
-            group_hashes: [0_u64; BATCH_SIZE],
-            addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
+            group_hashes: [0; BATCH_SIZE],
+            addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::new(0); BATCH_SIZE],
             group_compare_vector: new_sel(),
