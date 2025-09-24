@@ -462,7 +462,6 @@ impl<'a> SelectRewriter<'a> {
                     })?;
                     let mut values =
                         self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
-
                     values.sort_by(|a, b| a.1.cmp(&b.1));
                     self.process_pivot_column_values(
                         pivot,
