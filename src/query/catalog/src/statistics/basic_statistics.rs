@@ -151,3 +151,15 @@ impl BasicColumnStatistics {
         estimate.round().clamp(0.0, n) as u64
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::BasicColumnStatistics;
+
+    #[test]
+    fn test_estimate_ndv() {
+        assert_eq!(BasicColumnStatistics::estimate_ndv(0, 1, 3), 3);
+        assert_eq!(BasicColumnStatistics::estimate_ndv(1, 1, 3), 3);
+        assert_eq!(BasicColumnStatistics::estimate_ndv(12, 100, 3000), 17);
+    }
+}
