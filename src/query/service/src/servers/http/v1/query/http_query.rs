@@ -858,7 +858,7 @@ impl HttpQuery {
         *t = HttpQueryState::ExpireAt(deadline);
     }
 
-    pub fn mark_removed(&self, remove_reason: StopReason) -> bool {
+    pub fn mark_stopped(&self, remove_reason: StopReason) -> bool {
         let mut t = self.state.lock();
         if !matches!(*t, HttpQueryState::Stopped(_)) {
             *t = HttpQueryState::Stopped(remove_reason);

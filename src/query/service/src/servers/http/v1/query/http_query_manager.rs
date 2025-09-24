@@ -100,16 +100,15 @@ impl Queries {
         query_id: &str,
         reason: StopReason,
         now: u64,
-    ) -> Option<Arc<HttpQuery>> {
+    ) -> (Option<Arc<HttpQuery>>, bool) {
         self.num_active_queries = self.num_active_queries.saturating_sub(1);
         self.last_query_end_at = Some(now);
         let q = self.queries.get(query_id).cloned();
         if let Some(q) = q {
-            if q.mark_removed(reason) {
-                return Some(q);
-            }
+            let stop_first_run = q.mark_stopped(reason);
+            return (Some(q), stop_first_run);
         }
-        None
+        (None, false)
     }
 
     pub(crate) fn status(&self) -> (u64, Option<u64>) {
@@ -219,16 +218,18 @@ impl HttpQueryManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let query = self.queries.write().stop(query_id, reason, now);
+        let (query, stop_first_run) = self.queries.write().stop(query_id, reason, now);
         if let Some(q) = &query {
             if reason != StopReason::Timeout {
                 q.check_client_session_id(client_session_id)?;
             }
-            q.kill(error).await;
-            let mut queue = self.removed_queries.lock();
-            if let Some(to_evict) = queue.push(q.id.to_string()) {
-                self.queries.write().remove(&to_evict);
-            };
+            if stop_first_run {
+                q.kill(error).await;
+                let mut queue = self.removed_queries.lock();
+                if let Some(to_evict) = queue.push(q.id.to_string()) {
+                    self.queries.write().remove(&to_evict);
+                };
+            }
         }
         Ok(query)
     }
