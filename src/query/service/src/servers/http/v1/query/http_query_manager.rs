@@ -19,9 +19,9 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
 
 use chrono::SecondsFormat;
-use dashmap::DashMap;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -32,19 +32,20 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
 
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
-pub enum RemoveReason {
+pub enum StopReason {
     Timeout,
     Canceled,
     Finished,
 }
 
-impl Display for RemoveReason {
+impl Display for StopReason {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", format!("{self:?}").to_lowercase())
     }
@@ -72,13 +73,55 @@ impl<T> LimitedQueue<T> {
         }
     }
 }
+#[derive(Default)]
+struct Queries {
+    #[allow(clippy::type_complexity)]
+    queries: HashMap<String, Arc<HttpQuery>>,
+    num_active_queries: u64,
+    last_query_end_at: Option<u64>,
+}
+
+impl Queries {
+    pub(crate) fn get(&self, query_id: &str) -> Option<Arc<HttpQuery>> {
+        self.queries.get(query_id).cloned()
+    }
+
+    pub(crate) fn insert(&mut self, query: Arc<HttpQuery>) {
+        self.num_active_queries += 1;
+        self.queries.insert(query.id.clone(), query);
+    }
+
+    pub(crate) fn remove(&mut self, query_id: &str) -> Option<Arc<HttpQuery>> {
+        self.queries.remove(query_id)
+    }
+
+    pub(crate) fn stop(
+        &mut self,
+        query_id: &str,
+        reason: StopReason,
+        now: u64,
+    ) -> Option<Arc<HttpQuery>> {
+        self.num_active_queries = self.num_active_queries.saturating_sub(1);
+        self.last_query_end_at = Some(now);
+        let q = self.queries.get(query_id).cloned();
+        if let Some(q) = q {
+            if q.mark_removed(reason) {
+                return Some(q);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn status(&self) -> (u64, Option<u64>) {
+        (self.num_active_queries, self.last_query_end_at)
+    }
+}
 
 pub struct HttpQueryManager {
     pub(crate) start_instant: Instant,
     pub(crate) server_info: ServerInfo,
-    #[allow(clippy::type_complexity)]
-    pub(crate) queries: Arc<DashMap<String, Arc<HttpQuery>>>,
-    pub(crate) removed_queries: Arc<Mutex<LimitedQueue<String>>>,
+    queries: RwLock<Queries>,
+    removed_queries: Mutex<LimitedQueue<String>>,
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }
@@ -92,8 +135,8 @@ impl HttpQueryManager {
                 id: cfg.query.node_id.clone(),
                 start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
             },
-            queries: Arc::new(DashMap::new()),
-            removed_queries: Arc::new(Mutex::new(LimitedQueue::new(1000))),
+            queries: Default::default(),
+            removed_queries: Mutex::new(LimitedQueue::new(1000)),
             txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
@@ -104,14 +147,18 @@ impl HttpQueryManager {
         GlobalInstance::get()
     }
 
+    pub(crate) fn status(self: &Arc<Self>) -> (u64, Option<u64>) {
+        self.queries.read().status()
+    }
+
     pub(crate) fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
-        self.queries.get(query_id).map(|q| q.to_owned())
+        self.queries.read().get(query_id).map(|q| q.to_owned())
     }
 
     #[async_backtrace::framed]
     pub async fn add_query(self: &Arc<Self>, query: HttpQuery) -> Arc<HttpQuery> {
         let query = Arc::new(query);
-        self.queries.insert(query.id.clone(), query.clone());
+        self.queries.write().insert(query.clone());
 
         let self_clone = self.clone();
         let query_id_clone = query.id.clone();
@@ -137,10 +184,10 @@ impl HttpQueryManager {
                             &query_id_clone, query_result_timeout_secs
                         );
                         _ = self_clone
-                            .remove_query(
+                            .stop_query(
                                 &query_id_clone,
                                 &None,
-                                RemoveReason::Timeout,
+                                StopReason::Timeout,
                                 ErrorCode::AbortedQuery(&msg),
                             )
                             .await
@@ -150,7 +197,7 @@ impl HttpQueryManager {
                     ExpireResult::Sleep(t) => {
                         sleep(t).await;
                     }
-                    ExpireResult::Removed => {
+                    ExpireResult::Stopped => {
                         break;
                     }
                 }
@@ -161,26 +208,30 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn remove_query(
+    pub(crate) async fn stop_query(
         self: &Arc<Self>,
         query_id: &str,
         client_session_id: &Option<String>,
-        reason: RemoveReason,
+        reason: StopReason,
         error: ErrorCode,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
-        // deref at once to avoid holding DashMap shard guard for too long.
-        let query = self.queries.get(query_id).map(|q| q.clone());
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
+        let query = self
+            .queries
+            .write()
+            .stop(query_id, reason, now);
         if let Some(q) = &query {
-            if reason != RemoveReason::Timeout {
+            if reason != StopReason::Timeout {
                 q.check_client_session_id(client_session_id)?;
             }
-            if q.mark_removed(reason) {
-                q.kill(error).await;
-                let mut queue = self.removed_queries.lock();
-                if let Some(to_evict) = queue.push(q.id.to_string()) {
-                    self.queries.remove(&to_evict);
-                };
-            }
+            q.kill(error).await;
+            let mut queue = self.removed_queries.lock();
+            if let Some(to_evict) = queue.push(q.id.to_string()) {
+                self.queries.write().remove(&to_evict);
+            };
         }
         Ok(query)
     }
@@ -242,6 +293,7 @@ impl HttpQueryManager {
         for query_id in query_ids {
             if !self
                 .queries
+                .read()
                 .get(&query_id)
                 .map(|q| q.on_heartbeat())
                 .unwrap_or(false)
