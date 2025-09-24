@@ -35,6 +35,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::arrow_writer::compute_leaves;
+use parquet::arrow::arrow_writer::get_column_writers;
+use parquet::arrow::arrow_writer::ArrowColumnWriter;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::errors;
@@ -42,7 +45,9 @@ use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
+use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::format::FileMetaData;
+use parquet::schema::types::SchemaDescriptor;
 
 #[derive(Debug, Clone)]
 pub enum Layout {
@@ -233,6 +238,48 @@ impl ChunkReader for Reader {
     fn get_bytes(&self, start: u64, length: usize) -> errors::Result<bytes::Bytes> {
         let start = start as usize;
         Ok(self.0.slice(start..start + length).to_bytes())
+    }
+}
+
+pub struct RowGroupWriter {
+    schema: Arc<Schema>,
+    props: Arc<WriterProperties>,
+    writers: Vec<ArrowColumnWriter>,
+}
+
+impl RowGroupWriter {
+    fn new(props: Arc<WriterProperties>, arrow: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
+        let col_writers = get_column_writers(parquet, &props, &arrow).unwrap();
+        Self {
+            schema: arrow,
+            props,
+            writers: col_writers,
+        }
+    }
+
+    pub fn write(&mut self, block: DataBlock) -> errors::Result<()> {
+        let mut writer_iter = self.writers.iter_mut();
+        for (field, entry) in self.schema.fields().iter().zip(block.take_columns()) {
+            let array = (&entry.to_column()).into();
+            for col in compute_leaves(field, &array).unwrap() {
+                writer_iter.next().unwrap().write(&col)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn close<W: Write + Send>(
+        self,
+        writer: &mut SerializedRowGroupWriter<'_, W>,
+    ) -> errors::Result<()> {
+        for w in self.writers {
+            w.close()?.append_to_row_group(writer)?
+        }
+        Ok(())
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.writers.iter().map(|w| w.memory_size()).sum()
     }
 }
 
