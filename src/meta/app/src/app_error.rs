@@ -969,18 +969,6 @@ impl UnsupportedSequenceStorageVersion {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("WrongAutoIncrementCount: `{key}`")]
-pub struct WrongAutoIncrementCount {
-    key: AutoIncrementKey,
-}
-
-impl WrongAutoIncrementCount {
-    pub fn new(key: AutoIncrementKey) -> Self {
-        Self { key }
-    }
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[error("OutOfAutoIncrementRange: `{key}` while `{context}`")]
 pub struct OutOfAutoIncrementRange {
     key: AutoIncrementKey,
@@ -1252,9 +1240,6 @@ pub enum SequenceError {
 pub enum AutoIncrementError {
     #[error(transparent)]
     OutOfAutoIncrementRange(#[from] OutOfAutoIncrementRange),
-
-    #[error(transparent)]
-    WrongAutoIncrementCount(#[from] WrongAutoIncrementCount),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1609,12 +1594,6 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
-impl AppErrorMessage for WrongAutoIncrementCount {
-    fn message(&self) -> String {
-        format!("Require zero AutoIncrement count for '{}'", self.key)
-    }
-}
-
 impl AppErrorMessage for OutOfAutoIncrementRange {
     fn message(&self) -> String {
         format!("AutoIncrement '{}' out of range", self.key)
@@ -1626,9 +1605,6 @@ impl AppErrorMessage for AutoIncrementError {
         match self {
             AutoIncrementError::OutOfAutoIncrementRange(e) => {
                 format!("OutOfAutoIncrementRange: '{}'", e.message())
-            }
-            AutoIncrementError::WrongAutoIncrementCount(e) => {
-                format!("WrongAutoIncrementCount: '{}'", e.message())
             }
         }
     }

@@ -14,14 +14,15 @@
 
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::OutOfSequenceRange;
-use databend_common_meta_app::app_error::SequenceError;
+use databend_common_meta_app::app_error::AutoIncrementError;
+use databend_common_meta_app::app_error::OutOfAutoIncrementRange;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::anyerror::func_name;
+use databend_common_meta_types::protobuf::FetchAddU64Response;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -47,7 +48,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         self,
         tenant: impl ToTenant,
         count: u64,
-    ) -> Result<Result<(u64, u64), &'static str>, KVAppError> {
+    ) -> Result<FetchAddU64Response, KVAppError> {
         debug!("{}", func_name!());
 
         // Key for the sequence number value.
@@ -68,27 +69,23 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
             func_name!(),
             self.key,
         );
+        debug_assert!(succ);
 
-        if succ {
-            let resp = responses[0].try_as_fetch_add_u64().unwrap();
+        let resp = responses[0].try_as_fetch_add_u64().unwrap();
+        let got_delta = resp.delta();
 
-            let got_delta = resp.delta();
-
-            if got_delta < delta {
-                return Err(KVAppError::AppError(AppError::SequenceError(
-                    SequenceError::OutOfSequenceRange(OutOfSequenceRange::new(
-                        self.key,
-                        format!(
-                            "{}: count: {count}; expected delta: {delta}, but got: {resp}",
-                            self.expr.step,
-                        ),
-                    )),
-                )));
-            }
-
-            Ok(Ok((resp.before, resp.after)))
-        } else {
-            Ok(Err("transaction conflict"))
+        if got_delta < delta {
+            return Err(KVAppError::AppError(AppError::AutoIncrementError(
+                AutoIncrementError::OutOfAutoIncrementRange(OutOfAutoIncrementRange::new(
+                    self.key,
+                    format!(
+                        "{}: count: {count}; expected delta: {delta}, but got: {resp}",
+                        self.expr.step,
+                    ),
+                )),
+            )));
         }
+
+        Ok(resp.clone())
     }
 }

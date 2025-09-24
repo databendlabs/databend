@@ -5787,13 +5787,11 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: Some(
-                            AutoIncrement(
-                                AutoIncrement {
-                                    start: 10,
-                                    step: 20,
-                                    is_ordered: true,
-                                },
-                            ),
+                            AutoIncrement {
+                                start: 10,
+                                step: 20,
+                                is_ordered: true,
+                            },
                         ),
                         check: None,
                         comment: None,
@@ -5857,13 +5855,11 @@ CreateTable(
                         },
                         data_type: Int32,
                         expr: Some(
-                            AutoIncrement(
-                                AutoIncrement {
-                                    start: 10,
-                                    step: 20,
-                                    is_ordered: true,
-                                },
-                            ),
+                            AutoIncrement {
+                                start: 10,
+                                step: 20,
+                                is_ordered: true,
+                            },
                         ),
                         check: None,
                         comment: None,

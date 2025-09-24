@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::AutoIncrementError;
-use databend_common_meta_app::app_error::WrongAutoIncrementCount;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_kvapi::kvapi;
@@ -25,7 +22,6 @@ use log::debug;
 use crate::auto_increment_api::AutoIncrementApi;
 use crate::auto_increment_nextval_impl::NextVal;
 use crate::kv_app_error::KVAppError;
-use crate::txn_backoff;
 
 #[async_trait::async_trait]
 #[tonic::async_trait]
@@ -36,39 +32,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> AutoIncrementApi for KV {
     ) -> Result<GetAutoIncrementNextValueReply, KVAppError> {
         debug!(req :? =(&req); "AutoIncrementApi: {}", func_name!());
 
-        let auto_increment_key = req.key.clone();
-        if req.count == 0 {
-            return Err(KVAppError::AppError(AppError::AutoIncrementError(
-                AutoIncrementError::WrongAutoIncrementCount(WrongAutoIncrementCount::new(
-                    auto_increment_key,
-                )),
-            )));
-        }
+        let next_val = NextVal {
+            kv_api: self,
+            key: req.key.clone(),
+            expr: req.expr.clone(),
+        };
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
+        let resp = next_val.next_val(&req.tenant, req.count).await?;
 
-            let next_val = NextVal {
-                kv_api: self,
-                key: req.key.clone(),
-                expr: req.expr.clone(),
-            };
-
-            let response = next_val.next_val(&req.tenant, req.count).await?;
-
-            match response {
-                Ok((start, end)) => {
-                    return Ok(GetAutoIncrementNextValueReply {
-                        start,
-                        step: req.expr.step,
-                        end,
-                    });
-                }
-                Err(_e) => {
-                    // conflict, continue
-                }
-            }
-        }
+        Ok(GetAutoIncrementNextValueReply {
+            start: resp.before,
+            step: req.expr.step,
+            end: resp.after,
+        })
     }
 }
