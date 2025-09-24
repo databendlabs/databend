@@ -219,10 +219,7 @@ impl HttpQueryManager {
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let query = self
-            .queries
-            .write()
-            .stop(query_id, reason, now);
+        let query = self.queries.write().stop(query_id, reason, now);
         if let Some(q) = &query {
             if reason != StopReason::Timeout {
                 q.check_client_session_id(client_session_id)?;

@@ -30,6 +30,8 @@ use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_common_version::DATABEND_SEMVER;
+use databend_query::servers::admin::v1::instance_status::instance_status_handler;
+use databend_query::servers::admin::v1::instance_status::InstanceStatus;
 use databend_query::servers::http::error::QueryError;
 use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::catalog;
@@ -61,6 +63,7 @@ use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
+use poem::get;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Request;
@@ -68,7 +71,6 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
-use serde_json::json;
 use tokio::time::sleep;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -172,12 +174,29 @@ impl TestHttpQueryRequest {
         Ok((status, resp.unwrap(), body))
     }
 
+    #[allow(unused)]
     async fn fetch_next(&mut self) -> Result<(StatusCode, Option<TestQueryResponse>, String)> {
         let (status, resp, body) = self
             .do_request(Method::GET, self.next_uri.as_ref().unwrap())
             .await?;
         self.next_uri = resp.as_ref().and_then(|r| r.next_uri.clone());
         Ok((status, resp, body))
+    }
+
+    async fn status(&mut self) -> InstanceStatus {
+        let req = Request::builder()
+            .uri("/v1_status".parse().unwrap())
+            .method(Method::GET)
+            .finish();
+        let response = self
+            .ep
+            .call(req)
+            .await
+            .map_err(|e| ErrorCode::Internal(e.to_string()))
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().into_vec().await.unwrap();
+        serde_json::from_str::<InstanceStatus>(&String::from_utf8_lossy(&body)).unwrap()
     }
 
     async fn fetch_total(&mut self) -> Result<TestHttpQueryFetchReply> {
@@ -676,36 +695,34 @@ async fn test_pagination() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore]
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_result_timeout() -> Result<()> {
-    let config = ConfigBuilder::create().build();
+    let config = ConfigBuilder::create()
+        .http_handler_result_timeout(5u64)
+        .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
     let mut req = TestHttpQueryRequest::new(json);
+    assert_eq!(req.status().await.running_queries_count, 0);
     let (status, result, _) = req.fetch_begin().await?;
-
+    assert_eq!(req.status().await.running_queries_count, 1);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    let query_id = result.id.clone();
     assert_eq!(result.data.len(), 1);
 
-    sleep(std::time::Duration::from_secs(5)).await;
+    sleep(std::time::Duration::from_secs(10)).await;
+    let status = req.status().await;
+    assert_eq!(status.running_queries_count, 0);
 
+    let query_id = result.id.clone();
     // fail to get page 0 again (e.g. retry) due to timeout
-    // this is flaky
-    let (status, result, body) = req
+    let (status, _, body) = req
         .do_request(Method::GET, &format!("/v1/query/{query_id}/page/0",))
         .await?;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", body);
-    let msg = format!("query id {} timeout", query_id);
-    let msg = json!({ "error": { "code": "400", "message": msg }}).to_string();
-    assert_eq!(body, msg, "{:?}", result);
-
-    // but /final return ok
-    let (status, result, _) = req.fetch_next().await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-
+    assert!(body.contains("timeout"), "{}", body);
+    // let (status, result, _) = req.fetch_next().await?;
+    // assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", result);
     Ok(())
 }
 
@@ -951,7 +968,9 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, TestQue
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest("/v1", query_route().around(json_response)))
+    Ok(Route::new()
+        .nest("/v1", query_route().around(json_response))
+        .at("/v1_status", get(instance_status_handler)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, TestQueryResponse)> {

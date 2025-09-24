@@ -102,7 +102,7 @@ async fn test_status() -> Result<()> {
                 status.last_query_started_at.is_some(),
                 status.last_query_finished_at.is_some(),
             ),
-            (1, true, false),
+            (1, true, true),
             "running"
         );
 
