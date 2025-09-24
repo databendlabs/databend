@@ -44,6 +44,8 @@ pub async fn do_vacuum_drop_table(
     tables: Vec<DroppedTableDesc>,
     dry_run_limit: Option<usize>,
 ) -> VacuumDropTablesResult {
+    let is_dry_run = dry_run_limit.is_some();
+
     let mut list_files = vec![];
     let mut failed_tables = HashSet::new();
     for table_desc in tables {
@@ -59,33 +61,43 @@ pub async fn do_vacuum_drop_table(
                 );
                 continue;
             };
-        let result =
-            vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
-        if result.is_err() {
-            let table_id = table_info.ident.table_id;
-            failed_tables.insert(table_id);
-            continue;
+
+        {
+            let result =
+                vacuum_drop_single_table(table_info, operator, dry_run_limit, &mut list_files)
+                    .await;
+
+            if result.is_err() {
+                let table_id = table_info.ident.table_id;
+                failed_tables.insert(table_id);
+                continue;
+            }
         }
 
-        let req = GcDroppedTableReq {
-            tenant: tenant.clone(),
-            catalog: catalog.name(),
-            drop_ids: vec![DroppedId::Table {
-                name: DBIdTableName {
-                    db_id: table_desc.db_id,
-                    table_name: table_desc.table_name,
-                },
-                id: TableId::new(table.get_table_info().ident.table_id),
-            }],
-        };
+        if !is_dry_run {
+            let req = GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: catalog.name(),
+                drop_ids: vec![DroppedId::Table {
+                    name: DBIdTableName {
+                        db_id: table_desc.db_id,
+                        table_name: table_desc.table_name.clone(),
+                    },
+                    id: TableId::new(table.get_table_info().ident.table_id),
+                }],
+            };
 
-        let result = catalog.gc_drop_tables(req).await;
+            let result = catalog.gc_drop_tables(req).await;
 
-        if result.is_err() {
-            // TODO log here
-            let table_id = table_info.ident.table_id;
-            failed_tables.insert(table_id);
-            continue;
+            if result.is_err() {
+                let table_id = table_info.ident.table_id;
+                failed_tables.insert(table_id);
+                info!(
+                    "failed to drop table table db_id: {}, table {}[{:}]",
+                    table_desc.db_id, table_desc.table_name, table_id
+                );
+                continue;
+            }
         }
     }
     Ok(if dry_run_limit.is_some() {
@@ -251,32 +263,8 @@ pub async fn vacuum_drop_tables_by_table_info(
     Ok(result)
 }
 
+// TODO remove this func
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables(dropped_tables: VacuumDroppedTablesCtx) -> VacuumDropTablesResult {
-    //    let  VacuumDroppedTablesCtx {
-    //        threads_nums, tables, dry_run_limit
-    //    }  = dropped_tables;
-    //
-    //    let num_tables = tables.len();
-    //    info!("vacuum_drop_tables {} tables", num_tables);
-
-    //    let mut table_infos = Vec::with_capacity(num_tables);
-    //    for table_desc in tables {
-    //        let table = table_desc.table;
-    //        let (table_info, operator) =
-    //            if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
-    //                (fuse_table.get_table_info(), fuse_table.get_operator())
-    //            } else {
-    //                info!(
-    //                    "ignore table {}, which is not of FUSE engine. Table engine {}",
-    //                    table.get_table_info().name,
-    //                    table.engine()
-    //                );
-    //                continue;
-    //            };
-    //
-    //        table_infos.push((table_info.clone(), operator, table_desc.table_name, table_desc.db_id));
-    //    }
-
     vacuum_drop_tables_by_table_info(dropped_tables).await
 }
