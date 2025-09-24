@@ -382,6 +382,17 @@ impl<'a> SelectRewriter<'a> {
         }
     }
 
+    // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
+    fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Literal { value, .. } => match value {
+                Literal::String(v) => Some(v.clone()),
+                _ => Some(expr.to_string()),
+            },
+            _ => None,
+        }
+    }
+
     pub fn with_subquery_executor(
         mut self,
         subquery_executor: Option<Arc<dyn QueryExecutor>>,
@@ -439,10 +450,16 @@ impl<'a> SelectRewriter<'a> {
         // Therefore, the subquery can only return one column, and only return a string type.
         match &pivot.values {
             PivotValues::ColumnValues(values) => {
-                let values: Vec<_> = values
+                let values = values
                     .iter()
-                    .map(|value| (value.clone(), value.to_string()))
-                    .collect();
+                    .map(|value| {
+                        let alias = Self::raw_string_from_literal_expr(value).ok_or_else(|| {
+                            ErrorCode::SyntaxException("Pivot value should be literal")
+                        })?;
+                        Ok((value.clone(), alias))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
                 self.process_pivot_column_values(
                     pivot,
                     &values,
