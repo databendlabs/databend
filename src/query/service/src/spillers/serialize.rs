@@ -32,19 +32,24 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
+use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::errors;
+use parquet::file::metadata::RowGroupMetaDataPtr;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
+use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::format::FileMetaData;
 use parquet::schema::types::SchemaDescriptor;
@@ -243,16 +248,14 @@ impl ChunkReader for Reader {
 
 pub struct RowGroupWriter {
     schema: Arc<Schema>,
-    props: Arc<WriterProperties>,
     writers: Vec<ArrowColumnWriter>,
 }
 
 impl RowGroupWriter {
-    fn new(props: Arc<WriterProperties>, arrow: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
-        let col_writers = get_column_writers(parquet, &props, &arrow).unwrap();
+    fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
+        let col_writers = get_column_writers(parquet, props, &schema).unwrap();
         Self {
-            schema: arrow,
-            props,
+            schema,
             writers: col_writers,
         }
     }
@@ -268,7 +271,7 @@ impl RowGroupWriter {
         Ok(())
     }
 
-    pub fn close<W: Write + Send>(
+    fn close<W: Write + Send>(
         self,
         writer: &mut SerializedRowGroupWriter<'_, W>,
     ) -> errors::Result<()> {
@@ -280,6 +283,50 @@ impl RowGroupWriter {
 
     pub fn memory_size(&self) -> usize {
         self.writers.iter().map(|w| w.memory_size()).sum()
+    }
+}
+
+pub struct FileWriter<W: Write + Send> {
+    props: Arc<WriterProperties>,
+    schema: Arc<Schema>,
+    writer: SerializedFileWriter<W>,
+}
+
+impl<W: Write + Send> FileWriter<W> {
+    pub fn new(
+        props: Arc<WriterProperties>,
+        table_schema: &TableSchema,
+        w: W,
+    ) -> errors::Result<Self> {
+        let schema = Arc::new(Schema::from(table_schema));
+
+        let parquet = ArrowSchemaConverter::new()
+            .with_coerce_types(props.coerce_types())
+            .convert(&schema)?;
+
+        let writer = SerializedFileWriter::new(w, parquet.root_schema_ptr(), props.clone())?;
+        Ok(Self {
+            props,
+            schema,
+            writer,
+        })
+    }
+
+    pub fn new_row_group(&self) -> RowGroupWriter {
+        RowGroupWriter::new(&self.props, self.schema.clone(), self.writer.schema_descr())
+    }
+
+    pub fn flush_row_group(
+        &mut self,
+        row_group: RowGroupWriter,
+    ) -> errors::Result<RowGroupMetaDataPtr> {
+        let mut row_group_writer = self.writer.next_row_group()?;
+        row_group.close(&mut row_group_writer)?;
+        row_group_writer.close()
+    }
+
+    pub fn close(self) -> errors::Result<FileMetaData> {
+        self.writer.close()
     }
 }
 
