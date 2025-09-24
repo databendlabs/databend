@@ -278,6 +278,7 @@ impl Binder {
 /// [`column_binding`] contains the column binding information of the SelectStmt.
 ///
 /// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
+#[allow(dead_code)]
 struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
@@ -287,14 +288,6 @@ struct SelectRewriter<'a> {
 
 // helper functions to SelectRewriter
 impl SelectRewriter<'_> {
-    fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
-        if self.is_unquoted_ident_case_sensitive {
-            a == b
-        } else {
-            a.eq_ignore_ascii_case(b)
-        }
-    }
-
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
