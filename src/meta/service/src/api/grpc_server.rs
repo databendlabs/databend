@@ -191,7 +191,10 @@ impl GrpcServer {
             }
         }
 
-        info!("Drop MetaHandle for meta_node(id={id}) to stop");
+        info!(
+            "Drop MetaHandle for meta_node(id={id}) to stop, ref count to meta-handle: {}",
+            Arc::strong_count(&meta_handle)
+        );
         drop(meta_handle);
     }
 

@@ -24,16 +24,17 @@ use poem::web::IntoResponse;
 use poem::web::Json;
 use poem::web::Query;
 
-use crate::meta_service::MetaNode;
+use crate::meta_node::meta_handle::MetaHandle;
 
 /// Let raft leader send snapshot to followers/learners.
 #[poem::handler]
-pub async fn trigger_snapshot(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
-    meta_node
-        .raft
-        .trigger()
-        .snapshot()
+pub async fn trigger_snapshot(
+    meta_handle: Data<&Arc<MetaHandle>>,
+) -> poem::Result<impl IntoResponse> {
+    meta_handle
+        .handle_trigger_snapshot()
         .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
     Ok(Json(()))
 }
@@ -56,10 +57,15 @@ pub struct TransferLeaderResponse {
 /// Note that a 200 OK response does not mean the transfer is successful, it only means the request is accepted.
 #[poem::handler]
 pub async fn trigger_transfer_leader(
-    meta_node: Data<&Arc<MetaNode>>,
+    meta_handle: Data<&Arc<MetaHandle>>,
     query: Option<Query<TransferLeaderQuery>>,
 ) -> poem::Result<impl IntoResponse> {
-    let metrics = meta_node.raft.metrics().borrow_watched().clone();
+    let metrics = meta_handle
+        .handle_raft_metrics()
+        .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?
+        .borrow_watched()
+        .clone();
 
     let id = metrics.id;
     let current_leader = metrics.current_leader;
@@ -114,11 +120,10 @@ pub async fn trigger_transfer_leader(
 
     info!("id={} Begin to transfer leadership to node: {}", id, to);
 
-    meta_node
-        .raft
-        .trigger()
-        .transfer_leader(to)
+    meta_handle
+        .handle_trigger_transfer_leader(to)
         .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
     Ok(Json(TransferLeaderResponse {

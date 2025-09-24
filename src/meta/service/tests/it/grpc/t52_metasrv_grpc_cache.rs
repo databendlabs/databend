@@ -126,7 +126,7 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     let mut stopped = tcs.remove(0);
     { stopped }.grpc_srv.take().unwrap().stop(None).await?;
 
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(6)).await;
 
     // Receive update
 

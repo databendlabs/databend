@@ -1268,16 +1268,22 @@ impl MetaNode {
         for<'a> MetaLeader<'a>: Handler<Req>,
         for<'a> MetaForwarder<'a>: Forwarder<Req>,
     {
-        debug!(target :% =(&req.forward_to_leader),
-               req :? =(&req);
-               "handle_forwardable_request");
+        let id = self.raft_store.id;
+        debug!(
+            "id={} forward_quota={} handle_forwardable_request req={:?}",
+            id, req.forward_to_leader, req
+        );
 
         let mut n_retry = 20;
         let mut slp = Duration::from_millis(1_000);
 
         loop {
             let assume_leader_res = self.assume_leader().await;
-            debug!("assume_leader: is_err: {}", assume_leader_res.is_err());
+            debug!(
+                "id={} assume_leader: is_err: {}",
+                id,
+                assume_leader_res.is_err()
+            );
 
             // Handle the request locally or return a ForwardToLeader error
             let op_err = match assume_leader_res {

@@ -5074,6 +5074,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-common-tracing",
+ "databend-common-version",
  "deepsize",
  "derive_more",
  "display-more",

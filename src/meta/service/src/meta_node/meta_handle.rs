@@ -33,6 +33,7 @@ use databend_common_meta_types::raft_types::Fatal;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::Wait;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -262,9 +263,25 @@ impl MetaHandle {
         .await
     }
 
+    pub async fn handle_get_sys_data(&self) -> Result<SysData, MetaNodeStopped> {
+        self.request(move |meta_node| {
+            let fu = async move { meta_node.raft_store.get_sm_v003().sys_data() };
+            Box::pin(fu)
+        })
+        .await
+    }
+
     pub async fn handle_get_node(&self, node_id: NodeId) -> Result<Option<Node>, MetaNodeStopped> {
         self.request(move |meta_node| {
             let fu = async move { meta_node.get_node(&node_id).await };
+            Box::pin(fu)
+        })
+        .await
+    }
+
+    pub async fn handle_get_nodes(&self) -> Result<Vec<Node>, MetaNodeStopped> {
+        self.request(move |meta_node| {
+            let fu = async move { meta_node.get_nodes().await };
             Box::pin(fu)
         })
         .await
@@ -322,6 +339,18 @@ impl MetaHandle {
     pub async fn handle_trigger_snapshot(&self) -> Result<Result<(), Fatal>, MetaNodeStopped> {
         self.request(move |meta_node| {
             let fu = async move { meta_node.raft.trigger().snapshot().await };
+
+            Box::pin(fu)
+        })
+        .await
+    }
+
+    pub async fn handle_trigger_transfer_leader(
+        &self,
+        to: NodeId,
+    ) -> Result<Result<(), Fatal>, MetaNodeStopped> {
+        self.request(move |meta_node| {
+            let fu = async move { meta_node.raft.trigger().transfer_leader(to).await };
 
             Box::pin(fu)
         })

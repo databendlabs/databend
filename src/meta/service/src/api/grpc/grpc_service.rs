@@ -132,12 +132,25 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
-        debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
         let meta_handle = self.try_get_meta_handle()?;
+        let id = meta_handle.id;
+
+        debug!(
+            "id={} {}: Received MetaGrpcReq: {:?}",
+            id,
+            func_name!(),
+            req
+        );
+
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
-                let res = meta_handle.handle_upsert_kv(a.clone()).await?;
+                let res = meta_handle.handle_upsert_kv(a.clone()).await;
+                debug!(
+                    "id={} MetaGrpcReq UpsertKV: request: {:?} res: {:?}",
+                    id, req, res
+                );
+                let res = res?;
                 // TODO: the MetaApiError should be converted to Status
                 RaftReply::from(res)
             }

@@ -97,6 +97,9 @@ impl MetaWorker {
             (box_fn)(self.meta_node.clone()).await;
         }
 
-        info!("MetaWorker stopped because input channel closed");
+        info!(
+            "MetaWorker stopped because input channel closed, ref count to meta-node: {}",
+            Arc::strong_count(&self.meta_node)
+        );
     }
 }
