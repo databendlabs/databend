@@ -264,4 +264,43 @@ statement ok
 DROP TABLE t3;
 
 statement ok
+create table t4(a int, b string) enable_auto_analyze = 0;
+
+statement ok
+insert into t4 values(1, 'a'), (2, 'b');
+
+statement ok
+insert into t4 values(3, 'a'), (2, 'c');
+
+statement ok
+update t4 set a = 4 where b = 'c';
+
+query T
+show statistics from table db_09_0020.t4;
+----
+db_09_0020 t4 a 5 4 4 0 4 (empty)
+db_09_0020 t4 b 5 4 3 0 13 (empty)
+
+statement ok
+alter table t4 set options(enable_auto_analyze = 1);
+
+query T
+show statistics from table db_09_0020.t4;
+----
+db_09_0020 t4 a 4 4 4 0 4 (empty)
+db_09_0020 t4 b 4 4 3 0 13 (empty)
+
+statement ok
+delete from t4 where a = 4;
+
+query T
+show statistics from table db_09_0020.t4;
+----
+db_09_0020 t4 a 3 3 3 0 4 (empty)
+db_09_0020 t4 b 3 3 2 0 13 (empty)
+
+statement ok
+DROP TABLE t4 all;
+
+statement ok
 DROP DATABASE db_09_0020
