@@ -39,7 +39,7 @@ use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::value_convert::ValueConvert;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 use crate::leveled_store::ScopedSeqBoundedRead;
 
 mod compact_into_stream;
@@ -148,7 +148,7 @@ where
     K: ViewKey,
     K::V: ViewValue,
     K: MapKeyEncode + MapKeyDecode,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     Immutable: mvcc::ScopedSeqBoundedGet<K, K::V>,
 {
     async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<K::V>, Error> {
@@ -173,7 +173,7 @@ where
     K: ViewKey,
     K::V: ViewValue,
     K: MapKeyEncode + MapKeyDecode,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     Immutable: mvcc::ScopedSeqBoundedRange<K, K::V>,
 {
     async fn range<R>(

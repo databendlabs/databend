@@ -25,7 +25,7 @@ use rotbl::v001::SeqMarked;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::value_convert::ValueConvert;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 
 pub struct RotblCodec;
 
@@ -79,10 +79,10 @@ impl RotblCodec {
     where
         K: MapKey,
         K: MapKeyEncode,
-        SeqMarked<K::V>: ValueConvert<SeqMarked>,
+        SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     {
         let k = Self::encode_key(key)?;
-        let v = marked.conv_to()?;
+        let v = marked.encode_to()?;
         Ok((k, v))
     }
 

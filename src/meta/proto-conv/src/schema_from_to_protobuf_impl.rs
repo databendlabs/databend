@@ -525,6 +525,13 @@ impl FromToProtoEnum for ex::VariantDataType {
             variant_data_type::Dt::ArrayT(dt) => {
                 ex::VariantDataType::Array(Box::new(ex::VariantDataType::from_pb_enum(*dt)?))
             }
+            variant_data_type::Dt::DecimalT(dt) => {
+                ex::VariantDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(dt)?)
+            }
+            variant_data_type::Dt::BinaryT(_) => ex::VariantDataType::Binary,
+            variant_data_type::Dt::DateT(_) => ex::VariantDataType::Date,
+            variant_data_type::Dt::TimestampT(_) => ex::VariantDataType::Timestamp,
+            variant_data_type::Dt::IntervalT(_) => ex::VariantDataType::Interval,
         })
     }
 
@@ -539,6 +546,14 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Array(dt) => {
                 pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
             }
+            VariantDataType::Decimal(n) => {
+                let x = n.to_pb()?;
+                pb::variant_data_type::Dt::DecimalT(x)
+            }
+            VariantDataType::Binary => pb::variant_data_type::Dt::BinaryT(pb::Empty {}),
+            VariantDataType::Date => pb::variant_data_type::Dt::DateT(pb::Empty {}),
+            VariantDataType::Timestamp => pb::variant_data_type::Dt::TimestampT(pb::Empty {}),
+            VariantDataType::Interval => pb::variant_data_type::Dt::IntervalT(pb::Empty {}),
         };
 
         Ok(pb::VariantDataType { dt: Some(dt) })

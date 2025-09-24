@@ -66,6 +66,14 @@ impl SegmentInfo {
     }
 }
 
+// The virtual column variant types
+const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
+const VIRTUAL_COLUMN_BOOL_TYPE: u8 = 1;
+const VIRTUAL_COLUMN_UINT64_TYPE: u8 = 2;
+const VIRTUAL_COLUMN_INT64_TYPE: u8 = 3;
+const VIRTUAL_COLUMN_FLOAT64_TYPE: u8 = 4;
+const VIRTUAL_COLUMN_STRING_TYPE: u8 = 5;
+
 /// The column meta of virtual columns.
 /// Virtual column is the internal field values extracted from variant type values,
 /// used to speed up the reading of internal fields of variant data.
@@ -101,23 +109,30 @@ impl VirtualColumnMeta {
 
     pub fn data_type(&self) -> TableDataType {
         match self.data_type {
-            1 => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
-            2 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            3 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
-            4 => TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64))),
-            5 => TableDataType::Nullable(Box::new(TableDataType::String)),
-            _ => TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            VIRTUAL_COLUMN_JSONB_TYPE => TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            VIRTUAL_COLUMN_BOOL_TYPE => TableDataType::Nullable(Box::new(TableDataType::Boolean)),
+            VIRTUAL_COLUMN_UINT64_TYPE => {
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
+            }
+            VIRTUAL_COLUMN_INT64_TYPE => {
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64)))
+            }
+            VIRTUAL_COLUMN_FLOAT64_TYPE => {
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Float64)))
+            }
+            VIRTUAL_COLUMN_STRING_TYPE => TableDataType::Nullable(Box::new(TableDataType::String)),
+            _ => unreachable!(),
         }
     }
 
     pub fn data_type_code(variant_type: &VariantDataType) -> u8 {
         match variant_type {
-            VariantDataType::Jsonb => 0,
-            VariantDataType::Boolean => 1,
-            VariantDataType::UInt64 => 2,
-            VariantDataType::Int64 => 3,
-            VariantDataType::Float64 => 4,
-            VariantDataType::String => 5,
+            VariantDataType::Jsonb => VIRTUAL_COLUMN_JSONB_TYPE,
+            VariantDataType::Boolean => VIRTUAL_COLUMN_BOOL_TYPE,
+            VariantDataType::UInt64 => VIRTUAL_COLUMN_UINT64_TYPE,
+            VariantDataType::Int64 => VIRTUAL_COLUMN_INT64_TYPE,
+            VariantDataType::Float64 => VIRTUAL_COLUMN_FLOAT64_TYPE,
+            VariantDataType::String => VIRTUAL_COLUMN_STRING_TYPE,
             _ => unreachable!(),
         }
     }

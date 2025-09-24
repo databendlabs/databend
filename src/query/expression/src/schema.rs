@@ -150,7 +150,7 @@ pub struct DataSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum VariantDataType {
     Jsonb,
     Boolean,
@@ -159,6 +159,11 @@ pub enum VariantDataType {
     Float64,
     String,
     Array(Box<VariantDataType>),
+    Decimal(DecimalDataType),
+    Binary,
+    Date,
+    Timestamp,
+    Interval,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

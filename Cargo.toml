@@ -472,7 +472,7 @@ rustyline = "14"
 scroll = "0.12.0"
 self_cell = "1.2.0"
 semver = "1.0.14"
-seq-marked = { version = "0.3.3", features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
+seq-marked = { version = "0.3.5", features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_derive = "1"
 serde_ignored = "0.1.10"
@@ -657,6 +657,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
+jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "425aae9" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
