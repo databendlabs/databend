@@ -20,24 +20,21 @@ INSERT INTO monthly_sales VALUES
     (2, 800, 'APR'),
     (2, 4500, 'APR');
 
-query IIIII
-SELECT empid,jan,feb,mar,apr FROM (
+## duckdb support it, sn does not, we compate with sn
+statement error
+SELECT empid, JAN,feb,mar,apr FROM (
     SELECT *
         FROM monthly_sales
             PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
         ORDER BY EMPID
 );
-----
-1	10400	8000	11000	18000
-2	39500	90700	12000	5300
+
 
 query IRRRR
-SELECT empid,jan,feb,mar,apr FROM (
-    SELECT *
-        FROM monthly_sales
-            PIVOT(AVG(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
-        ORDER BY EMPID
-);
+SELECT *
+    FROM monthly_sales
+        PIVOT(AVG(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+    ORDER BY EMPID
 ----
 1	5200.0	4000.0	5500.0	9000.0
 2	19750.0	45350.0	6000.0	2650.0
@@ -56,38 +53,33 @@ SELECT EMPID,
 2	39500	90700	12000	5300
 
 query IIIII
-SELECT empid,jan,feb,mar,apr FROM (
-    SELECT *
-        FROM (SELECT * FROM monthly_sales)
-            PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
-        ORDER BY EMPID
-);
+SELECT *
+    FROM (SELECT * FROM monthly_sales)
+        PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+    ORDER BY EMPID;
 ----
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
 
 query IIIII
-SELECT empid,jan,feb,mar,apr FROM (
-    SELECT *
-        FROM monthly_sales
-            PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
-        ORDER BY EMPID
-);
+SELECT *
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
+    ORDER BY EMPID
 ----
-1	10400	8000	11000	18000
-2	39500	90700	12000	5300
+1 18000 8000 10400 11000
+2 5300 90700 39500 12000
 
 query IIIII
-SELECT empid,jan,feb,mar,apr FROM (
-    SELECT *
-        FROM (SELECT * FROM monthly_sales)
-            PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
-        ORDER BY EMPID
-);
+SELECT *
+    FROM (SELECT * FROM monthly_sales)
+        PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
+    ORDER BY EMPID
 ----
-1	10400	8000	11000	18000
-2	39500	90700	12000	5300
+1 18000 8000 10400 11000
+2 5300 90700 39500 12000
 
+## The subquery of `pivot in` must return one column
 statement error 1065
 SELECT empid,jan,feb,mar,apr FROM (
     SELECT *
@@ -96,13 +88,11 @@ SELECT empid,jan,feb,mar,apr FROM (
         ORDER BY EMPID
 );
 
-statement error 1065
-SELECT empid,jan,feb,mar,apr FROM (
-    SELECT *
-        FROM monthly_sales
-            PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT empid FROM monthly_sales))
-        ORDER BY EMPID
-);
+statement ok
+SELECT *
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT MONTH FROM monthly_sales))
+    ORDER BY EMPID
 
 statement ok
 CREATE OR REPLACE TABLE test_table ("DATA_TIME" timestamp, "METRIC_CODE" string, "VALUE" decimal(16,4));
@@ -208,6 +198,201 @@ ORDER BY max_cost_source_url;
 url1 ['hero','villain'] ['outdoor','city'] NULL
 url2 ['monster'] NULL ['action']
 
+# Test cases for PIVOT ANY ORDER BY functionality
+statement ok
+CREATE OR REPLACE TABLE quarterly_sales (
+    empid INT,
+    amount DECIMAL(10,2),
+    quarter VARCHAR(10)
+);
+
+statement ok
+INSERT INTO quarterly_sales VALUES
+    (1, 1000.00, 'Q1'),
+    (1, 1500.00, 'Q2'),
+    (1, 2000.00, 'Q3'),
+    (1, 1800.00, 'Q4'),
+    (2, 2500.00, 'Q1'),
+    (2, 3000.00, 'Q2'),
+    (2, 2800.00, 'Q3'),
+    (2, 3200.00, 'Q4');
+
+# Test basic table data
+query IRT
+SELECT empid, amount, quarter FROM quarterly_sales ORDER BY empid, quarter;
+----
+1 1000.00 Q1
+1 1500.00 Q2
+1 2000.00 Q3
+1 1800.00 Q4
+2 2500.00 Q1
+2 3000.00 Q2
+2 2800.00 Q3
+2 3200.00 Q4
+
+# Test simple ANY first (without ORDER BY)
+statement ok
+SELECT * FROM quarterly_sales PIVOT (
+    AVG(amount) FOR quarter IN (ANY)
+) LIMIT 0;
+
+# Test PIVOT with ANY ORDER BY ascending - columns should be Q1, Q2, Q3, Q4
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    AVG(amount) FOR quarter IN (ANY ORDER BY quarter)
+)
+ORDER BY empid;
+----
+1 1000.0000 1500.0000 2000.0000 1800.0000
+2 2500.0000 3000.0000 2800.0000 3200.0000
+
+# Test PIVOT with ANY ORDER BY descending - columns should be Q4, Q3, Q2, Q1
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    AVG(amount) FOR quarter IN (ANY ORDER BY quarter DESC)
+)
+ORDER BY empid;
+----
+1 1800.0000 2000.0000 1500.0000 1000.0000
+2 3200.0000 2800.0000 3000.0000 2500.0000
+
+# Test with different aggregate functions and ANY ORDER BY
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    SUM(amount) FOR quarter IN (ANY ORDER BY quarter)
+)
+ORDER BY empid;
+----
+1 1000.00 1500.00 2000.00 1800.00
+2 2500.00 3000.00 2800.00 3200.00
+
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    MAX(amount) FOR quarter IN (ANY ORDER BY quarter)
+)
+ORDER BY empid;
+----
+1 1000.00 1500.00 2000.00 1800.00
+2 2500.00 3000.00 2800.00 3200.00
+
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    MIN(amount) FOR quarter IN (ANY ORDER BY quarter)
+)
+ORDER BY empid;
+----
+1 1000.00 1500.00 2000.00 1800.00
+2 2500.00 3000.00 2800.00 3200.00
+
+query IRRRR
+SELECT * FROM quarterly_sales PIVOT (
+    COUNT(amount) FOR quarter IN (ANY ORDER BY quarter)
+)
+ORDER BY empid;
+----
+1 1 1 1 1
+2 1 1 1 1
+
+# Test with additional data including NULL values
+statement ok
+CREATE OR REPLACE TABLE test_null_pivot (
+    id INT,
+    category VARCHAR(10),
+    value INT
+);
+
+statement ok
+INSERT INTO test_null_pivot VALUES
+    (1, 'A', 10),
+    (1, 'B', 20),
+    (1, NULL, 30),
+    (2, 'A', 40),
+    (2, 'B', 50),
+    (2, NULL, 60);
+
+# Test ANY with NULL values - NULL should be included as a pivot value
+query IRRRR
+SELECT * FROM test_null_pivot PIVOT (
+    SUM(value) FOR category IN (ANY ORDER BY category)
+)
+ORDER BY id;
+----
+1 10 20 NULL
+2 40 50 NULL
+
+
+# Test the example from the task description - comprehensive test
+query IRRRR
+SELECT 'Average sale amount' AS aggregate, *
+  FROM quarterly_sales
+    PIVOT(AVG(amount) FOR quarter IN (ANY ORDER BY quarter))
+UNION
+SELECT 'Highest value sale' AS aggregate, *
+  FROM quarterly_sales
+    PIVOT(MAX(amount) FOR quarter IN (ANY ORDER BY quarter))
+UNION
+SELECT 'Lowest value sale' AS aggregate, *
+  FROM quarterly_sales
+    PIVOT(MIN(amount) FOR quarter IN (ANY ORDER BY quarter))
+UNION
+SELECT 'Number of sales' AS aggregate, *
+  FROM quarterly_sales
+    PIVOT(COUNT(amount) FOR quarter IN (ANY ORDER BY quarter))
+UNION
+SELECT 'Total amount' AS aggregate, *
+  FROM quarterly_sales
+    PIVOT(SUM(amount) FOR quarter IN (ANY ORDER BY quarter))
+ORDER BY aggregate, empid;
+----
+Average sale amount 1 1000.0000 1500.0000 2000.0000 1800.0000
+Average sale amount 2 2500.0000 3000.0000 2800.0000 3200.0000
+Highest value sale 1 1000.0000 1500.0000 2000.0000 1800.0000
+Highest value sale 2 2500.0000 3000.0000 2800.0000 3200.0000
+Lowest value sale 1 1000.0000 1500.0000 2000.0000 1800.0000
+Lowest value sale 2 2500.0000 3000.0000 2800.0000 3200.0000
+Number of sales 1 1.0000 1.0000 1.0000 1.0000
+Number of sales 2 1.0000 1.0000 1.0000 1.0000
+Total amount 1 1000.0000 1500.0000 2000.0000 1800.0000
+Total amount 2 2500.0000 3000.0000 2800.0000 3200.0000
+
+# Test ANY ORDER BY with string data and multiple sort criteria
+statement ok
+CREATE OR REPLACE TABLE test_string_pivot (
+    id INT,
+    region VARCHAR(10),
+    month VARCHAR(10),
+    sales INT
+);
+
+statement ok
+INSERT INTO test_string_pivot VALUES
+    (1, 'North', 'Jan', 100),
+    (1, 'North', 'Mar', 300),
+    (1, 'North', 'Feb', 200),
+    (2, 'South', 'Jan', 150),
+    (2, 'South', 'Mar', 350),
+    (2, 'South', 'Feb', 250);
+
+# Test ANY ORDER BY with string sorting
+query ITIII
+SELECT id, region, * FROM test_string_pivot PIVOT (
+    SUM(sales) FOR month IN (ANY ORDER BY month)
+)
+ORDER BY id, region;
+----
+1 North 1 North 200 100 300
+2 South 2 South 250 150 350
+
+# Test ANY ORDER BY with complex ORDER BY expression (multiple columns would be for future enhancement)
+query ITIII
+SELECT id, region, * FROM test_string_pivot PIVOT (
+    AVG(sales) FOR month IN (ANY ORDER BY month DESC)
+)
+ORDER BY id, region;
+----
+1 North 1 North 300.0 100.0 200.0
+2 South 2 South 350.0 150.0 250.0
+
 statement ok
 drop table monthly_sales;
 
@@ -219,3 +404,12 @@ drop table test_tag_list;
 
 statement ok
 drop table cte_0_materialized;
+
+statement ok
+drop table quarterly_sales;
+
+statement ok
+drop table test_null_pivot;
+
+statement ok
+drop table test_string_pivot;

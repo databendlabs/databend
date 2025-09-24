@@ -48,6 +48,7 @@ use std::ops::Range;
 
 use databend_common_ast::ast::TypeName;
 pub use databend_common_base::base::OrderedFloat;
+use databend_common_exception::ErrorCode;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -401,6 +402,74 @@ impl DataType {
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
+        }
+    }
+
+    pub fn to_type_name(&self) -> databend_common_exception::Result<TypeName> {
+        match self {
+            DataType::Number(num_ty) => match num_ty {
+                NumberDataType::UInt8 => Ok(TypeName::UInt8),
+                NumberDataType::UInt16 => Ok(TypeName::UInt16),
+                NumberDataType::UInt32 => Ok(TypeName::UInt32),
+                NumberDataType::UInt64 => Ok(TypeName::UInt64),
+                NumberDataType::Int8 => Ok(TypeName::Int8),
+                NumberDataType::Int16 => Ok(TypeName::Int16),
+                NumberDataType::Int32 => Ok(TypeName::Int32),
+                NumberDataType::Int64 => Ok(TypeName::Int64),
+                NumberDataType::Float32 => Ok(TypeName::Float32),
+                NumberDataType::Float64 => Ok(TypeName::Float64),
+            },
+            DataType::String => Ok(TypeName::String),
+            DataType::Date => Ok(TypeName::Date),
+            DataType::Timestamp => Ok(TypeName::Timestamp),
+            DataType::Interval => Ok(TypeName::Interval),
+            DataType::Decimal(size) => {
+                let precision = size.precision();
+                let scale = size.scale();
+                Ok(TypeName::Decimal { precision, scale })
+            }
+            DataType::Array(inner_ty) => {
+                let inner_ty = inner_ty.to_type_name()?;
+                Ok(TypeName::Array(Box::new(inner_ty)))
+            }
+            DataType::Map(inner_ty) => {
+                let inner_ty = inner_ty.as_tuple().unwrap();
+                let key_ty = inner_ty[0].to_type_name()?;
+                let val_ty = inner_ty[1].to_type_name()?;
+                Ok(TypeName::Map {
+                    key_type: Box::new(key_ty),
+                    val_type: Box::new(val_ty),
+                })
+            }
+            DataType::Bitmap => Ok(TypeName::Bitmap),
+            DataType::Variant => Ok(TypeName::Variant),
+            DataType::Geometry => Ok(TypeName::Geometry),
+            DataType::Geography => Ok(TypeName::Geography),
+            DataType::Tuple(inner_tys) => {
+                let inner_tys = inner_tys
+                    .iter()
+                    .map(|inner_ty| inner_ty.to_type_name())
+                    .collect::<Result<Vec<TypeName>, ErrorCode>>()?;
+                Ok(TypeName::Tuple {
+                    fields_name: None,
+                    fields_type: inner_tys,
+                })
+            }
+            DataType::Vector(inner_ty) => {
+                let d = inner_ty.dimension();
+                Ok(TypeName::Vector(d))
+            }
+            DataType::Nullable(inner_ty) => inner_ty.to_type_name(),
+            DataType::Boolean => Ok(TypeName::Boolean),
+            DataType::Binary => Ok(TypeName::Binary),
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Opaque(_)
+            | DataType::Generic(_) => Err(ErrorCode::BadArguments(format!(
+                "Unsupported data type {} to sql type",
+                self
+            ))),
         }
     }
 

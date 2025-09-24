@@ -607,6 +607,7 @@ impl Display for TimeTravelPoint {
 pub enum PivotValues {
     ColumnValues(Vec<Expr>),
     Subquery(Box<Query>),
+    Any { order_by: Option<Vec<OrderByExpr>> },
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -625,6 +626,13 @@ impl Display for Pivot {
             }
             PivotValues::Subquery(subquery) => {
                 write!(f, "{}", subquery)?;
+            }
+            PivotValues::Any { order_by } => {
+                write!(f, "ANY")?;
+                if let Some(order_by_exprs) = order_by {
+                    write!(f, " ORDER BY ")?;
+                    write_comma_separated_list(f, order_by_exprs)?;
+                }
             }
         }
         write!(f, "))")?;

@@ -945,8 +945,20 @@ fn unpivot(i: Input) -> IResult<Unpivot> {
 
 fn pivot_values(i: Input) -> IResult<PivotValues> {
     alt((
-        map(comma_separated_list1(expr), PivotValues::ColumnValues),
+        // Parse ANY [ORDER BY ...] - must be first to avoid ANY being parsed as expression
+        map(
+            rule! {
+                ANY ~
+                (ORDER ~ BY ~ #comma_separated_list1(order_by_expr))?
+            },
+            |(_, order_by_opt)| PivotValues::Any {
+                order_by: order_by_opt.map(|(_, _, order_by_list)| order_by_list),
+            },
+        ),
+        // Parse subquery - must be before expr list to avoid parsing subquery as expression
         map(query, |q| PivotValues::Subquery(Box::new(q))),
+        // Parse expression list - must be last
+        map(comma_separated_list1(expr), PivotValues::ColumnValues),
     ))(i)
 }
 

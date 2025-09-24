@@ -1225,6 +1225,7 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
         r#"SELECT * FROM (((SELECT *) EXCEPT (SELECT *))) foo"#,
         r#"SELECT * FROM (SELECT * FROM xyu ORDER BY x, y) AS xyu"#,
+        r#"SELECT 'Lowest value sale' AS aggregate, * FROM quarterly_sales PIVOT(MIN(amount) FOR quarter IN (ANY ORDER BY quarter))"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in (select distinct month from monthly_sales)) order by empid"#,
