@@ -451,7 +451,6 @@ async fn query_page_handler(
                 if next_is_final {
                     query.wait_for_final()
                 }
-                SessionManager::instance().new_query_request();
                 Ok(resp)
             }
         }

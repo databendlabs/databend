@@ -18,6 +18,7 @@ pub use server::Server;
 pub use server::ShutdownHandle;
 
 pub use self::flight_sql::FlightSQLServer;
+pub use self::http::v1::HttpQueryManager;
 pub use self::http::HttpHandler;
 pub use self::http::HttpHandlerKind;
 pub use self::mysql::MySQLConnection;

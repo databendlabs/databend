@@ -59,7 +59,6 @@ pub struct SessionManager {
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
-    pub last_query_request_at: AtomicU64,
 }
 
 impl SessionManager {
@@ -337,12 +336,6 @@ impl SessionManager {
         status_t.active_sessions_count = active_sessions_count;
         status_t.max_running_query_executed_secs = max_running_query_executed_secs;
 
-        let last_query_request_at = self.last_query_request_at.load(Ordering::Acquire);
-        status_t.last_query_request_at = if last_query_request_at == 0 {
-            None
-        } else {
-            Some(last_query_request_at)
-        };
         status_t
     }
 
@@ -495,13 +488,5 @@ impl SessionManager {
             }
         }
         Ok(all_temp_tables)
-    }
-
-    pub fn new_query_request(&self) {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs();
-        self.last_query_request_at.store(now, Ordering::Relaxed);
     }
 }
