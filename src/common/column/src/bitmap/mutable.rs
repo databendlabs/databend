@@ -557,6 +557,10 @@ impl MutableBitmap {
         // the length of the iterator throughout this function.
         let mut length = iterator.size_hint().1.unwrap();
 
+        if length == 0 {
+            return;
+        }
+
         let bit_offset = self.length % 8;
 
         if length < 8 - bit_offset {
