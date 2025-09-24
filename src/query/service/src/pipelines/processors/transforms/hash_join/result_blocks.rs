@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -48,13 +49,17 @@ impl HashJoinProbeState {
     where
         H::Key: 'a,
     {
+        if self.hash_join_state.hash_join_desc.join_type.is_any_join() {
+            let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
+            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(hash_table.len()))
+        }
         let no_other_predicate = self
             .hash_join_state
             .hash_join_desc
             .other_predicate
             .is_none();
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Inner => match self.hash_join_state.hash_join_desc.single_to_inner {
+            JoinType::Inner(_) => match self.hash_join_state.hash_join_desc.single_to_inner {
                 Some(JoinType::LeftSingle) => {
                     self.inner_join::<_, true, false>(probe_state, keys, hash_table)
                 }
@@ -63,7 +68,7 @@ impl HashJoinProbeState {
                 }
                 _ => self.inner_join::<_, false, false>(probe_state, keys, hash_table),
             },
-            JoinType::Left | JoinType::Full => {
+            JoinType::Left(_) | JoinType::Full => {
                 if no_other_predicate {
                     self.left_join::<_, false>(probe_state, keys, hash_table)
                 } else {
@@ -98,7 +103,7 @@ impl HashJoinProbeState {
                     self.left_mark_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
-            JoinType::Right | JoinType::RightSingle => {
+            JoinType::Right(_) | JoinType::RightSingle => {
                 self.probe_right_join(probe_state, keys, hash_table)
             }
             JoinType::RightSemi | JoinType::RightAnti => {

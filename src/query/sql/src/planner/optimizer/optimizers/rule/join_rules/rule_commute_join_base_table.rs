@@ -65,10 +65,10 @@ impl Rule for RuleCommuteJoinBaseTable {
         }
 
         match join.join_type {
-            JoinType::Inner
-            | JoinType::Cross
-            | JoinType::Left
-            | JoinType::Right
+            JoinType::Inner(_)
+            | JoinType::Cross(_)
+            | JoinType::Left(_)
+            | JoinType::Right(_)
             | JoinType::LeftSingle
             | JoinType::RightSingle
             | JoinType::LeftSemi

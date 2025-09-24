@@ -246,8 +246,12 @@ impl HashJoinBuildState {
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
                 return Ok(());
             }
-
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
+            if self
+                .hash_join_state
+                .hash_join_desc
+                .join_type
+                .is_cross_join()
+            {
                 return Ok(());
             }
 
@@ -343,7 +347,7 @@ impl HashJoinBuildState {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, $overwrite: expr, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -378,7 +382,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr);
+                            $table.insert(*key, raw_entry_ptr, $overwrite);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -398,7 +402,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr);
+                            $table.insert(*key, raw_entry_ptr, $overwrite);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -409,7 +413,7 @@ impl HashJoinBuildState {
         }
 
         macro_rules! insert_binary_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $overwrite: expr, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -469,7 +473,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr);
+                            $table.insert(key, raw_entry_ptr, $overwrite);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -502,7 +506,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr);
+                            $table.insert(key, raw_entry_ptr, $overwrite);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -524,7 +528,7 @@ impl HashJoinBuildState {
         let mut _nullable_chunk = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full
         ) {
             let validity = Bitmap::new_constant(true, chunk.num_rows());
             let nullable_columns = chunk
@@ -627,6 +631,10 @@ impl HashJoinBuildState {
             }
             _ => {}
         };
+        let overwrite = matches!(
+            self.hash_join_state.hash_join_desc.join_type,
+            JoinType::Inner(true) | JoinType::Left(true)
+        );
 
         keys_entries
             .iter_mut()
@@ -637,28 +645,28 @@ impl HashJoinBuildState {
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, overwrite,
             },
             HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, overwrite,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8, overwrite,
             },
             HashJoinHashTable::KeysU16(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16, overwrite,
             },
             HashJoinHashTable::KeysU32(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32, overwrite,
             },
             HashJoinHashTable::KeysU64(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64, overwrite,
             },
             HashJoinHashTable::KeysU128(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128, overwrite,
             },
             HashJoinHashTable::KeysU256(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256, overwrite,
             },
             HashJoinHashTable::Null => {
                 return Err(ErrorCode::AbortedQuery(
@@ -688,7 +696,11 @@ impl HashJoinBuildState {
 
         let data_blocks = &mut build_state.generation_state.chunks;
         if !data_blocks.is_empty()
-            && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
+            && !self
+                .hash_join_state
+                .hash_join_desc
+                .join_type
+                .is_cross_join()
         {
             let num_columns = data_blocks[0].num_columns();
             let columns_data_type: Vec<DataType> = (0..num_columns)
@@ -713,7 +725,7 @@ impl HashJoinBuildState {
         if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.build_generation_state();
             if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
-                let partition_id = if self.join_type() != JoinType::Cross {
+                let partition_id = if !self.join_type().is_cross_join() {
                     // If build side has spilled data, we need to wait build side to next round.
                     // Set partition id to `HashJoinState`
                     let mut spill_partitions = self.hash_join_state.spilled_partitions.write();

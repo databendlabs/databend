@@ -261,7 +261,7 @@ impl SubqueryDecorrelatorOptimizer {
                         .precise_cardinality
                         .is_some()
                 } {
-                    JoinType::Left
+                    JoinType::Left(false)
                 } else {
                     JoinType::LeftSingle
                 };

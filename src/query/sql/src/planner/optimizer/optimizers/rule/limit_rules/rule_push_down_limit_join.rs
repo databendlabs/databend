@@ -74,7 +74,7 @@ impl Rule for RulePushDownLimitOuterJoin {
             let child = s_expr.child(0)?;
             let join: Join = child.plan().clone().try_into()?;
             match join.join_type {
-                JoinType::Left => {
+                JoinType::Left(_) => {
                     let child = child.replace_children(vec![
                         Arc::new(SExpr::create_unary(
                             Arc::new(RelOperator::Limit(limit.without_lazy_columns())),
@@ -94,7 +94,7 @@ impl Rule for RulePushDownLimitOuterJoin {
                     result.set_applied_rule(&self.id);
                     state.add_result(result)
                 }
-                JoinType::Right => {
+                JoinType::Right(_) => {
                     let child = Arc::new(child.replace_children(vec![
                         Arc::new(child.child(0)?.clone()),
                         Arc::new(SExpr::create_unary(

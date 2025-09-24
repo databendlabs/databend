@@ -110,7 +110,7 @@ impl HashJoinProbeState {
     ) -> Result<Self> {
         if matches!(
             join_type,
-            &JoinType::Right | &JoinType::RightSingle | &JoinType::Full
+            &JoinType::Right(_) | &JoinType::RightSingle | &JoinType::Full
         ) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
@@ -148,7 +148,7 @@ impl HashJoinProbeState {
     /// Probe the hash table and retrieve matched rows as DataBlocks.
     pub fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Cross => self.cross_join(input, probe_state),
+            JoinType::Cross(_) => self.cross_join(input, probe_state),
             _ => self.probe_join(input, probe_state),
         }
     }
@@ -180,7 +180,7 @@ impl HashJoinProbeState {
         let mut _nullable_data_block = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Right | JoinType::RightSingle | JoinType::Full
+            JoinType::Right(_) | JoinType::RightSingle | JoinType::Full
         ) {
             let nullable_columns = input
                 .columns()
@@ -280,7 +280,7 @@ impl HashJoinProbeState {
         if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
-                JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+                JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
             return self.left_fast_return(
@@ -388,9 +388,9 @@ impl HashJoinProbeState {
         }
         matches!(
             join_type,
-            JoinType::Inner
+            JoinType::Inner(_)
                 | JoinType::Full
-                | JoinType::Left
+                | JoinType::Left(_)
                 | JoinType::LeftSingle
                 | JoinType::LeftAnti
                 | JoinType::LeftSemi
@@ -403,7 +403,7 @@ impl HashJoinProbeState {
     pub fn need_unmatched_selection(join_type: &JoinType, with_conjunction: bool) -> bool {
         matches!(
             join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
         ) && !with_conjunction
     }
 
@@ -441,7 +441,7 @@ impl HashJoinProbeState {
 
     pub fn final_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match &self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+            JoinType::Right(_) | JoinType::RightSingle | JoinType::Full => {
                 self.right_and_full_outer_scan(task, state)
             }
             JoinType::RightSemi => self.right_semi_outer_scan(task, state),

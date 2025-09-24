@@ -44,10 +44,10 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
-    Cross,
-    Inner,
-    Left,
-    Right,
+    Cross(bool /* is_any, only for pull up filter */),
+    Inner(bool /* is_any */),
+    Left(bool /* is_any */),
+    Right(bool /* is_any */),
     Full,
     LeftSemi,
     RightSemi,
@@ -72,8 +72,8 @@ pub enum JoinType {
 impl JoinType {
     pub fn opposite(&self) -> JoinType {
         match self {
-            JoinType::Left => JoinType::Right,
-            JoinType::Right => JoinType::Left,
+            JoinType::Left(is_any) => JoinType::Right(*is_any),
+            JoinType::Right(is_any) => JoinType::Left(*is_any),
             JoinType::LeftSingle => JoinType::RightSingle,
             JoinType::RightSingle => JoinType::LeftSingle,
             JoinType::LeftSemi => JoinType::RightSemi,
@@ -91,8 +91,8 @@ impl JoinType {
     pub fn is_outer_join(&self) -> bool {
         matches!(
             self,
-            JoinType::Left
-                | JoinType::Right
+            JoinType::Left(_)
+                | JoinType::Right(_)
                 | JoinType::Full
                 | JoinType::LeftSingle
                 | JoinType::RightSingle
@@ -104,19 +104,42 @@ impl JoinType {
     pub fn is_mark_join(&self) -> bool {
         matches!(self, JoinType::LeftMark | JoinType::RightMark)
     }
+
+    pub fn is_any_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Inner(true) | JoinType::Left(true) | JoinType::Right(true)
+        )
+    }
+
+    pub fn is_cross_join(&self) -> bool {
+        matches!(self, JoinType::Cross(_))
+    }
 }
 
 impl Display for JoinType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            JoinType::Inner => {
-                write!(f, "INNER")
+            JoinType::Inner(is_any) => {
+                if *is_any {
+                    write!(f, "INNER ANY")
+                } else {
+                    write!(f, "INNER")
+                }
             }
-            JoinType::Left => {
-                write!(f, "LEFT OUTER")
+            JoinType::Left(is_any) => {
+                if *is_any {
+                    write!(f, "LEFT ANY")
+                } else {
+                    write!(f, "LEFT OUTER")
+                }
             }
-            JoinType::Right => {
-                write!(f, "RIGHT OUTER")
+            JoinType::Right(is_any) => {
+                if *is_any {
+                    write!(f, "RIGHT ANY")
+                } else {
+                    write!(f, "RIGHT OUTER")
+                }
             }
             JoinType::Full => {
                 write!(f, "FULL OUTER")
@@ -133,7 +156,7 @@ impl Display for JoinType {
             JoinType::RightAnti => {
                 write!(f, "RIGHT ANTI")
             }
-            JoinType::Cross => {
+            JoinType::Cross(_) => {
                 write!(f, "CROSS")
             }
             JoinType::LeftMark => {
@@ -225,7 +248,7 @@ impl Default for Join {
         Self {
             equi_conditions: Vec::new(),
             non_equi_conditions: Vec::new(),
-            join_type: JoinType::Cross,
+            join_type: JoinType::Cross(false),
             marker_index: None,
             from_correlated_subquery: false,
             need_hold_hash_table: false,
@@ -449,11 +472,11 @@ impl Join {
             &mut right_statistics,
         )?;
         let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Asof | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left | JoinType::LeftAsof => {
+            JoinType::Inner(_) | JoinType::Asof | JoinType::Cross(_) => inner_join_cardinality,
+            JoinType::Left(_) | JoinType::LeftAsof => {
                 f64::max(left_cardinality, inner_join_cardinality)
             }
-            JoinType::Right | JoinType::RightAsof => {
+            JoinType::Right(_) | JoinType::RightAsof => {
                 f64::max(right_cardinality, inner_join_cardinality)
             }
             JoinType::Full => {
@@ -592,7 +615,7 @@ impl Operator for Join {
             });
         }
 
-        if !matches!(self.join_type, JoinType::Inner | JoinType::Asof) {
+        if !matches!(self.join_type, JoinType::Inner(_) | JoinType::Asof) {
             return Ok(PhysicalProperty {
                 distribution: Distribution::Random,
             });
@@ -651,7 +674,7 @@ impl Operator for Join {
         // Try to use broadcast join
         if !matches!(
             self.join_type,
-            JoinType::Right
+            JoinType::Right(_)
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi
@@ -755,7 +778,9 @@ impl Operator for Join {
         }
 
         let settings = ctx.get_settings();
-        if self.join_type != JoinType::Cross && !settings.get_enforce_broadcast_join()? {
+        if !matches!(self.join_type, JoinType::Cross(_))
+            && !settings.get_enforce_broadcast_join()?
+        {
             // (Hash, Hash)
             children_required.extend(self.equi_conditions.iter().map(|condition| {
                 vec![
@@ -771,7 +796,7 @@ impl Operator for Join {
 
         if !matches!(
             self.join_type,
-            JoinType::Right
+            JoinType::Right(_)
                 | JoinType::Full
                 | JoinType::RightAnti
                 | JoinType::RightSemi

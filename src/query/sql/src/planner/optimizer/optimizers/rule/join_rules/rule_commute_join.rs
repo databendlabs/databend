@@ -72,10 +72,10 @@ impl Rule for RuleCommuteJoin {
         let need_commute = if left_card < right_card {
             matches!(
                 join.join_type,
-                JoinType::Inner
-                    | JoinType::Cross
-                    | JoinType::Left
-                    | JoinType::Right
+                JoinType::Inner(_)
+                    | JoinType::Cross(_)
+                    | JoinType::Left(_)
+                    | JoinType::Right(_)
                     | JoinType::LeftSingle
                     | JoinType::RightSingle
                     | JoinType::LeftSemi
@@ -88,7 +88,10 @@ impl Rule for RuleCommuteJoin {
         } else if left_card == right_card {
             matches!(
                 join.join_type,
-                JoinType::Right | JoinType::RightSingle | JoinType::RightSemi | JoinType::RightAnti
+                JoinType::Right(_)
+                    | JoinType::RightSingle
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti
             )
         } else {
             false

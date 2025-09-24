@@ -14,6 +14,7 @@
 
 use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::hints::assume;
@@ -42,6 +43,7 @@ pub struct HashJoinStringHashTable<A: Allocator + Clone = DefaultAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
+    pub(crate) count: AtomicUsize,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
@@ -57,6 +59,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
+            count: Default::default(),
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -64,7 +67,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry) {
+    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry, overwrite: bool) {
         let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -72,10 +75,15 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
+            let header = if overwrite {
+                new_header
+            } else {
+                combine_header(new_header, old_header)
+            };
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
-                    combine_header(new_header, old_header),
+                    header,
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
@@ -84,6 +92,10 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Ok(_) => break,
                 Err(x) => old_header = x,
             };
+        }
+        self.count.fetch_add(1, Ordering::Relaxed);
+        if overwrite {
+            return;
         }
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
@@ -340,5 +352,9 @@ where A: Allocator + Clone + 'static
             ptr = raw_entry.next;
         }
         0
+    }
+
+    fn len(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
     }
 }

@@ -103,8 +103,8 @@ impl Rule for RuleLeftExchangeJoin {
         let t3 = s_expr.child(1)?;
 
         // Ensure inner joins or cross joins.
-        if !matches!(join1.join_type, JoinType::Inner | JoinType::Cross)
-            || !matches!(join2.join_type, JoinType::Inner | JoinType::Cross)
+        if !matches!(join1.join_type, JoinType::Inner(_) | JoinType::Cross(_))
+            || !matches!(join2.join_type, JoinType::Inner(_) | JoinType::Cross(_))
         {
             return Ok(());
         }
@@ -112,7 +112,7 @@ impl Rule for RuleLeftExchangeJoin {
         // Check if original sexpr contains cross join.
         // We will reject the results contain cross join if there is no cross join in original sexpr.
         let contains_cross_join =
-            join1.join_type == JoinType::Cross || join2.join_type == JoinType::Cross;
+            matches!(join1.join_type, JoinType::Cross(_)) || join2.join_type.is_cross_join();
 
         let predicates = [get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
@@ -167,7 +167,7 @@ impl Rule for RuleLeftExchangeJoin {
         }
 
         if !join_3.equi_conditions.is_empty() {
-            join_3.join_type = JoinType::Inner;
+            join_3.join_type = JoinType::Inner(false);
         }
 
         // Resolve predicates for join4
@@ -200,12 +200,12 @@ impl Rule for RuleLeftExchangeJoin {
         }
 
         if !join_4.equi_conditions.is_empty() {
-            join_4.join_type = JoinType::Inner;
+            join_4.join_type = JoinType::Inner(false);
         }
 
         // Reject inefficient cross join
         if !contains_cross_join
-            && (join_3.join_type == JoinType::Cross || join_4.join_type == JoinType::Cross)
+            && (join_3.join_type.is_cross_join() || join_4.join_type.is_cross_join())
         {
             return Ok(());
         }

@@ -276,7 +276,7 @@ impl SubqueryDecorrelatorOptimizer {
                 }
 
                 // todo: non_equi_conditions for other join_type
-                if join.join_type != JoinType::Inner
+                if matches!(join.join_type, JoinType::Inner(_))
                     || join
                         .non_equi_conditions
                         .iter()
@@ -678,7 +678,7 @@ impl SubqueryDecorrelatorOptimizer {
                 };
 
                 let cross_join = Join {
-                    join_type: JoinType::Cross,
+                    join_type: JoinType::Cross(false),
                     equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
                     ..Join::default()
                 };

@@ -642,7 +642,7 @@ impl TransformHashJoinProbe {
     fn can_fast_return(&self) -> bool {
         !matches!(
             self.join_probe_state.join_type(),
-            JoinType::Left
+            JoinType::Left(_)
                 | JoinType::LeftSingle
                 | JoinType::LeftAnti
                 | JoinType::RightMark

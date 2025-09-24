@@ -316,7 +316,7 @@ impl MutationExpression {
                         let join_plan = Join {
                             equi_conditions: vec![],
                             non_equi_conditions: vec![],
-                            join_type: JoinType::Cross,
+                            join_type: JoinType::Cross(false),
                             marker_index: None,
                             from_correlated_subquery: true,
                             need_hold_hash_table: false,

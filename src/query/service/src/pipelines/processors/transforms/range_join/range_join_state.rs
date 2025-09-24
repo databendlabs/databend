@@ -110,7 +110,7 @@ impl RangeJoinState {
         // Sink block to right table
         let mut right_table = self.right_table.write();
         let mut right_block = block;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+        if matches!(self.join_type, JoinType::Left(_) | JoinType::LeftAsof) {
             let validity = Bitmap::new_constant(true, right_block.num_rows());
             let nullable_right_columns = right_block
                 .columns()
@@ -127,7 +127,7 @@ impl RangeJoinState {
         // Sink block to left table
         let mut left_table = self.left_table.write();
         let mut left_block = block;
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+        if matches!(self.join_type, JoinType::Right(_) | JoinType::RightAsof) {
             let validity = Bitmap::new_constant(true, left_block.num_rows());
             let nullable_left_columns = left_block
                 .columns()
@@ -312,7 +312,7 @@ impl RangeJoinState {
         // Add Fill task
         left_offset = 0;
         right_offset = 0;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+        if matches!(self.join_type, JoinType::Left(_) | JoinType::LeftAsof) {
             let mut left_match = self.left_match.write();
             for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
                 row_offset.push((left_offset, 0));
@@ -321,7 +321,7 @@ impl RangeJoinState {
                 left_match.extend_constant(left_block.num_rows(), false);
             }
         }
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+        if matches!(self.join_type, JoinType::Right(_) | JoinType::RightAsof) {
             let mut right_match = self.right_match.write();
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 row_offset.push((0, right_offset));
