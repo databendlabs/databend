@@ -140,4 +140,4 @@ mod v145_opaque_data_type;
 mod v146_constraint;
 mod v147_grant_object_procedure;
 mod v148_virtual_schema;
-mod v148_field_auto_increment;
+mod v149_field_auto_increment;

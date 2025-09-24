@@ -31,12 +31,12 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v148_field_auto_increment() -> anyhow::Result<()> {
-    let table_schema_v148 = vec![
-        10, 44, 10, 1, 97, 26, 19, 154, 2, 9, 42, 0, 160, 6, 148, 1, 168, 6, 24, 160, 6, 148, 1,
-        168, 6, 24, 50, 11, 8, 1, 16, 2, 160, 6, 148, 1, 168, 6, 24, 160, 6, 148, 1, 168, 6, 24,
-        10, 33, 10, 1, 98, 26, 19, 154, 2, 9, 42, 0, 160, 6, 148, 1, 168, 6, 24, 160, 6, 148, 1,
-        168, 6, 24, 32, 1, 160, 6, 148, 1, 168, 6, 24, 24, 2, 160, 6, 148, 1, 168, 6, 24,
+fn test_decode_v149_field_auto_increment() -> anyhow::Result<()> {
+    let table_schema_v149 = vec![
+        10, 44, 10, 1, 97, 26, 19, 154, 2, 9, 42, 0, 160, 6, 149, 1, 168, 6, 24, 160, 6, 149, 1,
+        168, 6, 24, 50, 11, 8, 1, 16, 2, 160, 6, 149, 1, 168, 6, 24, 160, 6, 149, 1, 168, 6, 24,
+        10, 33, 10, 1, 98, 26, 19, 154, 2, 9, 42, 0, 160, 6, 149, 1, 168, 6, 24, 160, 6, 149, 1,
+        168, 6, 24, 32, 1, 160, 6, 149, 1, 168, 6, 24, 24, 2, 160, 6, 149, 1, 168, 6, 24,
     ];
 
     let want = || {
@@ -59,7 +59,7 @@ fn test_decode_v148_field_auto_increment() -> anyhow::Result<()> {
         }
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_schema_v148.as_slice(), 148, want())?;
+    common::test_load_old(func_name!(), table_schema_v149.as_slice(), 149, want())?;
 
     Ok(())
 }
