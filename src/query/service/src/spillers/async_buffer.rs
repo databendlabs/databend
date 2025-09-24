@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::io::Write;
+use std::io;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -21,10 +21,15 @@ use std::sync::PoisonError;
 
 use bytes::Bytes;
 use bytes::BytesMut;
+use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_storages_common_cache::TempDir;
+use databend_storages_common_cache::TempPath;
 use opendal::Metadata;
 use opendal::Writer;
+
+use super::Location;
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -119,6 +124,7 @@ impl BufferPool {
             available_write_buffers_tx: buffers_tx,
         })
     }
+
     pub fn try_alloc_buffer(&self) -> Option<BytesMut> {
         self.available_write_buffers.try_recv().ok()
     }
@@ -264,8 +270,8 @@ impl BufferWriter {
     }
 }
 
-impl std::io::Write for BufferWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+impl io::Write for BufferWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
         }
@@ -315,7 +321,7 @@ impl std::io::Write for BufferWriter {
         Ok(written)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         if matches!(&self.current_bytes, Some(current_bytes) if !current_bytes.is_empty()) {
             if let Some(current_bytes) = self.current_bytes.take() {
                 self.pending_buffers.push_back(current_bytes.freeze());
@@ -464,6 +470,51 @@ impl Background {
                 op.response.condvar.notify_one();
             }
         }
+    }
+}
+
+struct LocalDst {
+    dir: Arc<TempDir>,
+    path: TempPath,
+    buf: Option<DmaWriteBuf>,
+}
+
+struct RemoteDst {
+    path: String,
+    buf: BufferWriter,
+}
+
+pub struct XXX {
+    local: Option<LocalDst>,
+    remote: Option<RemoteDst>,
+}
+
+impl io::Write for XXX {
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
+        match &mut self.local {
+            Some(LocalDst {
+                dir,
+                path,
+                buf: Some(dma),
+            }) => {
+                if dma.need_alloc() {
+                    if dir.grow_size(path, dma.chunk())? {
+                        dma.alloc_buffer();
+                        buf = dma.write_last(buf);
+                    }
+                } else {
+                    buf = dma.write_last(buf);
+                }
+            }
+            _ => todo!(),
+        }
+
+        // self.local.unwrap().set_size(size)
+        todo!()
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        todo!()
     }
 }
 

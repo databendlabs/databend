@@ -194,13 +194,13 @@ pub fn dma_buffer_to_bytes(buf: DmaBuffer) -> Bytes {
 
 /// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
 /// perform direct IO.
-struct DmaFile {
+struct AsyncDmaFile {
     fd: File,
     alignment: Alignment,
     buf: Option<DmaBuffer>,
 }
 
-impl DmaFile {
+impl AsyncDmaFile {
     async fn open_raw(path: impl AsRef<Path>, #[allow(unused)] dio: bool) -> io::Result<File> {
         #[allow(unused_mut)]
         let mut flags = 0;
@@ -234,14 +234,14 @@ impl DmaFile {
     }
 
     /// Attempts to open a file in read-only mode.
-    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<DmaFile> {
-        let file = DmaFile::open_raw(path, dio).await?;
+    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
+        let file = AsyncDmaFile::open_raw(path, dio).await?;
         open_dma(file).await
     }
 
     /// Opens a file in write-only mode.
-    async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<DmaFile> {
-        let file = DmaFile::create_raw(path, dio).await?;
+    async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
+        let file = AsyncDmaFile::create_raw(path, dio).await?;
         open_dma(file).await
     }
 
@@ -314,11 +314,11 @@ impl DmaFile {
     }
 }
 
-async fn open_dma(file: File) -> io::Result<DmaFile> {
+async fn open_dma(file: File) -> io::Result<AsyncDmaFile> {
     let stat = fstatvfs(&file).await?;
     let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
 
-    Ok(DmaFile {
+    Ok(AsyncDmaFile {
         fd: file,
         alignment,
         buf: None,
@@ -373,8 +373,8 @@ impl DmaWriteBuf {
     }
 
     pub async fn into_file(mut self, path: impl AsRef<Path>, dio: bool) -> io::Result<usize> {
-        let mut file = DmaFile {
-            fd: DmaFile::create_raw(path, dio).await?,
+        let mut file = AsyncDmaFile {
+            fd: AsyncDmaFile::create_raw(path, dio).await?,
             alignment: self.allocator.0,
             buf: None,
         };
@@ -478,7 +478,7 @@ pub async fn dma_write_file_vectored<'a>(
     path: impl AsRef<Path>,
     bufs: &'a [IoSlice<'a>],
 ) -> io::Result<usize> {
-    let mut file = DmaFile::create(path.as_ref(), true).await?;
+    let mut file = AsyncDmaFile::create(path.as_ref(), true).await?;
 
     let file_length = bufs.iter().map(|buf| buf.len()).sum();
     if file_length == 0 {
@@ -536,7 +536,7 @@ pub async fn dma_read_file(
     mut writer: impl io::Write,
 ) -> io::Result<usize> {
     const BUFFER_SIZE: usize = 1024 * 1024;
-    let mut file = DmaFile::open(path.as_ref(), true).await?;
+    let mut file = AsyncDmaFile::open(path.as_ref(), true).await?;
     let buf = Vec::with_capacity_in(
         file.align_up(BUFFER_SIZE),
         DmaAllocator::new(file.alignment),
@@ -571,7 +571,7 @@ pub async fn dma_read_file_range(
     path: impl AsRef<Path>,
     range: Range<u64>,
 ) -> io::Result<(DmaBuffer, Range<usize>)> {
-    let mut file = DmaFile::open(path.as_ref(), true).await?;
+    let mut file = AsyncDmaFile::open(path.as_ref(), true).await?;
 
     let align_start = file.align_down(range.start as usize);
     let align_end = file.align_up(range.end as usize);
@@ -661,7 +661,7 @@ mod tests {
         assert_eq!(length, want.len());
         assert_eq!(got, want);
 
-        let file = DmaFile::open(filename, dio).await?;
+        let file = AsyncDmaFile::open(filename, dio).await?;
         let align = file.alignment;
         drop(file);
 
@@ -731,7 +731,7 @@ mod tests {
         let bufs = vec![IoSlice::new(&want)];
         dma_write_file_vectored(filename, &bufs).await.unwrap();
 
-        let mut file = DmaFile::open(filename, true).await.unwrap();
+        let mut file = AsyncDmaFile::open(filename, true).await.unwrap();
         let buf = Vec::with_capacity_in(file_size, DmaAllocator::new(file.alignment));
         file.set_buffer(buf);
 

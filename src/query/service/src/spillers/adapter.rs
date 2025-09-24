@@ -31,6 +31,8 @@ use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parquet::file::metadata::RowGroupMetaDataPtr;
+use parquet::format::FileMetaData;
 
 use super::inner::*;
 use super::serialize::*;
@@ -95,8 +97,8 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
+    pub async fn read_spilled_partition(&mut self, partition_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(partition_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
             for (loc, _data_size, _blocks_num) in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;
@@ -352,6 +354,32 @@ pub struct MergedPartition {
 pub struct Chunk {
     pub range: Range<usize>,
     pub layout: Layout,
+}
+
+pub struct SpillWriter {
+    file: FileWriter<Vec<u8>>,
+}
+
+impl SpillWriter {
+    pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
+        let mut row_group = self.file.new_row_group();
+        for block in blocks {
+            row_group.write(block)?;
+        }
+        Ok(self.file.flush_row_group(row_group)?)
+    }
+
+    pub fn close(self) -> Result<FileMetaData> {
+        Ok(self.file.close()?)
+    }
+}
+
+pub struct SpillReader {}
+
+impl SpillReader {
+    pub fn restore(&self, _ordinal: i16) {
+        todo!()
+    }
 }
 
 impl SpillAdapter for Arc<QueryContext> {

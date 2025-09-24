@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs;
 use std::hash::Hash;
+use std::io;
 use std::io::ErrorKind;
 use std::ops::Deref;
 use std::ops::Drop;
@@ -182,9 +183,8 @@ impl TempDirManager {
         self.alignment
     }
 
-    fn insufficient_disk(&self, size: u64) -> Result<bool> {
-        let stat = statvfs(self.root.as_ref().unwrap().as_ref())
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    fn insufficient_disk(&self, size: u64) -> io::Result<bool> {
+        let stat = statvfs(self.root.as_ref().unwrap().as_ref());
 
         debug_assert_eq!(stat.f_frsize, self.alignment.as_usize() as u64);
         let n = self.alignment.align_up_count(size as usize) as u64;
@@ -216,7 +216,10 @@ impl TempDir {
         let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
 
         if self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
-            || self.manager.insufficient_disk(size as u64)?
+            || self
+                .manager
+                .insufficient_disk(size as u64)
+                .map_err(|e| ErrorCode::Internal(format!("insufficient_disk fail {e}")))?
         {
             return Ok(None);
         }
@@ -241,9 +244,12 @@ impl TempDir {
         }))))
     }
 
-    pub fn grow_size(&self, path: &mut TempPath, grow: usize) -> Result<bool> {
+    pub fn grow_size(&self, path: &mut TempPath, grow: usize) -> io::Result<bool> {
         let Some(path) = Arc::get_mut(&mut path.0) else {
-            return Err(ErrorCode::Internal("can't set size after share"));
+            return Err(io::const_error!(
+                io::ErrorKind::InvalidInput,
+                "can't set size after share"
+            ));
         };
 
         if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow
