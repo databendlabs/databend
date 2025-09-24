@@ -618,7 +618,7 @@ impl Catalog for MutableCatalog {
 
         let resp = ctx.meta.get_drop_table_infos(req).await?;
 
-        let drop_ids = resp.drop_ids.clone();
+        let drop_ids = resp.drop_ids;
 
         let storage = ctx.storage_factory;
 

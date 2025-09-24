@@ -32,7 +32,6 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::VacuumDropTablePlan;
-use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::vacuum_handler::DroppedTableDesc;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDroppedTablesCtx;
@@ -186,31 +185,29 @@ impl Interpreter for VacuumDropTablesInterpreter {
             drop_ids
         );
 
-        // Filter out read-only tables and views.
-        // Note: The drop_ids list still includes view IDs
-        let (views, tables): (Vec<_>, Vec<_>) = tables
-            .into_iter()
-            .filter(|tbl| !tbl.as_ref().is_read_only())
-            .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
+        //// Filter out read-only tables and views.
+        //// Note: The drop_ids list still includes view IDs
+        // let (views, tables): (Vec<_>, Vec<_>) = tables
+        //    .into_iter()
+        //    .filter(|tbl| !tbl.as_ref().is_read_only())
+        //    .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
 
-        {
-            let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
-            info!("view ids excluded from purging data: {:?}", view_ids);
-        }
+        // let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
+        // info!("view ids excluded from purging data: {:?}", view_ids);
 
-        info!(
-            "after filter read-only tables: {} tables remain: [{}]",
-            tables.len(),
-            tables
-                .iter()
-                .map(|t| format!(
-                    "{}(id:{})",
-                    t.get_table_info().name,
-                    t.get_table_info().ident.table_id
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        // info!(
+        //    "after filter read-only tables: {} tables remain: [{}]",
+        //    tables.len(),
+        //    tables
+        //        .iter()
+        //        .map(|t| format!(
+        //            "{}(id:{})",
+        //            t.get_table_info().name,
+        //            t.get_table_info().ident.table_id
+        //        ))
+        //        .collect::<Vec<_>>()
+        //        .join(", ")
+        //);
 
         let tables_count = tables.len();
 
@@ -264,13 +261,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
                             success_dropped_ids.push(drop_id);
                         }
                     }
-                    DroppedId::Table { name: _, id } => {
-                        if !failed_tables.contains(&id.table_id) {
-                            success_dropped_ids.push(drop_id);
-                        }
+                    DroppedId::Table { .. } => {
+                        // Table metadata has been cleaned individually
                     }
                 }
             }
+
             info!(
                 "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
                 failed_db_ids.len(),

@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DroppedId;
@@ -50,28 +49,33 @@ pub async fn do_vacuum_drop_table(
     let mut failed_tables = HashSet::new();
     for table_desc in tables {
         let table = &table_desc.table;
-        let (table_info, operator) =
+        let table_info = table.get_table_info();
+
+        if !table.is_read_only() {
             if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
-                (fuse_table.get_table_info(), fuse_table.get_operator())
+                let operator = fuse_table.get_operator();
+
+                let result =
+                    vacuum_drop_single_table(table_info, operator, dry_run_limit, &mut list_files)
+                        .await;
+
+                if result.is_err() {
+                    let table_id = table_info.ident.table_id;
+                    failed_tables.insert(table_id);
+                    continue;
+                }
             } else {
                 info!(
-                    "ignore table {}, which is not of FUSE engine. Table engine {}",
+                    "table {} is not of engine {}, it's data will NOT be cleaned.",
                     table.get_table_info().name,
                     table.engine()
                 );
-                continue;
             };
-
-        {
-            let result =
-                vacuum_drop_single_table(table_info, operator, dry_run_limit, &mut list_files)
-                    .await;
-
-            if result.is_err() {
-                let table_id = table_info.ident.table_id;
-                failed_tables.insert(table_id);
-                continue;
-            }
+        } else {
+            info!(
+                "table {} is read-only, it's data will NOT be cleaned.",
+                table.get_table_info().name,
+            );
         }
 
         if !is_dry_run {
@@ -230,8 +234,8 @@ pub async fn vacuum_drop_tables_by_table_info(
 
         // Note that Errs should NOT be swallowed if any target is not successfully deleted.
         // Otherwise, the caller site may proceed to purge meta-data from meta-server with
-        // some table data un-vacuumed, and the `vacuum` action of those dropped tables can no
-        // longer be roll-forward.
+        // some table data have not been cleaned completely, and the `vacuum` action of those
+        // dropped tables can no longer be roll-forward.
         if dry_run_limit.is_some() {
             let mut ret_files = vec![];
             for res in result {
