@@ -30,7 +30,6 @@ use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
-use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::start_metasrv_cluster;
 
 #[test(harness = meta_service_test_harness)]
