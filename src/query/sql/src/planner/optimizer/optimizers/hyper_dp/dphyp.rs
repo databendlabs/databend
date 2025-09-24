@@ -198,7 +198,7 @@ impl DPhpyOptimizer {
 
         // Check if it's an inner join
         let mut is_inner_join =
-            matches!(op.join_type, JoinType::Inner) || matches!(op.join_type, JoinType::Cross);
+            matches!(op.join_type, JoinType::Inner(_)) || op.join_type.is_cross_join();
 
         // Check if children are subqueries
         let left_op = s_expr.child(0)?.plan.as_ref();
@@ -433,7 +433,7 @@ impl DPhpyOptimizer {
                 .await?;
 
             let join = JoinNode {
-                join_type: JoinType::Inner,
+                join_type: JoinType::Inner(false),
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
                 join_conditions: Arc::new(vec![]),
@@ -810,7 +810,7 @@ impl DPhpyOptimizer {
 
         if !join_conditions.is_empty() {
             let mut join_node = JoinNode {
-                join_type: JoinType::Inner,
+                join_type: JoinType::Inner(false),
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
                     Arc::new(vec![right_join, left_join])
@@ -834,7 +834,7 @@ impl DPhpyOptimizer {
         } else {
             // Create cross join
             let join_node = JoinNode {
-                join_type: JoinType::Cross,
+                join_type: JoinType::Cross(false),
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
                     Arc::new(vec![right_join, left_join])
@@ -1146,6 +1146,6 @@ impl Optimizer for DPhpyOptimizer {
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        self.optimize_async(s_expr).await
+        Ok(s_expr.clone())
     }
 }

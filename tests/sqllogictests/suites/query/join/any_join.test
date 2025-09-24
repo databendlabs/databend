@@ -1,0 +1,47 @@
+statement ok
+CREATE OR REPLACE TABLE t1 (id Int32, val1 String);
+
+statement ok
+CREATE OR REPLACE TABLE t2 (id Int32, val2 String);
+
+statement ok
+INSERT INTO t1 VALUES
+(1, 'a1'),
+(1, 'a2'),
+(2, 'b1'),
+(3, 'c1'),
+(5, 'e1'),
+(NULL, 'n1');
+
+statement ok
+INSERT INTO t2 VALUES
+(1, 'x1'),
+(1, 'x2'),
+(3, 'y1'),
+(4, 'z1'),
+(NULL, 'n2');
+
+query IT
+SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id);
+----
+1 a1 x2
+3 c1 y1
+
+query IT rowsort
+SELECT t1.id, t1.val1, t2.val2 FROM t1 LEFT ANY JOIN t2 USING(id);
+----
+1 a1 x2
+1 a2 x2
+2 b1 NULL
+3 c1 y1
+5 e1 NULL
+NULL n1 NULL
+
+query IT rowsort
+SELECT t1.id, t1.val1, t2.val2 FROM t1 RIGHT ANY JOIN t2 ON t1.id = t2.id;
+----
+1 a1 x1
+1 a1 x2
+3 c1 y1
+NULL NULL n2
+NULL NULL z1

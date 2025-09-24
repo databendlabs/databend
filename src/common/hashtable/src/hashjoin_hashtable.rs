@@ -15,6 +15,7 @@
 use std::alloc::Allocator;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::mem_allocator::DefaultAllocator;
@@ -106,6 +107,7 @@ pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = DefaultAllocator
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) phantom: PhantomData<K>,
+    pub(crate) count: AtomicUsize,
 }
 
 unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHashTable<K, A> {}
@@ -122,6 +124,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
             phantom: PhantomData,
+            count: Default::default(),
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -129,7 +132,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: K, entry_ptr: *mut RawEntry<K>) {
+    pub fn insert(&mut self, key: K, entry_ptr: *mut RawEntry<K>, overwrite: bool) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -137,10 +140,15 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
+            let header = if overwrite {
+                new_header
+            } else {
+                combine_header(new_header, old_header)
+            };
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
-                    combine_header(new_header, old_header),
+                    header,
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
@@ -149,6 +157,10 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                 Ok(_) => break,
                 Err(x) => old_header = x,
             };
+        }
+        self.count.fetch_add(1, Ordering::Relaxed);
+        if overwrite {
+            return;
         }
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
@@ -387,5 +399,9 @@ where
             ptr = raw_entry.next;
         }
         0
+    }
+
+    fn len(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
     }
 }

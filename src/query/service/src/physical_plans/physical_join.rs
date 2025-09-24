@@ -74,7 +74,9 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             &mut other_conditions,
         )
     }
-    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+    if !range_conditions.is_empty()
+        && matches!(join.join_type, JoinType::Inner(_) | JoinType::Cross(_))
+    {
         return Ok(PhysicalJoinType::RangeJoin(
             range_conditions,
             other_conditions,

@@ -127,8 +127,8 @@ impl JoinRuntimeFilter {
     fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
         matches!(
             join_type,
-            JoinType::Inner
-                | JoinType::Right
+            JoinType::Inner(_)
+                | JoinType::Right(_)
                 | JoinType::RightSemi
                 | JoinType::RightAnti
                 | JoinType::LeftMark

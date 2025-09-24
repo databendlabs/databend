@@ -154,7 +154,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             JoinPredicate::Left(_) => {
                 if matches!(
                     join.join_type,
-                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                    JoinType::Right(_) | JoinType::RightSingle | JoinType::Full
                 ) {
                     if can_filter_null(
                         &predicate,
@@ -173,7 +173,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             JoinPredicate::Right(_) => {
                 if matches!(
                     join.join_type,
-                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                    JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full
                 ) {
                     if can_filter_null(
                         &predicate,
@@ -191,7 +191,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
             }
             JoinPredicate::Other(_) => original_predicates.push(predicate),
             JoinPredicate::Both { is_equal_op, .. } => {
-                if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+                if matches!(join.join_type, JoinType::Inner(_) | JoinType::Cross(_))
                     || join.single_to_inner.is_some()
                 {
                     if is_equal_op {
@@ -199,8 +199,8 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
                     } else {
                         non_equi_predicates.push(predicate);
                     }
-                    if join.join_type == JoinType::Cross {
-                        join.join_type = JoinType::Inner;
+                    if join.join_type.is_cross_join() {
+                        join.join_type = JoinType::Inner(join.join_type == JoinType::Cross(true));
                     }
                 } else {
                     original_predicates.push(predicate);
@@ -227,11 +227,11 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
         }
         join.equi_conditions.clear();
         match join.join_type {
-            JoinType::Left | JoinType::LeftSingle => {
+            JoinType::Left(_) | JoinType::LeftSingle => {
                 push_down_predicates.extend(left_push_down);
                 left_push_down = vec![];
             }
-            JoinType::Right | JoinType::RightSingle => {
+            JoinType::Right(_) | JoinType::RightSingle => {
                 push_down_predicates.extend(right_push_down);
                 right_push_down = vec![];
             }

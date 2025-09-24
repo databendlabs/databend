@@ -300,7 +300,7 @@ impl Rule for RuleEagerAggregation {
 
         let join: Join = join_expr.plan().clone().try_into()?;
         // Only supports inner/cross join and equal conditions.
-        if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+        if !matches!(join.join_type, JoinType::Inner(_) | JoinType::Cross(_))
             | !join.non_equi_conditions.is_empty()
         {
             return Ok(());
