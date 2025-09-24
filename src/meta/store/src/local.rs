@@ -30,7 +30,7 @@ use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
-use databend_meta::meta_service::MetaNode;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use log::debug;
 use log::info;
 use log::warn;
@@ -148,8 +148,9 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_node = MetaNode::start(&config, version).await?;
-        let mut grpc_server = GrpcServer::create(config.clone(), meta_node);
+        let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
+        let meta_handle = Arc::new(meta_handle);
+        let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
         grpc_server.start().await?;
 
         let client = Self::grpc_client(&config, version).await?;

@@ -53,6 +53,10 @@ impl Interval {
         Self::from_duration(Duration::from_secs(secs))
     }
 
+    pub fn to_duration(&self) -> Duration {
+        Duration::from_millis(self.millis)
+    }
+
     pub fn millis(&self) -> u64 {
         self.millis
     }
@@ -114,6 +118,10 @@ impl Time {
         Self {
             time: Interval::from_secs(secs),
         }
+    }
+
+    pub fn to_duration(&self) -> Duration {
+        self.time.to_duration()
     }
 
     pub fn millis(&self) -> u64 {

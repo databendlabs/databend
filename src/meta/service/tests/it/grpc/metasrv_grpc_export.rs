@@ -46,12 +46,13 @@ async fn test_export() -> anyhow::Result<()> {
         }
     }
 
-    let mn = tc
+    let meta_handle = tc
         .grpc_srv
         .as_ref()
-        .map(|grpc_server| grpc_server.get_meta_node())
+        .map(|grpc_server| grpc_server.get_meta_handle())
         .unwrap();
-    mn.raft.trigger().snapshot().await?;
+
+    meta_handle.handle_trigger_snapshot().await??;
 
     // Wait for snapshot to be ready
     sleep(Duration::from_secs(2)).await;

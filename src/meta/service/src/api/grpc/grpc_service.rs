@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future;
 use std::io;
 use std::pin::Pin;
 use std::sync::atomic::AtomicU64;
@@ -22,7 +21,6 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use arrow_flight::BasicAuth;
-use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
@@ -31,8 +29,6 @@ use databend_common_grpc::GrpcClaim;
 use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::utils::seq_marked_to_seqv;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -48,11 +44,8 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::AppliedState;
-use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
@@ -66,9 +59,7 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
-use map_api::mvcc::ScopedRange;
 use prost::Message;
-use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
@@ -78,19 +69,12 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
-use watcher::dispatch::Command;
-use watcher::key_range::build_key_range;
-use watcher::util::new_initialization_sink;
-use watcher::util::try_forward;
-use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
 
 use crate::api::grpc::OnCompleteStream;
-use crate::message::ForwardRequest;
-use crate::message::ForwardRequestBody;
+use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
-use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::InFlightRead;
 use crate::metrics::InFlightWrite;
@@ -104,13 +88,13 @@ pub struct MetaServiceImpl {
     /// MetaServiceImpl is not dropped if there is an alive connection.
     ///
     /// Thus make the reference to [`MetaNode`] a Weak reference so that it does not prevent [`MetaNode`] to be dropped
-    pub(crate) meta_node: Weak<MetaNode>,
+    pub(crate) meta_handle: Weak<MetaHandle>,
 }
 
 impl Drop for MetaServiceImpl {
     fn drop(&mut self) {
-        if let Some(meta_node) = self.meta_node.upgrade() {
-            debug!("MetaServiceImpl::drop: id={}", meta_node.raft_store.id);
+        if let Some(meta_node) = self.meta_handle.upgrade() {
+            debug!("MetaServiceImpl::drop: id={}", meta_node.id);
         } else {
             debug!("MetaServiceImpl::drop: inner MetaNode already dropped");
         }
@@ -118,16 +102,16 @@ impl Drop for MetaServiceImpl {
 }
 
 impl MetaServiceImpl {
-    pub fn create(meta_node: Weak<MetaNode>) -> Self {
+    pub fn create(meta_handle: Weak<MetaHandle>) -> Self {
         Self {
-            version: meta_node.upgrade().unwrap().version,
+            version: meta_handle.upgrade().unwrap().version,
             token: GrpcToken::create(),
-            meta_node,
+            meta_handle,
         }
     }
 
-    pub fn try_get_meta_node(&self) -> Result<Arc<MetaNode>, Status> {
-        self.meta_node.upgrade().ok_or_else(|| {
+    pub fn try_get_meta_handle(&self) -> Result<Arc<MetaHandle>, Status> {
+        self.meta_handle.upgrade().ok_or_else(|| {
             Status::internal("MetaNode is already dropped, can not serve new requests")
         })
     }
@@ -148,16 +132,26 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
-        debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
-        let m = self.try_get_meta_node()?;
+        let meta_handle = self.try_get_meta_handle()?;
+        let id = meta_handle.id;
+
+        debug!(
+            "id={} {}: Received MetaGrpcReq: {:?}",
+            id,
+            func_name!(),
+            req
+        );
+
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
-                let res = m
-                    .kv_api()
-                    .upsert_kv(a.clone())
-                    .log_elapsed_info(format!("UpsertKV: {:?}", a))
-                    .await;
+                let res = meta_handle.handle_upsert_kv(a.clone()).await;
+                debug!(
+                    "id={} MetaGrpcReq UpsertKV: request: {:?} res: {:?}",
+                    id, req, res
+                );
+                let res = res?;
+                // TODO: the MetaApiError should be converted to Status
                 RaftReply::from(res)
             }
         };
@@ -174,14 +168,11 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
         debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
-        let req = ForwardRequest::new(1, req);
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let meta_node = self.try_get_meta_node()?;
-
-        let res = meta_node
-            .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
-            .log_elapsed_info(format!("ReadRequest: {:?}", req))
-            .await
+        let res = meta_handle
+            .handle_kv_read_v1(req.clone())
+            .await?
             .map_err(GrpcHelper::internal_err);
 
         network_metrics::incr_request_result(res.is_ok());
@@ -197,26 +188,17 @@ impl MetaServiceImpl {
 
         debug!("{}: Received TxnRequest: {}", func_name!(), txn);
 
-        let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let forward_req = ForwardRequest::new(1, ForwardRequestBody::Write(ent));
+        let log_msg = format!("TxnRequest: {}", txn);
 
-        let meta_node = self.try_get_meta_node()?;
-
-        let forward_res = meta_node
-            .handle_forwardable_request(forward_req)
-            .log_elapsed_info(format!("TxnRequest: {}", txn))
-            .await;
+        let forward_res = meta_handle
+            .handle_transaction(txn)
+            .log_elapsed_info(log_msg)
+            .await?;
 
         let (endpoint, txn_reply) = match forward_res {
-            Ok((endpoint, forward_resp)) => {
-                let applied_state: AppliedState =
-                    forward_resp.try_into().expect("expect AppliedState");
-
-                let txn_reply: TxnReply = applied_state.try_into().expect("expect TxnReply");
-
-                (endpoint, txn_reply)
-            }
+            Ok((endpoint, txn_reply)) => (endpoint, txn_reply),
             Err(err) => {
                 network_metrics::incr_request_result(false);
                 error!("txn request failed: {:?}", err);
@@ -401,7 +383,7 @@ impl MetaService for MetaServiceImpl {
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
 
-    /// Export all meta data.
+    /// Export all meta service data.
     ///
     /// Including header, raft state, logs and state machine.
     /// The exported data is a series of JSON encoded strings of `RaftStoreEntry`.
@@ -411,9 +393,9 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::ExportStream>, Status> {
         let guard = InFlightRead::guard();
 
-        let meta_node = self.try_get_meta_node()?;
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let strm = meta_node.raft_store.clone().export();
+        let strm = meta_handle.handle_export().await?;
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
@@ -444,9 +426,9 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::ExportV1Stream>, Status> {
         let guard = InFlightRead::guard();
 
-        let meta_node = self.try_get_meta_node()?;
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let strm = meta_node.raft_store.clone().export();
+        let strm = meta_handle.handle_export().await?;
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
         // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
@@ -473,98 +455,10 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let watch = request.into_inner();
 
-        info!("{}: Received WatchRequest: {}", func_name!(), watch);
+        let meta_handle = self.try_get_meta_handle()?;
+        let stream = meta_handle.handle_watch(watch).await??;
 
-        let key_range = build_key_range(
-            &UserKey::new(&watch.key),
-            &watch.key_end.as_ref().map(UserKey::new),
-        )
-        .map_err(Status::invalid_argument)?;
-        let flush = watch.initial_flush;
-
-        let (tx, rx) = mpsc::channel(4);
-
-        let mn = self.try_get_meta_node()?;
-
-        // Atomically:
-        // - add watcher tx to dispatcher;
-        // - reads and forwards a range of key-value pairs to the provided `tx`.
-        //
-        // This ensures consistency by:
-        // 1. Queuing all data publishing through the singleton sender to maintain event ordering
-        // 2. Reading the key-value range atomically within the state machine
-        // 3. Forwarding the data to the event sender in a single transaction
-        //
-        // This approach prevents race conditions and guarantees that no events will be
-        // delivered out of order to the watcher.
-        let stream = {
-            let sm = mn.raft_store.get_sm_v003();
-
-            let sender = mn.new_watch_sender(watch, tx.clone())?;
-            let sender_str = sender.to_string();
-            let weak_sender = mn.insert_watch_sender(sender);
-
-            // Build a closure to remove the stream tx from Dispatcher when the stream is dropped.
-            let on_drop = {
-                let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
-                move || {
-                    try_remove_sender(weak_sender, weak_handle, "on-drop-WatchStream");
-                }
-            };
-
-            let stream = WatchStream::new(rx, Box::new(on_drop));
-
-            let stream = stream.map(move |item| {
-                if let Ok(ref resp) = item {
-                    network_metrics::incr_watch_sent(resp);
-                }
-                item
-            });
-
-            if flush {
-                let ctx = "watch-Dispatcher";
-                let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
-                let strm = sm.to_state_machine_snapshot().range(key_range).await?;
-                let strm = strm
-                    .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));
-
-                info!("created initialization stream for {}", sender_str);
-
-                let sndr = sender_str.clone();
-
-                let fu = async move {
-                    try_forward(strm, snk, ctx).await;
-
-                    info!("initialization flush complete for watcher {}", sndr);
-
-                    // Send an empty message with `is_initialization=false` to indicate
-                    // the end of the initialization flush.
-                    tx.send(Ok(WatchResponse::new_initialization_complete()))
-                        .await
-                        .map_err(|e| {
-                            error!("failed to send flush complete message: {}", e);
-                        })
-                        .ok();
-
-                    info!(
-                        "finished sending initialization complete flag for watcher {}",
-                        sndr
-                    );
-                };
-                let fu = Box::pin(fu);
-
-                info!(
-                    "sending initial flush Future to watcher {} via Dispatcher",
-                    sender_str
-                );
-
-                mn.dispatcher_handle.send_command(Command::Future(fu));
-            }
-
-            stream
-        };
-
-        Ok(Response::new(Box::pin(stream) as Self::WatchStream))
+        Ok(Response::new(stream as Self::WatchStream))
     }
 
     async fn member_list(
@@ -575,9 +469,9 @@ impl MetaService for MetaServiceImpl {
 
         let _guard = InFlightRead::guard();
 
-        let meta_node = self.try_get_meta_node()?;
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let members = meta_node.get_grpc_advertise_addrs().await;
+        let members = meta_handle.handle_member_list(request.into_inner()).await?;
 
         let resp = MemberListReply { data: members };
         network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
@@ -591,18 +485,15 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<ClusterStatus>, Status> {
         let _guard = InFlightRead::guard();
 
-        let meta_node = self.try_get_meta_node()?;
+        let meta_handle = self.try_get_meta_handle()?;
 
-        let status = meta_node
-            .get_status()
-            .await
-            .map_err(|e| Status::internal(format!("get meta node status failed: {}", e)))?;
+        let status = meta_handle.handle_get_status().await?;
 
         let resp = ClusterStatus {
             id: status.id,
             binary_version: status.binary_version,
             data_version: status.data_version.to_string(),
-            endpoint: status.endpoint,
+            endpoint: status.endpoint.unwrap_or_default(),
 
             raft_log_size: status.raft_log.wal_total_size,
 
@@ -680,7 +571,7 @@ fn thread_tracking_guard<T>(req: &tonic::Request<T>) -> Option<TrackingGuard> {
 /// This function receives two weak references: one to the sender and one to the dispatcher handle.
 /// Using weak references prevents memory leaks by avoiding cyclic references when these are captured in closures.
 /// If either reference can't be upgraded, the function logs the situation and returns early.
-fn try_remove_sender(
+pub(crate) fn try_remove_sender(
     weak_sender: Weak<WatchStreamSender<WatchTypes>>,
     weak_handle: Weak<DispatcherHandle>,
     ctx: &str,

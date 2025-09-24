@@ -569,7 +569,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
     let client1 = make_client(&addr)?;
     let _watch_stream1 = client1.request(watch_req()).await?;
 
-    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
+    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().unwrap().get_meta_node().await;
 
     info!("one watcher");
     {

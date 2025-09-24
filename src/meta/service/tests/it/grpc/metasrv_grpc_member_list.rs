@@ -88,7 +88,13 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
 
     // Get the leader to send join request
     let leader_tc = &tcs[0];
-    let leader_mn = leader_tc.grpc_srv.as_ref().unwrap().meta_node.clone();
+    let leader_mn = leader_tc
+        .grpc_srv
+        .as_ref()
+        .unwrap()
+        .meta_handle
+        .clone()
+        .unwrap();
 
     // Join the learner to the cluster
     let endpoint = learner_tc.config.raft_config.raft_api_addr().await?;
@@ -109,7 +115,12 @@ async fn test_member_list_with_learner() -> anyhow::Result<()> {
         ),
     };
 
-    leader_mn.handle_forwardable_request(admin_req).await?;
+    leader_mn
+        .request(|mn| {
+            let fu = async move { mn.handle_forwardable_request(admin_req).await };
+            Box::pin(fu)
+        })
+        .await??;
 
     // Wait for the learner to be added and reach the correct state
     sleep(Duration::from_millis(1000)).await;
