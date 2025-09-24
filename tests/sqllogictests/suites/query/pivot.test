@@ -20,7 +20,7 @@ INSERT INTO monthly_sales VALUES
     (2, 800, 'APR'),
     (2, 4500, 'APR');
 
-## duckdb support it, sn does not, we compate with sn
+## duckdb support it, sn does not, we compatible with sn
 statement error
 SELECT empid, JAN,feb,mar,apr FROM (
     SELECT *

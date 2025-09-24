@@ -459,7 +459,9 @@ impl DataType {
                 let d = inner_ty.dimension();
                 Ok(TypeName::Vector(d))
             }
-            DataType::Nullable(inner_ty) => inner_ty.to_type_name(),
+            DataType::Nullable(inner_ty) => {
+                Ok(TypeName::Nullable(Box::new(inner_ty.to_type_name()?)))
+            }
             DataType::Boolean => Ok(TypeName::Boolean),
             DataType::Binary => Ok(TypeName::Binary),
             DataType::Null
