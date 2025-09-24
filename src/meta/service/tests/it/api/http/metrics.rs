@@ -31,13 +31,20 @@ use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
+use crate::tests::start_metasrv_cluster;
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
-    let (_, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {}).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let leader = tcs[0].meta_node.clone().unwrap();
+    let leader = tcs[0]
+        .grpc_srv
+        .as_ref()
+        .unwrap()
+        .meta_handle
+        .clone()
+        .unwrap();
 
     // record some metrics to make the registry get initialized
     server_metrics::incr_leader_change();

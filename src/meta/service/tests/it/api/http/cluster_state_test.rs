@@ -61,18 +61,25 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     let _mn0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
 
-    let mn1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
-    let res = mn1
-        .join_cluster(
-            &tc1.config.raft_config,
-            tc1.config.grpc_api_advertise_address(),
-        )
-        .await?;
-    assert_eq!(Ok(()), res);
+    let mn1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
+    let meta_handle_1 = Arc::new(mn1);
+
+    let c = tc1.config.clone();
+    let res = meta_handle_1
+        .request(move |mn| {
+            let fu = async move {
+                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                    .await
+            };
+            Box::pin(fu)
+        })
+        .await??;
+
+    assert!(res.is_ok());
 
     let cluster_router = Route::new()
         .at("/cluster/nodes", get(nodes_handler))
-        .data(mn1.clone());
+        .data(meta_handle_1.clone());
     let response = cluster_router
         .call(
             Request::builder()
