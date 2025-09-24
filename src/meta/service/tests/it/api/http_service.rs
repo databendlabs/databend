@@ -14,12 +14,12 @@
 
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 use databend_common_base::base::Stoppable;
-use databend_common_version::BUILD_INFO;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
-use databend_meta::meta_service::MetaNode;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -40,9 +40,11 @@ async fn test_http_service_tls_server() -> anyhow::Result<()> {
     conf.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
     conf.admin_api_address = addr_str.to_owned();
     let tc = MetaSrvTestContext::new(0);
-    let meta_node = MetaNode::start(&tc.config, &BUILD_INFO).await?;
 
-    let mut srv = HttpService::create(conf, meta_node);
+    let mh = MetaWorker::create_meta_worker_in_rt(tc.config.clone()).await?;
+    let mh = Arc::new(mh);
+
+    let mut srv = HttpService::create(conf, mh);
     // test cert is issued for "localhost"
     let url = format!("https://{}:30002/v1/health", TEST_CN_NAME);
 

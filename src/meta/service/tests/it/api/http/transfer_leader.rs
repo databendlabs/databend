@@ -34,8 +34,8 @@ use crate::tests::start_metasrv_cluster;
 async fn test_transfer_leader() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_node();
-    let metrics = meta0.raft.metrics().borrow_watched().clone();
+    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(0));
 
     let mut srv = HttpService::create(tcs[0].config.clone(), meta0.clone());
@@ -67,17 +67,17 @@ async fn test_transfer_leader() -> anyhow::Result<()> {
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let metrics = meta0.raft.metrics().borrow_watched().clone();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(2));
 
     {
-        let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_node();
-        let metrics = meta1.raft.metrics().borrow_watched().clone();
+        let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
+        let metrics = meta1.handle_raft_metrics().await?.borrow_watched().clone();
         assert_eq!(metrics.current_leader, Some(2));
     }
     {
-        let meta2 = tcs[2].grpc_srv.as_ref().unwrap().get_meta_node();
-        let metrics = meta2.raft.metrics().borrow_watched().clone();
+        let meta2 = tcs[2].grpc_srv.as_ref().unwrap().get_meta_handle();
+        let metrics = meta2.handle_raft_metrics().await?.borrow_watched().clone();
         assert_eq!(metrics.current_leader, Some(2));
     }
 

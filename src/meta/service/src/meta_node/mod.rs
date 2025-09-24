@@ -12,20 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![allow(clippy::uninlined_format_args)]
+//! MetaNode is the container of all meta service logic, without the service layer.
 
-pub mod api;
-pub mod configs;
-pub mod message;
+pub mod errors;
+pub mod meta_handle;
+#[allow(clippy::module_inception)]
 pub mod meta_node;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
-
-pub mod util;
+pub mod meta_node_builder;
+pub mod meta_node_kv_api_impl;
+pub mod meta_node_status;
+pub mod meta_worker;

@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
@@ -27,6 +28,7 @@ use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::HttpService;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use http::Method;
 use http::StatusCode;
@@ -135,7 +137,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
             .await?;
     }
 
-    let status = mn0.get_status().await?;
+    let status = mn0.get_status().await;
 
     println!(
         "status = {}",
@@ -251,15 +253,21 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
 
     let _meta_node0 = MetaNode::start(&tc0.config, &BUILD_INFO).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config, &BUILD_INFO).await?;
-    let _ = meta_node1
-        .join_cluster(
-            &tc1.config.raft_config,
-            tc1.config.grpc_api_advertise_address(),
-        )
-        .await?;
+    let meta_handle_1 = MetaWorker::create_meta_worker_in_rt(tc1.config.clone()).await?;
+    let meta_handle_1 = Arc::new(meta_handle_1);
 
-    let mut srv = HttpService::create(tc1.config.clone(), meta_node1);
+    let c = tc1.config.clone();
+    let _ = meta_handle_1
+        .request(move |mn| {
+            let fu = async move {
+                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                    .await
+            };
+            Box::pin(fu)
+        })
+        .await??;
+
+    let mut srv = HttpService::create(tc1.config.clone(), meta_handle_1);
 
     // test cert is issued for "localhost"
     let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);
