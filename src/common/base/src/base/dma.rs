@@ -347,7 +347,7 @@ where
 
 pub struct DmaWriteBuf {
     allocator: DmaAllocator,
-    data: Vec<Vec<u8, DmaAllocator>>,
+    data: Vec<DmaBuffer>,
     chunk: usize,
 }
 
@@ -358,6 +358,10 @@ impl DmaWriteBuf {
             data: Vec::new(),
             chunk: align.align_up(chunk),
         }
+    }
+
+    pub fn chunk(&self) -> usize {
+        self.chunk
     }
 
     pub fn size(&self) -> usize {
@@ -407,6 +411,42 @@ impl DmaWriteBuf {
     pub fn into_data(self) -> Vec<DmaBuffer> {
         self.data
     }
+
+    pub fn write_last<'a>(&mut self, buf: &'a [u8]) -> &'a [u8] {
+        let Some(dst) = self.data.last_mut() else {
+            return buf;
+        };
+        if dst.len() == dst.capacity() {
+            return buf;
+        }
+
+        let remain = dst.capacity() - dst.len();
+        Self::full_buffer(buf, dst, remain)
+    }
+
+    fn full_buffer<'a>(buf: &'a [u8], dst: &mut DmaBuffer, remain: usize) -> &'a [u8] {
+        if buf.len() <= remain {
+            dst.extend_from_slice(buf);
+            &buf[buf.len()..]
+        } else {
+            let (left, right) = buf.split_at(remain);
+            dst.extend_from_slice(left);
+            right
+        }
+    }
+
+    pub fn need_alloc(&self) -> bool {
+        self.data
+            .last()
+            .map(|dst| dst.len() == dst.capacity())
+            .unwrap_or(true)
+    }
+
+    pub fn alloc_buffer(&mut self) {
+        debug_assert!(self.data.iter().all(|buf| buf.len() == self.chunk));
+        self.data
+            .push(Vec::with_capacity_in(self.chunk, self.allocator));
+    }
 }
 
 impl Write for DmaWriteBuf {
@@ -419,20 +459,12 @@ impl Write for DmaWriteBuf {
                     (dst, remain)
                 }
                 _ => {
-                    self.data
-                        .push(Vec::with_capacity_in(self.chunk, self.allocator));
+                    self.alloc_buffer();
                     (self.data.last_mut().unwrap(), self.chunk)
                 }
             };
 
-            if buf.len() <= remain {
-                dst.extend_from_slice(buf);
-                buf = &buf[buf.len()..]
-            } else {
-                let (left, right) = buf.split_at(remain);
-                dst.extend_from_slice(left);
-                buf = right
-            }
+            buf = Self::full_buffer(buf, dst, remain);
         }
         Ok(n)
     }

@@ -253,14 +253,11 @@ pub struct RowGroupWriter {
 
 impl RowGroupWriter {
     fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
-        let col_writers = get_column_writers(parquet, props, &schema).unwrap();
-        Self {
-            schema,
-            writers: col_writers,
-        }
+        let writers = get_column_writers(parquet, props, &schema).unwrap();
+        Self { schema, writers }
     }
 
-    pub fn write(&mut self, block: DataBlock) -> errors::Result<()> {
+    pub(super) fn write(&mut self, block: DataBlock) -> errors::Result<()> {
         let mut writer_iter = self.writers.iter_mut();
         for (field, entry) in self.schema.fields().iter().zip(block.take_columns()) {
             let array = (&entry.to_column()).into();
@@ -287,13 +284,12 @@ impl RowGroupWriter {
 }
 
 pub struct FileWriter<W: Write + Send> {
-    props: Arc<WriterProperties>,
     schema: Arc<Schema>,
     writer: SerializedFileWriter<W>,
 }
 
 impl<W: Write + Send> FileWriter<W> {
-    pub fn new(
+    pub(super) fn new(
         props: Arc<WriterProperties>,
         table_schema: &TableSchema,
         w: W,
@@ -305,18 +301,18 @@ impl<W: Write + Send> FileWriter<W> {
             .convert(&schema)?;
 
         let writer = SerializedFileWriter::new(w, parquet.root_schema_ptr(), props.clone())?;
-        Ok(Self {
-            props,
-            schema,
-            writer,
-        })
+        Ok(Self { schema, writer })
     }
 
-    pub fn new_row_group(&self) -> RowGroupWriter {
-        RowGroupWriter::new(&self.props, self.schema.clone(), self.writer.schema_descr())
+    pub(super) fn new_row_group(&self) -> RowGroupWriter {
+        RowGroupWriter::new(
+            self.writer.properties(),
+            self.schema.clone(),
+            self.writer.schema_descr(),
+        )
     }
 
-    pub fn flush_row_group(
+    pub(super) fn flush_row_group(
         &mut self,
         row_group: RowGroupWriter,
     ) -> errors::Result<RowGroupMetaDataPtr> {
@@ -325,7 +321,7 @@ impl<W: Write + Send> FileWriter<W> {
         row_group_writer.close()
     }
 
-    pub fn close(self) -> errors::Result<FileMetaData> {
+    pub(super) fn close(self) -> errors::Result<FileMetaData> {
         self.writer.close()
     }
 }

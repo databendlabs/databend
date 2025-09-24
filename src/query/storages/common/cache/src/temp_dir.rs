@@ -215,8 +215,7 @@ impl TempDir {
     pub fn new_file_with_size(&self, size: usize) -> Result<Option<TempPath>> {
         let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
 
-        if self.dir_info.limit < *self.dir_info.size.lock().unwrap() + size
-            || self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
             || self.manager.insufficient_disk(size as u64)?
         {
             return Ok(None);
@@ -240,6 +239,28 @@ impl TempDir {
             size,
             dir_info,
         }))))
+    }
+
+    pub fn grow_size(&self, path: &mut TempPath, grow: usize) -> Result<bool> {
+        let Some(path) = Arc::get_mut(&mut path.0) else {
+            return Err(ErrorCode::Internal("can't set size after share"));
+        };
+
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow
+            || self.manager.insufficient_disk(grow as u64)?
+        {
+            return Ok(false);
+        }
+
+        let mut dir_size = self.dir_info.size.lock().unwrap();
+        if self.dir_info.limit < *dir_size + grow {
+            return Ok(false);
+        }
+
+        *dir_size += grow;
+        path.size += grow;
+
+        Ok(true)
     }
 
     fn init_dir(&self) -> Result<()> {

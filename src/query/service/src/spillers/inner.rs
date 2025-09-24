@@ -224,12 +224,17 @@ impl<A: SpillAdapter> SpillerInner<A> {
         deserialize_block(columns_layout, data)
     }
 
-    pub(super) async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+    pub(super) fn new_location(&self, size: usize) -> Result<Location> {
         let location = match &self.temp_dir {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
         }
         .unwrap_or(Location::Remote(self.create_unique_location()));
+        Ok(location)
+    }
+
+    pub(super) async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+        let location = self.new_location(size)?;
 
         let mut writer = match (&location, &self.local_operator) {
             (Location::Local(path), None) => {
