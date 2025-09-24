@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use http::StatusCode;
 use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
@@ -33,12 +32,7 @@ pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl
 
 #[poem::handler]
 pub async fn status_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
-    let status = meta_node.get_status().await.map_err(|e| {
-        poem::Error::from_string(
-            format!("failed to get status: {}", e),
-            StatusCode::INTERNAL_SERVER_ERROR,
-        )
-    })?;
+    let status = meta_node.get_status().await;
 
     Ok(Json(status))
 }

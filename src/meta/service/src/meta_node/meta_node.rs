@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::future;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
@@ -36,6 +37,7 @@ use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
+use databend_common_meta_raft_store::utils::seq_marked_to_seqv;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::RaftError;
@@ -69,41 +71,52 @@ use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use fastrace::func_name;
 use fastrace::prelude::*;
+use futures::stream::BoxStream;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use map_api::mvcc::ScopedRange;
 use maplit::btreemap;
 use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
+use state_machine_api::UserKey;
 use tokio::sync::mpsc;
 use tonic::Status;
+use watcher::dispatch::Command;
 use watcher::dispatch::Dispatcher;
 use watcher::key_range::build_key_range;
+use watcher::util::new_initialization_sink;
+use watcher::util::try_forward;
+use watcher::watch_stream::WatchStream;
 use watcher::watch_stream::WatchStreamSender;
 use watcher::EventFilter;
 
+use crate::api::grpc::grpc_service::try_remove_sender;
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
+use crate::meta_node::meta_node_status::MetaNodeStatus;
 use crate::meta_service::errors::grpc_error_to_network_err;
-use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
-use crate::meta_service::meta_node_kv_api_impl::MetaKVApi;
-use crate::meta_service::meta_node_kv_api_impl::MetaKVApiOwned;
-use crate::meta_service::meta_node_status::MetaNodeStatus;
 use crate::meta_service::runtime_config::RuntimeConfig;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
+use crate::meta_service::MetaForwarder;
+use crate::meta_service::MetaKVApi;
+use crate::meta_service::MetaKVApiOwned;
+use crate::meta_service::MetaNodeBuilder;
 use crate::meta_service::RaftServiceImpl;
+use crate::metrics::network_metrics;
 use crate::metrics::server_metrics;
-use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::meta_raft_log::MetaRaftLog;
@@ -139,124 +152,6 @@ impl Drop for MetaNode {
             self.raft_store.id,
             self.raft_store.config.raft_api_advertise_host_string()
         );
-    }
-}
-
-pub struct MetaNodeBuilder {
-    node_id: Option<NodeId>,
-    raft_config: Option<Config>,
-    sto: Option<RaftStore>,
-    raft_service_endpoint: Option<Endpoint>,
-    version: Option<BuildInfoRef>,
-}
-
-impl MetaNodeBuilder {
-    pub async fn build(mut self) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let node_id = self
-            .node_id
-            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("node_id is not set")))?;
-
-        let config = self
-            .raft_config
-            .take()
-            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("config is not set")))?;
-
-        let sto = self
-            .sto
-            .take()
-            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
-
-        let version = self
-            .version
-            .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("version is not set")))?;
-
-        let net = NetworkFactory::new(sto.clone());
-
-        let log_store = sto.log().clone();
-        let sm_store = sto.state_machine().clone();
-
-        let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
-            .await
-            .map_err(|e| MetaStartupError::MetaServiceError(e.to_string()))?;
-
-        let runtime_config = RuntimeConfig::default();
-
-        let (tx, rx) = watch::channel::<()>(());
-
-        let handle = Dispatcher::spawn();
-        let handle = DispatcherHandle::new(handle, node_id);
-        let handle = Arc::new(handle);
-
-        let on_change_applied = {
-            let h = handle.clone();
-            let broadcast = runtime_config.broadcast_state_machine_changes.clone();
-            move |change| {
-                if broadcast.load(std::sync::atomic::Ordering::Relaxed) {
-                    h.send_change(change)
-                } else {
-                    info!(
-                        "broadcast_state_machine_changes is disabled, ignoring change: {:?}",
-                        change
-                    );
-                }
-            }
-        };
-
-        sto.get_sm_v003()
-            .set_on_change_applied(Box::new(on_change_applied));
-
-        let meta_node = Arc::new(MetaNode {
-            raft_store: sto.clone(),
-            dispatcher_handle: handle,
-            raft: raft.clone(),
-            runtime_config,
-            running_tx: tx,
-            running_rx: rx,
-            join_handles: Mutex::new(Vec::new()),
-            joined_tasks: AtomicI32::new(1),
-            version,
-        });
-
-        MetaNode::subscribe_metrics(meta_node.clone(), raft.metrics()).await;
-
-        let endpoint = if let Some(a) = self.raft_service_endpoint.take() {
-            a
-        } else {
-            sto.get_node_raft_endpoint(&node_id).await.map_err(|e| {
-                MetaStartupError::InvalidConfig(format!(
-                    "endpoint of node: {} is not configured and is not in store, error: {}",
-                    node_id, e,
-                ))
-            })?
-        };
-
-        MetaNode::start_raft_service(meta_node.clone(), &endpoint).await?;
-
-        Ok(meta_node)
-    }
-
-    #[must_use]
-    pub fn node_id(mut self, node_id: NodeId) -> Self {
-        self.node_id = Some(node_id);
-        self
-    }
-
-    #[must_use]
-    pub fn sto(mut self, sto: RaftStore) -> Self {
-        self.sto = Some(sto);
-        self
-    }
-
-    #[must_use]
-    pub fn raft_service_endpoint(mut self, endpoint: Endpoint) -> Self {
-        self.raft_service_endpoint = Some(endpoint);
-        self
-    }
-
-    #[must_use]
-    pub fn version(mut self, version: BuildInfoRef) -> Self {
-        self.version = Some(version);
-        self
     }
 }
 
@@ -1278,7 +1173,7 @@ impl MetaNode {
         self.raft_store.get_snapshot_db_stat().await
     }
 
-    pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
+    pub async fn get_status(&self) -> MetaNodeStatus {
         let voters = self
             .raft_store
             .get_nodes(|ms| ms.voter_ids().collect::<Vec<_>>())
@@ -1292,7 +1187,7 @@ impl MetaNode {
         let endpoint = self
             .raft_store
             .get_node_raft_endpoint(&self.raft_store.id)
-            .await?;
+            .await;
 
         let raft_log_status = self.get_raft_log_stat().await.into();
         let snapshot_key_count = self.get_snapshot_key_count().await;
@@ -1308,11 +1203,11 @@ impl MetaNode {
 
         let last_seq = self.get_last_seq().await;
 
-        Ok(MetaNodeStatus {
+        MetaNodeStatus {
             id: self.raft_store.id,
             binary_version: self.version.semantic.to_string(),
             data_version: DATA_VERSION,
-            endpoint: endpoint.to_string(),
+            endpoint: endpoint.map(|x| x.to_string()),
             raft_log: raft_log_status,
             snapshot_key_count,
             snapshot_key_space_stat,
@@ -1328,7 +1223,7 @@ impl MetaNode {
             voters,
             non_voters: learners,
             last_seq,
-        })
+        }
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
@@ -1572,6 +1467,103 @@ impl MetaNode {
             // Note that when it returns, `changed()` will mark the most recent value as **seen**.
             rx.changed().await?;
         }
+    }
+
+    pub(crate) async fn handle_watch(
+        &self,
+        watch: WatchRequest,
+    ) -> Result<BoxStream<'static, Result<WatchResponse, Status>>, Status> {
+        info!("{}: Received WatchRequest: {}", func_name!(), watch);
+
+        let key_range = build_key_range(
+            &UserKey::new(&watch.key),
+            &watch.key_end.as_ref().map(UserKey::new),
+        )
+        .map_err(Status::invalid_argument)?;
+        let flush = watch.initial_flush;
+
+        let (tx, rx) = mpsc::channel(4);
+
+        let mn = self;
+
+        // Atomically:
+        // - add watcher tx to dispatcher;
+        // - reads and forwards a range of key-value pairs to the provided `tx`.
+        //
+        // This ensures consistency by:
+        // 1. Queuing all data publishing through the singleton sender to maintain event ordering
+        // 2. Reading the key-value range atomically within the state machine
+        // 3. Forwarding the data to the event sender in a single transaction
+        //
+        // This approach prevents race conditions and guarantees that no events will be
+        // delivered out of order to the watcher.
+        let stream = {
+            let sm = mn.raft_store.get_sm_v003();
+
+            let sender = mn.new_watch_sender(watch, tx.clone())?;
+            let sender_str = sender.to_string();
+            let weak_sender = mn.insert_watch_sender(sender);
+
+            // Build a closure to remove the stream tx from Dispatcher when the stream is dropped.
+            let on_drop = {
+                let weak_handle = Arc::downgrade(&mn.dispatcher_handle);
+                move || {
+                    try_remove_sender(weak_sender, weak_handle, "on-drop-WatchStream");
+                }
+            };
+
+            let stream = WatchStream::new(rx, Box::new(on_drop));
+
+            let stream = stream.map(move |item| {
+                if let Ok(ref resp) = item {
+                    network_metrics::incr_watch_sent(resp);
+                }
+                item
+            });
+
+            if flush {
+                let ctx = "watch-Dispatcher";
+                let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
+                let strm = sm.to_state_machine_snapshot().range(key_range).await?;
+                let strm = strm
+                    .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));
+
+                info!("created initialization stream for {}", sender_str);
+
+                let sndr = sender_str.clone();
+
+                let fu = async move {
+                    try_forward(strm, snk, ctx).await;
+
+                    info!("initialization flush complete for watcher {}", sndr);
+
+                    // Send an empty message with `is_initialization=false` to indicate
+                    // the end of the initialization flush.
+                    tx.send(Ok(WatchResponse::new_initialization_complete()))
+                        .await
+                        .map_err(|e| {
+                            error!("failed to send flush complete message: {}", e);
+                        })
+                        .ok();
+
+                    info!(
+                        "finished sending initialization complete flag for watcher {}",
+                        sndr
+                    );
+                };
+                let fu = Box::pin(fu);
+
+                info!(
+                    "sending initial flush Future to watcher {} via Dispatcher",
+                    sender_str
+                );
+
+                mn.dispatcher_handle.send_command(Command::Future(fu));
+            }
+
+            stream
+        };
+        Ok(Box::pin(stream))
     }
 
     pub(crate) fn insert_watch_sender(

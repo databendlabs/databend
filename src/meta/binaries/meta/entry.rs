@@ -21,6 +21,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::StopHandle;
 use databend_common_base::base::Stoppable;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
@@ -42,13 +43,16 @@ use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
 use databend_meta::version::raft_server_provides;
 use databend_meta::version::MIN_METACLI_SEMVER;
+use log::error;
 use log::info;
 use log::warn;
+use tokio::sync::oneshot;
 use tokio::time::sleep;
 use tokio::time::Instant;
 
@@ -150,7 +154,8 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_node = MetaNode::start(&conf, &BUILD_INFO).await?;
+    let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
+    let meta_handle = Arc::new(meta_handle);
 
     let mut stop_handler = StopHandle::<AnyError>::create();
     let stop_tx = StopHandle::<AnyError>::install_termination_handle();
@@ -158,7 +163,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     // HTTP API service.
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
-        let mut srv = HttpService::create(conf.clone(), meta_node.clone());
+        let mut srv = HttpService::create(conf.clone(), meta_handle.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
         stop_handler.push(srv);
@@ -166,7 +171,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv = GrpcServer::create(conf.clone(), meta_node.clone());
+        let mut srv = GrpcServer::create(conf.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
             conf.grpc_api_address.clone()
@@ -176,13 +181,13 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     }
 
     // Join a raft cluster only after all service started.
-    let join_res = meta_node
+    let join_res = meta_handle
         .join_cluster(&conf.raft_config, conf.grpc_api_advertise_address())
         .await?;
 
     info!("Join result: {:?}", join_res);
 
-    register_node(&meta_node, &conf).await?;
+    register_node(&meta_handle, &conf).await?;
 
     println!("Databend Metasrv started");
 
