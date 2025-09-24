@@ -131,6 +131,7 @@ impl BasicColumnStatistics {
         })
     }
 
+    // Inspired by duckdb (https://github.com/duckdb/duckdb/blob/main/src/storage/statistics/distinct_statistics.cpp#L55-L69)
     fn estimate_ndv(ndv: u64, stats_row_count: u64, num_rows: u64) -> u64 {
         if stats_row_count == 0 || ndv == 0 {
             return num_rows;
@@ -161,5 +162,9 @@ mod tests {
         assert_eq!(BasicColumnStatistics::estimate_ndv(0, 1, 3), 3);
         assert_eq!(BasicColumnStatistics::estimate_ndv(1, 1, 3), 3);
         assert_eq!(BasicColumnStatistics::estimate_ndv(12, 100, 3000), 17);
+        assert_eq!(
+            BasicColumnStatistics::estimate_ndv(6000, 10000, 1000000),
+            219840
+        );
     }
 }
