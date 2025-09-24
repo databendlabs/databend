@@ -20,15 +20,13 @@ INSERT INTO monthly_sales VALUES
     (2, 800, 'APR'),
     (2, 4500, 'APR');
 
-## duckdb support it, sn does not, we compatible with sn
-statement error
+statement ok
 SELECT empid, JAN,feb,mar,apr FROM (
     SELECT *
         FROM monthly_sales
             PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
         ORDER BY EMPID
 );
-
 
 query IRRRR
 SELECT *
