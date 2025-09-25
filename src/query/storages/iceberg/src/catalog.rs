@@ -320,7 +320,6 @@ impl Catalog for IcebergMutableCatalog {
                 {
                     return Ok(CreateDatabaseReply {
                         db_id: DatabaseId::new(0),
-                        old_db_id: None,
                     });
                 }
             }
@@ -347,8 +346,6 @@ impl Catalog for IcebergMutableCatalog {
 
         Ok(CreateDatabaseReply {
             db_id: DatabaseId::new(0),
-            // external catalog directly return None
-            old_db_id: None,
         })
     }
 

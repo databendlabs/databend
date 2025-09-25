@@ -16,6 +16,7 @@ databend-storages-common-table-meta = { workspace = true }
 
 chrono = { workspace = true }
 log = { workspace = true }
+opendal = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }

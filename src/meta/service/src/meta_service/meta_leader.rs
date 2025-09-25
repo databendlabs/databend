@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use anyerror::AnyError;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::node::Node;
@@ -48,7 +49,7 @@ use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
-use crate::meta_service::meta_node::MetaRaft;
+use crate::meta_node::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
@@ -71,7 +72,8 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
         &self,
         req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!(req :? =(&req), target = req.forward_to_leader; "handle_forwardable_req");
+        let id = self.sto.id;
+        debug!("id={} handle(ForwardRequestBody): {:?}", id, req);
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -90,17 +92,17 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
 
             ForwardRequestBody::GetKV(req) => {
-                let sm = self.sto.state_machine();
+                let sm = self.sto.get_sm_v003();
                 let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
-                let sm = self.sto.state_machine();
+                let sm = self.sto.get_sm_v003();
                 let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
-                let sm = self.sto.state_machine();
+                let sm = self.sto.get_sm_v003();
                 let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
@@ -115,9 +117,10 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
         &self,
         req: ForwardRequest<MetaGrpcReadReq>,
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
-        debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
+        let id = self.sto.id;
+        debug!("id={} handle(MetaGrpcReadReq): {:?}", id, req);
 
-        let sm = self.sto.state_machine();
+        let sm = self.sto.get_sm_v003();
         let kv_api = sm.kv_api();
 
         match req.body {
@@ -238,7 +241,7 @@ impl<'a> MetaLeader<'a> {
 
         let membership = self
             .sto
-            .state_machine()
+            .get_sm_v003()
             .with_sys_data(|s| s.last_membership_ref().membership().clone());
 
         let msg = if membership.voter_ids().any(|id| id == node_id) {
@@ -294,7 +297,7 @@ impl<'a> MetaLeader<'a> {
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
-            let sm = self.sto.state_machine();
+            let sm = self.sto.get_sm_v003();
             sm.sys_data().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);

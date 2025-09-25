@@ -356,4 +356,45 @@ statement ok
 drop table t all
 
 statement ok
+CREATE OR REPLACE TABLE test_delete_or_filters (group_flag VARCHAR NULL, af_cohort_install DOUBLE NULL) ENGINE=FUSE;
+
+statement ok
+INSERT INTO test_delete_or_filters
+VALUES ('af_cohort_retained', 50594),
+       ('af_cohort_retained', 49465),
+       ('af_cohort_retained', 49176),
+       ('af_cohort_retained', 48575),
+       ('af_cohort_retained', 53555),
+       ('af_cohort_retained', 54150),
+       ('af_cohort_receipt', 50594),
+       ('af_cohort_receipt', 49465),
+       ('af_cohort_receipt', 49176),
+       ('af_cohort_receipt', 48575),
+       ('af_cohort_receipt', 53555),
+       ('af_cohort_receipt', 54150),
+       ('af_cohort_deposit', 25000),
+       ('af_cohort_deposit', 24500),
+       ('af_cohort_deposit', 24000),
+       ('af_cohort_deposit', 23500),
+       ('af_cohort_deposit', 26000),
+       ('af_cohort_deposit', 27000),
+       ('af_cohort_deposit', 25500),
+       ('af_cohort_deposit', 26500),
+       ('normal_data', 10000),
+       ('normal_data', 11000),
+       ('normal_data', 12000),
+       ('normal_data', 13000);
+
+statement ok
+delete from test_delete_or_filters where group_flag in ('af_cohort_deposit', 'af_cohort_receipt', 'af_cohort_retained');
+
+query TI
+select * from test_delete_or_filters;
+----
+normal_data 10000.0
+normal_data 11000.0
+normal_data 12000.0
+normal_data 13000.0
+
+statement ok
 DROP DATABASE db1

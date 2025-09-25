@@ -228,6 +228,11 @@ impl BinaryColumnBuilder {
             self.commit_row();
         }
     }
+
+    pub fn reserve(&mut self, offset_additional: usize, data_additional: usize) {
+        self.offsets.reserve(offset_additional);
+        self.data.reserve(data_additional)
+    }
 }
 
 impl<P: AsRef<[u8]>> FromIterator<P> for BinaryColumnBuilder {

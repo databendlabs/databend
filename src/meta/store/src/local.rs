@@ -30,7 +30,7 @@ use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
-use databend_meta::meta_service::MetaNode;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use log::debug;
 use log::info;
 use log::warn;
@@ -113,12 +113,6 @@ impl LocalMetaService {
         let raft_port = next_port();
         let mut config = configs::Config::default();
 
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-        if cfg!(target_os = "macos") {
-            warn!("Disabled fsync for meta service. fsync on mac is quite slow");
-            config.raft_config.no_sync = true;
-        }
-
         config.raft_config.id = 0;
 
         config.raft_config.config_id = raft_port.to_string();
@@ -154,8 +148,9 @@ impl LocalMetaService {
         }
 
         // Bring up the services
-        let meta_node = MetaNode::start(&config, version).await?;
-        let mut grpc_server = GrpcServer::create(config.clone(), meta_node);
+        let meta_handle = MetaWorker::create_meta_worker_in_rt(config.clone()).await?;
+        let meta_handle = Arc::new(meta_handle);
+        let mut grpc_server = GrpcServer::create(config.clone(), meta_handle);
         grpc_server.start().await?;
 
         let client = Self::grpc_client(&config, version).await?;

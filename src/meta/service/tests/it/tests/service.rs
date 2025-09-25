@@ -34,6 +34,7 @@ use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::message::ForwardRequest;
 use databend_meta::message::ForwardRequestBody;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use log::info;
 use log::warn;
@@ -51,15 +52,21 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let mn = MetaNode::start(&tc.config, &BUILD_INFO).await?;
-    let _ = mn
-        .join_cluster(
-            &tc.config.raft_config,
-            tc.config.grpc_api_advertise_address(),
-        )
-        .await?;
+    let mh = MetaWorker::create_meta_worker_in_rt(tc.config.clone()).await?;
+    let mh = Arc::new(mh);
 
-    let mut srv = GrpcServer::create(tc.config.clone(), mn);
+    let c = tc.config.clone();
+    let _ = mh
+        .request(move |mn| {
+            let fu = async move {
+                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                    .await
+            };
+            Box::pin(fu)
+        })
+        .await??;
+
+    let mut srv = GrpcServer::create(tc.config.clone(), mh);
     srv.start().await?;
     tc.grpc_srv = Some(Box::new(srv));
 
@@ -135,12 +142,6 @@ impl MetaSrvTestContext {
         let config_id = next_port();
 
         let mut config = configs::Config::default();
-
-        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
-        if cfg!(target_os = "macos") {
-            warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
-            config.raft_config.no_sync = true;
-        }
 
         config.raft_config.id = id;
 

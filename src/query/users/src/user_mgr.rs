@@ -206,10 +206,13 @@ impl UserApiProvider {
         // We can allow grant connection|seq to user in 2026.07
         if matches!(
             object,
-            GrantObject::Warehouse(_) | GrantObject::Connection(_) | GrantObject::Sequence(_)
+            GrantObject::Warehouse(_)
+                | GrantObject::Connection(_)
+                | GrantObject::Sequence(_)
+                | GrantObject::Procedure(_)
         ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse|connection|Sequence privileges to user `{}`",
+                "Cannot grant warehouse|connection|Sequence|Procedure privileges to user `{}`",
                 user.username
             )));
         }

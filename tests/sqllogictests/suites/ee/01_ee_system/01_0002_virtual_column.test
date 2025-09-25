@@ -448,7 +448,7 @@ SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 6
 
 statement ok
-set enable_refresh_virtual_column_after_write = 0;
+set enable_experimental_virtual_column = 0;
 
 statement ok
 INSERT INTO tweets FROM (SELECT * FROM tweets);
@@ -457,6 +457,12 @@ query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
 6
+
+statement error
+REFRESH VIRTUAL COLUMN FOR tweets;
+
+statement ok
+set enable_experimental_virtual_column = 1;
 
 statement ok
 REFRESH VIRTUAL COLUMN FOR tweets;
@@ -493,9 +499,6 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 12 12 "3/19" "vv" 16 10 {"lat":4.0} 4.0 NULL NULL
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
 13 13 "4/18" "u" 13 6 {"lat":3.0} 3.0 NULL NULL
-
-statement ok
-set enable_refresh_virtual_column_after_write = 1;
 
 statement ok
 CREATE OR REPLACE TABLE STUDENT_GRADES (
@@ -676,6 +679,58 @@ FROM test_stream;
 8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
 9 "Richard" 33 "Austin" "hiking" "cycling"
 10 "Lisa" 26 "Chicago" "gaming" "reading"
+
+statement ok
+CREATE OR REPLACE TABLE test2 (
+    id INT,
+    data1 VARIANT,
+    data2 VARIANT
+);
+
+statement ok
+INSERT INTO test2 (id, data1, data2) VALUES 
+(1, '{"name": "John", "address": {"city": "New York", "district": "Manhattan"}}', '{"product_id": 101}'),
+(2, '{"name": "Alice", "address": {"city": "San Francisco", "district": "Mission"}}', '{"product_id": 102, "price": 10.2}'),
+(3, '{"name": "Bob", "age": 28, "address": {"city": "Chicago", "district": "Loop"}}', '{"product_id": 103, "price": 10.3}'),
+(4, '{"name": "Emma", "age": 22, "address": {"district": "Brooklyn"}}', '{"product_id": 104, "price": 10.4}'),
+(5, '{"name": "Michael", "age": 35, "address": {"city": "Seattle", "district": "Downtown"}}', '{"price": "10.5"}'),
+(6, '{"age": 27, "address": {"city": "Boston", "district": "Back Bay"}}', '{"product_id": 106}'),
+(7, '{"name": "David", "age": 31, "address": {"district": "Queens"}}', '{"product_id": 107, "price": "10.7"}'),
+(8, '{"name": "Jennifer", "age": 29, "address": {"city": "San Francisco", "district": "Marina"}}', '{"product_id": 108, "price": "10.8"}'),
+(9, '{"name": "Richard", "age": 33, "address": {"city": "Austin"}}', '{"product_id": "109", "price": "10.9"}'),
+(10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago"}}', '{"price": "10.10"}');
+
+query TTT
+show virtual columns from test2;
+----
+test_virtual_column test2 data1 3000000000 ['address']['city'] String
+test_virtual_column test2 data1 3000000001 ['address']['district'] String
+test_virtual_column test2 data1 3000000002 ['age'] UInt64
+test_virtual_column test2 data1 3000000003 ['name'] String
+test_virtual_column test2 data2 3000000004 ['price'] Jsonb
+test_virtual_column test2 data2 3000000005 ['product_id'] Jsonb
+
+query ITTTTT
+SELECT 
+    id,
+    data1:name AS name,
+    data1:age AS age,
+    data1:address:city AS city,
+    data1:address:district AS district,
+    data2:product_id AS product_id,
+    data2:price AS price
+FROM test2;
+----
+1 "John" NULL "New York" "Manhattan" 101 NULL
+2 "Alice" NULL "San Francisco" "Mission" 102 10.2
+3 "Bob" 28 "Chicago" "Loop" 103 10.3
+4 "Emma" 22 NULL "Brooklyn" 104 10.4
+5 "Michael" 35 "Seattle" "Downtown" NULL "10.5"
+6 NULL 27 "Boston" "Back Bay" 106 NULL
+7 "David" 31 NULL "Queens" 107 "10.7"
+8 "Jennifer" 29 "San Francisco" "Marina" 108 "10.8"
+9 "Richard" 33 "Austin" NULL "109" "10.9"
+10 "Lisa" 26 "Chicago" NULL NULL "10.10"
 
 statement ok
 set enable_experimental_virtual_column = 0;

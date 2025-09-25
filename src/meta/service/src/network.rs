@@ -26,6 +26,8 @@ use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime;
+use databend_common_base::runtime::spawn_named;
+use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
@@ -35,6 +37,7 @@ use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::InstallEntryV004;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
@@ -61,10 +64,16 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use futures::FutureExt;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use seq_marked::SeqData;
+use seq_marked::SeqV;
+use state_machine_api::MetaValue;
+use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -244,7 +253,17 @@ impl Network {
             "Raft NetworkConnection lookup target address: start: target={}",
             self.target
         );
-        let endpoint = self.sto.get_node_raft_endpoint(&self.target).await?;
+
+        let endpoint = self
+            .sto
+            .get_node_raft_endpoint(&self.target)
+            .await
+            .ok_or_else(|| {
+                MetaNetworkError::GetNodeAddrError(format!(
+                    "Node {} not found in state machine",
+                    self.target
+                ))
+            })?;
 
         Ok(endpoint)
     }
@@ -449,6 +468,201 @@ impl Network {
         Ok(())
     }
 
+    /// Stream all KV entries from snapshot DB for V004 replication.
+    /// Converts SeqMarked entries to protobuf format and sends via channel.
+    /// Skips tombstones.
+    async fn send_snapshot_in_stream_v004(
+        vote: Vote,
+        snapshot: Snapshot,
+        cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
+        _option: RPCOption,
+        target: NodeId,
+        tx: mpsc::Sender<InstallEntryV004>,
+    ) -> Result<(), StreamingError> {
+        let snapshot_meta = snapshot.meta;
+        let db = snapshot.snapshot;
+
+        info!(
+            "start to transmit snapshot via v004: {}; db.file_size: {}; db.stat: {}",
+            snapshot_meta,
+            db.file_size(),
+            db.stat()
+        );
+
+        let mut c = std::pin::pin!(cancel);
+
+        // Stream KV data from the snapshot DB
+        let strm = db.inner_range();
+
+        // Discard tombstones and convert SeqMarked to SeqData and then to protobuf SeqV
+        let strm = strm.try_filter_map(|(k, v)| async move {
+            let seq_data: Option<SeqData<_>> = v.into();
+            let Some(seq_data) = seq_data else {
+                // Tombstone, skip
+                return Ok(None);
+            };
+
+            let seq_data = SeqData::<MetaValue>::decode_from(seq_data)?;
+            let seq_v = SeqV::from(seq_data);
+            let pb_seq_v = pb::SeqV::from(seq_v);
+            let item = pb::StreamItem::new(k, Some(pb_seq_v));
+            Ok(Some(item))
+        });
+
+        // Chunk the stream into batches of 64 items for efficiency
+        let mut strm = strm.try_chunks(64).boxed();
+
+        let mut kv_count = 0u64;
+
+        while let Some(chunk) = strm
+            .try_next()
+            .await
+            .map_err(|err| StorageError::read_snapshot(Some(snapshot_meta.signature()), &err.1))?
+        {
+            // Check for cancellation
+            if let Some(err) = c.as_mut().now_or_never() {
+                return Err(err.into());
+            }
+
+            // Total length of keys and values in this chunk
+            let total_kv_len = chunk
+                .iter()
+                .map(|item| item.key.len() + item.value.as_ref().map(|v| v.data.len()).unwrap_or(0))
+                .sum::<usize>();
+
+            kv_count += chunk.len() as u64;
+
+            // Send KV entry
+            let kv_entry = InstallEntryV004 {
+                version: 4,
+                key_values: chunk,
+                commit: None,
+            };
+
+            let send_res = tx.send(kv_entry).await;
+            if let Err(e) = send_res {
+                warn!("error sending to snapshot stream: {}, maybe closed", e);
+                return Ok(());
+            }
+
+            if kv_count % 10000 == 0 {
+                info!("V004 snapshot streaming: sent {} KV entries", kv_count);
+            }
+
+            raft_metrics::network::incr_sendto_bytes(&target, total_kv_len as u64);
+        }
+
+        info!("V004 snapshot streaming: completed {} KV entries", kv_count);
+
+        // Send commit entry
+        let sys_data_json = serde_json::to_string(db.sys_data())
+            .map_err(|e| StorageError::read_snapshot(Some(snapshot_meta.signature()), &e))?;
+
+        // Convert Vote to protobuf Vote using existing conversion
+        let pb_vote = pb::Vote::from(vote);
+
+        let commit = pb::Commit {
+            snapshot_id: snapshot_meta.snapshot_id.to_string(),
+            sys_data: sys_data_json,
+            vote: Some(pb_vote),
+        };
+
+        let final_entry = InstallEntryV004 {
+            version: 4,
+            key_values: vec![],
+            commit: Some(commit),
+        };
+
+        let send_res = tx.send(final_entry).await;
+        if let Err(e) = send_res {
+            error!("error sending commit entry to snapshot stream: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Send snapshot using V004 streaming protocol.
+    ///
+    /// Creates streaming connection and sends KV entries followed by commit message.
+    /// More memory efficient than V003 as it doesn't buffer entire snapshot.
+    async fn send_snapshot_via_v004(
+        &mut self,
+        vote: Vote,
+        snapshot: Snapshot,
+        cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
+        option: RPCOption,
+    ) -> Result<SnapshotResponse, StreamingError> {
+        let ctx = format!(
+            "send_snapshot_via_v004 id={} target={}, snapshot={}",
+            self.id, self.target, snapshot.meta
+        );
+
+        info!("{}", ctx);
+
+        let target = self.target;
+        let (tx, rx) = mpsc::channel(64);
+        let strm = ReceiverStream::new(rx);
+
+        let strm_handle = spawn_named(
+            Self::send_snapshot_in_stream_v004(vote, snapshot, cancel, option, target, tx),
+            "send_snapshot_via_v004".to_string(),
+        );
+
+        let mut client = self
+            .take_client()
+            .log_elapsed_debug("Raft NetworkConnection install_snapshot_v004 take_client()")
+            .await?;
+
+        let grpc_res = client
+            .install_snapshot_v004(strm)
+            .with_timing(observe_snapshot_send_spent(target))
+            .await;
+
+        info!("{}: grpc_result: {:?}", ctx, grpc_res,);
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!("{} failed: {}", ctx, e);
+            }
+        }
+
+        // if ensure_not_unimplemented(&grpc_res).is_err() {
+        // }
+
+        let res: Result<SnapshotResponse, StreamingError> = try {
+            let join_res = strm_handle.await;
+            match join_res {
+                Err(e) => {
+                    warn!("{} Snapshot sending thread error: {}", ctx, e);
+                }
+                Ok(strm_res) => {
+                    if let Err(e) = strm_res {
+                        warn!("{} Snapshot sending thread error: {}", ctx, e);
+                        Err(e)?;
+                    }
+                }
+            }
+            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let snapshot_response = grpc_response.into_inner();
+
+            // Convert protobuf Vote back to internal Vote
+            let proto_vote = snapshot_response.vote.ok_or_else(|| {
+                StreamingError::Network(NetworkError::new(&AnyError::error(
+                    "Missing vote in response",
+                )))
+            })?;
+            let vote = Vote::from(proto_vote);
+            SnapshotResponse { vote }
+        };
+
+        self.report_metrics_snapshot(res.is_ok());
+        res
+    }
+
+    /// Send snapshot in stream of binary bytes chunks
     async fn send_snapshot_via_v003(
         &mut self,
         vote: Vote,
@@ -572,6 +786,8 @@ impl RaftNetworkV2<TypeConfig> for Network {
         self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
     }
 
+    /// Send snapshot to target node. Currently uses V004 streaming protocol.
+    /// TODO: Add version negotiation to choose between V003/V004 based on target capabilities.
     #[logcall::logcall(err = "error", input = "")]
     #[fastrace::trace]
     async fn full_snapshot(
@@ -585,11 +801,61 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
-        let resp = self
-            .send_snapshot_via_v003(vote, snapshot.clone(), cancel, option.clone())
-            .await?;
+        // Clone the cancel
+        let (tx1, cancel1) = oneshot::channel();
+        let (tx2, cancel2) = oneshot::channel();
 
-        Ok(resp)
+        spawn_named(
+            async move {
+                let got = cancel.await;
+                tx1.send(got.clone()).ok();
+                tx2.send(got).ok();
+            },
+            "snapshot_cancel_watch".to_string(),
+        );
+
+        // TODO: Add proper version negotiation or configuration
+        // For now, use V004 for testing the new KV streaming implementation
+        let res = self
+            .send_snapshot_via_v004(
+                vote,
+                snapshot.clone(),
+                async move {
+                    let _ = cancel1.await;
+                    ReplicationClosed::new("snapshot cancelled")
+                },
+                option.clone(),
+            )
+            .await;
+
+        let err = match res {
+            Ok(resp) => {
+                return Ok(resp);
+            }
+            Err(e) => e,
+        };
+
+        warn!(
+            "id={} target={} send_snapshot_via_v004 failed: {}",
+            self.id, self.target, err
+        );
+
+        if let StreamingError::Unreachable(_unreachable) = &err {
+            let resp = self
+                .send_snapshot_via_v003(
+                    vote,
+                    snapshot,
+                    async move {
+                        let _ = cancel2.await;
+                        ReplicationClosed::new("snapshot cancelled")
+                    },
+                    option.clone(),
+                )
+                .await?;
+            Ok(resp)
+        } else {
+            Err(err)
+        }
     }
 
     #[logcall::logcall(err = "debug")]
@@ -626,7 +892,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
             }
             Err(e) => {
                 // Only fall back for specific status codes indicating method not implemented
-                if matches!(e.code(), tonic::Code::Unimplemented | tonic::Code::NotFound) {
+                if e.code() == tonic::Code::Unimplemented || e.code() == tonic::Code::NotFound {
                     warn!(target = self.target, rpc = rpc.summary(); "vote_v001 not implemented, falling back to vote: {}", e);
                 } else {
                     // For other errors, don't fall back - return the error
@@ -750,4 +1016,14 @@ fn observe_snapshot_send_spent<T>(target: NodeId) -> impl Fn(&T, Duration, Durat
 /// Create a function that increases metric value of inflight snapshot sending.
 fn snapshot_send_inflight(target: NodeId) -> impl FnMut(i64) {
     move |i: i64| raft_metrics::network::incr_snapshot_sendto_inflight(&target, i)
+}
+
+#[allow(dead_code)]
+fn ensure_not_unimplemented<T>(res: &Result<T, tonic::Status>) -> Result<(), tonic::Status> {
+    match res {
+        Err(e) if e.code() == tonic::Code::Unimplemented || e.code() == tonic::Code::NotFound => {
+            Err(e.clone())
+        }
+        _ => Ok(()),
+    }
 }

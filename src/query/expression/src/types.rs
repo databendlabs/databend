@@ -94,6 +94,8 @@ pub use self::vector::VectorScalar;
 pub use self::vector::VectorScalarRef;
 pub use self::vector::VectorType;
 use self::zero_size_type::*;
+pub use self::OpaqueColumn;
+pub use self::OpaqueColumnBuilder;
 use crate::property::Domain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;

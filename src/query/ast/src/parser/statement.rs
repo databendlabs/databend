@@ -57,6 +57,23 @@ pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
 }
 
+fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+    let procedure_type_names = map(
+        rule! {
+            "(" ~ #comma_separated_list1(type_name) ~ ")"
+        },
+        |(_, args, _)| args,
+    );
+    let procedure_empty_types = map(
+        rule! {
+            "(" ~ ")"
+        },
+        |(_, _)| vec![],
+    );
+    rule!(#procedure_empty_types: "()"
+            | #procedure_type_names: "(<type_name>, ...)")(i)
+}
+
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
@@ -2483,22 +2500,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, show_options)| Statement::ShowProcedures { show_options },
     );
 
-    fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
-        let procedure_type_names = map(
-            rule! {
-                "(" ~ #comma_separated_list1(type_name) ~ ")"
-            },
-            |(_, args, _)| args,
-        );
-        let procedure_empty_types = map(
-            rule! {
-                "(" ~ ")"
-            },
-            |(_, _)| vec![],
-        );
-        rule!(#procedure_empty_types: "()"
-            | #procedure_type_names: "(<type_name>, ...)")(i)
-    }
+    // fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
+    // let procedure_type_names = map(
+    // rule! {
+    // "(" ~ #comma_separated_list1(type_name) ~ ")"
+    // },
+    // |(_, args, _)| args,
+    // );
+    // let procedure_empty_types = map(
+    // rule! {
+    // "(" ~ ")"
+    // },
+    // |(_, _)| vec![],
+    // );
+    // rule!(#procedure_empty_types: "()"
+    // | #procedure_type_names: "(<type_name>, ...)")(i)
+    // }
 
     let call_procedure = map(
         rule! {
@@ -3526,6 +3543,46 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let procedure_privs = map(
+        rule! {
+            ACCESS ~ PROCEDURE ~ ON ~ PROCEDURE ~ #ident ~ #procedure_type_name
+        },
+        |(_, _, _, _, name, args)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessProcedure],
+            level: AccountMgrLevel::Procedure(ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if args.is_empty() {
+                    "".to_string()
+                } else {
+                    args.iter()
+                        .map(|arg| arg.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                },
+            }),
+        },
+    );
+
+    let procedure_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ PROCEDURE ~ #ident ~ #procedure_type_name
+        },
+        |(_, _, _, _, name, args)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessProcedure],
+            level: AccountMgrLevel::Procedure(ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if args.is_empty() {
+                    "".to_string()
+                } else {
+                    args.iter()
+                        .map(|arg| arg.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                },
+            }),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
@@ -3538,6 +3595,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
+        | #procedure_privs: "ACCESS PROCEDURE ON PROCEDURE <procedure_identity>"
+        | #procedure_all_privs: "ALL [ PRIVILEGES ] ON PROCEDURE <procedure_identity>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -3563,7 +3622,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         UserPrivilegeType::CreateConnection,
         rule! { CREATE ~ CONNECTION },
     );
-    let access_sequence = value(
+    let access_connection = value(
         UserPrivilegeType::AccessConnection,
         rule! { ACCESS ~ CONNECTION },
     );
@@ -3571,9 +3630,17 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         UserPrivilegeType::CreateSequence,
         rule! { CREATE ~ SEQUENCE },
     );
-    let access_connection = value(
+    let access_sequence = value(
         UserPrivilegeType::AccessSequence,
         rule! { ACCESS ~ SEQUENCE },
+    );
+    let create_procedure = value(
+        UserPrivilegeType::CreateProcedure,
+        rule! { CREATE ~ PROCEDURE },
+    );
+    let access_procedure = value(
+        UserPrivilegeType::AccessProcedure,
+        rule! { ACCESS ~ PROCEDURE },
     );
     let drop_user = value(UserPrivilegeType::DropUser, rule! { DROP ~ USER });
     let create_role = value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE });
@@ -3602,6 +3669,8 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #access_connection
             | #access_sequence
             | #create_sequence
+            | #access_procedure
+            | #create_procedure
             | #drop_user
             | #create_role
             | #drop_role
@@ -3674,6 +3743,23 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::Sequence(w.to_string())
     });
 
+    let procedure = map(
+        rule! { PROCEDURE ~ #ident ~ #procedure_type_name},
+        |(_, name, args)| {
+            GrantObjectName::Procedure(ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if args.is_empty() {
+                    "".to_string()
+                } else {
+                    args.iter()
+                        .map(|arg| arg.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                },
+            })
+        },
+    );
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
@@ -3682,6 +3768,7 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         | #warehouse : "WAREHOUSE <warehouse_name>"
         | #connection : "CONNECTION <connection_name>"
         | #seq : "SEQUENCE <seq_name>"
+        | #procedure : "PROCEDURE <procedure_identity>"
     )(i)
 }
 
@@ -3800,10 +3887,30 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         },
     );
 
+    let procedure = map(
+        rule! {
+            PROCEDURE ~ #grant_ident ~ #procedure_type_name
+        },
+        |(_, name, args)| {
+            let name = ProcedureIdentity {
+                name: name.to_string(),
+                args_type: if args.is_empty() {
+                    "".to_string()
+                } else {
+                    args.iter()
+                        .map(|arg| arg.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                },
+            };
+            AccountMgrLevel::Procedure(name)
+        },
+    );
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
         | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
+        | #procedure : "PROCEDURE <procedure_identity>"
     )(i)
 }
 

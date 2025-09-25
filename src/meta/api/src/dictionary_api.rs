@@ -73,6 +73,7 @@ where
                 false,
                 |_| vec![],
                 |_, _| Ok(vec![]),
+                |_, _| {},
             )
             .await?;
 

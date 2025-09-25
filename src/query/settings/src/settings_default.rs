@@ -178,6 +178,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("max_vacuum_threads", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Sets the maximum number of threads to execute vacuum operation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=3)),
+                }),
                 ("max_memory_usage", DefaultSettingValue {
                     value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
@@ -1071,13 +1078,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
-                }),
-                ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Refresh virtual column after new data written",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

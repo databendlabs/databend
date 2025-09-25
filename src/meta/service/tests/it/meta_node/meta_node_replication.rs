@@ -15,11 +15,14 @@
 use std::fs;
 use std::io::Read;
 
+use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_kvapi::kvapi::GetKVReq;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::SnapshotResponse;
@@ -31,8 +34,10 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
+use databend_meta::message::ForwardRequest;
 use databend_meta::meta_service::MetaNode;
 use futures::stream;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use log::info;
 use maplit::btreeset;
@@ -138,7 +143,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let sm = mn1.raft_store.state_machine();
+        let sm = mn1.raft_store.get_sm_v003();
         let got = sm.get_maybe_expired_kv(&key).await?;
         match got {
             None => {
@@ -229,6 +234,120 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
 
     let err = client0
         .install_snapshot_v003(stream::iter(strm_data))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+    Ok(())
+}
+
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_raft_service_install_snapshot_v004() -> anyhow::Result<()> {
+    // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.
+
+    let (_nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
+    let tc0 = tcs.remove(0);
+
+    let mut client0 = tc0.raft_client().await?;
+
+    let last_log_id = log_id(10, 2, 4);
+
+    let snapshot_id = MetaSnapshotId::new(Some(last_log_id), 1);
+
+    // build a temp snapshot data
+    let ss_store = SnapshotStoreV004::new(tc0.config.raft_config.clone());
+    let writer = ss_store.new_writer()?;
+
+    let db = {
+        // build an empty snapshot
+        let strm = futures::stream::iter([]);
+        let mut sys_data = SysData::default();
+        *sys_data.last_applied_mut() = Some(last_log_id);
+        let db = writer
+            .write_kv_stream(strm, snapshot_id.clone(), sys_data)
+            .await?;
+        db
+    };
+
+    let sys_data = db.sys_data().clone();
+    let sys_data_str = serde_json::to_string(&sys_data)?;
+
+    let strm_data = vec![
+        //
+        pb::InstallEntryV004 {
+            version: 1,
+            key_values: vec![
+                //
+                pb::StreamItem::new(
+                    "kv--/a".to_string(),
+                    Some(SeqV::new(1, b"foo".to_vec()).into()),
+                ),
+            ],
+            commit: None,
+        },
+        pb::InstallEntryV004 {
+            version: 1,
+            key_values: vec![],
+            commit: Some(pb::Commit {
+                snapshot_id: snapshot_id.to_string(),
+                sys_data: sys_data_str,
+                vote: Some(pb::Vote::from(Vote::new_committed(10, 2))),
+            }),
+        },
+    ];
+
+    // Complete transmit
+
+    let resp = client0
+        .install_snapshot_v004(stream::iter(strm_data))
+        .await?;
+    let reply = resp.into_inner();
+
+    let vote = reply.to_vote()?;
+
+    assert_eq!(vote, Vote::new_committed(10, 2));
+
+    let meta_node = tc0.meta_node.as_ref().unwrap();
+    let m = meta_node.raft.metrics().borrow().clone();
+
+    assert_eq!(Some(last_log_id), m.snapshot);
+
+    let (_endpoint, strm) = meta_node
+        .handle_forwardable_request(ForwardRequest::<MetaGrpcReadReq> {
+            forward_to_leader: 0,
+            body: MetaGrpcReadReq::GetKV(GetKVReq {
+                key: "a".to_string(),
+            }),
+        })
+        .await?;
+
+    let got = strm.try_collect::<Vec<_>>().await?;
+    assert_eq!(got, vec![pb::StreamItem::new(
+        "a".to_string(),
+        Some(SeqV::new(1, b"foo".to_vec()).into())
+    )]);
+
+    // Incomplete
+
+    let strm_data = [
+        //
+        pb::InstallEntryV004 {
+            version: 1,
+            key_values: vec![
+                //
+                pb::StreamItem::new(
+                    "kv--/a".to_string(),
+                    Some(SeqV::new(1, b"foo".to_vec()).into()),
+                ),
+            ],
+            commit: None,
+        },
+    ];
+
+    let err = client0
+        .install_snapshot_v004(stream::iter(strm_data))
         .await
         .unwrap_err();
 

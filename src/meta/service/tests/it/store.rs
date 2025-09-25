@@ -33,8 +33,8 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::snapshot_db::DB;
-use databend_meta::meta_service::meta_node::LogStore;
-use databend_meta::meta_service::meta_node::SMStore;
+use databend_meta::meta_node::meta_node::LogStore;
+use databend_meta::meta_node::meta_node::SMStore;
 use databend_meta::store::RaftStore;
 use futures::TryStreamExt;
 use log::debug;
@@ -55,7 +55,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
         let sto = RaftStore::open(&tc.config.raft_config)
             .await
             .expect("fail to create store");
-        Ok((tc, sto.clone(), sto))
+        Ok((tc, sto.log().clone(), sto.state_machine().clone()))
     }
 }
 
@@ -79,24 +79,26 @@ async fn test_meta_store_purge_cache() -> anyhow::Result<()> {
     tc.config.raft_config.log_wal_chunk_max_records = 5;
 
     {
-        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::open(&tc.config.raft_config).await?;
 
-        sto.save_vote(&Vote::new(10, 5)).await?;
+        sto.log().clone().save_vote(&Vote::new(10, 5)).await?;
 
-        sto.blocking_append([
-            Entry::new_blank(log_id(1, 2, 1)),
-            Entry::new_blank(log_id(1, 2, 2)),
-            Entry::new_blank(log_id(1, 2, 3)),
-            Entry::new_blank(log_id(1, 2, 4)),
-            Entry::new_blank(log_id(1, 2, 5)),
-        ])
-        .await?;
+        sto.log()
+            .clone()
+            .blocking_append([
+                Entry::new_blank(log_id(1, 2, 1)),
+                Entry::new_blank(log_id(1, 2, 2)),
+                Entry::new_blank(log_id(1, 2, 3)),
+                Entry::new_blank(log_id(1, 2, 4)),
+                Entry::new_blank(log_id(1, 2, 5)),
+            ])
+            .await?;
 
-        let stat = sto.log.read().await.stat();
+        let stat = sto.log().read().await.stat();
         assert_eq!(stat.payload_cache_item_count, 5);
 
         {
-            let r = sto.log.read().await;
+            let r = sto.log().read().await;
             let got = r.dump().write_to_string()?;
             println!("dump: {}", got);
             let want_dumped = r#"RaftLog:
@@ -118,13 +120,13 @@ ChunkId(00_000_000_000_000_000_200)
         // When purging up to index=4, all entries in the last open chunk will still be cached.
         // All previous entries are purge, although the cache is not full.
 
-        sto.purge(log_id(1, 2, 4)).await?;
+        sto.log().clone().purge(log_id(1, 2, 4)).await?;
 
-        let r = sto.log.read().await;
+        let r = sto.log().read().await;
         let got = r.dump().write_to_string()?;
         println!("dump: {}", got);
 
-        let stat = sto.log.read().await.stat();
+        let stat = sto.log().read().await.stat();
         println!("stat: {:#}", stat);
         assert_eq!(stat.payload_cache_item_count, 3);
     }
@@ -145,35 +147,44 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
     info!("--- new meta store");
     {
-        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
-        assert!(!sto.is_opened);
-        assert_eq!(None, sto.read_vote().await?);
+        assert_eq!(None, sto.log().clone().read_vote().await?);
 
         info!("--- update metasrv");
 
-        sto.save_vote(&Vote::new(10, 5)).await?;
+        sto.log().clone().save_vote(&Vote::new(10, 5)).await?;
 
-        sto.blocking_append([Entry::new_blank(log_id(1, 2, 1))])
+        sto.log()
+            .clone()
+            .blocking_append([Entry::new_blank(log_id(1, 2, 1))])
             .await?;
 
-        sto.save_committed(Some(log_id(1, 2, 2))).await?;
+        sto.log()
+            .clone()
+            .save_committed(Some(log_id(1, 2, 2)))
+            .await?;
 
-        sto.apply([Entry::new_blank(log_id(1, 2, 2))]).await?;
+        sto.state_machine()
+            .clone()
+            .apply([Entry::new_blank(log_id(1, 2, 2))])
+            .await?;
     }
 
     info!("--- reopen meta store");
     {
-        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::open(&tc.config.raft_config).await?;
         assert_eq!(id, sto.id);
-        assert!(sto.is_opened);
-        assert_eq!(Some(Vote::new(10, 5)), sto.read_vote().await?);
+        assert_eq!(Some(Vote::new(10, 5)), sto.log().clone().read_vote().await?);
 
-        assert_eq!(log_id(1, 2, 1), sto.get_log_id(1).await?);
-        assert_eq!(Some(log_id(1, 2, 2)), sto.read_committed().await?);
+        assert_eq!(log_id(1, 2, 1), sto.log().clone().get_log_id(1).await?);
+        assert_eq!(
+            Some(log_id(1, 2, 2)),
+            sto.log().clone().read_committed().await?
+        );
         assert_eq!(
             None,
-            sto.applied_state().await?.0,
+            sto.state_machine().clone().applied_state().await?.0,
             "state machine is not persisted"
         );
     }
@@ -190,16 +201,16 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+    let sto = RaftStore::open(&tc.config.raft_config).await?;
 
     info!("--- feed logs and state machine");
 
     let (logs, want) = snapshot_logs();
 
-    sto.blocking_append(logs.clone()).await?;
-    sto.state_machine().apply_entries(logs).await?;
+    sto.log().clone().blocking_append(logs.clone()).await?;
+    sto.get_sm_v003().apply_entries(logs).await?;
 
-    let curr_snap = sto.build_snapshot().await?;
+    let curr_snap = sto.state_machine().clone().build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
 
     info!("--- check snapshot");
@@ -214,12 +225,12 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
     info!("--- rebuild other 4 times, keeps only last 3");
     {
-        sto.build_snapshot().await?;
-        sto.build_snapshot().await?;
-        sto.build_snapshot().await?;
-        sto.build_snapshot().await?;
+        sto.state_machine().clone().build_snapshot().await?;
+        sto.state_machine().clone().build_snapshot().await?;
+        sto.state_machine().clone().build_snapshot().await?;
+        sto.state_machine().clone().build_snapshot().await?;
 
-        let snapshot_store = sto.snapshot_store();
+        let snapshot_store = sto.state_machine().snapshot_store();
         let loader = snapshot_store.new_loader();
         let (snapshot_ids, _) = loader.load_snapshot_ids().await?;
         assert_eq!(3, snapshot_ids.len());
@@ -238,23 +249,28 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let tc = MetaSrvTestContext::new(id);
 
-    let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+    let sto = RaftStore::open(&tc.config.raft_config).await?;
 
     info!("--- feed logs and state machine");
 
     let (logs, want) = snapshot_logs();
 
-    sto.blocking_append(logs.clone()).await?;
+    sto.log().clone().blocking_append(logs.clone()).await?;
     {
-        let sm = sto.state_machine();
+        let sm = sto.get_sm_v003();
         sm.apply_entries(logs).await?;
     }
 
-    sto.build_snapshot().await?;
+    sto.state_machine().clone().build_snapshot().await?;
 
     info!("--- check get_current_snapshot");
 
-    let curr_snap = sto.get_current_snapshot().await?.unwrap();
+    let curr_snap = sto
+        .state_machine()
+        .clone()
+        .get_current_snapshot()
+        .await?
+        .unwrap();
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
 
     info!("--- check snapshot");
@@ -285,14 +301,14 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::open(&tc.config.raft_config).await?;
 
         info!("--- feed logs and state machine");
 
-        sto.blocking_append(logs.clone()).await?;
-        sto.state_machine().apply_entries(logs).await?;
+        sto.log().clone().blocking_append(logs.clone()).await?;
+        sto.get_sm_v003().apply_entries(logs).await?;
 
-        snap = sto.build_snapshot().await?;
+        snap = sto.state_machine().clone().build_snapshot().await?;
     }
 
     let data = snap.snapshot;
@@ -301,16 +317,19 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     {
         let tc = MetaSrvTestContext::new(id);
 
-        let mut sto = RaftStore::open(&tc.config.raft_config).await?;
+        let sto = RaftStore::open(&tc.config.raft_config).await?;
 
         info!("--- install snapshot");
         {
-            sto.do_install_snapshot(data.clone()).await?;
+            sto.state_machine()
+                .clone()
+                .do_install_snapshot(data.clone())
+                .await?;
         }
 
         info!("--- check installed meta");
         {
-            let mem = sto.state_machine().sys_data().last_membership_ref().clone();
+            let mem = sto.get_sm_v003().sys_data().last_membership_ref().clone();
 
             assert_eq!(
                 StoredMembership::new(
@@ -320,13 +339,13 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 mem
             );
 
-            let last_applied = *sto.state_machine().sys_data().last_applied_ref();
+            let last_applied = *sto.get_sm_v003().sys_data().last_applied_ref();
             assert_eq!(Some(log_id(1, 0, 9)), last_applied);
         }
 
         info!("--- check snapshot");
         {
-            let curr_snap = sto.build_snapshot().await?;
+            let curr_snap = sto.state_machine().clone().build_snapshot().await?;
             let data = curr_snap.snapshot;
             let res = db_to_lines(&data).await?;
 

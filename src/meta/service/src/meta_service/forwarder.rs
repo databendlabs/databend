@@ -32,7 +32,7 @@ use tonic::transport::Channel;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
-use crate::meta_service::meta_node::MetaRaft;
+use crate::meta_node::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::request_handling::Forwarder;
 use crate::store::RaftStore;
@@ -62,7 +62,12 @@ impl<'a> MetaForwarder<'a> {
             .sto
             .get_node_raft_endpoint(target)
             .await
-            .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
+            .ok_or_else(|| {
+                MetaNetworkError::GetNodeAddrError(format!(
+                    "Node {} not found in state machine",
+                    target
+                ))
+            })?;
 
         let client = RaftServiceClient::connect(format!("http://{}", endpoint))
             .await

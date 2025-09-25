@@ -18,14 +18,10 @@ use async_trait::async_trait;
 use databend_common_meta_types::errors;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures_util::stream::BoxStream;
-use futures_util::StreamExt;
-use futures_util::TryStreamExt;
-use log::debug;
 
 use crate::kvapi;
 
@@ -55,43 +51,6 @@ pub trait KVApi: Send + Sync {
     /// Update or insert a key-value record.
     async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error>;
 
-    /// Get single key-value record by key.
-    async fn get_kv(&self, key: &str) -> Result<Option<SeqV>, Self::Error> {
-        let mut strm = self.get_kv_stream(&[key.to_string()]).await?;
-
-        let strm_item = strm
-            .next()
-            .await
-            .ok_or_else(|| errors::IncompleteStream::new(1, 0).context(" while get_kv"))??;
-
-        let reply = strm_item.value.map(SeqV::from);
-
-        Ok(reply)
-    }
-
-    /// Get several key-values by keys.
-    async fn mget_kv(&self, keys: &[String]) -> Result<Vec<Option<SeqV>>, Self::Error> {
-        let n = keys.len();
-        let strm = self.get_kv_stream(keys).await?;
-
-        let seq_values: Vec<Option<SeqV>> = strm
-            .map_ok(|item| item.value.map(SeqV::from))
-            .try_collect()
-            .await?;
-
-        if seq_values.len() != n {
-            return Err(
-                errors::IncompleteStream::new(n as u64, seq_values.len() as u64)
-                    .context(" while mget_kv")
-                    .into(),
-            );
-        }
-
-        debug!("mget: keys: {:?}; values: {:?}", keys, seq_values);
-
-        Ok(seq_values)
-    }
-
     /// Get key-values by keys.
     ///
     /// 2024-01-06: since: 1.2.287
@@ -101,27 +60,6 @@ pub trait KVApi: Send + Sync {
     ///
     /// Same as `prefix_list_kv()`, except it returns a stream.
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error>;
-
-    /// List key-value starting with the specified prefix and return a [`Vec`]
-    ///
-    /// Same as [`Self::list_kv`] but return a [`Vec`] instead of a stream.
-    async fn list_kv_collect(&self, prefix: &str) -> Result<Vec<(String, SeqV)>, Self::Error> {
-        let now = std::time::Instant::now();
-
-        let strm = self.list_kv(prefix).await?;
-
-        debug!("list_kv() took {:?}", now.elapsed());
-
-        let key_seqv_list = strm
-            .map_ok(|stream_item| {
-                // Safe unwrap(): list_kv() does not return None value
-                (stream_item.key, SeqV::from(stream_item.value.unwrap()))
-            })
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        Ok(key_seqv_list)
-    }
 
     /// Run transaction: update one or more records if specified conditions are met.
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error>;

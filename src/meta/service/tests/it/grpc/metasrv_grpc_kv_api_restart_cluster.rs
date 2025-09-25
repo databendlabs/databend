@@ -21,6 +21,7 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::UpsertKV;
 use databend_common_version::BUILD_INFO;
 use log::info;
@@ -103,10 +104,10 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             info!("--- wait until a leader is observed");
             // Every tcs[i] contains one meta node in this context.
             let g = tc.grpc_srv.as_ref().unwrap();
-            let meta_node = g.get_meta_node();
+            let meta_node = g.get_meta_handle();
             let metrics = meta_node
-                .raft
-                .wait(timeout())
+                .handle_raft_metrics_wait(timeout())
+                .await?
                 .metrics(|m| m.current_leader.is_some(), "a leader is observed")
                 .await?;
 
@@ -216,10 +217,10 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
             info!("--- wait until a leader is observed");
             // Every tcs[i] contains one meta node in this context.
             let g = tc.grpc_srv.as_ref().unwrap();
-            let meta_node = g.get_meta_node();
+            let meta_node = g.get_meta_handle();
             let metrics = meta_node
-                .raft
-                .wait(timeout())
+                .handle_raft_metrics_wait(timeout())
+                .await?
                 .metrics(|m| m.current_leader.is_some(), "a leader is observed")
                 .await?;
 

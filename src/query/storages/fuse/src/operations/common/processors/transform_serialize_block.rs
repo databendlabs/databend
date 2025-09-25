@@ -164,12 +164,7 @@ impl TransformSerializeBlock {
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
 
-        let virtual_column_builder = if ctx
-            .get_settings()
-            .get_enable_refresh_virtual_column_after_write()
-            .unwrap_or_default()
-            && table.support_virtual_columns()
-        {
+        let virtual_column_builder = if table.support_virtual_columns() {
             VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
         } else {
             None

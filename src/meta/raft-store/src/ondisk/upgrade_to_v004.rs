@@ -63,7 +63,7 @@ impl OnDisk {
 
         // Read the purged index
         let first_log_index = {
-            let tree = SledTree::open(&db, "raft_log", self.config.is_sync())?;
+            let tree = SledTree::open(&db, "raft_log")?;
             let ks = tree.key_space::<LogMeta>();
             let purged = ks.get(&LogMetaKey::LastPurged).map_err(|e| {
                 io::Error::other(format!(
@@ -77,7 +77,7 @@ impl OnDisk {
 
         // import logs
         {
-            let tree = SledTree::open(&db, "raft_log", self.config.is_sync())?;
+            let tree = SledTree::open(&db, "raft_log")?;
             let it = tree.tree.iter();
 
             for (i, rkv) in it.enumerate() {
@@ -111,7 +111,7 @@ impl OnDisk {
 
         // import raft_state
         {
-            let tree = SledTree::open(&db, "raft_state", self.config.is_sync())?;
+            let tree = SledTree::open(&db, "raft_state")?;
             let kvs = tree.export()?;
             for kv in kvs {
                 let ent = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;

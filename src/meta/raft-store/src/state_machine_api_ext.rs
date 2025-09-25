@@ -119,8 +119,8 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         };
 
         debug!(
-            "applied upsert: {:?}; prev: {:?}; res: {:?}",
-            upsert_kv, prev, result
+            "upsert_kv_primary_index {}: {}; prev: {:?}; res: {:?}",
+            cmd_ctx, upsert_kv, prev, result
         );
 
         Ok((prev, result))

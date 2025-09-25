@@ -39,15 +39,16 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::SeqV;
+use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
-use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 use log::info;
+use opendal::Operator;
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
@@ -109,7 +110,6 @@ impl TempTblMgr {
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
         let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
-        let mut old_table_id = None;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
             (true, CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
@@ -123,9 +123,9 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                old_table_id = self.name_to_id.insert(desc.clone(), table_id);
-                if let Some(old_id) = &old_table_id {
-                    self.id_to_table.remove(old_id);
+                let old_id = self.name_to_id.insert(desc.clone(), table_id);
+                if let Some(old_id) = old_id {
+                    self.id_to_table.remove(&old_id);
                 }
                 self.id_to_table.insert(table_id, TempTable {
                     db_name: name_ident.db_name,
@@ -150,7 +150,6 @@ impl TempTblMgr {
             spec_vec: None,
             prev_table_id: None,
             orphan_table_name,
-            old_table_id,
         })
     }
 
@@ -327,6 +326,19 @@ impl TempTblMgr {
     }
 }
 
+/// Get the appropriate operator for a table based on its storage configuration
+fn get_table_operator(table_meta: &TableMeta) -> Result<Operator> {
+    // Check if the table has custom storage parameters
+    if let Some(storage_params) = &table_meta.storage_params {
+        // Use the custom storage parameters to create an operator
+        init_operator(storage_params)
+            .map_err(|e| ErrorCode::StorageUnavailable(format!("Failed to init operator: {}", e)))
+    } else {
+        // Use the default operator
+        Ok(DataOperator::instance().operator())
+    }
+}
+
 pub async fn drop_table_by_id(
     mgr: TempTblMgrRef,
     req: DropTableByIdReq,
@@ -339,13 +351,14 @@ pub async fn drop_table_by_id(
     );
     match engine.as_str() {
         "FUSE" => {
-            let dir = {
+            let (dir, table_meta) = {
                 let mut guard = mgr.lock();
                 let entry = guard.id_to_table.entry(*tb_id);
                 match entry {
                     Entry::Occupied(e) => {
                         let dir = parse_storage_prefix(&e.get().meta.options, *tb_id)?;
                         let table = e.remove();
+                        let table_meta = table.meta.clone();
                         let desc = format!("{}.{}", table.db_name, table.table_name);
                         guard.name_to_id.remove(&desc).ok_or_else(|| {
                             ErrorCode::Internal(format!(
@@ -353,14 +366,14 @@ pub async fn drop_table_by_id(
                                 guard, req
                             ))
                         })?;
-                        dir
+                        (dir, table_meta)
                     }
                     Entry::Vacant(_) => {
                         return Ok(None);
                     }
                 }
             };
-            let op = DataOperator::instance().operator();
+            let op = get_table_operator(&table_meta)?;
             op.remove_all(&dir).await?;
         }
         "MEMORY" => {
@@ -404,23 +417,35 @@ pub async fn drop_all_temp_tables(
     mgr: TempTblMgrRef,
     reason: &str,
 ) -> Result<()> {
-    let (num_fuse_table, mem_tbl_ids) = {
+    let (fuse_table_data, mem_tbl_ids) = {
         let mut guard = mgr.lock();
-        let mut num_fuse_table = 0;
+        let mut fuse_table_data = Vec::new(); // (dir, table_meta)
         let mut mem_tbl_ids = Vec::new();
         for (id, table) in &guard.id_to_table {
             let engine = table.meta.engine.as_str();
             if engine == "FUSE" {
-                num_fuse_table += 1;
+                // Parse the storage prefix to get the directory path for each table
+                match parse_storage_prefix(&table.meta.options, *id) {
+                    Ok(dir) => fuse_table_data.push((dir, table.meta.clone())),
+                    Err(e) => {
+                        // Log the error but continue with other tables
+                        log::warn!(
+                            "[TEMP TABLE] Failed to parse storage prefix for table {}: {}",
+                            id,
+                            e
+                        );
+                    }
+                }
             } else if engine == "MEMORY" {
                 mem_tbl_ids.push(*id);
             }
         }
         guard.id_to_table.clear();
         guard.name_to_id.clear();
-        (num_fuse_table, mem_tbl_ids)
+        (fuse_table_data, mem_tbl_ids)
     };
 
+    let num_fuse_table = fuse_table_data.len();
     let num_mem_table = mem_tbl_ids.len();
 
     info!(
@@ -428,12 +453,30 @@ pub async fn drop_all_temp_tables(
         , num_fuse_table, num_mem_table
     );
 
-    let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name_session_id);
-
-    if num_fuse_table > 0 {
-        let op = DataOperator::instance().operator();
-        op.remove_all(&path).await?;
+    // Clean up each fuse table directory individually with the correct operator
+    for (dir, table_meta) in fuse_table_data {
+        // Get the operator for this specific table's storage location
+        match get_table_operator(&table_meta) {
+            Ok(op) => {
+                if let Err(e) = op.remove_all(&dir).await {
+                    // Log the error but continue with other tables
+                    log::warn!(
+                        "[TEMP TABLE] Failed to clean up temp table directory '{}': {}",
+                        dir,
+                        e
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "[TEMP TABLE] Failed to get operator for temp table directory '{}': {}",
+                    dir,
+                    e
+                );
+            }
+        }
     }
+
     if !mem_tbl_ids.is_empty() {
         let mut in_mem_data = IN_MEMORY_DATA.write();
         for id in mem_tbl_ids {

@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -27,6 +31,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
+use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 use crate::spillers::Spiller;
@@ -49,6 +54,7 @@ pub struct HashJoinSpiller {
     hash_method: HashMethodKind,
     /// Next restore file index, only used for cross join.
     next_restore_file: usize,
+    block_partition_stream: BlockPartitionStream,
 }
 
 impl HashJoinSpiller {
@@ -84,6 +90,8 @@ impl HashJoinSpiller {
         // if the partition memory size exceeds the threshold.
         let partition_threshold = partition_buffer_threshold * 1024 * 1024 / num_partitions;
 
+        let block_bytes = ctx.get_settings().get_max_block_bytes()? as usize;
+
         // Create a PartitionBuffer to buffer data before spilling.
         let partition_buffer = PartitionBuffer::create(num_partitions);
 
@@ -100,16 +108,43 @@ impl HashJoinSpiller {
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
+            block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
         })
     }
 
     // Just add datablocks to SpillBuffer without spilling.
-    pub(crate) fn buffer(&mut self, data_blocks: &[DataBlock]) -> Result<()> {
+    pub(crate) fn buffer(&mut self, data_blocks: Vec<DataBlock>) -> Result<()> {
         if data_blocks.is_empty() {
             return Ok(());
         }
+
+        if self.join_type == JoinType::Cross {
+            return self.cross_buffer(data_blocks);
+        }
+
+        for data_block in data_blocks {
+            let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
+
+            for hash in hashes.iter_mut() {
+                *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
+            }
+
+            let ready_partitions = self
+                .block_partition_stream
+                .partition(hashes, data_block, false);
+            assert_eq!(ready_partitions.len(), 0);
+        }
+
+        Ok(())
+    }
+
+    fn cross_buffer(&mut self, data_blocks: Vec<DataBlock>) -> Result<()> {
+        if data_blocks.is_empty() {
+            return Ok(());
+        }
+
         let join_type = self.join_type.clone();
-        let data_block = DataBlock::concat(data_blocks)?;
+        let data_block = DataBlock::concat(&data_blocks)?;
         let partition_data_blocks =
             self.partition_data_block(&data_block, &join_type, self.spill_partition_bits)?;
         for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
@@ -118,17 +153,105 @@ impl HashJoinSpiller {
                     .add_data_block(partition_id, data_block);
             }
         }
+
         Ok(())
     }
 
     // Spill data blocks, and return unspilled data blocks.
     pub(crate) async fn spill(
         &mut self,
+        data_blocks: Vec<DataBlock>,
+        partition_need_to_spill: Option<&HashSet<usize>>,
+    ) -> Result<Vec<DataBlock>> {
+        if self.join_type == JoinType::Cross {
+            return self
+                .cross_spill(&data_blocks, partition_need_to_spill)
+                .await;
+        }
+
+        let need_spill = {
+            move |partition: usize| {
+                let Some(partition_need_to_spill) = partition_need_to_spill else {
+                    return true;
+                };
+
+                partition_need_to_spill.contains(&partition)
+            }
+        };
+
+        let mut unspilled_data_blocks = vec![];
+
+        let mut partitions_writer = HashMap::<usize, BlocksWriter>::new();
+
+        for data_block in data_blocks {
+            let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
+
+            for hash in hashes.iter_mut() {
+                *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
+            }
+
+            let ready_partitions = self
+                .block_partition_stream
+                .partition(hashes, data_block, true);
+
+            for (partition_id, data_block) in ready_partitions {
+                if !need_spill(partition_id) {
+                    unspilled_data_blocks.push(data_block);
+                    continue;
+                }
+
+                if data_block.is_empty() {
+                    continue;
+                }
+
+                let progress_val = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+
+                match partitions_writer.entry(partition_id) {
+                    Entry::Occupied(mut entry) => {
+                        let stream_writer = entry.get_mut();
+                        stream_writer.write(data_block).await?;
+                    }
+                    Entry::Vacant(entry) => {
+                        let mut stream_writer = self.spiller.block_stream_writer().await?;
+                        stream_writer.write(data_block).await?;
+                        entry.insert(stream_writer);
+                    }
+                };
+
+                self.spiller.inc_progress(progress_val);
+            }
+        }
+
+        for (id, partition_writer) in partitions_writer {
+            let (location, written, written_blocks) = partition_writer.close().await?;
+            self.spiller
+                .add_hash_join_location(id, location, written_blocks, written);
+        }
+
+        if let Some(partition_need_to_spill) = partition_need_to_spill {
+            let partitions = self
+                .block_partition_stream
+                .take_partitions(partition_need_to_spill);
+
+            for (_, data) in partitions {
+                unspilled_data_blocks.push(data);
+            }
+        }
+
+        Ok(unspilled_data_blocks)
+    }
+
+    async fn cross_spill(
+        &mut self,
         data_blocks: &[DataBlock],
         partition_need_to_spill: Option<&HashSet<usize>>,
     ) -> Result<Vec<DataBlock>> {
         let join_type = self.join_type.clone();
         let mut unspilled_data_blocks = vec![];
+
         let data_block = DataBlock::concat(data_blocks)?;
         let fetch_option =
             PartitionBufferFetchOption::PickPartitionWithThreshold(self.partition_threshold);
@@ -162,27 +285,24 @@ impl HashJoinSpiller {
     // Restore data blocks from SpillBuffer and spilled files.
     pub(crate) async fn restore(&mut self, partition_id: usize) -> Result<Vec<DataBlock>> {
         let mut data_blocks = vec![];
-        // 1. restore data from SpillBuffer.
-        let option = if self.can_pick_buffer() {
-            PartitionBufferFetchOption::PickPartitionWithThreshold(0)
-        } else {
-            PartitionBufferFetchOption::ReadPartition
-        };
-        if self.need_read_buffer()
-            && let Some(buffer_blocks) = self
-                .partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-        {
-            data_blocks.extend(buffer_blocks);
+        if self.need_read_buffer() {
+            // 1. restore data from SpillBuffer.
+            if self.join_type == JoinType::Cross {
+                if let Some(buffer_blocks) = self.restore_cross_buffer(partition_id)? {
+                    data_blocks.extend(buffer_blocks);
+                }
+            } else if let Some(buffer_block) = self.restore_buffer(partition_id) {
+                data_blocks.push(buffer_block);
+            }
         }
 
         // 2. restore data from spilled files.
         if self.need_read_partition() {
-            let partition_data_blocks = self.spiller.read_spilled_partition(&partition_id).await?;
-            if !partition_data_blocks.is_empty() {
-                let spilled_data = DataBlock::concat(&partition_data_blocks)?;
-                if !spilled_data.is_empty() {
-                    data_blocks.push(spilled_data);
+            let mut block_reader = self.spiller.partition_blocks_reader(&partition_id);
+
+            while let Some(data_block) = block_reader.read().await? {
+                if !data_block.is_empty() {
+                    data_blocks.push(data_block);
                 }
             }
         } else {
@@ -202,6 +322,21 @@ impl HashJoinSpiller {
             }
         }
         Ok(data_blocks)
+    }
+
+    fn restore_buffer(&mut self, partition_id: usize) -> Option<DataBlock> {
+        self.block_partition_stream.finalize_partition(partition_id)
+    }
+
+    fn restore_cross_buffer(&mut self, partition_id: usize) -> Result<Option<Vec<DataBlock>>> {
+        let option = if self.can_pick_buffer() {
+            PartitionBufferFetchOption::PickPartitionWithThreshold(0)
+        } else {
+            PartitionBufferFetchOption::ReadPartition
+        };
+
+        self.partition_buffer
+            .fetch_data_blocks(partition_id, &option)
     }
 
     fn partition_data_block(
@@ -245,10 +380,15 @@ impl HashJoinSpiller {
 
     pub(crate) fn spilled_partitions(&self) -> HashSet<usize> {
         let mut partition_ids = self.spiller.spilled_partitions();
-        for partition_id in self.partition_buffer.partition_ids() {
-            partition_ids.insert(partition_id);
-        }
+
+        partition_ids.extend(self.cross_spilled_partitions());
+        partition_ids.extend(self.block_partition_stream.partition_ids());
+
         partition_ids
+    }
+
+    fn cross_spilled_partitions(&self) -> Vec<usize> {
+        self.partition_buffer.partition_ids()
     }
 
     pub fn has_next_restore_file(&self) -> bool {

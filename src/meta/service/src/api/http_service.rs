@@ -35,20 +35,20 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::configs::Config;
-use crate::meta_service::MetaNode;
+use crate::meta_node::meta_handle::MetaHandle;
 
 pub struct HttpService {
     cfg: Config,
     shutdown_handler: HttpShutdownHandler,
-    meta_node: Arc<MetaNode>,
+    meta_handle: Arc<MetaHandle>,
 }
 
 impl HttpService {
-    pub fn create(cfg: Config, meta_node: Arc<MetaNode>) -> Box<Self> {
+    pub fn create(cfg: Config, meta_handle: Arc<MetaHandle>) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
-            meta_node,
+            meta_handle,
         })
     }
 
@@ -94,7 +94,7 @@ impl HttpService {
                 get(debug_jeprof_dump_handler),
             );
         };
-        route.data(self.meta_node.clone()).data(self.cfg.clone())
+        route.data(self.meta_handle.clone()).data(self.cfg.clone())
     }
 
     fn build_tls(config: &Config) -> Result<OpensslTlsConfig, MetaNetworkError> {

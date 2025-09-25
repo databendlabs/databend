@@ -21,14 +21,17 @@ pub mod level;
 pub mod level_index;
 pub mod leveled_map;
 pub mod map_api;
+pub mod persisted_codec;
 pub mod rotbl_codec;
 pub(crate) mod snapshot;
 pub mod sys_data;
 pub mod sys_data_api;
 pub mod types;
 pub mod util;
-pub mod value_convert;
 pub mod view;
+
+#[cfg(test)]
+pub(crate) mod testing_data;
 
 mod db_impl_scoped_seq_bounded_read;
 mod db_open_snapshot_impl;
@@ -36,6 +39,8 @@ mod db_open_snapshot_impl;
 mod db_scoped_seq_bounded_read_test;
 pub mod immutable_data;
 mod key_spaces_impl;
+mod rotbl_meta_value_impl;
+mod rotbl_seq_data_impl;
 mod rotbl_seq_mark_impl;
 
 pub use db_impl_scoped_seq_bounded_read::ScopedSeqBoundedRead;

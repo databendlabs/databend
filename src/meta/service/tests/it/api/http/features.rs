@@ -34,15 +34,15 @@ use crate::tests::start_metasrv_cluster;
 async fn test_features() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_node();
+    let meta0 = tcs[0].grpc_srv.as_ref().unwrap().get_meta_handle();
     let mut srv1 = HttpService::create(tcs[0].config.clone(), meta0.clone());
     srv1.start().await.expect("HTTP: admin api error");
 
-    let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_node();
+    let meta1 = tcs[1].grpc_srv.as_ref().unwrap().get_meta_handle();
     let mut srv1 = HttpService::create(tcs[1].config.clone(), meta1.clone());
     srv1.start().await.expect("HTTP: admin api error");
 
-    let metrics = meta0.raft.metrics().borrow_watched().clone();
+    let metrics = meta0.handle_raft_metrics().await?.borrow_watched().clone();
     assert_eq!(metrics.current_leader, Some(0));
 
     let list_features_url = |i: usize| {

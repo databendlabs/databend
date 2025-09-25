@@ -332,6 +332,7 @@ impl SessionManager {
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
         status_t.max_running_query_executed_secs = max_running_query_executed_secs;
+
         status_t
     }
 

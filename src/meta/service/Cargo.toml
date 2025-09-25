@@ -36,6 +36,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-common-version = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -56,10 +57,12 @@ prost = { workspace = true }
 raft-log = { workspace = true }
 rustls = { workspace = true }
 semver = { workspace = true }
+seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
 state-machine-api = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }

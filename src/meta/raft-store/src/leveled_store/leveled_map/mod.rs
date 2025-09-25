@@ -23,6 +23,8 @@ use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Node;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
 use log::info;
 use map_api::mvcc;
 use seq_marked::InternalSeq;
@@ -30,20 +32,15 @@ use seq_marked::InternalSeq;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
-use crate::leveled_store::leveled_map::applier_acquirer::WriterPermit;
-use crate::leveled_store::leveled_map::compacting_data::CompactingData;
+use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
 use crate::leveled_store::snapshot::MvccSnapshot;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::leveled_store::view::StateMachineView;
+use crate::sm_v003::compactor_acquirer::CompactorPermit;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 
-#[cfg(test)]
-mod acquire_compactor_test;
-
-pub mod applier_acquirer;
-pub mod compacting_data;
 pub mod compactor;
-pub mod compactor_acquirer;
 mod impl_commit;
 mod impl_scoped_seq_bounded_get;
 mod impl_scoped_seq_bounded_range;
@@ -100,17 +97,21 @@ impl LeveledMap {
 
     /// Freeze the current writable level and create a new empty writable level.
     ///
-    /// Need writer permit and compactor permit
-    pub fn freeze_writable(&self, _writer_permit: &mut WriterPermit) {
+    /// Need writer permit to reset the writable level, and compactor permit to add a new immutable level.
+    pub fn freeze_writable(
+        &self,
+        _writer_permit: &mut WriterPermit,
+        _compactor_permit: &mut CompactorPermit,
+    ) {
         self.do_freeze_writable()
     }
 
     /// For testing, requires no permit
-    pub fn testing_freeze_writable(&self) {
+    pub fn freeze_writable_without_permit(&self) {
         self.do_freeze_writable()
     }
 
-    pub fn do_freeze_writable(&self) {
+    fn do_freeze_writable(&self) {
         let mut inner = self.data.lock().unwrap();
 
         let new_writable = inner.writable.new_level();
@@ -124,10 +125,15 @@ impl LeveledMap {
         inner.immutable = Arc::new(new_immutable_data);
 
         info!(
-            "do_freeze_writable: after writable: {:?}, immutables: {:?}",
-            inner.writable,
-            levels.indexes()
+            "do_freeze_writable: after writable: {}, immutables: {}",
+            inner.writable.stat(),
+            levels.indexes().display_n(265)
         );
+    }
+
+    /// Return the kv count and expire count in the writable level.
+    pub fn writable_stat(&self) -> LevelStat {
+        self.with_inner(|inner| inner.writable.stat())
     }
 
     pub fn persisted(&self) -> Option<DB> {
@@ -174,8 +180,7 @@ impl LeveledMap {
 
     /// For testing only.
     /// Replace all immutable levels with the given one.
-    #[allow(dead_code)]
-    pub(crate) fn replace_immutable_levels(&mut self, b: ImmutableLevels) {
+    pub(crate) fn replace_immutable_levels(&self, b: ImmutableLevels) {
         self.with_inner(|data| {
             let persisted = data.immutable.persisted().cloned();
             data.immutable = Arc::new(ImmutableData::new(b, persisted))
@@ -187,17 +192,17 @@ impl LeveledMap {
     /// **Important**: Do not drop the compactor within this function when called
     /// under a state machine lock, as dropping may take ~250ms.
     pub fn replace_with_compacted(&self, compactor: &mut Compactor, db: DB) {
-        let upto = compactor.compacting_data.latest_level_index();
-        let compactor_indexes = compactor.compacting_data.levels().indexes();
+        let upto = compactor.immutable_data.latest_level_index();
+        let compactor_indexes = compactor.immutable_data.levels().indexes();
 
         self.with_inner(|inner| {
             let mut levels = inner.immutable.levels().clone();
 
             info!(
-                "replace_with_compacted: compacted upto {:?} immutable levels; my levels: {:?}; compacted levels: {:?}",
-                upto,
-                levels.indexes(),
-                compactor_indexes,
+                "replace_with_compacted: compacted upto {} immutable levels; my levels: {}; compacted levels: {}",
+                upto.display(),
+                levels.indexes().display_n(265),
+                compactor_indexes.display_n(265),
             );
 
             // If there is immutable levels compacted, remove them.
@@ -211,8 +216,7 @@ impl LeveledMap {
         info!("replace_with_compacted: finished replacing the db");
     }
 
-    pub(crate) fn new_compacting_data(&self) -> CompactingData {
-        let immutable = self.with_inner(|inner| inner.immutable.clone());
-        CompactingData::new(immutable)
+    pub(crate) fn immutable_data(&self) -> Arc<ImmutableData> {
+        self.with_inner(|inner| inner.immutable.clone())
     }
 }

@@ -41,7 +41,7 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
 
         a.commit().await?;
 
-        sm.levels_mut().testing_freeze_writable();
+        sm.levels_mut().freeze_writable_without_permit();
 
         let mut a = sm.new_applier().await;
 

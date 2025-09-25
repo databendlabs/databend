@@ -28,6 +28,7 @@ use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
+use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
@@ -237,6 +238,11 @@ impl ClientHandle {
     #[async_backtrace::framed]
     pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaClientError> {
         self.request(message::GetClusterStatus {}).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_member_list(&self) -> Result<MemberListReply, MetaClientError> {
+        self.request(message::GetMemberList {}).await
     }
 
     #[async_backtrace::framed]

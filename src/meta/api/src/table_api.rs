@@ -91,6 +91,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
@@ -272,7 +273,6 @@ where
         }
 
         let mut trials = txn_backoff(None, func_name!());
-        let mut old_table_id = None;
 
         loop {
             trials.next().unwrap()?.await;
@@ -324,7 +324,6 @@ where
                                 spec_vec: None,
                                 prev_table_id: None,
                                 orphan_table_name: None,
-                                old_table_id: None,
                             });
                         }
                         CreateOption::CreateOrReplace => {
@@ -336,11 +335,11 @@ where
 
                                 SeqV::new(id.seq, *id.data)
                             } else {
-                                old_table_id = Some(*id.data);
                                 let (seq, id) = construct_drop_table_txn_operations(
                                     self,
                                     req.name_ident.table_name.clone(),
                                     &req.name_ident.tenant,
+                                    req.catalog_name.clone(),
                                     *id.data,
                                     *seq_db_id.data,
                                     true,
@@ -474,7 +473,6 @@ where
                         spec_vec: None,
                         prev_table_id,
                         orphan_table_name,
-                        old_table_id,
                     });
                 } else {
                     // re-run txn with re-fetched data
@@ -502,6 +500,7 @@ where
                 self,
                 req.table_name.clone(),
                 &req.tenant,
+                None,
                 table_id,
                 req.db_id,
                 req.if_exists,
@@ -1602,6 +1601,7 @@ where
                     table_drop_time_range,
                     db_info.database_id.db_id,
                     capacity,
+                    vacuum_db,
                 )
                 .await?;
 
@@ -1648,9 +1648,14 @@ where
         };
 
         let database_id = seq_db_id.data;
-        let table_nivs =
-            get_history_tables_for_gc(self, drop_time_range.clone(), database_id.db_id, the_limit)
-                .await?;
+        let table_nivs = get_history_tables_for_gc(
+            self,
+            drop_time_range.clone(),
+            database_id.db_id,
+            the_limit,
+            false,
+        )
+        .await?;
 
         let mut drop_ids = vec![];
         let mut vacuum_tables = vec![];

@@ -56,6 +56,7 @@ exclude = [
     "src/bendsave/Cargo.toml",
     "src/binaries/Cargo.toml",
     "src/meta/binaries/Cargo.toml",
+    "src/meta/service/Cargo.toml",
     "src/query/ee/Cargo.toml",
     "src/query/service/Cargo.toml",
 ]

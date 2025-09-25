@@ -19,6 +19,7 @@ use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::servers::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
@@ -49,13 +50,24 @@ pub struct InstanceStatus {
 pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let session_manager = SessionManager::instance();
     let queue_manager = QueriesQueueManager::instance();
+    let (http_query_count, last_query_finished_at_http) = HttpQueryManager::instance().status();
     let status = session_manager.get_current_session_status();
+
+    let last_query_finished_at = [
+        status.last_query_started_at.map(unix_timestamp_secs),
+        last_query_finished_at_http,
+    ]
+    .iter()
+    .flatten()
+    .max()
+    .copied();
+
     let status = InstanceStatus {
-        running_queries_count: status.running_queries_count,
+        running_queries_count: status.running_queries_count.max(http_query_count),
         active_sessions_count: status.active_sessions_count,
         queuing_queries_count: queue_manager.length() as u64,
         last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),
-        last_query_finished_at: status.last_query_finished_at.map(unix_timestamp_secs),
+        last_query_finished_at,
         max_running_query_executed_secs: status.max_running_query_executed_secs,
         instance_started_at: unix_timestamp_secs(status.instance_started_at),
         instance_timestamp: unix_timestamp_secs(SystemTime::now()),

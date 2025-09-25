@@ -1,0 +1,256 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+create or replace database test_procedure_multi;
+
+statement ok
+use test_procedure_multi;
+
+statement ok
+CREATE TABLE t1(id int, name varchar(50));
+
+statement ok
+CREATE TABLE t2(id int, amount decimal(10,2));
+
+statement ok
+CREATE TABLE t3(id int, status varchar(20));
+
+# Test multiple procedures in single transaction - all succeed
+statement ok
+drop procedure if exists proc_insert_user();
+
+statement ok
+CREATE PROCEDURE proc_insert_user() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t1 VALUES (1, 'Alice'), (2, 'Bob');
+    RETURN 'users inserted';
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_insert_amounts();
+
+statement ok
+CREATE PROCEDURE proc_insert_amounts() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t2 VALUES (1, 1000.50), (2, 2000.75);
+    RETURN 'amounts inserted';
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_update_status();
+
+statement ok
+CREATE PROCEDURE proc_update_status() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t3 VALUES (1, 'active'), (2, 'pending');
+    UPDATE t3 SET status = 'confirmed' WHERE id = 1;
+    RETURN 'status updated';
+END;
+$$;
+
+# Test all procedures succeed in transaction
+statement ok
+BEGIN;
+
+statement ok
+call procedure proc_insert_user();
+
+statement ok
+call procedure proc_insert_amounts();
+
+statement ok
+call procedure proc_update_status();
+
+statement ok
+COMMIT;
+
+query IS
+SELECT * FROM t1 ORDER BY id;
+----
+1 Alice
+2 Bob
+
+query IF
+SELECT * FROM t2 ORDER BY id;
+----
+1 1000.50
+2 2000.75
+
+query IS
+SELECT * FROM t3 ORDER BY id;
+----
+1 confirmed
+2 pending
+
+# Test multiple procedures with one failure - all should rollback
+statement ok
+create or replace table t1(id int, name varchar(50));
+
+statement ok
+create or replace table t2(id int, amount decimal(10,2));
+
+statement ok
+create or replace table t3(id int, status varchar(20));
+
+statement ok
+drop procedure if exists proc_insert_user_v2();
+
+statement ok
+CREATE PROCEDURE proc_insert_user_v2() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t1 VALUES (3, 'Charlie'), (4, 'David');
+    RETURN 'users inserted v2';
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_failing_operation();
+
+statement ok
+CREATE PROCEDURE proc_failing_operation() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t2 VALUES (3, 3000.25);
+    SELECT 1/0; 
+    RETURN 'this should not return';
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_more_updates();
+
+statement ok
+CREATE PROCEDURE proc_more_updates() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t3 VALUES (3, 'new');
+    RETURN 'more updates done';
+END;
+$$;
+
+# Test transaction with failure - all should be rolled back
+statement error
+BEGIN;
+call procedure proc_insert_user_v2();
+call procedure proc_failing_operation();
+call procedure proc_more_updates();
+COMMIT;
+
+# Verify all tables are empty due to rollback
+query IS
+SELECT * FROM t1;
+----
+
+query IF
+SELECT * FROM t2;
+----
+
+query IS
+SELECT * FROM t3;
+----
+
+# Test procedures with complex operations across multiple tables
+statement ok
+drop procedure if exists proc_complex_operations();
+
+statement ok
+CREATE PROCEDURE proc_complex_operations() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    INSERT INTO t1 VALUES (5, 'Eve'), (6, 'Frank');
+    INSERT INTO t2 VALUES (5, 5000.00), (6, 6000.00);
+    
+    UPDATE t2 SET amount = amount * 1.1 WHERE id = 5;
+    
+    INSERT INTO t3 SELECT id, 'calculated' FROM t1 WHERE id >= 5;
+    
+    RETURN 'complex operations completed';
+END;
+$$;
+
+statement ok
+drop procedure if exists proc_final_adjustments();
+
+statement ok
+CREATE PROCEDURE proc_final_adjustments() RETURNS string not null LANGUAGE SQL AS $$
+BEGIN
+    UPDATE t3 SET status = 'finalized' WHERE status = 'calculated';
+    DELETE FROM t2 WHERE amount < 5500.00;
+    RETURN 'final adjustments completed';
+END;
+$$;
+
+# Test complex multi-procedure transaction
+statement ok
+BEGIN;
+
+statement ok
+call procedure proc_complex_operations();
+
+statement ok
+call procedure proc_final_adjustments();
+
+statement ok
+COMMIT;
+
+query IS
+SELECT * FROM t1 ORDER BY id;
+----
+5 Eve
+6 Frank
+
+query IF
+SELECT * FROM t2 ORDER BY id;
+----
+5 5500.00
+6 6000.00
+
+query IS
+SELECT * FROM t3 ORDER BY id;
+----
+5 finalized
+6 finalized
+
+# Test snapshot consistency across multiple procedures
+query I
+select count(*) from fuse_snapshot('test_procedure_multi','t1');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_procedure_multi','t2');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_procedure_multi','t3');
+----
+1
+
+# Cleanup
+statement ok
+drop procedure if exists proc_insert_user();
+
+statement ok
+drop procedure if exists proc_insert_amounts();
+
+statement ok
+drop procedure if exists proc_update_status();
+
+statement ok
+drop procedure if exists proc_insert_user_v2();
+
+statement ok
+drop procedure if exists proc_failing_operation();
+
+statement ok
+drop procedure if exists proc_more_updates();
+
+statement ok
+drop procedure if exists proc_complex_operations();
+
+statement ok
+drop procedure if exists proc_final_adjustments();
+
+statement ok
+drop database test_procedure_multi;

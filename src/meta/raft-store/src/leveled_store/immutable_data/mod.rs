@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::fmt::Formatter;
 use std::io;
 use std::io::Error;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
+use display_more::DisplayOptionExt;
+use display_more::DisplaySliceExt;
 use futures_util::StreamExt;
 use map_api::mvcc;
 use map_api::mvcc::ViewKey;
@@ -31,11 +35,35 @@ use stream_more::StreamMore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::level::LevelStat;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::value_convert::ValueConvert;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 use crate::leveled_store::ScopedSeqBoundedRead;
+
+mod compact_into_stream;
+
+#[derive(Debug, Clone)]
+pub struct ImmutableDataStat {
+    pub last_seq: InternalSeq,
+    pub last_level_index: Option<LevelIndex>,
+    pub immutable_level_stats: Vec<LevelStat>,
+    pub persisted: Option<String>,
+}
+
+impl fmt::Display for ImmutableDataStat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ImmutableDataStat{{last_seq: {}, last_index: {}, immutables: {}, persisted: {}}}",
+            *self.last_seq,
+            self.last_level_index.display(),
+            self.immutable_level_stats.display_n(256),
+            self.persisted.display()
+        )
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct ImmutableData {
@@ -75,6 +103,15 @@ impl ImmutableData {
         }
     }
 
+    pub fn stat(&self) -> ImmutableDataStat {
+        ImmutableDataStat {
+            last_seq: self.last_seq,
+            last_level_index: self.last_level_index,
+            immutable_level_stats: self.levels.stat(),
+            persisted: self.persisted.as_ref().map(|db| format!("{:?}", db)),
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn with_levels(&self, levels: ImmutableLevels) -> Self {
         Self::new(levels, self.persisted.clone())
@@ -111,7 +148,7 @@ where
     K: ViewKey,
     K::V: ViewValue,
     K: MapKeyEncode + MapKeyDecode,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     Immutable: mvcc::ScopedSeqBoundedGet<K, K::V>,
 {
     async fn get(&self, key: K, snapshot_seq: u64) -> Result<SeqMarked<K::V>, Error> {
@@ -136,7 +173,7 @@ where
     K: ViewKey,
     K::V: ViewValue,
     K: MapKeyEncode + MapKeyDecode,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     Immutable: mvcc::ScopedSeqBoundedRange<K, K::V>,
 {
     async fn range<R>(

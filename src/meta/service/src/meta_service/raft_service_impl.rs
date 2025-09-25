@@ -19,12 +19,20 @@ use std::io;
 use std::sync::Arc;
 
 use databend_common_meta_client::MetaGrpcReadReq;
+use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
+use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
+use databend_common_meta_raft_store::sm_v003::WriterV003;
+use databend_common_meta_raft_store::snapshot_config::SnapshotConfig;
+use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::Empty;
+use databend_common_meta_types::protobuf::InstallEntryV004;
+use databend_common_meta_types::protobuf::InstallSnapshotResponseV004;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
@@ -32,9 +40,12 @@ use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::AppendEntriesRequest;
 use databend_common_meta_types::raft_types::Snapshot;
+use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
+use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::snapshot_db::DB;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_metrics::count::Count;
 use fastrace::func_path;
@@ -43,6 +54,10 @@ use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
+use raft_metrics::network::incr_snapshot_recvfrom_result;
+use seq_marked::SeqMarked;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 use tonic::Response;
@@ -114,12 +129,131 @@ impl RaftServiceImpl {
             .await
             .map_err(GrpcHelper::internal_err);
 
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+        incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
 
         let resp = res?;
 
         let resp = SnapshotResponseV003::new(resp.vote);
-        Ok(tonic::Response::new(resp))
+        Ok(Response::new(resp))
+    }
+
+    /// Install snapshot using V004 streaming protocol.
+    /// Receives KV entries and builds snapshot incrementally using WriterV003.
+    /// More memory efficient than V003 as it processes data as it arrives.
+    async fn do_install_snapshot_v004(
+        &self,
+        request: Request<Streaming<InstallEntryV004>>,
+    ) -> Result<Response<InstallSnapshotResponseV004>, Status> {
+        let addr = remote_addr(&request);
+
+        let _guard = snapshot_recv_inflight(&addr).counter_guard();
+
+        let mut strm = request.into_inner();
+
+        // Create snapshot config and WriterV003
+        let snapshot_config = SnapshotConfig::new(
+            DATA_VERSION,
+            self.meta_node.raft_store.config.as_ref().clone(),
+        );
+        let writer = WriterV003::new(&snapshot_config)
+            .map_err(|e| Status::internal(format!("Failed to create WriterV003: {}", e)))?;
+
+        let (write_tx, jh) = writer.spawn_writer_thread("install_snapshot_v004");
+
+        let mut commit = None;
+
+        while let Some(entry) = strm
+            .try_next()
+            .await
+            .map_err(|e| Status::internal(format!("Failed to receive snapshot entry: {:?}", e)))?
+        {
+            for kv in entry.key_values {
+                if let Some(pb_seq_v) = kv.value {
+                    let seq_v = SeqV::from(pb_seq_v);
+                    let seq_marked_mv = SeqMarked::<MetaValue>::from(seq_v);
+                    let seq_marked = seq_marked_mv
+                        .encode_to()
+                        .map_err(|e| Status::internal(format!("Failed to convert SeqV: {}", e)))?;
+
+                    let data_entry = WriteEntry::Data((kv.key, seq_marked));
+
+                    write_tx
+                        .send(data_entry)
+                        .await
+                        .map_err(|_| Status::internal("Failed to send KV data to writer thread"))?;
+                }
+            }
+
+            if let Some(c) = entry.commit {
+                commit = Some(c.clone());
+                break;
+            }
+        }
+
+        let Some(commit) = commit else {
+            return Err(Status::invalid_argument(
+                "No commit received from snapshot stream",
+            ));
+        };
+
+        let pb_vote = commit.vote.ok_or_else(|| {
+            Status::invalid_argument("None vote received from commit in snapshot stream")
+        })?;
+
+        let req_vote = Vote::from(pb_vote);
+
+        let sys_data: SysData = serde_json::from_str(&commit.sys_data)
+            .map_err(|e| Status::invalid_argument(format!("Invalid sys_data JSON: {}", e)))?;
+
+        let snapshot_id: MetaSnapshotId = commit
+            .snapshot_id
+            .parse()
+            .map_err(|e| Status::invalid_argument(format!("Invalid snapshot_id: {}", e)))?;
+
+        // Send finish signal to writer (with empty data for now)
+        let finish_entry = WriteEntry::Finish((snapshot_id.clone(), sys_data.clone()));
+        write_tx
+            .send(finish_entry)
+            .await
+            .map_err(|_| Status::internal("Failed to send finish signal to writer thread"))?;
+
+        // Wait for writer to complete and get the DB
+        let db = jh
+            .await
+            .map_err(|e| Status::internal(format!("Writer thread panicked: {:?}", e)))?
+            .map_err(|e| Status::internal(format!("Writer failed: {}", e)))?;
+
+        // Create the snapshot with proper metadata from sys_data
+        let snapshot_meta = SnapshotMeta {
+            last_log_id: *sys_data.last_applied_ref(),
+            last_membership: sys_data.last_membership_ref().clone(),
+            snapshot_id: snapshot_id.to_string(),
+        };
+
+        let snapshot = Snapshot {
+            meta: snapshot_meta,
+            snapshot: db,
+        };
+
+        // Install the snapshot using raft
+        let res = self
+            .meta_node
+            .raft
+            .install_full_snapshot(req_vote, snapshot)
+            .await
+            .map_err(|e| Status::internal(format!("Failed to install snapshot: {}", e)));
+
+        incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+
+        let snapshot_response = res?;
+
+        info!("V004 snapshot installation completed successfully");
+
+        // Use the response vote from raft instead of the request vote
+        let resp = InstallSnapshotResponseV004 {
+            vote: Some(pb::Vote::from(snapshot_response.vote)),
+        };
+        Ok(Response::new(resp))
     }
 
     /// Receive a single file snapshot in binary chunks.
@@ -133,7 +267,7 @@ impl RaftServiceImpl {
 
         let _guard = snapshot_recv_inflight(&addr).counter_guard();
 
-        let ss_store = self.meta_node.raft_store.snapshot_store();
+        let ss_store = self.meta_node.raft_store.state_machine().snapshot_store();
 
         let mut receiver_v003 = ss_store.new_receiver(&addr).map_err(io_err_to_status)?;
         receiver_v003.set_on_recv_callback(new_incr_recvfrom_bytes(addr.clone()));
@@ -258,6 +392,14 @@ impl RaftService for RaftServiceImpl {
     ) -> Result<Response<SnapshotResponseV003>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         self.do_install_snapshot_v003(request).in_span(root).await
+    }
+
+    async fn install_snapshot_v004(
+        &self,
+        request: Request<Streaming<InstallEntryV004>>,
+    ) -> Result<Response<InstallSnapshotResponseV004>, Status> {
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+        self.do_install_snapshot_v004(request).in_span(root).await
     }
 
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {

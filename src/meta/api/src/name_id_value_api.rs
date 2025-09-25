@@ -65,7 +65,7 @@ where
     IdRsc: TenantResource + Send + Sync + 'static,
     IdRsc::ValueType: FromToProto + Send + Sync + 'static,
 {
-    /// Create a two level `name -> id -> value` mapping.
+    /// Create a two level `name -> id -> value` mapping with cleanup support for old resources.
     ///
     /// `associated_records` is used to generate additional key-values to add or remove along with the main operation.
     /// Such operations do not have any condition constraints.
@@ -76,17 +76,25 @@ where
     ///
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
-    async fn create_id_value<A, M>(
+    ///
+    /// `on_override_fn` is called with the old id and txn when override_exist is true and an existing
+    /// resource is being replaced. It can add custom operations to the transaction.
+    ///
+    /// This eliminates the need for callers to manually handle cleanup logic after the fact.
+    /// For example, when a procedure is dropped by `override_exist`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
+    async fn create_id_value<A, M, O>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
         override_exist: bool,
         associated_records: A,
         mark_delete_records: M,
+        on_override_fn: O,
     ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
         M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
+        O: Fn(DataId<IdRsc>, &mut TxnRequest) + Send,
     {
         debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
 
@@ -124,6 +132,8 @@ where
                         for (k, v) in kvs {
                             txn.if_then.push(TxnOp::put(k, v));
                         }
+                        // Apply override function if provided
+                        on_override_fn(seq_id.data, &mut txn);
                     } else {
                         return Ok(Err(seq_id));
                     }

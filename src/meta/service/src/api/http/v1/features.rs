@@ -24,7 +24,8 @@ use poem::web::Json;
 use poem::web::Query;
 use poem::IntoResponse;
 
-use crate::meta_service::MetaNode;
+use crate::meta_node::errors::MetaNodeStopped;
+use crate::meta_node::meta_handle::MetaHandle;
 
 /// Query parameters for setting a feature.
 #[derive(Debug, serde::Deserialize)]
@@ -44,13 +45,25 @@ pub struct FeatureResponse {
 
 /// List all available state machine features
 #[poem::handler]
-pub async fn list(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
-    let metrics = meta_node.raft.metrics().borrow_watched().clone();
+pub async fn list(meta_handle: Data<&Arc<MetaHandle>>) -> poem::Result<impl IntoResponse> {
+    let metrics = meta_handle
+        .handle_raft_metrics()
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(
+                format!("Failed to get raft metrics: {}", e),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?
+        .borrow_watched()
+        .clone();
 
     let id = metrics.id;
     info!("id={} Received list_feature request", id);
 
-    let response = features_state(meta_node.0);
+    let response = features_state(meta_handle.0)
+        .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
     Ok(Json(response))
 }
@@ -60,10 +73,20 @@ pub async fn list(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResp
 /// Only the leader can set features. If this node is not a leader, 404 NOT_FOUND will be returned.
 #[poem::handler]
 pub async fn set(
-    meta_node: Data<&Arc<MetaNode>>,
+    meta_handle: Data<&Arc<MetaHandle>>,
     query: Option<Query<SetFeatureQuery>>,
 ) -> poem::Result<impl IntoResponse> {
-    let metrics = meta_node.raft.metrics().borrow_watched().clone();
+    let metrics = meta_handle
+        .handle_raft_metrics()
+        .await
+        .map_err(|e| {
+            poem::Error::from_string(
+                format!("Failed to get raft metrics: {}", e),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?
+        .borrow_watched()
+        .clone();
 
     let id = metrics.id;
     let current_leader = metrics.current_leader;
@@ -102,25 +125,39 @@ pub async fn set(
         id, query.feature, query.enable
     );
 
-    meta_node
-        .set_feature(query.feature, query.enable)
+    let f = query.feature;
+    let enable = query.enable;
+
+    meta_handle
+        .request(move |mn| {
+            let fu = async move { mn.set_feature(f, enable).await };
+            Box::pin(fu)
+        })
         .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let response = features_state(meta_node.0);
+    let response = features_state(meta_handle.0).await.map_err(|e| {
+        poem::Error::from_string(
+            format!("Failed to get feature: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
 
     Ok(Json(response))
 }
 
-pub fn features_state(meta_node: &Arc<MetaNode>) -> FeatureResponse {
+pub async fn features_state(
+    meta_handle: &Arc<MetaHandle>,
+) -> Result<FeatureResponse, MetaNodeStopped> {
     let enabled = {
-        let sm = meta_node.raft_store.state_machine();
-        let x = sm.sys_data().features().clone();
+        let sys_data = meta_handle.handle_get_sys_data().await?;
+        let x = sys_data.features().clone();
         x.into_iter().collect()
     };
 
-    FeatureResponse {
+    Ok(FeatureResponse {
         features: StateMachineFeature::all(),
         enabled,
-    }
+    })
 }

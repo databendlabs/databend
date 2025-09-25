@@ -324,7 +324,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         ))
     }
 
-    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<()> {
+    /// Garbage collect dropped tables and databases.
+    ///
+    /// Returns the approximate number of metadata keys removed.
+    /// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
+    async fn gc_drop_tables(&self, _req: GcDroppedTableReq) -> Result<usize> {
         Err(ErrorCode::Unimplemented("'gc_drop_tables' not implemented"))
     }
 

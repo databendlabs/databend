@@ -323,9 +323,9 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
+    // revoke ownership handling is now integrated into the create_table transaction
     async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
         // grant the ownership of the table to the current role.
-        let mut invalid_cache = false;
         let current_role = self.ctx.get_current_role();
         let role_api = UserApiProvider::instance().role_api(tenant);
         if let Some(current_role) = current_role {
@@ -339,22 +339,6 @@ impl CreateTableInterpreter {
                     &current_role.name,
                 )
                 .await?;
-            invalid_cache = true;
-        }
-
-        // TODO: can refactor into create_table in one txn
-        // if old_table_id is some means create or replace is success, we should delete the old table id's ownership key
-        if let Some(old_table_id) = reply.old_table_id {
-            role_api
-                .revoke_ownership(&OwnershipObject::Table {
-                    catalog_name: self.plan.catalog.clone(),
-                    db_id: reply.db_id,
-                    table_id: old_table_id,
-                })
-                .await?;
-            invalid_cache = true;
-        }
-        if invalid_cache {
             RoleCacheManager::instance().invalidate_cache(tenant);
         }
         Ok(())
@@ -513,6 +497,11 @@ impl CreateTableInterpreter {
 
         let req = CreateTableReq {
             create_option: self.plan.create_option,
+            catalog_name: if self.plan.create_option.is_overriding() {
+                Some(self.plan.catalog.to_string())
+            } else {
+                None
+            },
             name_ident: TableNameIdent {
                 tenant: self.plan.tenant.clone(),
                 db_name: self.plan.database.to_string(),

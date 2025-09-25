@@ -4323,6 +4323,7 @@ dependencies = [
  "chrono",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -4829,6 +4830,7 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -5097,6 +5099,7 @@ dependencies = [
  "reqwest",
  "rustls 0.23.27",
  "semver",
+ "seq-marked",
  "serde",
  "serde_json",
  "serfig",
@@ -5104,6 +5107,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "test-harness",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -5514,6 +5518,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
+ "opendal",
  "parking_lot 0.12.3",
  "serde",
  "uuid",
@@ -9450,8 +9455,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a452366d21e8d3cbca680c41388e01d6a88739afef7877961946a6da409f9ccd"
+source = "git+https://github.com/databendlabs/jsonb?rev=425aae9#425aae9cbf567dd7e523d4657e8290268480953c"
 dependencies = [
  "byteorder",
  "ethnum",
@@ -13714,9 +13718,9 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 
 [[package]]
 name = "seq-marked"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "835b34bd2bb988a2287b118e7a43054e6ad381a5cde3beb6ef27c4637c5aa828"
+checksum = "a9484923c6320a859e6e925359a06cb20067085b12c9d7999649ba9636646860"
 dependencies = [
  "bincode 2.0.1",
  "serde",

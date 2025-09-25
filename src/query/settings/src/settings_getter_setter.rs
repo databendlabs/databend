@@ -215,6 +215,10 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+    pub fn get_max_vacuum_threads(&self) -> Result<u64> {
+        self.try_get_u64("max_vacuum_threads")
+    }
+
     // Get storage_fetch_part_num.
     pub fn get_storage_fetch_part_num(&self) -> Result<u64> {
         match self.try_get_u64("storage_fetch_part_num")? {
@@ -783,10 +787,6 @@ impl Settings {
             "ZSTD" => Ok(Some(FlightCompression::Zstd)),
             _ => unreachable!("check possible_values in set variable"),
         }
-    }
-
-    pub fn get_enable_refresh_virtual_column_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
     }
 
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {

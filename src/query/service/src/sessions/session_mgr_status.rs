@@ -32,9 +32,7 @@ impl SessionManagerStatus {
 
     pub(crate) fn query_finish(&mut self, now: SystemTime) {
         self.running_queries_count = self.running_queries_count.saturating_sub(1);
-        if self.running_queries_count == 0 {
-            self.last_query_finished_at = Some(now)
-        }
+        self.last_query_finished_at = Some(now)
     }
 }
 

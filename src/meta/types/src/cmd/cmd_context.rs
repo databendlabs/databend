@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
+use display_more::DisplayUnixTimeStampExt;
+
+use crate::raft_types::LogId;
 use crate::Time;
 
 /// A context used when executing a [`Cmd`], to provide additional environment information.
@@ -20,15 +25,39 @@ use crate::Time;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CmdContext {
     time: Time,
+
+    /// Current log id to apply
+    log_id: LogId,
+}
+
+impl fmt::Display for CmdContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[time: {}, log_id: {}]",
+            self.time.to_duration().display_unix_timestamp_short(),
+            self.log_id
+        )
+    }
 }
 
 impl CmdContext {
+    pub fn from_millis_and_log_id(millis: u64, log_id: LogId) -> Self {
+        Self {
+            time: Time::from_millis(millis),
+            log_id,
+        }
+    }
+
     pub fn from_millis(millis: u64) -> Self {
         Self::new(Time::from_millis(millis))
     }
 
     pub fn new(time: Time) -> Self {
-        CmdContext { time }
+        CmdContext {
+            time,
+            log_id: LogId::default(),
+        }
     }
 
     /// Returns the time since 1970-01-01 when this log is proposed by the leader.
