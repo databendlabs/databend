@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod join;
-mod memory;
-mod transform_hash_join;
-
-pub use join::Join;
-pub use transform_hash_join::TransformHashJoin;
-pub use memory::MemoryInnerJoin;
+#[inline]
+pub fn assume(condition: bool) {
+    if !condition {
+        unsafe { std::hint::unreachable_unchecked() }
+    }
+}

@@ -209,7 +209,7 @@ impl HashJoinDesc {
 
         for (entry, is_null) in keys.iter_mut().zip(is_null_equal.iter()) {
             if !is_null && entry.data_type().is_nullable() {
-                *entry = entry.remove_nullable();
+                *entry = entry.clone().remove_nullable();
             }
         }
 

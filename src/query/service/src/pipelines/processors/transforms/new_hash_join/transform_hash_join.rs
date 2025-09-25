@@ -48,14 +48,18 @@ impl TransformHashJoin {
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
     ) -> ProcessorPtr {
-        // ProcessorPtr::create(Box::new(TransformHashJoin {
-        //     build_port,
-        //     probe_port,
-        //     joined_port,
-        //     stage: Stage::Build,
-        //     join: Box::new(()),
-        // }))
-        unimplemented!()
+        ProcessorPtr::create(Box::new(TransformHashJoin {
+            build_port,
+            probe_port,
+            joined_port,
+            join,
+            joined_data: None,
+            stage_sync_barrier,
+            stage: Stage::Build(BuildState {
+                finished: false,
+                build_data: None,
+            }),
+        }))
     }
 }
 

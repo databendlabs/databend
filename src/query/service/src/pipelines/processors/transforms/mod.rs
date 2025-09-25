@@ -80,3 +80,4 @@ pub use transform_srf::TransformSRF;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;
+pub use new_hash_join::*;

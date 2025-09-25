@@ -17,33 +17,34 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::and_validities;
-use databend_common_expression::{with_join_hash_method, BlockEntry, HashMethod};
+use databend_common_expression::with_join_hash_method;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::ProjectedBlock;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::{BinaryHashJoinHashMap, HashJoinHashtableLike};
+use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
-
+use databend_common_catalog::table_context::TableContext;
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::memory_state::HashJoinMemoryState;
+use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
+use crate::pipelines::processors::transforms::ProbeStream;
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::sessions::QueryContext;
 
 pub struct MemoryInnerJoin {
     desc: Arc<HashJoinDesc>,
@@ -54,13 +55,29 @@ pub struct MemoryInnerJoin {
     build_projection: ColumnSet,
     probe_projections: ColumnSet,
     function_ctx: FunctionContext,
-    num_matched: usize,
-    processed_probe_rows: usize,
 }
 
 impl MemoryInnerJoin {
-    pub fn create() -> Self {
-        unimplemented!()
+    pub fn create(
+        ctx: &QueryContext,
+        function_ctx: FunctionContext,
+        method: HashMethodKind,
+        desc: Arc<HashJoinDesc>,
+        build_projection: ColumnSet,
+        probe_projections: ColumnSet,
+    ) -> Result<Self> {
+        let settings = ctx.get_settings();
+        let block_size = settings.get_max_block_size()? as usize;
+        let block_bytes = settings.get_max_block_size()? as usize;
+        Ok(MemoryInnerJoin {
+            desc,
+            method,
+            function_ctx,
+            build_projection,
+            probe_projections,
+            squash_block: SquashBlocks::new(block_size, block_bytes),
+            state: Arc::new(HashJoinMemoryState::new()),
+        })
     }
 
     fn init_memory_hash_table(&mut self) {
@@ -71,56 +88,68 @@ impl MemoryInnerJoin {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
+        // let mut projection_columns = Vec::with_capacity(self.build_projection.len());
+        // for chunk in self.state.chunks.deref() {
+        //     let columns_vec = Vec::with_capacity(self.build_projection.len());
+        //     for (index, column) in chunk.columns().iter().enumerate() {
+        //         if !self.build_projection.contains(&index) {
+        //             continue;
+        //         }
+        //
+        //         projection_columns.push(index);
+        //     }
+        // }
+
         if matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             let build_num_rows = *self.state.build_rows.deref();
             *self.state.hash_table.as_mut() = match self.method.clone() {
                 HashMethodKind::Serializer(_) => {
-                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSerializer::default(),
-                    })
+                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
+                        BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        HashMethodSerializer::default(),
+                    ))
                 }
                 HashMethodKind::SingleBinary(_) => {
-                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
-                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSingleBinary::default(),
-                    })
+                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable::new(
+                        BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        HashMethodSingleBinary::default(),
+                    ))
                 }
                 HashMethodKind::KeysU8(hash_method) => {
-                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
                 HashMethodKind::KeysU16(hash_method) => {
-                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
                 HashMethodKind::KeysU32(hash_method) => {
-                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
                 HashMethodKind::KeysU64(hash_method) => {
-                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
                 HashMethodKind::KeysU128(hash_method) => {
-                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
                 HashMethodKind::KeysU256(hash_method) => {
-                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
-                    })
+                    ))
                 }
             }
         }
@@ -190,7 +219,7 @@ impl Join for MemoryInnerJoin {
         // take storage block
         {
             let chunks = self.state.chunks.as_mut();
-            std::mem::swap(&mut chunks[chunk_block], &mut chunk_block);
+            std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
         let mut keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
@@ -208,7 +237,7 @@ impl Join for MemoryInnerJoin {
         // restore storage block
         {
             let chunks = self.state.chunks.as_mut();
-            std::mem::swap(&mut chunks[chunk_block], &mut chunk_block);
+            std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
         self.build_hash_table(keys_entries, chunk_index)?;
@@ -227,97 +256,23 @@ impl Join for MemoryInnerJoin {
             false => self.desc.build_valids_by_keys(&mut probe_keys)?,
         };
 
-        // Adaptive early filtering.
-        // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
-        // when all keys have matches. This allows us to achieve the same performance as before.
-        self.processed_probe_rows += match valids.as_ref() {
-            None => data.num_rows(),
-            Some(valids) => valids.len() - valids.null_count(),
-        };
-
-        // We use the information from the probed data to predict the matching state of this probe.
-        let enable_early_filtering =
-            (self.num_matched as f64) / (self.processed_probe_rows as f64) < 0.8;
-
         let probe_key = ProjectedBlock::from(&probe_keys);
-        let mut hashes = Vec::with_capacity(data.num_rows());
-        // let mut selection = Vec::with_capacity(data.num_rows());
+        let probe_block = data.project(&self.probe_projections);
+
         with_join_hash_method!(|T| match self.state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
-                // Build `keys` and get the hashes of `keys`.
-                let keys_state = table.hash_method.build_keys_state(probe_key, data.num_rows())?;
-                table.hash_method.build_keys_hashes(&keys_state, &mut hashes);
-                let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
+                let probe_keys_stream = table.probe_keys(probe_key, valids)?;
 
-                // probe_state.process_state = Some(ProcessState {
-                //     input,
-                //     probe_has_null,
-                //     keys_state,
-                //     next_idx: 0,
-                // });
-
-                match enable_early_filtering {
-                    true => table.hash_table.early_filtering_matched_probe(
-                            &mut hashes,
-                            valids,
-                            &mut selection,
-                        ),
-                    false => table.hash_table.probe(&mut hashes, valids)
-                }
-
-                // Perform a round of hash table probe.
-                // probe_state.probe_with_selection = prefer_early_filtering;
-                probe_state.selection_count = if !Self::need_unmatched_selection(
-                    &self.hash_join_state.hash_join_desc.join_type,
-                    probe_state.with_conjunction,
-                ) {
-                    if prefer_early_filtering {
-                        // Early filtering, use selection to get better performance.
-                        table.hash_table.early_filtering_matched_probe(
-                            &mut probe_state.hashes,
-                            valids,
-                            &mut probe_state.selection,
-                        )
-                    } else {
-                        // If don't do early filtering, don't use selection.
-                        table.hash_table.probe(&mut probe_state.hashes, valids)
-                    }
-                } else {
-                    if prefer_early_filtering {
-                        // Early filtering, use matched selection and unmatched selection to get better performance.
-                        let unmatched_selection =
-                            probe_state.probe_unmatched_indexes.as_mut().unwrap();
-                        let (matched_count, unmatched_count) =
-                            table.hash_table.early_filtering_probe(
-                                &mut probe_state.hashes,
-                                valids,
-                                &mut probe_state.selection,
-                                unmatched_selection,
-                            );
-                        probe_state.probe_unmatched_indexes_count = unmatched_count;
-                        matched_count
-                    } else {
-                        // If don't do early filtering, don't use selection.
-                        table.hash_table.probe(&mut probe_state.hashes, valids)
-                    }
-                };
-                probe_state.num_keys_hash_matched += probe_state.selection_count as u64;
-
-                // Continue to probe hash table and process data blocks.
-                self.result_blocks(probe_state, keys, &table.hash_table)
+                Ok(MemoryInnerJoinStream::new(
+                    probe_block,
+                    self.state.clone(),
+                    probe_keys_stream,
+                ))
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })
-        // let keys_state = self.method.build_keys_state(probe_keys, input_num_rows)?;
-        table
-            .hash_method
-            .build_keys_hashes(&keys_state, &mut probe_state.hashes);
-        let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
-        data = data.project(&self.probe_projections)?;
-
-        todo!()
     }
 
     fn final_probe(&mut self) -> Result<Box<dyn JoinStream>> {
@@ -325,4 +280,93 @@ impl Join for MemoryInnerJoin {
     }
 }
 
-struct MemoryInnerJoinStream {}
+struct MemoryInnerJoinStream {
+    probe_data_block: DataBlock,
+    join_state: Arc<HashJoinMemoryState>,
+    probe_keys_stream: Box<dyn ProbeStream>,
+}
+
+unsafe impl Send for MemoryInnerJoinStream {}
+unsafe impl Sync for MemoryInnerJoinStream {}
+
+impl MemoryInnerJoinStream {
+    pub fn new(
+        block: DataBlock,
+        state: Arc<HashJoinMemoryState>,
+        probe_keys_stream: Box<dyn ProbeStream>,
+    ) -> Box<dyn JoinStream> {
+        Box::new(MemoryInnerJoinStream {
+            probe_data_block: block,
+            join_state: state,
+            probe_keys_stream,
+        })
+    }
+}
+
+impl JoinStream for MemoryInnerJoinStream {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            let probe_result = self.probe_keys_stream.next(65535)?;
+
+            if probe_result.is_empty() {
+                return Ok(None);
+            }
+
+            if probe_result.is_all_unmatched() {
+                continue;
+            }
+
+            let probe_block = match self.probe_data_block.num_columns() {
+                0 => None,
+                _ => Some(DataBlock::take(
+                    &self.probe_data_block,
+                    &probe_result.matched_probe,
+                )?),
+            };
+
+            let build_block = match self.join_state.columns.is_empty() {
+                true => None,
+                false => {
+                    let row_ptrs = probe_result.matched_build.as_slice();
+                    Some(DataBlock::take_column_vec(
+                        self.join_state.columns.as_slice(),
+                        self.join_state.column_types.as_slice(),
+                        row_ptrs,
+                        row_ptrs.len(),
+                    ))
+                }
+            };
+
+            let result_block = match (probe_block, build_block) {
+                (Some(mut probe_block), Some(build_block)) => {
+                    probe_block.merge_block(build_block);
+                    probe_block
+                }
+                (Some(probe_block), None) => probe_block,
+                (None, Some(build_block)) => build_block,
+                (None, None) => DataBlock::new(vec![], probe_result.matched_build.len()),
+            };
+
+            // if !self.join_state.probe_to_build.is_empty() {
+            //     for (index, (is_probe_nullable, is_build_nullable)) in
+            //         self.join_state.probe_to_build.iter()
+            //     {
+            //         let entry = match (is_probe_nullable, is_build_nullable) {
+            //             (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+            //             (true, false) => {
+            //                 result_block.get_by_offset(*index).clone().remove_nullable()
+            //             }
+            //             (false, true) => wrap_true_validity(
+            //                 result_block.get_by_offset(*index),
+            //                 result_block.num_rows(),
+            //                 &probe_state.true_validity,
+            //             ),
+            //         };
+            //         result_block.add_entry(entry);
+            //     }
+            // }
+
+            return Ok(Some(result_block));
+        }
+    }
+}

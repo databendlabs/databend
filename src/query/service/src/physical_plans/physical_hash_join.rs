@@ -23,6 +23,7 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -55,6 +56,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
+use crate::pipelines::processors::transforms::MemoryInnerJoin;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
@@ -414,7 +416,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                self.create_join(),
+                self.create_join(builder)?,
                 stage_sync_barrier.clone(),
             );
 
@@ -431,8 +433,34 @@ impl HashJoin {
         Ok(())
     }
 
-    fn create_join(&self) -> Box<dyn crate::pipelines::processors::transforms::Join> {
-        unimplemented!()
+    fn create_join(
+        &self,
+        builder: &mut PipelineBuilder,
+    ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
+        let desc = Arc::new(HashJoinDesc::create(self)?);
+        let hash_key_types = self
+            .build_keys
+            .iter()
+            .zip(&desc.is_null_equal)
+            .map(|(expr, is_null_equal)| {
+                let expr = expr.as_expr(&BUILTIN_FUNCTIONS);
+                if *is_null_equal {
+                    expr.data_type().clone()
+                } else {
+                    expr.data_type().remove_nullable()
+                }
+            })
+            .collect::<Vec<_>>();
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+
+        Ok(Box::new(MemoryInnerJoin::create(
+            &builder.ctx,
+            builder.func_ctx.clone(),
+            method,
+            desc,
+            self.build_projections.clone(),
+            self.probe_projections.clone(),
+        )?))
     }
 }
 

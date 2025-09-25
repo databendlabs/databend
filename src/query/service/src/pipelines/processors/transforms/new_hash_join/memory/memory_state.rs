@@ -15,6 +15,8 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+use databend_common_expression::types::DataType;
+use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
@@ -24,8 +26,25 @@ pub struct HashJoinMemoryState {
     pub mutex: Mutex<()>,
     pub build_rows: CStyleCell<usize>,
     pub chunks: CStyleCell<Vec<DataBlock>>,
+    pub columns: CStyleCell<Vec<ColumnVec>>,
+    pub column_types: CStyleCell<Vec<DataType>>,
     pub build_queue: CStyleCell<VecDeque<usize>>,
 
-    pub hash_table: CStyleCell<HashJoinHashTable>,
     pub arenas: CStyleCell<Vec<Vec<u8>>>,
+    pub hash_table: CStyleCell<HashJoinHashTable>,
+}
+
+impl HashJoinMemoryState {
+    pub fn new() -> Self {
+        HashJoinMemoryState {
+            mutex: Mutex::new(()),
+            build_rows: CStyleCell::new(0),
+            chunks: CStyleCell::new(Vec::new()),
+            columns: CStyleCell::new(Vec::new()),
+            column_types: CStyleCell::new(Vec::new()),
+            build_queue: CStyleCell::new(VecDeque::new()),
+            arenas: CStyleCell::new(Vec::new()),
+            hash_table: CStyleCell::new(HashJoinHashTable::Null),
+        }
+    }
 }
