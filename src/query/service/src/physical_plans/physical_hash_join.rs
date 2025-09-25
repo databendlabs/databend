@@ -55,6 +55,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::HashJoinMemoryState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
 use crate::pipelines::processors::transforms::MemoryInnerJoin;
 use crate::pipelines::processors::transforms::TransformHashJoin;
@@ -407,6 +408,7 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
+        let state = Arc::new(HashJoinMemoryState::create());
         let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
@@ -422,7 +424,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                self.create_join(builder, desc.clone())?,
+                self.create_join(builder, desc.clone(), state.clone())?,
                 stage_sync_barrier.clone(),
             );
 
@@ -443,6 +445,7 @@ impl HashJoin {
         &self,
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
+        state: Arc<HashJoinMemoryState>,
     ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
         let hash_key_types = self
             .build_keys
@@ -468,6 +471,7 @@ impl HashJoin {
             self.build_projections.clone(),
             self.probe_projections.clone(),
             self.probe_to_build.clone(),
+            state,
         )?))
     }
 }

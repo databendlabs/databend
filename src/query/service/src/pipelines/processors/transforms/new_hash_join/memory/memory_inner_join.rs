@@ -70,6 +70,7 @@ impl MemoryInnerJoin {
         build_projection: ColumnSet,
         probe_projections: ColumnSet,
         probe_to_build: Vec<(usize, (bool, bool))>,
+        state: Arc<HashJoinMemoryState>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
@@ -77,13 +78,13 @@ impl MemoryInnerJoin {
 
         Ok(MemoryInnerJoin {
             desc,
+            state,
             method,
             function_ctx,
             build_projection,
             probe_projections,
             probe_to_build: Arc::new(probe_to_build),
             squash_block: SquashBlocks::new(block_size, block_bytes),
-            state: Arc::new(HashJoinMemoryState::new()),
         })
     }
 

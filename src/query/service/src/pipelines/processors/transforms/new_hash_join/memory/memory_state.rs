@@ -35,7 +35,7 @@ pub struct HashJoinMemoryState {
 }
 
 impl HashJoinMemoryState {
-    pub fn new() -> Self {
+    pub fn create() -> Self {
         HashJoinMemoryState {
             mutex: Mutex::new(()),
             build_rows: CStyleCell::new(0),

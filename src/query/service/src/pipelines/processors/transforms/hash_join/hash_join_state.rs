@@ -420,7 +420,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
 
         match enable_early_filtering {
             true => {
-                let mut selection = Vec::with_capacity(keys.len());
+                let mut selection = vec![0; keys.len()];
 
                 match self.hash_table.early_filtering_matched_probe(
                     &mut hashes,
@@ -537,7 +537,7 @@ impl SerializerHashJoinHashTable {
 
         match enable_early_filtering {
             true => {
-                let mut selection = Vec::with_capacity(keys.len());
+                let mut selection = vec![0; keys.len()];
 
                 match self.hash_table.early_filtering_matched_probe(
                     &mut hashes,
@@ -654,7 +654,7 @@ impl SingleBinaryHashJoinHashTable {
 
         match enable_early_filtering {
             true => {
-                let mut selection = Vec::with_capacity(keys.len());
+                let mut selection = vec![0; keys.len()];
 
                 match self.hash_table.early_filtering_matched_probe(
                     &mut hashes,
@@ -751,6 +751,7 @@ impl<Key: FixedKey + HashtableKeyable> FixedKeysProbeStream<Key> {
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = Key>>,
     ) -> Box<dyn ProbeStream> {
+        log::info!("[JOIN] probe hashes: {:?}", pointers);
         Box::new(FixedKeysProbeStream {
             keys,
             pointers,
