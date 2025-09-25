@@ -1420,11 +1420,12 @@ impl<'a> Evaluator<'a> {
     fn eval_or_filters(
         &self,
         args: &[Expr],
-        mut validity: Option<Bitmap>,
+        validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
     ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
 
+        let mut result = validity.clone();
         for arg in args {
             let cond = self.partial_run(arg, validity.clone(), options)?;
             match &cond {
@@ -1443,12 +1444,12 @@ impl<'a> Evaluator<'a> {
                         Column::Boolean(boolean_column) => boolean_column.clone(),
                         _ => unreachable!(),
                     };
-                    match &validity {
+                    match &result {
                         Some(v) => {
-                            validity = Some(v | (&flag));
+                            result = Some(v | (&flag));
                         }
                         None => {
-                            validity = Some(flag);
+                            result = Some(flag);
                         }
                     }
                 }
@@ -1456,7 +1457,7 @@ impl<'a> Evaluator<'a> {
             }
         }
 
-        match validity {
+        match result {
             Some(bitmap) => Ok(Value::Column(Column::Boolean(bitmap))),
             None => Ok(Value::Scalar(Scalar::Boolean(false))),
         }
