@@ -177,7 +177,8 @@ impl HttpQueryManager {
                 };
 
                 match expire_res {
-                    ExpireResult::Expired => {
+                    ExpireResult::Expired(stop_reason) => {
+                        // this msg is only used when query is starting or running
                         let msg = format!(
                             "[HTTP-QUERY] Query {} timed out after {} seconds",
                             &query_id_clone, query_result_timeout_secs
@@ -186,7 +187,7 @@ impl HttpQueryManager {
                             .stop_query(
                                 &query_id_clone,
                                 &None,
-                                StopReason::Timeout,
+                                stop_reason,
                                 ErrorCode::AbortedQuery(&msg),
                             )
                             .await

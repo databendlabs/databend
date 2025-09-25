@@ -413,7 +413,7 @@ impl HttpSessionConf {
                     ) {
                         warn!(
                             "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}, is_data_drained={}",
-                            id, state, last_query.is_data_drained.load(Ordering::Relaxed)
+                            id, state, last_query.data_drained_at.lock().is_some()
                         );
                     }
                 }
@@ -517,7 +517,7 @@ pub enum HttpQueryState {
 
 #[derive(Debug)]
 pub enum ExpireResult {
-    Expired,
+    Expired(StopReason),
     Sleep(Duration),
     Stopped,
 }
@@ -531,7 +531,11 @@ pub struct HttpQuery {
     executor: Arc<Mutex<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
     state: Arc<Mutex<HttpQueryState>>,
-    is_data_drained: AtomicBool,
+    // User may not conn.close(), to avoid meaningless timeout check and heartbeat,
+    // we can mark the query as Finished  after the last page has returned for 30s and stop them.
+    // because client retry should not take as long as result_timeout_secs.
+    // heartbeat_handler should notify client that no need for heartbeat anymore.
+    data_drained_at: Mutex<Option<Instant>>,
     /// The timeout for the query result polling. In the normal case, the client driver
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
@@ -641,7 +645,7 @@ impl HttpQuery {
             query_mem_stat: ctx.get_query_memory_tracking(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
-            is_data_drained: AtomicBool::new(false),
+            data_drained_at: Default::default(),
         })
     }
 
@@ -869,7 +873,10 @@ impl HttpQuery {
     }
 
     pub fn set_data_drained(&self) {
-        self.is_data_drained.store(true, Ordering::Relaxed);
+        let mut guard = self.data_drained_at.lock();
+        if guard.is_none() {
+            *guard = Some(Instant::now())
+        }
     }
 
     pub fn check_removed(&self) -> Option<StopReason> {
@@ -884,12 +891,17 @@ impl HttpQuery {
     // return Duration to sleep
     #[async_backtrace::framed]
     pub async fn check_expire(&self) -> ExpireResult {
+        let is_drained = self.data_drained_at.lock().is_some();
         let expire_state = self.state.lock();
         match *expire_state {
             HttpQueryState::ExpireAt(expire_at) => {
                 let now = Instant::now();
                 if now >= expire_at {
-                    ExpireResult::Expired
+                    ExpireResult::Expired(if is_drained {
+                        StopReason::Finished
+                    } else {
+                        StopReason::Timeout
+                    })
                 } else {
                     ExpireResult::Sleep(expire_at - now)
                 }
@@ -898,15 +910,22 @@ impl HttpQuery {
         }
     }
 
+    /// return false if no need to send heartbeat anymore
     #[async_backtrace::framed]
     #[fastrace::trace(name = "HttpQuery::on_heartbeat")]
     pub fn on_heartbeat(&self) -> bool {
         let mut expire_state = self.state.lock();
         match *expire_state {
             HttpQueryState::ExpireAt(_) => {
+                let now = Instant::now();
+                if let Some(drained_at) = *self.data_drained_at.lock() {
+                    if now > drained_at + Duration::from_secs(self.result_timeout_secs.min(30)) {
+                        *expire_state = HttpQueryState::Stopped(StopReason::Finished);
+                        return false;
+                    }
+                }
                 let duration = Duration::from_secs(self.result_timeout_secs);
-                let deadline = Instant::now() + duration;
-                *expire_state = HttpQueryState::ExpireAt(deadline);
+                *expire_state = HttpQueryState::ExpireAt(now + duration);
                 true
             }
             HttpQueryState::Stopped(_) => false,
