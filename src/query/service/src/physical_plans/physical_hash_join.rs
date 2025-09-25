@@ -253,9 +253,14 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let desc = Arc::new(HashJoinDesc::create(self)?);
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
-        if self.join_type == JoinType::Inner && experimental_new_join {
-            return self.build_new_join_pipeline(builder);
+
+        if desc.single_to_inner.is_none()
+            && self.join_type == JoinType::Inner
+            && experimental_new_join
+        {
+            return self.build_new_join_pipeline(builder, desc);
         }
 
         // Create the join state with optimization flags
@@ -378,7 +383,11 @@ impl HashJoin {
         Ok(())
     }
 
-    fn build_new_join_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_new_join_pipeline(
+        &self,
+        builder: &mut PipelineBuilder,
+        desc: Arc<HashJoinDesc>,
+    ) -> Result<()> {
         self.build.build_pipeline(builder)?;
         let mut build_sinks = builder.main_pipeline.take_sinks();
 
@@ -398,9 +407,6 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        // let params = JoinParams::create();
-        // let settings = JoinSettings::create();
-
         let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
@@ -416,7 +422,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                self.create_join(builder)?,
+                self.create_join(builder, desc.clone())?,
                 stage_sync_barrier.clone(),
             );
 
@@ -436,9 +442,8 @@ impl HashJoin {
     fn create_join(
         &self,
         builder: &mut PipelineBuilder,
+        desc: Arc<HashJoinDesc>,
     ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
-        let desc = Arc::new(HashJoinDesc::create(self)?);
-
         let hash_key_types = self
             .build_keys
             .iter()
