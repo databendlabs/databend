@@ -229,12 +229,7 @@ pub async fn get_history_tables_for_gc(
     for (ident, table_history) in table_history_kvs {
         let id_list = &table_history.id_list;
         if !id_list.is_empty() {
-            // Make sure that the last table id is also the max one (of each table name).
             let last_id = id_list.last().unwrap();
-            {
-                let max_id = id_list.iter().max().unwrap();
-                assert_eq!(max_id, last_id);
-            }
             latest_table_ids.insert(*last_id);
 
             for table_id in id_list.iter() {
