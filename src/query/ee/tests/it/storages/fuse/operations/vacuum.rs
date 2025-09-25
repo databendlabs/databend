@@ -554,7 +554,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum_dropped_table_clean_sequences() -> Result<()> {
+async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
     let endpoints = meta.endpoints.clone();
