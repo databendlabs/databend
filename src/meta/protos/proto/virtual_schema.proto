@@ -32,6 +32,11 @@ message VariantDataType {
       Empty float64_t = 5;
       Empty string_t = 6;
       VariantDataType array_t = 7;
+      Decimal decimal_t = 8;
+      Empty binary_t = 9;
+      Empty date_t = 10;
+      Empty timestamp_t = 11;
+      Empty interval_t = 12;
   }
 }
 

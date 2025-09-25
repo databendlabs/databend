@@ -38,11 +38,13 @@ use crate::types::VectorColumn;
 use crate::types::VectorColumnBuilder;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 
 struct PartitionBlockBuilder {
+    num_rows: usize,
     columns_builder: Vec<ColumnBuilder>,
 }
 
@@ -52,7 +54,6 @@ pub struct BlockPartitionStream {
     rows_threshold: usize,
     bytes_threshold: usize,
     partitions: Vec<PartitionBlockBuilder>,
-    finalize_partitions: Vec<Option<DataBlock>>,
 }
 
 impl BlockPartitionStream {
@@ -75,12 +76,16 @@ impl BlockPartitionStream {
             bytes_threshold,
             initialize: false,
             partitions: vec![],
-            finalize_partitions: vec![None; scatter_size],
         }
     }
 
-    pub fn partition(&mut self, indices: Vec<u64>, block: DataBlock) -> Vec<(usize, DataBlock)> {
-        if block.num_rows() == 0 || block.is_empty() {
+    pub fn partition(
+        &mut self,
+        indices: Vec<u64>,
+        block: DataBlock,
+        out_ready: bool,
+    ) -> Vec<(usize, DataBlock)> {
+        if block.is_empty() {
             return vec![];
         }
 
@@ -96,7 +101,10 @@ impl BlockPartitionStream {
                     columns_builder.push(ColumnBuilder::with_capacity(&data_type, 0));
                 }
 
-                let block_builder = PartitionBlockBuilder { columns_builder };
+                let block_builder = PartitionBlockBuilder {
+                    num_rows: 0,
+                    columns_builder,
+                };
                 self.partitions.push(block_builder);
             }
         }
@@ -110,14 +118,26 @@ impl BlockPartitionStream {
         let scatter_indices =
             DataBlock::divide_indices_by_scatter_size(&indices, self.scatter_size);
 
+        for (partition_id, indices) in scatter_indices.iter().enumerate() {
+            self.partitions[partition_id].num_rows += indices.len();
+        }
+
         for (column_idx, column) in columns.into_iter().enumerate() {
             for (partition_id, indices) in scatter_indices.iter().enumerate() {
+                if indices.is_empty() {
+                    continue;
+                }
+
                 let partition = &mut self.partitions[partition_id];
                 let column_builder = &mut partition.columns_builder[column_idx];
                 copy_column(indices, &column, column_builder);
             }
 
             drop(column);
+        }
+
+        if !out_ready {
+            return vec![];
         }
 
         let mut ready_blocks = Vec::with_capacity(self.partitions.len());
@@ -128,7 +148,7 @@ impl BlockPartitionStream {
                 .map(|x| x.memory_size())
                 .sum::<usize>();
 
-            let rows = partition.columns_builder[0].len();
+            let rows = partition.num_rows;
 
             if memory_size >= self.bytes_threshold || rows >= self.rows_threshold {
                 let mut columns = Vec::with_capacity(partition.columns_builder.len());
@@ -140,10 +160,11 @@ impl BlockPartitionStream {
                     let data_type = column_builder.data_type();
                     let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
                     partition.columns_builder.push(new_builder);
-                    columns.push(column_builder.build());
+                    columns.push(BlockEntry::from(column_builder.build()));
                 }
 
-                ready_blocks.push((id, DataBlock::new_from_columns(columns)));
+                partition.num_rows = 0;
+                ready_blocks.push((id, DataBlock::new(columns, rows)));
             }
         }
 
@@ -158,9 +179,7 @@ impl BlockPartitionStream {
         }
 
         for (partition_id, data) in self.partitions.iter().enumerate() {
-            if data.columns_builder[0].len() != 0
-                || self.finalize_partitions[partition_id].is_some()
-            {
+            if data.num_rows != 0 {
                 partition_ids.push(partition_id);
             }
         }
@@ -168,13 +187,13 @@ impl BlockPartitionStream {
     }
 
     pub fn take_partitions(&mut self, excluded: &HashSet<usize>) -> Vec<(usize, DataBlock)> {
+        if !self.initialize {
+            return vec![];
+        }
+
         let capacity = self.partitions.len() - excluded.len();
 
         let mut take_blocks = Vec::with_capacity(capacity);
-
-        if !self.initialize {
-            return take_blocks;
-        }
 
         for (id, partition) in self.partitions.iter_mut().enumerate() {
             if excluded.contains(&id) {
@@ -190,31 +209,27 @@ impl BlockPartitionStream {
                 let data_type = column_builder.data_type();
                 let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
                 partition.columns_builder.push(new_builder);
-                columns.push(column_builder.build());
+                columns.push(BlockEntry::from(column_builder.build()));
             }
 
-            take_blocks.push((id, DataBlock::new_from_columns(columns)));
+            let num_rows = partition.num_rows;
+            partition.num_rows = 0;
+            take_blocks.push((id, DataBlock::new(columns, num_rows)));
         }
 
         take_blocks
     }
 
-    pub fn destroy_finalize_partition(&mut self, partition_id: usize) -> Option<DataBlock> {
-        self.finalize_partitions[partition_id].take()
-    }
-
     pub fn finalize_partition(&mut self, partition_id: usize) -> Option<DataBlock> {
-        if let Some(data_block) = &self.finalize_partitions[partition_id] {
-            return Some(data_block.clone());
-        }
-
         if !self.initialize {
             return None;
         }
 
         let partition = &mut self.partitions[partition_id];
 
-        if partition.columns_builder[0].len() == 0 {
+        let num_rows = partition.num_rows;
+
+        if num_rows == 0 {
             return None;
         }
 
@@ -226,29 +241,11 @@ impl BlockPartitionStream {
             let data_type = column_builder.data_type();
             let new_builder = ColumnBuilder::with_capacity(&data_type, 0);
             partition.columns_builder.push(new_builder);
-            columns.push(column_builder.build());
+            columns.push(BlockEntry::from(column_builder.build()));
         }
 
-        self.finalize_partitions[partition_id] = Some(DataBlock::new_from_columns(columns));
-        self.finalize_partitions[partition_id].clone()
-    }
-
-    pub fn set_row_threshold(&mut self, row_threshold: usize) {
-        self.rows_threshold = row_threshold;
-    }
-
-    pub fn set_bytes_threshold(&mut self, bytes_threshold: usize) {
-        self.bytes_threshold = bytes_threshold;
-    }
-
-    pub fn is_partition_empty(&self, partition_id: usize) -> bool {
-        if !self.initialize || self.partitions.is_empty() {
-            return true;
-        }
-
-        (self.partitions[partition_id].columns_builder.is_empty()
-            || self.partitions[partition_id].columns_builder[0].len() == 0)
-            && self.finalize_partitions[partition_id].is_none()
+        partition.num_rows = 0;
+        Some(DataBlock::new(columns, num_rows))
     }
 }
 
@@ -325,7 +322,6 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
         (ColumnBuilder::Nullable(builder), Column::Nullable(column)) => {
             copy_nullable(builder, column, indices);
         }
-
         (ColumnBuilder::Vector(builder), Column::Vector(column)) => {
             copy_vector(indices, builder, column);
         }
@@ -343,6 +339,11 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
 
 fn copy_boolean<I: Index>(to: &mut MutableBitmap, from: &Bitmap, indices: &[I]) {
     let num_rows = indices.len();
+
+    if num_rows == 0 {
+        return;
+    }
+
     // Fast path: avoid iterating column to generate a new bitmap.
     // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
     // we can just slice it.

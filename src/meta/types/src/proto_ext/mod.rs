@@ -22,6 +22,7 @@ mod put_sequential_ext;
 mod raft_types_ext;
 mod seq_v_ext;
 mod snapshot_chunk_request_ext;
+mod snapshot_v004_ext;
 mod stream_item_ext;
 mod transfer_leader_request_ext;
 mod txn_condition_ext;

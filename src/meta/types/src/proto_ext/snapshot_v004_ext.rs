@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Convert one type to another type for this crate to convert between 3rd party types.
+use anyerror::AnyError;
 
-use std::io;
+use crate::protobuf::InstallSnapshotResponseV004;
+use crate::raft_types::NetworkError;
+use crate::raft_types::Vote;
 
-/// Convert one type to another type for this crate to convert between 3rd party types.
-pub trait ValueConvert<T>
-where Self: Sized
-{
-    /// Convert `Self` to `T`.
-    fn conv_to(self) -> Result<T, io::Error>;
+impl InstallSnapshotResponseV004 {
+    pub fn to_vote(&self) -> Result<Vote, NetworkError> {
+        let Some(vote) = self.vote else {
+            return Err(NetworkError::new(&AnyError::error(
+                "missing vote in InstallSnapshotResponseV004",
+            )));
+        };
 
-    /// Convert `T` to `Self`.
-    fn conv_from(value: T) -> Result<Self, io::Error>;
+        Ok(Vote::from(vote))
+    }
 }

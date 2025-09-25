@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// # Safety
-/// # As: core::ptr::copy_nonoverlapping
-#[inline]
-pub unsafe fn store<T: Copy>(val: &T, ptr: *mut u8) {
-    core::ptr::copy_nonoverlapping(val as *const T as *const u8, ptr, std::mem::size_of::<T>());
-}
+//! Convert one type to another type for this crate to convert between 3rd party types.
 
-/// # Safety
-/// # As: core::ptr::read_unaligned
-#[inline]
-pub unsafe fn read<T>(ptr: *const u8) -> T {
-    core::ptr::read_unaligned::<T>(ptr as _)
+use std::io;
+
+/// Convert one type `Self` to type `T` for persisting on disk for this crate to convert between 3rd party types.
+pub trait PersistedCodec<T>
+where Self: Sized
+{
+    /// Convert `Self` to `T`.
+    fn encode_to(self) -> Result<T, io::Error>;
+
+    /// Parse `T` back to `Self`.
+    fn decode_from(value: T) -> Result<Self, io::Error>;
 }

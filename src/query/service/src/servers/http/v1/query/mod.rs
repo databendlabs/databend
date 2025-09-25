@@ -35,7 +35,7 @@ pub use http_query::HttpSessionConf;
 pub use http_query::HttpSessionStateInternal;
 pub use http_query_context::HttpQueryContext;
 pub use http_query_manager::HttpQueryManager;
-pub(crate) use http_query_manager::RemoveReason;
+pub(crate) use http_query_manager::StopReason;
 pub use page_manager::PageManager;
 pub use page_manager::ResponseData;
 pub use sized_spsc::Wait;
