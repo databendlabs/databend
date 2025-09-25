@@ -233,10 +233,11 @@ impl<F: AsFd> DmaFile<F> {
 
     fn write_direct(&mut self) -> io::Result<usize> {
         let buf = self.buffer();
+        let buf_size = buf.len();
         match rustix::io::write(&self.fd, buf) {
             Ok(n) => {
                 self.length += n;
-                if n != buf.len() {
+                if n != buf_size {
                     return Err(io::Error::other("short write"));
                 }
                 self.mut_buffer().clear();
@@ -271,7 +272,7 @@ impl<F: AsFd> DmaFile<F> {
         Ok(rustix::fs::fstat(&self.fd)?.st_size as _)
     }
 
-    pub fn len(&self) -> usize {
+    pub fn length(&self) -> usize {
         self.length
     }
 }
