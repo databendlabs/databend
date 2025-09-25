@@ -937,7 +937,7 @@ impl Catalog for MutableCatalog {
         &self,
         req: GetAutoIncrementNextValueReq,
     ) -> Result<GetAutoIncrementNextValueReply> {
-        let res = self.ctx.meta.get_auto_increment_next_value(req).await?;
+        let res = self.ctx.meta.get_auto_increment_next_value(req).await??;
         Ok(res)
     }
 }

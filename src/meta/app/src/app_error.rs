@@ -19,7 +19,6 @@ use databend_common_meta_types::MatchSeq;
 
 use crate::data_mask::data_mask_name_ident;
 use crate::principal::procedure_name_ident;
-use crate::principal::AutoIncrementKey;
 use crate::principal::ProcedureIdentity;
 use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
@@ -968,22 +967,6 @@ impl UnsupportedSequenceStorageVersion {
     }
 }
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("OutOfAutoIncrementRange: `{key}` while `{context}`")]
-pub struct OutOfAutoIncrementRange {
-    key: AutoIncrementKey,
-    context: String,
-}
-
-impl OutOfAutoIncrementRange {
-    pub fn new(key: AutoIncrementKey, context: impl ToString) -> Self {
-        Self {
-            key,
-            context: context.to_string(),
-        }
-    }
-}
-
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1166,9 +1149,6 @@ pub enum AppError {
     SequenceError(#[from] SequenceError),
 
     #[error(transparent)]
-    AutoIncrementError(#[from] AutoIncrementError),
-
-    #[error(transparent)]
     UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 
     #[error(transparent)]
@@ -1234,12 +1214,6 @@ pub enum SequenceError {
 
     #[error(transparent)]
     UnsupportedSequenceStorageVersion(#[from] UnsupportedSequenceStorageVersion),
-}
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-pub enum AutoIncrementError {
-    #[error(transparent)]
-    OutOfAutoIncrementRange(#[from] OutOfAutoIncrementRange),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1594,22 +1568,6 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
-impl AppErrorMessage for OutOfAutoIncrementRange {
-    fn message(&self) -> String {
-        format!("AutoIncrement '{}' out of range", self.key)
-    }
-}
-
-impl AppErrorMessage for AutoIncrementError {
-    fn message(&self) -> String {
-        match self {
-            AutoIncrementError::OutOfAutoIncrementRange(e) => {
-                format!("OutOfAutoIncrementRange: '{}'", e.message())
-            }
-        }
-    }
-}
-
 impl AppErrorMessage for VirtualColumnIdOutBound {}
 
 impl AppErrorMessage for VirtualColumnTooMany {}
@@ -1737,7 +1695,6 @@ impl From<AppError> for ErrorCode {
             AppError::CleanDbIdTableNamesFailed(err) => {
                 ErrorCode::GeneralDbGcFailure(err.message())
             }
-            AppError::AutoIncrementError(err) => ErrorCode::AutoIncrementError(err.message()),
         }
     }
 }

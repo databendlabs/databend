@@ -15,12 +15,13 @@
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 
-use crate::kv_app_error::KVAppError;
+use crate::errors::AutoIncrementError;
+use crate::meta_txn_error::MetaTxnError;
 
 #[async_trait::async_trait]
 pub trait AutoIncrementApi: Send + Sync {
     async fn get_auto_increment_next_value(
         &self,
         req: GetAutoIncrementNextValueReq,
-    ) -> Result<GetAutoIncrementNextValueReply, KVAppError>;
+    ) -> Result<Result<GetAutoIncrementNextValueReply, AutoIncrementError>, MetaTxnError>;
 }

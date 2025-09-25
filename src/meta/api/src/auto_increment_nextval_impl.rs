@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use databend_common_expression::AutoIncrementExpr;
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::AutoIncrementError;
-use databend_common_meta_app::app_error::OutOfAutoIncrementRange;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::tenant::ToTenant;
@@ -28,7 +25,8 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use log::debug;
 
-use crate::kv_app_error::KVAppError;
+use crate::errors::AutoIncrementError;
+use crate::meta_txn_error::MetaTxnError;
 use crate::send_txn;
 
 /// The implementation of `next_val` for sequence number.
@@ -48,7 +46,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         self,
         tenant: impl ToTenant,
         count: u64,
-    ) -> Result<FetchAddU64Response, KVAppError> {
+    ) -> Result<Result<FetchAddU64Response, AutoIncrementError>, MetaTxnError> {
         debug!("{}", func_name!());
 
         // Key for the sequence number value.
@@ -75,17 +73,15 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         let got_delta = resp.delta();
 
         if got_delta < delta {
-            return Err(KVAppError::AppError(AppError::AutoIncrementError(
-                AutoIncrementError::OutOfAutoIncrementRange(OutOfAutoIncrementRange::new(
-                    self.key,
-                    format!(
-                        "{}: count: {count}; expected delta: {delta}, but got: {resp}",
-                        self.expr.step,
-                    ),
-                )),
-            )));
+            return Ok(Err(AutoIncrementError::OutOfAutoIncrementRange {
+                key: self.key,
+                context: format!(
+                    "{}: count: {count}; expected delta: {delta}, but got: {resp}",
+                    self.expr.step,
+                ),
+            }));
         }
 
-        Ok(resp.clone())
+        Ok(Ok(resp.clone()))
     }
 }

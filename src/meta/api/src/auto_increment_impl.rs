@@ -21,7 +21,8 @@ use log::debug;
 
 use crate::auto_increment_api::AutoIncrementApi;
 use crate::auto_increment_nextval_impl::NextVal;
-use crate::kv_app_error::KVAppError;
+use crate::errors::AutoIncrementError;
+use crate::meta_txn_error::MetaTxnError;
 
 #[async_trait::async_trait]
 #[tonic::async_trait]
@@ -29,7 +30,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> AutoIncrementApi for KV {
     async fn get_auto_increment_next_value(
         &self,
         req: GetAutoIncrementNextValueReq,
-    ) -> Result<GetAutoIncrementNextValueReply, KVAppError> {
+    ) -> Result<Result<GetAutoIncrementNextValueReply, AutoIncrementError>, MetaTxnError> {
         debug!(req :? =(&req); "AutoIncrementApi: {}", func_name!());
 
         let next_val = NextVal {
@@ -38,12 +39,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> AutoIncrementApi for KV {
             expr: req.expr.clone(),
         };
 
-        let resp = next_val.next_val(&req.tenant, req.count).await?;
+        let (start, end) = match next_val.next_val(&req.tenant, req.count).await? {
+            Ok(resp) => (resp.before, resp.after),
+            Err(err) => {
+                return Ok(Err(err));
+            }
+        };
 
-        Ok(GetAutoIncrementNextValueReply {
-            start: resp.before,
+        Ok(Ok(GetAutoIncrementNextValueReply {
+            start,
             step: req.expr.step,
-            end: resp.after,
-        })
+            end,
+        }))
     }
 }
