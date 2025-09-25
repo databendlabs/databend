@@ -199,6 +199,7 @@ pub struct DmaFile<F> {
     fd: F,
     alignment: Alignment,
     buf: Option<DmaBuffer>,
+    length: usize,
 }
 
 impl<F: AsFd> DmaFile<F> {
@@ -234,6 +235,7 @@ impl<F: AsFd> DmaFile<F> {
         let buf = self.buffer();
         match rustix::io::write(&self.fd, buf) {
             Ok(n) => {
+                self.length += n;
                 if n != buf.len() {
                     return Err(io::Error::other("short write"));
                 }
@@ -267,6 +269,10 @@ impl<F: AsFd> DmaFile<F> {
 
     pub fn size(&self) -> io::Result<usize> {
         Ok(rustix::fs::fstat(&self.fd)?.st_size as _)
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
     }
 }
 
@@ -327,6 +333,7 @@ impl AsyncDmaFile {
             fd: file,
             alignment,
             buf: None,
+            length: 0,
         })
     }
 
@@ -365,6 +372,7 @@ impl SyncDmaFile {
             fd,
             alignment,
             buf: None,
+            length: 0,
         })
     }
 
@@ -422,6 +430,7 @@ impl DmaWriteBuf {
             fd: AsyncDmaFile::create_fd(path, dio).await?,
             alignment: self.allocator.0,
             buf: None,
+            length: 0,
         };
 
         let file_length = self.size();
@@ -456,18 +465,6 @@ impl DmaWriteBuf {
     pub fn into_data(self) -> Vec<DmaBuffer> {
         self.data
     }
-
-    // fn write_last<'a>(&mut self, buf: &'a [u8]) -> &'a [u8] {
-    //     let Some(dst) = self.data.last_mut() else {
-    //         return buf;
-    //     };
-    //     if dst.len() == dst.capacity() {
-    //         return buf;
-    //     }
-
-    //     let remain = dst.capacity() - dst.len();
-    //     Self::copy(buf, dst, remain)
-    // }
 
     fn copy<'a>(src: &'a [u8], dst: &mut DmaBuffer, remain: usize) -> &'a [u8] {
         if src.len() <= remain {
@@ -532,6 +529,8 @@ impl DmaWriteBuf {
             _ => (),
         }
 
+        file.length += writen;
+
         if writen != len {
             Err(io::Error::other("short write"))
         } else {
@@ -576,10 +575,12 @@ impl DmaWriteBuf {
         }
 
         if to_truncate == 0 {
+            file.length += writen;
             return Ok(writen);
         }
 
-        file.truncate(file.size()? - to_truncate)?;
+        file.length -= to_truncate;
+        file.truncate(file.length)?;
         Ok(writen - to_truncate)
     }
 }

@@ -481,19 +481,65 @@ struct LocalDst {
 }
 
 struct RemoteDst {
+    offset: usize,
     path: String,
     buf: BufferWriter,
 }
 
-pub struct XXX {
+pub struct MixFileWriter {
     local: Option<LocalDst>,
     remote: Option<RemoteDst>,
 }
 
-impl io::Write for XXX {
+impl MixFileWriter {
+    pub fn open() {}
+
+    pub fn finish(self) -> Result<MixFile> {
+        let local_path = match self.local {
+            Some(
+                local @ LocalDst {
+                    file: Some(_),
+                    buf: Some(_),
+                    ..
+                },
+            ) => {
+                let dma = local.buf.as_mut().unwrap();
+                if dma.fast_write(buf) {
+                    return Ok(n);
+                }
+
+                let mut file = local.file.take().unwrap();
+                let file_size = file.len() + dma.size();
+                dma.flush_and_close(file)?;
+
+                local.path.set_size(file_size).unwrap();
+
+                return Ok(MixFile {
+                    local_path: local.path,
+                    remote: None,
+                    remote_offset: 0,
+                });
+            }
+            Some(LocalDst { path, .. }) => Some(path),
+            _ => None,
+        };
+
+        let Some(remote) = &mut self.remote else {
+            unreachable!()
+        };
+
+        Ok(MixFile {
+            local_path,
+            remote: Some(remote.path),
+            remote_offset: remote.offset,
+        })
+    }
+}
+
+impl io::Write for MixFileWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let n = buf.len();
-        let dma_buf = match &mut self.local {
+        let (dma_buf, offset) = match &mut self.local {
             Some(
                 local @ LocalDst {
                     file: Some(_),
@@ -510,22 +556,28 @@ impl io::Write for XXX {
                     dma.write(buf)?;
                     let file = local.file.as_mut().unwrap();
                     dma.flush_full_buffer(file)?;
-                    local.path.set_size(file.size()?).unwrap();
+                    local.path.set_size(file.len()).unwrap();
                     return Ok(n);
                 }
 
                 let mut file = local.file.take().unwrap();
                 dma.flush_full_buffer(&mut file)?;
-                local.path.set_size(file.size()?).unwrap();
+
+                let file_size = file.len();
+                local.path.set_size(file_size).unwrap();
                 drop(file);
-                local.buf.take().unwrap().into_data()
+
+                (local.buf.take().unwrap().into_data(), file_size)
             }
-            _ => vec![],
+            _ => (vec![], 0),
         };
 
         let Some(remote) = &mut self.remote else {
             unreachable!()
         };
+        if offset != 0 {
+            remote.offset = offset;
+        }
 
         for buf in dma_buf {
             remote.buf.write(&buf)?;
@@ -534,9 +586,30 @@ impl io::Write for XXX {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        // todo close
-        Ok(())
+        match &mut self.local {
+            Some(LocalDst {
+                file: Some(file),
+                buf: Some(dma),
+                ..
+            }) => {
+                // warning: not completely flushed, data may be lost
+                dma.flush_full_buffer(file)?;
+            }
+            _ => (),
+        }
+
+        let Some(remote) = &mut self.remote else {
+            unreachable!()
+        };
+
+        remote.buf.flush()
     }
+}
+
+pub struct MixFile {
+    local_path: TempPath,
+    remote: Option<String>,
+    remote_offset: usize,
 }
 
 #[cfg(test)]
