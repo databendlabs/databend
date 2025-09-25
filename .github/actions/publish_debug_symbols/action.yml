@@ -1,0 +1,48 @@
+name: "Publish Debug Symbols"
+description: "Publish debug symbols to GitHub releases and R2"
+inputs:
+  version:
+    description: "Release version"
+    required: true
+  target:
+    description: "Release target"
+    required: true
+  category:
+    description: "Release default/docker"
+    required: false
+    default: default
+  sha:
+    description: "Git SHA for artifact download"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ inputs.sha }}
+        target: ${{ inputs.target }}
+        category: ${{ inputs.category }}
+        artifacts: query.debug
+        path: distro/bin
+
+    - name: Prepare artifact
+      id: prepare
+      shell: bash
+      run: |
+        publish_name="databend-query-${{ inputs.category }}-${{ inputs.version }}-${{ inputs.target }}.debug.tar.gz"
+        tar -C distro/bin -czvf ${publish_name} databend-query.debug
+        echo "name=$publish_name" >> $GITHUB_OUTPUT
+
+    - name: Update debug symbols to github
+      shell: bash
+      run: |
+        gh release upload ${{ inputs.version }} ${{ steps.prepare.outputs.name }} --clobber
+
+    - name: Sync debug symbols to R2
+      shell: bash
+      continue-on-error: true
+      if: inputs.category == 'default'
+      run: |
+        aws s3 cp ${{ steps.prepare.outputs.name }} s3://repo/databend/${{ inputs.version }}/${{ steps.prepare.outputs.name }} --no-progress --checksum-algorithm=CRC32
