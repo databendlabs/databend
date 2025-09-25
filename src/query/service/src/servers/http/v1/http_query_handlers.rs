@@ -60,7 +60,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use super::query::RemoveReason;
+use super::query::StopReason;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
@@ -93,7 +93,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
-use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -167,10 +166,10 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn removed(query_id: &str, remove_reason: RemoveReason) -> impl IntoResponse {
+    pub(crate) fn removed(query_id: &str, remove_reason: StopReason) -> impl IntoResponse {
         let id = query_id.to_string();
         let state = match remove_reason {
-            RemoveReason::Finished => ExecuteStateKind::Succeeded,
+            StopReason::Finished => ExecuteStateKind::Succeeded,
             _ => ExecuteStateKind::Failed,
         };
         Json(QueryResponse {
@@ -306,10 +305,10 @@ async fn query_final_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .remove_query(
+            .stop_query(
                 &query_id,
                 &ctx.client_session_id,
-                RemoveReason::Finished,
+                StopReason::Finished,
                 ErrorCode::ClosedQuery("Query closed by client"),
             )
             .await?
@@ -347,10 +346,10 @@ async fn query_cancel_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .remove_query(
+            .stop_query(
                 &query_id,
                 &ctx.client_session_id,
-                RemoveReason::Canceled,
+                StopReason::Canceled,
                 ErrorCode::AbortedQuery("canceled by client"),
             )
             .await?
@@ -449,9 +448,8 @@ async fn query_page_handler(
                 query.update_expire_time(false).await;
                 let (resp, next_is_final) = QueryResponse::from_internal(query_id, resp, false);
                 if next_is_final {
-                    query.wait_for_final()
+                    query.set_data_drained()
                 }
-                SessionManager::instance().new_query_request();
                 Ok(resp)
             }
         }
@@ -501,7 +499,6 @@ pub(crate) async fn query_handler(
             client_session_id_info,
             mask_connection_info(&format!("{:?}", req))
         );
-        SessionManager::instance().new_query_request();
         let sql = req.sql.clone();
 
         match HttpQuery::try_create(ctx, req.clone()).await {
@@ -522,7 +519,6 @@ pub(crate) async fn query_handler(
                 let http_query_manager = HttpQueryManager::instance();
                 let query = http_query_manager.add_query(query).await;
 
-                query.update_expire_time(true).await;
                 // tmp workaround to tolerant old clients
                 let resp = query
                     .get_response_page(0)
@@ -550,7 +546,7 @@ pub(crate) async fn query_handler(
                 let (resp, next_is_final) =
                     QueryResponse::from_internal(query.id.to_string(), resp, false);
                 if next_is_final {
-                    query.wait_for_final()
+                    query.set_data_drained()
                 }
                 Ok(resp.into_response())
             }
@@ -842,7 +838,7 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
+fn query_id_removed(query_id: &str, remove_reason: StopReason) -> PoemError {
     PoemError::from_string(
         format!("[HTTP-QUERY] Query ID {query_id} {}", remove_reason),
         StatusCode::BAD_REQUEST,
