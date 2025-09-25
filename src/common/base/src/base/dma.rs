@@ -22,6 +22,7 @@ use std::io::IoSlice;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::ops::Range;
+use std::os::fd::AsFd;
 use std::os::fd::BorrowedFd;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -30,7 +31,7 @@ use std::ptr::NonNull;
 
 use bytes::Bytes;
 use rustix::fs::OFlags;
-use tokio::fs::File;
+use tokio::fs::File as AsyncFile;
 use tokio::io::AsyncSeekExt;
 
 use crate::runtime::spawn_blocking;
@@ -192,59 +193,15 @@ pub fn dma_buffer_to_bytes(buf: DmaBuffer) -> Bytes {
     Bytes::from(data)
 }
 
-/// A `DmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
+/// A `AsyncDmaFile` is similar to a `File`, but it is opened with the `O_DIRECT` file in order to
 /// perform direct IO.
-struct AsyncDmaFile {
-    fd: File,
+struct DmaFile<F> {
+    fd: F,
     alignment: Alignment,
     buf: Option<DmaBuffer>,
 }
 
-impl AsyncDmaFile {
-    async fn open_raw(path: impl AsRef<Path>, #[allow(unused)] dio: bool) -> io::Result<File> {
-        #[allow(unused_mut)]
-        let mut flags = 0;
-        #[cfg(target_os = "linux")]
-        if dio {
-            flags = OFlags::DIRECT.bits() as i32
-        }
-
-        File::options()
-            .read(true)
-            .custom_flags(flags)
-            .open(path)
-            .await
-    }
-
-    async fn create_raw(path: impl AsRef<Path>, #[allow(unused)] dio: bool) -> io::Result<File> {
-        #[allow(unused_mut)]
-        let mut flags = OFlags::EXCL;
-        #[cfg(target_os = "linux")]
-        if dio {
-            flags |= OFlags::DIRECT;
-        }
-
-        File::options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags(flags.bits() as i32)
-            .open(path)
-            .await
-    }
-
-    /// Attempts to open a file in read-only mode.
-    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
-        let file = AsyncDmaFile::open_raw(path, dio).await?;
-        open_dma(file).await
-    }
-
-    /// Opens a file in write-only mode.
-    async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
-        let file = AsyncDmaFile::create_raw(path, dio).await?;
-        open_dma(file).await
-    }
-
+impl<F: AsFd> DmaFile<F> {
     fn set_buffer(&mut self, buf: DmaBuffer) {
         self.buf = Some(buf)
     }
@@ -308,13 +265,59 @@ impl AsyncDmaFile {
     fn truncate(&self, length: usize) -> io::Result<()> {
         rustix::fs::ftruncate(&self.fd, length as u64).map_err(|e| e.into())
     }
+}
+
+type AsyncDmaFile = DmaFile<AsyncFile>;
+
+impl AsyncDmaFile {
+    async fn open_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncFile> {
+        let flags = if cfg!(target_os = "linux") && dio {
+            OFlags::DIRECT.bits() as i32
+        } else {
+            0
+        };
+
+        AsyncFile::options()
+            .read(true)
+            .custom_flags(flags)
+            .open(path)
+            .await
+    }
+
+    async fn create_raw(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncFile> {
+        let flags = if cfg!(target_os = "linux") && dio {
+            OFlags::EXCL | OFlags::DIRECT
+        } else {
+            OFlags::EXCL
+        };
+
+        AsyncFile::options()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .custom_flags(flags.bits() as i32)
+            .open(path)
+            .await
+    }
+
+    /// Attempts to open a file in read-only mode.
+    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
+        let file = AsyncDmaFile::open_raw(path, dio).await?;
+        open_dma(file).await
+    }
+
+    /// Opens a file in write-only mode.
+    async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
+        let file = AsyncDmaFile::create_raw(path, dio).await?;
+        open_dma(file).await
+    }
 
     async fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.fd.seek(pos).await
     }
 }
 
-async fn open_dma(file: File) -> io::Result<AsyncDmaFile> {
+async fn open_dma(file: AsyncFile) -> io::Result<AsyncDmaFile> {
     let stat = fstatvfs(&file).await?;
     let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
 
@@ -325,7 +328,7 @@ async fn open_dma(file: File) -> io::Result<AsyncDmaFile> {
     })
 }
 
-async fn fstatvfs(file: &File) -> io::Result<rustix::fs::StatVfs> {
+async fn fstatvfs(file: &AsyncFile) -> io::Result<rustix::fs::StatVfs> {
     let fd = file.as_raw_fd();
     asyncify(move || {
         let fd = unsafe { BorrowedFd::borrow_raw(fd) };
