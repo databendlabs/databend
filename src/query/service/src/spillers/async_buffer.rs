@@ -493,8 +493,7 @@ pub struct XXX {
 impl io::Write for XXX {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let n = buf.len();
-        // while !buf.is_empty() {
-        match &mut self.local {
+        let dma_buf = match &mut self.local {
             Some(
                 local @ LocalDst {
                     file: Some(_),
@@ -509,22 +508,34 @@ impl io::Write for XXX {
 
                 if local.dir.grow_size(&mut local.path, buf.len(), false)? {
                     dma.write(buf)?;
-                    dma.flush_full_buffer(local.file.as_mut().unwrap())?;
+                    let file = local.file.as_mut().unwrap();
+                    dma.flush_full_buffer(file)?;
+                    local.path.set_size(file.size()?).unwrap();
                     return Ok(n);
                 }
-                dma.flush_and_close(local.file.take().unwrap())?;
-            }
-            _ => todo!(),
-        }
-        //}
-        //        Ok(())
 
-        // self.local.unwrap().set_size(size)
-        todo!()
+                let mut file = local.file.take().unwrap();
+                dma.flush_full_buffer(&mut file)?;
+                local.path.set_size(file.size()?).unwrap();
+                drop(file);
+                local.buf.take().unwrap().into_data()
+            }
+            _ => vec![],
+        };
+
+        let Some(remote) = &mut self.remote else {
+            unreachable!()
+        };
+
+        for buf in dma_buf {
+            remote.buf.write(&buf)?;
+        }
+        remote.buf.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        todo!()
+        // todo close
+        Ok(())
     }
 }
 

@@ -265,7 +265,7 @@ impl<F: AsFd> DmaFile<F> {
         rustix::fs::ftruncate(&self.fd, length as u64).map_err(|e| e.into())
     }
 
-    fn size(&self) -> io::Result<usize> {
+    pub fn size(&self) -> io::Result<usize> {
         Ok(rustix::fs::fstat(&self.fd)?.st_size as _)
     }
 }
