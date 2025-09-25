@@ -51,6 +51,7 @@ message AutoIncrementExpr {
   uint64 start = 1;
   int64 step = 2;
   bool is_ordered = 3;
+  // Used to concatenate AutoIncrementKey in `DefaultExprBinder::parse_and_bind`
   uint32 column_id = 4;
 }
 
