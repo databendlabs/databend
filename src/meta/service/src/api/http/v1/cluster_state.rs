@@ -19,23 +19,30 @@ use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
 
-use crate::meta_service::MetaNode;
+use crate::meta_node::meta_handle::MetaHandle;
 
 /// list all nodes in current databend-meta cluster.
 ///
 /// request: None
 /// return: return a list of cluster node information
 #[poem::handler]
-pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
-    let nodes = meta_node.get_nodes().await;
+pub async fn nodes_handler(meta_handle: Data<&Arc<MetaHandle>>) -> poem::Result<impl IntoResponse> {
+    let nodes = meta_handle.handle_get_nodes().await.map_err(|e| {
+        poem::Error::from_string(
+            format!("Failed to get status: {}", e),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
+    })?;
     Ok(Json(nodes))
 }
 
 #[poem::handler]
-pub async fn status_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
-    let status = meta_node.get_status().await.map_err(|e| {
+pub async fn status_handler(
+    meta_handle: Data<&Arc<MetaHandle>>,
+) -> poem::Result<impl IntoResponse> {
+    let status = meta_handle.handle_get_status().await.map_err(|e| {
         poem::Error::from_string(
-            format!("failed to get status: {}", e),
+            format!("Failed to get status: {}", e),
             StatusCode::INTERNAL_SERVER_ERROR,
         )
     })?;

@@ -486,7 +486,7 @@ async fn benchmark_list(
         .unwrap_or_else(|| format!("{}-{}", prefix, client_num));
 
     if i % 100 == 0 {
-        println!("{:>10}-th list using prefix: '{}'", name, key_prefix);
+        println!("{:>10} list using prefix: '{}'", name, key_prefix);
     }
 
     let start_time = Instant::now();
@@ -494,20 +494,24 @@ async fn benchmark_list(
     let stream_returned_time = Instant::now();
 
     static TOTAL: AtomicU64 = AtomicU64::new(0);
+    static ERROR: AtomicU64 = AtomicU64::new(0);
+
     TOTAL.fetch_add(1, Ordering::Relaxed);
 
     println!(
-        "{:>10}-th list stream returned in {:?}, err: {:?}, total streams: {}",
+        "{:>10} list stream returned in {:?}, err: {:?}, total streams: {}, errors: {}",
         name,
         stream_returned_time.duration_since(start_time),
         stream_res.as_ref().err(),
-        TOTAL.load(Ordering::Relaxed)
+        TOTAL.load(Ordering::Relaxed),
+        ERROR.load(Ordering::Relaxed)
     );
 
     let mut strm = match stream_res {
         Ok(stream) => stream,
         Err(e) => {
-            println!("{:>10}-th list error: {:?}", name, e);
+            println!("{:>10} list error: {:?}", name, e);
+            ERROR.fetch_add(1, Ordering::Relaxed);
             return;
         }
     };
@@ -531,12 +535,18 @@ async fn benchmark_list(
             }
         }
 
-        if count % 10 == 0 {
-            println!("{:>10}-th list found {} keys", name, count);
+        if count % 10 == 9 {
+            println!("{:>10} list found {} keys", name, count);
         }
     }
 
-    println!("{:>10}-th list found {} keys", name, count);
+    println!(
+        "{:>10} list found {} keys; total list: {}, error: {}",
+        name,
+        count,
+        TOTAL.load(Ordering::Relaxed),
+        ERROR.load(Ordering::Relaxed)
+    );
 }
 
 fn print_res<D: Debug>(i: u64, typ: impl Display, res: &D) {

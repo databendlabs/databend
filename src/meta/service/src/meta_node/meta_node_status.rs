@@ -31,7 +31,7 @@ pub struct MetaNodeStatus {
     pub data_version: DataVersion,
 
     /// The raft service endpoint for internal communication
-    pub endpoint: String,
+    pub endpoint: Option<String>,
 
     /// The status about local raft-log
     pub raft_log: RaftLogStatus,

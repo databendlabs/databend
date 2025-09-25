@@ -42,6 +42,8 @@ use databend_common_version::VERGEN_GIT_SHA;
 use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::meta_node::meta_handle::MetaHandle;
+use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::server_metrics;
 use databend_meta::version::raft_client_requires;
@@ -150,7 +152,8 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         conf.raft_config.single, conf
     );
 
-    let meta_node = MetaNode::start(&conf, &BUILD_INFO).await?;
+    let meta_handle = MetaWorker::create_meta_worker_in_rt(conf.clone()).await?;
+    let meta_handle = Arc::new(meta_handle);
 
     let mut stop_handler = StopHandle::<AnyError>::create();
     let stop_tx = StopHandle::<AnyError>::install_termination_handle();
@@ -158,7 +161,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     // HTTP API service.
     {
         server_metrics::set_version(DATABEND_GIT_SEMVER.to_string(), VERGEN_GIT_SHA.to_string());
-        let mut srv = HttpService::create(conf.clone(), meta_node.clone());
+        let mut srv = HttpService::create(conf.clone(), meta_handle.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
         stop_handler.push(srv);
@@ -166,7 +169,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     // gRPC API service.
     {
-        let mut srv = GrpcServer::create(conf.clone(), meta_node.clone());
+        let mut srv = GrpcServer::create(conf.clone(), meta_handle.clone());
         info!(
             "Databend meta server listening on {}",
             conf.grpc_api_address.clone()
@@ -176,13 +179,20 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     }
 
     // Join a raft cluster only after all service started.
-    let join_res = meta_node
-        .join_cluster(&conf.raft_config, conf.grpc_api_advertise_address())
-        .await?;
+    let c = conf.clone();
+    let join_res = meta_handle
+        .request(move |mn| {
+            let fu = async move {
+                mn.join_cluster(&c.raft_config, c.grpc_api_advertise_address())
+                    .await
+            };
+            Box::pin(fu)
+        })
+        .await??;
 
     info!("Join result: {:?}", join_res);
 
-    register_node(&meta_node, &conf).await?;
+    register_node(&meta_handle, &conf).await?;
 
     println!("Databend Metasrv started");
 
@@ -194,8 +204,8 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
-    let node_id = meta_node.raft_store.id;
+async fn do_register(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), MetaAPIError> {
+    let node_id = meta_handle.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
         .with_grpc_advertise_address(conf.grpc_api_advertise_address());
@@ -210,7 +220,7 @@ async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), Met
     });
     info!("Raft log entry for updating node: {:?}", ent);
 
-    meta_node.write(ent).await?;
+    meta_handle.handle_write(ent).await.unwrap()?;
     info!("Done register");
     Ok(())
 }
@@ -251,7 +261,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
 #[fastrace::trace]
-async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), anyhow::Error> {
+async fn register_node(meta_handle: &Arc<MetaHandle>, conf: &Config) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
     );
@@ -274,7 +284,10 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
             break;
         }
 
-        let wait = meta_node.raft.wait(Some(timeout_at - Instant::now()));
+        let wait = meta_handle
+            .handle_raft_metrics_wait(Some(timeout_at - Instant::now()))
+            .await?;
+
         let metrics = wait
             .metrics(|x| x.current_leader.is_some(), "receive an active leader")
             .await?;
@@ -296,14 +309,14 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         );
         println!();
 
-        if meta_node.get_node(&leader_id).await.is_none() {
+        if meta_handle.handle_get_node(leader_id).await?.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
             sleep(Duration::from_millis(500)).await
         }
 
         info!("Registering node with grpc-advertise-addr...");
 
-        let res = do_register(meta_node, conf).await;
+        let res = do_register(meta_handle, conf).await;
         info!("Register-node result: {:?}", res);
 
         match res {

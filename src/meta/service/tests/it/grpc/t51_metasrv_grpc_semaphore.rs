@@ -538,8 +538,18 @@ async fn test_time_based_pause_streaming() -> anyhow::Result<()> {
         "foo".to_string(),
     );
 
-    let meta_node = tc.grpc_srv.as_ref().unwrap().meta_node.clone();
+    let meta_node = tc
+        .grpc_srv
+        .as_ref()
+        .unwrap()
+        .meta_handle
+        .clone()
+        .unwrap()
+        .get_meta_node()
+        .await?;
+
     let rc = meta_node.runtime_config();
+
     rc.broadcast_state_machine_changes
         .store(false, std::sync::atomic::Ordering::Relaxed);
 

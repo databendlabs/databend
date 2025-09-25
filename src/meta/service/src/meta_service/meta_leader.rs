@@ -49,7 +49,7 @@ use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
-use crate::meta_service::meta_node::MetaRaft;
+use crate::meta_node::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
@@ -72,7 +72,8 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
         &self,
         req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
-        debug!(req :? =(&req), target = req.forward_to_leader; "handle_forwardable_req");
+        let id = self.sto.id;
+        debug!("id={} handle(ForwardRequestBody): {:?}", id, req);
 
         match req.body {
             ForwardRequestBody::Ping => Ok(ForwardResponse::Pong),
@@ -116,7 +117,8 @@ impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
         &self,
         req: ForwardRequest<MetaGrpcReadReq>,
     ) -> Result<BoxStream<StreamItem>, MetaOperationError> {
-        debug!(req :? =(&req); "handle(MetaGrpcReadReq)");
+        let id = self.sto.id;
+        debug!("id={} handle(MetaGrpcReadReq): {:?}", id, req);
 
         let sm = self.sto.get_sm_v003();
         let kv_api = sm.kv_api();

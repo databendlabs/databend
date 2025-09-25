@@ -60,6 +60,7 @@ pub type SnapshotMeta = openraft::SnapshotMeta<TypeConfig>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
 
 pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
+pub type Wait = openraft::metrics::Wait<TypeConfig>;
 
 pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
 pub type ErrorVerb = openraft::ErrorVerb;

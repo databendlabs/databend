@@ -253,7 +253,17 @@ impl Network {
             "Raft NetworkConnection lookup target address: start: target={}",
             self.target
         );
-        let endpoint = self.sto.get_node_raft_endpoint(&self.target).await?;
+
+        let endpoint = self
+            .sto
+            .get_node_raft_endpoint(&self.target)
+            .await
+            .ok_or_else(|| {
+                MetaNetworkError::GetNodeAddrError(format!(
+                    "Node {} not found in state machine",
+                    self.target
+                ))
+            })?;
 
         Ok(endpoint)
     }

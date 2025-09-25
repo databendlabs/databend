@@ -35,6 +35,7 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::api::grpc::grpc_service::MetaServiceImpl;
 use crate::configs::Config;
+use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::MetaNode;
 use crate::util::DropDebug;
 
@@ -43,7 +44,7 @@ pub struct GrpcServer {
     /// GrpcServer is the main container of the gRPC service.
     /// [`MetaNode`] should never be dropped while [`GrpcServer`] is alive.
     /// Therefore, it is held by a strong reference (Arc) to ensure proper lifetime management.
-    pub meta_node: Arc<MetaNode>,
+    pub meta_handle: Option<Arc<MetaHandle>>,
     join_handle: Option<JoinHandle<()>>,
     stop_grpc_tx: Option<Sender<()>>,
 }
@@ -55,22 +56,32 @@ impl Drop for GrpcServer {
 }
 
 impl GrpcServer {
-    pub fn create(conf: Config, meta_node: Arc<MetaNode>) -> Self {
+    pub fn create(conf: Config, meta_node: Arc<MetaHandle>) -> Self {
         Self {
             conf,
-            meta_node,
+            meta_handle: Some(meta_node),
             join_handle: None,
             stop_grpc_tx: None,
         }
     }
 
-    pub fn get_meta_node(&self) -> Arc<MetaNode> {
-        self.meta_node.clone()
+    pub fn get_meta_handle(&self) -> Arc<MetaHandle> {
+        self.meta_handle.clone().unwrap()
+    }
+
+    // Only for test
+    pub async fn get_meta_node(&self) -> Arc<MetaNode> {
+        self.meta_handle
+            .as_ref()
+            .unwrap()
+            .get_meta_node()
+            .await
+            .unwrap()
     }
 
     async fn do_start(&mut self) -> Result<(), MetaNetworkError> {
         let conf = self.conf.clone();
-        let meta_node = self.meta_node.clone();
+        let meta_handle = self.meta_handle.clone().unwrap();
         // For sending signal when server started.
         let (started_tx, started_rx) = oneshot::channel::<()>();
         // For receive stop signal.
@@ -101,7 +112,7 @@ impl GrpcServer {
 
         info!("start gRPC listening: {}", addr);
 
-        let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_node));
+        let grpc_impl = MetaServiceImpl::create(Arc::downgrade(&meta_handle));
         let grpc_srv = MetaServiceServer::new(grpc_impl)
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
@@ -145,7 +156,13 @@ impl GrpcServer {
     }
 
     async fn do_stop(&mut self, _force: Option<tokio::sync::broadcast::Receiver<()>>) {
-        let id = self.meta_node.raft_store.id;
+        let meta_handle = self.meta_handle.take();
+        let Some(meta_handle) = meta_handle else {
+            info!("GrpcServer::do_stop: already stopped");
+            return;
+        };
+
+        let id = meta_handle.id;
         let ctx = format!("gRPC-task(id={id})");
 
         if let Some(stop_grpc_tx) = self.stop_grpc_tx.take() {
@@ -174,9 +191,11 @@ impl GrpcServer {
             }
         }
 
-        info!("Waiting for meta_node(id={id}) to stop");
-        let x = tokio::time::timeout(Duration::from_millis(1_000), self.meta_node.stop()).await;
-        info!("Done: waiting for meta_node(id={id}) stop: res: {:?}", x);
+        info!(
+            "Drop MetaHandle for meta_node(id={id}) to stop, ref count to meta-handle: {}",
+            Arc::strong_count(&meta_handle)
+        );
+        drop(meta_handle);
     }
 
     async fn tls_config(conf: &Config) -> Result<Option<ServerTlsConfig>, std::io::Error> {

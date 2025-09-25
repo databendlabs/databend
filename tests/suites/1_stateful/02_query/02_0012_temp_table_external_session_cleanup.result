@@ -1,0 +1,6 @@
+====== Testing External Temp Table Session Cleanup ======
+-- Create external temp table
+Records in temp_external: 2
+Files created in external location: 6
+Files after session ended: 0
+✓ External temp table cleanup test PASSED
