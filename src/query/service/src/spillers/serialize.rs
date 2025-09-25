@@ -32,27 +32,17 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::arrow_writer::compute_leaves;
-use parquet::arrow::arrow_writer::get_column_writers;
-use parquet::arrow::arrow_writer::ArrowColumnWriter;
-use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::errors;
-use parquet::file::metadata::RowGroupMetaDataPtr;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
-use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
-use parquet::file::writer::SerializedFileWriter;
-use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::format::FileMetaData;
-use parquet::schema::types::SchemaDescriptor;
 
 #[derive(Debug, Clone)]
 pub enum Layout {
@@ -243,86 +233,6 @@ impl ChunkReader for Reader {
     fn get_bytes(&self, start: u64, length: usize) -> errors::Result<bytes::Bytes> {
         let start = start as usize;
         Ok(self.0.slice(start..start + length).to_bytes())
-    }
-}
-
-pub struct RowGroupWriter {
-    schema: Arc<Schema>,
-    writers: Vec<ArrowColumnWriter>,
-}
-
-impl RowGroupWriter {
-    fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
-        let writers = get_column_writers(parquet, props, &schema).unwrap();
-        Self { schema, writers }
-    }
-
-    pub(super) fn write(&mut self, block: DataBlock) -> errors::Result<()> {
-        let mut writer_iter = self.writers.iter_mut();
-        for (field, entry) in self.schema.fields().iter().zip(block.take_columns()) {
-            let array = (&entry.to_column()).into();
-            for col in compute_leaves(field, &array).unwrap() {
-                writer_iter.next().unwrap().write(&col)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn close<W: Write + Send>(
-        self,
-        writer: &mut SerializedRowGroupWriter<'_, W>,
-    ) -> errors::Result<()> {
-        for w in self.writers {
-            w.close()?.append_to_row_group(writer)?
-        }
-        Ok(())
-    }
-
-    pub fn memory_size(&self) -> usize {
-        self.writers.iter().map(|w| w.memory_size()).sum()
-    }
-}
-
-pub struct FileWriter<W: Write + Send> {
-    schema: Arc<Schema>,
-    writer: SerializedFileWriter<W>,
-}
-
-impl<W: Write + Send> FileWriter<W> {
-    pub(super) fn new(
-        props: Arc<WriterProperties>,
-        table_schema: &TableSchema,
-        w: W,
-    ) -> errors::Result<Self> {
-        let schema = Arc::new(Schema::from(table_schema));
-
-        let parquet = ArrowSchemaConverter::new()
-            .with_coerce_types(props.coerce_types())
-            .convert(&schema)?;
-
-        let writer = SerializedFileWriter::new(w, parquet.root_schema_ptr(), props.clone())?;
-        Ok(Self { schema, writer })
-    }
-
-    pub(super) fn new_row_group(&self) -> RowGroupWriter {
-        RowGroupWriter::new(
-            self.writer.properties(),
-            self.schema.clone(),
-            self.writer.schema_descr(),
-        )
-    }
-
-    pub(super) fn flush_row_group(
-        &mut self,
-        row_group: RowGroupWriter,
-    ) -> errors::Result<RowGroupMetaDataPtr> {
-        let mut row_group_writer = self.writer.next_row_group()?;
-        row_group.close(&mut row_group_writer)?;
-        row_group_writer.close()
-    }
-
-    pub(super) fn close(self) -> errors::Result<FileMetaData> {
-        self.writer.close()
     }
 }
 

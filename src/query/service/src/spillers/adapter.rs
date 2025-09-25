@@ -36,6 +36,7 @@ use parquet::format::FileMetaData;
 
 use super::inner::*;
 use super::serialize::*;
+use super::union_file::FileWriter;
 use super::Location;
 use crate::sessions::QueryContext;
 use crate::spillers::block_reader::BlocksReader;

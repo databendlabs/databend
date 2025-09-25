@@ -22,12 +22,8 @@ use std::sync::PoisonError;
 
 use bytes::Bytes;
 use bytes::BytesMut;
-use databend_common_base::base::DmaWriteBuf;
-use databend_common_base::base::SyncDmaFile;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_storages_common_cache::TempDir;
-use databend_storages_common_cache::TempPath;
 use opendal::Metadata;
 use opendal::Writer;
 
@@ -471,125 +467,6 @@ impl Background {
             }
         }
     }
-}
-
-struct LocalDst {
-    dir: Arc<TempDir>,
-    path: TempPath,
-    file: Option<SyncDmaFile>,
-    buf: Option<DmaWriteBuf>,
-}
-
-pub struct MixFileWriter {
-    local: LocalDst,
-    remote: BufferWriter,
-    remote_offset: usize,
-}
-
-impl MixFileWriter {
-    pub fn new(local: LocalDst, remote: BufferWriter) -> Self {
-        MixFileWriter {
-            local,
-            remote,
-            remote_offset: 0,
-        }
-    }
-
-    pub fn finish(self) -> io::Result<MixFile> {
-        let local_path = match self.local {
-            mut local @ LocalDst {
-                file: Some(_),
-                buf: Some(_),
-                ..
-            } => {
-                let dma = local.buf.as_mut().unwrap();
-
-                let file = local.file.take().unwrap();
-                let file_size = file.length() + dma.size();
-                dma.flush_and_close(file)?;
-
-                local.path.set_size(file_size).unwrap();
-
-                return Ok(MixFile {
-                    local_path: local.path,
-                    remote_offset: 0,
-                });
-            }
-            LocalDst { path, .. } => path,
-        };
-
-        Ok(MixFile {
-            local_path,
-            remote_offset: self.remote_offset,
-        })
-    }
-}
-
-impl io::Write for MixFileWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let (dma_buf, offset) = match &mut self.local {
-            local @ LocalDst {
-                file: Some(_),
-                buf: Some(_),
-                ..
-            } => {
-                let n = buf.len();
-                let dma = local.buf.as_mut().unwrap();
-                if dma.fast_write(buf) {
-                    return Ok(n);
-                }
-
-                if local.dir.grow_size(&mut local.path, buf.len(), false)? {
-                    dma.write(buf)?;
-                    let file = local.file.as_mut().unwrap();
-                    dma.flush_full_buffer(file)?;
-                    local.path.set_size(file.length()).unwrap();
-                    return Ok(n);
-                }
-
-                let mut file = local.file.take().unwrap();
-                dma.flush_full_buffer(&mut file)?;
-
-                let file_size = file.length();
-                local.path.set_size(file_size).unwrap();
-                drop(file);
-
-                (local.buf.take().unwrap().into_data(), file_size)
-            }
-            _ => (vec![], 0),
-        };
-
-        if offset != 0 {
-            self.remote_offset = offset;
-        }
-
-        for buf in dma_buf {
-            self.remote.write(&buf)?;
-        }
-        self.remote.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        match &mut self.local {
-            LocalDst {
-                file: Some(file),
-                buf: Some(dma),
-                ..
-            } => {
-                // warning: not completely flushed, data may be lost
-                dma.flush_full_buffer(file)?;
-                return Ok(());
-            }
-            _ => (),
-        }
-
-        self.remote.flush()
-    }
-}
-
-pub struct MixFile {
-    local_path: TempPath,
-    remote_offset: usize,
 }
 
 #[cfg(test)]

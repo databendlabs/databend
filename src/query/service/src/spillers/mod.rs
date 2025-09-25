@@ -21,6 +21,7 @@ mod partition_buffer;
 mod serialize;
 #[cfg(test)]
 mod test_memory;
+mod union_file;
 
 pub use adapter::*;
 pub use block_writer::*;
