@@ -17,10 +17,14 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
@@ -31,7 +35,7 @@ use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
-use databend_common_catalog::table_context::TableContext;
+
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
@@ -54,6 +58,7 @@ pub struct MemoryInnerJoin {
     state: Arc<HashJoinMemoryState>,
     build_projection: ColumnSet,
     probe_projections: ColumnSet,
+    probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
     function_ctx: FunctionContext,
 }
 
@@ -65,19 +70,65 @@ impl MemoryInnerJoin {
         desc: Arc<HashJoinDesc>,
         build_projection: ColumnSet,
         probe_projections: ColumnSet,
+        probe_to_build: Vec<(usize, (bool, bool))>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
         let block_bytes = settings.get_max_block_size()? as usize;
+
         Ok(MemoryInnerJoin {
             desc,
             method,
             function_ctx,
             build_projection,
             probe_projections,
+            probe_to_build: Arc::new(probe_to_build),
             squash_block: SquashBlocks::new(block_size, block_bytes),
             state: Arc::new(HashJoinMemoryState::new()),
         })
+    }
+
+    fn init_columns_vec(&mut self) {
+        if self.build_projection.is_empty() || !self.state.columns.is_empty() {
+            return;
+        }
+
+        let locked = self.state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        if !self.state.columns.is_empty() {
+            return;
+        }
+
+        let mut offsets = Vec::with_capacity(self.build_projection.len());
+
+        for chunk in self.state.chunks.iter() {
+            if chunk.num_columns() != 0 {
+                for (index, entry) in chunk.columns().iter().enumerate() {
+                    if !self.build_projection.contains(&index) {
+                        continue;
+                    }
+
+                    offsets.push(index);
+                    let columns_type = self.state.column_types.as_mut();
+                    columns_type.push(entry.data_type());
+                }
+
+                break;
+            }
+        }
+
+        for offset in offsets {
+            let full_columns = self
+                .state
+                .chunks
+                .iter()
+                .map(|block| block.get_by_offset(offset).to_column())
+                .collect::<Vec<_>>();
+
+            let columns = self.state.columns.as_mut();
+            columns.push(Column::take_downcast_column_vec(&full_columns));
+        }
     }
 
     fn init_memory_hash_table(&mut self) {
@@ -87,18 +138,6 @@ impl MemoryInnerJoin {
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        // let mut projection_columns = Vec::with_capacity(self.build_projection.len());
-        // for chunk in self.state.chunks.deref() {
-        //     let columns_vec = Vec::with_capacity(self.build_projection.len());
-        //     for (index, column) in chunk.columns().iter().enumerate() {
-        //         if !self.build_projection.contains(&index) {
-        //             continue;
-        //         }
-        //
-        //         projection_columns.push(index);
-        //     }
-        // }
 
         if matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
             let build_num_rows = *self.state.build_rows.deref();
@@ -156,7 +195,7 @@ impl MemoryInnerJoin {
     }
 
     fn build_hash_table(&self, keys: Vec<BlockEntry>, chunk_idx: usize) -> Result<()> {
-        let mut arena = Vec::new();
+        let mut arena = Vec::with_capacity(0);
         let keys = ProjectedBlock::from(&keys);
 
         match self.state.hash_table.deref() {
@@ -171,7 +210,7 @@ impl MemoryInnerJoin {
             HashJoinHashTable::KeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
         };
 
-        if !arena.is_empty() {
+        if arena.capacity() != 0 {
             let locked = self.state.mutex.lock();
             let _locked = locked.unwrap_or_else(PoisonError::into_inner);
             self.state.arenas.as_mut().push(arena);
@@ -208,6 +247,7 @@ impl Join for MemoryInnerJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        self.init_columns_vec();
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
@@ -267,6 +307,7 @@ impl Join for MemoryInnerJoin {
                     probe_block,
                     self.state.clone(),
                     probe_keys_stream,
+                    self.probe_to_build.clone(),
                 ))
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
@@ -284,6 +325,7 @@ struct MemoryInnerJoinStream {
     probe_data_block: DataBlock,
     join_state: Arc<HashJoinMemoryState>,
     probe_keys_stream: Box<dyn ProbeStream>,
+    probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
 }
 
 unsafe impl Send for MemoryInnerJoinStream {}
@@ -294,11 +336,13 @@ impl MemoryInnerJoinStream {
         block: DataBlock,
         state: Arc<HashJoinMemoryState>,
         probe_keys_stream: Box<dyn ProbeStream>,
+        probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
     ) -> Box<dyn JoinStream> {
         Box::new(MemoryInnerJoinStream {
             probe_data_block: block,
             join_state: state,
             probe_keys_stream,
+            probe_to_build,
         })
     }
 }
@@ -337,7 +381,7 @@ impl JoinStream for MemoryInnerJoinStream {
                 }
             };
 
-            let result_block = match (probe_block, build_block) {
+            let mut result_block = match (probe_block, build_block) {
                 (Some(mut probe_block), Some(build_block)) => {
                     probe_block.merge_block(build_block);
                     probe_block
@@ -347,24 +391,30 @@ impl JoinStream for MemoryInnerJoinStream {
                 (None, None) => DataBlock::new(vec![], probe_result.matched_build.len()),
             };
 
-            // if !self.join_state.probe_to_build.is_empty() {
-            //     for (index, (is_probe_nullable, is_build_nullable)) in
-            //         self.join_state.probe_to_build.iter()
-            //     {
-            //         let entry = match (is_probe_nullable, is_build_nullable) {
-            //             (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-            //             (true, false) => {
-            //                 result_block.get_by_offset(*index).clone().remove_nullable()
-            //             }
-            //             (false, true) => wrap_true_validity(
-            //                 result_block.get_by_offset(*index),
-            //                 result_block.num_rows(),
-            //                 &probe_state.true_validity,
-            //             ),
-            //         };
-            //         result_block.add_entry(entry);
-            //     }
-            // }
+            if !self.probe_to_build.is_empty() {
+                for (index, (is_probe_nullable, is_build_nullable)) in self.probe_to_build.iter() {
+                    let entry = match (is_probe_nullable, is_build_nullable) {
+                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                        (true, false) => {
+                            result_block.get_by_offset(*index).clone().remove_nullable()
+                        }
+                        (false, true) => {
+                            let entry = result_block.get_by_offset(*index);
+                            let col = entry.to_column();
+
+                            match col.is_null() || col.is_nullable() {
+                                true => entry.clone(),
+                                false => BlockEntry::from(NullableColumn::new_column(
+                                    col,
+                                    Bitmap::new_constant(true, result_block.num_rows()),
+                                )),
+                            }
+                        }
+                    };
+
+                    result_block.add_entry(entry);
+                }
+            }
 
             return Ok(Some(result_block));
         }

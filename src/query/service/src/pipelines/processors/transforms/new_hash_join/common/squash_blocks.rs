@@ -84,10 +84,6 @@ impl SquashBlocks {
         }
     }
 
-    pub fn current_rows(&self) -> usize {
-        self.current_rows
-    }
-
     fn squash_blocks(&mut self) -> Result<DataBlock> {
         let mut blocks = vec![];
 

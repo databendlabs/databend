@@ -438,6 +438,7 @@ impl HashJoin {
         builder: &mut PipelineBuilder,
     ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
         let desc = Arc::new(HashJoinDesc::create(self)?);
+
         let hash_key_types = self
             .build_keys
             .iter()
@@ -451,6 +452,7 @@ impl HashJoin {
                 }
             })
             .collect::<Vec<_>>();
+
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
 
         Ok(Box::new(MemoryInnerJoin::create(
@@ -460,6 +462,7 @@ impl HashJoin {
             desc,
             self.build_projections.clone(),
             self.probe_projections.clone(),
+            self.probe_to_build.clone(),
         )?))
     }
 }
