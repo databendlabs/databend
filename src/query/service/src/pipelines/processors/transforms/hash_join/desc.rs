@@ -25,10 +25,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::optimizer::ir::ColumnStat;
-use databend_common_sql::ColumnSet;
 use parking_lot::RwLock;
-use petgraph::visit::Walker;
 
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::PhysicalRuntimeFilter;
@@ -149,7 +146,7 @@ impl HashJoinDesc {
 
     pub fn build_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
         let build_keys = &self.build_keys;
-        let evaluator = Evaluator::new(&block, ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS);
         build_keys
             .iter()
             .map(|expr| {
@@ -163,7 +160,7 @@ impl HashJoinDesc {
 
     pub fn probe_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
         let build_keys = &self.probe_keys;
-        let evaluator = Evaluator::new(&block, ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS);
         build_keys
             .iter()
             .map(|expr| {

@@ -18,5 +18,5 @@ mod memory;
 mod transform_hash_join;
 
 pub use join::Join;
-pub use transform_hash_join::TransformHashJoin;
 pub use memory::MemoryInnerJoin;
+pub use transform_hash_join::TransformHashJoin;

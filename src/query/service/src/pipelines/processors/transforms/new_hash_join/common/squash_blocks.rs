@@ -31,11 +31,11 @@ impl BlockWithInfo {
 
 #[derive(Default)]
 pub struct SquashBlocks {
-    pub current_rows: usize,
-    pub current_bytes: usize,
-    pub squash_rows: usize,
-    pub squash_bytes: usize,
-    pub blocks: VecDeque<BlockWithInfo>,
+    current_rows: usize,
+    current_bytes: usize,
+    squash_rows: usize,
+    squash_bytes: usize,
+    blocks: VecDeque<BlockWithInfo>,
 }
 
 impl SquashBlocks {
@@ -135,6 +135,7 @@ impl SquashBlocks {
 }
 
 /// Compact small blocks into larger blocks that meet the max_rows and max_bytes requirements
+#[allow(dead_code)]
 pub fn compact_blocks(
     blocks: impl IntoIterator<Item = DataBlock>,
     rows: usize,

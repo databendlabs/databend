@@ -44,6 +44,7 @@ impl<T> CStyleCell<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_inner(self) -> T {
         self.inner.into_inner()
     }

@@ -41,7 +41,6 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::memory_state::HashJoinMemoryState;
-use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::ProbeStream;
@@ -288,7 +287,7 @@ impl Join for MemoryInnerJoin {
         }))
     }
 
-    fn probe_block(&mut self, mut data: DataBlock) -> Result<Box<dyn JoinStream>> {
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>> {
         let mut probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let valids = match self.desc.from_correlated_subquery {
@@ -303,7 +302,7 @@ impl Join for MemoryInnerJoin {
             HashJoinHashTable::T(table) => {
                 let probe_keys_stream = table.probe_keys(probe_key, valids)?;
 
-                Ok(MemoryInnerJoinStream::new(
+                Ok(MemoryInnerJoinStream::create(
                     probe_block,
                     self.state.clone(),
                     probe_keys_stream,
@@ -332,7 +331,7 @@ unsafe impl Send for MemoryInnerJoinStream {}
 unsafe impl Sync for MemoryInnerJoinStream {}
 
 impl MemoryInnerJoinStream {
-    pub fn new(
+    pub fn create(
         block: DataBlock,
         state: Arc<HashJoinMemoryState>,
         probe_keys_stream: Box<dyn ProbeStream>,

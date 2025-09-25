@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
