@@ -20,8 +20,11 @@ use crate::tenant::Tenant;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetAutoIncrementNextValueReq {
     pub tenant: Tenant,
+    // Information describing the AutoIncrement
     pub expr: AutoIncrementExpr,
+    // AutoIncrement unique key information, including table id and column id
     pub key: AutoIncrementKey,
+    // get the number of steps at one time
     pub count: u64,
 }
 

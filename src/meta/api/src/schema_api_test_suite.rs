@@ -27,7 +27,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -43,7 +42,6 @@ use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
-use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
@@ -58,7 +56,6 @@ use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -5034,13 +5031,7 @@ impl SchemaApiTestSuite {
             Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
                 TableDataType::Number(NumberDataType::UInt64),
-            )
-            .with_auto_increment_expr(Some(AutoIncrementExpr {
-                column_id: 0,
-                start: 0,
-                step: 1,
-                is_ordered: true,
-            }))]))
+            )]))
         };
 
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -5271,17 +5262,6 @@ impl SchemaApiTestSuite {
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_some() && seqv.unwrap().seq != 0);
 
-            let auto_increment_key =
-                AutoIncrementKey::new(create_table_as_dropped_resp.table_id, 0);
-            let auto_increment_sequence_storage =
-                AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key);
-
-            // assert auto increment sequence exists
-            let seqv = mt
-                .get_kv(&auto_increment_sequence_storage.to_string_key())
-                .await?;
-            assert!(seqv.is_some() && seqv.unwrap().seq != 0);
-
             // vacuum drop table
             let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
@@ -5301,12 +5281,6 @@ impl SchemaApiTestSuite {
                 table_id: create_table_as_dropped_resp.table_id,
             };
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
-            assert!(seqv.is_none());
-
-            // assert auto increment sequence has been vacuum
-            let seqv = mt
-                .get_kv(&auto_increment_sequence_storage.to_string_key())
-                .await?;
             assert!(seqv.is_none());
         }
 
