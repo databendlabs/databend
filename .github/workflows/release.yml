@@ -230,49 +230,6 @@ jobs:
           target: ${{ matrix.target }}
           category: default
 
-  publish_dbg:
-    runs-on:
-      - self-hosted
-      - ARM64
-      - Linux
-      - 2c8g
-      - aws
-    needs: [ create_release, build_default, build_docker ]
-    strategy:
-      fail-fast: false
-      matrix:
-        category:
-          - default
-          - docker
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.create_release.outputs.sha }}
-      - name: Download artifact
-        uses: ./.github/actions/artifact_download
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
-          category: ${{ matrix.category }}
-          artifacts: query.debug
-          path: distro/bin
-      - name: Prepare artifact
-        id: prepare
-        run: |
-          publish_name="databend-query-${{ matrix.category }}-${{ needs.create_release.outputs.version }}-${{ matrix.target }}.debug.gz"
-          gzip distro/bin/databend-query.debug
-          mv distro/bin/databend-query.debug.gz ${publish_name}
-          echo "publish_name=${publish_name}" >> $GITHUB_OUTPUT
-      - name: Upload to Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload ${{ needs.create_release.outputs.version }} ${{ steps.prepare.outputs.publish_name }} --clobber
-
   publish_testsuite:
     runs-on:
       - self-hosted
@@ -322,6 +279,36 @@ jobs:
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ matrix.target }}
           category: testsuite
+
+  publish_dbg:
+    runs-on:
+      - self-hosted
+      - ARM64
+      - Linux
+      - 2c8g
+      - aws
+    needs: [ create_release, build_default, build_docker ]
+    strategy:
+      fail-fast: false
+      matrix:
+        category:
+          - default
+          - docker
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: Publish Debug Symbols
+        uses: ./.github/actions/publish_debug_symbols
+        with:
+          version: ${{ needs.create_release.outputs.version }}
+          target: ${{ matrix.target }}
+          category: ${{ matrix.category }}
+          sha: ${{ github.sha }}
 
   docker_all_in_one:
     runs-on:
