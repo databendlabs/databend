@@ -27,7 +27,6 @@ use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -56,11 +55,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
+use super::query::CloseReason;
 use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use super::query::StopReason;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
@@ -166,10 +165,10 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn removed(query_id: &str, remove_reason: StopReason) -> impl IntoResponse {
+    pub(crate) fn closed(query_id: &str, close_reason: CloseReason) -> impl IntoResponse {
         let id = query_id.to_string();
-        let state = match remove_reason {
-            StopReason::Finished => ExecuteStateKind::Succeeded,
+        let state = match close_reason {
+            CloseReason::Finalized => ExecuteStateKind::Succeeded,
             _ => ExecuteStateKind::Failed,
         };
         Json(QueryResponse {
@@ -198,7 +197,7 @@ impl QueryResponse {
         id: String,
         r: HttpQueryResponseInternal,
         is_final: bool,
-    ) -> (impl IntoResponse, bool) {
+    ) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -248,12 +247,7 @@ impl QueryResponse {
         };
         let rows = data.num_rows();
 
-        let next_is_final = next_uri
-            .as_ref()
-            .map(|u| u.ends_with("final"))
-            .unwrap_or(false);
-
-        let resp = Json(QueryResponse {
+        Json(QueryResponse {
             data,
             state: state.state,
             schema: state.schema.clone(),
@@ -274,8 +268,7 @@ impl QueryResponse {
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
-        .with_header(HEADER_QUERY_PAGE_ROWS, rows);
-        (resp, next_is_final)
+        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
     }
 }
 
@@ -305,11 +298,11 @@ async fn query_final_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .stop_query(
+            .close_query(
                 &query_id,
+                CloseReason::Finalized,
                 &ctx.client_session_id,
-                StopReason::Finished,
-                ErrorCode::ClosedQuery("Query closed by client"),
+                true,
             )
             .await?
         {
@@ -320,7 +313,7 @@ async fn query_final_handler(
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                Ok(QueryResponse::from_internal(query_id, response, true).0)
+                Ok(QueryResponse::from_internal(query_id, response, true))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
@@ -346,11 +339,11 @@ async fn query_cancel_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .stop_query(
+            .close_query(
                 &query_id,
+                CloseReason::Canceled,
                 &ctx.client_session_id,
-                StopReason::Canceled,
-                ErrorCode::AbortedQuery("canceled by client"),
+                true,
             )
             .await?
         {
@@ -374,15 +367,13 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
-                if let Some(reason) = query.check_removed() {
-                    Ok(QueryResponse::removed(&query_id, reason).into_response())
+                if let Some(reason) = query.check_closed() {
+                    Ok(QueryResponse::closed(&query_id, reason.reason).into_response())
                 } else {
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false)
-                        .0
-                        .into_response())
+                    Ok(QueryResponse::from_internal(query_id, response, false).into_response())
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -423,18 +414,16 @@ async fn query_page_handler(
             }
 
             query.check_client_session_id(&ctx.client_session_id)?;
-            if let Some(reason) = query.check_removed() {
-                log::info!(
-                    "[HTTP-QUERY] /query/{}/page/{} - query is removed (reason: {})",
-                    query_id,
-                    page_no,
-                    reason
+            if let Some(st) = query.check_closed() {
+                info!(
+                    "[HTTP-QUERY] /query/{}/page/{} - query is close (reason: {:?})",
+                    query_id, page_no, st
                 );
-                Err(query_id_removed(&query_id, reason))
+                Err(query_id_closed(&query_id, st.reason))
             } else {
-                query.update_expire_time(true).await;
+                query.update_expire_time(true, false).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
-                    log::info!(
+                    info!(
                         "[HTTP-QUERY] /query/{}/page/{} - get response page error (reason: {})",
                         query_id,
                         page_no,
@@ -445,12 +434,10 @@ async fn query_page_handler(
                         StatusCode::NOT_FOUND,
                     )
                 })?;
-                query.update_expire_time(false).await;
-                let (resp, next_is_final) = QueryResponse::from_internal(query_id, resp, false);
-                if next_is_final {
-                    query.set_data_drained()
-                }
-                Ok(resp)
+                query
+                    .update_expire_time(false, resp.is_data_drained())
+                    .await;
+                Ok(QueryResponse::from_internal(query_id, resp, false))
             }
         }
     };
@@ -519,7 +506,6 @@ pub(crate) async fn query_handler(
                 let http_query_manager = HttpQueryManager::instance();
                 let query = http_query_manager.add_query(query).await;
 
-                // tmp workaround to tolerant old clients
                 let resp = query
                     .get_response_page(0)
                     .await
@@ -542,13 +528,10 @@ pub(crate) async fn query_handler(
                 info!("[HTTP-QUERY] Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
                         &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                     );
-                query.update_expire_time(false).await;
-                let (resp, next_is_final) =
-                    QueryResponse::from_internal(query.id.to_string(), resp, false);
-                if next_is_final {
-                    query.set_data_drained()
-                }
-                Ok(resp.into_response())
+                query
+                    .update_expire_time(false, resp.is_data_drained())
+                    .await;
+                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
             }
         }
     };
@@ -838,9 +821,12 @@ pub fn query_route() -> Route {
     route
 }
 
-fn query_id_removed(query_id: &str, remove_reason: StopReason) -> PoemError {
+fn query_id_closed(query_id: &str, closed_reason: CloseReason) -> PoemError {
     PoemError::from_string(
-        format!("[HTTP-QUERY] Query ID {query_id} {}", remove_reason),
+        format!(
+            "[HTTP-QUERY] Query {query_id} is closed for {}",
+            closed_reason
+        ),
         StatusCode::BAD_REQUEST,
     )
 }
