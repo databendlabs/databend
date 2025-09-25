@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::io;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -22,14 +23,13 @@ use std::sync::PoisonError;
 use bytes::Bytes;
 use bytes::BytesMut;
 use databend_common_base::base::DmaWriteBuf;
+use databend_common_base::base::SyncDmaFile;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Metadata;
 use opendal::Writer;
-
-use super::Location;
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -476,6 +476,7 @@ impl Background {
 struct LocalDst {
     dir: Arc<TempDir>,
     path: TempPath,
+    file: Option<SyncDmaFile>,
     buf: Option<DmaWriteBuf>,
 }
 
@@ -490,24 +491,33 @@ pub struct XXX {
 }
 
 impl io::Write for XXX {
-    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = buf.len();
+        // while !buf.is_empty() {
         match &mut self.local {
-            Some(LocalDst {
-                dir,
-                path,
-                buf: Some(dma),
-            }) => {
-                if dma.need_alloc() {
-                    if dir.grow_size(path, dma.chunk())? {
-                        dma.alloc_buffer();
-                        buf = dma.write_last(buf);
-                    }
-                } else {
-                    buf = dma.write_last(buf);
+            Some(
+                local @ LocalDst {
+                    file: Some(_),
+                    buf: Some(_),
+                    ..
+                },
+            ) => {
+                let dma = local.buf.as_mut().unwrap();
+                if dma.fast_write(buf) {
+                    return Ok(n);
                 }
+
+                if local.dir.grow_size(&mut local.path, buf.len(), false)? {
+                    dma.write(buf)?;
+                    dma.flush_full_buffer(local.file.as_mut().unwrap())?;
+                    return Ok(n);
+                }
+                dma.flush_and_close(local.file.take().unwrap())?;
             }
             _ => todo!(),
         }
+        //}
+        //        Ok(())
 
         // self.local.unwrap().set_size(size)
         todo!()

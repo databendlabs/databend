@@ -183,11 +183,11 @@ impl TempDirManager {
         self.alignment
     }
 
-    fn insufficient_disk(&self, size: u64) -> io::Result<bool> {
-        let stat = statvfs(self.root.as_ref().unwrap().as_ref());
+    fn insufficient_disk(&self, grow: u64) -> io::Result<bool> {
+        let stat = statvfs(self.root.as_ref().unwrap().as_ref())?;
 
         debug_assert_eq!(stat.f_frsize, self.alignment.as_usize() as u64);
-        let n = self.alignment.align_up_count(size as usize) as u64;
+        let n = self.alignment.align_up_count(grow as usize) as u64;
         Ok(stat.f_bavail < self.reserved + n)
     }
 }
@@ -244,7 +244,12 @@ impl TempDir {
         }))))
     }
 
-    pub fn grow_size(&self, path: &mut TempPath, grow: usize) -> io::Result<bool> {
+    pub fn grow_size(
+        &self,
+        path: &mut TempPath,
+        grow: usize,
+        check_disk: bool,
+    ) -> io::Result<bool> {
         let Some(path) = Arc::get_mut(&mut path.0) else {
             return Err(io::const_error!(
                 io::ErrorKind::InvalidInput,
@@ -252,9 +257,11 @@ impl TempDir {
             ));
         };
 
-        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow
-            || self.manager.insufficient_disk(grow as u64)?
-        {
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow {
+            return Ok(false);
+        }
+
+        if check_disk && self.manager.insufficient_disk(grow as u64)? {
             return Ok(false);
         }
 
@@ -287,6 +294,10 @@ impl TempDir {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn insufficient_disk(&self, grow: usize) -> io::Result<bool> {
+        self.manager.insufficient_disk(grow as _)
     }
 }
 
