@@ -33,20 +33,23 @@ use crate::common;
 //
 
 #[test]
-fn test_decode_v90_role() -> anyhow::Result<()> {
-    let role_info_v90 = vec![
-        10, 2, 114, 49, 18, 6, 160, 6, 90, 168, 6, 24, 160, 6, 90, 168, 6, 24,
+fn test_decode_v150_role() -> anyhow::Result<()> {
+    let role_info_v150 = vec![
+        10, 2, 114, 49, 18, 7, 160, 6, 150, 1, 168, 6, 24, 26, 23, 50, 48, 50, 51, 45, 49, 50, 45,
+        49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85, 84, 67, 34, 23, 50, 48, 50, 51, 45, 49,
+        50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 49, 48, 32, 85, 84, 67, 42, 12, 116, 101, 115,
+        116, 95, 99, 111, 109, 109, 101, 110, 116, 160, 6, 150, 1, 168, 6, 24,
     ];
 
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
-        comment: None,
         grants: UserGrantSet::new(vec![], HashSet::new()),
-        created_on: DateTime::<Utc>::default(),
-        update_on: DateTime::<Utc>::default(),
+        created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(1702603570, 0).unwrap(),
+        comment: Some("test_comment".to_string()),
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), role_info_v90.as_slice(), 90, want())?;
+    common::test_load_old(func_name!(), role_info_v150.as_slice(), 150, want())?;
 
     Ok(())
 }

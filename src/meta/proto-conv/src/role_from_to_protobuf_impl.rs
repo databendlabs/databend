@@ -53,6 +53,7 @@ impl FromToProto for mt::principal::RoleInfo {
                 Some(c) => DateTime::<Utc>::from_pb(c)?,
                 None => DateTime::<Utc>::default(),
             },
+            comment: p.comment.clone(),
         })
     }
 
@@ -64,6 +65,7 @@ impl FromToProto for mt::principal::RoleInfo {
             grants: Some(mt::principal::UserGrantSet::to_pb(&self.grants)?),
             created_on: Some(self.created_on.to_pb()?),
             update_on: Some(self.update_on.to_pb()?),
+            comment: self.comment.clone(),
         })
     }
 }
