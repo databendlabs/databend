@@ -291,7 +291,7 @@ build_exceptions! {
     ConstraintError(1133),
 }
 
-// Sequence Errors [1124-1126, 3101]
+// Sequence Errors [1124-1126, 3101-3102]
 build_exceptions! {
     /// Out of sequence range
     OutofSequenceRange(1124),
@@ -301,6 +301,8 @@ build_exceptions! {
     UnknownSequence(1126),
     /// Sequence error
     SequenceError(3101),
+    /// AutoIncrement error
+    AutoIncrementError(3102),
 }
 
 // Virtual Column Errors [1128-1129]

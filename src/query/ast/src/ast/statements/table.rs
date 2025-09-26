@@ -944,6 +944,11 @@ pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
     Stored(Box<Expr>),
+    AutoIncrement {
+        start: u64,
+        step: i64,
+        is_ordered: bool,
+    },
 }
 
 impl Display for ColumnExpr {
@@ -957,6 +962,18 @@ impl Display for ColumnExpr {
             }
             ColumnExpr::Stored(expr) => {
                 write!(f, " AS ({expr}) STORED")?;
+            }
+            ColumnExpr::AutoIncrement {
+                start,
+                step,
+                is_ordered,
+            } => {
+                write!(f, " AUTOINCREMENT ({}, {}) ", start, step)?;
+                if *is_ordered {
+                    write!(f, "ORDER")?;
+                } else {
+                    write!(f, "NOORDER")?;
+                }
             }
         }
         Ok(())

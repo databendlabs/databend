@@ -5876,11 +5876,12 @@ impl SchemaApiTestSuite {
 
             mt.drop_sequence(req).await?;
 
+            let sequence_ident = SequenceIdent::new(&tenant, sequence_name);
             let req = SequenceIdent::new(&tenant, sequence_name);
             let resp = mt.get_sequence(&req).await?;
             assert!(resp.is_none());
 
-            let storage_ident = SequenceStorageIdent::new_from(req);
+            let storage_ident = SequenceStorageIdent::new_from(sequence_ident);
             let got = mt.get_kv(&storage_ident.to_string_key()).await?;
             assert!(
                 got.is_none(),

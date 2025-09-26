@@ -15,14 +15,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SourceSchemaIndex;
+use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 
+use crate::pipelines::processors::transforms::transform_async_function::AutoIncrementNextValFetcher;
 use crate::pipelines::processors::transforms::transform_async_function::SequenceCounters;
+use crate::pipelines::processors::transforms::transform_async_function::SequenceNextValFetcher;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
 use crate::sql::plans::AsyncFunctionArgument;
@@ -64,11 +68,29 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                     let counter_lock = sequence_counters[i].clone();
-                    TransformAsyncFunction::transform_sequence(
+                    TransformAsyncFunction::transform(
                         self.ctx.clone(),
                         &mut block,
                         counter_lock,
-                        sequence_name,
+                        SequenceNextValFetcher {
+                            sequence_ident: SequenceIdent::new(
+                                self.ctx.get_tenant(),
+                                sequence_name.clone(),
+                            ),
+                        },
+                    )
+                    .await?;
+                }
+                AsyncFunctionArgument::AutoIncrement { key, expr } => {
+                    let counter_lock = sequence_counters[i].clone();
+                    TransformAsyncFunction::transform(
+                        self.ctx.clone(),
+                        &mut block,
+                        counter_lock,
+                        AutoIncrementNextValFetcher {
+                            key: key.clone(),
+                            expr: expr.clone(),
+                        },
                     )
                     .await?;
                 }

@@ -21,11 +21,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -681,6 +683,20 @@ async fn remove_data_for_dropped_table(
         txn_delete_exact(txn, &id_to_name, seq_name.seq);
     }
 
+    // Remove table auto increment sequences
+    {
+        // clear the sequence associated with auto increment in the table field
+        let auto_increment_key = AutoIncrementKey::new(table_id.table_id, 0);
+        let dir_name = DirName::new(AutoIncrementStorageIdent::new_generic(
+            tenant,
+            auto_increment_key,
+        ));
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
+
+        while let Some(auto_increment_ident) = auto_increments.try_next().await? {
+            txn.if_then.push(txn_op_del(&auto_increment_ident));
+        }
+    }
     // Remove table ownership
     {
         let table_ownership = OwnershipObject::Table {

@@ -100,6 +100,7 @@ mod converters {
                 data_type: value.data_type.into(),
                 column_id: value.column_id,
                 computed_expr: None,
+                auto_increment_expr: None,
             }
         }
     }

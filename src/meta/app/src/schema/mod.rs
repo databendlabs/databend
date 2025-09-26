@@ -14,39 +14,45 @@
 
 //! Schema types
 
+mod auto_increment;
+mod auto_increment_storage;
 pub mod catalog;
 pub mod catalog_id_ident;
 pub mod catalog_id_to_name_ident;
 pub mod catalog_name_ident;
+mod constraint;
+mod create_option;
+mod database;
 pub mod database_id;
 pub mod database_id_history_ident;
 pub mod database_name_ident;
+mod dictionary;
 pub mod dictionary_id_ident;
+mod dictionary_identity;
 pub mod dictionary_name_ident;
+mod index;
 pub mod index_id_ident;
 pub mod index_id_to_name_ident;
 pub mod index_name_ident;
+mod least_visible_time;
 pub mod least_visible_time_ident;
+mod lock;
 pub mod marked_deleted_index_id;
 pub mod marked_deleted_index_ident;
 pub mod marked_deleted_table_index_id;
 pub mod marked_deleted_table_index_ident;
+mod ownership;
+mod sequence;
 pub mod sequence_storage;
+mod table;
 pub mod table_lock_ident;
 pub mod table_niv;
 
-mod constraint;
-mod create_option;
-mod database;
-mod dictionary;
-mod dictionary_identity;
-mod index;
-mod least_visible_time;
-mod lock;
-mod ownership;
-mod sequence;
-mod table;
-
+pub use auto_increment::GetAutoIncrementNextValueReply;
+pub use auto_increment::GetAutoIncrementNextValueReq;
+pub use auto_increment_storage::AutoIncrementStorageIdent;
+pub use auto_increment_storage::AutoIncrementStorageRsc;
+pub use auto_increment_storage::AutoIncrementStorageValue;
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
 pub use catalog_id_to_name_ident::CatalogIdToNameIdent;

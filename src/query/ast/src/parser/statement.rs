@@ -3253,12 +3253,32 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
         CheckExpr(Box<Expr>),
+        AutoIncrement {
+            start: u64,
+            step: i64,
+            is_ordered: bool,
+        },
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
+    let identity_parmas = alt((
+        map(
+            rule! {
+                "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_i64 ~ ^")"
+            },
+            |(_, start, _, step, _)| (start, step),
+        ),
+        map(
+            rule! {
+                START ~ ^#literal_u64 ~ ^INCREMENT ~ ^#literal_i64
+            },
+            |(_, start, _, step)| (start, step),
+        ),
+    ));
+
     let expr = alt((
         map(
             rule! {
@@ -3283,6 +3303,25 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")"
             },
             |(_, _, expr, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
+        ),
+        map(
+            rule! {
+                (AUTOINCREMENT | IDENTITY)
+                ~ #identity_parmas?
+                ~ (ORDER | NOORDER)?
+            },
+            |(_, params, order_token)| {
+                let (start, step) = params.unwrap_or((0, 1));
+                let is_ordered = order_token
+                    .map(|token| token.text().eq_ignore_ascii_case("order"))
+                    .unwrap_or(true);
+
+                ColumnConstraint::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                }
+            },
         ),
     ));
 
@@ -3331,6 +3370,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
+                if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other(
+                            "DEFAULT and AUTO INCREMENT cannot exist at the same time",
+                        ),
+                    )));
+                }
                 def.expr = Some(ColumnExpr::Default(default_expr))
             }
             ColumnConstraint::VirtualExpr(virtual_expr) => {
@@ -3340,6 +3387,29 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
             ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
+            ColumnConstraint::AutoIncrement {
+                start,
+                step,
+                is_ordered,
+            } => {
+                if matches!(def.expr, Some(ColumnExpr::Default(_))) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                    )));
+                }
+                if !is_ordered {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
+                    )));
+                }
+                def.expr = Some(ColumnExpr::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                })
+            }
         }
     }
 

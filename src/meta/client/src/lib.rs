@@ -168,7 +168,7 @@ use semver::Version;
 // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
 // ```
 // Skip 1.2.258 use the next 1.2.259
-pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 677);
+pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 768);
 
 pub fn to_digit_ver(v: &Version) -> u64 {
     v.major * 1_000_000 + v.minor * 1_000 + v.patch

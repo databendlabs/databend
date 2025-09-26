@@ -59,6 +59,8 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -750,6 +752,13 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        _req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
         unimplemented!()
     }
 }

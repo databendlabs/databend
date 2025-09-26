@@ -54,6 +54,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -567,6 +569,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
+
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply>;
 
     fn set_session_state(&self, _state: SessionState) -> Arc<dyn Catalog> {
         unimplemented!()

@@ -59,6 +59,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -900,5 +902,12 @@ impl Catalog for DatabaseCatalog {
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.mutable_catalog.rename_dictionary(req).await
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
+        self.mutable_catalog.get_autoincrement_next_value(req).await
     }
 }

@@ -45,9 +45,13 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::primitive::Id;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -144,6 +148,7 @@ use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_get;
 use crate::txn_op_put;
+use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 use crate::DEFAULT_MGET_SIZE;
@@ -444,6 +449,21 @@ where
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
                         .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                }
+
+                for table_field in req.table_meta.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let auto_increment_key =
+                        AutoIncrementKey::new(table_id, table_field.column_id());
+                    let storage_ident =
+                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
+                    let storage_value =
+                        Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
+                    txn.if_then
+                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
