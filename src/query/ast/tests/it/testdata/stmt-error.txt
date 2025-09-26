@@ -303,7 +303,7 @@ error:
   --> SQL:1:19
   |
 1 | create role 'test'@'%';
-  |                   ^ unexpected `@`, expecting `FORMAT` or `;`
+  |                   ^ unexpected `@`, expecting `COMMENT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -327,7 +327,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -341,7 +341,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -355,7 +355,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -369,7 +369,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------

@@ -1671,17 +1671,50 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_role = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
+            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, role_name)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+        |(_, _, opt_if_not_exists, role_name, opt_comment)| {
+            let create_option = parse_create_option(false, opt_if_not_exists.is_some())?;
             Ok(Statement::CreateRole {
                 create_option,
                 role_name,
+                comment: opt_comment.map(|(_, _, comment)| comment),
             })
         },
     );
+    let alter_role = map(
+        rule! {
+            ALTER ~ ROLE ~ ( IF ~ ^EXISTS )? ~ ^#ident
+             ~ #alter_role_action
+        },
+        |(_, _, opt_if_exists, name, action)| {
+            let stmt = AlterRoleStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                action,
+            };
+            Statement::AlterRole(stmt)
+        },
+    );
+    pub fn alter_role_action(i: Input) -> IResult<AlterRoleAction> {
+        let set_comment = map(
+            rule! {
+               SET ~ COMMENT ~ ^"=" ~ ^#literal_string
+            },
+            |(_, _, _, comment)| AlterRoleAction::Comment(Some(comment)),
+        );
+        let unset_comment = map(
+            rule! {
+               UNSET ~ COMMENT
+            },
+            |(_, _)| AlterRoleAction::Comment(None),
+        );
+
+        rule!(
+            #set_comment
+            | #unset_comment
+        )(i)
+    }
     let drop_role = map(
         rule! {
             DROP ~ ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
@@ -2666,7 +2699,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
             | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`"
+            | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
             | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"

@@ -1,0 +1,56 @@
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;
+
+statement ok
+create role role1;
+
+statement ok
+create role if not exists role1 comment = 'test'
+
+statement ok
+create role if not exists role2 comment = 'test'
+
+query T
+select name, comment from show_roles() where name in ('role1', 'role2', 'role3') order by name;
+----
+role1 (empty)
+role2 test
+
+statement ok
+alter role role2 unset comment;
+
+statement ok
+alter role role1 set comment = 'xxx'
+
+query T
+select name, comment from show_roles() where name in ('role1', 'role2', 'role3') order by name;
+----
+role1 xxx
+role2 (empty)
+
+statement ok
+alter role if exists role1 set comment = 'cccc'
+
+statement ok
+alter role if exists role3 set comment = 'cccc'
+
+statement ok
+alter role if exists role3 unset comment
+
+statement error 2204
+alter role role3 set comment = 'cccc'
+
+statement error 2204
+alter role role3 unset comment
+
+statement error 1005
+create or replace role role3;
+
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;

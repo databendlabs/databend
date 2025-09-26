@@ -393,6 +393,7 @@ impl Binder {
             Statement::CreateRole {
                 create_option,
                 role_name,
+                comment,
             } => {
                 if illegal_ident_name(role_name) {
                     return Err(ErrorCode::IllegalRole(
@@ -402,6 +403,7 @@ impl Binder {
                 Plan::CreateRole(Box::new(CreateRolePlan {
                     create_option: create_option.clone().into(),
                     role_name: role_name.to_string(),
+                    comment: comment.clone(),
                 }))
             }
             Statement::DropRole {
@@ -411,6 +413,18 @@ impl Binder {
                 if_exists: *if_exists,
                 role_name: role_name.to_string(),
             })),
+            Statement::AlterRole(stmt) => {
+                let action = match &stmt.action {
+                    databend_common_ast::ast::AlterRoleAction::Comment(comment) => {
+                        crate::plans::AlterRoleAction::Comment(comment.clone())
+                    }
+                };
+                Plan::AlterRole(Box::new(crate::plans::AlterRolePlan {
+                    if_exists: stmt.if_exists,
+                    role_name: stmt.name.clone(),
+                    action,
+                }))
+            }
 
             // Stages
             Statement::ShowStages { show_options } => {

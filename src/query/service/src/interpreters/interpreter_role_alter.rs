@@ -14,14 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::RoleInfo;
-use databend_common_sql::plans::CreateRolePlan;
+use databend_common_sql::plans::AlterRolePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
 
 use crate::interpreters::Interpreter;
@@ -30,21 +26,21 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[derive(Debug)]
-pub struct CreateRoleInterpreter {
+pub struct AlterRoleInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateRolePlan,
+    plan: AlterRolePlan,
 }
 
-impl CreateRoleInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateRolePlan) -> Result<Self> {
-        Ok(CreateRoleInterpreter { ctx, plan })
+impl AlterRoleInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterRolePlan) -> Result<Self> {
+        Ok(AlterRoleInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateRoleInterpreter {
+impl Interpreter for AlterRoleInterpreter {
     fn name(&self) -> &str {
-        "CreateRoleInterpreter"
+        "AlterRoleInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -54,28 +50,22 @@ impl Interpreter for CreateRoleInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "create_role_execute");
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_role_execute");
 
-        // TODO: add privilege check about CREATE ROLE
         let plan = self.plan.clone();
-        let role_name = plan.role_name;
-        if role_name.to_lowercase() == BUILTIN_ROLE_ACCOUNT_ADMIN
-            || role_name.to_lowercase() == BUILTIN_ROLE_PUBLIC
-        {
-            return Err(ErrorCode::IllegalRole(
-                "Illegal Create Role command. Can not create built-in role [ account_admin | public ]",
-            ));
-        }
-
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-        user_mgr
-            .add_role(
-                &tenant,
-                RoleInfo::new(&role_name, plan.comment),
-                &plan.create_option,
-            )
-            .await?;
+
+        // Update role based on action
+        match &plan.action {
+            databend_common_sql::plans::AlterRoleAction::Comment(comment) => {
+                user_mgr
+                    .update_role_comment(&tenant, &plan.role_name, comment.clone(), plan.if_exists)
+                    .await?;
+            }
+        }
+
+        // Force reload role cache after altering
         RoleCacheManager::instance().force_reload(&tenant).await?;
         Ok(PipelineBuildResult::create())
     }

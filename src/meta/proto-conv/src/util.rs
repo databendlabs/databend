@@ -178,6 +178,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (146, "2025-09-01: Add: add Constraint on TableMeta"),
     (147, "2025-09-17: Add: Grant/OwnershipProcedureObject and UserPrivilegeType AccessProcedure, AccessProcedure"),
     (148, "2025-09-22: Add: virtual_data_type add Decimal, Binary, Date, Timestamp, Interval"),
+    (149, "2025-09-26: Add: RoleInfo::comment"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

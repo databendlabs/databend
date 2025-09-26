@@ -534,6 +534,10 @@ impl InterpreterFactory {
                 ctx,
                 *drop_role.clone(),
             )?)),
+            Plan::AlterRole(alter_role) => Ok(Arc::new(AlterRoleInterpreter::try_create(
+                ctx,
+                *alter_role.clone(),
+            )?)),
             Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
                 ctx,
                 *set_role.clone(),

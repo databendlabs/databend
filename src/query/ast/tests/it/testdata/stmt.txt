@@ -5341,6 +5341,54 @@ DropTable(
 
 
 ---------- Input ----------
+create role role1 comment='test';
+---------- Output ---------
+CREATE ROLE 'role1' COMMENT = 'test'
+---------- AST ------------
+CreateRole {
+    create_option: Create,
+    role_name: "role1",
+    comment: Some(
+        "test",
+    ),
+}
+
+
+---------- Input ----------
+alter role role1 set comment='test';
+---------- Output ---------
+ALTER ROLE role1 SET COMMENT = 'test'
+---------- AST ------------
+AlterRole(
+    AlterRoleStmt {
+        if_exists: false,
+        name: "role1",
+        action: Comment(
+            Some(
+                "test",
+            ),
+        ),
+    },
+)
+
+
+---------- Input ----------
+alter role role1 unset comment;
+---------- Output ---------
+ALTER ROLE role1 UNSET COMMENT
+---------- AST ------------
+AlterRole(
+    AlterRoleStmt {
+        if_exists: false,
+        name: "role1",
+        action: Comment(
+            None,
+        ),
+    },
+)
+
+
+---------- Input ----------
 CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
 ---------- Output ---------
 CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
@@ -13439,6 +13487,7 @@ CREATE ROLE 'test'
 CreateRole {
     create_option: Create,
     role_name: "test",
+    comment: None,
 }
 
 
@@ -13450,6 +13499,7 @@ CREATE ROLE 'test'
 CreateRole {
     create_option: Create,
     role_name: "test",
+    comment: None,
 }
 
 
