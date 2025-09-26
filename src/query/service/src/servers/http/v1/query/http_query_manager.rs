@@ -189,6 +189,7 @@ impl HttpQueryManager {
                                 &None,
                                 stop_reason,
                                 ErrorCode::AbortedQuery(&msg),
+                                false,
                             )
                             .await
                             .ok();
@@ -214,6 +215,7 @@ impl HttpQueryManager {
         client_session_id: &Option<String>,
         reason: StopReason,
         error: ErrorCode,
+        check_session_id: bool,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -221,7 +223,7 @@ impl HttpQueryManager {
             .as_secs();
         let (query, stop_first_run) = self.queries.write().stop(query_id, reason, now);
         if let Some(q) = &query {
-            if reason != StopReason::Timeout {
+            if check_session_id {
                 q.check_client_session_id(client_session_id)?;
             }
             if stop_first_run {
