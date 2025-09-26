@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::future::TimedFutureExt;
+use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -44,9 +45,11 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::stream::BoxStream;
+use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::watch;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
 use crate::message::ForwardRequest;
@@ -61,9 +64,15 @@ pub type MetaFnOnce<T> = Box<dyn FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 
 /// A handle to talk to MetaNode in another runtime.
 #[derive(Clone)]
 pub struct MetaHandle {
+    /// The node id of the meta node
     pub id: NodeId,
+
+    /// Binary build version
     pub version: BuildInfoRef,
-    tx: mpsc::Sender<MetaFnOnce<()>>,
+
+    /// A channel to send requests to the [`MetaWorker`].
+    meta_worker_request_tx: mpsc::Sender<MetaFnOnce<()>>,
+
     /// The runtime containing the meta node worker.
     ///
     /// When all handles are dropped, the runtime will be dropped
@@ -74,18 +83,18 @@ impl MetaHandle {
     pub fn new(
         id: NodeId,
         version: BuildInfoRef,
-        tx: mpsc::Sender<MetaFnOnce<()>>,
+        meta_worker_request_tx: mpsc::Sender<MetaFnOnce<()>>,
         rt: Arc<Runtime>,
     ) -> Self {
         MetaHandle {
             id,
             version,
-            tx,
+            meta_worker_request_tx,
             _rt: rt,
         }
     }
 
-    /// Run a function in meta-node
+    /// Run a function with meta-node, in the meta-node runtime.
     pub async fn request<T>(
         &self,
         f: impl FnOnce(Arc<MetaNode>) -> BoxFuture<T> + Send + 'static,
@@ -104,7 +113,7 @@ impl MetaHandle {
             fu
         });
 
-        self.tx
+        self.meta_worker_request_tx
             .send(box_fn)
             .await
             .map_err(|_e| MetaNodeStopped::new().with_context("sending request"))?;
@@ -157,14 +166,19 @@ impl MetaHandle {
         >,
         MetaNodeStopped,
     > {
-        self.request(move |meta_node| {
-            let req = ForwardRequest::new(1, req);
+        let req = ForwardRequest::new(1, req);
 
+        self.request(move |meta_node| {
             let fu = async move {
-                meta_node
+                let (endpoint, strm) = meta_node
                     .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
                     .log_elapsed_info(format!("ReadRequest: {:?}", req))
-                    .await
+                    .await?;
+
+                // Prevent leaking IO operation to the outer runtime.
+                let strm = decouple_stream(strm);
+
+                Ok((endpoint, strm))
             };
 
             Box::pin(fu)
@@ -228,7 +242,12 @@ impl MetaHandle {
         &self,
     ) -> Result<BoxStream<'static, Result<String, io::Error>>, MetaNodeStopped> {
         self.request(move |meta_node| {
-            let fu = async move { meta_node.raft_store.clone().export() };
+            let fu = async move {
+                let strm = meta_node.raft_store.clone().export();
+
+                // Prevent leaking IO operation to the outer runtime.
+                decouple_stream(strm)
+            };
 
             Box::pin(fu)
         })
@@ -253,10 +272,7 @@ impl MetaHandle {
         _request: MemberListRequest,
     ) -> Result<Vec<String>, MetaNodeStopped> {
         self.request(move |meta_node| {
-            let fu = async move {
-                //
-                meta_node.get_grpc_advertise_addrs().await
-            };
+            let fu = async move { meta_node.get_grpc_advertise_addrs().await };
 
             Box::pin(fu)
         })
@@ -356,4 +372,32 @@ impl MetaHandle {
         })
         .await
     }
+}
+
+/// Spawn a stream forwarder task.
+///
+/// So that the stream that do the IO reside inside its own runtime.
+/// And the service runtime is won't be blocked by IO or CPU intensive tasks.
+///
+/// This function should be called in the io runtime.
+fn decouple_stream<T>(mut strm: BoxStream<'static, T>) -> BoxStream<'static, T>
+where T: Send + 'static {
+    let (tx, rx) = mpsc::channel(1024);
+
+    spawn_named(
+        async move {
+            while let Some(item) = strm.next().await {
+                let send_res = tx.send(item).await;
+                if send_res.is_err() {
+                    // receiver dropped
+                    break;
+                }
+            }
+        },
+        "stream-forward".to_string(),
+    );
+
+    
+
+    (Box::pin(ReceiverStream::new(rx))) as _
 }
