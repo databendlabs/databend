@@ -276,7 +276,7 @@ impl SubqueryDecorrelatorOptimizer {
                 }
 
                 // todo: non_equi_conditions for other join_type
-                if matches!(join.join_type, JoinType::Inner(_))
+                if !matches!(join.join_type, JoinType::Inner(_))
                     || join
                         .non_equi_conditions
                         .iter()
