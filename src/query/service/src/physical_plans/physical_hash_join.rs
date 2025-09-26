@@ -552,7 +552,11 @@ impl PhysicalPlanBuilder {
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::LeftAsof
+            | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
                 let build_schema = DataSchemaRefExt::create(
@@ -588,7 +592,7 @@ impl PhysicalPlanBuilder {
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Right(_) | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
+            JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
                 let probe_schema = probe_side.output_schema()?;
                 // Wrap nullable type for columns in probe side
                 let probe_schema = DataSchemaRefExt::create(
@@ -805,7 +809,7 @@ impl PhysicalPlanBuilder {
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
             // Handle inner join column optimization
-            if matches!(join.join_type, JoinType::Inner(_)) {
+            if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
                     left_condition,
                     right_condition,
@@ -1032,11 +1036,14 @@ impl PhysicalPlanBuilder {
     ) -> Result<(Vec<DataField>, DataSchemaRef, ColumnSet)> {
         // Create merged fields based on join type
         let merged_fields = match join.join_type {
-            JoinType::Cross(_)
-            | JoinType::Inner(_)
-            | JoinType::Left(_)
+            JoinType::Cross
+            | JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Left
+            | JoinType::LeftAny
             | JoinType::LeftSingle
-            | JoinType::Right(_)
+            | JoinType::Right
+            | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::Full => {
                 let mut result = probe_fields.clone();

@@ -93,14 +93,13 @@ impl PullUpFilterOptimizer {
 
     fn pull_up_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
         let (left_need_pull_up, right_need_pull_up) = match join.join_type {
-            JoinType::Inner(_) | JoinType::Cross(_) => (true, true),
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::LeftSemi | JoinType::LeftAnti => {
+            JoinType::Inner | JoinType::Cross => (true, true),
+            JoinType::Left | JoinType::LeftSingle | JoinType::LeftSemi | JoinType::LeftAnti => {
                 (true, false)
             }
-            JoinType::Right(_)
-            | JoinType::RightSingle
-            | JoinType::RightSemi
-            | JoinType::RightAnti => (false, true),
+            JoinType::Right | JoinType::RightSingle | JoinType::RightSemi | JoinType::RightAnti => {
+                (false, true)
+            }
             _ => (false, false),
         };
 
@@ -140,10 +139,7 @@ impl PullUpFilterOptimizer {
             }
             join.equi_conditions.clear();
             join.non_equi_conditions.clear();
-            join.join_type = JoinType::Cross(matches!(
-                join.join_type,
-                JoinType::Inner(true) | JoinType::Cross(true)
-            ));
+            join.join_type = JoinType::Cross;
         }
         let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))

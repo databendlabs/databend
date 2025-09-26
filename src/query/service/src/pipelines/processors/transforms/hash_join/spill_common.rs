@@ -41,7 +41,7 @@ pub fn get_hashes(
     if from_build
         && matches!(
             join_type,
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         )
     {
         wrap_nullable_block(&mut block);
@@ -49,7 +49,7 @@ pub fn get_hashes(
     if !from_build
         && matches!(
             join_type,
-            JoinType::Right(_) | JoinType::RightSingle | JoinType::Full
+            JoinType::Right | JoinType::RightAny | JoinType::RightSingle | JoinType::Full
         )
     {
         wrap_nullable_block(&mut block);

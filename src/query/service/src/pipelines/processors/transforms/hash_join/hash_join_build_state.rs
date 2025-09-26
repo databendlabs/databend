@@ -246,12 +246,8 @@ impl HashJoinBuildState {
                     .map_err(|_| ErrorCode::TokioError("build_watcher channel is closed"))?;
                 return Ok(());
             }
-            if self
-                .hash_join_state
-                .hash_join_desc
-                .join_type
-                .is_cross_join()
-            {
+
+            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
             }
 
@@ -528,7 +524,7 @@ impl HashJoinBuildState {
         let mut _nullable_chunk = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         ) {
             let validity = Bitmap::new_constant(true, chunk.num_rows());
             let nullable_columns = chunk
@@ -633,7 +629,7 @@ impl HashJoinBuildState {
         };
         let overwrite = matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Inner(true) | JoinType::Left(true)
+            JoinType::Inner | JoinType::InnerAny | JoinType::Left | JoinType::LeftAny
         );
 
         keys_entries
@@ -696,11 +692,7 @@ impl HashJoinBuildState {
 
         let data_blocks = &mut build_state.generation_state.chunks;
         if !data_blocks.is_empty()
-            && !self
-                .hash_join_state
-                .hash_join_desc
-                .join_type
-                .is_cross_join()
+            && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
         {
             let num_columns = data_blocks[0].num_columns();
             let columns_data_type: Vec<DataType> = (0..num_columns)
@@ -725,7 +717,7 @@ impl HashJoinBuildState {
         if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.build_generation_state();
             if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
-                let partition_id = if !self.join_type().is_cross_join() {
+                let partition_id = if self.join_type() != JoinType::Cross {
                     // If build side has spilled data, we need to wait build side to next round.
                     // Set partition id to `HashJoinState`
                     let mut spill_partitions = self.hash_join_state.spilled_partitions.write();

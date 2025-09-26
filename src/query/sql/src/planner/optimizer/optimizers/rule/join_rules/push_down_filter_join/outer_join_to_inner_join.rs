@@ -133,17 +133,15 @@ fn eliminate_outer_join_type(
     can_filter_right_null: bool,
 ) -> JoinType {
     match join_type {
-        JoinType::Left(is_any) if can_filter_right_null => JoinType::Inner(is_any),
-        JoinType::LeftSingle if can_filter_right_null => JoinType::Inner(false),
-        JoinType::Right(is_any) if can_filter_left_null => JoinType::Inner(is_any),
-        JoinType::RightSingle if can_filter_left_null => JoinType::Inner(false),
+        JoinType::Left | JoinType::LeftSingle if can_filter_right_null => JoinType::Inner,
+        JoinType::Right | JoinType::RightSingle if can_filter_left_null => JoinType::Inner,
         JoinType::Full => {
             if can_filter_left_null && can_filter_right_null {
-                JoinType::Inner(false)
+                JoinType::Inner
             } else if can_filter_left_null {
-                JoinType::Left(false)
+                JoinType::Left
             } else if can_filter_right_null {
-                JoinType::Right(false)
+                JoinType::Right
             } else {
                 join_type
             }
@@ -158,10 +156,7 @@ pub fn can_filter_null(
     join_type: &JoinType,
     metadata: MetadataRef,
 ) -> Result<bool> {
-    if !matches!(
-        join_type,
-        JoinType::Left(_) | JoinType::Right(_) | JoinType::Full
-    ) {
+    if !matches!(join_type, JoinType::Left | JoinType::Right | JoinType::Full) {
         return Ok(true);
     }
 
