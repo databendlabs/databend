@@ -17,10 +17,18 @@ create or replace table test_autoincrement (c1 int, c2 int autoincrement, c3 flo
 """
 
 stmt """
-insert into test_autoincrement (c1) values(0), (0), (0);
+insert into test_autoincrement (c1) values(0);
 """
 
-query "select * from test_autoincrement;"
+stmt """
+insert into test_autoincrement (c1) values(0);
+"""
+
+stmt """
+insert into test_autoincrement (c1) values(0);
+"""
+
+query "select * from test_autoincrement order by c2;"
 
 stmt """
 alter table test_autoincrement add column c4 string autoincrement;
@@ -36,13 +44,13 @@ stmt """
 insert into test_autoincrement (c1) values(0);
 """
 
-query "select * from test_autoincrement;"
+query "select * from test_autoincrement order by c2;"
 
 stmt """
 alter table test_autoincrement drop column c2;
 """
 
-query "select * from test_autoincrement;"
+query "select * from test_autoincrement order by c2;"
 
 stmt """
 drop table test_autoincrement;
