@@ -131,7 +131,7 @@ async fn main() {
         &BUILD_INFO,
         "root",
         "xxx",
-        None,
+        Some(Duration::from_secs(5)),
         None,
         None,
         required::read_write(),
