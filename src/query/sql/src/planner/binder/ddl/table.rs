@@ -1779,20 +1779,8 @@ impl Binder {
             }
             fields.push(field);
         }
-        // update auto increment expr column id
-        if has_autoincrement {
-            let table_schema = TableSchema::new(fields.clone());
 
-            for (i, table_field) in table_schema.fields().iter().enumerate() {
-                let Some(auto_increment_expr) = fields[i].auto_increment_expr.as_mut() else {
-                    continue;
-                };
-
-                auto_increment_expr.column_id = table_field.column_id;
-            }
-        }
-
-        let fields = if has_computed {
+        let mut fields = if has_computed {
             let mut source_fields = Vec::with_capacity(fields.len());
             for (column, field) in columns.iter().zip(fields.iter()) {
                 match &column.expr {
@@ -1835,6 +1823,18 @@ impl Binder {
         } else {
             fields
         };
+        // update auto increment expr column id
+        if has_autoincrement {
+            let table_schema = TableSchema::new(fields.clone());
+
+            for (i, table_field) in table_schema.fields().iter().enumerate() {
+                let Some(auto_increment_expr) = fields[i].auto_increment_expr.as_mut() else {
+                    continue;
+                };
+
+                auto_increment_expr.column_id = table_field.column_id;
+            }
+        }
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
