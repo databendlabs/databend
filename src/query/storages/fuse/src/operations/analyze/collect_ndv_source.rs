@@ -36,6 +36,8 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::BlockMeta;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::CompactSegmentInfo;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::SegmentStatistics;
@@ -86,6 +88,20 @@ enum State {
     MergeHLL,
     WriteMeta,
     Finish,
+}
+
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            State::ReadData(_) => "ReadData",
+            State::CollectNDV { .. } => "CollectNDV",
+            State::BuildHLL => "BuildHLL",
+            State::MergeHLL => "MergeHLL",
+            State::WriteMeta => "WriteMeta",
+            State::Finish => "Finish",
+        };
+        f.write_str(name)
+    }
 }
 
 pub struct AnalyzeCollectNDVSource {
@@ -270,7 +286,12 @@ impl Processor for AnalyzeCollectNDVSource {
                 }
                 self.state = State::WriteMeta;
             }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
+            state => {
+                return Err(ErrorCode::Internal(format!(
+                    "Invalid state reached in sync process: {:?}. This is a bug.",
+                    state
+                )))
+            }
         }
         Ok(())
     }
@@ -362,16 +383,22 @@ impl Processor for AnalyzeCollectNDVSource {
 
                 let segment_loc = segment_location.0.as_str();
                 let data = SegmentStatistics::new(raw_block_hlls).to_bytes()?;
+                let size = data.len() as u64;
                 let segment_stats_location =
                     TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                         segment_loc,
                     );
+                self.dal.write(&segment_stats_location, data).await?;
+                // remove the old cache.
+                if let Some(cache) = SegmentStatistics::cache() {
+                    cache.evict(&segment_stats_location);
+                }
+
                 let additional_stats_meta = AdditionalStatsMeta {
-                    size: data.len() as u64,
-                    location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+                    size,
+                    location: (segment_stats_location, SegmentStatistics::VERSION),
                     ..Default::default()
                 };
-                self.dal.write(&segment_stats_location, data).await?;
                 origin_summary.additional_stats_meta = Some(additional_stats_meta);
                 let new_segment = SegmentInfo::new(block_metas, origin_summary);
                 new_segment
@@ -379,7 +406,12 @@ impl Processor for AnalyzeCollectNDVSource {
                     .await?;
                 self.state = State::ReadData(None);
             }
-            _ => return Err(ErrorCode::Internal("It's a bug.")),
+            state => {
+                return Err(ErrorCode::Internal(format!(
+                    "Invalid state reached in async process: {:?}. This is a bug.",
+                    state
+                )))
+            }
         }
         Ok(())
     }

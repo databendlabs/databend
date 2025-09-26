@@ -142,7 +142,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
-        let enable_auto_analyze = Self::enable_auto_analyze(table, &snapshot_gen);
+        let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
 
         let vacuum_handler = if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
@@ -197,7 +197,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
         Ok(mode)
     }
 
-    fn enable_auto_analyze(table: &FuseTable, snapshot_gen: &F) -> bool {
+    fn enable_auto_analyze(
+        ctx: Arc<dyn TableContext>,
+        table: &FuseTable,
+        snapshot_gen: &F,
+    ) -> bool {
+        if !ctx
+            .get_settings()
+            .get_enable_auto_analyze()
+            .unwrap_or_default()
+        {
+            return false;
+        }
+
         let enable_auto_analyze = table.get_option(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE, 0u32);
         if enable_auto_analyze == 0 {
             return false;
