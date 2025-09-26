@@ -4205,6 +4205,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
+    let swap_with = map(
+        rule! {
+           SWAP ~ WITH ~ #ident
+        },
+        |(_, _, target_table)| AlterTableAction::SwapWith { target_table },
+    );
     let rename_column = map(
         rule! {
             RENAME ~ COLUMN? ~ #ident ~ TO ~ #ident
@@ -4353,6 +4359,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #drop_constraint
         | #rename_table
+        | #swap_with
         | #rename_column
         | #modify_table_comment
         | #add_column

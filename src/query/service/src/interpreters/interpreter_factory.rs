@@ -343,6 +343,10 @@ impl InterpreterFactory {
                 ctx,
                 *rename_table.clone(),
             )?)),
+            Plan::SwapTable(swap_table) => Ok(Arc::new(SwapTableInterpreter::try_create(
+                ctx,
+                *swap_table.clone(),
+            )?)),
             Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
                 ctx,
                 *set_options.clone(),

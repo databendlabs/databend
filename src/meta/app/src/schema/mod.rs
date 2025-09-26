@@ -116,6 +116,8 @@ pub use table::SetTableColumnMaskPolicyReq;
 pub use table::SetTableRowAccessPolicyAction;
 pub use table::SetTableRowAccessPolicyReply;
 pub use table::SetTableRowAccessPolicyReq;
+pub use table::SwapTableReply;
+pub use table::SwapTableReq;
 pub use table::TableCopiedFileInfo;
 pub use table::TableCopiedFileNameIdent;
 pub use table::TableId;

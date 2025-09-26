@@ -151,6 +151,7 @@ use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
 use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
+use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
@@ -1041,6 +1042,17 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                })))
+            }
+            AlterTableAction::SwapWith { target_table } => {
+                Ok(Plan::SwapTable(Box::new(SwapTablePlan {
+                    tenant,
+                    if_exists: *if_exists,
+                    catalog: catalog.clone(),
+                    database: database.clone(),
+                    table: table.clone(),
+                    target_table: normalize_identifier(target_table, &self.name_resolution_ctx)
+                        .name,
                 })))
             }
             AlterTableAction::ModifyTableComment { new_comment } => {

@@ -91,6 +91,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -551,6 +553,23 @@ impl Catalog for DatabaseCatalog {
         }
 
         self.mutable_catalog.rename_table(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        info!("Swap table from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), &req.origin_table.db_name)
+            .await?
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Cannot swap tables from(to) system databases",
+            ));
+        }
+
+        self.mutable_catalog.swap_table(req).await
     }
 
     #[async_backtrace::framed]

@@ -13688,6 +13688,49 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t1 swap with t2;
+---------- Output ---------
+ALTER TABLE t1 SWAP WITH t2
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..14,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..14,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SwapWith {
+            target_table: Identifier {
+                span: Some(
+                    25..27,
+                ),
+                name: "t2",
+                quote: None,
+                ident_type: None,
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t refresh cache;
 ---------- Output ---------
 ALTER TABLE t REFRESH CACHE

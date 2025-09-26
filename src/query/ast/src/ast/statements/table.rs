@@ -439,6 +439,9 @@ pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
     },
+    SwapWith {
+        target_table: Identifier,
+    },
     AddColumn {
         column: ColumnDefinition,
         option: AddColumnOption,
@@ -507,6 +510,9 @@ impl Display for AlterTableAction {
 
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
+            }
+            AlterTableAction::SwapWith { target_table } => {
+                write!(f, "SWAP WITH {target_table}")?;
             }
             AlterTableAction::ModifyTableComment { new_comment } => {
                 write!(f, "COMMENT={}", QuotedString(new_comment, '\''))?;

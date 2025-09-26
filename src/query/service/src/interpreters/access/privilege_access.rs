@@ -1190,6 +1190,17 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 self.validate_db_access(&plan.catalog, &plan.new_database, UserPrivilegeType::Create, false).await?;
             }
+            Plan::SwapTable(plan) => {
+                // only the current role have OWNERSHIP privileges on the tables can execute swap.
+                let session = self.ctx.get_current_session();
+                let origin_table_owner = self.has_ownership(&session, &GrantObject::Table(plan.catalog.clone(), plan.database.clone(), plan.table.clone()), true, false).await?;
+                let target_table_owner = self.has_ownership(&session, &GrantObject::Table(plan.catalog.clone(), plan.database.clone(), plan.target_table.clone()), true, false).await?;
+                return if target_table_owner && origin_table_owner {
+                    Ok(())
+                } else {
+                    Err(ErrorCode::PermissionDenied("Insufficient privileges: only the table owner can perform this operation"))
+                }
+            }
             Plan::SetOptions(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
