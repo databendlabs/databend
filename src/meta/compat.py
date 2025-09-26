@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 meta_to_query_compat = [
-    # upto meta version(exclusive) : compatible query version(left open, right closed)
+    # upto meta version(exclusive) : compatible query version [from, to) (left closed, right open)
 
     "0.0.0     0.0.0   0.0.0   ",
     "0.8.30    0.0.0   0.0.0   ",
@@ -15,9 +15,10 @@ meta_to_query_compat = [
     "1.2.258   0.9.41  1.2.361 ",
     "1.2.663   0.9.41  1.2.726 ",
     "1.2.677   1.2.287 1.2.726 ",
-    "1.2.755   1.2.676 ∞       ",
-    "1.2.756   1.2.676 ∞       ",
-    "1.2.764   1.2.676 ∞       ",
+    "1.2.755   1.2.676 1.2.821 ",
+    "1.2.756   1.2.676 1.2.821 ",
+    "1.2.764   1.2.676 1.2.821 ",
+    "1.2.768   1.2.676 1.2.821 ",
     "∞         1.2.676 ∞       ",
 ]
 
@@ -59,23 +60,26 @@ def draw_meta_to_query_compat(output_file: str):
     # Create compatibility rectangles
     for i, (meta, q_from, q_to) in enumerate(ranges):
         # Get positions
-        meta_x = meta_pos[meta]
+        meta_end_x = meta_pos[meta]  # This is the exclusive upper bound
         q_from_y = query_pos[q_from]
         q_to_y = query_pos[q_to]
 
-        # Determine the width of the rectangle (next meta version - current)
-        next_meta_idx = sorted_meta_versions.index(meta) + 1
-        if next_meta_idx < len(sorted_meta_versions):
-            width = meta_pos[sorted_meta_versions[next_meta_idx]] - meta_x
+        # Determine the start position (previous meta version or 0)
+        meta_idx = sorted_meta_versions.index(meta)
+        if meta_idx > 0:
+            meta_start_x = meta_pos[sorted_meta_versions[meta_idx - 1]]
         else:
-            width = 1.0  # Width for the last range
+            meta_start_x = -0.5  # Start from beginning for first range
 
-        # Height of the rectangle
+        # Width of the rectangle (up to but not including current meta version)
+        width = meta_end_x - meta_start_x
+
+        # Height of the rectangle ([from, to) range - covers q_from_y to just before q_to_y)
         height = q_to_y - q_from_y
 
         # Create rectangle patch
         rect = patches.Rectangle(
-            (meta_x, q_from_y),
+            (meta_start_x, q_from_y),
             width,
             height,
             linewidth=1,
