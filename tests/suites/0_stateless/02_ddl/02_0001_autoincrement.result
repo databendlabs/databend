@@ -6,14 +6,6 @@ Error: APIError: QueryFailed: [1065]AUTO INCREMENT only supports Decimal or Nume
 >>>> 
 create or replace table test_autoincrement (c1 int, c2 int default 1 autoincrement);
 
->>>> 
-create or replace table test_autoincrement (c1 int, c2 string autoincrement);
-
-Error: APIError: QueryFailed: [1065]AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types
-<<<<
->>>> 
-create or replace table test_autoincrement (c1 int, c2 int default 1 autoincrement);
-
 Error: APIError: QueryFailed: [1005]error: 
   --> SQL:1:83
   |
@@ -89,4 +81,3 @@ Error: APIError: QueryFailed: [1065]error:
 drop table test_autoincrement;
 
 >>>> drop database test
-
