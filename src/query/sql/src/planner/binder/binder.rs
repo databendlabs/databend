@@ -34,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -1006,13 +1007,17 @@ impl Binder {
         &self,
         scalar: &ScalarExpr,
     ) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-            )
+        let f = |scalar: &ScalarExpr| match scalar {
+            ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::WindowFunction(_)
+            | ScalarExpr::UDAFCall(_)
+            | ScalarExpr::SubqueryExpr(_)
+            | ScalarExpr::AsyncFunctionCall(_) => true,
+            ScalarExpr::FunctionCall(func) => BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(true),
+            _ => false,
         };
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
