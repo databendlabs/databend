@@ -9,7 +9,7 @@ Exchange(Merge)
             ├── aggregate functions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) AS (#173)]
             └── Exchange(Hash)
                 ├── Exchange(Hash): keys: [a.a0d (#0)]
-                └── Join(Inner)
+                └── Join(Inner(false))
                     ├── build keys: [c.a0m (#149)]
                     ├── probe keys: [a.a0m (#9)]
                     ├── other filters: []
@@ -23,11 +23,11 @@ Exchange(Merge)
                     │           ├── Exchange(Hash): keys: [a.a0d (#0)]
                     │           └── EvalScalar
                     │               ├── scalars: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), if(eq(d.a1v (#154), '603020'), 1, 0) AS (#166), b.a2t (#70) AS (#169), d.a5w (#156) AS (#171)]
-                    │               └── Join(Inner)
+                    │               └── Join(Inner(false))
                     │                   ├── build keys: [b.a0k (#48), b.a0n (#50)]
                     │                   ├── probe keys: [a.a0k (#7), a.a0n (#10)]
                     │                   ├── other filters: [lte(b.a2c (#52), a.a0d (#0)), gt(b.a2k (#61), a.a0d (#0))]
-                    │                   ├── Join(Inner)
+                    │                   ├── Join(Inner(false))
                     │                   │   ├── build keys: [d.a5t (#151)]
                     │                   │   ├── probe keys: [a.a0l (#8)]
                     │                   │   ├── other filters: []

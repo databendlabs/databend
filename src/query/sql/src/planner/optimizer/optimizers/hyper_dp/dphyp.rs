@@ -195,6 +195,10 @@ impl DPhpyOptimizer {
         if op.build_side_cache_info.is_some() {
             return Ok((Arc::new(s_expr.clone()), true));
         }
+        // FIXME: How to emit inner any join with inner join?
+        if op.join_type.is_any_join() {
+            return Ok((Arc::new(s_expr.clone()), true));
+        }
 
         // Check if it's an inner join
         let mut is_inner_join =
@@ -1146,6 +1150,6 @@ impl Optimizer for DPhpyOptimizer {
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        Ok(s_expr.clone())
+        self.optimize_async(s_expr).await
     }
 }

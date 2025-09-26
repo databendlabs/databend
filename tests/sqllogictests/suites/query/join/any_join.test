@@ -45,3 +45,6 @@ SELECT t1.id, t1.val1, t2.val2 FROM t1 RIGHT ANY JOIN t2 ON t1.id = t2.id;
 3 c1 y1
 NULL NULL n2
 NULL NULL z1
+
+statement error 1065
+SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2;
