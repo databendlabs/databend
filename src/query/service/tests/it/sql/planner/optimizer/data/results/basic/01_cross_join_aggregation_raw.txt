@@ -5,7 +5,7 @@ EvalScalar
     ├── aggregate functions: [SUM(i1.i) AS (#2), MIN(i1.i) AS (#3), MAX(i2.i) AS (#4)]
     └── EvalScalar
         ├── scalars: [i1.i (#0) AS (#0), i1.i (#0) AS (#0), i2.i (#1) AS (#1)]
-        └── Join(Cross)
+        └── Join(Cross(false))
             ├── build keys: []
             ├── probe keys: []
             ├── other filters: []

@@ -29,7 +29,7 @@ Limit
             │                                   ├── scalars: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103), store_returns.sr_return_amt (#107) AS (#107)]
             │                                   └── Filter
             │                                       ├── filters: [eq(store_returns.sr_returned_date_sk (#96), date_dim.d_date_sk (#116)), eq(date_dim.d_year (#122), 2001)]
-            │                                       └── Join(Cross)
+            │                                       └── Join(Cross(false))
             │                                           ├── build keys: []
             │                                           ├── probe keys: []
             │                                           ├── other filters: []
@@ -43,11 +43,11 @@ Limit
             │                                               ├── filters: []
             │                                               ├── order by: []
             │                                               └── limit: NONE
-            └── Join(Cross)
+            └── Join(Cross(false))
                 ├── build keys: []
                 ├── probe keys: []
                 ├── other filters: []
-                ├── Join(Cross)
+                ├── Join(Cross(false))
                 │   ├── build keys: []
                 │   ├── probe keys: []
                 │   ├── other filters: []
@@ -60,7 +60,7 @@ Limit
                 │   │           ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), store_returns.sr_return_amt (#11) AS (#11)]
                 │   │           └── Filter
                 │   │               ├── filters: [eq(store_returns.sr_returned_date_sk (#0), date_dim.d_date_sk (#20)), eq(date_dim.d_year (#26), 2001)]
-                │   │               └── Join(Cross)
+                │   │               └── Join(Cross(false))
                 │   │                   ├── build keys: []
                 │   │                   ├── probe keys: []
                 │   │                   ├── other filters: []

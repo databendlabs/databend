@@ -345,4 +345,9 @@ impl HashJoinHashTable {
             HashJoinHashTable::KeysU256(table) => table.hash_table.len(),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
