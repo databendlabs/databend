@@ -102,7 +102,7 @@ impl Rule for RuleFilterNulls {
         let join: Join = s_expr.plan().clone().try_into()?;
         if !matches!(
             join.join_type,
-            JoinType::Inner(_) | JoinType::LeftSemi | JoinType::RightSemi
+            JoinType::Inner | JoinType::LeftSemi | JoinType::RightSemi
         ) || join.is_lateral
         {
             state.add_result(s_expr.clone());

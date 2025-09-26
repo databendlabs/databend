@@ -96,7 +96,7 @@ impl ProbeState {
         other_predicate: Option<Expr>,
     ) -> Self {
         let (row_state, row_state_indexes) = match &join_type {
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full => {
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunction {
                     (Some(vec![0; max_block_size]), Some(vec![0; max_block_size]))
                 } else {
@@ -107,7 +107,11 @@ impl ProbeState {
         };
         let probe_unmatched_indexes = if matches!(
             &join_type,
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+            JoinType::Left
+                | JoinType::LeftAny
+                | JoinType::LeftSingle
+                | JoinType::Full
+                | JoinType::LeftAnti
         ) && !with_conjunction
         {
             Some(vec![0; max_block_size])
@@ -121,7 +125,7 @@ impl ProbeState {
         };
         let filter_executor = if !matches!(
             &join_type,
-            JoinType::LeftMark | JoinType::RightMark | JoinType::Cross(_)
+            JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
         ) && let Some(predicate) = other_predicate
         {
             let filter_executor = FilterExecutor::new(

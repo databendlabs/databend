@@ -365,7 +365,7 @@ impl Binder {
         let mut non_equi_conditions = join_conditions.non_equi_conditions;
         let other_conditions = join_conditions.other_conditions;
 
-        if join_type.is_cross_join()
+        if join_type == JoinType::Cross
             && (!left_conditions.is_empty() || !right_conditions.is_empty())
         {
             return Err(ErrorCode::SemanticError(
@@ -415,8 +415,8 @@ impl Binder {
                     is_null_equal.push(i);
                 }
             }
-            if join_type.is_cross_join() {
-                join_type = JoinType::Inner(false);
+            if join_type == JoinType::Cross {
+                join_type = JoinType::Inner;
             }
             is_lateral = true;
         }
@@ -485,11 +485,14 @@ impl Binder {
             let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
             match pred {
                 JoinPredicate::ALL(_) => match join_type {
-                    JoinType::Cross(_)
-                    | JoinType::Inner(_)
+                    JoinType::Cross
+                    | JoinType::Inner
                     | JoinType::Asof
                     | JoinType::LeftAsof
                     | JoinType::RightAsof
+                    | JoinType::InnerAny
+                    | JoinType::LeftAny
+                    | JoinType::RightAny
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
@@ -498,11 +501,11 @@ impl Binder {
                         left_push_down.push(predicate.clone());
                         right_push_down.push(predicate.clone());
                     }
-                    JoinType::Left(_) | JoinType::LeftSingle | JoinType::RightMark => {
+                    JoinType::Left | JoinType::LeftSingle | JoinType::RightMark => {
                         need_push_down = true;
                         right_push_down.push(predicate.clone());
                     }
-                    JoinType::Right(_) | JoinType::RightSingle | JoinType::LeftMark => {
+                    JoinType::Right | JoinType::RightSingle | JoinType::LeftMark => {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
                     }
@@ -1016,10 +1019,10 @@ impl<'a> JoinConditionResolver<'a> {
 
 fn join_type(join_type: &JoinOperator) -> JoinType {
     match join_type {
-        JoinOperator::CrossJoin => JoinType::Cross(false),
-        JoinOperator::Inner => JoinType::Inner(false),
-        JoinOperator::LeftOuter => JoinType::Left(false),
-        JoinOperator::RightOuter => JoinType::Right(false),
+        JoinOperator::CrossJoin => JoinType::Cross,
+        JoinOperator::Inner => JoinType::Inner,
+        JoinOperator::LeftOuter => JoinType::Left,
+        JoinOperator::RightOuter => JoinType::Right,
         JoinOperator::FullOuter => JoinType::Full,
         JoinOperator::LeftSemi => JoinType::LeftSemi,
         JoinOperator::RightSemi => JoinType::RightSemi,
@@ -1028,9 +1031,9 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::Asof => JoinType::Asof,
         JoinOperator::LeftAsof => JoinType::LeftAsof,
         JoinOperator::RightAsof => JoinType::RightAsof,
-        JoinOperator::LeftAny => JoinType::Left(true),
-        JoinOperator::RightAny => JoinType::Right(true),
-        JoinOperator::InnerAny => JoinType::Inner(true),
+        JoinOperator::LeftAny => JoinType::LeftAny,
+        JoinOperator::RightAny => JoinType::RightAny,
+        JoinOperator::InnerAny => JoinType::InnerAny,
     }
 }
 

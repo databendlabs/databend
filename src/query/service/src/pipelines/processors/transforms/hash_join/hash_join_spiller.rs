@@ -118,7 +118,7 @@ impl HashJoinSpiller {
             return Ok(());
         }
 
-        if self.join_type.is_cross_join() {
+        if self.join_type == JoinType::Cross {
             return self.cross_buffer(data_blocks);
         }
 
@@ -163,7 +163,7 @@ impl HashJoinSpiller {
         data_blocks: Vec<DataBlock>,
         partition_need_to_spill: Option<&HashSet<usize>>,
     ) -> Result<Vec<DataBlock>> {
-        if self.join_type.is_cross_join() {
+        if self.join_type == JoinType::Cross {
             return self
                 .cross_spill(&data_blocks, partition_need_to_spill)
                 .await;
@@ -287,7 +287,7 @@ impl HashJoinSpiller {
         let mut data_blocks = vec![];
         if self.need_read_buffer() {
             // 1. restore data from SpillBuffer.
-            if self.join_type.is_cross_join() {
+            if self.join_type == JoinType::Cross {
                 if let Some(buffer_blocks) = self.restore_cross_buffer(partition_id)? {
                     data_blocks.extend(buffer_blocks);
                 }
@@ -345,7 +345,7 @@ impl HashJoinSpiller {
         join_type: &JoinType,
         partition_bits: usize,
     ) -> Result<Vec<DataBlock>> {
-        if self.join_type.is_cross_join() {
+        if join_type == &JoinType::Cross {
             Ok(vec![data_block.clone()])
         } else {
             let mut hashes = self.get_hashes(data_block, join_type)?;
@@ -401,14 +401,14 @@ impl HashJoinSpiller {
     }
 
     pub fn need_read_buffer(&self) -> bool {
-        !self.join_type.is_cross_join() || self.next_restore_file == 0
+        self.join_type != JoinType::Cross || self.next_restore_file == 0
     }
 
     pub fn need_read_partition(&self) -> bool {
-        !self.join_type.is_cross_join()
+        self.join_type != JoinType::Cross
     }
 
     pub fn can_pick_buffer(&self) -> bool {
-        self.is_build_side || !self.join_type.is_cross_join()
+        self.is_build_side || self.join_type != JoinType::Cross
     }
 }

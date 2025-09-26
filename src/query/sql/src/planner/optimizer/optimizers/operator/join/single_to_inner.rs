@@ -39,7 +39,7 @@ impl SingleToInnerOptimizer {
             && join.single_to_inner.is_some()
         {
             let mut join = join.clone();
-            join.join_type = JoinType::Inner(false);
+            join.join_type = JoinType::Inner;
             s_expr.replace_plan(Arc::new(RelOperator::Join(join)))
         } else {
             s_expr.clone()

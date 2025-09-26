@@ -41,9 +41,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
     );
 
-    if join.equi_conditions.is_empty()
-        && (join.join_type.is_any_join() || join.join_type == JoinType::Cross(true))
-    {
+    if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
         ));
@@ -82,9 +80,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             &mut other_conditions,
         )
     }
-    if !range_conditions.is_empty()
-        && matches!(join.join_type, JoinType::Inner(_) | JoinType::Cross(_))
-    {
+    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
             range_conditions,
             other_conditions,

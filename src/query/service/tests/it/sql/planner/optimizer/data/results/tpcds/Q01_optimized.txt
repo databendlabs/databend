@@ -10,7 +10,7 @@ Limit
             ├── limit: [100]
             └── EvalScalar
                 ├── scalars: [customer.c_customer_id (#79) AS (#79), ctr1.ctr_total_return (#48) AS (#154), scalar_subquery_147 (#147) AS (#155), store.s_store_sk (#49) AS (#156), ctr1.ctr_store_sk (#7) AS (#157), store.s_state (#73) AS (#158), ctr1.ctr_customer_sk (#3) AS (#159), customer.c_customer_sk (#78) AS (#160)]
-                └── Join(Inner(false))
+                └── Join(Inner)
                     ├── build keys: [ctr1.ctr_customer_sk (#3)]
                     ├── probe keys: [customer.c_customer_sk (#78)]
                     ├── other filters: []
@@ -20,7 +20,7 @@ Limit
                     │   ├── order by: []
                     │   └── limit: NONE
                     └── Exchange(Broadcast)
-                        └── Join(Inner(false))
+                        └── Join(Inner)
                             ├── build keys: [sr_store_sk (#103)]
                             ├── probe keys: [sr_store_sk (#7)]
                             ├── other filters: [gt(ctr1.ctr_total_return (#48), scalar_subquery_147 (#147))]
@@ -34,7 +34,7 @@ Limit
                             │           ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#3)]
                             │           └── EvalScalar
                             │               ├── scalars: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7), store_returns.sr_return_amt (#11) AS (#11), store_returns.sr_returned_date_sk (#0) AS (#148), date_dim.d_date_sk (#20) AS (#149), date_dim.d_year (#26) AS (#150)]
-                            │               └── Join(Inner(false))
+                            │               └── Join(Inner)
                             │                   ├── build keys: [date_dim.d_date_sk (#20)]
                             │                   ├── probe keys: [store_returns.sr_returned_date_sk (#0)]
                             │                   ├── other filters: []
@@ -50,7 +50,7 @@ Limit
                             │                           ├── order by: []
                             │                           └── limit: NONE
                             └── Exchange(Broadcast)
-                                └── Join(Inner(false))
+                                └── Join(Inner)
                                     ├── build keys: [sr_store_sk (#103)]
                                     ├── probe keys: [store.s_store_sk (#49)]
                                     ├── other filters: []
@@ -80,7 +80,7 @@ Limit
                                                                     ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#99)]
                                                                     └── EvalScalar
                                                                         ├── scalars: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103), store_returns.sr_return_amt (#107) AS (#107), store_returns.sr_returned_date_sk (#96) AS (#151), date_dim.d_date_sk (#116) AS (#152), date_dim.d_year (#122) AS (#153)]
-                                                                        └── Join(Inner(false))
+                                                                        └── Join(Inner)
                                                                             ├── build keys: [date_dim.d_date_sk (#116)]
                                                                             ├── probe keys: [store_returns.sr_returned_date_sk (#96)]
                                                                             ├── other filters: []

@@ -104,7 +104,7 @@ impl Rule for RuleSemiToInnerJoin {
                 false
             }
         }) {
-            join.join_type = JoinType::Inner(false);
+            join.join_type = JoinType::Inner;
             let mut join_expr = SExpr::create_binary(
                 Arc::new(join.into()),
                 Arc::new(s_expr.child(0)?.clone()),

@@ -195,14 +195,13 @@ impl DPhpyOptimizer {
         if op.build_side_cache_info.is_some() {
             return Ok((Arc::new(s_expr.clone()), true));
         }
-        // FIXME: How to emit inner any join with inner join?
         if op.join_type.is_any_join() {
             return Ok((Arc::new(s_expr.clone()), true));
         }
 
         // Check if it's an inner join
         let mut is_inner_join =
-            matches!(op.join_type, JoinType::Inner(_)) || op.join_type.is_cross_join();
+            matches!(op.join_type, JoinType::Inner) || op.join_type == JoinType::Cross;
 
         // Check if children are subqueries
         let left_op = s_expr.child(0)?.plan.as_ref();
@@ -437,7 +436,7 @@ impl DPhpyOptimizer {
                 .await?;
 
             let join = JoinNode {
-                join_type: JoinType::Inner(false),
+                join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
                 join_conditions: Arc::new(vec![]),
@@ -814,7 +813,7 @@ impl DPhpyOptimizer {
 
         if !join_conditions.is_empty() {
             let mut join_node = JoinNode {
-                join_type: JoinType::Inner(false),
+                join_type: JoinType::Inner,
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
                     Arc::new(vec![right_join, left_join])
@@ -838,7 +837,7 @@ impl DPhpyOptimizer {
         } else {
             // Create cross join
             let join_node = JoinNode {
-                join_type: JoinType::Cross(false),
+                join_type: JoinType::Cross,
                 leaves: Arc::new(parent_set.clone()),
                 children: if left_cardinality < right_cardinality {
                     Arc::new(vec![right_join, left_join])

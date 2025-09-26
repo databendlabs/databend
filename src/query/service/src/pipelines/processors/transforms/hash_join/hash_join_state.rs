@@ -148,7 +148,7 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left(_) | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
@@ -227,7 +227,8 @@ impl HashJoinState {
         matches!(
             self.hash_join_desc.join_type,
             JoinType::Full
-                | JoinType::Right(_)
+                | JoinType::Right
+                | JoinType::RightAny
                 | JoinType::RightSingle
                 | JoinType::RightSemi
                 | JoinType::RightAnti
