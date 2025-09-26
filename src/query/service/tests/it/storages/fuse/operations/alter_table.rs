@@ -186,6 +186,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         option: AddColumnOption::End,
         is_deterministic: true,
         is_nextval: false,
+        is_autoincrement: false,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;

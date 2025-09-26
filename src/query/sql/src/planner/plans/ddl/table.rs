@@ -315,6 +315,7 @@ pub struct AddTableColumnPlan {
     pub option: AddColumnOption,
     pub is_deterministic: bool,
     pub is_nextval: bool,
+    pub is_autoincrement: bool,
 }
 
 impl AddTableColumnPlan {

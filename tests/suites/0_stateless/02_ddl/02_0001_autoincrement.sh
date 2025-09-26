@@ -41,19 +41,31 @@ alter table test_autoincrement add column c7 int autoincrement;
 """
 
 stmt """
-insert into test_autoincrement (c1) values(0);
+alter table test_autoincrement drop column c3;
 """
 
 query "select * from test_autoincrement order by c2;"
 
+# test add column success on empty table
 stmt """
-alter table test_autoincrement drop column c2;
+create or replace table test_empty_autoincrement (c1 int);
 """
 
-query "select * from test_autoincrement order by c2;"
+stmt """
+alter table test_empty_autoincrement add column c2 int autoincrement;
+"""
 
 stmt """
-drop table test_autoincrement;
+insert into test_empty_autoincrement (c1) values(0);
+"""
+stmt """
+insert into test_empty_autoincrement (c1) values(0);
+"""
+
+query "select * from test_empty_autoincrement order by c2;"
+
+stmt """
+drop table test_empty_autoincrement;
 """
 
 stmt "drop database test"
