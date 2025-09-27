@@ -22,8 +22,9 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use tokio::sync::Barrier;
 use databend_common_sql::ColumnSet;
+use tokio::sync::Barrier;
+
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 
