@@ -101,11 +101,13 @@ impl Queries {
         reason: StopReason,
         now: u64,
     ) -> (Option<Arc<HttpQuery>>, bool) {
-        self.num_active_queries = self.num_active_queries.saturating_sub(1);
-        self.last_query_end_at = Some(now);
         let q = self.queries.get(query_id).cloned();
         if let Some(q) = q {
             let stop_first_run = q.mark_stopped(reason);
+            if stop_first_run {
+                self.last_query_end_at = Some(now);
+                self.num_active_queries = self.num_active_queries.saturating_sub(1);
+            }
             return (Some(q), stop_first_run);
         }
         (None, false)
