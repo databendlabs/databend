@@ -15,6 +15,7 @@
 mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregator_params;
+mod build_partition_bucket;
 mod new_transform_partition_bucket;
 mod serde;
 mod transform_aggregate_expand;
@@ -26,7 +27,7 @@ mod udaf_script;
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;
-pub use new_transform_partition_bucket::build_partition_bucket;
+pub use build_partition_bucket::build_partition_bucket;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
