@@ -1,7 +1,4 @@
 statement ok
-set global enable_expand_roles=0;
-
-statement ok
 drop role if exists role1;
 
 statement ok
@@ -35,7 +32,7 @@ statement ok
 alter role role1 set comment = 'xxx'
 
 query T
-select grants from show_grants('role', 'role1');
+settings (enable_expand_roles=0) select grants from show_grants('role', 'role1');
 ----
 GRANT ROLE public to ROLE `role1`
 GRANT ALL ON *.* TO ROLE `role1`
@@ -69,6 +66,3 @@ drop role if exists role1;
 
 statement ok
 drop role if exists role2;
-
-statement ok
-unset global enable_expand_roles;
