@@ -152,6 +152,9 @@ use semver::Version;
 /// - 2025-07-04: since 1.2.770
 ///   🖥 server: add `PutSequential`.
 ///
+/// - 2025-09-27: since 1.2.821
+///   👥 client: require 1.2.764(yanked), use 1.2.768, for `FetchAddU64`
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
