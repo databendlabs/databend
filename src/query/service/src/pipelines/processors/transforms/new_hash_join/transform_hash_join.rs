@@ -23,7 +23,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use tokio::sync::Barrier;
-
+use databend_common_sql::ColumnSet;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 
@@ -37,6 +37,7 @@ pub struct TransformHashJoin {
     join: Box<dyn Join>,
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
+    projection: ColumnSet,
 }
 
 impl TransformHashJoin {
@@ -46,6 +47,7 @@ impl TransformHashJoin {
         joined_port: Arc<OutputPort>,
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
+        projection: ColumnSet,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformHashJoin {
             build_port,
@@ -54,6 +56,7 @@ impl TransformHashJoin {
             join,
             joined_data: None,
             stage_sync_barrier,
+            projection,
             stage: Stage::Build(BuildState {
                 finished: false,
                 build_data: None,
@@ -90,6 +93,7 @@ impl Processor for TransformHashJoin {
         }
 
         if let Some(joined_data) = self.joined_data.take() {
+            let joined_data = joined_data.project(&self.projection);
             self.joined_port.push_data(Ok(joined_data));
             return Ok(Event::NeedConsume);
         }

@@ -22,10 +22,12 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NullableColumn;
+use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
@@ -263,10 +265,14 @@ impl Join for MemoryInnerJoin {
         }
 
         let mut keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
-        chunk_block = chunk_block.project(&self.build_projection);
 
+        chunk_block = chunk_block.project(&self.build_projection);
         if let Some(bitmap) = self.desc.build_valids_by_keys(&mut keys_entries)? {
-            if bitmap.null_count() != bitmap.len() {
+            let keys = DataBlock::new(keys_entries, chunk_block.num_rows());
+            let keys = keys.filter_with_bitmap(&bitmap)?;
+            keys_entries = keys.take_columns();
+
+            if chunk_block.num_columns() != 0 && bitmap.null_count() != bitmap.len() {
                 chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
             }
         }

@@ -426,6 +426,7 @@ impl HashJoin {
                 joined_output.clone(),
                 self.create_join(builder, desc.clone(), state.clone())?,
                 stage_sync_barrier.clone(),
+                self.projections.clone(),
             );
 
             join_pipe_items.push(PipeItem::create(
