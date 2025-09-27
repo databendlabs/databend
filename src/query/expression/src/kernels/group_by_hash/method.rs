@@ -52,12 +52,14 @@ unsafe impl Send for KeysState {}
 
 unsafe impl Sync for KeysState {}
 
-pub trait KeyAccessor {
+pub trait KeyAccessor: Send + Sync {
     type Key: ?Sized;
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
+
+    fn len(&self) -> usize;
 }
 
 pub trait HashMethod: Clone + Sync + Send + 'static {

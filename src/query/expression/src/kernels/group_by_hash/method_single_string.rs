@@ -81,4 +81,8 @@ impl KeyAccessor for BinaryColumn {
         debug_assert!(index + 1 < self.offsets().len());
         self.index_unchecked(index)
     }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
 }

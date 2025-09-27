@@ -257,59 +257,59 @@ impl HashJoinBuildState {
             // Create a fixed size hash table.
             let (hash_join_hash_table, entry_size) = match self.method.clone() {
                 HashMethodKind::Serializer(_) => (
-                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable {
-                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSerializer::default(),
-                    }),
+                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
+                        BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        HashMethodSerializer::default(),
+                    )),
                     std::mem::size_of::<StringRawEntry>(),
                 ),
                 HashMethodKind::SingleBinary(_) => (
-                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable {
-                        hash_table: BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                        hash_method: HashMethodSingleBinary::default(),
-                    }),
+                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable::new(
+                        BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                        HashMethodSingleBinary::default(),
+                    )),
                     std::mem::size_of::<StringRawEntry>(),
                 ),
                 HashMethodKind::KeysU8(hash_method) => (
-                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<u8>>(),
                 ),
                 HashMethodKind::KeysU16(hash_method) => (
-                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<u16>>(),
                 ),
                 HashMethodKind::KeysU32(hash_method) => (
-                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<u32>>(),
                 ),
                 HashMethodKind::KeysU64(hash_method) => (
-                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<u64>>(),
                 ),
                 HashMethodKind::KeysU128(hash_method) => (
-                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<u128>>(),
                 ),
                 HashMethodKind::KeysU256(hash_method) => (
-                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable {
-                        hash_table: HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
+                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
-                    }),
+                    )),
                     std::mem::size_of::<RawEntry<U256>>(),
                 ),
             };

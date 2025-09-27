@@ -82,6 +82,13 @@ impl<'a> ProjectedBlock<'a> {
             entries: data.columns(),
         }
     }
+
+    pub fn num_rows(&self) -> usize {
+        match self.entries.is_empty() {
+            true => 0,
+            false => self.entries[0].len(),
+        }
+    }
 }
 
 pub struct EntriesIter<'a> {

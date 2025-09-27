@@ -78,7 +78,9 @@ where T: Clone + Default
     }
 }
 
-trait FixedKey: FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send {
+pub trait FixedKey:
+    FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send
+{
     fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>>;
 
     fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>>;
@@ -538,22 +540,26 @@ fn fixed_hash_decimal<T>(
     }
 }
 
-pub struct PrimitiveKeyAccessor<T> {
+pub struct PrimitiveKeyAccessor<T: Send + Sync> {
     data: Buffer<T>,
 }
 
-impl<T> PrimitiveKeyAccessor<T> {
+impl<T: Send + Sync> PrimitiveKeyAccessor<T> {
     pub fn new(data: Buffer<T>) -> Self {
         Self { data }
     }
 }
 
-impl<T> KeyAccessor for PrimitiveKeyAccessor<T> {
+impl<T: Send + Sync> KeyAccessor for PrimitiveKeyAccessor<T> {
     type Key = T;
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
         self.data.get_unchecked(index)
+    }
+
+    fn len(&self) -> usize {
+        self.data.len()
     }
 }
