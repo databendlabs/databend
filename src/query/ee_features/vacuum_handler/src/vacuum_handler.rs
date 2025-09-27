@@ -17,15 +17,33 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
+
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
 
 // (drop_files, failed_tables)
 pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashSet<u64>)>;
+
+#[derive(Clone)]
+pub struct DroppedTableDesc {
+    pub table: Arc<dyn Table>,
+    pub db_id: u64,
+    pub table_name: String,
+}
+#[derive(Clone)]
+pub struct VacuumDroppedTablesCtx {
+    pub tenant: Tenant,
+    pub catalog: Arc<dyn Catalog>,
+    pub threads_nums: usize,
+    pub tables: Vec<DroppedTableDesc>,
+    pub dry_run_limit: Option<usize>,
+}
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
@@ -43,11 +61,9 @@ pub trait VacuumHandler: Sync + Send {
         respect_flash_back: bool,
     ) -> Result<Vec<String>>;
 
-    async fn do_vacuum_drop_tables(
+    async fn do_vacuum_dropped_tables(
         &self,
-        threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
-        dry_run_limit: Option<usize>,
+        dropped_tables: VacuumDroppedTablesCtx,
     ) -> VacuumDropTablesResult;
 
     async fn do_vacuum_temporary_files(
@@ -100,13 +116,9 @@ impl VacuumHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn do_vacuum_drop_tables(
         &self,
-        threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
-        dry_run_limit: Option<usize>,
+        dropped_tables: VacuumDroppedTablesCtx,
     ) -> VacuumDropTablesResult {
-        self.handler
-            .do_vacuum_drop_tables(threads_nums, tables, dry_run_limit)
-            .await
+        self.handler.do_vacuum_dropped_tables(dropped_tables).await
     }
 
     #[async_backtrace::framed]
