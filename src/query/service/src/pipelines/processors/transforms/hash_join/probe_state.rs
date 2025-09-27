@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::filter::FilterExecutor;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -76,6 +77,9 @@ pub struct ProbeState {
     pub(crate) probe_unmatched_indexes_count: usize,
 
     pub(crate) filter_executor: Option<FilterExecutor>,
+
+    // Marks the hash table as used by RowPtr, will not be reused
+    pub(crate) used_once: Option<MutableBitmap>,
 }
 
 impl ProbeState {
@@ -92,7 +96,7 @@ impl ProbeState {
         other_predicate: Option<Expr>,
     ) -> Self {
         let (row_state, row_state_indexes) = match &join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunction {
                     (Some(vec![0; max_block_size]), Some(vec![0; max_block_size]))
                 } else {
@@ -103,7 +107,11 @@ impl ProbeState {
         };
         let probe_unmatched_indexes = if matches!(
             &join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+            JoinType::Left
+                | JoinType::LeftAny
+                | JoinType::LeftSingle
+                | JoinType::Full
+                | JoinType::LeftAnti
         ) && !with_conjunction
         {
             Some(vec![0; max_block_size])
@@ -151,6 +159,7 @@ impl ProbeState {
             probe_unmatched_indexes_count: 0,
             with_conjunction,
             filter_executor,
+            used_once: None,
         }
     }
 
@@ -159,6 +168,25 @@ impl ProbeState {
     pub fn reset(&mut self) {
         self.num_keys = 1;
         self.num_keys_hash_matched = 1;
+    }
+
+    pub(crate) fn check_used(
+        used_once: &mut Option<MutableBitmap>,
+        max_block_size: usize,
+        build_indexes_ptr: *mut RowPtr,
+        matched_idx: usize,
+    ) -> bool {
+        if let Some(used_once) = used_once {
+            // used_once indicates the row position of the same key in build keys,
+            // and the complete row is spliced out by row ptr to get whether the corresponding position has been used.
+            let ptr = unsafe { &*build_indexes_ptr.add(matched_idx) };
+            let row = ptr.chunk_index as usize * max_block_size + ptr.row_index as usize;
+            if used_once.get(row) {
+                return true;
+            }
+            used_once.set(row, true);
+        }
+        false
     }
 }
 

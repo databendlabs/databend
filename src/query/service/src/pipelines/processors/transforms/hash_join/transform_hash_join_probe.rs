@@ -643,6 +643,7 @@ impl TransformHashJoinProbe {
         !matches!(
             self.join_probe_state.join_type(),
             JoinType::Left
+                | JoinType::LeftAny
                 | JoinType::LeftSingle
                 | JoinType::LeftAnti
                 | JoinType::RightMark

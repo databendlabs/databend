@@ -241,7 +241,7 @@ impl HashJoinProbeState {
     pub(crate) fn probe_merge_into_partial_modified_done(&self) -> Result<()> {
         assert!(matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Left
+            JoinType::Left | JoinType::LeftAny
         ));
         let old_count = self.wait_probe_counter.fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {

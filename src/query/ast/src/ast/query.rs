@@ -1058,6 +1058,15 @@ impl Display for TableReference {
                     JoinOperator::RightAsof => {
                         write!(f, " ASOF RIGHT JOIN")?;
                     }
+                    JoinOperator::InnerAny => {
+                        write!(f, " INNER ANY JOIN")?;
+                    }
+                    JoinOperator::LeftAny => {
+                        write!(f, " LEFT ANY JOIN")?;
+                    }
+                    JoinOperator::RightAny => {
+                        write!(f, " RIGHT ANY JOIN")?;
+                    }
                 }
                 write!(f, " {}", join.right)?;
                 match &join.condition {
@@ -1134,6 +1143,10 @@ pub enum JoinOperator {
     Asof,
     LeftAsof,
     RightAsof,
+    // Any
+    InnerAny,
+    LeftAny,
+    RightAny,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
