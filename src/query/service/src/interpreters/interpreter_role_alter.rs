@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterRolePlan;
 use databend_common_users::RoleCacheManager;
@@ -59,14 +60,24 @@ impl Interpreter for AlterRoleInterpreter {
         // Update role based on action
         match &plan.action {
             databend_common_sql::plans::AlterRoleAction::Comment(comment) => {
-                user_mgr
-                    .update_role_comment(&tenant, &plan.role_name, comment.clone(), plan.if_exists)
-                    .await?;
+                match user_mgr
+                    .update_role_comment(&tenant, &plan.role_name, comment.clone())
+                    .await
+                {
+                    Ok(_) => {
+                        // Force reload role cache after altering
+                        RoleCacheManager::instance().force_reload(&tenant).await?;
+                        Ok(PipelineBuildResult::create())
+                    }
+                    Err(e) => {
+                        if e.code() == ErrorCode::UNKNOWN_ROLE && plan.if_exists {
+                            Ok(PipelineBuildResult::create())
+                        } else {
+                            Err(e.add_message_back("(while updating role comment)"))
+                        }
+                    }
+                }
             }
         }
-
-        // Force reload role cache after altering
-        RoleCacheManager::instance().force_reload(&tenant).await?;
-        Ok(PipelineBuildResult::create())
     }
 }

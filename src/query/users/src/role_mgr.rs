@@ -143,36 +143,23 @@ impl UserApiProvider {
         tenant: &Tenant,
         role_name: &str,
         comment: Option<String>,
-        if_exists: bool,
     ) -> Result<()> {
         let client = self.role_api(tenant);
 
-        let result = client
+        client
             .update_role_with(role_name, MatchSeq::GE(0), |role_info| {
                 role_info.comment = comment.clone();
             })
-            .await;
-
-        match result {
-            Ok(Some(_)) => Ok(()),
-            Ok(None) => {
-                if if_exists {
-                    Ok(())
-                } else {
+            .await
+            .and_then(|opt| {
+                opt.map(|_| Ok(())).unwrap_or_else(|| {
                     Err(ErrorCode::UnknownRole(format!(
                         "Role '{}' does not exist",
                         role_name
                     )))
-                }
-            }
-            Err(e) => {
-                if e.code() == ErrorCode::UNKNOWN_ROLE && if_exists {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back("(while updating role comment)"))
-                }
-            }
-        }
+                })
+            })
+            .map_err(|e| e.add_message_back("(while updating role comment)"))
     }
 
     #[async_backtrace::framed]
