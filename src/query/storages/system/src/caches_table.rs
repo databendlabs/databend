@@ -76,6 +76,7 @@ impl SyncSystemTable for CachesTable {
         let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
         let table_snapshot_statistic_cache = cache_manager.get_table_snapshot_statistics_cache();
         let segment_info_cache = cache_manager.get_table_segment_cache();
+        let segment_statistics_cache = cache_manager.get_segment_statistics_cache();
         let column_oriented_segment_info_cache =
             cache_manager.get_column_oriented_segment_info_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
@@ -101,6 +102,10 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(segment_info_cache) = segment_info_cache {
             Self::append_row(&segment_info_cache, &local_node, &mut columns);
+        }
+
+        if let Some(segment_statistics_cache) = segment_statistics_cache {
+            Self::append_row(&segment_statistics_cache, &local_node, &mut columns);
         }
 
         if let Some(column_oriented_segment_info_cache) = column_oriented_segment_info_cache {

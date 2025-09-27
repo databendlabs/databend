@@ -34,7 +34,7 @@ pub async fn read_segment_stats(dal: Operator, loc: Location) -> Result<Arc<Segm
         location,
         len_hint: None,
         ver,
-        put_cache: false,
+        put_cache: true,
     };
     reader.read(&load_params).await
 }

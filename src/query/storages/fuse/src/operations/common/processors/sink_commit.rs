@@ -39,6 +39,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -57,11 +58,13 @@ use crate::operations::set_backoff;
 use crate::operations::vacuum::vacuum_table;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
+use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::statistics::TableStatsGenerator;
 use crate::FuseTable;
+use crate::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 
 enum State {
@@ -103,10 +106,11 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     new_segment_locs: Vec<Location>,
     new_virtual_schema: Option<VirtualDataSchema>,
-    insert_hll: BlockHLL,
-    insert_rows: u64,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
+    insert_hll: BlockHLL,
+    insert_rows: u64,
+    enable_auto_analyze: bool,
 
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
@@ -138,6 +142,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
+        let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
 
         let vacuum_handler = if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
@@ -167,6 +172,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             insert_hll: HashMap::new(),
             insert_rows: 0,
             start_time: Instant::now(),
+            enable_auto_analyze,
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
@@ -189,6 +195,38 @@ where F: SnapshotGenerator + Send + Sync + 'static
             None
         };
         Ok(mode)
+    }
+
+    fn enable_auto_analyze(
+        ctx: Arc<dyn TableContext>,
+        table: &FuseTable,
+        snapshot_gen: &F,
+    ) -> bool {
+        if !ctx
+            .get_settings()
+            .get_enable_auto_analyze()
+            .unwrap_or_default()
+        {
+            return false;
+        }
+
+        let enable_auto_analyze = table.get_option(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE, 0u32);
+        if enable_auto_analyze == 0 {
+            return false;
+        }
+
+        snapshot_gen
+            .as_any()
+            .downcast_ref::<MutationGenerator>()
+            .is_some_and(|gen| {
+                matches!(
+                    gen.mutation_kind,
+                    MutationKind::Update
+                        | MutationKind::Delete
+                        | MutationKind::MergeInto
+                        | MutationKind::Replace
+                )
+            })
     }
 
     fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
@@ -492,8 +530,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
-
                 self.dal.write(&location, data).await?;
+
+                // enable auto analyze.
+                let mut enable_auto_analyze = false;
+                if self.enable_auto_analyze {
+                    if let Some(meta) = &snapshot.summary.additional_stats_meta {
+                        let actual_rows =
+                            snapshot.summary.row_count.saturating_sub(meta.unstats_rows);
+                        let stats_rows = meta.row_count;
+                        let diff = stats_rows.abs_diff(actual_rows);
+                        enable_auto_analyze = diff * 10 >= actual_rows;
+                    }
+                }
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
@@ -562,6 +611,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             self.ctx.add_written_segment_location(segment_loc)?;
                         }
 
+                        if enable_auto_analyze {
+                            self.ctx.set_enable_auto_analyze(true);
+                        }
                         let target_descriptions = {
                             let table_info = self.table.get_table_info();
                             let tbl = (&table_info.name, table_info.ident, &table_info.meta.engine);

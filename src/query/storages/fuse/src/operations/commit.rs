@@ -521,9 +521,8 @@ impl FuseTable {
         insert_rows: u64,
     ) -> Result<TableStatsGenerator> {
         // Extract previous stats meta (row_count / hll, etc.) from snapshot
-        let prev_stats_meta = snapshot
-            .as_ref()
-            .and_then(|v| v.summary.additional_stats_meta.as_ref());
+        let summary = snapshot.summary();
+        let prev_stats_meta = summary.additional_stats_meta.as_ref();
         // Previous statistics file location (if any)
         let mut prev_stats_location = snapshot.table_statistics_location();
         // If no new rows are inserted, or HLL is empty, just reuse previous statistics
@@ -532,6 +531,7 @@ impl FuseTable {
                 prev_stats_meta.cloned(),
                 prev_stats_location,
                 0,
+                0,
                 HashMap::new(),
             ));
         }
@@ -539,12 +539,12 @@ impl FuseTable {
         // Initialize a new HLL with inserted rows
         let mut new_hll = insert_hll.clone();
         // Calculate updated row_count
-        let row_count = match prev_stats_meta {
+        let (row_count, unstats_rows) = match prev_stats_meta {
             // Case 1: Previous stats exist and already contain HLL → merge directly
             Some(v) if v.hll.is_some() => {
                 let prev_hll = decode_column_hll(v.hll.as_ref().unwrap())?.unwrap();
                 merge_column_hll_mut(&mut new_hll, &prev_hll);
-                v.row_count + insert_rows
+                (v.row_count + insert_rows, v.unstats_rows)
             }
             // Case 2: Previous meta has no HLL → need to load from stats file
             _ => {
@@ -577,22 +577,29 @@ impl FuseTable {
                         if let Some(prev) = prev_snapshot {
                             // Successfully loaded the previous snapshot → use its row_count + inserted rows
                             merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
-                            prev.summary.row_count + insert_rows
+                            let prev_rows = prev.summary.row_count;
+                            (
+                                prev_rows + insert_rows,
+                                summary.row_count.saturating_sub(prev_rows),
+                            )
                         } else {
                             // Could not load previous snapshot → old stats are invalid
                             // Drop prev_stats_location to mark stats as "reset",
                             // and only use inserted rows as the new base.
                             prev_stats_location = None;
-                            insert_rows
+                            (insert_rows, summary.row_count)
                         }
                     } else {
                         // Normal case: accumulate old row_count + inserted rows
                         merge_column_hll_mut(&mut new_hll, &prev_stats.hll);
-                        prev_stats.row_count + insert_rows
+                        (
+                            prev_stats.row_count + insert_rows,
+                            summary.row_count.saturating_sub(prev_stats.row_count),
+                        )
                     }
                 } else {
                     // No previous stats available → start from inserted rows only
-                    insert_rows
+                    (insert_rows, summary.row_count)
                 }
             }
         };
@@ -601,6 +608,7 @@ impl FuseTable {
             None,
             prev_stats_location,
             row_count,
+            unstats_rows,
             new_hll,
         ))
     }

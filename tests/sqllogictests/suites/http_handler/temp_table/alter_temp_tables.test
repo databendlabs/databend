@@ -79,7 +79,7 @@ CREATE TEMP TABLE `05_0003_at_t3`(a int not null, b int not null, c int not null
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` drop column c
@@ -87,7 +87,7 @@ ALTER TABLE `05_0003_at_t3` drop column c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, b INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` rename column b to c
@@ -95,7 +95,7 @@ ALTER TABLE `05_0003_at_t3` rename column b to c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TEMP TABLE "05_0003_at_t3" ( a INT NOT NULL, c INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
 
 statement error 1301
 ALTER TABLE `05_0003_at_t3` MODIFY COLUMN c decimal(5,2) not null
@@ -110,7 +110,7 @@ statement ok
 set hide_options_in_show_create_table=1
 
 statement ok
-CREATE TEMP TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
+CREATE TEMP TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
 
 statement ok
 INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))

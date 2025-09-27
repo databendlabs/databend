@@ -200,8 +200,9 @@ merge into t_17800 using t1_17800 on t_17800.a=t1_17800.a when matched then upda
 17 33
 
 query II
-select segment_count, row_count from fuse_snapshot('db','t_17800') limit 3;
+select segment_count, row_count from fuse_snapshot('db','t_17800') limit 4;
 ----
+1 117
 1 117
 2 117
 1 100
