@@ -87,6 +87,7 @@ impl ShowRoles {
             TableField::new("inherited_roles_name", TableDataType::String),
             TableField::new("is_current", TableDataType::Boolean),
             TableField::new("is_default", TableDataType::Boolean),
+            TableField::new("comment", TableDataType::String),
         ])
     }
 }
@@ -172,6 +173,10 @@ async fn show_roles(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
         .unwrap_or_default();
 
     let names = roles.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+    let comments = roles
+        .iter()
+        .map(|x| x.clone().comment.unwrap_or("".to_string()))
+        .collect::<Vec<_>>();
     let inherited_roles: Vec<u64> = roles
         .iter()
         .map(|x| x.grants.roles().len() as u64)
@@ -189,6 +194,7 @@ async fn show_roles(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
         StringType::from_data(inherited_roles_names),
         BooleanType::from_data(is_currents),
         BooleanType::from_data(is_defaults),
+        StringType::from_data(comments),
     ])))
 }
 

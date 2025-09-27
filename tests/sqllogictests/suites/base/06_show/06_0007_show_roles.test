@@ -11,7 +11,7 @@ test
 query T
 show roles like 'account_admin';
 ----
-account_admin 0 (empty) 1 1
+account_admin 0 (empty) 1 1 (empty)
 
 statement ok
 DROP ROLE test

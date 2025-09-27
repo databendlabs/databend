@@ -42,7 +42,7 @@ mod add {
             let (kv_api, role_api) = new_role_api(true).await?;
 
             let role_key = make_role_key(role_name);
-            let role_info = RoleInfo::new(role_name);
+            let role_info = RoleInfo::new(role_name, None);
 
             let v = serde_json::to_vec(&role_info)?;
             let kv_api = kv_api.clone();
@@ -55,10 +55,7 @@ mod add {
                 ))
                 .await?;
 
-            let get = role_api
-                .get_role(&role_name.to_owned(), MatchSeq::GE(1))
-                .await?
-                .data;
+            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
             assert_eq!("role1".to_string(), get.name);
         }
 
@@ -66,7 +63,7 @@ mod add {
             let (kv_api, role_api) = new_role_api(false).await?;
 
             let role_key = make_role_key(role_name);
-            let role_info = RoleInfo::new(role_name);
+            let role_info = RoleInfo::new(role_name, None);
 
             let v = serde_json::to_vec(&role_info)?;
             let kv_api = kv_api.clone();
@@ -78,10 +75,7 @@ mod add {
                     None,
                 ))
                 .await?;
-            let get = role_api
-                .get_role(&role_name.to_owned(), MatchSeq::GE(1))
-                .await?
-                .data;
+            let get = role_api.get_role(role_name, MatchSeq::GE(1)).await?.data;
             assert_eq!("role1".to_string(), get.name);
         }
 

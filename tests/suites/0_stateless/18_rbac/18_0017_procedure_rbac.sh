@@ -14,9 +14,12 @@ echo "set global enable_experimental_procedure=1;" | $BENDSQL_CLIENT_CONNECT
 
 # Create roles
 echo "=== Creating roles ==="
-echo "CREATE OR REPLACE ROLE admin_role;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE OR REPLACE ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE OR REPLACE ROLE test_role;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS dev_role;" | $BENDSQL_CLIENT_CONNECT
+echo "DROP ROLE IF EXISTS test_role;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE ROLE admin_role;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE ROLE dev_role;" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE ROLE test_role;" | $BENDSQL_CLIENT_CONNECT
 
 # Create users
 echo "=== Creating users ==="

@@ -90,12 +90,25 @@ impl DescUserPlan {
 pub struct CreateRolePlan {
     pub create_option: CreateOption,
     pub role_name: String,
+    pub comment: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropRolePlan {
     pub if_exists: bool,
     pub role_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlterRolePlan {
+    pub if_exists: bool,
+    pub role_name: String,
+    pub action: AlterRoleAction,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AlterRoleAction {
+    Comment(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

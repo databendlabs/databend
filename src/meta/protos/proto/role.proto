@@ -27,4 +27,5 @@ message RoleInfo {
   optional string created_on = 3;
   // The time role update.
   optional string update_on = 4;
+  optional string comment = 5;
 }

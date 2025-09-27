@@ -107,7 +107,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
         let public_role = RoleCacheManager::instance()
             .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
             .await?
-            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
+            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC, None));
 
         // if CURRENT ROLE is not set, take current session's AUTH ROLE
         let mut current_role_name = self.get_current_role().map(|r| r.name);

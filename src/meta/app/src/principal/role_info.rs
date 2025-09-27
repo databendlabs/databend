@@ -32,6 +32,7 @@ pub struct RoleInfo {
     pub grants: UserGrantSet,
     pub created_on: DateTime<Utc>,
     pub update_on: DateTime<Utc>,
+    pub comment: Option<String>,
 }
 
 /// Error when ser/de RoleInfo
@@ -42,13 +43,14 @@ pub struct RoleInfoSerdeError {
 }
 
 impl RoleInfo {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, comment: Option<String>) -> Self {
         let now = Utc::now();
         Self {
             name: name.to_string(),
             grants: UserGrantSet::empty(),
             created_on: now,
             update_on: now,
+            comment,
         }
     }
 

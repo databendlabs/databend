@@ -88,6 +88,7 @@ fn test_decode_v120_grant_object() -> anyhow::Result<()> {
         ),
         created_on: DateTime::<Utc>::default(),
         update_on: DateTime::<Utc>::default(),
+        comment: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

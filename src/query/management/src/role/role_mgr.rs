@@ -206,7 +206,7 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
+    async fn get_role(&self, role: &str, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.role_ident(role).to_string_key();
         let res = self.kv_api.get_kv(&key).await?;
         let seq_value =
@@ -408,7 +408,7 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn update_role_with<F>(
         &self,
-        role: &String,
+        role: &str,
         seq: MatchSeq,
         f: F,
     ) -> Result<Option<u64>, ErrorCode>

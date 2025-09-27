@@ -48,6 +48,7 @@ fn test_decode_v137_grant_object() -> anyhow::Result<()> {
     ];
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
+        comment: None,
         grants: UserGrantSet::new(
             vec![
                 mt::principal::GrantEntry::new(

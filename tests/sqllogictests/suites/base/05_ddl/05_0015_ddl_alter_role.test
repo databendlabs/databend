@@ -1,0 +1,68 @@
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;
+
+statement ok
+create role role1;
+
+statement ok
+create role if not exists role1 comment = 'test'
+
+statement ok
+create role if not exists role2 comment = 'test'
+
+statement ok
+grant role role1 to role role2;
+
+statement ok
+grant all on *.* to role role1;
+
+query T
+select name, comment, inherited_roles_name from show_roles() where name in ('role1', 'role2', 'role3') order by name;
+----
+role1 (empty) (empty)
+role2 test role1
+
+statement ok
+alter role role2 unset comment;
+
+statement ok
+alter role role1 set comment = 'xxx'
+
+query T
+settings (enable_expand_roles=0) select grants from show_grants('role', 'role1');
+----
+GRANT ROLE public to ROLE `role1`
+GRANT ALL ON *.* TO ROLE `role1`
+
+query T
+select name, comment, inherited_roles_name from show_roles() where name in ('role1', 'role2', 'role3') order by name;
+----
+role1 xxx (empty)
+role2 (empty) role1
+
+statement ok
+alter role if exists role1 set comment = 'cccc'
+
+statement ok
+alter role if exists role3 set comment = 'cccc'
+
+statement ok
+alter role if exists role3 unset comment
+
+statement error 2204
+alter role role3 set comment = 'cccc'
+
+statement error 2204
+alter role role3 unset comment
+
+statement error 1005
+create or replace role role3;
+
+statement ok
+drop role if exists role1;
+
+statement ok
+drop role if exists role2;

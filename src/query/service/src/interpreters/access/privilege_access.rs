@@ -1473,6 +1473,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterUDF(_)
             | Plan::RefreshIndex(_)
             | Plan::RefreshTableIndex(_)
+            | Plan::AlterRole(_)
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
