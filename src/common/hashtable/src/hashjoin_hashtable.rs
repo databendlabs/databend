@@ -129,7 +129,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: K, entry_ptr: *mut RawEntry<K>) {
+    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
