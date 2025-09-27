@@ -310,6 +310,7 @@ async fn query_final_handler(
                 &ctx.client_session_id,
                 StopReason::Finished,
                 ErrorCode::ClosedQuery("Query closed by client"),
+                true,
             )
             .await?
         {
@@ -351,6 +352,7 @@ async fn query_cancel_handler(
                 &ctx.client_session_id,
                 StopReason::Canceled,
                 ErrorCode::AbortedQuery("canceled by client"),
+                true,
             )
             .await?
         {
