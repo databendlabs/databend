@@ -86,7 +86,7 @@ pub(crate) mod raft {
             add_provide(("append",           0), "2023-02-16", (0,  9,  41)),
             add_provide(("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
             add_provide(("vote",             1), "2025-07-20", (1,  2, 777)),
-            add_provide(("install_snapshot", 4), "2025-xx-xx", (1,  2, 0)), // TODO: update date and version when merged
+            add_provide(("install_snapshot", 4), "2025-09-24", (1,  2, 818)),
         ];
 
         /// The client features that raft server depends on.
