@@ -24,7 +24,10 @@ struct BlockWithInfo {
 
 impl BlockWithInfo {
     pub fn new(block: DataBlock) -> BlockWithInfo {
-        let avg_bytes = block.memory_size().div_ceil(block.num_rows());
+        let avg_bytes = match block.num_rows() {
+            0 => 0,
+            _ => block.memory_size().div_ceil(block.num_rows()),
+        };
         BlockWithInfo { avg_bytes, block }
     }
 }
@@ -50,6 +53,10 @@ impl SquashBlocks {
     }
 
     pub fn add_block(&mut self, block: DataBlock) -> Result<Option<DataBlock>> {
+        if block.is_empty() {
+            return Ok(None);
+        }
+
         let up_rows_bound = self.squash_rows * 2 / 3 * 2;
         let up_bytes_bound = self.squash_bytes * 2 / 3 * 2;
 
