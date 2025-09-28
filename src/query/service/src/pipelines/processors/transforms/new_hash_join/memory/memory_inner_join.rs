@@ -99,25 +99,14 @@ impl MemoryInnerJoin {
             return;
         }
 
-        let mut offsets = Vec::with_capacity(self.build_projection.len());
-
-        for chunk in self.state.chunks.iter() {
-            if chunk.num_columns() != 0 {
-                for (index, entry) in chunk.columns().iter().enumerate() {
-                    if !self.build_projection.contains(&index) {
-                        continue;
-                    }
-
-                    offsets.push(index);
-                    let columns_type = self.state.column_types.as_mut();
-                    columns_type.push(entry.data_type());
-                }
-
-                break;
+        if let Some(block) = self.state.chunks.first() {
+            for offset in 0..self.build_projection.len() {
+                let column_type = self.state.column_types.as_mut();
+                column_type.push(block.get_by_offset(offset).data_type());
             }
         }
 
-        for offset in offsets {
+        for offset in 0..self.build_projection.len() {
             let full_columns = self
                 .state
                 .chunks
@@ -245,7 +234,6 @@ impl Join for MemoryInnerJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.init_columns_vec();
         self.init_memory_hash_table();
 
         let Some(chunk_index) = self.steal_chunk_index() else {
@@ -294,6 +282,7 @@ impl Join for MemoryInnerJoin {
             return Ok(Box::new(EmptyJoinStream));
         }
 
+        self.init_columns_vec();
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
