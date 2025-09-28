@@ -123,7 +123,11 @@ impl Processor for TransformHashJoin {
                     return Ok(());
                 };
 
-                self.join.add_block(Some(data_block))
+                if !data_block.is_empty() {
+                    self.join.add_block(Some(data_block))?;
+                }
+
+                Ok(())
             }
             Stage::BuildFinal(state) => {
                 state.finished = self.join.final_build()?.is_none();

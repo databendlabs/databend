@@ -356,8 +356,9 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
         }
     }
 
-    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
+        let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
         let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
 
@@ -392,13 +393,15 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
 
     pub fn probe_keys(
         &self,
-        keys: ProjectedBlock,
+        keys: DataBlock,
         valids: Option<Bitmap>,
     ) -> Result<Box<dyn ProbeStream>> {
+        let num_rows = keys.num_rows();
         let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(keys.num_rows());
+        let mut hashes = Vec::with_capacity(num_rows);
 
-        let keys_state = hash_method.build_keys_state(keys, keys.num_rows())?;
+        let keys = ProjectedBlock::from(keys.columns());
+        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
         let keys = hash_method.build_keys_accessor(keys_state.clone())?;
 
@@ -412,7 +415,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
 
         self.probed_rows.fetch_add(
             match &valids {
-                None => keys.len(),
+                None => num_rows,
                 Some(valids) => valids.len() - valids.null_count(),
             },
             Ordering::Relaxed,
@@ -420,7 +423,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
 
         match enable_early_filtering {
             true => {
-                let mut selection = vec![0; keys.len()];
+                let mut selection = vec![0; num_rows];
 
                 match self.hash_table.early_filtering_matched_probe(
                     &mut hashes,
@@ -452,8 +455,9 @@ impl SerializerHashJoinHashTable {
         }
     }
 
-    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
+        let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
         let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
 
@@ -509,13 +513,15 @@ impl SerializerHashJoinHashTable {
 
     pub fn probe_keys(
         &self,
-        keys: ProjectedBlock,
+        keys: DataBlock,
         valids: Option<Bitmap>,
     ) -> Result<Box<dyn ProbeStream>> {
+        let num_rows = keys.num_rows();
         let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(keys.num_rows());
+        let mut hashes = Vec::with_capacity(num_rows);
 
-        let keys_state = hash_method.build_keys_state(keys, keys.num_rows())?;
+        let keys = ProjectedBlock::from(keys.columns());
+        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
         let keys = hash_method.build_keys_accessor(keys_state.clone())?;
 
@@ -569,8 +575,9 @@ impl SingleBinaryHashJoinHashTable {
         }
     }
 
-    pub fn insert(&self, keys: ProjectedBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
+    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
+        let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
         let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
 
@@ -626,13 +633,15 @@ impl SingleBinaryHashJoinHashTable {
 
     pub fn probe_keys(
         &self,
-        keys: ProjectedBlock,
+        keys: DataBlock,
         valids: Option<Bitmap>,
     ) -> Result<Box<dyn ProbeStream>> {
+        let num_rows = keys.num_rows();
         let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(keys.num_rows());
+        let mut hashes = Vec::with_capacity(num_rows);
 
-        let keys_state = hash_method.build_keys_state(keys, keys.num_rows())?;
+        let keys = ProjectedBlock::from(keys.columns());
+        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
         let keys = hash_method.build_keys_accessor(keys_state.clone())?;
 
@@ -751,7 +760,6 @@ impl<Key: FixedKey + HashtableKeyable> FixedKeysProbeStream<Key> {
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = Key>>,
     ) -> Box<dyn ProbeStream> {
-        log::info!("[JOIN] probe hashes: {:?}", pointers);
         Box::new(FixedKeysProbeStream {
             keys,
             pointers,
@@ -774,12 +782,8 @@ impl<Key: FixedKey + HashtableKeyable> ProbeStream for FixedKeysProbeStream<Key>
                 std::hint::assert_unchecked(matched_build.len() <= matched_build.capacity());
                 std::hint::assert_unchecked(matched_probe.len() <= matched_probe.capacity());
 
-                if matched_probe.len() == matched_probe.capacity() {
-                    return Ok(ProbeKeysResult::new(
-                        unmatched,
-                        matched_probe,
-                        matched_build,
-                    ));
+                if matched_probe.len() == max_rows {
+                    break;
                 }
 
                 if self.probe_entry_ptr == 0 {
@@ -802,7 +806,13 @@ impl<Key: FixedKey + HashtableKeyable> ProbeStream for FixedKeysProbeStream<Key>
                         matched_probe.push(self.key_idx as u64);
                         matched_build.push(row_ptr);
 
-                        if matched_probe.len() == matched_probe.capacity() {
+                        if matched_probe.len() == max_rows {
+                            self.probe_entry_ptr = raw_entry.next;
+
+                            if self.probe_entry_ptr == 0 {
+                                self.key_idx += 1;
+                            }
+
                             return Ok(ProbeKeysResult::new(
                                 unmatched,
                                 matched_probe,
@@ -860,12 +870,8 @@ impl ProbeStream for BinaryKeyProbeStream {
                 std::hint::assert_unchecked(matched_build.len() <= matched_build.capacity());
                 std::hint::assert_unchecked(matched_probe.len() <= matched_probe.capacity());
 
-                if matched_probe.len() == matched_probe.capacity() {
-                    return Ok(ProbeKeysResult::new(
-                        unmatched,
-                        matched_probe,
-                        matched_build,
-                    ));
+                if matched_probe.len() == max_rows {
+                    break;
                 }
 
                 if self.probe_entry_ptr == 0 {
@@ -897,7 +903,13 @@ impl ProbeStream for BinaryKeyProbeStream {
                             matched_probe.push(self.key_idx as u64);
                             matched_build.push(row_ptr);
 
-                            if matched_probe.len() == matched_probe.capacity() {
+                            if matched_probe.len() == max_rows {
+                                self.probe_entry_ptr = raw_entry.next;
+
+                                if self.probe_entry_ptr == 0 {
+                                    self.key_idx += 1;
+                                }
+
                                 return Ok(ProbeKeysResult::new(
                                     unmatched,
                                     matched_probe,

@@ -194,9 +194,8 @@ impl MemoryInnerJoin {
         }
     }
 
-    fn build_hash_table(&self, keys: Vec<BlockEntry>, chunk_idx: usize) -> Result<()> {
+    fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
         let mut arena = Vec::with_capacity(0);
-        let keys = ProjectedBlock::from(&keys);
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
@@ -262,15 +261,14 @@ impl Join for MemoryInnerJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        let mut keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
+        let keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
+        let mut keys_block = DataBlock::new(keys_entries, chunk_block.num_rows());
 
         chunk_block = chunk_block.project(&self.build_projection);
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&mut keys_entries)? {
-            let keys = DataBlock::new(keys_entries, chunk_block.num_rows());
-            let keys = keys.filter_with_bitmap(&bitmap)?;
-            keys_entries = keys.take_columns();
+        if let Some(bitmap) = self.desc.build_valids_by_keys(&mut keys_block)? {
+            keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
-            if chunk_block.num_columns() != 0 && bitmap.null_count() != bitmap.len() {
+            if bitmap.null_count() != bitmap.len() {
                 chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
             }
         }
@@ -284,7 +282,7 @@ impl Join for MemoryInnerJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        self.build_hash_table(keys_entries, chunk_index)?;
+        self.build_hash_table(keys_block, chunk_index)?;
 
         Ok(Some(ProgressValues {
             rows: num_rows,
@@ -293,19 +291,23 @@ impl Join for MemoryInnerJoin {
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>> {
-        let mut probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+        if data.is_empty() {
+            return Ok(Box::new(EmptyJoinStream));
+        }
 
+        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+
+        let mut keys = DataBlock::new(probe_keys, data.num_rows());
         let valids = match self.desc.from_correlated_subquery {
             true => None,
-            false => self.desc.build_valids_by_keys(&mut probe_keys)?,
+            false => self.desc.build_valids_by_keys(&mut keys)?,
         };
 
-        let probe_key = ProjectedBlock::from(&probe_keys);
         let probe_block = data.project(&self.probe_projections);
 
         with_join_hash_method!(|T| match self.state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
-                let probe_keys_stream = table.probe_keys(probe_key, valids)?;
+                let probe_keys_stream = table.probe_keys(keys, valids)?;
 
                 Ok(MemoryInnerJoinStream::create(
                     probe_block,

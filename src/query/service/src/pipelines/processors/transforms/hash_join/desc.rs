@@ -172,16 +172,13 @@ impl HashJoinDesc {
             .collect::<Result<_>>()
     }
 
-    pub fn build_valids_by_keys(&self, keys: &mut [BlockEntry]) -> Result<Option<Bitmap>> {
+    pub fn build_valids_by_keys(&self, keys: &mut DataBlock) -> Result<Option<Bitmap>> {
         let is_null_equal = &self.is_null_equal;
         let mut valids = None;
 
-        let num_rows = match keys.is_empty() {
-            true => 0,
-            false => keys[0].len(),
-        };
+        let num_rows = keys.num_rows();
 
-        for (entry, null_equals) in keys.iter().zip(is_null_equal.iter()) {
+        for (entry, null_equals) in keys.columns().iter().zip(is_null_equal.iter()) {
             if !null_equals {
                 let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
 
@@ -204,7 +201,7 @@ impl HashJoinDesc {
             }
         }
 
-        for (entry, is_null) in keys.iter_mut().zip(is_null_equal.iter()) {
+        for (entry, is_null) in keys.columns_mut().iter_mut().zip(is_null_equal.iter()) {
             if !is_null && entry.data_type().is_nullable() {
                 *entry = entry.clone().remove_nullable();
             }
