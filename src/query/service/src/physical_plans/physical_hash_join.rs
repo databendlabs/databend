@@ -256,10 +256,12 @@ impl IPhysicalPlan for HashJoin {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let desc = Arc::new(HashJoinDesc::create(self)?);
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
+        let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
         if desc.single_to_inner.is_none()
             && self.join_type == JoinType::Inner
             && experimental_new_join
+            && !enable_optimization
         {
             return self.build_new_join_pipeline(builder, desc);
         }
