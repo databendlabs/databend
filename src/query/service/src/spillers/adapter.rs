@@ -32,7 +32,6 @@ use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::RowGroupMetaDataPtr;
-use parquet::format::FileMetaData;
 
 use super::inner::*;
 use super::serialize::*;
@@ -368,10 +367,6 @@ impl SpillWriter {
             row_group.write(block)?;
         }
         Ok(self.file.flush_row_group(row_group)?)
-    }
-
-    pub fn close(self) -> Result<FileMetaData> {
-        Ok(self.file.close()?)
     }
 }
 

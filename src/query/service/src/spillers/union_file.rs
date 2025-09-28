@@ -20,6 +20,7 @@ use arrow_schema::Schema;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
 use databend_common_base::runtime::Runtime;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::TempDir;
@@ -34,7 +35,6 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
-use parquet::format::FileMetaData;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferPool;
@@ -116,12 +116,20 @@ impl<W: Write + Send> FileWriter<W> {
         row_group.close(&mut row_group_writer)?;
         row_group_writer.close()
     }
+
+    pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
+        let mut row_group = self.new_row_group();
+        for block in blocks {
+            row_group.write(block)?;
+        }
+        Ok(self.flush_row_group(row_group)?)
+    }
 }
 
 impl FileWriter<UnionFileWriter> {
-    pub(super) fn finish(self) -> errors::Result<FileMetaData> {
+    pub(super) fn finish(self) -> errors::Result<UnionFile> {
         let writer = self.writer.into_inner()?;
-        writer.finish()
+        Ok(writer.finish()?)
     }
 }
 
@@ -134,7 +142,8 @@ struct LocalDst {
 
 pub struct UnionFileWriter {
     local: Option<LocalDst>,
-    remote: BufferWriter,
+    remote: String,
+    remote_writer: BufferWriter,
     remote_offset: usize,
 }
 
@@ -144,7 +153,8 @@ impl UnionFileWriter {
         path: TempPath,
         file: SyncDmaFile,
         buf: DmaWriteBuf,
-        remote: BufferWriter,
+        remote: String,
+        remote_writer: BufferWriter,
     ) -> Self {
         UnionFileWriter {
             local: Some(LocalDst {
@@ -154,20 +164,22 @@ impl UnionFileWriter {
                 buf: Some(buf),
             }),
             remote,
+            remote_writer,
             remote_offset: 0,
         }
     }
 
-    pub fn without_local(remote: BufferWriter) -> Self {
+    pub fn without_local(remote: String, remote_writer: BufferWriter) -> Self {
         UnionFileWriter {
             local: None,
             remote,
+            remote_writer,
             remote_offset: 0,
         }
     }
 
-    pub fn finish(self) -> io::Result<MixFile> {
-        let local_path = match self.local {
+    pub fn finish(self) -> io::Result<UnionFile> {
+        match self.local {
             Some(
                 mut local @ LocalDst {
                     file: Some(_),
@@ -183,19 +195,23 @@ impl UnionFileWriter {
 
                 local.path.set_size(file_size).unwrap();
 
-                return Ok(MixFile {
+                Ok(UnionFile {
                     local_path: Some(local.path),
-                    remote_offset: 0,
-                });
+                    remote_path: self.remote,
+                    remote_offset: None,
+                })
             }
-            Some(LocalDst { path, .. }) => Some(path),
-            None => None,
-        };
-
-        Ok(MixFile {
-            local_path,
-            remote_offset: self.remote_offset,
-        })
+            Some(LocalDst { path, .. }) => Ok(UnionFile {
+                local_path: Some(path),
+                remote_path: self.remote,
+                remote_offset: Some(self.remote_offset),
+            }),
+            None => Ok(UnionFile {
+                local_path: None,
+                remote_path: self.remote,
+                remote_offset: Some(0),
+            }),
+        }
     }
 }
 
@@ -240,9 +256,9 @@ impl io::Write for UnionFileWriter {
         }
 
         for buf in dma_buf {
-            self.remote.write(&buf)?;
+            self.remote_writer.write(&buf)?;
         }
-        self.remote.write(buf)
+        self.remote_writer.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -257,22 +273,24 @@ impl io::Write for UnionFileWriter {
             return Ok(());
         }
 
-        self.remote.flush()
+        self.remote_writer.flush()
     }
 }
 
-pub struct MixFile {
+#[derive(Debug)]
+pub struct UnionFile {
     local_path: Option<TempPath>,
-    remote_offset: usize,
+    remote_path: String,
+    remote_offset: Option<usize>,
 }
 
 impl<A: SpillAdapter> SpillerInner<A> {
-    async fn new_file_writer(
+    pub(super) async fn new_file_writer(
         &self,
         schema: &TableSchema,
         executor: Arc<Runtime>,
         max_buffer: usize,
-    ) -> databend_common_exception::Result<FileWriter<UnionFileWriter>> {
+    ) -> Result<FileWriter<UnionFileWriter>> {
         let pool = BufferPool::create(executor, max_buffer, 3);
 
         let op = self.local_operator.as_ref().unwrap_or(&self.operator);
@@ -286,12 +304,12 @@ impl<A: SpillAdapter> SpillerInner<A> {
                 let file = SyncDmaFile::create(&path, true)?;
                 let align = disk.block_alignment();
                 let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
-                UnionFileWriter::new(disk.clone(), path, file, buf, remote)
+                UnionFileWriter::new(disk.clone(), path, file, buf, remote_location, remote)
             } else {
-                UnionFileWriter::without_local(remote)
+                UnionFileWriter::without_local(remote_location, remote)
             }
         } else {
-            UnionFileWriter::without_local(remote)
+            UnionFileWriter::without_local(remote_location, remote)
         };
 
         let props = WriterProperties::default().into();
@@ -299,44 +317,59 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use databend_common_exception::Result;
-//     use opendal::Builder;
-//     use opendal::Operator;
-//     use parquet::file::properties::WriterProperties;
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::GlobalIORuntime;
+    use databend_common_exception::Result;
+    use databend_common_expression::infer_table_schema;
+    use databend_common_expression::types::UInt64Type;
+    use databend_common_expression::FromData;
+    use opendal::Operator;
+    use parquet::file::properties::WriterProperties;
 
-//     use super::*;
-//     use crate::spillers::async_buffer::BufferPool;
+    use super::*;
+    use crate::spillers::async_buffer::BufferPool;
+    use crate::test_kits::ConfigBuilder;
+    use crate::test_kits::TestFixture;
 
-//     async fn xxx() -> Result<()> {
-//         let props = WriterProperties::default().into();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_xxx() -> Result<()> {
+        let config = ConfigBuilder::create().build();
+        let fixture = TestFixture::setup_with_config(&config).await?;
+        let _ctx = fixture.new_query_ctx().await?;
 
-//         let table_schema = todo!();
-//         let executor = todo!();
-//         let memory = 1024 * 1024 * 100;
+        let props = WriterProperties::default().into();
 
-//         let pool = BufferPool::create(executor, memory, 3);
+        let block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![7, 8, 9])]);
 
-//         let builder = opendal::services::Fs::default().root("/tmp");
-//         let op = Operator::new(builder)?.finish();
+        let table_schema = infer_table_schema(&block.infer_schema())?;
+        let executor = GlobalIORuntime::instance();
+        let memory = 1024 * 1024 * 100;
 
-//         let writer = op.writer("path").await?;
-//         let remote = pool.buffer_write(writer);
+        let pool = BufferPool::create(executor, memory, 3);
 
-//         let dir = todo!();
-//         let path = todo!();
+        let builder = opendal::services::Fs::default().root("/tmp");
+        let op = Operator::new(builder)?.finish();
 
-//         let file = SyncDmaFile::create(path, true)?;
-//         let align = todo!();
-//         let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
+        let writer = op.writer("path").await?;
+        let remote = pool.buffer_write(writer);
 
-//         let mix_file = MixFileWriter::new(dir, path, file, buf, remote);
+        // let dir = todo!();
+        // let path = todo!();
 
-//         let file_writer = FileWriter::new(props, table_schema, &mut mix_file)?;
+        // let file = SyncDmaFile::create(path, true)?;
+        // let align = todo!();
+        // let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
 
-//         let file_meta = file_writer.close()?;
+        let file = UnionFileWriter::without_local("path".to_string(), remote);
+        let mut file_writer = FileWriter::new(props, &table_schema, file)?;
 
-//         let xx = mix_file.finish()?;
-//     }
-// }
+        let x = file_writer.spill(vec![block])?;
+        println!("{x:#?}");
+
+        let x = file_writer.finish()?;
+        println!("{x:#?}");
+
+        Ok(())
+    }
+}
