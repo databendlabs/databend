@@ -33,8 +33,8 @@ fn test_find_all_related_roles() {
     }
 
     // Create some test RoleInfo instances for the cache
-    let mut role1 = RoleInfo::new("role1");
-    let role2 = RoleInfo::new("role2");
+    let mut role1 = RoleInfo::new("role1", None);
+    let role2 = RoleInfo::new("role2", None);
     // Add more RoleInfo instances as needed for testing.
 
     // Create the cache HashMap and add the RoleInfo instances to it.

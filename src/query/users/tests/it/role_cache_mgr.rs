@@ -48,7 +48,7 @@ async fn test_role_cache_mgr() -> Result<()> {
     let user_manager = UserApiProvider::try_create_simple(conf, &tenant).await?;
     let role_cache_manager = RoleCacheManager::try_create(user_manager.clone())?;
 
-    let mut role1 = RoleInfo::new("role1");
+    let mut role1 = RoleInfo::new("role1", None);
     role1.grants.grant_privileges(
         &GrantObject::Database(CATALOG_DEFAULT.to_owned(), "db1".to_string()),
         UserPrivilegeSet::available_privileges_on_database(false),
@@ -71,11 +71,11 @@ async fn test_role_cache_mgr() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_find_all_related_roles() -> Result<()> {
     let roles = vec![
-        RoleInfo::new("role1"),
-        RoleInfo::new("role2"),
-        RoleInfo::new("role3"),
-        RoleInfo::new("role4"),
-        RoleInfo::new("role5"),
+        RoleInfo::new("role1", None),
+        RoleInfo::new("role2", None),
+        RoleInfo::new("role3", None),
+        RoleInfo::new("role4", None),
+        RoleInfo::new("role5", None),
     ];
     // role1 -> role2 -> role4 -> role5
     //    <- -> role3

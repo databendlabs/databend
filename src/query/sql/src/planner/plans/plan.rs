@@ -41,6 +41,7 @@ use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
+use crate::plans::AlterRolePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
@@ -355,6 +356,7 @@ pub enum Plan {
     // Role
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
+    AlterRole(Box<AlterRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
     RevokePriv(Box<RevokePrivilegePlan>),

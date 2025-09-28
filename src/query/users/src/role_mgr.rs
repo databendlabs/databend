@@ -74,7 +74,7 @@ impl UserApiProvider {
     //    Until we can confirm all product use https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly or later,
     //    We can add account_admin into meta.
     fn builtin_roles(&self) -> HashMap<String, RoleInfo> {
-        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
+        let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN, None);
         account_admin.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
@@ -124,16 +124,42 @@ impl UserApiProvider {
         let client = self.role_api(tenant);
         let name = role_info.identity().to_string();
         if let Err(_e) = client.add_role(role_info, can_replace).await? {
-            if matches!(create_option, CreateOption::CreateIfNotExists) {
-                return Ok(());
+            return if matches!(create_option, CreateOption::CreateIfNotExists) {
+                Ok(())
             } else {
-                return Err(ErrorCode::RoleAlreadyExists(format!(
+                Err(ErrorCode::RoleAlreadyExists(format!(
                     "Role {} already exists",
                     name
-                )));
-            }
+                )))
+            };
         }
         return Ok(());
+    }
+
+    // Update role comment.
+    #[async_backtrace::framed]
+    pub async fn update_role_comment(
+        &self,
+        tenant: &Tenant,
+        role_name: &str,
+        comment: Option<String>,
+    ) -> Result<()> {
+        let client = self.role_api(tenant);
+
+        client
+            .update_role_with(role_name, MatchSeq::GE(0), |role_info| {
+                role_info.comment = comment.clone();
+            })
+            .await
+            .and_then(|opt| {
+                opt.map(|_| Ok(())).unwrap_or_else(|| {
+                    Err(ErrorCode::UnknownRole(format!(
+                        "Role '{}' does not exist",
+                        role_name
+                    )))
+                })
+            })
+            .map_err(|e| e.add_message_back("(while updating role comment)"))
     }
 
     #[async_backtrace::framed]
@@ -188,7 +214,7 @@ impl UserApiProvider {
     pub async fn grant_privileges_to_role(
         &self,
         tenant: &Tenant,
-        role: &String,
+        role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -206,7 +232,7 @@ impl UserApiProvider {
     pub async fn revoke_privileges_from_role(
         &self,
         tenant: &Tenant,
-        role: &String,
+        role: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
@@ -253,7 +279,7 @@ impl UserApiProvider {
     pub async fn revoke_role_from_role(
         &self,
         tenant: &Tenant,
-        role: &String,
+        role: &str,
         revoke_role: &String,
     ) -> Result<Option<u64>> {
         let client = self.role_api(tenant);
