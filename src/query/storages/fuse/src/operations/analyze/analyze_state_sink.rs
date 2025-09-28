@@ -53,6 +53,7 @@ use crate::operations::analyze::AnalyzeCollectNDVSource;
 use crate::operations::analyze::AnalyzeNDVMeta;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
+use crate::statistics::reducers::reduce_virtual_column_statistics;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
@@ -232,10 +233,11 @@ impl SinkAnalyzeState {
             None
         };
 
-        let (col_stats, cluster_stats) =
+        let (col_stats, virtual_col_stats, cluster_stats) =
             self.regenerate_statistics(table, snapshot.as_ref()).await?;
         // 4. Save table statistics
         new_snapshot.summary.col_stats = col_stats;
+        new_snapshot.summary.virtual_col_stats = virtual_col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
         table
             .commit_to_meta_server(
@@ -254,13 +256,18 @@ impl SinkAnalyzeState {
         &self,
         table: &FuseTable,
         snapshot: &TableSnapshot,
-    ) -> Result<(StatisticsOfColumns, Option<ClusterStatistics>)> {
+    ) -> Result<(
+        StatisticsOfColumns,
+        Option<StatisticsOfColumns>,
+        Option<ClusterStatistics>,
+    )> {
         // 1. Read table snapshot.
         let default_cluster_key_id = table.cluster_key_id();
 
         // 2. Iterator segments and blocks to estimate statistics.
         let mut read_segment_count = 0;
         let mut col_stats = HashMap::new();
+        let mut virtual_col_stats = None;
         let mut cluster_stats = None;
 
         let start = Instant::now();
@@ -270,10 +277,14 @@ impl SinkAnalyzeState {
         let number_segments = snapshot.segments.len();
         for chunk in snapshot.segments.chunks(chunk_size) {
             let mut stats_of_columns = Vec::new();
+            let mut stats_of_virtual_columns = Vec::new();
             let mut blocks_cluster_stats = Vec::new();
             if !col_stats.is_empty() {
                 stats_of_columns.push(col_stats.clone());
                 blocks_cluster_stats.push(cluster_stats.clone());
+            }
+            if virtual_col_stats.is_some() {
+                stats_of_virtual_columns.push(virtual_col_stats);
             }
 
             let segments = segments_io
@@ -282,11 +293,13 @@ impl SinkAnalyzeState {
             for segment in segments {
                 let segment = segment?;
                 stats_of_columns.push(segment.summary.col_stats.clone());
+                stats_of_virtual_columns.push(segment.summary.virtual_col_stats.clone());
                 blocks_cluster_stats.push(segment.summary.cluster_stats.clone());
             }
 
             // Generate new column statistics for snapshot
             col_stats = reduce_block_statistics(&stats_of_columns);
+            virtual_col_stats = reduce_virtual_column_statistics(&stats_of_virtual_columns);
             cluster_stats =
                 reduce_cluster_statistics(&blocks_cluster_stats, default_cluster_key_id);
 
@@ -309,7 +322,7 @@ impl SinkAnalyzeState {
                 stats.distinct_of_values = Some(ndv);
             }
         }
-        Ok((col_stats, cluster_stats))
+        Ok((col_stats, virtual_col_stats, cluster_stats))
     }
 }
 

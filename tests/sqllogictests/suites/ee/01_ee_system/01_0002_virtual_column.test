@@ -322,8 +322,31 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 9 9 "2/14" "y" 5 5 {"lat":4.2} 4.2 25 ["good","popular"]
 10 10 "2/15" "z" 7 7 {"lat":5.0} 5.0 10 ["new","interesting"]
 
+query TIIIT
+select * from fuse_statistic('test_virtual_column', 'tweets');
+----
+id 10 0 4 (empty)
+data['create'] 10 0 16 (empty)
+data['id'] 10 0 8 (empty)
+data['replies'] 7 3 8 (empty)
+data['text'] 7 0 13 (empty)
+data['user']['id'] 6 0 8 (empty)
+data['likes'] 2 0 1 (empty)
+data['tags'][0] 2 0 3 (empty)
+data['tags'][1] 2 0 4 (empty)
+
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
+
+query TIIIT
+select * from fuse_statistic('test_virtual_column', 'tweets');
+----
+id 10 0 4 (empty)
+data['create'] 10 0 16 (empty)
+data['id'] 10 0 8 (empty)
+data['replies'] 7 3 8 (empty)
+data['text'] 8 0 13 (empty)
+data['user']['id'] 4 0 8 (empty)
 
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
