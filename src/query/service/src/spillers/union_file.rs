@@ -307,16 +307,56 @@ impl AsyncFileReader for FileReader {
         range: std::ops::Range<u64>,
     ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
         async move {
-            let range = match self.remote_offset {
-                Some(offset) => (range.start + offset)..(range.end + offset),
-                None => range,
+            let local_bytes = if let Some(local_path) = &self.local_path {
+                let local_range = self
+                    .remote_offset
+                    .map(|offset| {
+                        if range.end <= offset {
+                            return range.clone();
+                        }
+                        if range.start < offset {
+                            range.start..offset
+                        } else {
+                            offset..offset
+                        }
+                    })
+                    .unwrap_or(range);
+
+                let (dma_buf, rt_range) = databend_common_base::base::dma_read_file_range(
+                    local_path,
+                    local_range.clone(),
+                )
+                .await?;
+
+                let bytes =
+                    databend_common_base::base::dma_buffer_to_bytes(dma_buf).slice(rt_range);
+                if local_range == range {
+                    return Ok(bytes);
+                }
+                Some(bytes)
+            } else {
+                None
             };
-            let buf = self
+
+            let remote_range = self
+                .remote_offset
+                .map(|offset| (range.start - offset)..(range.end - offset))
+                .unwrap_or(range.clone());
+
+            let remote_bytes = self
                 .remote_reader
-                .read(range)
+                .read(remote_range)
                 .await
                 .map_err(|err| errors::ParquetError::External(Box::new(err)))?;
-            Ok(buf.to_bytes())
+
+            if local_bytes.is_some() {
+                Ok(opendal::Buffer::from_iter(
+                    local_bytes.into_iter().chain(remote_bytes.into_iter()),
+                )
+                .to_bytes())
+            } else {
+                Ok(remote_bytes.to_bytes())
+            }
         }
         .boxed()
     }
