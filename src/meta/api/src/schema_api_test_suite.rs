@@ -3453,8 +3453,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3467,7 +3466,10 @@ impl SchemaApiTestSuite {
             };
             let res = mt.get_table(req).await?;
 
-            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            match &res.meta.row_access_policy_columns_ids {
+                Some(r) => assert_eq!(r.policy_id, *policy1_id),
+                None => panic!(),
+            }
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
@@ -3497,8 +3499,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3510,7 +3511,10 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = mt.get_table(req).await?;
-            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            match &res.meta.row_access_policy_columns_ids {
+                Some(r) => assert_eq!(r.policy_id, *policy1_id),
+                None => panic!(),
+            }
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
@@ -3528,8 +3532,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id: table_id_1,
-                action: SetTableRowAccessPolicyAction::Unset(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Unset(*policy1_id),
             };
             mt.set_table_row_access_policy(req).await??;
 

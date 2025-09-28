@@ -73,6 +73,31 @@ select id from t;
 1
 
 statement ok
+create or replace table t_1(id int, cc string);
+
+statement ok
+insert into t_1 values(1,'x');
+
+query T
+select id from t_1;
+----
+1
+
+statement ok
+alter table t_1 ADD ROW ACCESS POLICY rap_it ON (cc);
+
+## t_1 apply row access policy rpa_it(means if current role == account_admin will return false)
+query T
+select id from t_1;
+----
+
+statement error
+alter table t_1 drop column cc;
+
+statement ok
+alter table t_1 drop column id;
+
+statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
 ## t apply row access policy rpa_it(means if current role == account_admin will return false)

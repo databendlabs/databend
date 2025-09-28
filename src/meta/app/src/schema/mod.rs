@@ -116,6 +116,7 @@ pub use table::ListDroppedTableResp;
 pub use table::ListTableReq;
 pub use table::RenameTableReply;
 pub use table::RenameTableReq;
+pub use table::RowAccessPolicyColumnMap;
 pub use table::SetTableColumnMaskPolicyAction;
 pub use table::SetTableColumnMaskPolicyReply;
 pub use table::SetTableColumnMaskPolicyReq;

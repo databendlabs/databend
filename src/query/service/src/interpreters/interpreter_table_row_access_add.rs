@@ -99,23 +99,23 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
             .await?;
 
         // check if column type match to the input type
-        let policy_args: Vec<(String, String)> = policy
-            .args
-            .iter()
-            .map(|arg| (arg.0.to_string(), arg.1.to_lowercase()))
-            .collect();
+        let policy_data_types: Vec<String> =
+            policy.args.iter().map(|arg| arg.1.to_lowercase()).collect();
 
+        let mut columns_ids = vec![];
         let schema = table.schema();
         let table_info = table.get_table_info();
         let columns = self.plan.columns.clone();
         for column in &columns {
             if let Some((_, data_field)) = schema.column_with_name(column) {
                 let data_type = data_field.data_type().to_string().to_lowercase();
-                if !policy_args.contains(&(column.to_string(), data_type.to_string())) {
+                if !policy_data_types.contains(&data_type.to_string()) {
                     return Err(ErrorCode::UnmatchColumnDataType(format!(
                         "Column '{}' data type {} does not match to the row access policy {}",
                         column, data_type, policy_name,
                     )));
+                } else {
+                    columns_ids.push(data_field.column_id);
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -130,8 +130,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            policy_id: *policy_id.data,
-            action: SetTableRowAccessPolicyAction::Set(policy_name),
+            action: SetTableRowAccessPolicyAction::Set(*policy_id.data, columns_ids),
         };
 
         let _resp = catalog.set_table_row_access_policy(req).await?;
