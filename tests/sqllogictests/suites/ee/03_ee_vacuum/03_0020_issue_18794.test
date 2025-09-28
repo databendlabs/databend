@@ -1,0 +1,35 @@
+statement ok
+create or replace database issue_18794;
+
+statement ok
+use issue_18794;
+
+statement ok
+create or replace table t (c int);
+
+statement ok
+create or replace table t (c int);
+
+statement ok
+create or replace table t (c int);
+
+statement ok
+alter table t rename to t1;
+
+statement ok
+create or replace table t (c int);
+
+statement ok
+drop table t;
+
+statement ok
+alter table t1 rename to t;
+
+statement ok
+drop table t;
+
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+vacuum drop table;
