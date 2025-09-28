@@ -21,13 +21,21 @@ use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
+use databend_common_expression::Value;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
+use futures::future::BoxFuture;
+use parquet::arrow::arrow_reader::ArrowReaderBuilder;
+use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
+use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaDataPtr;
@@ -35,6 +43,7 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
+use parquet::format::FileMetaData;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferPool;
@@ -127,9 +136,10 @@ impl<W: Write + Send> FileWriter<W> {
 }
 
 impl FileWriter<UnionFileWriter> {
-    pub(super) fn finish(self) -> errors::Result<UnionFile> {
-        let writer = self.writer.into_inner()?;
-        Ok(writer.finish()?)
+    pub(super) fn finish(mut self) -> errors::Result<(FileMetaData, UnionFile)> {
+        let file_meta = self.writer.finish()?;
+        let file = self.writer.inner_mut().finish()?;
+        Ok((file_meta, file))
     }
 }
 
@@ -148,7 +158,7 @@ pub struct UnionFileWriter {
 }
 
 impl UnionFileWriter {
-    pub fn new(
+    fn new(
         dir: Arc<TempDir>,
         path: TempPath,
         file: SyncDmaFile,
@@ -169,7 +179,7 @@ impl UnionFileWriter {
         }
     }
 
-    pub fn without_local(remote: String, remote_writer: BufferWriter) -> Self {
+    fn without_local(remote: String, remote_writer: BufferWriter) -> Self {
         UnionFileWriter {
             local: None,
             remote,
@@ -178,8 +188,8 @@ impl UnionFileWriter {
         }
     }
 
-    pub fn finish(self) -> io::Result<UnionFile> {
-        match self.local {
+    fn finish(&mut self) -> io::Result<UnionFile> {
+        match self.local.take() {
             Some(
                 mut local @ LocalDst {
                     file: Some(_),
@@ -197,18 +207,18 @@ impl UnionFileWriter {
 
                 Ok(UnionFile {
                     local_path: Some(local.path),
-                    remote_path: self.remote,
+                    remote_path: std::mem::take(&mut self.remote),
                     remote_offset: None,
                 })
             }
             Some(LocalDst { path, .. }) => Ok(UnionFile {
                 local_path: Some(path),
-                remote_path: self.remote,
+                remote_path: std::mem::take(&mut self.remote),
                 remote_offset: Some(self.remote_offset),
             }),
             None => Ok(UnionFile {
                 local_path: None,
-                remote_path: self.remote,
+                remote_path: std::mem::take(&mut self.remote),
                 remote_offset: Some(0),
             }),
         }
@@ -274,6 +284,55 @@ impl io::Write for UnionFileWriter {
         }
 
         self.remote_writer.flush()
+    }
+}
+
+async fn xxxx(schema: &DataSchema, row_groups: Vec<usize>) -> Result<Vec<DataBlock>> {
+    let input = Reader;
+
+    let builder = ArrowReaderBuilder::new(input).await?;
+    let mut stream = builder
+        .with_row_groups(row_groups)
+        .with_batch_size(usize::MAX)
+        .build()?;
+
+    let mut blocks = Vec::new();
+
+    while let Some(reader) = stream.next_row_group().await? {
+        for record in reader {
+            let record = record?;
+            let num_rows = record.num_rows();
+            let mut columns = Vec::with_capacity(record.num_columns());
+            for (array, field) in record.columns().iter().zip(schema.fields()) {
+                let data_type = field.data_type();
+                columns.push(BlockEntry::new(
+                    Value::from_arrow_rs(array.clone(), data_type)?,
+                    || (data_type.clone(), num_rows),
+                ))
+            }
+            let block = DataBlock::new(columns, num_rows);
+            blocks.push(block);
+        }
+    }
+
+    Ok(blocks)
+}
+
+struct Reader;
+
+impl AsyncFileReader for Reader {
+    fn get_bytes(
+        &mut self,
+        range: std::ops::Range<u64>,
+    ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
+        todo!()
+    }
+
+    fn get_metadata<'a>(
+        &'a mut self,
+        options: Option<&'a ArrowReaderOptions>,
+    ) -> BoxFuture<'a, errors::Result<Arc<ParquetMetaData>>> {
+        todo!()
     }
 }
 
