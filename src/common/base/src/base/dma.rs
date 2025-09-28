@@ -277,7 +277,7 @@ impl<F: AsFd> DmaFile<F> {
     }
 }
 
-type AsyncDmaFile = DmaFile<AsyncFile>;
+pub type AsyncDmaFile = DmaFile<AsyncFile>;
 
 impl AsyncDmaFile {
     async fn open_fd(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncFile> {
@@ -311,24 +311,34 @@ impl AsyncDmaFile {
     }
 
     /// Attempts to open a file in read-only mode.
-    async fn open(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
+    pub async fn open(
+        path: impl AsRef<Path>,
+        dio: bool,
+        align: Option<Alignment>,
+    ) -> io::Result<AsyncDmaFile> {
         let file = AsyncDmaFile::open_fd(path, dio).await?;
-        Self::open_dma(file).await
+        Self::new(file, align).await
     }
 
     /// Opens a file in write-only mode.
     async fn create(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncDmaFile> {
         let file = AsyncDmaFile::create_fd(path, dio).await?;
-        Self::open_dma(file).await
+        Self::new(file, None).await
     }
 
-    async fn open_dma(file: AsyncFile) -> io::Result<AsyncDmaFile> {
-        let fd = file.as_raw_fd();
-        let stat = asyncify(move || {
-            rustix::fs::fstatvfs(unsafe { BorrowedFd::borrow_raw(fd) }).map_err(|e| e.into())
-        })
-        .await?;
-        let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
+    async fn new(file: AsyncFile, align: Option<Alignment>) -> io::Result<AsyncDmaFile> {
+        let alignment = match align {
+            Some(align) => align,
+            None => {
+                let fd = file.as_raw_fd();
+                let stat = asyncify(move || {
+                    rustix::fs::fstatvfs(unsafe { BorrowedFd::borrow_raw(fd) })
+                        .map_err(|e| e.into())
+                })
+                .await?;
+                Alignment::new(stat.f_bsize.max(512) as usize).unwrap()
+            }
+        };
 
         Ok(AsyncDmaFile {
             fd: file,
@@ -340,6 +350,50 @@ impl AsyncDmaFile {
 
     async fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         self.fd.seek(pos).await
+    }
+
+    pub async fn read_range(&mut self, range: Range<u64>) -> io::Result<(DmaBuffer, Range<usize>)> {
+        let align_start = self.align_down(range.start as usize);
+        let align_end = self.align_up(range.end as usize);
+
+        let buf = Vec::with_capacity_in(align_end - align_start, DmaAllocator::new(self.alignment));
+        self.set_buffer(buf);
+
+        if align_start != 0 {
+            let offset = self.seek(SeekFrom::Start(align_start as u64)).await?;
+            if offset as usize != align_start {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "range out of range",
+                ));
+            }
+        }
+
+        let fd = self.fd.as_raw_fd();
+        let mut buf = self.buf.take().unwrap();
+        let alignment = self.alignment;
+        let mut n;
+        loop {
+            (buf, n) = asyncify(move || {
+                let remain = buf.capacity() - buf.len();
+                let mut file = DmaFile {
+                    fd: unsafe { BorrowedFd::borrow_raw(fd) },
+                    alignment,
+                    buf: Some(buf),
+                    length: 0,
+                };
+                file.read_direct(remain).map(|n| (file.buf.unwrap(), n))
+            })
+            .await?;
+            if align_start + buf.len() >= range.end as usize {
+                break;
+            }
+            if n == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
+            }
+        }
+        let rt_range = range.start as usize - align_start..range.end as usize - align_start;
+        Ok((buf, rt_range))
     }
 }
 
@@ -673,7 +727,7 @@ pub async fn dma_read_file(
     mut writer: impl io::Write,
 ) -> io::Result<usize> {
     const BUFFER_SIZE: usize = 1024 * 1024;
-    let mut file = AsyncDmaFile::open(path.as_ref(), true).await?;
+    let mut file = AsyncDmaFile::open(path.as_ref(), true, None).await?;
     let buf = Vec::with_capacity_in(
         file.align_up(BUFFER_SIZE),
         DmaAllocator::new(file.alignment),
@@ -708,42 +762,8 @@ pub async fn dma_read_file_range(
     path: impl AsRef<Path>,
     range: Range<u64>,
 ) -> io::Result<(DmaBuffer, Range<usize>)> {
-    let mut file = AsyncDmaFile::open(path.as_ref(), true).await?;
-
-    let align_start = file.align_down(range.start as usize);
-    let align_end = file.align_up(range.end as usize);
-
-    let buf = Vec::with_capacity_in(align_end - align_start, DmaAllocator::new(file.alignment));
-    file.set_buffer(buf);
-
-    if align_start != 0 {
-        let offset = file.seek(SeekFrom::Start(align_start as u64)).await?;
-        if offset as usize != align_start {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "range out of range",
-            ));
-        }
-    }
-
-    let mut n;
-    loop {
-        (file, n) = asyncify(move || {
-            let buf = file.buffer();
-            let remain = buf.capacity() - buf.len();
-            file.read_direct(remain).map(|n| (file, n))
-        })
-        .await?;
-        if align_start + file.buffer().len() >= range.end as usize {
-            break;
-        }
-        if n == 0 {
-            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
-        }
-    }
-
-    let rt_range = range.start as usize - align_start..range.end as usize - align_start;
-    Ok((file.buf.unwrap(), rt_range))
+    let mut file = AsyncDmaFile::open(path.as_ref(), true, None).await?;
+    file.read_range(range).await
 }
 
 #[cfg(test)]
@@ -800,7 +820,7 @@ mod tests {
         assert_eq!(length, want.len());
         assert_eq!(got, want);
 
-        let file = AsyncDmaFile::open(filename, dio).await?;
+        let file = AsyncDmaFile::open(filename, dio, None).await?;
         let align = file.alignment;
         drop(file);
 
@@ -870,7 +890,7 @@ mod tests {
         let bufs = vec![IoSlice::new(&want)];
         dma_write_file_vectored(filename, &bufs).await.unwrap();
 
-        let mut file = AsyncDmaFile::open(filename, true).await.unwrap();
+        let mut file = AsyncDmaFile::open(filename, true, None).await.unwrap();
         let buf = Vec::with_capacity_in(file_size, DmaAllocator::new(file.alignment));
         file.set_buffer(buf);
 

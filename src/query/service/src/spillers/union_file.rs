@@ -18,6 +18,8 @@ use std::io::Write;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
+use databend_common_base::base::dma_buffer_to_bytes;
+use databend_common_base::base::AsyncDmaFile;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
 use databend_common_base::runtime::Runtime;
@@ -296,7 +298,7 @@ pub struct UnionFile {
 
 struct FileReader {
     meta: Arc<ParquetMetaData>,
-    local_path: Option<TempPath>,
+    local: Option<(TempPath, AsyncDmaFile)>,
     remote_reader: Reader,
     remote_offset: Option<u64>,
 }
@@ -307,7 +309,7 @@ impl AsyncFileReader for FileReader {
         range: std::ops::Range<u64>,
     ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
         async move {
-            let local_bytes = if let Some(local_path) = &self.local_path {
+            let local_bytes = if let Some((_, file)) = &mut self.local {
                 let local_range = self
                     .remote_offset
                     .map(|offset| {
@@ -320,16 +322,10 @@ impl AsyncFileReader for FileReader {
                             offset..offset
                         }
                     })
-                    .unwrap_or(range);
+                    .unwrap_or(range.clone());
 
-                let (dma_buf, rt_range) = databend_common_base::base::dma_read_file_range(
-                    local_path,
-                    local_range.clone(),
-                )
-                .await?;
-
-                let bytes =
-                    databend_common_base::base::dma_buffer_to_bytes(dma_buf).slice(rt_range);
+                let (dma_buf, rt_range) = file.read_range(local_range.clone()).await?;
+                let bytes = dma_buffer_to_bytes(dma_buf).slice(rt_range);
                 if local_range == range {
                     return Ok(bytes);
                 }
@@ -341,7 +337,7 @@ impl AsyncFileReader for FileReader {
             let remote_range = self
                 .remote_offset
                 .map(|offset| (range.start - offset)..(range.end - offset))
-                .unwrap_or(range.clone());
+                .unwrap_or(range);
 
             let remote_bytes = self
                 .remote_reader
@@ -350,10 +346,10 @@ impl AsyncFileReader for FileReader {
                 .map_err(|err| errors::ParquetError::External(Box::new(err)))?;
 
             if local_bytes.is_some() {
-                Ok(opendal::Buffer::from_iter(
-                    local_bytes.into_iter().chain(remote_bytes.into_iter()),
+                Ok(
+                    opendal::Buffer::from_iter(local_bytes.into_iter().chain(remote_bytes))
+                        .to_bytes(),
                 )
-                .to_bytes())
             } else {
                 Ok(remote_bytes.to_bytes())
             }
@@ -409,9 +405,16 @@ impl<A: SpillAdapter> SpillerInner<A> {
         row_groups: Vec<usize>,
     ) -> Result<Vec<DataBlock>> {
         let op = self.local_operator.as_ref().unwrap_or(&self.operator);
+
         let input = FileReader {
             meta,
-            local_path: file.local_path,
+            local: if let Some(path) = file.local_path {
+                let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
+                let file = AsyncDmaFile::open(&path, true, alignment).await?;
+                Some((path, file))
+            } else {
+                None
+            },
             remote_offset: file.remote_offset,
             remote_reader: op.reader(&file.remote_path).await?,
         };
