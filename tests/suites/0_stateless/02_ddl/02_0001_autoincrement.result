@@ -17,16 +17,25 @@ Error: APIError: QueryFailed: [1005]error:
 
 <<<<
 >>>> 
+create or replace table test_autoincrement (c1 int, c2 int autoincrement start 0 increment 0);
+
+Error: APIError: QueryFailed: [1005]error: 
+  --> SQL:1:93
+  |
+1 | create or replace table test_autoincrement (c1 int, c2 int autoincrement start 0 increment 0)
+  | ------                                                                                      ^ INCREMENT cannot be 0 
+  | |                                                                                            
+  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+<<<<
+>>>> 
 create or replace table test_autoincrement (c1 int, c2 int autoincrement, c3 float autoincrement, c4 int identity (1,2), c5 int autoincrement start 1 increment 2, c6 decimal(20, 2) autoincrement);
 
 >>>> 
-insert into test_autoincrement (c1) values(0);
+insert into test_autoincrement (c1) values(0),(0);
 
-1
->>>> 
-insert into test_autoincrement (c1) values(0);
-
-1
+2
 >>>> 
 insert into test_autoincrement (c1) values(0);
 
