@@ -21,15 +21,18 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_sql::ColumnSet;
@@ -95,7 +98,7 @@ impl MemoryInnerJoin {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if !self.state.columns.is_empty() {
+        if self.state.chunks.is_empty() || !self.state.columns.is_empty() {
             return;
         }
 
@@ -293,7 +296,7 @@ impl Join for MemoryInnerJoin {
 
         let probe_block = data.project(&self.probe_projections);
 
-        with_join_hash_method!(|T| match self.state.hash_table.deref() {
+        let joined_stream = with_join_hash_method!(|T| match self.state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
                 let probe_keys_stream = table.probe_keys(keys, valids)?;
 
@@ -307,7 +310,16 @@ impl Join for MemoryInnerJoin {
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
-        })
+        })?;
+
+        match self.desc.other_predicate.as_ref() {
+            None => Ok(joined_stream),
+            Some(_) => Ok(FilterJoinStream::create(
+                self.desc.clone(),
+                self.function_ctx.clone(),
+                joined_stream,
+            )),
+        }
     }
 
     fn final_probe(&mut self) -> Result<Box<dyn JoinStream>> {
@@ -411,6 +423,55 @@ impl JoinStream for MemoryInnerJoinStream {
             }
 
             return Ok(Some(result_block));
+        }
+    }
+}
+
+pub struct FilterJoinStream {
+    desc: Arc<HashJoinDesc>,
+    inner: Box<dyn JoinStream>,
+    function_ctx: FunctionContext,
+}
+
+impl FilterJoinStream {
+    pub fn create(
+        desc: Arc<HashJoinDesc>,
+        function_ctx: FunctionContext,
+        inner: Box<dyn JoinStream>,
+    ) -> Box<dyn JoinStream> {
+        Box::new(FilterJoinStream {
+            desc,
+            inner,
+            function_ctx,
+        })
+    }
+}
+
+impl JoinStream for FilterJoinStream {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            let Some(data_block) = self.inner.next()? else {
+                return Ok(None);
+            };
+
+            if data_block.is_empty() {
+                continue;
+            }
+
+            let filter = self.desc.other_predicate.as_ref().unwrap();
+            let evaluator = Evaluator::new(&data_block, &self.function_ctx, &BUILTIN_FUNCTIONS);
+            let filter = evaluator
+                .run(filter)?
+                .try_downcast::<BooleanType>()
+                .unwrap();
+
+            let data_block = data_block.filter_boolean_value(&filter)?;
+
+            if data_block.is_empty() {
+                continue;
+            }
+
+            return Ok(Some(data_block));
         }
     }
 }

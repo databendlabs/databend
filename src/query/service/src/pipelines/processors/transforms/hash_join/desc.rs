@@ -138,7 +138,13 @@ impl HashJoinDesc {
                 Expr::Constant(Constant { ref scalar, .. }) if !scalar.is_null() => {
                     Ok(Some(cast_expr_to_non_null_boolean(expr)?))
                 }
-                _ => Ok(Some(expr)),
+                _ => Ok(Some(check_function(
+                    None,
+                    "is_true",
+                    &[],
+                    &[expr],
+                    &BUILTIN_FUNCTIONS,
+                )?)),
             },
             other => other,
         }
