@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future;
 use std::io;
 use std::io::Write;
 use std::sync::Arc;
@@ -30,6 +31,8 @@ use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use futures::future::BoxFuture;
+use futures::future::FutureExt;
+use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowReaderBuilder;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_writer::compute_leaves;
@@ -94,11 +97,7 @@ pub struct FileWriter<W: Write + Send> {
 }
 
 impl<W: Write + Send> FileWriter<W> {
-    pub(super) fn new(
-        props: Arc<WriterProperties>,
-        table_schema: &TableSchema,
-        w: W,
-    ) -> errors::Result<Self> {
+    fn new(props: Arc<WriterProperties>, table_schema: &TableSchema, w: W) -> errors::Result<Self> {
         let schema = Arc::new(Schema::from(table_schema));
 
         let parquet = ArrowSchemaConverter::new()
@@ -131,6 +130,7 @@ impl<W: Write + Send> FileWriter<W> {
         for block in blocks {
             row_group.write(block)?;
         }
+
         Ok(self.flush_row_group(row_group)?)
     }
 }
@@ -287,60 +287,40 @@ impl io::Write for UnionFileWriter {
     }
 }
 
-async fn xxxx(schema: &DataSchema, row_groups: Vec<usize>) -> Result<Vec<DataBlock>> {
-    let input = Reader;
-
-    let builder = ArrowReaderBuilder::new(input).await?;
-    let mut stream = builder
-        .with_row_groups(row_groups)
-        .with_batch_size(usize::MAX)
-        .build()?;
-
-    let mut blocks = Vec::new();
-
-    while let Some(reader) = stream.next_row_group().await? {
-        for record in reader {
-            let record = record?;
-            let num_rows = record.num_rows();
-            let mut columns = Vec::with_capacity(record.num_columns());
-            for (array, field) in record.columns().iter().zip(schema.fields()) {
-                let data_type = field.data_type();
-                columns.push(BlockEntry::new(
-                    Value::from_arrow_rs(array.clone(), data_type)?,
-                    || (data_type.clone(), num_rows),
-                ))
-            }
-            let block = DataBlock::new(columns, num_rows);
-            blocks.push(block);
-        }
-    }
-
-    Ok(blocks)
-}
-
-struct Reader;
-
-impl AsyncFileReader for Reader {
-    fn get_bytes(
-        &mut self,
-        range: std::ops::Range<u64>,
-    ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
-        todo!()
-    }
-
-    fn get_metadata<'a>(
-        &'a mut self,
-        options: Option<&'a ArrowReaderOptions>,
-    ) -> BoxFuture<'a, errors::Result<Arc<ParquetMetaData>>> {
-        todo!()
-    }
-}
-
 #[derive(Debug)]
 pub struct UnionFile {
     local_path: Option<TempPath>,
     remote_path: String,
     remote_offset: Option<usize>,
+}
+
+struct FileReader {
+    meta: Arc<ParquetMetaData>,
+    reader: Reader,
+}
+
+impl AsyncFileReader for FileReader {
+    fn get_bytes(
+        &mut self,
+        range: std::ops::Range<u64>,
+    ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
+        async move {
+            let buf = self
+                .reader
+                .read(range)
+                .await
+                .map_err(|err| errors::ParquetError::External(Box::new(err)))?;
+            Ok(buf.to_bytes())
+        }
+        .boxed()
+    }
+
+    fn get_metadata<'a>(
+        &'a mut self,
+        _options: Option<&'a ArrowReaderOptions>,
+    ) -> BoxFuture<'a, errors::Result<Arc<ParquetMetaData>>> {
+        future::ready(Ok(self.meta.clone())).boxed()
+    }
 }
 
 impl<A: SpillAdapter> SpillerInner<A> {
@@ -373,6 +353,47 @@ impl<A: SpillAdapter> SpillerInner<A> {
 
         let props = WriterProperties::default().into();
         Ok(FileWriter::new(props, schema, union)?)
+    }
+
+    pub(super) async fn xxxx(
+        &self,
+        file: UnionFile,
+        meta: Arc<ParquetMetaData>,
+        schema: &DataSchema,
+        row_groups: Vec<usize>,
+    ) -> Result<Vec<DataBlock>> {
+        let op = self.local_operator.as_ref().unwrap_or(&self.operator);
+        let input = FileReader {
+            meta,
+            reader: op.reader(&file.remote_path).await?,
+        };
+
+        let builder = ArrowReaderBuilder::new(input).await?;
+        let mut stream = builder
+            .with_row_groups(row_groups)
+            .with_batch_size(usize::MAX)
+            .build()?;
+
+        let mut blocks = Vec::new();
+
+        while let Some(reader) = stream.next_row_group().await? {
+            for record in reader {
+                let record = record?;
+                let num_rows = record.num_rows();
+                let mut columns = Vec::with_capacity(record.num_columns());
+                for (array, field) in record.columns().iter().zip(schema.fields()) {
+                    let data_type = field.data_type();
+                    columns.push(BlockEntry::new(
+                        Value::from_arrow_rs(array.clone(), data_type)?,
+                        || (data_type.clone(), num_rows),
+                    ))
+                }
+                let block = DataBlock::new(columns, num_rows);
+                blocks.push(block);
+            }
+        }
+
+        Ok(blocks)
     }
 }
 
