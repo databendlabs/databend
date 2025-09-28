@@ -139,7 +139,6 @@ impl TransformAsyncFunction {
             let counter = counter_lock.read().await;
             let fn_range_collect = |start: u64, end: u64, step: i64| {
                 (0..end - start)
-                    .into_iter()
                     .map(|num| start + num * step as u64)
                     .collect::<Vec<_>>()
             };
