@@ -211,34 +211,26 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
-    // For table ids of each table with the same name, we keep the largest one, e.g.
+    // For table ids of each table with the same name, we keep the last one, e.g.
     // ```
-    //  create or replace table t ... ; -- table_id 1
-    //  create or replace table t ... ; -- table_id 2
+    //  create or replace table t ... ; -- table_id a
+    //  create or replace table t ... ; -- table_id b
     // ```
-    // table_id 2 will be kept for table t (we do not care about the table name though),
+    // table_id `b` will be kept for table t,
     //
-    // Please note that the largest table id might be "invisible", e.g.
+    // Please note that the largest table id might be dropped, e.g.
     // ```
     //  create or replace table t ... ; -- table_id 1
-    //  create or replace table t ... ; -- table_id 2
+    //  ...
     //  drop table t ... ;
     // ```
-    // In this case, table_id 2 is marked as dropped.
 
     let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
 
     for (ident, table_history) in table_history_kvs {
         let id_list = &table_history.id_list;
-        if !id_list.is_empty() {
-            // Make sure that the last table id is also the max one (of each table name).
-            let last_id = id_list.last().unwrap();
-            {
-                let max_id = id_list.iter().max().unwrap();
-                assert_eq!(max_id, last_id);
-            }
+        if let Some(last_id) = id_list.last() {
             latest_table_ids.insert(*last_id);
-
             for table_id in id_list.iter() {
                 args.push((TableId::new(*table_id), ident.table_name.clone()));
             }
