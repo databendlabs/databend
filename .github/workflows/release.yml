@@ -199,7 +199,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_default ]
+    needs:
+      - create_release
+      - build_default
     strategy:
       fail-fast: false
       matrix:
@@ -237,7 +239,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_default ]
+    needs:
+      - create_release
+      - build_default
     strategy:
       fail-fast: false
       matrix:
@@ -287,7 +291,10 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_default, build_docker ]
+    needs:
+      - create_release
+      - build_default
+      - build_docker
     strategy:
       fail-fast: false
       matrix:
@@ -304,6 +311,8 @@ jobs:
           ref: ${{ needs.create_release.outputs.sha }}
       - name: Publish Debug Symbols
         uses: ./.github/actions/publish_debug_symbols
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ matrix.target }}
@@ -317,7 +326,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_default ]
+    needs:
+      - create_release
+      - build_default
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -396,7 +407,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_docker ]
+    needs:
+      - create_release
+      - build_docker
     strategy:
       fail-fast: false
       matrix:
@@ -471,7 +484,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, build_default ]
+    needs:
+      - create_release
+      - build_default
     strategy:
       matrix:
         arch:
@@ -528,7 +543,10 @@ jobs:
           gh release edit ${{ needs.create_release.outputs.version }} --draft=false
 
   sha256sums:
-    needs: [ create_release, publish, distribution ]
+    needs:
+      - create_release
+      - publish
+      - distribution
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -561,7 +579,9 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [ create_release, notify ]
+    needs:
+      - create_release
+      - notify
     steps:
       - uses: actions/checkout@v4
         with:
@@ -591,7 +611,9 @@ jobs:
       - Linux
       - 4c16g
       - aws
-    needs: [ create_release, notify ]
+    needs:
+      - create_release
+      - notify
     steps:
       - uses: actions/checkout@v4
         with:
@@ -617,7 +639,10 @@ jobs:
             await script({context, core})
 
   benchmark:
-    needs: [ create_release, docker_service, notify ]
+    needs:
+      - create_release
+      - docker_service
+      - notify
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
@@ -629,6 +654,9 @@ jobs:
       target: all
 
   deb:
-    needs: [ create_release, distribution, notify ]
+    needs:
+      - create_release
+      - distribution
+      - notify
     uses: ./.github/workflows/deb.yml
     secrets: inherit
