@@ -104,7 +104,7 @@ pub struct SpillerInner<A: SpillAdapter> {
     pub(super) adapter: A,
     pub(super) operator: Operator,
     location_prefix: String,
-    temp_dir: Option<Arc<TempDir>>,
+    pub(super) temp_dir: Option<Arc<TempDir>>,
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
     use_parquet: bool,
