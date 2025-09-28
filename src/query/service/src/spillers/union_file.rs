@@ -154,7 +154,7 @@ pub struct UnionFileWriter {
     local: Option<LocalDst>,
     remote: String,
     remote_writer: BufferWriter,
-    remote_offset: usize,
+    remote_offset: u64,
 }
 
 impl UnionFileWriter {
@@ -262,7 +262,7 @@ impl io::Write for UnionFileWriter {
         };
 
         if offset != 0 {
-            self.remote_offset = offset;
+            self.remote_offset = offset as _;
         }
 
         for buf in dma_buf {
@@ -291,12 +291,14 @@ impl io::Write for UnionFileWriter {
 pub struct UnionFile {
     local_path: Option<TempPath>,
     remote_path: String,
-    remote_offset: Option<usize>,
+    remote_offset: Option<u64>,
 }
 
 struct FileReader {
     meta: Arc<ParquetMetaData>,
-    reader: Reader,
+    local_path: Option<TempPath>,
+    remote_reader: Reader,
+    remote_offset: Option<u64>,
 }
 
 impl AsyncFileReader for FileReader {
@@ -305,8 +307,12 @@ impl AsyncFileReader for FileReader {
         range: std::ops::Range<u64>,
     ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
         async move {
+            let range = match self.remote_offset {
+                Some(offset) => (range.start + offset)..(range.end + offset),
+                None => range,
+            };
             let buf = self
-                .reader
+                .remote_reader
                 .read(range)
                 .await
                 .map_err(|err| errors::ParquetError::External(Box::new(err)))?;
@@ -355,7 +361,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
         Ok(FileWriter::new(props, schema, union)?)
     }
 
-    pub(super) async fn xxxx(
+    pub(super) async fn load_row_groups(
         &self,
         file: UnionFile,
         meta: Arc<ParquetMetaData>,
@@ -365,7 +371,9 @@ impl<A: SpillAdapter> SpillerInner<A> {
         let op = self.local_operator.as_ref().unwrap_or(&self.operator);
         let input = FileReader {
             meta,
-            reader: op.reader(&file.remote_path).await?,
+            local_path: file.local_path,
+            remote_offset: file.remote_offset,
+            remote_reader: op.reader(&file.remote_path).await?,
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
