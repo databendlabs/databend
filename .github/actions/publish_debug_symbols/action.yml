@@ -31,7 +31,7 @@ runs:
       id: prepare
       shell: bash
       run: |
-        publish_name="databend-query-${{ inputs.version }}-${{ inputs.target }}.${{ inputs.category }}.debug.tar.gz"
+        publish_name="databend-${{ inputs.version }}-${{ inputs.target }}.${{ inputs.category }}.debug.tar.gz"
         tar -C distro/bin -czvf ${publish_name} databend-query.debug
         echo "name=$publish_name" >> $GITHUB_OUTPUT
 
