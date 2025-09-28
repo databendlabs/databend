@@ -756,11 +756,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -787,11 +788,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -806,11 +808,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -825,11 +828,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -844,11 +848,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -863,11 +868,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -882,11 +888,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -901,11 +908,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -923,11 +931,12 @@ error:
 1 | COPY INTO mytable
   | ---- while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 2 |                 FROM @my_stage
 3 |                 FILE_FORMAT = (
@@ -1279,11 +1288,12 @@ error:
   | |                                                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
