@@ -17,12 +17,14 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_sql::plans::AddTableRowAccessPolicyPlan;
+use databend_common_sql::resolve_type_name_by_str;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -41,6 +43,11 @@ pub struct AddTableRowAccessPolicyInterpreter {
 impl AddTableRowAccessPolicyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AddTableRowAccessPolicyPlan) -> Result<Self> {
         Ok(AddTableRowAccessPolicyInterpreter { ctx, plan })
+    }
+
+    fn parse_type_name(type_str: &str) -> Result<TableDataType> {
+        let table_data_type = resolve_type_name_by_str(type_str, false)?;
+        Ok(table_data_type.remove_nullable())
     }
 }
 
@@ -99,20 +106,31 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
             .await?;
 
         // check if column type match to the input type
-        let policy_data_types: Vec<String> =
-            policy.args.iter().map(|arg| arg.1.to_lowercase()).collect();
+        let mut policy_data_types = Vec::new();
+        for (_, type_str) in &policy.args {
+            let policy_type = Self::parse_type_name(type_str)?;
+            policy_data_types.push(policy_type);
+        }
 
         let mut columns_ids = vec![];
         let schema = table.schema();
         let table_info = table.get_table_info();
         let columns = self.plan.columns.clone();
-        for column in &columns {
+
+        if columns.len() != policy_data_types.len() {
+            return Err(ErrorCode::UnmatchColumnDataType(format!(
+                         "Number of columns ({}) does not match the number of row access policy arguments ({})",
+                         columns.len(), policy_data_types.len()
+                 )));
+        }
+
+        for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {
             if let Some((_, data_field)) = schema.column_with_name(column) {
-                let data_type = data_field.data_type().to_string().to_lowercase();
-                if !policy_data_types.contains(&data_type.to_string()) {
+                let column_type = data_field.data_type();
+                if policy_data_type != column_type.remove_nullable() {
                     return Err(ErrorCode::UnmatchColumnDataType(format!(
                         "Column '{}' data type {} does not match to the row access policy {}",
-                        column, data_type, policy_name,
+                        column, column_type, policy_name,
                     )));
                 } else {
                     columns_ids.push(data_field.column_id);
