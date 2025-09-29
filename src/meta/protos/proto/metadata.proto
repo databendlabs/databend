@@ -43,6 +43,18 @@ message ComputedExpr {
   }
 }
 
+// AutoIncrement expression
+message AutoIncrementExpr {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 start = 1;
+  int64 step = 2;
+  bool is_ordered = 3;
+  // Used to concatenate AutoIncrementKey in `DefaultExprBinder::parse_and_bind`
+  uint32 column_id = 4;
+}
+
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
@@ -61,4 +73,6 @@ message DataField {
   uint32 column_id = 4;
 
   optional ComputedExpr computed_expr = 5;
+
+  optional AutoIncrementExpr auto_increment_expr = 6;
 }

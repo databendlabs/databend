@@ -100,6 +100,7 @@ fn test_decode_v85_table_meta() -> anyhow::Result<()> {
             version: "".to_string(),
             options: btreemap! {},
         }},
+        row_access_policy_columns_ids: None,
         constraints: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;

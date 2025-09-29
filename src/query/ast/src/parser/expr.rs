@@ -1680,6 +1680,24 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
     )(i)
 }
 
+#[allow(clippy::from_str_radix_10)]
+pub fn literal_i64(i: Input) -> IResult<i64> {
+    let decimal = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| i64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
+    );
+    let hex = map_res(literal_hex_str, |lit| {
+        i64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
+    });
+
+    rule!(
+        #decimal
+        | #hex
+    )(i)
+}
+
 pub fn literal_number(i: Input) -> IResult<Literal> {
     let decimal_uint = map_res(
         rule! {

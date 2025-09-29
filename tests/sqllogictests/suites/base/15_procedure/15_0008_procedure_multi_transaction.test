@@ -217,15 +217,16 @@ select count(*) from fuse_snapshot('test_procedure_multi','t1');
 ----
 1
 
+# Do auto analyze after delete and update.
 query I
 select count(*) from fuse_snapshot('test_procedure_multi','t2');
 ----
-1
+2
 
 query I
 select count(*) from fuse_snapshot('test_procedure_multi','t3');
 ----
-1
+2
 
 # Cleanup
 statement ok

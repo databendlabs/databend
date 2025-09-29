@@ -25,8 +25,10 @@ use databend_common_meta_api::get_u64_value;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::send_txn;
 use databend_common_meta_api::txn_core_util::txn_replace_exact;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::TableInfo;
@@ -547,6 +549,102 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_table_clean_autoincrement() -> Result<()> {
+    // 1. Prepare local meta service
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
+
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    // 2. Setup test fixture by using local meta store
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    // Adjust retention period to 0, so that dropped tables will be vacuumed immediately
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // 3. Prepare test db and table
+    let ctx = fixture.new_query_ctx().await?;
+    let db_name = "test_vacuum_clean_ownership";
+    let tbl_name = "t";
+    fixture
+        .execute_command(format!("create database {db_name}").as_str())
+        .await?;
+    fixture
+        .execute_command(
+            format!("create table {db_name}.{tbl_name} (a int autoincrement)").as_str(),
+        )
+        .await?;
+
+    // 4. Ensure that table auto increment sequence exist right after table is created
+    let tenant = ctx.get_tenant();
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+
+    let auto_increment_key_0 = AutoIncrementKey::new(table.get_id(), 0);
+    let sequence_storage_ident_0 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_0);
+
+    let v = meta.get_pb(&sequence_storage_ident_0).await?;
+    assert!(v.is_some());
+
+    // 5. Ensure that table auto increment sequence exist right after table is replace
+    fixture
+        .execute_command(
+            format!("create or replace table {db_name}.{tbl_name} (a int autoincrement, b int autoincrement)").as_str(),
+        )
+        .await?;
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&tenant, db_name, tbl_name)
+        .await?;
+
+    let auto_increment_key_1 = AutoIncrementKey::new(table.get_id(), 0);
+    let sequence_storage_ident_1 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_1);
+    let auto_increment_key_2 = AutoIncrementKey::new(table.get_id(), 1);
+    let sequence_storage_ident_2 =
+        AutoIncrementStorageIdent::new_generic(&tenant, auto_increment_key_2);
+
+    let v = meta.get_pb(&sequence_storage_ident_0).await?;
+    assert!(v.is_some());
+    let v = meta.get_pb(&sequence_storage_ident_1).await?;
+    assert!(v.is_some());
+    let v = meta.get_pb(&sequence_storage_ident_2).await?;
+    assert!(v.is_some());
+
+    // 6. Ensure that column b auto increment sequence exist right after column b is drop
+    fixture
+        .execute_command(format!("alter table {db_name}.{tbl_name} drop column b").as_str())
+        .await?;
+    let v = meta.get_pb(&sequence_storage_ident_2).await?;
+    assert!(v.is_some());
+
+    // 7. Drop test table
+    fixture
+        .execute_command(format!("drop table {db_name}.{tbl_name}").as_str())
+        .await?;
+
+    // 8. Vacuum dropped tables
+    fixture.execute_command("vacuum drop table").await?;
+
+    // 9. Ensure that table auto increment sequence is cleaned up
+    let v = meta.get_pb(&sequence_storage_ident_0).await?;
+    assert!(v.is_none());
+    let v = meta.get_pb(&sequence_storage_ident_1).await?;
+    assert!(v.is_none());
+    let v = meta.get_pb(&sequence_storage_ident_2).await?;
+    assert!(v.is_none());
 
     Ok(())
 }

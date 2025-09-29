@@ -53,14 +53,18 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let (http_query_count, last_query_finished_at_http) = HttpQueryManager::instance().status();
     let status = session_manager.get_current_session_status();
 
-    let last_query_finished_at = [
-        status.last_query_started_at.map(unix_timestamp_secs),
-        last_query_finished_at_http,
-    ]
-    .iter()
-    .flatten()
-    .max()
-    .copied();
+    let last_query_finished_at = if status.last_query_started_at.is_none() {
+        None
+    } else {
+        [
+            status.last_query_finished_at.map(unix_timestamp_secs),
+            last_query_finished_at_http,
+        ]
+        .iter()
+        .flatten()
+        .max()
+        .copied()
+    };
 
     let status = InstanceStatus {
         running_queries_count: status.running_queries_count.max(http_query_count),

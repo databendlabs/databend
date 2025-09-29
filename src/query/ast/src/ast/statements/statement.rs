@@ -27,6 +27,7 @@ use super::*;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
+use crate::ast::statements::role::AlterRoleStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::statements::warehouse::ShowWarehousesStmt;
@@ -247,11 +248,13 @@ pub enum Statement {
     CreateRole {
         create_option: CreateOption,
         role_name: String,
+        comment: Option<String>,
     },
     DropRole {
         if_exists: bool,
         role_name: String,
     },
+    AlterRole(AlterRoleStmt),
     Grant(GrantStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
@@ -610,6 +613,7 @@ impl Statement {
             | Statement::RenameWorkloadGroup(..)
             | Statement::SetWorkloadQuotasGroup(..)
             | Statement::UnsetWorkloadQuotasGroup(..) => false,
+            Statement::AlterRole(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -880,6 +884,7 @@ impl Display for Statement {
             Statement::CreateRole {
                 create_option,
                 role_name: role,
+                comment,
             } => {
                 write!(f, "CREATE")?;
                 if let CreateOption::CreateOrReplace = create_option {
@@ -890,6 +895,9 @@ impl Display for Statement {
                     write!(f, " IF NOT EXISTS")?;
                 }
                 write!(f, " {}", QuotedString(role, '\''))?;
+                if let Some(comment) = comment {
+                    write!(f, " COMMENT = '{comment}'")?;
+                }
             }
             Statement::DropRole {
                 if_exists,
@@ -1081,6 +1089,7 @@ impl Display for Statement {
             Statement::RenameWorkloadGroup(stmt) => write!(f, "{stmt}")?,
             Statement::SetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
             Statement::UnsetWorkloadQuotasGroup(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterRole(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

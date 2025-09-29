@@ -59,6 +59,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -92,6 +94,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -555,6 +559,23 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        info!("Swap table from req:{:?}", req);
+
+        if self
+            .immutable_catalog
+            .exists_database(req.tenant(), &req.origin_table.db_name)
+            .await?
+        {
+            return Err(ErrorCode::Unimplemented(
+                "Cannot swap tables from(to) system databases",
+            ));
+        }
+
+        self.mutable_catalog.swap_table(req).await
+    }
+
+    #[async_backtrace::framed]
     async fn create_table_index(&self, req: CreateTableIndexReq) -> Result<()> {
         self.mutable_catalog.create_table_index(req).await
     }
@@ -894,5 +915,12 @@ impl Catalog for DatabaseCatalog {
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.mutable_catalog.rename_dictionary(req).await
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
+        self.mutable_catalog.get_autoincrement_next_value(req).await
     }
 }

@@ -73,6 +73,7 @@ use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
@@ -151,6 +152,7 @@ use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
 use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
+use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
@@ -1043,6 +1045,17 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::SwapWith { target_table } => {
+                Ok(Plan::SwapTable(Box::new(SwapTablePlan {
+                    tenant,
+                    if_exists: *if_exists,
+                    catalog: catalog.clone(),
+                    database: database.clone(),
+                    table: table.clone(),
+                    target_table: normalize_identifier(target_table, &self.name_resolution_ctx)
+                        .name,
+                })))
+            }
             AlterTableAction::ModifyTableComment { new_comment } => {
                 Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
                     if_exists: *if_exists,
@@ -1091,7 +1104,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment, is_deterministic, is_nextval) =
+                let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
@@ -1110,6 +1123,7 @@ impl Binder {
                     option,
                     is_deterministic,
                     is_nextval,
+                    is_autoincrement,
                 })))
             }
             AlterTableAction::AddConstraint { constraint } => {
@@ -1180,7 +1194,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment, _, _) =
+                            let (field, comment, _, _, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -1657,13 +1671,15 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String, bool, bool)> {
+    ) -> Result<(TableField, String, bool, bool, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
         let mut is_nextval = false;
+        let mut is_autoincrement = false;
         let mut field = TableField::new(&name, data_type);
+
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
@@ -1693,10 +1709,37 @@ impl Binder {
                     field = field.with_computed_expr(Some(ComputedExpr::Stored(expr)));
                     is_deterministic = false;
                 }
+                ColumnExpr::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                } => {
+                    if !matches!(
+                        field.data_type().remove_nullable(),
+                        TableDataType::Number(_) | TableDataType::Decimal(_)
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
+                        ));
+                    }
+                    field.auto_increment_expr = Some(AutoIncrementExpr {
+                        column_id: table_schema.next_column_id(),
+                        start: *start,
+                        step: *step,
+                        is_ordered: *is_ordered,
+                    });
+                    is_autoincrement = true;
+                }
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment, is_deterministic, is_nextval))
+        Ok((
+            field,
+            comment,
+            is_deterministic,
+            is_nextval,
+            is_autoincrement,
+        ))
     }
 
     #[async_backtrace::framed]
@@ -1705,6 +1748,7 @@ impl Binder {
         columns: &[ColumnDefinition],
     ) -> Result<(TableSchemaRef, Vec<String>)> {
         let mut has_computed = false;
+        let mut has_autoincrement = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
@@ -1721,13 +1765,34 @@ impl Binder {
                             .parse_default_expr_to_string(&field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
+                    ColumnExpr::AutoIncrement {
+                        start,
+                        step,
+                        is_ordered,
+                    } => {
+                        if !matches!(
+                            field.data_type().remove_nullable(),
+                            TableDataType::Number(_) | TableDataType::Decimal(_)
+                        ) {
+                            return Err(ErrorCode::SemanticError(
+                                "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
+                            ));
+                        }
+                        has_autoincrement = true;
+                        field.auto_increment_expr = Some(AutoIncrementExpr {
+                            column_id: 0,
+                            start: *start,
+                            step: *step,
+                            is_ordered: *is_ordered,
+                        });
+                    }
                     _ => has_computed = true,
                 }
             }
             fields.push(field);
         }
 
-        let fields = if has_computed {
+        let mut fields = if has_computed {
             let mut source_fields = Vec::with_capacity(fields.len());
             for (column, field) in columns.iter().zip(fields.iter()) {
                 match &column.expr {
@@ -1770,6 +1835,18 @@ impl Binder {
         } else {
             fields
         };
+        // update auto increment expr column id
+        if has_autoincrement {
+            let table_schema = TableSchema::new(fields.clone());
+
+            for (i, table_field) in table_schema.fields().iter().enumerate() {
+                let Some(auto_increment_expr) = fields[i].auto_increment_expr.as_mut() else {
+                    continue;
+                };
+
+                auto_increment_expr.column_id = table_field.column_id;
+            }
+        }
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;

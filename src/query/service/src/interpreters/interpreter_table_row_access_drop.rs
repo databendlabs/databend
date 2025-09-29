@@ -77,8 +77,7 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            action: SetTableRowAccessPolicyAction::Unset(self.plan.policy.to_string()),
-            policy_id: *policy_id.data,
+            action: SetTableRowAccessPolicyAction::Unset(*policy_id.data),
         };
 
         let _resp = catalog.set_table_row_access_policy(req).await?;

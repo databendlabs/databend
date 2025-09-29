@@ -1,0 +1,33 @@
+statement error unexpected `\(`
+copy into t1 from(select * from (select 1))
+
+statement error unexpected `where`
+copy into t1 from (select a from @s1 where a > 1)
+
+statement error unexpected `order`
+copy into t1 from (select a from @s1 order by a)
+
+statement error unexpected `,`
+copy into t1 from (select a, b from '@s1', t2)
+
+statement error unexpected `group`
+copy into t1 from (select a from @s1 group by a)
+
+statement ok
+create or replace stage s1;
+
+statement ok
+copy into @s1 from (select 1)
+
+
+statement ok
+create or replace table t1(a int);
+
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select JSON_ARRAY_ELEMENTS(parse_json($1)) as c1 from @s1);
+
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select sum($1::int) as c1 from @s1) file_format=(type=csv);
+
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select rank() OVER (ORDER BY $1), $1 from @s1) file_format=(type=csv);

@@ -272,7 +272,7 @@ impl JwkKeyStore {
                     reason.as_str().to_string(),
                     err.code(),
                 );
-                warn!("Failed to load JWKS from {}: {}", self.url, err);
+                warn!("failed to load JWKS from {}: {}", self.url, err);
                 if !old_keys.is_empty() {
                     return Ok(());
                 }
@@ -290,7 +290,21 @@ impl JwkKeyStore {
         if new_keys.keys().eq(old_keys.keys()) {
             return Ok(());
         }
-        info!("JWKS keys from {} changed.", self.url);
+        info!(
+            "JWKS keys changed on refresh: url={}, reason={}, old={}, new={}",
+            self.url,
+            reason.as_str(),
+            old_keys
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            new_keys
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
 
         // append the new keys to the end of recent_cached_maps
         {
@@ -341,8 +355,8 @@ impl JwkKeyStore {
             };
             if need_retry {
                 warn!(
-                    "key id {} not found in jwk store, try to peek the latest keys",
-                    key_id
+                    "key id not found in jwk store, try to peek the latest keys: key={}, url={}",
+                    key_id, self.url
                 );
                 self.maybe_refresh_cached_keys(true).await?;
                 *self.last_retry_time.write() = Some(Instant::now());

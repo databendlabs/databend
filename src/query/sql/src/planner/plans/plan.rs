@@ -41,6 +41,7 @@ use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
+use crate::plans::AlterRolePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
@@ -163,6 +164,7 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
+use crate::plans::SwapTablePlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
@@ -267,6 +269,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    SwapTable(Box<SwapTablePlan>),
     ModifyTableComment(Box<ModifyTableCommentPlan>),
     RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
@@ -353,6 +356,7 @@ pub enum Plan {
     // Role
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
+    AlterRole(Box<AlterRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
     RevokePriv(Box<RevokePrivilegePlan>),
