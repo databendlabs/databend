@@ -88,6 +88,7 @@ pub async fn count_prefix(
         }
 
         // Extend dir_counts if needed and add counts for all parent directories of current key
+        #[allow(clippy::needless_range_loop)]
         for i in last_parts.len()..new_part_ends.len() {
             last_parts.push((new_part_ends[i], 0));
         }
