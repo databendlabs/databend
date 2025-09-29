@@ -79,7 +79,7 @@ pub async fn count_prefix(
         while last_parts.len() > common_prefix_count {
             let (end_pos, count) = last_parts.pop().unwrap();
 
-            if last_parts.len() + 1 <= max_depth {
+            if last_parts.len() < max_depth {
                 yield KeysCount {
                     prefix: last_key[..end_pos].to_string(),
                     count,
@@ -91,18 +91,16 @@ pub async fn count_prefix(
         for i in last_parts.len()..new_part_ends.len() {
             last_parts.push((new_part_ends[i], 0));
         }
-        for i in 0..last_parts.len() {
-            last_parts[i].1 += 1;
+        for (_, count) in &mut last_parts {
+            *count += 1;
         }
 
         last_key = key;
     }
 
     // Yield remaining directories
-    while !last_parts.is_empty() {
-        let (end_pos, count) = last_parts.pop().unwrap();
-
-        if last_parts.len() + 1 <= max_depth {
+    while let Some((end_pos, count)) = last_parts.pop() {
+        if last_parts.len() < max_depth {
             yield KeysCount {
                 prefix: last_key[..end_pos].to_string(),
                 count,
@@ -146,10 +144,7 @@ mod tests {
     }
 
     async fn error_stream() -> BoxStream<'static, Result<String, io::Error>> {
-        Box::pin(stream::iter(vec![Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Test error",
-        ))]))
+        Box::pin(stream::iter(vec![Err(io::Error::other("Test error"))]))
     }
 
     async fn collect_results(
