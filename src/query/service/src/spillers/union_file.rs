@@ -14,6 +14,7 @@
 
 use std::future;
 use std::io;
+use std::io::Cursor;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -35,6 +36,7 @@ use futures::future::FutureExt;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowReaderBuilder;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
@@ -56,23 +58,33 @@ use super::SpillerInner;
 
 pub struct RowGroupWriter {
     schema: Arc<Schema>,
+    props: WriterPropertiesPtr,
     writers: Vec<ArrowColumnWriter>,
+    num_rows: usize,
 }
 
 impl RowGroupWriter {
     fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
         let writers = get_column_writers(parquet, props, &schema).unwrap();
-        Self { schema, writers }
+        Self {
+            schema,
+            props: props.clone(),
+            writers,
+            num_rows: 0,
+        }
     }
 
     pub(super) fn write(&mut self, block: DataBlock) -> errors::Result<()> {
+        let num_rows = block.num_rows();
+        let columns = block.take_columns();
         let mut writer_iter = self.writers.iter_mut();
-        for (field, entry) in self.schema.fields().iter().zip(block.take_columns()) {
+        for (field, entry) in self.schema.fields().iter().zip(columns) {
             let array = (&entry.to_column()).into();
             for col in compute_leaves(field, &array).unwrap() {
                 writer_iter.next().unwrap().write(&col)?;
             }
         }
+        self.num_rows += num_rows;
         Ok(())
     }
 
@@ -88,6 +100,62 @@ impl RowGroupWriter {
 
     pub fn memory_size(&self) -> usize {
         self.writers.iter().map(|w| w.memory_size()).sum()
+    }
+
+    pub(super) fn into_block(self) -> Result<DataBlock> {
+        let RowGroupWriter {
+            schema,
+            props,
+            writers,
+            num_rows,
+        } = self;
+
+        let data_schema = DataSchema::try_from(schema.as_ref())?;
+        if num_rows == 0 {
+            return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
+        }
+
+        let parquet_schema = ArrowSchemaConverter::new()
+            .with_coerce_types(props.coerce_types())
+            .convert(&schema)?;
+
+        let mut file_writer = SerializedFileWriter::new(
+            Cursor::new(Vec::new()),
+            parquet_schema.root_schema_ptr(),
+            props.clone(),
+        )?;
+
+        {
+            let mut row_group_writer = file_writer.next_row_group()?;
+            for writer in writers {
+                writer.close()?.append_to_row_group(&mut row_group_writer)?;
+            }
+            row_group_writer.close()?;
+        }
+
+        let cursor = file_writer.into_inner()?;
+        let parquet_bytes = bytes::Bytes::from(cursor.into_inner());
+
+        let mut reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
+        let mut blocks = Vec::new();
+        while let Some(batch) = reader.next() {
+            let batch = batch?;
+            let (block, _) = DataBlock::from_record_batch(&data_schema, &batch)?;
+            blocks.push(block);
+        }
+
+        if blocks.is_empty() {
+            return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
+        }
+
+        let block = if blocks.len() == 1 {
+            blocks.into_iter().next().unwrap()
+        } else {
+            DataBlock::concat(&blocks)?
+        };
+
+        debug_assert_eq!(block.num_rows(), num_rows);
+        Ok(block)
     }
 }
 
