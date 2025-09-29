@@ -96,7 +96,7 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
 
 impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
-        let other_predicate = Self::join_predicate(&join.non_equi_conditions)?;
+        let other_predicate = Self::join_predicate(&join.join_type, &join.non_equi_conditions)?;
 
         let build_keys: Vec<Expr> = join
             .build_keys
@@ -125,7 +125,10 @@ impl HashJoinDesc {
         })
     }
 
-    fn join_predicate(non_equi_conditions: &[RemoteExpr]) -> Result<Option<Expr>> {
+    fn join_predicate(
+        join_type: &JoinType,
+        non_equi_conditions: &[RemoteExpr],
+    ) -> Result<Option<Expr>> {
         let expr = non_equi_conditions
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
@@ -138,13 +141,19 @@ impl HashJoinDesc {
                 Expr::Constant(Constant { ref scalar, .. }) if !scalar.is_null() => {
                     Ok(Some(cast_expr_to_non_null_boolean(expr)?))
                 }
-                _ => Ok(Some(check_function(
-                    None,
-                    "is_true",
-                    &[],
-                    &[expr],
-                    &BUILTIN_FUNCTIONS,
-                )?)),
+                _ => {
+                    if matches!(join_type, JoinType::RightMark) {
+                        Ok(Some(expr))
+                    } else {
+                        Ok(Some(check_function(
+                            None,
+                            "is_true",
+                            &[],
+                            &[expr],
+                            &BUILTIN_FUNCTIONS,
+                        )?))
+                    }
+                }
             },
             other => other,
         }
