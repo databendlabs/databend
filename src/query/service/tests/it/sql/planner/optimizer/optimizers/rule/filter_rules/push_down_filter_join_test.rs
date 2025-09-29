@@ -139,14 +139,14 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
             }
             RelOperator::Join(join) => {
                 let join_type = match join.join_type {
-                    JoinType::Inner(false) => "Inner",
-                    JoinType::Inner(true) => "InnerAny",
-                    JoinType::Left(false) => "Left",
-                    JoinType::Left(true) => "LeftAny",
-                    JoinType::Right(false) => "Right",
-                    JoinType::Right(true) => "RightAny",
+                    JoinType::Inner => "Inner",
+                    JoinType::InnerAny => "InnerAny",
+                    JoinType::Left => "Left",
+                    JoinType::LeftAny => "LeftAny",
+                    JoinType::Right => "Right",
+                    JoinType::RightAny => "RightAny",
                     JoinType::Full => "Full",
-                    JoinType::Cross(_) => "Cross",
+                    JoinType::Cross => "Cross",
                     JoinType::LeftSemi => "LeftSemi",
                     JoinType::RightSemi => "RightSemi",
                     JoinType::LeftAnti => "LeftAnti",
@@ -291,7 +291,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     println!("Actual after pattern:\n{}", normalized_after);
 
     // Special handling for RIGHT JOIN which might be converted to INNER JOIN
-    if matches!(test_case.join_type, JoinType::Right(_)) {
+    if matches!(test_case.join_type, JoinType::Right) {
         // Check if filter was pushed down correctly even if join type changed
         let expected_filter_pushed =
             normalized_after_expected.contains("Filter") && normalized_after.contains("Filter");
@@ -423,7 +423,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests that a filter on the right table join key converts LEFT JOIN to INNER JOIN",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id > 10",
             filter_expr: right_id_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [t2.id > 10]
               Left Join [t1.id = t2.id]
@@ -444,7 +444,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests that a complex filter with multiple conditions is handled correctly",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id > 10 AND t2.value < 100",
             filter_expr: right_combined_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [and(t2.id > 10, t2.value < 100)]
               Left Join [t1.id = t2.id]
@@ -464,7 +464,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests that a filter on a non-join column of the right table converts LEFT JOIN to INNER JOIN",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.value < 100",
             filter_expr: right_value_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [t2.value < 100]
               Left Join [t1.id = t2.id]
@@ -484,7 +484,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests that an IS NULL filter on the right table is handled correctly in LEFT JOIN",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NULL",
             filter_expr: is_null_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [t2.id = Null]
               Left Join [t1.id = t2.id]
@@ -505,7 +505,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests that an IS NOT NULL filter on the right table converts LEFT JOIN to INNER JOIN",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NOT NULL",
             filter_expr: is_not_null_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [noteq(t2.id, Null)]
               Left Join [t1.id = t2.id]
@@ -526,7 +526,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests a complex OR filter with multiple conditions on the right table (TPC-DS query 13 pattern)",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE (t2.id > 10 AND t2.value < 50) OR (t2.id > 20 AND t2.qty < 100)",
             filter_expr: complex_or_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [or(and(t2.id > 10, t2.value < 50), and(t2.id > 20, t2.qty < 100))]
               Left Join [t1.id = t2.id]
@@ -547,7 +547,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests a complex filter with AND-OR conditions including a date filter (TPC-DS query 72 pattern)",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE ((t2.id > 10 AND t2.value < 50) OR (t2.id > 20 AND t2.qty < 100)) AND t2.date > 200",
             filter_expr: complex_and_or_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [and(or(and(t2.id > 10, t2.value < 50), and(t2.id > 20, t2.qty < 100)), t2.date > 200)]
               Left Join [t1.id = t2.id]
@@ -567,7 +567,7 @@ fn test_push_down_filter_left_join() -> Result<()> {
             description: "Tests a filter with an IF function (similar to CASE expression in TPC-DS query 72 pattern)",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE IF(t2.id = 10, 1, 0) > 0",
             filter_expr: case_filter.clone(),
-            join_type: JoinType::Left(false),
+            join_type: JoinType::Left,
             before_pattern: r#"
             Filter [if(t2.id = 10, 1, 0) > 0]
               Left Join [t1.id = t2.id]
@@ -692,7 +692,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests that a filter on the left table is pushed down in RIGHT JOIN",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE t1.a > 10",
             filter_expr: left_a_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [t1.a > 10]
               Right Join [t1.id = t2.id]
@@ -712,7 +712,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests that a complex filter with multiple conditions on left table is handled correctly",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE t1.a > 10 AND t1.value < 100",
             filter_expr: left_combined_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [and(t1.a > 10, t1.value < 100)]
               Right Join [t1.id = t2.id]
@@ -732,7 +732,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests that an IS NULL filter on the left table is handled correctly in RIGHT JOIN",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE t1.a IS NULL",
             filter_expr: is_null_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [t1.a = Null]
               Right Join [t1.id = t2.id]
@@ -752,7 +752,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests that an IS NOT NULL filter on the left table is handled correctly in RIGHT JOIN",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE t1.a IS NOT NULL",
             filter_expr: is_not_null_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [noteq(t1.a, Null)]
               Right Join [t1.id = t2.id]
@@ -772,7 +772,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests a complex OR filter with multiple conditions on the left table",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE (t1.a > 10 AND t1.value < 50) OR (t1.a > 20 AND t1.qty < 100)",
             filter_expr: complex_or_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [or(and(t1.a > 10, t1.value < 50), and(t1.a > 20, t1.qty < 100))]
               Right Join [t1.id = t2.id]
@@ -793,7 +793,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests a complex filter with AND-OR conditions including a date filter on left table",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE ((t1.a > 10 AND t1.value < 50) OR (t1.a > 20 AND t1.qty < 100)) AND t1.date > 200",
             filter_expr: complex_and_or_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [and(or(and(t1.a > 10, t1.value < 50), and(t1.a > 20, t1.qty < 100)), t1.date > 200)]
               Right Join [t1.id = t2.id]
@@ -813,7 +813,7 @@ fn test_push_down_filter_right_join() -> Result<()> {
             description: "Tests a filter with an IF function on left table",
             sql_example: "SELECT * FROM t1 RIGHT JOIN t2 ON t1.id = t2.id WHERE IF(t1.a = 10, 1, 0) > 0",
             filter_expr: case_filter.clone(),
-            join_type: JoinType::Right(false),
+            join_type: JoinType::Right,
             before_pattern: r#"
             Filter [if(t1.a = 10, 1, 0) > 0]
               Right Join [t1.id = t2.id]
@@ -1161,12 +1161,7 @@ fn test_push_down_complex_or_expressions() -> Result<()> {
 
     // Create join
     // SQL: FROM t1 INNER JOIN t2 ON t1.id = t2.id
-    let join = builder.join(
-        left_scan,
-        right_scan,
-        vec![join_condition],
-        JoinType::Inner(false),
-    );
+    let join = builder.join(left_scan, right_scan, vec![join_condition], JoinType::Inner);
 
     // Create filter
     // SQL: SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id

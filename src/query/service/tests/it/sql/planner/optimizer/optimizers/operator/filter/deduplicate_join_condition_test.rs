@@ -244,12 +244,12 @@ fn test_basic_deduplication() -> Result<()> {
     let cond_t2_t3 = builder.join_condition(t2_id.clone(), t3_id.clone(), false);
 
     // Create the join tree: (t3 JOIN (t1 JOIN t2))
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = builder.join(
         t3,
         join_t1_t2,
         vec![cond_t1_t3.clone(), cond_t2_t3.clone()],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -336,12 +336,12 @@ fn test_different_data_types() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false);
 
     // Create the join tree: ((t1 JOIN t2) JOIN t3)
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = builder.join(
         join_t1_t2,
         t3,
         vec![cond_t2_t3.clone(), cond_t1_t3.clone()],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -430,7 +430,7 @@ fn test_no_redundant_conditions() -> Result<()> {
     let cond_name = builder.join_condition(t1_name.clone(), t2_name.clone(), false);
 
     // Create the join
-    let join = builder.join(t1, t2, vec![cond_id, cond_name], JoinType::Inner(false));
+    let join = builder.join(t1, t2, vec![cond_id, cond_name], JoinType::Inner);
 
     // Define expected before optimization patterns
     let before_patterns = [
@@ -545,18 +545,18 @@ fn test_complex_transitive_conditions() -> Result<()> {
     let cond_t1_t4 = builder.join_condition(t1_id.clone(), t4_id.clone(), false); // Redundant: t1-t2-t3-t4
 
     // Create a complex join tree: (((t1 JOIN t2) JOIN t3) JOIN t4)
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_t1_t2_t3 = builder.join(
         join_t1_t2,
         t3,
         vec![cond_t2_t3, cond_t1_t3],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
     let join_tree = builder.join(
         join_t1_t2_t3,
         t4,
         vec![cond_t3_t4, cond_t2_t4, cond_t1_t4],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -660,12 +660,12 @@ fn test_null_equal_conditions() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), true); // Redundant
 
     // Create the join tree: (t1 JOIN t2) JOIN t3
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = builder.join(
         join_t1_t2,
         t3,
         vec![cond_t2_t3, cond_t1_t3],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -764,12 +764,12 @@ fn test_mixed_null_equal_conditions() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), true); // Redundant but with different is_null_equal
 
     // Create the join tree: (t1 JOIN t2) JOIN t3
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = builder.join(
         join_t1_t2,
         t3,
         vec![cond_t2_t3, cond_t1_t3],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -868,13 +868,8 @@ fn test_non_inner_join_types() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false); // Redundant
 
     // Create a join tree with non-inner joins
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Left(false));
-    let join_tree = builder.join(
-        join_t1_t2,
-        t3,
-        vec![cond_t2_t3, cond_t1_t3],
-        JoinType::Left(false),
-    );
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Left);
+    let join_tree = builder.join(join_t1_t2, t3, vec![cond_t2_t3, cond_t1_t3], JoinType::Left);
 
     // Define expected before optimization patterns
     let before_patterns = [
@@ -975,7 +970,7 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
         t1,
         t2,
         vec![cond_t1_t2_id, cond_t1_t2_name, cond_t1_t2_id_duplicate],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -1025,7 +1020,7 @@ fn test_empty_conditions() -> Result<()> {
     let t2 = builder.table_scan(1, "t2");
 
     // Create a join with no conditions
-    let join = builder.join(t1, t2, vec![], JoinType::Inner(false));
+    let join = builder.join(t1, t2, vec![], JoinType::Inner);
 
     // Define expected before optimization patterns
     let before_patterns = [
@@ -1102,7 +1097,7 @@ fn test_duplicate_identical_conditions() -> Result<()> {
     let cond2 = builder.join_condition(t1_id.clone(), t2_id.clone(), false); // Duplicate
 
     // Create a join with duplicate conditions
-    let join = builder.join(t1, t2, vec![cond1, cond2], JoinType::Inner(false));
+    let join = builder.join(t1, t2, vec![cond1, cond2], JoinType::Inner);
 
     // Define expected before optimization patterns
     let before_patterns = [
@@ -1197,12 +1192,12 @@ fn test_commutative_and_circular_conditions() -> Result<()> {
     let cond_t3_t1 = builder.join_condition(t3_id.clone(), t1_id.clone(), false); // Same as t1.id = t3.id but reversed
 
     // Create a join tree
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = builder.join(
         join_t1_t2,
         t3,
         vec![cond_t2_t3, cond_t3_t1],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -1332,15 +1327,14 @@ fn test_deep_nested_join_tree() -> Result<()> {
     let cond_t1_t5 = builder.join_condition(t1_id.clone(), t5_id.clone(), false); // Redundant due to transitivity
 
     // Create a deeply nested join tree: ((((t1 JOIN t2) JOIN t3) JOIN t4) JOIN t5)
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
-    let join_t1_t2_t3 = builder.join(join_t1_t2, t3, vec![cond_t2_t3], JoinType::Inner(false));
-    let join_t1_t2_t3_t4 =
-        builder.join(join_t1_t2_t3, t4, vec![cond_t3_t4], JoinType::Inner(false));
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
+    let join_t1_t2_t3 = builder.join(join_t1_t2, t3, vec![cond_t2_t3], JoinType::Inner);
+    let join_t1_t2_t3_t4 = builder.join(join_t1_t2_t3, t4, vec![cond_t3_t4], JoinType::Inner);
     let join_tree = builder.join(
         join_t1_t2_t3_t4,
         t5,
         vec![cond_t4_t5, cond_t1_t5],
-        JoinType::Inner(false),
+        JoinType::Inner,
     );
 
     // Define expected before optimization patterns
@@ -1442,13 +1436,8 @@ fn test_mixed_join_types() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false); // Redundant
 
     // Create a mixed join tree: (t1 INNER JOIN t2) LEFT JOIN t3
-    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner(false));
-    let join_tree = builder.join(
-        join_t1_t2,
-        t3,
-        vec![cond_t2_t3, cond_t1_t3],
-        JoinType::Left(false),
-    );
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
+    let join_tree = builder.join(join_t1_t2, t3, vec![cond_t2_t3, cond_t1_t3], JoinType::Left);
 
     // Define expected before optimization patterns
     let before_patterns = [
