@@ -135,6 +135,11 @@ impl<W: Write + Send> FileWriter<W> {
 
         Ok(self.flush_row_group(row_group)?)
     }
+
+    fn schema_descr(&self) -> SchemaDescriptor {
+        let tp = self.writer.schema_descr().root_schema_ptr();
+        SchemaDescriptor::new(tp)
+    }
 }
 
 impl FileWriter<UnionFileWriter> {
@@ -453,9 +458,10 @@ mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use databend_common_exception::Result;
     use databend_common_expression::infer_table_schema;
+    use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
     use databend_common_expression::FromData;
-    use opendal::Operator;
+    use databend_common_storage::DataOperator;
     use parquet::file::properties::WriterProperties;
 
     use super::*;
@@ -471,18 +477,21 @@ mod tests {
 
         let props = WriterProperties::default().into();
 
-        let block = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![7, 8, 9])]);
+        let block = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![7, 8, 9]),
+            StringType::from_data(vec!["c", "d", "e"]),
+        ]);
 
-        let table_schema = infer_table_schema(&block.infer_schema())?;
+        let data_schema = block.infer_schema();
+        let table_schema = infer_table_schema(&data_schema)?;
         let executor = GlobalIORuntime::instance();
         let memory = 1024 * 1024 * 100;
 
         let pool = BufferPool::create(executor, memory, 3);
+        let op = DataOperator::instance().operator();
 
-        let builder = opendal::services::Fs::default().root("/tmp");
-        let op = Operator::new(builder)?.finish();
-
-        let writer = op.writer("path").await?;
+        let path = "path";
+        let writer = op.writer(path).await?;
         let remote = pool.buffer_write(writer);
 
         // let dir = todo!();
@@ -492,14 +501,58 @@ mod tests {
         // let align = todo!();
         // let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
 
-        let file = UnionFileWriter::without_local("path".to_string(), remote);
+        let file = UnionFileWriter::without_local(path.to_string(), remote);
         let mut file_writer = FileWriter::new(props, &table_schema, file)?;
 
-        let x = file_writer.spill(vec![block])?;
-        println!("{x:#?}");
+        let mut row_groups = vec![];
+        let row_group = file_writer.spill(vec![block])?;
+        row_groups.push((*row_group).clone());
 
-        let x = file_writer.finish()?;
-        println!("{x:#?}");
+        let schema_descr = file_writer.schema_descr().into();
+
+        let (file_metadata, file) = file_writer.finish()?;
+
+        let metadata = parquet::file::metadata::FileMetaData::new(
+            file_metadata.version,
+            file_metadata.num_rows,
+            file_metadata.created_by.clone(),
+            file_metadata.key_value_metadata.clone(),
+            schema_descr,
+            None,
+        );
+
+        let meta = ParquetMetaData::new(metadata, row_groups).into();
+
+        let input = FileReader {
+            meta,
+            local: None,
+            remote_reader: op.reader(&file.remote_path).await?,
+            remote_offset: None,
+        };
+
+        let builder = ArrowReaderBuilder::new(input).await?;
+        let mut stream = builder.with_batch_size(usize::MAX).build()?;
+
+        let mut blocks = Vec::new();
+
+        while let Some(reader) = stream.next_row_group().await? {
+            for record in reader {
+                let record = record?;
+                let num_rows = record.num_rows();
+                let mut columns = Vec::with_capacity(record.num_columns());
+                for (array, field) in record.columns().iter().zip(data_schema.fields()) {
+                    let data_type = field.data_type();
+                    columns.push(BlockEntry::new(
+                        Value::from_arrow_rs(array.clone(), data_type)?,
+                        || (data_type.clone(), num_rows),
+                    ))
+                }
+                let block = DataBlock::new(columns, num_rows);
+                blocks.push(block);
+            }
+        }
+
+        println!("{:?}", blocks);
 
         Ok(())
     }
