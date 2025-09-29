@@ -18,6 +18,7 @@ use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
@@ -45,4 +46,10 @@ pub trait RowAccessPolicyApi: Send + Sync {
         &self,
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError>;
+
+    async fn get_row_access_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<SeqV<RowAccessPolicyMeta>>, MetaError>;
 }
