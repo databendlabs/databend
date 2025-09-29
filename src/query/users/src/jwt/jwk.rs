@@ -294,8 +294,16 @@ impl JwkKeyStore {
             "JWKS keys changed on refresh: url={}, reason={}, old={}, new={}",
             self.url,
             reason.as_str(),
-            old_keys.keys(),
-            new_keys.keys()
+            old_keys
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
+            new_keys
+                .keys()
+                .map(|k| k.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
         );
 
         // append the new keys to the end of recent_cached_maps
