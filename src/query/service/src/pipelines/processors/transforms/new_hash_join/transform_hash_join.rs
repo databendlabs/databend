@@ -39,6 +39,7 @@ pub struct TransformHashJoin {
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
     projection: ColumnSet,
+    initialize: bool,
 }
 
 impl TransformHashJoin {
@@ -58,6 +59,7 @@ impl TransformHashJoin {
             joined_data: None,
             stage_sync_barrier,
             projection,
+            initialize: false,
             stage: Stage::Build(BuildState {
                 finished: false,
                 build_data: None,
@@ -97,6 +99,13 @@ impl Processor for TransformHashJoin {
             let joined_data = joined_data.project(&self.projection);
             self.joined_port.push_data(Ok(joined_data));
             return Ok(Event::NeedConsume);
+        }
+
+        if !self.initialize {
+            self.initialize = true;
+            self.build_port.set_need_data();
+            self.probe_port.set_need_data();
+            return Ok(Event::NeedData);
         }
 
         match &mut self.stage {
