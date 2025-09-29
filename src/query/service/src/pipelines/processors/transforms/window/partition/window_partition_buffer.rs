@@ -238,3 +238,8 @@ impl WindowPartitionBuffer {
         Ok(result)
     }
 }
+
+trait Spill {
+    async fn spill(blocks: Vec<DataBlock>) -> Result<i16>;
+    async fn restore(ordinal: Vec<i16>) -> Result<Vec<DataBlock>>;
+}
