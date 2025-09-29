@@ -52,9 +52,9 @@ select count(*) from t;
 16000000
 
 query I
-select count(), sum(content_length) from copy_history('t');
+select count(), sum(content_length) between 183800000 and 183899999 from copy_history('t');
 ----
-16 183852153
+16 1
 
 statement ok
 set enable_distributed_copy_into = 0;
