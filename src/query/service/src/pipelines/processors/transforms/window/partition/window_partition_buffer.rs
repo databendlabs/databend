@@ -93,7 +93,7 @@ impl WindowPartitionBuffer {
             {
                 if let Some(data_blocks) = self
                     .partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
+                    .fetch_data_blocks(partition_id, &option)
                 {
                     return self
                         .spiller
@@ -112,7 +112,7 @@ impl WindowPartitionBuffer {
                     self.partition_buffer.partition_memory_size(partition_id);
                 if let Some(data_blocks) = self
                     .partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
+                    .fetch_data_blocks(partition_id, &option)
                 {
                     partitions_to_spill.push((partition_id, data_blocks));
                     accumulated_bytes += partition_memory_size;
@@ -190,7 +190,7 @@ impl WindowPartitionBuffer {
                 let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
                 if let Some(data_blocks) = self
                     .partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
+                    .fetch_data_blocks(partition_id, &option)
                 {
                     result.extend(self.concat_data_blocks(data_blocks)?);
                 }
@@ -203,7 +203,7 @@ impl WindowPartitionBuffer {
                 let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
                 if let Some(data_blocks) = self
                     .restored_partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
+                    .fetch_data_blocks(partition_id, &option)
                 {
                     result.extend(self.concat_data_blocks(data_blocks)?);
                 }

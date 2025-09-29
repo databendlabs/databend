@@ -68,76 +68,40 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
 
     pub async fn spill(&mut self) -> Result<()> {
         let spill_unit_size = self.memory_settings.spill_unit_size;
-        let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-        let next_to_restore_partition_id = (self.next_to_restore_partition_id + 1).max(0) as usize;
+        let next_to_restore_partition_id = (self.next_to_restore_partition_id + 1) as usize;
 
         let mut preferred_partition: Option<(usize, usize)> = None;
         for partition_id in (next_to_restore_partition_id..self.num_partitions).rev() {
             if self.partition_buffer.is_partition_empty(partition_id) {
                 continue;
             }
+            if let Some(blocks) = self.partition_buffer.fetch_data_blocks(
+                partition_id,
+                &PartitionBufferFetchOption::PickPartitionWithThreshold(spill_unit_size),
+            ) {
+                let ordinal = self.spill.spill(blocks).await?;
+                self.spilled_partition_ordinals[partition_id].push(ordinal);
+                return Ok(());
+            }
+
             let partition_size = self.partition_buffer.partition_memory_size(partition_id);
-            if partition_size > spill_unit_size
-                && preferred_partition
-                    .as_ref()
-                    .map(|(_, size)| partition_size > *size)
-                    .unwrap_or(true)
+            if preferred_partition
+                .as_ref()
+                .map(|(_, size)| partition_size > *size)
+                .unwrap_or(true)
             {
                 preferred_partition = Some((partition_id, partition_size));
             }
         }
 
         if let Some((partition_id, _)) = preferred_partition {
-            if let Some(blocks) = self
+            let blocks = self
                 .partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-            {
-                let ordinal = self.spill.spill(blocks).await?;
-                self.spilled_partition_ordinals[partition_id].push(ordinal);
-                return Ok(());
-            }
-        }
-
-        let mut partitions: Vec<(usize, usize)> = (next_to_restore_partition_id
-            ..self.num_partitions)
-            .filter_map(|partition_id| {
-                if self.partition_buffer.is_partition_empty(partition_id) {
-                    None
-                } else {
-                    Some((
-                        partition_id,
-                        self.partition_buffer.partition_memory_size(partition_id),
-                    ))
-                }
-            })
-            .collect();
-
-        if partitions.is_empty() {
-            self.can_spill = false;
-            return Ok(());
-        }
-
-        partitions.sort_by(|a, b| b.1.cmp(&a.1));
-
-        let mut spilled_any = false;
-        let mut spilled_bytes = 0;
-        for (partition_id, partition_size) in partitions {
-            if let Some(blocks) = self
-                .partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-            {
-                let ordinal = self.spill.spill(blocks).await?;
-                self.spilled_partition_ordinals[partition_id].push(ordinal);
-                spilled_any = true;
-                spilled_bytes += partition_size;
-            }
-
-            if spilled_bytes >= spill_unit_size {
-                break;
-            }
-        }
-
-        if !spilled_any {
+                .fetch_data_blocks(partition_id, &PartitionBufferFetchOption::ReadPartition)
+                .unwrap();
+            let ordinal = self.spill.spill(blocks).await?;
+            self.spilled_partition_ordinals[partition_id].push(ordinal);
+        } else {
             self.can_spill = false;
         }
         Ok(())
@@ -155,14 +119,11 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
                 self.spill.restore(ordinals).await?
             };
 
-            if !self.partition_buffer.is_partition_empty(partition_id) {
-                let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-                if let Some(blocks) = self
-                    .partition_buffer
-                    .fetch_data_blocks(partition_id, &option)?
-                {
-                    result.extend(self.concat_data_blocks(blocks)?);
-                }
+            if let Some(blocks) = self
+                .partition_buffer
+                .fetch_data_blocks(partition_id, &PartitionBufferFetchOption::ReadPartition)
+            {
+                result.extend(self.concat_data_blocks(blocks)?);
             }
 
             if !result.is_empty() {

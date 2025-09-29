@@ -52,8 +52,8 @@ impl PartitionBuffer {
         &mut self,
         partition_id: usize,
         option: &PartitionBufferFetchOption,
-    ) -> Result<Option<Vec<DataBlock>>> {
-        let data_blocks = match option {
+    ) -> Option<Vec<DataBlock>> {
+        match option {
             PartitionBufferFetchOption::ReadPartition => {
                 if !self.partition_data[partition_id].is_empty() {
                     Some(self.partition_data[partition_id].clone())
@@ -71,8 +71,7 @@ impl PartitionBuffer {
                     None
                 }
             }
-        };
-        Ok(data_blocks)
+        }
     }
 
     pub fn memory_size(&self) -> usize {
