@@ -1,7 +1,7 @@
 >>>> 
 create or replace table test_autoincrement (c1 int, c2 string autoincrement);
 
-Error: APIError: QueryFailed: [1065]AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types
+Error: APIError: QueryFailed: [1065]AUTOINCREMENT only supports Decimal or Numeric (e.g. INT32) types
 <<<<
 >>>> 
 create or replace table test_autoincrement (c1 int, c2 int default 1 autoincrement);
@@ -40,7 +40,7 @@ insert into test_autoincrement (c1) values(0);
 >>>> 
 alter table test_autoincrement add column c4 string autoincrement;
 
-Error: APIError: QueryFailed: [1065]AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types
+Error: APIError: QueryFailed: [1065]AUTOINCREMENT only supports Decimal or Numeric (e.g. INT32) types
 <<<<
 >>>> 
 alter table test_autoincrement add column c4 int default autoincrement;

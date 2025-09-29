@@ -1714,22 +1714,7 @@ impl Binder {
                     step,
                     is_ordered,
                 } => {
-                    if !matches!(
-                        field.data_type().remove_nullable(),
-                        TableDataType::Number(_) | TableDataType::Decimal(_)
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
-                        ));
-                    }
-                    if step == &0 {
-                        return Err(ErrorCode::SemanticError("INCREMENT cannot be 0"));
-                    }
-                    if step < &0 {
-                        return Err(ErrorCode::SemanticError(
-                            "INCREMENT does not currently support negative numbers",
-                        ));
-                    }
+                    Self::check_autoincrement_expr(&field, step, is_ordered)?;
                     field.auto_increment_expr = Some(AutoIncrementExpr {
                         column_id: table_schema.next_column_id(),
                         start: *start,
@@ -1748,6 +1733,31 @@ impl Binder {
             is_nextval,
             is_autoincrement,
         ))
+    }
+
+    fn check_autoincrement_expr(field: &TableField, step: &i64, is_ordered: &bool) -> Result<()> {
+        if !matches!(
+            field.data_type().remove_nullable(),
+            TableDataType::Number(_) | TableDataType::Decimal(_)
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "AUTOINCREMENT only supports Decimal or Numeric (e.g. INT32) types",
+            ));
+        }
+        if !is_ordered {
+            return Err(ErrorCode::SemanticError(
+                "AUTOINCREMENT only support ORDER now",
+            ));
+        }
+        if step == &0 {
+            return Err(ErrorCode::SemanticError("INCREMENT cannot be 0"));
+        }
+        if step < &0 {
+            return Err(ErrorCode::SemanticError(
+                "INCREMENT does not currently support negative numbers",
+            ));
+        }
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -1778,22 +1788,7 @@ impl Binder {
                         step,
                         is_ordered,
                     } => {
-                        if !matches!(
-                            field.data_type().remove_nullable(),
-                            TableDataType::Number(_) | TableDataType::Decimal(_)
-                        ) {
-                            return Err(ErrorCode::SemanticError(
-                                "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
-                            ));
-                        }
-                        if step == &0 {
-                            return Err(ErrorCode::SemanticError("INCREMENT cannot be 0"));
-                        }
-                        if step < &0 {
-                            return Err(ErrorCode::SemanticError(
-                                "INCREMENT does not currently support negative numbers",
-                            ));
-                        }
+                        Self::check_autoincrement_expr(&field, step, is_ordered)?;
                         has_autoincrement = true;
                         field.auto_increment_expr = Some(AutoIncrementExpr {
                             column_id: 0,
