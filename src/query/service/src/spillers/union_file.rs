@@ -60,7 +60,6 @@ pub struct RowGroupWriter {
     schema: Arc<Schema>,
     props: WriterPropertiesPtr,
     writers: Vec<ArrowColumnWriter>,
-    num_rows: usize,
 }
 
 impl RowGroupWriter {
@@ -70,12 +69,10 @@ impl RowGroupWriter {
             schema,
             props: props.clone(),
             writers,
-            num_rows: 0,
         }
     }
 
     pub(super) fn write(&mut self, block: DataBlock) -> errors::Result<()> {
-        let num_rows = block.num_rows();
         let columns = block.take_columns();
         let mut writer_iter = self.writers.iter_mut();
         for (field, entry) in self.schema.fields().iter().zip(columns) {
@@ -84,7 +81,6 @@ impl RowGroupWriter {
                 writer_iter.next().unwrap().write(&col)?;
             }
         }
-        self.num_rows += num_rows;
         Ok(())
     }
 
@@ -102,47 +98,40 @@ impl RowGroupWriter {
         self.writers.iter().map(|w| w.memory_size()).sum()
     }
 
-    pub(super) fn into_block(self) -> Result<DataBlock> {
+    pub fn into_block(self) -> Result<DataBlock> {
         let RowGroupWriter {
             schema,
             props,
             writers,
-            num_rows,
         } = self;
 
         let data_schema = DataSchema::try_from(schema.as_ref())?;
-        if num_rows == 0 {
-            return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
-        }
-
         let parquet_schema = ArrowSchemaConverter::new()
             .with_coerce_types(props.coerce_types())
             .convert(&schema)?;
 
         let mut file_writer = SerializedFileWriter::new(
+            // todo: find a nocopy way
             Cursor::new(Vec::new()),
             parquet_schema.root_schema_ptr(),
             props.clone(),
         )?;
 
-        {
-            let mut row_group_writer = file_writer.next_row_group()?;
-            for writer in writers {
-                writer.close()?.append_to_row_group(&mut row_group_writer)?;
-            }
-            row_group_writer.close()?;
+        let mut row_group_writer = file_writer.next_row_group()?;
+        for writer in writers {
+            writer.close()?.append_to_row_group(&mut row_group_writer)?;
         }
+        row_group_writer.close()?;
 
         let cursor = file_writer.into_inner()?;
         let parquet_bytes = bytes::Bytes::from(cursor.into_inner());
 
         let mut reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
-        let mut blocks = Vec::new();
-        while let Some(batch) = reader.next() {
-            let batch = batch?;
-            let (block, _) = DataBlock::from_record_batch(&data_schema, &batch)?;
-            blocks.push(block);
-        }
+
+        let blocks = reader
+            .into_iter()
+            .map(|batch| DataBlock::from_record_batch(&data_schema, &batch?)?.0)
+            .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {
             return Ok(DataBlock::empty_with_schema(Arc::new(data_schema)));
@@ -154,7 +143,6 @@ impl RowGroupWriter {
             DataBlock::concat(&blocks)?
         };
 
-        debug_assert_eq!(block.num_rows(), num_rows);
         Ok(block)
     }
 }
@@ -553,11 +541,17 @@ where
 mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use databend_common_exception::Result;
+    use databend_common_expression::types::array::ArrayColumnBuilder;
+    use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
+    use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_storage::DataOperator;
     use parquet::file::properties::WriterProperties;
+    use parquet::file::properties::WriterPropertiesPtr;
 
     use super::*;
     use crate::spillers::async_buffer::BufferPool;
@@ -616,6 +610,53 @@ mod tests {
 
         let blocks = load_blocks_from_stream(&data_schema, stream).await?;
         println!("{:?}", blocks);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_group_writer_restores() -> Result<()> {
+        let mut array_builder = ArrayColumnBuilder::<Int32Type>::with_capacity(3, 3, &[]);
+        {
+            let mut arrays = array_builder.as_mut();
+            arrays.put_item(1);
+            arrays.put_item(2);
+            arrays.commit_row();
+
+            arrays.put_item(3);
+            arrays.commit_row();
+
+            arrays.push_default();
+        }
+        let array_column = Column::Array(Box::new(
+            array_builder
+                .build()
+                .upcast(&DataType::Array(Int32Type::data_type().into())),
+        ));
+
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["alpha", "beta", "gamma"]),
+            array_column,
+            StringType::from_opt_data(vec![Some("nullable"), None, Some("value")]),
+        ]);
+
+        let data_schema = block.infer_schema();
+
+        let props: WriterPropertiesPtr = WriterProperties::default().into();
+        let file_writer = FileWriter::new(props.clone(), &data_schema, Vec::<u8>::new())?;
+        let mut row_group = file_writer.new_row_group();
+
+        row_group.write(block.clone())?;
+        row_group.write(block.clone())?;
+        let restored = row_group.into_block()?;
+
+        for (a, b) in DataBlock::concat(&[block.clone(), block])?
+            .columns()
+            .iter()
+            .zip(restored.columns())
+        {
+            assert_eq!(a, b);
+        }
 
         Ok(())
     }
