@@ -1722,6 +1722,14 @@ impl Binder {
                             "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
                         ));
                     }
+                    if step == &0 {
+                        return Err(ErrorCode::SemanticError("INCREMENT cannot be 0"));
+                    }
+                    if step < &0 {
+                        return Err(ErrorCode::SemanticError(
+                            "INCREMENT does not currently support negative numbers",
+                        ));
+                    }
                     field.auto_increment_expr = Some(AutoIncrementExpr {
                         column_id: table_schema.next_column_id(),
                         start: *start,
@@ -1776,6 +1784,14 @@ impl Binder {
                         ) {
                             return Err(ErrorCode::SemanticError(
                                 "AUTO INCREMENT only supports Decimal or Numeric (e.g. INT32) types",
+                            ));
+                        }
+                        if step == &0 {
+                            return Err(ErrorCode::SemanticError("INCREMENT cannot be 0"));
+                        }
+                        if step < &0 {
+                            return Err(ErrorCode::SemanticError(
+                                "INCREMENT does not currently support negative numbers",
                             ));
                         }
                         has_autoincrement = true;

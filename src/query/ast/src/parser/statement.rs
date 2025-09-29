@@ -3438,18 +3438,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                         ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
                     )));
                 }
-                if step == 0 {
-                    return Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::Other("INCREMENT cannot be 0 "),
-                    )));
-                }
-                if step < 0 {
-                    return Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::Other("INCREMENT does not currently support negative numbers"),
-                    )));
-                }
                 def.expr = Some(ColumnExpr::AutoIncrement {
                     start,
                     step,

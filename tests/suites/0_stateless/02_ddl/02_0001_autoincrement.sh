@@ -36,6 +36,9 @@ stmt """
 alter table test_autoincrement add column c4 int default autoincrement;
 """
 stmt """
+alter table test_autoincrement add column c4 int autoincrement start 0 increment 0;
+"""
+stmt """
 alter table test_autoincrement add column c7 int autoincrement;
 """
 
