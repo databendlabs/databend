@@ -13,15 +13,14 @@ stmt """
 create or replace table test_autoincrement (c1 int, c2 int default 1 autoincrement);
 """
 stmt """
+create or replace table test_autoincrement (c1 int, c2 int autoincrement start 0 increment 0);
+"""
+stmt """
 create or replace table test_autoincrement (c1 int, c2 int autoincrement, c3 float autoincrement, c4 int identity (1,2), c5 int autoincrement start 1 increment 2, c6 decimal(20, 2) autoincrement);
 """
 
 stmt """
-insert into test_autoincrement (c1) values(0);
-"""
-
-stmt """
-insert into test_autoincrement (c1) values(0);
+insert into test_autoincrement (c1) values(0),(0);
 """
 
 stmt """
@@ -35,6 +34,9 @@ alter table test_autoincrement add column c4 string autoincrement;
 """
 stmt """
 alter table test_autoincrement add column c4 int default autoincrement;
+"""
+stmt """
+alter table test_autoincrement add column c4 int autoincrement start 0 increment 0;
 """
 stmt """
 alter table test_autoincrement add column c7 int autoincrement;
