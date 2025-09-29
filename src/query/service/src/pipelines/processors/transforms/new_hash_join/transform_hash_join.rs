@@ -82,7 +82,11 @@ impl Processor for TransformHashJoin {
         if self.joined_port.is_finished() {
             self.build_port.finish();
             self.probe_port.finish();
-            return Ok(Event::Finished);
+
+            return match &self.stage {
+                Stage::Finished => Ok(Event::Finished),
+                _ => Ok(Event::Async),
+            };
         }
 
         if !self.joined_port.can_push() {
