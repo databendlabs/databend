@@ -1502,7 +1502,10 @@ impl SchemaApiTestSuite {
         // Test fetch_set_vacuum_timestamp with correct return semantics
         let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, first).await?;
         // Should return default (epoch) as old value
-        assert_eq!(old_retention.time, DateTime::<Utc>::from_timestamp(0, 0).unwrap());
+        assert_eq!(
+            old_retention.time,
+            DateTime::<Utc>::from_timestamp(0, 0).unwrap()
+        );
 
         // Attempt to set earlier timestamp should return current value (first) unchanged
         let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, earlier).await?;

@@ -478,12 +478,11 @@ pub async fn handle_undrop_table(
         );
 
         // Check vacuum retention guard before allowing undrop
-        let drop_marker = seq_table_meta
+        let drop_marker = *seq_table_meta
             .data
             .drop_on
             .as_ref()
-            .unwrap_or(&seq_table_meta.data.updated_on)
-            .clone();
+            .unwrap_or(&seq_table_meta.data.updated_on);
 
         let retention = kv_api
             .get_vacuum_timestamp(tenant_dbname_tbname.tenant())

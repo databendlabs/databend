@@ -109,9 +109,7 @@ where
 
         debug!(
             "Set vacuum retention timestamp for tenant {:?}: old={:?}, new={:?}",
-            req.tenant,
-            old_retention.time,
-            retention_timestamp
+            req.tenant, old_retention.time, retention_timestamp
         );
 
         let mut num_meta_key_removed = 0;
