@@ -41,7 +41,6 @@ use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 // Local enum to wrap WindowPartitionBuffer as a variant without modifying the original.
-#[derive(Debug)]
 pub enum WindowBuffer {
     WindowPartitionBuffer(Box<WindowPartitionBuffer>),
 }
@@ -77,25 +76,18 @@ impl WindowBuffer {
     }
 
     pub fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
-        if let WindowBuffer::WindowPartitionBuffer(inner) = self {
-            inner.add_data_block(partition_id, data_block);
-        }
+        let WindowBuffer::WindowPartitionBuffer(inner) = self;
+        inner.add_data_block(partition_id, data_block);
     }
 
     pub async fn spill(&mut self) -> Result<()> {
-        if let WindowBuffer::WindowPartitionBuffer(inner) = self {
-            inner.spill().await
-        } else {
-            Ok(())
-        }
+        let WindowBuffer::WindowPartitionBuffer(inner) = self;
+        inner.spill().await
     }
 
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
-        if let WindowBuffer::WindowPartitionBuffer(inner) = self {
-            inner.restore().await
-        } else {
-            Ok(vec![])
-        }
+        let WindowBuffer::WindowPartitionBuffer(inner) = self;
+        inner.restore().await
     }
 }
 
