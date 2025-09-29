@@ -98,6 +98,10 @@ impl SquashBlocks {
         let mut current_bytes = 0;
 
         while let Some(mut block) = self.blocks.pop_front() {
+            if block.block.is_empty() {
+                continue;
+            }
+
             self.current_rows -= block.block.num_rows();
             self.current_bytes -= block.block.memory_size();
 
@@ -105,7 +109,11 @@ impl SquashBlocks {
 
             slice_rows = std::cmp::min(slice_rows, self.squash_rows - current_rows);
 
-            let max_bytes_rows = (self.squash_bytes - current_bytes) / block.avg_bytes;
+            let max_bytes_rows = match block.avg_bytes {
+                0 => block.block.num_rows(),
+                _ => (self.squash_bytes - current_bytes) / block.avg_bytes,
+            };
+
             slice_rows = std::cmp::min(max_bytes_rows, slice_rows);
 
             if slice_rows != block.block.num_rows() {
