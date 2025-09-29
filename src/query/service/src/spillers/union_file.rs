@@ -41,6 +41,7 @@ use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
 use parquet::arrow::async_reader::AsyncFileReader;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaDataPtr;
@@ -95,6 +96,7 @@ impl RowGroupWriter {
 
 pub struct FileWriter<W: Write + Send> {
     schema: Arc<Schema>,
+    row_groups: Vec<RowGroupMetaDataPtr>,
     writer: SerializedFileWriter<W>,
 }
 
@@ -107,7 +109,11 @@ impl<W: Write + Send> FileWriter<W> {
             .convert(&schema)?;
 
         let writer = SerializedFileWriter::new(w, parquet.root_schema_ptr(), props.clone())?;
-        Ok(Self { schema, writer })
+        Ok(Self {
+            schema,
+            writer,
+            row_groups: vec![],
+        })
     }
 
     pub(super) fn new_row_group(&self) -> RowGroupWriter {
@@ -124,7 +130,9 @@ impl<W: Write + Send> FileWriter<W> {
     ) -> errors::Result<RowGroupMetaDataPtr> {
         let mut row_group_writer = self.writer.next_row_group()?;
         row_group.close(&mut row_group_writer)?;
-        row_group_writer.close()
+        let meta = row_group_writer.close()?;
+        self.row_groups.push(meta.clone());
+        Ok(meta)
     }
 
     pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
@@ -135,18 +143,27 @@ impl<W: Write + Send> FileWriter<W> {
 
         Ok(self.flush_row_group(row_group)?)
     }
-
-    fn schema_descr(&self) -> SchemaDescriptor {
-        let tp = self.writer.schema_descr().root_schema_ptr();
-        SchemaDescriptor::new(tp)
-    }
 }
 
 impl FileWriter<UnionFileWriter> {
-    pub(super) fn finish(mut self) -> errors::Result<(FileMetaData, UnionFile)> {
-        let file_meta = self.writer.finish()?;
+    pub(super) fn finish(mut self) -> errors::Result<(ParquetMetaData, UnionFile)> {
+        let file_metadata = self.writer.finish()?;
+        let tp = self.writer.schema_descr().root_schema_ptr();
+        let schema_descr = Arc::new(SchemaDescriptor::new(tp));
+
+        let metadata = parquet::file::metadata::FileMetaData::new(
+            file_metadata.version,
+            file_metadata.num_rows,
+            file_metadata.created_by.clone(),
+            file_metadata.key_value_metadata.clone(),
+            schema_descr,
+            None,
+        );
         let file = self.writer.inner_mut().finish()?;
-        Ok((file_meta, file))
+        let row_groups = std::mem::take(&mut self.row_groups);
+        drop(self);
+        let row_groups = row_groups.into_iter().map(Arc::unwrap_or_clone).collect();
+        Ok((ParquetMetaData::new(metadata, row_groups), file))
     }
 }
 
@@ -160,7 +177,7 @@ struct LocalDst {
 pub struct UnionFileWriter {
     local: Option<LocalDst>,
     remote: String,
-    remote_writer: BufferWriter,
+    remote_writer: Option<BufferWriter>,
     remote_offset: u64,
 }
 
@@ -181,7 +198,7 @@ impl UnionFileWriter {
                 buf: Some(buf),
             }),
             remote,
-            remote_writer,
+            remote_writer: Some(remote_writer),
             remote_offset: 0,
         }
     }
@@ -190,12 +207,13 @@ impl UnionFileWriter {
         UnionFileWriter {
             local: None,
             remote,
-            remote_writer,
+            remote_writer: Some(remote_writer),
             remote_offset: 0,
         }
     }
 
     fn finish(&mut self) -> io::Result<UnionFile> {
+        self.remote_writer.take().unwrap().close()?;
         match self.local.take() {
             Some(
                 mut local @ LocalDst {
@@ -273,9 +291,9 @@ impl io::Write for UnionFileWriter {
         }
 
         for buf in dma_buf {
-            self.remote_writer.write(&buf)?;
+            self.remote_writer.as_mut().unwrap().write(&buf)?;
         }
-        self.remote_writer.write(buf)
+        self.remote_writer.as_mut().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -290,7 +308,7 @@ impl io::Write for UnionFileWriter {
             return Ok(());
         }
 
-        self.remote_writer.flush()
+        self.remote_writer.as_mut().unwrap().flush()
     }
 }
 
@@ -425,32 +443,41 @@ impl<A: SpillAdapter> SpillerInner<A> {
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
-        let mut stream = builder
+        let stream = builder
             .with_row_groups(row_groups)
             .with_batch_size(usize::MAX)
             .build()?;
 
-        let mut blocks = Vec::new();
-
-        while let Some(reader) = stream.next_row_group().await? {
-            for record in reader {
-                let record = record?;
-                let num_rows = record.num_rows();
-                let mut columns = Vec::with_capacity(record.num_columns());
-                for (array, field) in record.columns().iter().zip(schema.fields()) {
-                    let data_type = field.data_type();
-                    columns.push(BlockEntry::new(
-                        Value::from_arrow_rs(array.clone(), data_type)?,
-                        || (data_type.clone(), num_rows),
-                    ))
-                }
-                let block = DataBlock::new(columns, num_rows);
-                blocks.push(block);
-            }
-        }
-
-        Ok(blocks)
+        load_blocks_from_stream(schema, stream).await
     }
+}
+
+async fn load_blocks_from_stream<T>(
+    schema: &DataSchema,
+    mut stream: ParquetRecordBatchStream<T>,
+) -> Result<Vec<DataBlock>>
+where
+    T: AsyncFileReader + Unpin + Send + 'static,
+{
+    let mut blocks = Vec::new();
+    while let Some(reader) = stream.next_row_group().await? {
+        for record in reader {
+            let record = record?;
+            let num_rows = record.num_rows();
+            let mut columns = Vec::with_capacity(record.num_columns());
+            for (array, field) in record.columns().iter().zip(schema.fields()) {
+                let data_type = field.data_type();
+                columns.push(BlockEntry::new(
+                    Value::from_arrow_rs(array.clone(), data_type)?,
+                    || (data_type.clone(), num_rows),
+                ))
+            }
+            let block = DataBlock::new(columns, num_rows);
+            blocks.push(block);
+        }
+    }
+
+    Ok(blocks)
 }
 
 #[cfg(test)]
@@ -471,7 +498,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_xxx() -> Result<()> {
-        let config = ConfigBuilder::create().build();
+        let config = ConfigBuilder::create().off_log().build();
         let fixture = TestFixture::setup_with_config(&config).await?;
         let _ctx = fixture.new_query_ctx().await?;
 
@@ -508,50 +535,19 @@ mod tests {
         let row_group = file_writer.spill(vec![block])?;
         row_groups.push((*row_group).clone());
 
-        let schema_descr = file_writer.schema_descr().into();
-
-        let (file_metadata, file) = file_writer.finish()?;
-
-        let metadata = parquet::file::metadata::FileMetaData::new(
-            file_metadata.version,
-            file_metadata.num_rows,
-            file_metadata.created_by.clone(),
-            file_metadata.key_value_metadata.clone(),
-            schema_descr,
-            None,
-        );
-
-        let meta = ParquetMetaData::new(metadata, row_groups).into();
+        let (metadata, file) = file_writer.finish()?;
 
         let input = FileReader {
-            meta,
+            meta: metadata.into(),
             local: None,
             remote_reader: op.reader(&file.remote_path).await?,
             remote_offset: None,
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
-        let mut stream = builder.with_batch_size(usize::MAX).build()?;
+        let stream = builder.with_batch_size(usize::MAX).build()?;
 
-        let mut blocks = Vec::new();
-
-        while let Some(reader) = stream.next_row_group().await? {
-            for record in reader {
-                let record = record?;
-                let num_rows = record.num_rows();
-                let mut columns = Vec::with_capacity(record.num_columns());
-                for (array, field) in record.columns().iter().zip(data_schema.fields()) {
-                    let data_type = field.data_type();
-                    columns.push(BlockEntry::new(
-                        Value::from_arrow_rs(array.clone(), data_type)?,
-                        || (data_type.clone(), num_rows),
-                    ))
-                }
-                let block = DataBlock::new(columns, num_rows);
-                blocks.push(block);
-            }
-        }
-
+        let blocks = load_blocks_from_stream(&data_schema, stream).await?;
         println!("{:?}", blocks);
 
         Ok(())
