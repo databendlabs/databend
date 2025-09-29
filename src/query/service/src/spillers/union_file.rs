@@ -22,12 +22,10 @@ use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::AsyncDmaFile;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
-use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
@@ -49,7 +47,6 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
-use parquet::format::FileMetaData;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferPool;
@@ -101,8 +98,8 @@ pub struct FileWriter<W: Write + Send> {
 }
 
 impl<W: Write + Send> FileWriter<W> {
-    fn new(props: Arc<WriterProperties>, table_schema: &TableSchema, w: W) -> errors::Result<Self> {
-        let schema = Arc::new(Schema::from(table_schema));
+    fn new(props: Arc<WriterProperties>, data_schema: &DataSchema, w: W) -> errors::Result<Self> {
+        let schema = Arc::new(Schema::from(data_schema));
 
         let parquet = ArrowSchemaConverter::new()
             .with_coerce_types(props.coerce_types())
@@ -391,12 +388,11 @@ impl AsyncFileReader for FileReader {
 impl<A: SpillAdapter> SpillerInner<A> {
     pub(super) async fn new_file_writer(
         &self,
-        schema: &TableSchema,
-        executor: Arc<Runtime>,
-        max_buffer: usize,
+        schema: &DataSchema,
+        pool: &Arc<BufferPool>,
+        dio: bool,
+        chunk: usize,
     ) -> Result<FileWriter<UnionFileWriter>> {
-        let pool = BufferPool::create(executor, max_buffer, 3);
-
         let op = self.local_operator.as_ref().unwrap_or(&self.operator);
 
         let remote_location = self.create_unique_location();
@@ -405,9 +401,9 @@ impl<A: SpillAdapter> SpillerInner<A> {
 
         let union = if let Some(disk) = &self.temp_dir {
             if let Some(path) = disk.new_file_with_size(0)? {
-                let file = SyncDmaFile::create(&path, true)?;
+                let file = SyncDmaFile::create(&path, dio)?;
                 let align = disk.block_alignment();
-                let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
+                let buf = DmaWriteBuf::new(align, chunk);
                 UnionFileWriter::new(disk.clone(), path, file, buf, remote_location, remote)
             } else {
                 UnionFileWriter::without_local(remote_location, remote)
@@ -422,24 +418,29 @@ impl<A: SpillAdapter> SpillerInner<A> {
 
     pub(super) async fn load_row_groups(
         &self,
-        file: UnionFile,
+        UnionFile {
+            local_path,
+            remote_path,
+            remote_offset,
+        }: UnionFile,
         meta: Arc<ParquetMetaData>,
         schema: &DataSchema,
         row_groups: Vec<usize>,
+        dio: bool,
     ) -> Result<Vec<DataBlock>> {
         let op = self.local_operator.as_ref().unwrap_or(&self.operator);
 
         let input = FileReader {
             meta,
-            local: if let Some(path) = file.local_path {
+            local: if let Some(path) = local_path {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
-                let file = AsyncDmaFile::open(&path, true, alignment).await?;
+                let file = AsyncDmaFile::open(&path, dio, alignment).await?;
                 Some((path, file))
             } else {
                 None
             },
-            remote_offset: file.remote_offset,
-            remote_reader: op.reader(&file.remote_path).await?,
+            remote_offset,
+            remote_reader: op.reader(&remote_path).await?,
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
@@ -484,7 +485,6 @@ where
 mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use databend_common_exception::Result;
-    use databend_common_expression::infer_table_schema;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
     use databend_common_expression::FromData;
@@ -510,7 +510,6 @@ mod tests {
         ]);
 
         let data_schema = block.infer_schema();
-        let table_schema = infer_table_schema(&data_schema)?;
         let executor = GlobalIORuntime::instance();
         let memory = 1024 * 1024 * 100;
 
@@ -529,7 +528,7 @@ mod tests {
         // let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
 
         let file = UnionFileWriter::without_local(path.to_string(), remote);
-        let mut file_writer = FileWriter::new(props, &table_schema, file)?;
+        let mut file_writer = FileWriter::new(props, &data_schema, file)?;
 
         let mut row_groups = vec![];
         let row_group = file_writer.spill(vec![block])?;
