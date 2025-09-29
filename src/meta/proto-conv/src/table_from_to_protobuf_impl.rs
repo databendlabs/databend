@@ -24,6 +24,7 @@ use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app_types::non_empty::NonEmptyString;
@@ -241,6 +242,10 @@ impl FromToProto for mt::TableMeta {
                 Some(p.column_mask_policy)
             },
             row_access_policy: p.row_access_policy,
+            row_access_policy_columns_ids: match p.row_access_policy_columns_ids {
+                Some(r) => Some(RowAccessPolicyColumnMap::from_pb(r)?),
+                None => None,
+            },
             indexes,
             virtual_schema,
             constraints,
@@ -289,6 +294,10 @@ impl FromToProto for mt::TableMeta {
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),
+            row_access_policy_columns_ids: match &self.row_access_policy_columns_ids {
+                Some(r) => Some(r.to_pb()?),
+                None => None,
+            },
             indexes,
             virtual_schema: self
                 .virtual_schema
@@ -296,6 +305,35 @@ impl FromToProto for mt::TableMeta {
                 .map(VirtualDataSchema::to_pb)
                 .transpose()?,
             constraints,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::RowAccessPolicyColumnMap {
+    type PB = pb::RowAccessPolicyColumnMap;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let v = Self {
+            policy_id: p.policy_id,
+            columns_ids: p.columns_ids.clone(),
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let p = pb::RowAccessPolicyColumnMap {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            policy_id: self.policy_id,
+            columns_ids: self.columns_ids.clone(),
         };
         Ok(p)
     }

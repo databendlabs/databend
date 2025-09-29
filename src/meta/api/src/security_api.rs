@@ -22,6 +22,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -181,8 +182,12 @@ where
             // upsert row access policy
             let table_meta = seq_meta.data;
             let mut new_table_meta = table_meta.clone();
+            let policy_id = match req.action {
+                SetTableRowAccessPolicyAction::Set(id, _) => id,
+                SetTableRowAccessPolicyAction::Unset(id) => id,
+            };
             let id = RowAccessPolicyIdTableId {
-                policy_id: req.policy_id,
+                policy_id,
                 table_id: req.table_id,
             };
             let ident = RowAccessPolicyTableIdIdent::new_generic(req.tenant.clone(), id);
@@ -193,14 +198,18 @@ where
                 .condition
                 .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
             match &req.action {
-                SetTableRowAccessPolicyAction::Set(new_mask_name) => {
-                    if table_meta.row_access_policy.is_some() {
+                SetTableRowAccessPolicyAction::Set(new_policy_id, columns_ids) => {
+                    if table_meta.row_access_policy_columns_ids.is_some() {
                         return Ok(Err(TableError::AlterTableError {
                             tenant: req.tenant.tenant_name().to_string(),
                             context: "Table already has a ROW_ACCESS_POLICY. Only one ROW_ACCESS_POLICY is allowed at a time.".to_string(),
                         }));
                     }
-                    new_table_meta.row_access_policy = Some(new_mask_name.to_string());
+                    new_table_meta.row_access_policy_columns_ids = Some(
+                        RowAccessPolicyColumnMap::new(*new_policy_id, columns_ids.clone()),
+                    );
+                    // Compatibility, can be deleted in the future
+                    new_table_meta.row_access_policy = None;
                     txn_req.if_then = vec![
                         txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy Some */
                         txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
@@ -208,17 +217,34 @@ where
                 }
                 SetTableRowAccessPolicyAction::Unset(old_policy) => {
                     // drop row access policy and table does not have row access policy
-                    if let Some(policy) = &table_meta.row_access_policy {
-                        if policy != old_policy {
-                            return Ok(Err(TableError::AlterTableError {
-                                tenant: req.tenant.tenant_name().to_string(),
-                                context: format!("Unknown row access policy {} on table", policy),
-                            }));
+                    match (
+                        table_meta.row_access_policy_columns_ids,
+                        table_meta.row_access_policy,
+                    ) {
+                        (Some(policy), _) => {
+                            if &policy.policy_id != old_policy {
+                                return Ok(Err(TableError::AlterTableError {
+                                    tenant: req.tenant.tenant_name().to_string(),
+                                    context: format!(
+                                        "Unknown row access policy {} on table",
+                                        policy.policy_id
+                                    ),
+                                }));
+                            } else {
+                                new_table_meta.row_access_policy_columns_ids = None;
+                                // Compatibility, can be deleted in the future
+                                new_table_meta.row_access_policy = None;
+                            }
                         }
-                    } else {
-                        return Ok(Ok(SetTableRowAccessPolicyReply {}));
+                        // Compatibility, can be deleted in the future
+                        (None, Some(_)) => {
+                            new_table_meta.row_access_policy = None;
+                        }
+                        (None, None) => {
+                            return Ok(Ok(SetTableRowAccessPolicyReply {}));
+                        }
                     }
-                    new_table_meta.row_access_policy = None;
+
                     txn_req.if_then = vec![
                         txn_op_put(&tbid, serialize_struct(&new_table_meta)?), /* tb_id -> tb_meta row access policy None */
                         txn_op_del(&ident), // table drop row access policy, del policy_tb_id

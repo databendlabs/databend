@@ -16,7 +16,7 @@ use fastrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v151_vacuum_retention() -> anyhow::Result<()> {
+fn test_decode_v152_vacuum_retention() -> anyhow::Result<()> {
     let want = || mt::VacuumRetention {
         time: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
         updated_by: "system".to_string(),

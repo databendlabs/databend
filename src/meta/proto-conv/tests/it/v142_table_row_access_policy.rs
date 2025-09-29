@@ -52,6 +52,7 @@ fn test_decode_v142_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: None,
         row_access_policy: Some("p1".to_string()),
+        row_access_policy_columns_ids: None,
         indexes: BTreeMap::default(),
         constraints: BTreeMap::default(),
     };

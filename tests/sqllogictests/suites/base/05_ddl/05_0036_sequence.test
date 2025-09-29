@@ -223,6 +223,31 @@ statement ok
 drop table t;
 
 statement ok
+CREATE OR REPLACE SEQUENCE seq start = 1 increment = 2;
+
+statement ok
+CREATE OR REPLACE table t2(id int default nextval(seq), name string);
+
+statement ok
+INSERT INTO t2(name) values('x'),('x'),('x');
+
+statement ok
+INSERT INTO t2(name) values('x'),('x'),('x');
+
+query IT
+select * from t2 order by id;
+----
+1 x
+3 x
+5 x
+7 x
+9 x
+11 x
+
+statement ok
+DROP TABLE t2
+
+statement ok
 DROP SEQUENCE seq;
 
 statement ok

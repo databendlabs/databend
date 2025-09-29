@@ -65,6 +65,13 @@ pub trait RowAccessPolicyHandler: Sync + Send {
         tenant: &Tenant,
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>;
+
+    async fn get_row_access_by_id(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<SeqV<RowAccessPolicyMeta>>;
 }
 
 pub struct RowAccessPolicyHandlerWrapper {
@@ -102,6 +109,17 @@ impl RowAccessPolicyHandlerWrapper {
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
         self.handler.get_row_access(meta_api, tenant, name).await
+    }
+
+    pub async fn get_row_access_by_id(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<SeqV<RowAccessPolicyMeta>> {
+        self.handler
+            .get_row_access_by_id(meta_api, tenant, policy_id)
+            .await
     }
 }
 

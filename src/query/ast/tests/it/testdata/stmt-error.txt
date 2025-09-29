@@ -112,18 +112,6 @@ error:
 
 
 ---------- Input ----------
-create table a.b (c integer autoincrement (10, 20) NOORDER)
----------- Output ---------
-error: 
-  --> SQL:1:59
-  |
-1 | create table a.b (c integer autoincrement (10, 20) NOORDER)
-  | ------                                                    ^ AUTOINCREMENT only support ORDER now
-  | |                                                          
-  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
-
-
----------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 

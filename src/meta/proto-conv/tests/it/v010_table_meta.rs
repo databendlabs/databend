@@ -145,6 +145,7 @@ fn test_decode_v10_table_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::new(),
         column_mask_policy: None,
         row_access_policy: None,
+        row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
     };

@@ -73,6 +73,40 @@ select id from t;
 1
 
 statement ok
+create or replace table t_1(id int, cc string);
+
+statement ok
+insert into t_1 values(1,'account_admin'),(2,'x');
+
+query T
+select id from t_1 order by id;
+----
+1
+2
+
+statement ok
+create or replace row access policy rap_it1 as (empl_id string null) returns boolean ->
+  case
+      when empl_id = current_role() then false
+      else true
+  end;
+
+statement ok
+alter table t_1 ADD ROW ACCESS POLICY rap_it1 ON (cc);
+
+## t_1 apply row access policy rpa_it1(means if current role == empl_id value account_admin will return false)
+query T
+select id from t_1;
+----
+2
+
+statement error
+alter table t_1 drop column cc;
+
+statement ok
+alter table t_1 drop column id;
+
+statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
 ## t apply row access policy rpa_it(means if current role == account_admin will return false)
@@ -95,9 +129,6 @@ query T
 select id from t1 union select id from t;
 ----
 100
-
-
-
 
 statement error 1132
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
@@ -148,6 +179,12 @@ drop row access policy if exists rap3;
 
 statement ok
 drop row access policy if exists p1;
+
+statement ok
+drop row access policy if exists rap_it1;
+
+statement ok
+drop table if exists t_1;
 
 statement ok
 unset global enable_experimental_row_access_policy;

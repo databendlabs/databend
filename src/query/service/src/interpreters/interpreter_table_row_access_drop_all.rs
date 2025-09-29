@@ -20,8 +20,6 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_sql::plans::DropAllTableRowAccessPoliciesPlan;
-use databend_common_users::UserApiProvider;
-use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -67,22 +65,11 @@ impl Interpreter for DropAllTableRowAccessPoliciesInterpreter {
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
 
-        if let Some(row_access_policy) = &table_info.meta.row_access_policy {
-            let meta_api = UserApiProvider::instance().get_meta_store_client();
-            let handler = get_row_access_policy_handler();
-            let (policy_id, _) = handler
-                .get_row_access(
-                    meta_api,
-                    &self.ctx.get_tenant(),
-                    row_access_policy.to_string(),
-                )
-                .await?;
-
+        if let Some(row_access_policy) = &table_info.meta.row_access_policy_columns_ids {
             let req = SetTableRowAccessPolicyReq {
                 tenant: self.ctx.get_tenant(),
                 table_id,
-                policy_id: *policy_id.data,
-                action: SetTableRowAccessPolicyAction::Unset(row_access_policy.to_string()),
+                action: SetTableRowAccessPolicyAction::Unset(row_access_policy.policy_id),
             };
             let _resp = catalog.set_table_row_access_policy(req).await?;
         }

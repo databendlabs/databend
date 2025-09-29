@@ -3432,12 +3432,6 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                         ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
-                if !is_ordered {
-                    return Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::Other("AUTOINCREMENT only support ORDER now"),
-                    )));
-                }
                 def.expr = Some(ColumnExpr::AutoIncrement {
                     start,
                     step,

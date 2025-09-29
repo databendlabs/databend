@@ -28,6 +28,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -297,9 +298,28 @@ pub struct TableMeta {
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
     // One table only has an unique row access policy
+    // should be discard
     pub row_access_policy: Option<String>,
+    // One table only has an unique row access policy
+    // store policy id and which column apply row access policy
+    pub row_access_policy_columns_ids: Option<RowAccessPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct RowAccessPolicyColumnMap {
+    pub policy_id: u64,
+    pub columns_ids: Vec<ColumnId>,
+}
+
+impl RowAccessPolicyColumnMap {
+    pub fn new(policy_id: u64, field_indexes: Vec<ColumnId>) -> Self {
+        Self {
+            policy_id,
+            columns_ids: field_indexes,
+        }
+    }
 }
 
 #[derive(
@@ -517,6 +537,7 @@ impl Default for TableMeta {
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
             row_access_policy: None,
+            row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
         }
@@ -974,16 +995,15 @@ pub struct SetTableColumnMaskPolicyReply {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetTableRowAccessPolicyAction {
     // new policy name
-    Set(String),
+    Set(u64, Vec<ColumnId>),
     // old policy name
-    Unset(String),
+    Unset(u64),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableRowAccessPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
-    pub policy_id: u64,
     pub action: SetTableRowAccessPolicyAction,
 }
 

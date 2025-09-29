@@ -139,6 +139,15 @@ message TableMeta {
   optional string row_access_policy = 33;
 
   map<string, Constraint> constraints = 34;
+  optional RowAccessPolicyColumnMap row_access_policy_columns_ids = 35;
+}
+
+message RowAccessPolicyColumnMap {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 policy_id = 1;
+  repeated uint32 columns_ids = 2;
 }
 
 message TableIndex {
