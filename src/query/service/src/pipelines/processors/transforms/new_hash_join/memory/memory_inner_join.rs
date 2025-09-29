@@ -293,7 +293,7 @@ impl Join for MemoryInnerJoin {
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
         let valids = match self.desc.from_correlated_subquery {
             true => None,
-            false => self.desc.build_valids_by_keys(&mut keys)?,
+            false => self.desc.build_valids_by_keys(&keys)?,
         };
 
         self.desc.remove_keys_nullable(&mut keys);
