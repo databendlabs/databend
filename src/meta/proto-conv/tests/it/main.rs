@@ -142,3 +142,4 @@ mod v147_grant_object_procedure;
 mod v148_virtual_schema;
 mod v149_field_auto_increment;
 mod v150_role_comment;
+mod v151_vacuum_retention;
