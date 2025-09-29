@@ -21,15 +21,14 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
-use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
 use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
@@ -54,10 +53,18 @@ impl UserApiProvider {
             user_info.option.set_all_flag();
             Ok(user_info)
         } else {
-            let client = self.user_api(tenant);
-            let get_user = client.get_user(user, MatchSeq::GE(0));
-            Ok(get_user.await?.data)
+            Ok(self.get_meta_user(tenant, user).await?.data)
         }
+    }
+
+    pub async fn get_meta_user(
+        &self,
+        tenant: &Tenant,
+        user: UserIdentity,
+    ) -> Result<SeqV<UserInfo>> {
+        let client = self.user_api(tenant);
+        let get_user = client.get_user(user, MatchSeq::GE(0)).await?;
+        Ok(get_user)
     }
 
     // Get one user and check client ip if has network policy.
@@ -330,49 +337,34 @@ impl UserApiProvider {
         }
     }
 
-    // Update an user by name and hostname.
     #[async_backtrace::framed]
-    pub async fn update_user(
+    pub async fn alter_user(
         &self,
         tenant: &Tenant,
-        user: UserIdentity,
-        auth_info: Option<AuthInfo>,
-        user_option: Option<UserOption>,
+        user_info: &UserInfo,
+        seq: u64,
     ) -> Result<Option<u64>> {
-        if let Some(ref user_option) = user_option {
-            if let Some(name) = user_option.network_policy() {
-                if self.get_network_policy(tenant, name).await.is_err() {
-                    return Err(ErrorCode::UnknownNetworkPolicy(format!(
-                        "network policy `{}` is not exist",
-                        name
-                    )));
-                }
-            }
-            if let Some(name) = user_option.password_policy() {
-                if self.get_password_policy(tenant, name).await.is_err() {
-                    return Err(ErrorCode::UnknownPasswordPolicy(format!(
-                        "password policy `{}` is not exist",
-                        name
-                    )));
-                }
+        let user_option = &user_info.option;
+        if let Some(name) = user_option.network_policy() {
+            if self.get_network_policy(tenant, name).await.is_err() {
+                return Err(ErrorCode::UnknownNetworkPolicy(format!(
+                    "network policy `{}` is not exist",
+                    name
+                )));
             }
         }
-        if self.get_configured_user(&user.username).is_some() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Built-in user `{}` cannot be updated",
-                user.username
-            )));
+        if let Some(name) = user_option.password_policy() {
+            if self.get_password_policy(tenant, name).await.is_err() {
+                return Err(ErrorCode::UnknownPasswordPolicy(format!(
+                    "password policy `{}` is not exist",
+                    name
+                )));
+            }
         }
-        let client = self.user_api(tenant);
-        let update_user = client
-            .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
-                ui.update_auth_option(auth_info.clone(), user_option);
-                ui.update_user_time();
-                ui.update_auth_history(auth_info)
-            })
-            .await;
 
-        match update_user {
+        let client = self.user_api(tenant);
+        let alter_user = client.alter_user(user_info, seq).await;
+        match alter_user {
             Ok(res) => Ok(res),
             Err(e) => Err(e.add_message_back("(while alter user).")),
         }
@@ -386,10 +378,12 @@ impl UserApiProvider {
         user: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
-        let mut user_info = self.get_user(tenant, user.clone()).await?;
+        let user = self.get_meta_user(tenant, user.clone()).await?;
+        let seq = user.seq;
+        let mut user_info = user.data;
         user_info.option.set_default_role(default_role);
-        self.update_user(tenant, user, None, Some(user_info.option))
-            .await
+        user_info.update_user_time();
+        self.alter_user(tenant, &user_info, seq).await
     }
 
     #[async_backtrace::framed]

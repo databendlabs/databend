@@ -184,6 +184,14 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
+    async fn alter_user(&self, user_info: &UserInfo, seq: u64) -> Result<Option<u64>> {
+        let seq = self
+            .upsert_user_info(user_info, MatchSeq::Exact(seq))
+            .await?;
+        Ok(Some(seq))
+    }
+
+    #[async_backtrace::framed]
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()> {
         let key = self.user_key(&user.username, &user.hostname);
         let res = self
