@@ -76,7 +76,7 @@ fn create_complex_expr() -> SExpr {
     let join_condition = builder.join_condition(t1_id, t2_id, false);
 
     // Create JOIN node
-    let joined = builder.join(scan1, scan2, vec![join_condition], JoinType::Inner(false));
+    let joined = builder.join(scan1, scan2, vec![join_condition], JoinType::Inner);
 
     // Add WHERE filter condition (simplified as boolean constant)
     let where_condition = builder.bool(true);
