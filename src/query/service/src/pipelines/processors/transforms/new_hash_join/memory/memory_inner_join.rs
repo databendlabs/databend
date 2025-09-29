@@ -255,13 +255,15 @@ impl Join for MemoryInnerJoin {
         let mut keys_block = DataBlock::new(keys_entries, chunk_block.num_rows());
 
         chunk_block = chunk_block.project(&self.build_projection);
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&mut keys_block)? {
+        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
             keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
             if bitmap.null_count() != bitmap.len() {
                 chunk_block = chunk_block.filter_with_bitmap(&bitmap)?;
             }
         }
+
+        self.desc.remove_keys_nullable(&mut keys_block);
 
         let num_rows = chunk_block.num_rows();
         let num_bytes = chunk_block.memory_size();
@@ -294,6 +296,7 @@ impl Join for MemoryInnerJoin {
             false => self.desc.build_valids_by_keys(&mut keys)?,
         };
 
+        self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.probe_projections);
 
         let joined_stream = with_join_hash_method!(|T| match self.state.hash_table.deref() {
