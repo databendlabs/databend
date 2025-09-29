@@ -1235,6 +1235,8 @@ pub struct GetTableCopiedFileReply {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
 }
 
+pub type ListTableCopiedFileReply = GetTableCopiedFileReply;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,

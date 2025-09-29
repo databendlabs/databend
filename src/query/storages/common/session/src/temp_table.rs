@@ -28,6 +28,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -323,6 +324,17 @@ impl TempTblMgr {
             }
         }
         Ok(GetTableCopiedFileReply { file_info })
+    }
+
+    pub fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
+        let Some(table) = self.id_to_table.get(&table_id) else {
+            return Err(ErrorCode::UnknownTable(format!(
+                "Temporary table id {} not found",
+                table_id
+            )));
+        };
+        let file_info = table.copied_files.clone();
+        Ok(ListTableCopiedFileReply { file_info })
     }
 }
 

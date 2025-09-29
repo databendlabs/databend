@@ -75,6 +75,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -479,6 +480,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_name: &str,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;
+
+    async fn list_table_copied_file_info(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_table_copied_file_info' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     async fn truncate_table(
         &self,

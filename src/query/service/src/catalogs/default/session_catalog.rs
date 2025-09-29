@@ -65,6 +65,7 @@ use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
@@ -574,6 +575,24 @@ impl Catalog for SessionCatalog {
         reply
             .file_info
             .extend(self.txn_mgr.lock().get_table_copied_file_info(table_id));
+        Ok(reply)
+    }
+
+    async fn list_table_copied_file_info(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        let reply = if is_temp_table_id(table_id) {
+            self.temp_tbl_mgr
+                .lock()
+                .list_table_copied_file_info(table_id)?
+        } else {
+            self.inner
+                .list_table_copied_file_info(tenant, db_name, table_id)
+                .await?
+        };
         Ok(reply)
     }
 

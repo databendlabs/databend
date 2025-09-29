@@ -5898,6 +5898,12 @@ impl SchemaApiTestSuite {
             assert_eq!(file_infos, resp.file_info);
         }
 
+        info!("--- list copied file infos");
+        {
+            let resp = mt.list_table_copied_file_info(table_id).await?;
+            assert_eq!(file_infos, resp.file_info);
+        }
+
         info!("--- truncate table and get stage file info again");
         {
             let req = TruncateTableReq {
