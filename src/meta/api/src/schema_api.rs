@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
+use databend_common_meta_app::app_error::UndropTableRetentionGuard;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -90,7 +91,6 @@ where
     Self: CatalogApi,
     Self: DatabaseApi,
     Self: DictionaryApi,
-    Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi,
     Self: SecurityApi,
@@ -111,7 +111,6 @@ where
     Self: CatalogApi,
     Self: DatabaseApi,
     Self: DictionaryApi,
-    Self: GarbageCollectionApi,
     Self: IndexApi,
     Self: LockApi,
     Self: SecurityApi,
@@ -469,6 +468,28 @@ pub async fn handle_undrop_table(
                 AppError::from(UnknownTableId::new(tbid.table_id, "when undrop table")).into(),
             );
         };
+
+        let drop_marker = seq_table_meta
+            .data
+            .drop_on
+            .as_ref()
+            .unwrap_or(&seq_table_meta.data.updated_on)
+            .clone();
+
+        let retention = kv_api
+            .get_vacuum_timestamp(tenant_dbname_tbname.tenant())
+            .await?;
+        let retention_time = retention.time;
+
+        if drop_marker <= retention_time {
+            return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
+                UndropTableRetentionGuard::new(
+                    &tenant_dbname_tbname.table_name,
+                    drop_marker,
+                    retention_time,
+                ),
+            )));
+        }
 
         debug!(
             ident :% =(&tbid),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -27,6 +28,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -40,6 +42,7 @@ use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::VacuumRetention;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -47,6 +50,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
 use fastrace::func_name;
@@ -56,10 +60,12 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use seq_marked::SeqValue;
 
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
@@ -86,6 +92,10 @@ where
     /// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
     #[fastrace::trace]
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize, KVAppError> {
+        // Advance retention watermark to "now" for this tenant so subsequent undrop respects it
+        self.fetch_set_vacuum_timestamp(&req.tenant, Utc::now())
+            .await?;
+
         let mut num_meta_key_removed = 0;
         for drop_id in req.drop_ids {
             match drop_id {
@@ -100,6 +110,42 @@ where
             }
         }
         Ok(num_meta_key_removed)
+    }
+
+    #[fastrace::trace]
+    async fn fetch_set_vacuum_timestamp(
+        &self,
+        tenant: &Tenant,
+        candidate_time: DateTime<Utc>,
+    ) -> Result<VacuumRetention, KVAppError> {
+        let ident = VacuumRetentionIdent::new_global(tenant.clone());
+        let candidate = VacuumRetention::new(candidate_time);
+
+        let transition = self
+            .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumRetention>>| {
+                let current_value = current.into_value().unwrap_or_default();
+                if current_value.time >= candidate.time {
+                    Ok(None)
+                } else {
+                    Ok(Some(candidate.clone()))
+                }
+            })
+            .await?;
+
+        let result = transition
+            .expect("crud_upsert_with must return some result")
+            .result
+            .into_value()
+            .unwrap_or_default();
+
+        Ok(result)
+    }
+
+    #[fastrace::trace]
+    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<VacuumRetention, KVAppError> {
+        let ident = VacuumRetentionIdent::new_global(tenant.clone());
+        let seq_value = self.get_pb(&ident).await?;
+        Ok(seq_value.map(|v| v.data).unwrap_or_default())
     }
 }
 

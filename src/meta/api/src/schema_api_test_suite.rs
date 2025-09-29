@@ -150,6 +150,7 @@ use log::debug;
 use log::info;
 
 use crate::deserialize_struct;
+use crate::garbage_collection_api::GarbageCollectionApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
@@ -351,6 +352,7 @@ impl SchemaApiTestSuite {
         suite.gc_dropped_db_after_undrop(&b.build().await).await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
+        suite.vacuum_retention_timestamp(&b.build().await).await?;
         suite
             .drop_table_without_tableid_to_name(&b.build().await)
             .await?;
@@ -1480,6 +1482,77 @@ impl SchemaApiTestSuite {
             assert_eq!(res.time, time_bigger);
             let res = mt.get_pb(&lvt_name_ident).await?;
             assert_eq!(res.unwrap().data.time, time_bigger);
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn vacuum_retention_timestamp<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_retention_timestamp";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let first = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
+        let earlier = DateTime::<Utc>::from_timestamp(500, 0).unwrap();
+        let later = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
+
+        let res = mt.fetch_set_vacuum_timestamp(&tenant, first).await?;
+        assert_eq!(res.time, first);
+
+        let res = mt.fetch_set_vacuum_timestamp(&tenant, earlier).await?;
+        assert_eq!(res.time, first);
+
+        let res = mt.fetch_set_vacuum_timestamp(&tenant, later).await?;
+        assert_eq!(res.time, later);
+
+        let stored = mt.get_vacuum_timestamp(&tenant).await?;
+        assert_eq!(stored.time, later);
+
+        // Ensure undrop is blocked once retention advances beyond drop time
+        {
+            let mut util = Util::new(
+                mt,
+                tenant_name,
+                "db_retention_guard",
+                "tbl_retention_guard",
+                "FUSE",
+            );
+            util.create_db().await?;
+            let (table_id, _table_meta) = util.create_table().await?;
+            util.drop_table_by_id().await?;
+
+            let table_meta = mt
+                .get_pb(&TableId::new(table_id))
+                .await?
+                .expect("dropped table meta must exist");
+            let drop_time = table_meta
+                .data
+                .drop_on
+                .expect("dropped table should carry drop_on timestamp");
+
+            let retention_candidate = drop_time + chrono::Duration::seconds(1);
+            let effective = mt
+                .fetch_set_vacuum_timestamp(&tenant, retention_candidate)
+                .await?;
+            assert_eq!(effective.time, retention_candidate);
+
+            let undrop_err = mt
+                .undrop_table(UndropTableReq {
+                    name_ident: TableNameIdent::new(&tenant, util.db_name(), util.tbl_name()),
+                })
+                .await
+                .expect_err("undrop must fail once vacuum retention blocks it");
+
+            match undrop_err {
+                KVAppError::AppError(AppError::UndropTableRetentionGuard(e)) => {
+                    assert_eq!(e.drop_time(), drop_time);
+                    assert_eq!(e.retention(), retention_candidate);
+                }
+                other => panic!("unexpected undrop error: {other:?}"),
+            }
         }
 
         Ok(())

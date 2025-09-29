@@ -180,6 +180,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (148, "2025-09-22: Add: virtual_data_type add Decimal, Binary, Date, Timestamp, Interval"),
     (149, "2025-09-24: Add: add AutoIncrement name and display on TableField"),
     (150, "2025-09-26: Add: RoleInfo::comment"),
+    (151, "2025-09-30: Add: VacuumRetention proto"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

@@ -1768,15 +1768,20 @@ where
     ) -> Result<ListDroppedTableResp, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let the_limit = req.limit.unwrap_or(usize::MAX);
+        let ListDroppedTableReq {
+            tenant,
+            database_name,
+            drop_time_range,
+            limit,
+        } = req;
 
-        let drop_time_range = req.drop_time_range;
+        let the_limit = limit.unwrap_or(usize::MAX);
 
-        if req.database_name.is_none() {
+        if database_name.is_none() {
             let db_infos = self
                 .get_tenant_history_databases(
                     ListDatabaseReq {
-                        tenant: req.tenant.clone(),
+                        tenant: tenant.clone(),
                     },
                     true,
                 )
@@ -1837,8 +1842,8 @@ where
             });
         }
 
-        let database_name = req.database_name.clone().unwrap();
-        let tenant_dbname = DatabaseNameIdent::new(&req.tenant, database_name);
+        let database_name = database_name.unwrap();
+        let tenant_dbname = DatabaseNameIdent::new(&tenant, database_name.clone());
 
         // Get db by name to ensure presence
         let res = get_db_or_err(
