@@ -21,7 +21,7 @@ use serde::Serialize;
 use state_machine_api::SeqV;
 use state_machine_api::SeqValue;
 
-use crate::reduce_seqv::ReduceSeqV;
+use crate::normalize_meta::NormalizeMeta;
 
 /// `Change` describes a state transition: the states before and after an operation.
 ///
@@ -147,22 +147,22 @@ where
     }
 }
 
-impl<T, ID> ReduceSeqV for Change<T, ID>
+impl<T, ID> NormalizeMeta for Change<T, ID>
 where ID: Clone + PartialEq
 {
-    fn erase_proposed_at(self) -> Self {
+    fn without_proposed_at(self) -> Self {
         Change {
             ident: self.ident,
-            prev: self.prev.erase_proposed_at(),
-            result: self.result.erase_proposed_at(),
+            prev: self.prev.without_proposed_at(),
+            result: self.result.without_proposed_at(),
         }
     }
 
-    fn reduce(self) -> Self {
+    fn normalize(self) -> Self {
         Change {
             ident: self.ident,
-            prev: self.prev.reduce(),
-            result: self.result.reduce(),
+            prev: self.prev.normalize(),
+            result: self.result.normalize(),
         }
     }
 }
@@ -196,7 +196,7 @@ mod tests {
             }),
         };
 
-        let erased = change.erase_proposed_at();
+        let erased = change.without_proposed_at();
 
         // Check ident is preserved
         assert_eq!(erased.ident, Some(123u64));
@@ -239,7 +239,7 @@ mod tests {
             }),
         };
 
-        let reduced = change.reduce();
+        let reduced = change.normalize();
 
         // Check ident is preserved
         assert_eq!(reduced.ident, Some(456u64));
@@ -277,7 +277,7 @@ mod tests {
             }),
         };
 
-        let reduced = change.reduce();
+        let reduced = change.normalize();
 
         // Both prev and result should have meta removed
         assert_eq!(reduced.prev.unwrap().meta, None);
@@ -293,8 +293,8 @@ mod tests {
             result: None,
         };
 
-        let erased = change.clone().erase_proposed_at();
-        let reduced = change.reduce();
+        let erased = change.clone().without_proposed_at();
+        let reduced = change.normalize();
 
         assert_eq!(erased.ident, Some(789u64));
         assert_eq!(erased.prev, None);
@@ -321,7 +321,7 @@ mod tests {
             result: None,
         };
 
-        let erased = change.erase_proposed_at();
+        let erased = change.without_proposed_at();
 
         // Meta should be removed entirely (was only proposed_at_ms, now default)
         assert_eq!(erased.prev.unwrap().meta, None);
@@ -343,7 +343,7 @@ mod tests {
             result: None,
         };
 
-        let erased = change.erase_proposed_at();
+        let erased = change.without_proposed_at();
 
         assert_eq!(erased.ident, Some("test-id".to_string()));
         // proposed_at_ms should be erased but expire_at should remain

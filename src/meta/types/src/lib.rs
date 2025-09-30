@@ -38,7 +38,7 @@ pub mod cmd;
 pub mod errors;
 pub mod node;
 pub mod raft_types;
-pub mod reduce_seqv;
+pub mod normalize_meta;
 pub mod snapshot_db;
 pub mod sys_data;
 // reexport
