@@ -19,6 +19,7 @@ use std::time::Duration;
 use databend_common_base::base::Stoppable;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::reduce_seqv::ReduceSeqV;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
@@ -63,7 +64,7 @@ async fn test_cache_basic() -> anyhow::Result<()> {
             (s("pp/a"), SeqV::new(2, b("a"))),
             (s("pp/c"), SeqV::new(3, b("c"))),
         ],
-        got
+        got.erase_proposed_at()
     );
 
     let last_seq = c.try_last_seq().await?;
@@ -78,10 +79,10 @@ async fn test_cache_basic() -> anyhow::Result<()> {
     sleep(Duration::from_millis(500)).await;
 
     let got = c.try_get("pp/b").await?;
-    assert_eq!(got, Some(SeqV::new(5, b("b"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(5, b("b"))));
 
     let got = c.try_get("pp/c").await?;
-    assert_eq!(got, Some(SeqV::new(6, b("c2"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(6, b("c2"))));
 
     let got = c.try_get("pp/a").await?;
     assert_eq!(got, None);
@@ -120,7 +121,7 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
         .await?;
 
     let got = c.try_get("pp/c").await?;
-    assert_eq!(got, Some(SeqV::new(2, b("c"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(2, b("c"))));
 
     // Stop the first node, which is the leader
     let mut stopped = tcs.remove(0);
@@ -137,10 +138,10 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     sleep(Duration::from_secs(3)).await;
 
     let got = c.try_get("pp/after_stop_n0").await?;
-    assert_eq!(got, Some(SeqV::new(4, b("3"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(4, b("3"))));
 
     let got = c.try_get("pp/c").await?;
-    assert_eq!(got, Some(SeqV::new(5, b("c2"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(5, b("c2"))));
 
     Ok(())
 }

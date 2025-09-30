@@ -27,6 +27,7 @@ impl From<KVMeta> for pb::KvMeta {
     fn from(m: KVMeta) -> Self {
         Self {
             expire_at: m.expire_at,
+            proposed_at_ms: m.proposed_at_ms,
         }
     }
 }
@@ -35,14 +36,24 @@ impl From<pb::KvMeta> for KVMeta {
     fn from(m: pb::KvMeta) -> Self {
         Self {
             expire_at: m.expire_at,
+            proposed_at_ms: m.proposed_at_ms,
         }
     }
 }
 
 impl pb::KvMeta {
+    pub fn new(expire_at: Option<u64>, proposed_at_ms: Option<u64>) -> Self {
+        Self {
+            expire_at,
+            proposed_at_ms,
+        }
+    }
+
+    #[deprecated]
     pub fn new_expire(expire_at: u64) -> Self {
         Self {
             expire_at: Some(expire_at),
+            proposed_at_ms: None,
         }
     }
 
@@ -129,15 +140,27 @@ mod tests {
 
     #[test]
     fn test_close_to() {
-        let e1 = pb::SeqV::with_meta(1, Some(pb::KvMeta::new_expire(1723102819)), b"".to_vec());
-        let e2 = pb::SeqV::with_meta(1, Some(pb::KvMeta::new_expire(1723102818)), b"".to_vec());
+        let e1 = pb::SeqV::with_meta(
+            1,
+            Some(pb::KvMeta::new(Some(1723102819), None)),
+            b"".to_vec(),
+        );
+        let e2 = pb::SeqV::with_meta(
+            1,
+            Some(pb::KvMeta::new(Some(1723102818), None)),
+            b"".to_vec(),
+        );
 
         assert!(e1.close_to(&e2, Duration::from_secs(1)));
 
-        let e1 = pb::SeqV::with_meta(1, Some(pb::KvMeta::new_expire(1723102819)), b"".to_vec());
+        let e1 = pb::SeqV::with_meta(
+            1,
+            Some(pb::KvMeta::new(Some(1723102819), None)),
+            b"".to_vec(),
+        );
         let e2 = pb::SeqV::with_meta(
             1,
-            Some(pb::KvMeta::new_expire(1_723_102_820_000)),
+            Some(pb::KvMeta::new(Some(1_723_102_820_000), None)),
             b"".to_vec(),
         );
 

@@ -21,6 +21,7 @@ use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
 use databend_common_meta_types::protobuf::KvMeta;
+use databend_common_meta_types::reduce_seqv::ReduceSeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
@@ -87,6 +88,9 @@ impl TestSuite {
         B: kvapi::ApiBuilder<KV>,
     {
         self.kv_write_read(&builder.build().await).await?;
+        self.kv_write_read_proposed_at(&builder.build().await)
+            .await?;
+
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
 
@@ -100,6 +104,8 @@ impl TestSuite {
 
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_transaction_proposed_at(&builder.build().await)
+            .await?;
         self.kv_transaction_fetch_add_u64(&builder.build().await)
             .await?;
         self.kv_transaction_fetch_add_u64_match_seq(&builder.build().await)
@@ -133,7 +139,7 @@ impl TestSuite {
             // write
             let res = kv.upsert_kv(UpsertKV::update("foo", b"bar")).await?;
             assert_eq!(None, res.prev);
-            assert_eq!(Some(SeqV::new(1, b("bar"))), res.result);
+            assert_eq!(Some(SeqV::new(1, b("bar"))), res.result.erase_proposed_at());
         }
 
         {
@@ -143,7 +149,7 @@ impl TestSuite {
                 .await?;
             assert_eq!(
                 (Some(SeqV::new(1, b("bar"))), Some(SeqV::new(1, b("bar"))),),
-                (res.prev, res.result),
+                (res.prev.erase_proposed_at(), res.result.erase_proposed_at()),
                 "nothing changed"
             );
         }
@@ -153,9 +159,44 @@ impl TestSuite {
             let res = kv
                 .upsert_kv(UpsertKV::update("foo", b"wow").with(MatchSeq::Exact(1)))
                 .await?;
-            assert_eq!(Some(SeqV::new(1, b("bar"))), res.prev, "old value");
-            assert_eq!(Some(SeqV::new(2, b("wow"))), res.result, "new value");
+            assert_eq!(
+                Some(SeqV::new(1, b("bar"))),
+                res.prev.erase_proposed_at(),
+                "old value"
+            );
+            assert_eq!(
+                Some(SeqV::new(2, b("wow"))),
+                res.result.erase_proposed_at(),
+                "new value"
+            );
         }
+
+        Ok(())
+    }
+
+    /// Test the proposed_at time field .
+    #[fastrace::trace]
+    pub async fn kv_write_read_proposed_at<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_write_read_proposed_at() start");
+        let proposed_at;
+        {
+            // write
+            let res = kv.upsert_kv(UpsertKV::update("foo", b"bar")).await?;
+            assert_eq!(None, res.prev);
+            let result = res.result.unwrap();
+            assert_eq!(1, result.seq);
+            assert_eq!(b("bar"), result.data);
+            let p = result.meta.unwrap().proposed_at_ms();
+            assert!(p.is_some());
+            proposed_at = p.unwrap();
+            assert!(proposed_at > 0);
+        }
+
+        let res = kv.get_kv("foo").await?;
+        assert_eq!(
+            res.unwrap().meta.unwrap().proposed_at_ms(),
+            Some(proposed_at)
+        );
 
         Ok(())
     }
@@ -174,7 +215,7 @@ impl TestSuite {
                 .upsert_kv(UpsertKV::new(test_key, wrong_seq, Operation::Delete, None))
                 .await?;
 
-            assert_eq!(res.prev, res.result);
+            assert_eq!(res.prev.erase_proposed_at(), res.result.erase_proposed_at());
 
             // dbg!("delete with wrong seq", &res);
 
@@ -205,7 +246,10 @@ impl TestSuite {
         let res = kv.upsert_kv(UpsertKV::delete(test_key)).await?;
         // dbg!("delete", &res);
 
-        assert_eq!((Some(SeqV::new(2, b("v2"))), None), (res.prev, res.result));
+        assert_eq!(
+            (Some(SeqV::new(2, b("v2"))), None),
+            (res.prev.erase_proposed_at(), res.result)
+        );
 
         Ok(())
     }
@@ -221,35 +265,36 @@ impl TestSuite {
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
         let r = kv.upsert_kv(UpsertKV::update(test_key, b"v1")).await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
-        let seq = r.result.unwrap().seq;
+        let seq = r.result.as_ref().unwrap().seq;
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result.erase_proposed_at());
 
         // unmatched seq
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v2").with(MatchSeq::Exact(seq + 1)))
             .await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev.erase_proposed_at());
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result.erase_proposed_at());
 
         // matched seq
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v2").with(MatchSeq::Exact(seq)))
             .await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
-        assert_eq!(Some(SeqV::new(2, b("v2"))), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev.erase_proposed_at());
+        assert_eq!(Some(SeqV::new(2, b("v2"))), r.result.erase_proposed_at());
 
         // blind update
         let r = kv
             .upsert_kv(UpsertKV::update(test_key, b"v3").with(MatchSeq::GE(1)))
             .await?;
-        assert_eq!(Some(SeqV::new(2, b("v2"))), r.prev);
-        assert_eq!(Some(SeqV::new(3, b("v3"))), r.result);
+        assert_eq!(Some(SeqV::new(2, b("v2"))), r.prev.erase_proposed_at());
+        assert_eq!(Some(SeqV::new(3, b("v3"))), r.result.erase_proposed_at());
 
         // value updated
         let key_value = kv.get_kv(test_key).await?;
         assert!(key_value.is_some());
         let key_value = key_value.unwrap();
-        assert_eq!(key_value, SeqV::new(key_value.seq, b("v3")));
+        let seq = key_value.seq;
+        assert_eq!(key_value.erase_proposed_at(), SeqV::new(seq, b("v3")));
         Ok(())
     }
 
@@ -465,8 +510,8 @@ impl TestSuite {
         let now_sec = since_epoch_secs();
 
         let r = kv.upsert_kv(UpsertKV::update(test_key, b"v1")).await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
-        let seq = r.result.unwrap().seq;
+        let seq = r.result.as_ref().unwrap().seq;
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result.erase_proposed_at());
 
         info!("--- mismatching seq does nothing");
 
@@ -478,8 +523,8 @@ impl TestSuite {
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev.erase_proposed_at());
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.result.erase_proposed_at());
 
         info!("--- matching seq only update meta");
 
@@ -491,7 +536,7 @@ impl TestSuite {
                 Some(MetaSpec::new_ttl(Duration::from_secs(20))),
             ))
             .await?;
-        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev);
+        assert_eq!(Some(SeqV::new(1, b("v1"))), r.prev.erase_proposed_at());
 
         {
             let res = r.result.unwrap();
@@ -562,7 +607,7 @@ impl TestSuite {
         kv.upsert_kv(UpsertKV::update("k2", b"v2")).await?;
 
         let res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
-        assert_eq!(res, vec![
+        assert_eq!(res.erase_proposed_at(), vec![
             Some(SeqV::new(1, b("v1"),)),
             // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
             Some(SeqV::new(2, b("v2"),)),
@@ -571,7 +616,10 @@ impl TestSuite {
         let res = kv
             .mget_kv(&["k1".to_string(), "key_no exist".to_string()])
             .await?;
-        assert_eq!(res, vec![Some(SeqV::new(1, b("v1"))), None]);
+        assert_eq!(res.erase_proposed_at(), vec![
+            Some(SeqV::new(1, b("v1"))),
+            None
+        ]);
 
         Ok(())
     }
@@ -930,7 +978,10 @@ impl TestSuite {
                 vec![TxnOpResponse::get(k1, Some(SeqV::new(8, b("v1"))))];
 
             assert_eq!(resp.success, false);
-            assert_eq!(resp.responses, expected);
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test eq value: success = true
 
@@ -1132,6 +1183,51 @@ impl TestSuite {
                 normalize_txn_response(expected)
             );
         }
+        Ok(())
+    }
+
+    #[allow(clippy::bool_assert_comparison)]
+    pub async fn kv_transaction_proposed_at<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- kvapi::KVApiTestSuite::kv_transaction_proposed_at() start");
+
+        let k1 = "txn_1_K1";
+        let val1 = b("v1");
+
+        // first insert k1 value
+        kv.upsert_kv(UpsertKV::update(k1, &val1)).await?;
+
+        // transaction by k1 condition
+        let txn_key = k1.to_string();
+        let condition = vec![TxnCondition {
+            key: txn_key.clone(),
+            expected: ConditionResult::Gt as i32,
+            target: Some(txn_condition::Target::Seq(0)),
+        }];
+
+        let if_then: Vec<TxnOp> = vec![TxnOp::put(txn_key.clone(), b("new_v1"))];
+
+        let txn = TxnRequest::new(condition, if_then);
+
+        let mut resp = kv.transaction(txn).await?;
+
+        assert!(resp.success);
+        assert_eq!(resp.responses.len(), 1);
+        let resp = resp.responses.pop().unwrap();
+
+        let put_resp = resp.try_as_put().unwrap().clone();
+
+        let prev = put_resp.prev_value.unwrap();
+        let current = put_resp.current.unwrap();
+
+        let prev_proposed_at = prev.meta.unwrap().proposed_at_ms.unwrap();
+        assert!(prev_proposed_at > 0);
+
+        let current_proposed_at = current.meta.unwrap().proposed_at_ms.unwrap();
+        assert!(current_proposed_at >= prev_proposed_at);
+
         Ok(())
     }
 
@@ -1373,23 +1469,16 @@ impl TestSuite {
 
         assert_eq!(resp.responses.len(), 2);
 
-        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+        let normalized = normalize_txn_response(resp.responses);
+        assert_eq!(normalized[0].try_as_put().unwrap(), &TxnPutResponse {
             key: "k1/000_000_000_000_000_000_000".to_string(),
             prev_value: None,
-            current: Some(pb::SeqV::with_meta(
-                2,
-                Some(KvMeta::default()),
-                b("v1").to_vec()
-            )),
+            current: Some(pb::SeqV::with_meta(2, None, b("v1").to_vec())),
         });
-        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+        assert_eq!(normalized[1].try_as_put().unwrap(), &TxnPutResponse {
             key: "k2/000_000_000_000_000_000_001".to_string(),
             prev_value: None,
-            current: Some(pb::SeqV::with_meta(
-                4,
-                Some(KvMeta::default()),
-                b("v2").to_vec()
-            )),
+            current: Some(pb::SeqV::with_meta(4, None, b("v2").to_vec())),
         });
 
         // insert again
@@ -1403,23 +1492,16 @@ impl TestSuite {
 
         assert_eq!(resp.responses.len(), 2);
 
-        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+        let normalized = normalize_txn_response(resp.responses);
+        assert_eq!(normalized[0].try_as_put().unwrap(), &TxnPutResponse {
             key: "k1/000_000_000_000_000_000_002".to_string(),
             prev_value: None,
-            current: Some(pb::SeqV::with_meta(
-                6,
-                Some(KvMeta::default()),
-                b("v1").to_vec()
-            )),
+            current: Some(pb::SeqV::with_meta(6, None, b("v1").to_vec())),
         });
-        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+        assert_eq!(normalized[1].try_as_put().unwrap(), &TxnPutResponse {
             key: "k2/000_000_000_000_000_000_003".to_string(),
             prev_value: None,
-            current: Some(pb::SeqV::with_meta(
-                8,
-                Some(KvMeta::default()),
-                b("v2").to_vec()
-            )),
+            current: Some(pb::SeqV::with_meta(8, None, b("v2").to_vec())),
         });
 
         Ok(())
@@ -1446,24 +1528,25 @@ impl TestSuite {
 
         assert_eq!(resp.responses.len(), 2);
 
-        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+        let normalized = normalize_txn_response(resp.responses);
+        assert_eq!(normalized[0].try_as_put().unwrap(), &TxnPutResponse {
             key: "k1/000_000_000_000_000_000_000".to_string(),
             prev_value: None,
             current: Some(pb::SeqV::with_meta(
                 2,
-                Some(KvMeta::new_expire(now_ms + 1000)),
+                Some(KvMeta::new(Some(now_ms + 1000), None)),
                 b("v1").to_vec()
             )),
         });
 
-        let got = resp.responses[1].try_as_put().unwrap();
+        let got = normalized[1].try_as_put().unwrap();
         assert_eq!(got.key, "k2/000_000_000_000_000_000_001".to_string());
         assert_eq!(got.prev_value, None);
         let current = got.current.clone().unwrap();
         assert_eq!(current.seq, 4);
         assert_eq!(current.data, b("v2"));
         assert!(current.meta.unwrap().close_to(
-            &KvMeta::new_expire(now_ms + 1000),
+            &KvMeta::new(Some(now_ms + 1000), None),
             Duration::from_millis(1000)
         ));
 
@@ -1767,7 +1850,7 @@ impl TestSuite {
         let got = kv.get_kv(&key()).await?;
         assert_eq!(
             Some(SeqV::new(1, val())),
-            got,
+            got.erase_proposed_at(),
             "not deleted due to non-matching seq"
         );
 
@@ -1849,7 +1932,7 @@ impl TestSuite {
                         data: b("v")
                     })
                 ],
-                res
+                res.erase_proposed_at()
             );
         }
 
@@ -1871,6 +1954,7 @@ impl TestSuite {
 }
 
 /// Convert Some(KvMeta{ expire: None }) to None to simplify the comparison
+/// Also erase proposed_at_ms for test comparisons
 fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
     vs.into_iter()
         .map(|mut v| {
@@ -1880,7 +1964,15 @@ fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
                     value: Some(pb::SeqV { meta, .. }),
                     ..
                 })) => {
-                    if *meta == Some(pb::KvMeta { expire_at: None }) {
+                    if let Some(m) = meta {
+                        m.proposed_at_ms = None;
+                    }
+                    if *meta
+                        == Some(pb::KvMeta {
+                            expire_at: None,
+                            proposed_at_ms: None,
+                        })
+                    {
                         *meta = None;
                     }
                 }
@@ -1888,7 +1980,31 @@ fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
                     prev_value: Some(pb::SeqV { meta, .. }),
                     ..
                 })) => {
-                    if *meta == Some(pb::KvMeta { expire_at: None }) {
+                    if let Some(m) = meta {
+                        m.proposed_at_ms = None;
+                    }
+                    if *meta
+                        == Some(pb::KvMeta {
+                            expire_at: None,
+                            proposed_at_ms: None,
+                        })
+                    {
+                        *meta = None;
+                    }
+                }
+                Some(Response::Delete(TxnDeleteResponse {
+                    prev_value: Some(pb::SeqV { meta, .. }),
+                    ..
+                })) => {
+                    if let Some(m) = meta {
+                        m.proposed_at_ms = None;
+                    }
+                    if *meta
+                        == Some(pb::KvMeta {
+                            expire_at: None,
+                            proposed_at_ms: None,
+                        })
+                    {
                         *meta = None;
                     }
                 }
@@ -1900,7 +2016,15 @@ fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
                 ..
             })) = &mut v.response
             {
-                if *meta == Some(pb::KvMeta { expire_at: None }) {
+                if let Some(m) = meta {
+                    m.proposed_at_ms = None;
+                }
+                if *meta
+                    == Some(pb::KvMeta {
+                        expire_at: None,
+                        proposed_at_ms: None,
+                    })
+                {
                     *meta = None;
                 }
             }
