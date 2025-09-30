@@ -135,15 +135,17 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         let retention_time = chrono::Utc::now() - duration;
 
-        // Set vacuum timestamp before starting the vacuum operation
+        // Set vacuum timestamp before starting the vacuum operation (only in non-dry-run mode)
         // This ensures undrop operations after this point will be blocked
-        let tenant = ctx.get_tenant();
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        if let Err(e) = meta_api
-            .fetch_set_vacuum_timestamp(&tenant, retention_time)
-            .await
-        {
-            info!("Failed to set vacuum timestamp: {:?}", e);
+        if self.plan.option.dry_run.is_none() {
+            let tenant = ctx.get_tenant();
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            if let Err(e) = meta_api
+                .fetch_set_vacuum_timestamp(&tenant, retention_time)
+                .await
+            {
+                info!("Failed to set vacuum timestamp: {:?}", e);
+            }
         }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
