@@ -364,7 +364,7 @@ impl SpillWriter {
     pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
         let mut row_group = self.file.new_row_group();
         for block in blocks {
-            row_group.write(block)?;
+            row_group.add(block)?;
         }
         Ok(self.file.flush_row_group(row_group)?)
     }

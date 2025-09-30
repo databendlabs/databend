@@ -56,13 +56,13 @@ use super::async_buffer::BufferWriter;
 use super::SpillAdapter;
 use super::SpillerInner;
 
-pub struct RowGroupWriter {
+pub struct RowGroupEncoder {
     schema: Arc<Schema>,
     props: WriterPropertiesPtr,
     writers: Vec<ArrowColumnWriter>,
 }
 
-impl RowGroupWriter {
+impl RowGroupEncoder {
     fn new(props: &WriterPropertiesPtr, schema: Arc<Schema>, parquet: &SchemaDescriptor) -> Self {
         let writers = get_column_writers(parquet, props, &schema).unwrap();
         Self {
@@ -72,7 +72,7 @@ impl RowGroupWriter {
         }
     }
 
-    pub(super) fn write(&mut self, block: DataBlock) -> errors::Result<()> {
+    pub fn add(&mut self, block: DataBlock) -> errors::Result<()> {
         let columns = block.take_columns();
         let mut writer_iter = self.writers.iter_mut();
         for (field, entry) in self.schema.fields().iter().zip(columns) {
@@ -99,7 +99,7 @@ impl RowGroupWriter {
     }
 
     pub fn into_block(self) -> Result<DataBlock> {
-        let RowGroupWriter {
+        let RowGroupEncoder {
             schema,
             props,
             writers,
@@ -169,8 +169,8 @@ impl<W: Write + Send> FileWriter<W> {
         })
     }
 
-    pub(super) fn new_row_group(&self) -> RowGroupWriter {
-        RowGroupWriter::new(
+    pub(super) fn new_row_group(&self) -> RowGroupEncoder {
+        RowGroupEncoder::new(
             self.writer.properties(),
             self.schema.clone(),
             self.writer.schema_descr(),
@@ -179,7 +179,7 @@ impl<W: Write + Send> FileWriter<W> {
 
     pub(super) fn flush_row_group(
         &mut self,
-        row_group: RowGroupWriter,
+        row_group: RowGroupEncoder,
     ) -> errors::Result<RowGroupMetaDataPtr> {
         let mut row_group_writer = self.writer.next_row_group()?;
         row_group.close(&mut row_group_writer)?;
@@ -191,7 +191,7 @@ impl<W: Write + Send> FileWriter<W> {
     pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
         let mut row_group = self.new_row_group();
         for block in blocks {
-            row_group.write(block)?;
+            row_group.add(block)?;
         }
 
         Ok(self.flush_row_group(row_group)?)
@@ -646,8 +646,8 @@ mod tests {
         let file_writer = FileWriter::new(props.clone(), &data_schema, Vec::<u8>::new())?;
         let mut row_group = file_writer.new_row_group();
 
-        row_group.write(block.clone())?;
-        row_group.write(block.clone())?;
+        row_group.add(block.clone())?;
+        row_group.add(block.clone())?;
         let restored = row_group.into_block()?;
 
         for (a, b) in DataBlock::concat(&[block.clone(), block])?
