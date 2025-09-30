@@ -573,7 +573,7 @@ impl DmaWriteBuf {
         let len = data.len() * self.chunk;
 
         let bufs = data.iter().map(|buf| IoSlice::new(buf)).collect::<Vec<_>>();
-        let writen = rustix::io::writev(&file.fd, &bufs)?;
+        let written = rustix::io::writev(&file.fd, &bufs)?;
 
         let last = self.data.pop();
         self.data.clear();
@@ -584,12 +584,12 @@ impl DmaWriteBuf {
             _ => (),
         }
 
-        file.length += writen;
+        file.length += written;
 
-        if writen != len {
+        if written != len {
             Err(io::Error::other("short write"))
         } else {
-            Ok(writen)
+            Ok(written)
         }
     }
 
@@ -624,19 +624,19 @@ impl DmaWriteBuf {
             .map(|buf| IoSlice::new(buf))
             .collect::<Vec<_>>();
 
-        let writen = rustix::io::writev(&file.fd, &bufs)?;
-        if writen != len {
+        let written = rustix::io::writev(&file.fd, &bufs)?;
+        if written != len {
             return Err(io::Error::other("short write"));
         }
 
         if to_truncate == 0 {
-            file.length += writen;
-            return Ok(writen);
+            file.length += written;
+            return Ok(written);
         }
 
         file.length -= to_truncate;
         file.truncate(file.length)?;
-        Ok(writen - to_truncate)
+        Ok(written - to_truncate)
     }
 }
 

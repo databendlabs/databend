@@ -48,14 +48,29 @@ enum WindowBuffer {
 
 impl WindowBuffer {
     fn new(
+        is_v2: bool,
         spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
-        let inner =
-            WindowPartitionBuffer::new(spiller, num_partitions, sort_block_size, memory_settings)?;
-        Ok(Self::V1(inner))
+        if is_v2 {
+            let inner = WindowPartitionBufferV2::new(
+                spiller,
+                num_partitions,
+                sort_block_size,
+                memory_settings,
+            )?;
+            Ok(Self::V2(inner))
+        } else {
+            let inner = WindowPartitionBuffer::new(
+                spiller,
+                num_partitions,
+                sort_block_size,
+                memory_settings,
+            )?;
+            Ok(Self::V1(inner))
+        }
     }
 
     fn need_spill(&mut self) -> bool {
@@ -170,8 +185,13 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer =
-            WindowBuffer::new(spiller, partitions.len(), sort_block_size, memory_settings)?;
+        let buffer = WindowBuffer::new(
+            true,
+            spiller,
+            partitions.len(),
+            sort_block_size,
+            memory_settings,
+        )?;
 
         Ok(Self {
             input,
