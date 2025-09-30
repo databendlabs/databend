@@ -92,26 +92,6 @@ where
     /// Note: DeleteByPrefix operations count as 1 but may remove multiple keys.
     #[fastrace::trace]
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize, KVAppError> {
-        // First advance retention watermark based on retention period and current time
-        let retention_timestamp = {
-            use chrono::Duration;
-            let now = Utc::now();
-            // Calculate retention timestamp based on retention period
-            // This should be configurable, but for now use a default
-            let retention_days = 7; // TODO: get from config/settings
-            now - Duration::days(retention_days)
-        };
-
-        // Set vacuum retention timestamp before starting cleanup
-        let old_retention = self
-            .fetch_set_vacuum_timestamp(&req.tenant, retention_timestamp)
-            .await?;
-
-        debug!(
-            "Set vacuum retention timestamp for tenant {:?}: old={:?}, new={:?}",
-            req.tenant, old_retention.time, retention_timestamp
-        );
-
         let mut num_meta_key_removed = 0;
         for drop_id in req.drop_ids {
             match drop_id {
