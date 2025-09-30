@@ -61,30 +61,6 @@ impl UserMgr {
         let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
         ident.tenant_prefix()
     }
-
-    #[async_backtrace::framed]
-    async fn upsert_user_info(
-        &self,
-        user_info: &UserInfo,
-        seq: MatchSeq,
-    ) -> databend_common_exception::Result<u64> {
-        let key = self.user_key(&user_info.name, &user_info.hostname);
-
-        let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-
-        let kv_api = self.kv_api.clone();
-        let res = kv_api
-            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
-            .await?;
-
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "User '{}' update failed: User does not exist or invalid request.",
-                user_info.name
-            ))),
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -184,11 +160,27 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
-    async fn alter_user(&self, user_info: &UserInfo, seq: u64) -> Result<Option<u64>> {
-        let seq = self
-            .upsert_user_info(user_info, MatchSeq::Exact(seq))
+    async fn upsert_user_info(
+        &self,
+        user_info: &UserInfo,
+        seq: MatchSeq,
+    ) -> databend_common_exception::Result<u64> {
+        let key = self.user_key(&user_info.name, &user_info.hostname);
+
+        let value = serialize_struct(user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+
+        let kv_api = self.kv_api.clone();
+        let res = kv_api
+            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
             .await?;
-        Ok(Some(seq))
+
+        match res.result {
+            Some(SeqV { seq: s, .. }) => Ok(s),
+            None => Err(ErrorCode::UnknownUser(format!(
+                "User '{}' update failed: User does not exist or invalid request.",
+                user_info.name
+            ))),
+        }
     }
 
     #[async_backtrace::framed]

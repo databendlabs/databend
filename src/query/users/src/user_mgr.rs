@@ -363,9 +363,11 @@ impl UserApiProvider {
         }
 
         let client = self.user_api(tenant);
-        let alter_user = client.alter_user(user_info, seq).await;
-        match alter_user {
-            Ok(res) => Ok(res),
+        let seq = client
+            .upsert_user_info(user_info, MatchSeq::Exact(seq))
+            .await;
+        match seq {
+            Ok(s) => Ok(Some(s)),
             Err(e) => Err(e.add_message_back("(while alter user).")),
         }
     }
@@ -383,7 +385,15 @@ impl UserApiProvider {
         let mut user_info = user.data;
         user_info.option.set_default_role(default_role);
         user_info.update_user_time();
-        self.alter_user(tenant, &user_info, seq).await
+
+        let client = self.user_api(tenant);
+        let seq = client
+            .upsert_user_info(&user_info, MatchSeq::Exact(seq))
+            .await;
+        match seq {
+            Ok(s) => Ok(Some(s)),
+            Err(e) => Err(e.add_message_back("(while alter user).")),
+        }
     }
 
     #[async_backtrace::framed]
