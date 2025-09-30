@@ -192,7 +192,7 @@ impl WindowPartitionBuffer {
                     .partition_buffer
                     .fetch_data_blocks(partition_id, &option)
                 {
-                    result.extend(self.concat_data_blocks(data_blocks)?);
+                    result.extend(concat_data_blocks(data_blocks, self.sort_block_size)?);
                 }
             }
 
@@ -205,7 +205,7 @@ impl WindowPartitionBuffer {
                     .restored_partition_buffer
                     .fetch_data_blocks(partition_id, &option)
                 {
-                    result.extend(self.concat_data_blocks(data_blocks)?);
+                    result.extend(concat_data_blocks(data_blocks, self.sort_block_size)?);
                 }
             }
 
@@ -215,31 +215,29 @@ impl WindowPartitionBuffer {
         }
         Ok(vec![])
     }
-
-    fn concat_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        let mut num_rows = 0;
-        let mut result = Vec::new();
-        let mut current_blocks = Vec::new();
-
-        for data_block in data_blocks.into_iter() {
-            num_rows += data_block.num_rows();
-            current_blocks.push(data_block);
-            if num_rows >= self.sort_block_size {
-                result.push(DataBlock::concat(&current_blocks)?);
-                num_rows = 0;
-                current_blocks.clear();
-            }
-        }
-
-        if !current_blocks.is_empty() {
-            result.push(DataBlock::concat(&current_blocks)?);
-        }
-
-        Ok(result)
-    }
 }
 
-trait Spill {
-    async fn spill(blocks: Vec<DataBlock>) -> Result<i16>;
-    async fn restore(ordinal: Vec<i16>) -> Result<Vec<DataBlock>>;
+pub(super) fn concat_data_blocks(
+    data_blocks: Vec<DataBlock>,
+    target_size: usize,
+) -> Result<Vec<DataBlock>> {
+    let mut num_rows = 0;
+    let mut result = Vec::new();
+    let mut current_blocks = Vec::new();
+
+    for data_block in data_blocks.into_iter() {
+        num_rows += data_block.num_rows();
+        current_blocks.push(data_block);
+        if num_rows >= target_size {
+            result.push(DataBlock::concat(&current_blocks)?);
+            num_rows = 0;
+            current_blocks.clear();
+        }
+    }
+
+    if !current_blocks.is_empty() {
+        result.push(DataBlock::concat(&current_blocks)?);
+    }
+
+    Ok(result)
 }

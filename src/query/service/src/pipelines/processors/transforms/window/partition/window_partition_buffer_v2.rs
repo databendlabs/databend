@@ -1,22 +1,21 @@
-use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 
+use super::concat_data_blocks;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait Spill: Send + Sync {
     async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16>;
     async fn restore(&mut self, ordinals: Vec<i16>) -> Result<Vec<DataBlock>>;
 }
 
-/// Alternate window partition buffer that delegates spilling through a `Spill`
-/// abstraction and tracks spilled partitions by ordinal.
 pub struct WindowPartitionBufferV2<S: Spill> {
     spill: S,
     memory_settings: MemorySettings,
+    min_spill_size: usize,
     partition_buffer: PartitionBuffer,
     num_partitions: usize,
     sort_block_size: usize,
@@ -36,6 +35,7 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
         Ok(Self {
             spill,
             memory_settings,
+            min_spill_size: 1024 * 1024,
             partition_buffer,
             num_partitions,
             sort_block_size,
@@ -63,7 +63,11 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
         }
         self.partition_buffer
             .add_data_block(partition_id, data_block);
-        self.can_spill = true;
+        if !self.can_spill
+            && self.partition_buffer.partition_memory_size(partition_id) >= self.min_spill_size
+        {
+            self.can_spill = true;
+        }
     }
 
     pub async fn spill(&mut self) -> Result<()> {
@@ -94,7 +98,9 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
             }
         }
 
-        if let Some((partition_id, _)) = preferred_partition {
+        if let Some((partition_id, size)) = preferred_partition
+            && size >= self.min_spill_size
+        {
             let blocks = self
                 .partition_buffer
                 .fetch_data_blocks(partition_id, &PartitionBufferFetchOption::ReadPartition)
@@ -123,7 +129,7 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
                 .partition_buffer
                 .fetch_data_blocks(partition_id, &PartitionBufferFetchOption::ReadPartition)
             {
-                result.extend(self.concat_data_blocks(blocks)?);
+                result.extend(concat_data_blocks(blocks, self.sort_block_size)?);
             }
 
             if !result.is_empty() {
@@ -132,27 +138,5 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
         }
 
         Ok(vec![])
-    }
-
-    fn concat_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        let mut num_rows = 0;
-        let mut result = Vec::new();
-        let mut current_blocks = Vec::new();
-
-        for data_block in data_blocks.into_iter() {
-            num_rows += data_block.num_rows();
-            current_blocks.push(data_block);
-            if num_rows >= self.sort_block_size {
-                result.push(DataBlock::concat(&current_blocks)?);
-                num_rows = 0;
-                current_blocks.clear();
-            }
-        }
-
-        if !current_blocks.is_empty() {
-            result.push(DataBlock::concat(&current_blocks)?);
-        }
-
-        Ok(result)
     }
 }
