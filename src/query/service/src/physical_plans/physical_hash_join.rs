@@ -454,7 +454,12 @@ impl HashJoin {
         builder.main_pipeline.extend_sinks(join_sinks);
         let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
         builder.main_pipeline.add_pipe(join_pipe);
-        Ok(())
+
+        // In the case of spilling, we need to share state among multiple threads
+        // Quickly fetch all data from this round to quickly start the next round
+        builder
+            .main_pipeline
+            .resize(builder.main_pipeline.output_len(), true)
     }
 
     fn create_join(
