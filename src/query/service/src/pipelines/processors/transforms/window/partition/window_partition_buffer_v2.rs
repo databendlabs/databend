@@ -25,12 +25,12 @@ use crate::spillers::SpillWriter;
 use crate::spillers::Spiller;
 
 #[async_trait::async_trait]
-trait Reader: Send {
+pub trait Reader: Send {
     async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>>;
 }
 
 #[async_trait::async_trait]
-trait Writer: Send {
+pub trait Writer: Send {
     type Reader: Reader;
 
     async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize>;
@@ -39,7 +39,7 @@ trait Writer: Send {
 }
 
 #[async_trait::async_trait]
-trait Builder: Send + Sync {
+pub trait Builder: Send + Sync {
     type Writer: Writer;
 
     async fn create(&self, schema: Arc<DataSchema>) -> Result<Self::Writer>;
@@ -59,7 +59,10 @@ impl Writer for SpillWriter {
     type Reader = SpillReader;
 
     async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
-        self.spill(blocks).await
+        if !self.is_opened() {
+            self.open().await?;
+        }
+        self.add_row_group(blocks)
     }
 
     async fn close(self) -> Result<SpillReader> {
@@ -178,7 +181,9 @@ where
     }
 }
 
-pub struct WindowPartitionBufferV2<B>
+pub(super) type WindowPartitionBufferV2 = PartitionBuffer<Spiller>;
+
+pub(super) struct PartitionBuffer<B>
 where B: Builder
 {
     spiller: B,
@@ -191,17 +196,16 @@ where B: Builder
     next_to_restore_partition_id: isize,
 }
 
-impl WindowPartitionBufferV2<Spiller> {
+impl PartitionBuffer<Spiller> {
     pub fn new(
         spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
-        let mut partitions = Vec::with_capacity(num_partitions);
-        for _ in 0..num_partitions {
-            partitions.push(PartitionSlot::<B::Writer>::default());
-        }
+        let partitions = (0..num_partitions)
+            .map(|_| PartitionSlot::default())
+            .collect();
         Ok(Self {
             spiller,
             partitions,
@@ -215,15 +219,11 @@ impl WindowPartitionBufferV2<Spiller> {
     }
 }
 
-impl<B> WindowPartitionBufferV2<B>
+impl<B> PartitionBuffer<B>
 where B: Builder
 {
     pub fn need_spill(&mut self) -> bool {
         self.can_spill && self.memory_settings.check_spill()
-    }
-
-    pub fn out_of_memory_limit(&mut self) -> bool {
-        self.memory_settings.check_spill()
     }
 
     pub fn is_empty(&self) -> bool {

@@ -35,17 +35,16 @@ use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parquet::file::metadata::RowGroupMetaDataPtr;
 
 use super::async_buffer::BufferPool;
+use super::block_reader::BlocksReader;
+use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::serialize::*;
-use super::union_file::FileWriter;
-use super::union_file::UnionFile;
-use super::union_file::UnionFileWriter;
+use super::union_file::*;
 use super::Location;
 use crate::sessions::QueryContext;
-use crate::spillers::block_reader::BlocksReader;
-use crate::spillers::block_writer::BlocksWriter;
 
 #[derive(Clone)]
 pub struct PartitionAdapter {
@@ -402,21 +401,45 @@ pub struct SpillWriter {
 }
 
 impl SpillWriter {
-    pub async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
-        let file_writer = match &mut self.file_writer {
-            Some(file_writer) => file_writer,
-            file_writer @ None => {
-                let writer = self
-                    .spiller
-                    .new_file_writer(&self.schema, &self.buffer_pool, self.dio, self.chunk_size)
-                    .await?;
-                file_writer.insert(writer)
-            }
+    pub async fn open(&mut self) -> Result<()> {
+        if self.file_writer.is_some() {
+            return Err(ErrorCode::Internal("SpillWriter already opened"));
+        }
+
+        let writer = self
+            .spiller
+            .new_file_writer(&self.schema, &self.buffer_pool, self.dio, self.chunk_size)
+            .await?;
+        self.file_writer = Some(writer);
+        Ok(())
+    }
+
+    pub fn is_opened(&self) -> bool {
+        self.file_writer.is_some()
+    }
+
+    pub fn add_row_group(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
         };
 
         let row_group_meta = file_writer.spill(blocks)?;
         let ordinal = row_group_meta.ordinal().unwrap();
         Ok(ordinal as _)
+    }
+
+    pub fn new_row_group_encoder(&self) -> Option<RowGroupEncoder> {
+        self.file_writer.as_ref().map(|w| w.new_row_group())
+    }
+
+    pub fn add_row_group_encoded(
+        &mut self,
+        row_group: RowGroupEncoder,
+    ) -> Result<RowGroupMetaDataPtr> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
+        };
+        Ok(file_writer.flush_row_group(row_group)?)
     }
 
     pub fn close(self) -> Result<SpillReader> {

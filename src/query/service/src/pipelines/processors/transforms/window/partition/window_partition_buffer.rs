@@ -63,7 +63,7 @@ impl WindowPartitionBuffer {
         self.can_spill && self.memory_settings.check_spill()
     }
 
-    pub fn out_of_memory_limit(&mut self) -> bool {
+    fn out_of_memory_limit(&mut self) -> bool {
         self.memory_settings.check_spill()
     }
 

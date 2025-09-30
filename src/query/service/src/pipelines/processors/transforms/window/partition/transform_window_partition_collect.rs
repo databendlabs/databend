@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 
+use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
@@ -40,13 +41,13 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
-// Local enum to wrap WindowPartitionBuffer as a variant without modifying the original.
-pub enum WindowBuffer {
-    WindowPartitionBuffer(Box<WindowPartitionBuffer>),
+enum WindowBuffer {
+    V1(WindowPartitionBuffer),
+    V2(WindowPartitionBufferV2),
 }
 
 impl WindowBuffer {
-    pub fn new(
+    fn new(
         spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
@@ -54,58 +55,60 @@ impl WindowBuffer {
     ) -> Result<Self> {
         let inner =
             WindowPartitionBuffer::new(spiller, num_partitions, sort_block_size, memory_settings)?;
-        Ok(Self::WindowPartitionBuffer(Box::new(inner)))
+        Ok(Self::V1(inner))
     }
 
-    pub fn need_spill(&mut self) -> bool {
+    fn need_spill(&mut self) -> bool {
         match self {
-            WindowBuffer::WindowPartitionBuffer(inner) => inner.need_spill(),
+            WindowBuffer::V1(inner) => inner.need_spill(),
+            WindowBuffer::V2(inner) => inner.need_spill(),
         }
     }
 
-    pub fn out_of_memory_limit(&mut self) -> bool {
+    fn is_empty(&self) -> bool {
         match self {
-            WindowBuffer::WindowPartitionBuffer(inner) => inner.out_of_memory_limit(),
+            WindowBuffer::V1(inner) => inner.is_empty(),
+            WindowBuffer::V2(inner) => inner.is_empty(),
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
         match self {
-            WindowBuffer::WindowPartitionBuffer(inner) => inner.is_empty(),
+            WindowBuffer::V1(inner) => inner.add_data_block(partition_id, data_block),
+            WindowBuffer::V2(inner) => inner.add_data_block(partition_id, data_block),
         }
     }
 
-    pub fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
-        let WindowBuffer::WindowPartitionBuffer(inner) = self;
-        inner.add_data_block(partition_id, data_block);
+    async fn spill(&mut self) -> Result<()> {
+        match self {
+            WindowBuffer::V1(inner) => inner.spill().await,
+            WindowBuffer::V2(inner) => inner.spill().await,
+        }
     }
 
-    pub async fn spill(&mut self) -> Result<()> {
-        let WindowBuffer::WindowPartitionBuffer(inner) = self;
-        inner.spill().await
-    }
-
-    pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
-        let WindowBuffer::WindowPartitionBuffer(inner) = self;
-        inner.restore().await
+    async fn restore(&mut self) -> Result<Vec<DataBlock>> {
+        match self {
+            WindowBuffer::V1(inner) => inner.restore().await,
+            WindowBuffer::V2(inner) => inner.restore().await,
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Step {
+enum Step {
     Sync(SyncStep),
     Async(AsyncStep),
     Finish,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SyncStep {
+enum SyncStep {
     Collect,
     Process,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AsyncStep {
+enum AsyncStep {
     Spill,
     Restore,
 }

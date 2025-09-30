@@ -25,7 +25,6 @@ pub use data_processor_strategy::*;
 pub use hilbert_partition_exchange::*;
 pub use transform_window_partition_collect::*;
 pub use window_partition_buffer::*;
-pub use window_partition_buffer_v2::*;
 pub use window_partition_exchange::*;
 pub use window_partition_meta::*;
 pub use window_partition_partial_top_n_exchange::*;
