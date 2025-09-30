@@ -93,9 +93,9 @@ async fn test_export() -> anyhow::Result<()> {
         r#"["state_machine/0",{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":6}}}}]"#,
         r#"["state_machine/0",{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":3},"membership":{"configs":[[0]],"nodes":{"0":{}}}}}}}]"#,
         r#"["state_machine/0",{"Nodes":{"key":0,"value":{"name":"0","endpoint":{"addr":"localhost","port":29000},"grpc_api_advertise_address":"127.0.0.1:29000"}}}]"#,
-        r#"["state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":null,"data":[98,97,114]}}}]"#,
-        r#"["state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":null,"data":[102,111,111]}}}]"#,
-        r#"["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"bar","value":{"seq":2,"meta":{"proposed_at_ms":1111111111111},"data":[98,97,114]}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"foo","value":{"seq":1,"meta":{"proposed_at_ms":1111111111111},"data":[102,111,111]}}}]"#,
+        r#"["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":{"proposed_at_ms":1111111111111},"data":[119,111,119]}}}]"#,
     ];
 
     // The addresses are built from random number.

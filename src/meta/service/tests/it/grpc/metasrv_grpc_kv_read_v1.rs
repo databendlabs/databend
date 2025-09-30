@@ -23,6 +23,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::reduce_seqv::ReduceSeqV;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
@@ -209,7 +210,7 @@ async fn test_streamed_list(client: &Arc<ClientHandle>, _now_sec: u64) -> anyhow
                 Some(pb::SeqV::new(4, b("c2")))
             )),
         ],
-        got
+        got.erase_proposed_at()
     );
     Ok(())
 }

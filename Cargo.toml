@@ -498,7 +498,7 @@ socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
 state = "0.6.0"
-state-machine-api = { version = "0.3.1" }
+state-machine-api = { version = "0.3.4" }
 stream-more = "0.1.3"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
@@ -663,7 +663,7 @@ openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-al
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
-state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.1" }
+state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
