@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-mod convert;
-mod global;
-mod interface;
-mod merge;
-mod packet;
+mod common;
+mod join;
+mod memory;
+mod runtime_filter;
+mod transform_hash_join;
 
-pub use convert::build_runtime_filter_infos;
-pub use global::get_global_runtime_filter_packet;
-pub use interface::build_and_push_down_runtime_filter;
-pub use packet::JoinRuntimeFilterPacket;
+pub use join::Join;
+pub use memory::HashJoinMemoryState;
+pub use memory::MemoryInnerJoin;
+pub use runtime_filter::PlanRuntimeFilterDesc;
+pub use transform_hash_join::TransformHashJoin;

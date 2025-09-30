@@ -24,4 +24,5 @@ pub use builders::RawValueSource;
 pub use builders::ValueSource;
 pub use pipeline_build_res::PipelineBuildResult;
 pub use pipeline_build_res::PipelineBuilderData;
+pub use pipeline_builder::HashJoinStateRef;
 pub use pipeline_builder::PipelineBuilder;

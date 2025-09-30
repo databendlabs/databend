@@ -12,14 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-mod convert;
-mod global;
-mod interface;
-mod merge;
-mod packet;
+mod memory_inner_join;
+mod memory_state;
 
-pub use convert::build_runtime_filter_infos;
-pub use global::get_global_runtime_filter_packet;
-pub use interface::build_and_push_down_runtime_filter;
-pub use packet::JoinRuntimeFilterPacket;
+pub use memory_inner_join::MemoryInnerJoin;
+pub use memory_state::HashJoinMemoryState;

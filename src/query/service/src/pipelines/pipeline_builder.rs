@@ -27,12 +27,19 @@ use databend_common_settings::Settings;
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::physical_plans::PhysicalPlan;
+use crate::pipelines::processors::transforms::HashJoinMemoryState;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
+
+#[derive(Clone)]
+pub enum HashJoinStateRef {
+    OldHashJoinState(Arc<HashJoinState>),
+    NewHashJoinState(Arc<HashJoinMemoryState>),
+}
 
 pub struct PipelineBuilder {
     pub(crate) ctx: Arc<QueryContext>,
@@ -48,7 +55,7 @@ pub struct PipelineBuilder {
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
-    pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
+    pub hash_join_states: HashMap<usize, HashJoinStateRef>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_stack: Vec<bool>,

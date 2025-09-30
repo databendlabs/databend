@@ -63,7 +63,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
+    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry) {
         let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -217,6 +217,9 @@ where A: Allocator + Clone + 'static
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
+                hashes.iter_mut().for_each(|hash| {
+                    *hash = 0;
+                });
                 return 0;
             } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
@@ -232,7 +235,11 @@ where A: Allocator + Clone + 'static
                             *hash = remove_header_tag(header);
                             unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
                             count += 1;
+                        } else {
+                            *hash = 0;
                         }
+                    } else {
+                        *hash = 0;
                     }
                 });
             }
@@ -243,6 +250,8 @@ where A: Allocator + Clone + 'static
                         *hash = remove_header_tag(header);
                         unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
                         count += 1;
+                    } else {
+                        *hash = 0;
                     }
                 });
             }

@@ -23,12 +23,17 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
@@ -50,12 +55,17 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::HashJoinMemoryState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
+use crate::pipelines::processors::transforms::MemoryInnerJoin;
+use crate::pipelines::processors::transforms::PlanRuntimeFilterDesc;
+use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::HashJoinStateRef;
 use crate::pipelines::PipelineBuilder;
 
 // Type aliases to simplify complex return types
@@ -246,13 +256,26 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let desc = Arc::new(HashJoinDesc::create(self)?);
+        let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
+        let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
+
+        if desc.single_to_inner.is_none()
+            && self.join_type == JoinType::Inner
+            && experimental_new_join
+            && !enable_optimization
+        {
+            return self.build_new_join_pipeline(builder, desc);
+        }
+
         // Create the join state with optimization flags
         let state = self.build_state(builder)?;
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
-            builder
-                .hash_join_states
-                .insert(build_cache_index, state.clone());
+            builder.hash_join_states.insert(
+                build_cache_index,
+                HashJoinStateRef::OldHashJoinState(state.clone()),
+            );
         }
 
         // Build both phases of the Hash Join
@@ -364,6 +387,113 @@ impl HashJoin {
             .push(build_res.main_pipeline.finalize(None));
         builder.pipelines.extend(build_res.sources_pipelines);
         Ok(())
+    }
+
+    fn build_new_join_pipeline(
+        &self,
+        builder: &mut PipelineBuilder,
+        desc: Arc<HashJoinDesc>,
+    ) -> Result<()> {
+        let state = Arc::new(HashJoinMemoryState::create());
+        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
+
+        if let Some((build_cache_index, _)) = self.build_side_cache_info {
+            builder.hash_join_states.insert(
+                build_cache_index,
+                HashJoinStateRef::NewHashJoinState(state.clone()),
+            );
+        }
+
+        self.build.build_pipeline(builder)?;
+        let mut build_sinks = builder.main_pipeline.take_sinks();
+
+        self.probe.build_pipeline(builder)?;
+
+        // Aligning hash join build and probe parallelism
+        let output_len = std::cmp::max(build_sinks.len(), builder.main_pipeline.output_len());
+        builder.main_pipeline.resize(output_len, false)?;
+
+        let probe_sinks = builder.main_pipeline.take_sinks();
+
+        if output_len != build_sinks.len() {
+            builder.main_pipeline.extend_sinks(build_sinks);
+            builder.main_pipeline.resize(output_len, false)?;
+            build_sinks = builder.main_pipeline.take_sinks();
+        }
+
+        debug_assert_eq!(build_sinks.len(), probe_sinks.len());
+
+        let stage_sync_barrier = Arc::new(Barrier::new(output_len));
+        let mut join_sinks = Vec::with_capacity(output_len * 2);
+        let mut join_pipe_items = Vec::with_capacity(output_len);
+        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
+            join_sinks.push(build_sink);
+            join_sinks.push(probe_sink);
+
+            let build_input = InputPort::create();
+            let probe_input = InputPort::create();
+            let joined_output = OutputPort::create();
+
+            let hash_join = TransformHashJoin::create(
+                build_input.clone(),
+                probe_input.clone(),
+                joined_output.clone(),
+                self.create_join(builder, desc.clone(), state.clone())?,
+                stage_sync_barrier.clone(),
+                self.projections.clone(),
+                rf_desc.clone(),
+            );
+
+            join_pipe_items.push(PipeItem::create(
+                hash_join,
+                vec![build_input, probe_input],
+                vec![joined_output],
+            ))
+        }
+
+        builder.main_pipeline.extend_sinks(join_sinks);
+        let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
+        builder.main_pipeline.add_pipe(join_pipe);
+
+        // In the case of spilling, we need to share state among multiple threads
+        // Quickly fetch all data from this round to quickly start the next round
+        builder
+            .main_pipeline
+            .resize(builder.main_pipeline.output_len(), true)
+    }
+
+    fn create_join(
+        &self,
+        builder: &mut PipelineBuilder,
+        desc: Arc<HashJoinDesc>,
+        state: Arc<HashJoinMemoryState>,
+    ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
+        let hash_key_types = self
+            .build_keys
+            .iter()
+            .zip(&desc.is_null_equal)
+            .map(|(expr, is_null_equal)| {
+                let expr = expr.as_expr(&BUILTIN_FUNCTIONS);
+                if *is_null_equal {
+                    expr.data_type().clone()
+                } else {
+                    expr.data_type().remove_nullable()
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+
+        Ok(Box::new(MemoryInnerJoin::create(
+            &builder.ctx,
+            builder.func_ctx.clone(),
+            method,
+            desc,
+            self.build_projections.clone(),
+            self.probe_projections.clone(),
+            self.probe_to_build.clone(),
+            state,
+        )?))
     }
 }
 
