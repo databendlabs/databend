@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![allow(clippy::uninlined_format_args)]
+//! Provide analysis utilities for meta service.
 
-pub mod analysis;
-pub mod api;
-pub mod configs;
-pub mod message;
-pub mod meta_node;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
-
-pub mod util;
+pub mod count_prefix;

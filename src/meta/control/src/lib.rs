@@ -20,6 +20,7 @@ pub mod export_from_disk;
 pub mod export_from_grpc;
 pub mod import;
 mod import_v004;
+pub mod keys_layout_from_grpc;
 pub mod lua_support;
 pub(crate) mod reading;
 mod upgrade;
