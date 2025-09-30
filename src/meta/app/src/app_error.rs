@@ -265,7 +265,7 @@ impl UndropTableHasNoHistory {
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
-    "UndropTableRetentionGuard: undrop {table_name} rejected; drop_time {drop_time} precedes retention {retention}"
+    "Cannot undrop table '{table_name}': table was dropped before vacuum cleanup started"
 )]
 pub struct UndropTableRetentionGuard {
     table_name: String,
@@ -1501,8 +1501,8 @@ impl AppErrorMessage for UndropTableWithNoDropTime {
 impl AppErrorMessage for UndropTableRetentionGuard {
     fn message(&self) -> String {
         format!(
-            "Undrop table '{}' rejected: drop_time {} precedes retention {}",
-            self.table_name, self.drop_time, self.retention
+            "Cannot undrop table '{}': table was dropped before vacuum cleanup started at {}",
+            self.table_name, self.retention
         )
     }
 }
