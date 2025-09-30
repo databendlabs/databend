@@ -142,7 +142,9 @@ impl HashJoinDesc {
                     Ok(Some(cast_expr_to_non_null_boolean(expr)?))
                 }
                 _ => {
-                    if matches!(join_type, JoinType::RightMark) {
+                    if matches!(join_type, JoinType::RightMark)
+                        || !expr.data_type().is_nullable_or_null()
+                    {
                         Ok(Some(expr))
                     } else {
                         Ok(Some(check_function(

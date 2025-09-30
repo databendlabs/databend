@@ -111,7 +111,7 @@ impl Processor for TransformHashJoin {
             Stage::Build(state) => match state.event(&self.build_port)? {
                 Event::NeedData if !self.initialize => {
                     self.initialize = true;
-                    self.probe_port.set_need_data();
+                    // self.probe_port.set_need_data();
                     Ok(Event::NeedData)
                 }
                 other => Ok(other),

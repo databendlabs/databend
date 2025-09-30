@@ -64,6 +64,7 @@ use crate::pipelines::processors::transforms::TransformHashJoinProbe;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::HashJoinStateRef;
 use crate::pipelines::PipelineBuilder;
 
 // Type aliases to simplify complex return types
@@ -270,9 +271,10 @@ impl IPhysicalPlan for HashJoin {
         let state = self.build_state(builder)?;
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
-            builder
-                .hash_join_states
-                .insert(build_cache_index, state.clone());
+            builder.hash_join_states.insert(
+                build_cache_index,
+                HashJoinStateRef::OldHashJoinState(state.clone()),
+            );
         }
 
         // Build both phases of the Hash Join
@@ -391,6 +393,15 @@ impl HashJoin {
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
     ) -> Result<()> {
+        let state = Arc::new(HashJoinMemoryState::create());
+
+        if let Some((build_cache_index, _)) = self.build_side_cache_info {
+            builder.hash_join_states.insert(
+                build_cache_index,
+                HashJoinStateRef::NewHashJoinState(state.clone()),
+            );
+        }
+
         self.build.build_pipeline(builder)?;
         let mut build_sinks = builder.main_pipeline.take_sinks();
 
@@ -410,7 +421,6 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let state = Arc::new(HashJoinMemoryState::create());
         let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);

@@ -65,6 +65,7 @@ pub use transform_branched_cast_schema::CastSchemaBranch;
 pub use transform_branched_cast_schema::TransformBranchedCastSchema;
 pub use transform_cache_scan::CacheSourceState;
 pub use transform_cache_scan::HashJoinCacheState;
+pub use transform_cache_scan::NewHashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
 pub use transform_cast_schema::build_cast_exprs;
 pub use transform_cast_schema::TransformCastSchema;
