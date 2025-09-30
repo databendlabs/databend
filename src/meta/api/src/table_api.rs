@@ -76,7 +76,6 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
-use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -131,7 +130,6 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_id_get_response;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
-use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::list_u64_value;
@@ -1759,13 +1757,10 @@ where
             file: "".to_string(),
         };
 
-        let res = self.list_kv_collect(&key.to_string_key()).await?;
+        let res = self.list_pb_vec(&DirName::new(key)).await?;
         let mut file_info = BTreeMap::new();
-        for (key, seqv) in res {
-            let name_key =
-                TableCopiedFileNameIdent::from_str_key(&key).map_err(PbApiReadError::KeyError)?;
-            let result: TableCopiedFileInfo = deserialize_struct(&seqv.data)?;
-            file_info.insert(name_key.file, result);
+        for (name_key, seqv) in res {
+            file_info.insert(name_key.file, seqv.data);
         }
 
         Ok(ListTableCopiedFileReply { file_info })
