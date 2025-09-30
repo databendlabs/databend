@@ -37,6 +37,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
+use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RowPtr;
 use databend_common_sql::plans::JoinType;
@@ -147,7 +148,7 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
@@ -227,6 +228,7 @@ impl HashJoinState {
             self.hash_join_desc.join_type,
             JoinType::Full
                 | JoinType::Right
+                | JoinType::RightAny
                 | JoinType::RightSingle
                 | JoinType::RightSemi
                 | JoinType::RightAnti
@@ -326,5 +328,26 @@ impl HashJoinState {
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }
+    }
+}
+
+impl HashJoinHashTable {
+    pub fn len(&self) -> usize {
+        match self {
+            HashJoinHashTable::Null => 0,
+            HashJoinHashTable::Serializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU256(table) => table.hash_table.len(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

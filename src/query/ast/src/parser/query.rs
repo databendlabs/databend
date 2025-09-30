@@ -671,11 +671,14 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
 
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
+        value(JoinOperator::InnerAny, rule! { INNER ~ ANY }),
         value(JoinOperator::Inner, rule! { INNER }),
         value(JoinOperator::LeftSemi, rule! { LEFT? ~ SEMI }),
         value(JoinOperator::RightSemi, rule! { RIGHT ~ SEMI }),
         value(JoinOperator::LeftAnti, rule! { LEFT? ~ ANTI }),
         value(JoinOperator::RightAnti, rule! { RIGHT ~ ANTI }),
+        value(JoinOperator::LeftAny, rule! { LEFT ~ ANY }),
+        value(JoinOperator::RightAny, rule! { RIGHT ~ ANY }),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),

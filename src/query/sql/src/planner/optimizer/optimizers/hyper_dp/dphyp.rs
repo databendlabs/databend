@@ -195,10 +195,13 @@ impl DPhpyOptimizer {
         if op.build_side_cache_info.is_some() {
             return Ok((Arc::new(s_expr.clone()), true));
         }
+        if op.join_type.is_any_join() {
+            return Ok((Arc::new(s_expr.clone()), true));
+        }
 
         // Check if it's an inner join
         let mut is_inner_join =
-            matches!(op.join_type, JoinType::Inner) || matches!(op.join_type, JoinType::Cross);
+            matches!(op.join_type, JoinType::Inner) || op.join_type == JoinType::Cross;
 
         // Check if children are subqueries
         let left_op = s_expr.child(0)?.plan.as_ref();
