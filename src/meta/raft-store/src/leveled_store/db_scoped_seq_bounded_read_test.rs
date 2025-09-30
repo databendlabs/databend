@@ -74,7 +74,7 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
     let binding = ScopedSeqBoundedRead(&db);
     let smap = binding;
     assert_eq!(
-        SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15))), b("a1"))),
+        SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15), Some(0))), b("a1"))),
         smap.get(user_key("a"), u64::MAX).await?
     );
     assert_eq!(
@@ -83,7 +83,7 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
         "no tombstone is stored"
     );
     assert_eq!(
-        SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20))), b("c0"))),
+        SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20), Some(0))), b("c0"))),
         smap.get(user_key("c"), u64::MAX).await?
     );
     assert_eq!(
@@ -100,11 +100,11 @@ async fn test_db_scoped_seq_bounded_read() -> anyhow::Result<()> {
         vec![
             (
                 user_key("a"),
-                SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15))), b("a1"))),
+                SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15), Some(0))), b("a1"))),
             ),
             (
                 user_key("c"),
-                SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20))), b("c0"))),
+                SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20), Some(0))), b("c0"))),
             )
         ],
         got

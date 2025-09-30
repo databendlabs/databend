@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::reduce_seqv::ReduceSeqV;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -33,33 +34,33 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a0")).await?;
     assert_eq!(prev, None);
-    assert_eq!(result, Some(SeqV::new(1, b("a0"))));
+    assert_eq!(result.erase_proposed_at(), Some(SeqV::new(1, b("a0"))));
     a.commit().await?;
 
     let got = sm.get_maybe_expired_kv(&s("a")).await?;
-    assert_eq!(got, Some(SeqV::new(1, b("a0"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(1, b("a0"))));
 
     let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("b", b"b0")).await?;
     assert_eq!(prev, None);
-    assert_eq!(result, Some(SeqV::new(2, b("b0"))));
+    assert_eq!(result.erase_proposed_at(), Some(SeqV::new(2, b("b0"))));
     a.commit().await?;
 
     let got = sm.get_maybe_expired_kv(&s("b")).await?;
-    assert_eq!(got, Some(SeqV::new(2, b("b0"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(2, b("b0"))));
 
     let mut a = sm.new_applier().await;
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a00")).await?;
-    assert_eq!(prev, Some(SeqV::new(1, b("a0"))));
-    assert_eq!(result, Some(SeqV::new(3, b("a00"))));
+    assert_eq!(prev.erase_proposed_at(), Some(SeqV::new(1, b("a0"))));
+    assert_eq!(result.erase_proposed_at(), Some(SeqV::new(3, b("a00"))));
     a.commit().await?;
 
     let got = sm.get_maybe_expired_kv(&s("a")).await?;
-    assert_eq!(got, Some(SeqV::new(3, b("a00"))));
+    assert_eq!(got.erase_proposed_at(), Some(SeqV::new(3, b("a00"))));
 
     // get_kv_ref()
 
-    let got = sm.get_maybe_expired_kv(&s("a")).await?;
+    let got = sm.get_maybe_expired_kv(&s("a")).await?.erase_proposed_at();
     assert_eq!(got.seq(), 3);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), Some(&b("a00")));
@@ -75,7 +76,8 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
-        .await?;
+        .await?
+        .erase_proposed_at();
     assert_eq!(got, vec![
         (s("a"), SeqV::new(3, b("a00"))),
         (s("b"), SeqV::new(2, b("b0")))
@@ -123,16 +125,16 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     // get_kv()
 
     assert_eq!(
-        sm.get_maybe_expired_kv(&s("a")).await?,
+        sm.get_maybe_expired_kv(&s("a")).await?.erase_proposed_at(),
         Some(SeqV::new(1, b("a0")))
     );
     assert_eq!(sm.get_maybe_expired_kv(&s("b")).await?, None);
     assert_eq!(
-        sm.get_maybe_expired_kv(&s("c")).await?,
+        sm.get_maybe_expired_kv(&s("c")).await?.erase_proposed_at(),
         Some(SeqV::new(4, b("c1")))
     );
     assert_eq!(
-        sm.get_maybe_expired_kv(&s("d")).await?,
+        sm.get_maybe_expired_kv(&s("d")).await?.erase_proposed_at(),
         Some(SeqV::new(5, b("d1")))
     );
 
@@ -144,7 +146,8 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
-        .await?;
+        .await?
+        .erase_proposed_at();
     assert_eq!(got, vec![
         (s("a"), SeqV::new(1, b("a0"))),
         (s("c"), SeqV::new(4, b("c1"))),
@@ -157,7 +160,8 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
         .await?
         .map_ok(|strm_item| strm_item.into_pair())
         .try_collect::<Vec<_>>()
-        .await?;
+        .await?
+        .erase_proposed_at();
     assert_eq!(got, vec![(s("a"), SeqV::new(1, b("a0"))),]);
     Ok(())
 }
