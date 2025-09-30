@@ -156,4 +156,4 @@ pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use table_lock_ident::TableLockIdent;
-pub use vacuum_retention::VacuumRetention;
+pub use vacuum_retention::VacuumWatermark;

@@ -27,7 +27,7 @@ impl VacuumRetentionIdent {
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::vacuum_retention::VacuumRetention;
+    use crate::schema::vacuum_retention::VacuumWatermark;
     use crate::schema::vacuum_retention_ident::VacuumRetentionIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -36,10 +36,10 @@ mod kvapi_impl {
     impl TenantResource for VacuumRetentionRsc {
         const PREFIX: &'static str = "__fd_vacuum_retention_ts";
         const HAS_TENANT: bool = true;
-        type ValueType = VacuumRetention;
+        type ValueType = VacuumWatermark;
     }
 
-    impl kvapi::Value for VacuumRetention {
+    impl kvapi::Value for VacuumWatermark {
         type KeyType = VacuumRetentionIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {

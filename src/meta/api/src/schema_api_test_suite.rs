@@ -1518,7 +1518,6 @@ impl SchemaApiTestSuite {
         // Verify current stored value
         let stored = mt.get_vacuum_timestamp(&tenant).await?;
         assert_eq!(stored.time, later);
-        assert!(stored.version >= 2); // Should have incremented
 
         // Test undrop retention guard behavior
         {

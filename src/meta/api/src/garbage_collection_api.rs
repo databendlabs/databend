@@ -42,7 +42,7 @@ use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdToName;
-use databend_common_meta_app::schema::VacuumRetention;
+use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -139,22 +139,17 @@ where
         &self,
         tenant: &Tenant,
         new_timestamp: DateTime<Utc>,
-    ) -> Result<VacuumRetention, KVAppError> {
+    ) -> Result<VacuumWatermark, KVAppError> {
         let ident = VacuumRetentionIdent::new_global(tenant.clone());
 
         // Use crud_upsert_with for atomic compare-and-swap semantics
         let transition = self
-            .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumRetention>>| {
+            .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumWatermark>>| {
                 let current_retention = current.into_value().unwrap_or_default();
 
                 // Only update if new timestamp is greater (monotonic property)
                 if new_timestamp > current_retention.time {
-                    let new_retention = VacuumRetention::new_with_details(
-                        new_timestamp,
-                        "system".to_string(),
-                        Utc::now(),
-                        current_retention.version + 1,
-                    );
+                    let new_retention = VacuumWatermark::new(new_timestamp);
                     Ok(Some(new_retention))
                 } else {
                     // Return None to indicate no update needed
@@ -175,7 +170,7 @@ where
 
     /// Get the current vacuum retention timestamp for a tenant.
     #[fastrace::trace]
-    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<VacuumRetention, KVAppError> {
+    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<VacuumWatermark, KVAppError> {
         let ident = VacuumRetentionIdent::new_global(tenant.clone());
         let seq_value = self.get_pb(&ident).await?;
         Ok(seq_value.map(|v| v.data).unwrap_or_default())

@@ -15,47 +15,22 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-/// Monotonic timestamp used to guard irreversible vacuum operations.
+/// Monotonic timestamp marking when vacuum cleanup started for a tenant.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VacuumRetention {
+pub struct VacuumWatermark {
     pub time: DateTime<Utc>,
-    pub updated_by: String,
-    pub updated_at: DateTime<Utc>,
-    pub version: u64,
 }
 
-impl VacuumRetention {
+impl VacuumWatermark {
     pub fn new(time: DateTime<Utc>) -> Self {
-        Self {
-            time,
-            updated_by: "system".to_string(),
-            updated_at: Utc::now(),
-            version: 1,
-        }
-    }
-
-    pub fn new_with_details(
-        time: DateTime<Utc>,
-        updated_by: String,
-        updated_at: DateTime<Utc>,
-        version: u64,
-    ) -> Self {
-        Self {
-            time,
-            updated_by,
-            updated_at,
-            version,
-        }
+        Self { time }
     }
 }
 
-impl Default for VacuumRetention {
+impl Default for VacuumWatermark {
     fn default() -> Self {
         Self {
             time: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-            updated_by: "system".to_string(),
-            updated_at: Utc::now(),
-            version: 1,
         }
     }
 }

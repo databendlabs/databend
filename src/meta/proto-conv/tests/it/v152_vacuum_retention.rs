@@ -17,11 +17,8 @@ use crate::common;
 
 #[test]
 fn test_decode_v152_vacuum_retention() -> anyhow::Result<()> {
-    let want = || mt::VacuumRetention {
+    let want = || mt::VacuumWatermark {
         time: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-        updated_by: "system".to_string(),
-        updated_at: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-        version: 1,
     };
 
     common::test_pb_from_to(func_name!(), want())?;
