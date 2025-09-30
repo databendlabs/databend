@@ -5,12 +5,9 @@
       "name": "s1",
       "database": "default",
       "catalog": "default",
-      "stream_id": 1084,
       "mode": "append_only",
       "comment": "",
       "table_name": "t1",
-      "table_id": 1076,
-      "table_version": 1083,
       "snapshot_location": null
     }
   ],

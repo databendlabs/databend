@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::io::Error;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
@@ -74,7 +73,7 @@ where
         &self,
         range: R,
         _snapshot_seq: u64,
-    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, Error>
+    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, io::Error>
     where
         R: RangeBounds<K> + Send + Sync + Clone + 'static,
     {

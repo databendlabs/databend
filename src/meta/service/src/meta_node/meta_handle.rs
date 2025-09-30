@@ -25,6 +25,9 @@ use databend_common_base::runtime::Runtime;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
+use databend_common_meta_types::protobuf::KeysCount;
+use databend_common_meta_types::protobuf::KeysLayoutRequest;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
@@ -44,11 +47,13 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures::stream::BoxStream;
+use futures::Stream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tonic::Status;
 
+use crate::analysis::count_prefix::count_prefix;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_node::errors::MetaNodeStopped;
@@ -229,6 +234,35 @@ impl MetaHandle {
     ) -> Result<BoxStream<'static, Result<String, io::Error>>, MetaNodeStopped> {
         self.request(move |meta_node| {
             let fu = async move { meta_node.raft_store.clone().export() };
+
+            Box::pin(fu)
+        })
+        .await
+    }
+
+    pub async fn handle_snapshot_keys_layout(
+        &self,
+        layout_request: KeysLayoutRequest,
+    ) -> Result<Result<BoxStream<'static, Result<KeysCount, io::Error>>, io::Error>, MetaNodeStopped>
+    {
+        self.request(move |meta_node| {
+            let fu = async move {
+                let db = meta_node.raft_store.get_sm_v003().get_snapshot();
+
+                if let Some(db) = db {
+                    let db_exporter = DBExporter::new(&db);
+                    let keys_stream = db_exporter.export_user_keys().await?;
+
+                    // Convert the keys stream to hierarchical layout with counts
+                    let layout_stream = count_prefix(keys_stream, layout_request);
+
+                    Ok(layout_stream)
+                } else {
+                    let strm = futures::stream::iter([]);
+                    let strm: Pin<Box<dyn Stream<Item = _> + Send + 'static>> = Box::pin(strm);
+                    Ok(strm)
+                }
+            };
 
             Box::pin(fu)
         })

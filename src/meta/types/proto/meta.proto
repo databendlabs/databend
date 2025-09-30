@@ -396,6 +396,38 @@ service RaftService {
   rpc TransferLeader(TransferLeaderRequest) returns (Empty);
 }
 
+// Request to retrieve key distribution layout information from a snapshot.
+// Returns grouped key counts by prefix at specified depth levels.
+message KeysLayoutRequest {
+  // Depth level for key grouping. Determines how many path segments to include when grouping keys.
+  //
+  // Examples:
+  // - depth = 1: Groups keys at the top level (no path separators)
+  //   ```text
+  //   __fd_table 20
+  //   __fd_user 100
+  //   ```
+  //
+  // - depth = 2: Groups keys with one path segment (excluding trailing "/")
+  //   For databases with IDs <db_id1> and <db_id2>:
+  //   ```text
+  //   __fd_table/<db_id1> 20
+  //   __fd_table/<db_id2> 10
+  //   __fd_table 30
+  //   __fd_user 100
+  //   ```
+  optional uint32 depth = 1;
+}
+
+// Key count entry in snapshot layout response stream.
+message KeysCount {
+  // Key prefix for grouping.
+  string prefix = 1;
+
+  // Count of keys matching this prefix.
+  uint64 count = 2;
+}
+
 service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
@@ -436,6 +468,20 @@ service MetaService {
   // ```
   rpc ExportV1(ExportRequest) returns (stream ExportedChunk);
 
+  // Get the hierarchical layout of keys in the snapshot with their counts.
+  //
+  // Returns a stream of key prefixes and their corresponding counts, organized
+  // hierarchically from most specific to least specific. This allows clients
+  // to understand the distribution and structure of keys in the meta storage.
+  //
+  // Example response showing key layout with counts:
+  // ```text
+  // __fd_table/<db_id1> 20
+  // __fd_table/<db_id2> 10
+  // __fd_table 30
+  // __fd_user 100
+  // ```
+  rpc SnapshotKeysLayout(KeysLayoutRequest) returns (stream KeysCount);
 
   // Add watch key stream.
   // Whenever the watch key data updated, client will be notified across the

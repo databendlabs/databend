@@ -18,6 +18,7 @@ mod boolean_expression_ext;
 mod conditional_operation_ext;
 mod fetch_add_u64;
 mod fetch_add_u64_response_ext;
+mod keys_count_ext;
 mod put_sequential_ext;
 mod raft_types_ext;
 mod seq_v_ext;

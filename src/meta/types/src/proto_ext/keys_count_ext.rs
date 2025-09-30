@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(try_blocks)]
-#![feature(coroutines)]
-#![allow(clippy::uninlined_format_args)]
+use std::fmt;
 
-pub mod analysis;
-pub mod api;
-pub mod configs;
-pub mod message;
-pub mod meta_node;
-pub mod meta_service;
-pub mod metrics;
-pub mod network;
-pub mod raft_client;
-pub(crate) mod request_handling;
-pub mod store;
-pub mod version;
+use crate::protobuf as pb;
 
-pub mod util;
+impl pb::KeysCount {
+    pub fn new(prefix: impl ToString, count: u64) -> Self {
+        Self {
+            prefix: prefix.to_string(),
+            count,
+        }
+    }
+}
+
+impl fmt::Display for pb::KeysCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.prefix, self.count)
+    }
+}

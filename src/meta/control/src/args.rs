@@ -282,3 +282,16 @@ pub struct MemberListArgs {
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct KeysLayoutArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
+    /// Limit the depth of directory hierarchy to return.
+    /// depth=1 returns only top-level prefixes (no slashes),
+    /// depth=2 returns prefixes with 0-1 slashes, etc.
+    /// If not specified, returns all levels.
+    #[clap(long)]
+    pub depth: Option<u32>,
+}
