@@ -32,11 +32,13 @@ mod util;
 
 pub use common::wrap_true_validity;
 pub use desc::HashJoinDesc;
+pub use desc::RuntimeFilterDesc;
 pub use hash_join_build_state::HashJoinBuildState;
 pub use hash_join_probe_state::HashJoinProbeState;
 pub use hash_join_spiller::HashJoinSpiller;
 pub use hash_join_state::*;
 pub use probe_state::ProbeState;
 pub use probe_state::ProcessState;
+pub use runtime_filter::*;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;

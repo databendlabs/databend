@@ -16,6 +16,8 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+
 pub trait JoinStream: Send + Sync + 'static {
     fn next(&mut self) -> Result<Option<DataBlock>>;
 }
@@ -24,6 +26,10 @@ pub trait Join: Send + Sync + 'static {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()>;
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
+
+    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
+        Ok(JoinRuntimeFilterPacket::default())
+    }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>>;
 

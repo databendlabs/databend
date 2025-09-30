@@ -15,9 +15,11 @@
 mod common;
 mod join;
 mod memory;
+mod runtime_filter;
 mod transform_hash_join;
 
 pub use join::Join;
 pub use memory::HashJoinMemoryState;
 pub use memory::MemoryInnerJoin;
+pub use runtime_filter::PlanRuntimeFilterDesc;
 pub use transform_hash_join::TransformHashJoin;

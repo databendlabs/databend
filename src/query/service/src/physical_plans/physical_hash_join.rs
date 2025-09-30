@@ -58,6 +58,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::HashJoinMemoryState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
 use crate::pipelines::processors::transforms::MemoryInnerJoin;
+use crate::pipelines::processors::transforms::PlanRuntimeFilterDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
@@ -421,6 +422,7 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
+        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
         let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
@@ -439,6 +441,7 @@ impl HashJoin {
                 self.create_join(builder, desc.clone(), state.clone())?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
+                rf_desc.clone(),
             );
 
             join_pipe_items.push(PipeItem::create(
