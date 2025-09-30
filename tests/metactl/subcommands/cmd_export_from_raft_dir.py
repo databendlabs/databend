@@ -80,12 +80,23 @@ def test_export_from_raft_dir():
     )
 
     def normalize_json(obj):
-        """Remove dynamic fields like time_ms from JSON object for comparison"""
+        """Remove dynamic fields like time_ms and proposed_at_ms from JSON object for comparison"""
         try:
-            # Directly try to remove time_ms if it exists
+            # Remove time_ms if it exists
             del obj[1]["LogEntry"]["payload"]["Normal"]["time_ms"]
         except:
-            # If any step fails, continue with original object
+            pass
+        try:
+            # Remove proposed_at_ms from GenericKV meta if it exists
+            if "GenericKV" in obj[1] and "value" in obj[1]["GenericKV"]:
+                value = obj[1]["GenericKV"]["value"]
+                if "meta" in value and value["meta"] is not None:
+                    if "proposed_at_ms" in value["meta"]:
+                        del value["meta"]["proposed_at_ms"]
+                    # If meta becomes empty dict, set to None
+                    if value["meta"] == {}:
+                        value["meta"] = None
+        except:
             pass
         return obj
 
