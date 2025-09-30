@@ -25,13 +25,13 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::Event;
 use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::protobuf::SeqV;
 use databend_common_meta_types::protobuf::TxnRequest;
 use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::reduce_seqv::ReduceSeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::ConditionResult;
@@ -68,7 +68,7 @@ async fn test_watch_main(
 
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
-            let event = resp.event.unwrap().erase_proposed_at();
+            let event = resp.event.unwrap().without_proposed_at();
 
             assert!(!watch_events.is_empty());
 
@@ -103,7 +103,7 @@ async fn test_watch_txn_main(
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
             if let Some(event) = resp.event {
-                let event = event.erase_proposed_at();
+                let event = event.without_proposed_at();
                 assert!(!watch_events.is_empty());
 
                 assert_eq!(watch_events.first(), Some(&event));

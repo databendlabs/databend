@@ -14,9 +14,9 @@
 
 use state_machine_api::SeqV;
 
+use crate::normalize_meta::NormalizeMeta;
 use crate::protobuf as pb;
 use crate::protobuf::StreamItem;
-use crate::reduce_seqv::ReduceSeqV;
 
 impl StreamItem {
     pub fn new(key: String, value: Option<pb::SeqV>) -> Self {
@@ -50,17 +50,17 @@ impl From<(String, SeqV)> for StreamItem {
     }
 }
 
-impl ReduceSeqV for pb::StreamItem {
-    fn erase_proposed_at(mut self) -> Self {
+impl NormalizeMeta for pb::StreamItem {
+    fn without_proposed_at(mut self) -> Self {
         if let Some(ref mut value) = self.value {
             if let Some(ref mut meta) = value.meta {
                 meta.proposed_at_ms = None;
             }
         }
-        self.reduce()
+        self.normalize()
     }
 
-    fn reduce(mut self) -> Self {
+    fn normalize(mut self) -> Self {
         if let Some(ref mut value) = self.value {
             if value.meta == Some(Default::default()) {
                 value.meta = None;
@@ -89,7 +89,7 @@ mod tests {
             }),
         );
 
-        let erased = item.erase_proposed_at();
+        let erased = item.without_proposed_at();
 
         // Check: expire_at should remain, proposed_at_ms should be None
         assert_eq!(erased.key, "test_key");
@@ -115,7 +115,7 @@ mod tests {
             }),
         );
 
-        let erased = item.erase_proposed_at();
+        let erased = item.without_proposed_at();
 
         // Meta should be removed entirely (was only proposed_at_ms, now default)
         assert_eq!(erased.value.as_ref().unwrap().meta, None);
@@ -136,7 +136,7 @@ mod tests {
             }),
         );
 
-        let reduced = item.reduce();
+        let reduced = item.normalize();
 
         // proposed_at_ms should remain, meta not removed (not default)
         let value = reduced.value.as_ref().unwrap();
@@ -160,7 +160,7 @@ mod tests {
             }),
         );
 
-        let reduced = item.reduce();
+        let reduced = item.normalize();
 
         // Meta should be removed (is default)
         assert_eq!(reduced.value.as_ref().unwrap().meta, None);
@@ -181,7 +181,7 @@ mod tests {
             }),
         );
 
-        let reduced = item.reduce();
+        let reduced = item.normalize();
 
         // Meta should remain (has expire_at)
         let value = reduced.value.as_ref().unwrap();
@@ -195,8 +195,8 @@ mod tests {
         // Test with None value
         let item = pb::StreamItem::new("key".to_string(), None);
 
-        let erased = item.clone().erase_proposed_at();
-        let reduced = item.reduce();
+        let erased = item.clone().without_proposed_at();
+        let reduced = item.normalize();
 
         assert_eq!(erased.value, None);
         assert_eq!(reduced.value, None);
@@ -214,8 +214,8 @@ mod tests {
             }),
         );
 
-        let erased = item.clone().erase_proposed_at();
-        let reduced = item.reduce();
+        let erased = item.clone().without_proposed_at();
+        let reduced = item.normalize();
 
         assert_eq!(erased.value.as_ref().unwrap().meta, None);
         assert_eq!(reduced.value.as_ref().unwrap().meta, None);

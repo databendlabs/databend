@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use display_more::DisplayOptionExt;
 
+use crate::normalize_meta::NormalizeMeta;
 use crate::protobuf as pb;
-use crate::reduce_seqv::ReduceSeqV;
 
 impl pb::Event {
     pub fn new(key: impl ToString) -> Self {
@@ -80,8 +80,8 @@ impl fmt::Display for pb::Event {
     }
 }
 
-impl ReduceSeqV for pb::Event {
-    fn erase_proposed_at(mut self) -> Self {
+impl NormalizeMeta for pb::Event {
+    fn without_proposed_at(mut self) -> Self {
         if let Some(ref mut prev) = self.prev {
             if let Some(ref mut meta) = prev.meta {
                 meta.proposed_at_ms = None;
@@ -92,10 +92,10 @@ impl ReduceSeqV for pb::Event {
                 meta.proposed_at_ms = None;
             }
         }
-        self.reduce()
+        self.normalize()
     }
 
-    fn reduce(mut self) -> Self {
+    fn normalize(mut self) -> Self {
         if let Some(ref mut prev) = self.prev {
             if prev.meta == Some(Default::default()) {
                 prev.meta = None;
@@ -273,7 +273,7 @@ mod tests {
                 b"current".to_vec(),
             ));
 
-        let erased = event.erase_proposed_at();
+        let erased = event.without_proposed_at();
 
         // Check prev: expire_at should remain, proposed_at_ms should be None
         assert_eq!(erased.prev.as_ref().unwrap().seq, 1);
@@ -307,7 +307,7 @@ mod tests {
                 b"current".to_vec(),
             ));
 
-        let reduced = event.reduce();
+        let reduced = event.normalize();
 
         // Check prev: proposed_at_ms should remain, but meta removed (only proposed_at is not default)
         assert_eq!(reduced.prev.as_ref().unwrap().seq, 1);
@@ -340,7 +340,7 @@ mod tests {
                 b"current".to_vec(),
             ));
 
-        let reduced = event.reduce();
+        let reduced = event.normalize();
 
         // Both prev and current should have meta removed
         assert_eq!(reduced.prev.as_ref().unwrap().meta, None);
@@ -359,7 +359,7 @@ mod tests {
             b"prev".to_vec(),
         ));
 
-        let erased = event.erase_proposed_at();
+        let erased = event.without_proposed_at();
 
         // Meta should be removed entirely (was only proposed_at_ms, now default)
         assert_eq!(erased.prev.as_ref().unwrap().meta, None);
