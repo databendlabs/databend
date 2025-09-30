@@ -264,9 +264,7 @@ impl UndropTableHasNoHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error(
-    "Cannot undrop table '{table_name}': table was dropped before vacuum cleanup started"
-)]
+#[error("Cannot undrop table '{table_name}': table was dropped before vacuum cleanup started")]
 pub struct UndropTableRetentionGuard {
     table_name: String,
     drop_time: DateTime<Utc>,
