@@ -20,15 +20,18 @@ use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::concat_data_blocks;
+use crate::spillers::SpillReader;
+use crate::spillers::SpillWriter;
+use crate::spillers::Spiller;
 
 #[async_trait::async_trait]
-pub trait SpillReader: Send {
+trait Reader: Send {
     async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>>;
 }
 
 #[async_trait::async_trait]
-pub trait SpillWriter: Send {
-    type Reader: SpillReader;
+trait Writer: Send {
+    type Reader: Reader;
 
     async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize>;
 
@@ -36,17 +39,46 @@ pub trait SpillWriter: Send {
 }
 
 #[async_trait::async_trait]
-pub trait SpillBuilder: Send + Sync {
-    type Writer: SpillWriter;
+trait Builder: Send + Sync {
+    type Writer: Writer;
 
     async fn create(&self, schema: Arc<DataSchema>) -> Result<Self::Writer>;
+}
+
+#[async_trait::async_trait]
+impl Builder for Spiller {
+    type Writer = SpillWriter;
+
+    async fn create(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
+        self.new_spill_writer(schema)
+    }
+}
+
+#[async_trait::async_trait]
+impl Writer for SpillWriter {
+    type Reader = SpillReader;
+
+    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        self.spill(blocks).await
+    }
+
+    async fn close(self) -> Result<SpillReader> {
+        self.close()
+    }
+}
+
+#[async_trait::async_trait]
+impl Reader for SpillReader {
+    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
+        self.restore(ordinals).await
+    }
 }
 
 #[derive(Default)]
 enum PartitionSpillState<W>
 where
-    W: SpillWriter,
-    W::Reader: SpillReader,
+    W: Writer,
+    W::Reader: Reader,
 {
     #[default]
     Empty,
@@ -56,8 +88,8 @@ where
 
 struct PartitionSlot<W>
 where
-    W: SpillWriter,
-    W::Reader: SpillReader,
+    W: Writer,
+    W::Reader: Reader,
 {
     state: PartitionSpillState<W>,
     spilled_ordinals: Vec<usize>,
@@ -67,8 +99,8 @@ where
 
 impl<W> Default for PartitionSlot<W>
 where
-    W: SpillWriter,
-    W::Reader: SpillReader,
+    W: Writer,
+    W::Reader: Reader,
 {
     fn default() -> Self {
         Self {
@@ -82,8 +114,8 @@ where
 
 impl<W> PartitionSlot<W>
 where
-    W: SpillWriter,
-    W::Reader: SpillReader,
+    W: Writer,
+    W::Reader: Reader,
 {
     fn add_block(&mut self, block: DataBlock) {
         self.buffered_size += block.memory_size();
@@ -119,7 +151,7 @@ where
     }
 
     async fn writer_mut<'a, B>(&'a mut self, builder: &B, block: &DataBlock) -> Result<&'a mut W>
-    where B: SpillBuilder<Writer = W> {
+    where B: Builder<Writer = W> {
         match &mut self.state {
             state @ PartitionSpillState::Empty => {
                 let writer = builder.create(block.infer_schema().into()).await?;
@@ -147,11 +179,9 @@ where
 }
 
 pub struct WindowPartitionBufferV2<B>
-where
-    B: SpillBuilder,
-    <B::Writer as SpillWriter>::Reader: SpillReader,
+where B: Builder
 {
-    spill_builder: B,
+    spiller: B,
     partitions: Vec<PartitionSlot<B::Writer>>,
     memory_settings: MemorySettings,
     min_spill_size: usize,
@@ -161,13 +191,9 @@ where
     next_to_restore_partition_id: isize,
 }
 
-impl<B> WindowPartitionBufferV2<B>
-where
-    B: SpillBuilder,
-    <B::Writer as SpillWriter>::Reader: SpillReader,
-{
+impl WindowPartitionBufferV2<Spiller> {
     pub fn new(
-        spill_builder: B,
+        spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
@@ -177,7 +203,7 @@ where
             partitions.push(PartitionSlot::<B::Writer>::default());
         }
         Ok(Self {
-            spill_builder,
+            spiller,
             partitions,
             memory_settings,
             min_spill_size: 1024 * 1024,
@@ -187,7 +213,11 @@ where
             next_to_restore_partition_id: -1,
         })
     }
+}
 
+impl<B> WindowPartitionBufferV2<B>
+where B: Builder
+{
     pub fn need_spill(&mut self) -> bool {
         self.can_spill && self.memory_settings.check_spill()
     }
@@ -223,9 +253,7 @@ where
             }
             if let Some(blocks) = partition.fetch_blocks(Some(spill_unit_size)) {
                 let ordinal = {
-                    let writer = partition
-                        .writer_mut(&self.spill_builder, &blocks[0])
-                        .await?;
+                    let writer = partition.writer_mut(&self.spiller, &blocks[0]).await?;
                     writer.spill(blocks).await?
                 };
                 partition.spilled_ordinals.push(ordinal);
@@ -248,9 +276,7 @@ where
             let partition = &mut self.partitions[partition_id];
             let blocks = partition.fetch_blocks(None).unwrap();
             let ordinal = {
-                let writer = partition
-                    .writer_mut(&self.spill_builder, &blocks[0])
-                    .await?;
+                let writer = partition.writer_mut(&self.spiller, &blocks[0]).await?;
                 writer.spill(blocks).await?
             };
             partition.spilled_ordinals.push(ordinal);

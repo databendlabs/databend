@@ -43,9 +43,6 @@ use super::union_file::FileWriter;
 use super::union_file::UnionFile;
 use super::union_file::UnionFileWriter;
 use super::Location;
-use crate::pipelines::processors::transforms::SpillBuilder as WindowSpillBuilder;
-use crate::pipelines::processors::transforms::SpillReader as WindowSpillReader;
-use crate::pipelines::processors::transforms::SpillWriter as WindowSpillWriter;
 use crate::sessions::QueryContext;
 use crate::spillers::block_reader::BlocksReader;
 use crate::spillers::block_writer::BlocksWriter;
@@ -354,6 +351,31 @@ impl Spiller {
             .cloned()
             .collect()
     }
+
+    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
+        if !self.use_parquet {
+            return Err(ErrorCode::Internal(
+                "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
+                    .to_string(),
+            ));
+        }
+
+        let runtime = GlobalIORuntime::instance();
+        let buffer_pool = BufferPool::create(
+            runtime,
+            WINDOW_SPILL_BUFFER_MEMORY_BYTES,
+            WINDOW_SPILL_BUFFER_WORKERS,
+        );
+
+        Ok(SpillWriter {
+            spiller: self.clone(),
+            buffer_pool,
+            dio: self.temp_dir.is_some(),
+            chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+            schema,
+            file_writer: None,
+        })
+    }
 }
 
 pub struct MergedPartition {
@@ -370,7 +392,7 @@ const WINDOW_SPILL_BUFFER_MEMORY_BYTES: usize = 64 * 1024 * 1024;
 const WINDOW_SPILL_BUFFER_WORKERS: usize = 2;
 const WINDOW_SPILL_CHUNK_SIZE: usize = 8 * 1024 * 1024;
 
-pub struct WindowPartitionSpillWriter {
+pub struct SpillWriter {
     spiller: Spiller,
     buffer_pool: Arc<BufferPool>,
     dio: bool,
@@ -379,19 +401,8 @@ pub struct WindowPartitionSpillWriter {
     file_writer: Option<FileWriter<UnionFileWriter>>,
 }
 
-pub struct WindowPartitionSpillReader {
-    spiller: Spiller,
-    schema: Arc<DataSchema>,
-    parquet_metadata: Arc<ParquetMetaData>,
-    union_file: Option<UnionFile>,
-    dio: bool,
-}
-
-#[async_trait::async_trait]
-impl WindowSpillWriter for WindowPartitionSpillWriter {
-    type Reader = WindowPartitionSpillReader;
-
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+impl SpillWriter {
+    pub async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
         let file_writer = match &mut self.file_writer {
             Some(file_writer) => file_writer,
             file_writer @ None => {
@@ -408,7 +419,7 @@ impl WindowSpillWriter for WindowPartitionSpillWriter {
         Ok(ordinal as _)
     }
 
-    async fn close(self) -> Result<WindowPartitionSpillReader> {
+    pub fn close(self) -> Result<SpillReader> {
         let Some(file_writer) = self.file_writer else {
             return Err(ErrorCode::Internal(
                 "attempted to close window spill writer without data".to_string(),
@@ -431,7 +442,7 @@ impl WindowSpillWriter for WindowPartitionSpillWriter {
             total_size,
         );
 
-        Ok(WindowPartitionSpillReader {
+        Ok(SpillReader {
             spiller: self.spiller,
             schema: self.schema,
             parquet_metadata,
@@ -441,9 +452,16 @@ impl WindowSpillWriter for WindowPartitionSpillWriter {
     }
 }
 
-#[async_trait::async_trait]
-impl WindowSpillReader for WindowPartitionSpillReader {
-    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
+pub struct SpillReader {
+    spiller: Spiller,
+    schema: Arc<DataSchema>,
+    parquet_metadata: Arc<ParquetMetaData>,
+    union_file: Option<UnionFile>,
+    dio: bool,
+}
+
+impl SpillReader {
+    pub async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
         if ordinals.is_empty() {
             return Ok(Vec::new());
         }
@@ -461,39 +479,6 @@ impl WindowSpillReader for WindowPartitionSpillReader {
                 self.dio,
             )
             .await
-    }
-}
-
-#[async_trait::async_trait]
-impl WindowSpillBuilder for Spiller {
-    type Writer = WindowPartitionSpillWriter;
-
-    async fn create(
-        &self,
-        schema: Arc<DataSchema>,
-    ) -> Result<<Self as WindowSpillBuilder>::Writer> {
-        if !self.use_parquet {
-            return Err(ErrorCode::Internal(
-                "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
-                    .to_string(),
-            ));
-        }
-
-        let runtime = GlobalIORuntime::instance();
-        let buffer_pool = BufferPool::create(
-            runtime,
-            WINDOW_SPILL_BUFFER_MEMORY_BYTES,
-            WINDOW_SPILL_BUFFER_WORKERS,
-        );
-
-        Ok(WindowPartitionSpillWriter {
-            spiller: self.clone(),
-            buffer_pool,
-            dio: self.temp_dir.is_some(),
-            chunk_size: WINDOW_SPILL_CHUNK_SIZE,
-            schema,
-            file_writer: None,
-        })
     }
 }
 
