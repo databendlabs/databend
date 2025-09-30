@@ -115,6 +115,7 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
@@ -310,6 +311,7 @@ impl SchemaApiTestSuite {
             .drop_table_without_table_id_list(&b.build().await)
             .await?;
         suite.table_rename(&b.build().await).await?;
+        suite.table_swap(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
         suite.table_update_mask_policy(&b.build().await).await?;
         suite
@@ -2378,6 +2380,179 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
+    async fn table_swap<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        let db1_name = "db1";
+        let tb1_name = "table_a";
+        let tb2_name = "table_b";
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+
+        let _table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: maplit::btreemap! {"opt-1".into() => "val-1".into()},
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let swap_req = |if_exists| SwapTableReq {
+            if_exists,
+            origin_table: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: db1_name.to_string(),
+                table_name: tb1_name.to_string(),
+            },
+            target_table_name: tb2_name.to_string(),
+        };
+
+        info!("--- swap tables on unknown db");
+        {
+            let got = mt.swap_table(swap_req(false)).await;
+            debug!("--- swap tables on unknown database got: {:?}", got);
+
+            assert!(got.is_err());
+            assert_eq!(
+                ErrorCode::UNKNOWN_DATABASE,
+                ErrorCode::from(got.unwrap_err()).code()
+            );
+        }
+
+        info!("--- prepare db and tables");
+        let created_on = Utc::now();
+        let mut util1 = Util::new(mt, tenant_name, db1_name, tb1_name, "JSON");
+        util1.create_db().await?;
+
+        let mut util2 = Util::new(mt, tenant_name, db1_name, tb2_name, "JSON");
+
+        info!("--- create table_a");
+        let tb1_ident = {
+            let old_db = util1.get_database().await?;
+            let (table_id, _table_meta) = util1
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema();
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
+            let cur_db = util1.get_database().await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+            let got = util1.get_table().await?;
+            assert_eq!(table_id, got.ident.table_id);
+            got.ident
+        };
+
+        info!("--- create table_b");
+        let tb2_ident = {
+            let old_db = util2.get_database().await?;
+            let (table_id, _table_meta) = util2
+                .create_table_with(
+                    |mut meta| {
+                        meta.schema = schema();
+                        meta.created_on = created_on;
+                        meta
+                    },
+                    |req| req,
+                )
+                .await?;
+            let cur_db = util2.get_database().await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+            let got = util2.get_table().await?;
+            assert_eq!(table_id, got.ident.table_id);
+            got.ident
+        };
+
+        info!("--- swap tables, both exist, ok");
+        {
+            let old_db = util1.get_database().await?;
+            let _reply = mt.swap_table(swap_req(false)).await?;
+            let cur_db = util1.get_database().await?;
+            assert!(old_db.meta.seq < cur_db.meta.seq);
+
+            // Verify tables are swapped
+            let got_a = mt
+                .get_table((tenant_name, db1_name, tb1_name).into())
+                .await?;
+            let got_b = mt
+                .get_table((tenant_name, db1_name, tb2_name).into())
+                .await?;
+
+            // table_a name should now point to table_b's id
+            assert_eq!(tb2_ident.table_id, got_a.ident.table_id);
+            // table_b name should now point to table_a's id
+            assert_eq!(tb1_ident.table_id, got_b.ident.table_id);
+        }
+
+        info!("--- swap tables again, should restore original mapping");
+        {
+            let _reply = mt.swap_table(swap_req(false)).await?;
+
+            // Verify tables are swapped back
+            let got_a = mt
+                .get_table((tenant_name, db1_name, tb1_name).into())
+                .await?;
+            let got_b = mt
+                .get_table((tenant_name, db1_name, tb2_name).into())
+                .await?;
+
+            // table_a name should point back to table_a's id
+            assert_eq!(tb1_ident.table_id, got_a.ident.table_id);
+            // table_b name should point back to table_b's id
+            assert_eq!(tb2_ident.table_id, got_b.ident.table_id);
+        }
+
+        info!("--- swap non-existent table with if_exists=false, error");
+        {
+            let swap_req_nonexist = SwapTableReq {
+                if_exists: false,
+                origin_table: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db1_name.to_string(),
+                    table_name: "non_existent".to_string(),
+                },
+                target_table_name: tb2_name.to_string(),
+            };
+
+            let got = mt.swap_table(swap_req_nonexist).await;
+            assert!(got.is_err());
+            assert_eq!(
+                ErrorCode::UNKNOWN_TABLE,
+                ErrorCode::from(got.unwrap_err()).code()
+            );
+        }
+
+        info!("--- swap non-existent table with if_exists=true, ok");
+        {
+            let swap_req_nonexist = SwapTableReq {
+                if_exists: true,
+                origin_table: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db1_name.to_string(),
+                    table_name: "non_existent".to_string(),
+                },
+                target_table_name: tb2_name.to_string(),
+            };
+
+            assert!(mt.swap_table(swap_req_nonexist).await.is_ok());
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
     async fn table_update_meta<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -3278,8 +3453,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3292,7 +3466,10 @@ impl SchemaApiTestSuite {
             };
             let res = mt.get_table(req).await?;
 
-            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            match &res.meta.row_access_policy_columns_ids {
+                Some(r) => assert_eq!(r.policy_id, *policy1_id),
+                None => panic!(),
+            }
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
@@ -3322,8 +3499,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3335,7 +3511,10 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = mt.get_table(req).await?;
-            assert_eq!(res.meta.row_access_policy, Some(policy1.to_string()));
+            match &res.meta.row_access_policy_columns_ids {
+                Some(r) => assert_eq!(r.policy_id, *policy1_id),
+                None => panic!(),
+            }
             // check mask policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
@@ -3353,8 +3532,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id: table_id_1,
-                action: SetTableRowAccessPolicyAction::Unset(policy1.to_string()),
-                policy_id: *policy1_id,
+                action: SetTableRowAccessPolicyAction::Unset(*policy1_id),
             };
             mt.set_table_row_access_policy(req).await??;
 
@@ -5701,11 +5879,12 @@ impl SchemaApiTestSuite {
 
             mt.drop_sequence(req).await?;
 
+            let sequence_ident = SequenceIdent::new(&tenant, sequence_name);
             let req = SequenceIdent::new(&tenant, sequence_name);
             let resp = mt.get_sequence(&req).await?;
             assert!(resp.is_none());
 
-            let storage_ident = SequenceStorageIdent::new_from(req);
+            let storage_ident = SequenceStorageIdent::new_from(sequence_ident);
             let got = mt.get_kv(&storage_ident.to_string_key()).await?;
             assert!(
                 got.is_none(),

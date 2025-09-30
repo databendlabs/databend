@@ -55,6 +55,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -87,6 +89,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -470,6 +474,10 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        self.inner.swap_table(req).await
+    }
+
     async fn upsert_table_option(
         &self,
         tenant: &Tenant,
@@ -763,6 +771,13 @@ impl Catalog for SessionCatalog {
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.inner.rename_dictionary(req).await
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
+        self.inner.get_autoincrement_next_value(req).await
     }
 }
 

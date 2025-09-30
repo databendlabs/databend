@@ -30,6 +30,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -172,6 +174,14 @@ pub trait Database: DynClone + Sync + Send {
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement rename_table in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn swap_table(&self, _req: SwapTableReq) -> Result<SwapTableReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement swap_table in {} Database",
             self.name()
         )))
     }

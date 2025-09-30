@@ -67,6 +67,7 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: None,
         row_access_policy: None,
+        row_access_policy_columns_ids: None,
         indexes: BTreeMap::default(),
         constraints: btreemap! {
             "constraint_1".to_string() => Constraint::Check("c1 > 10".to_string()),

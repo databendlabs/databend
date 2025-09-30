@@ -103,6 +103,7 @@ fn test_decode_v86_table_meta() -> anyhow::Result<()> {
             version: "f10b230153e14f2c84603958d7f864f8".to_string(),
             options: btreemap! {s("tokenizer") => s("chinese")},
         }},
+        row_access_policy_columns_ids: None,
         constraints: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;

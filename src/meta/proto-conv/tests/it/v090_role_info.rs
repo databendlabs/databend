@@ -40,6 +40,7 @@ fn test_decode_v90_role() -> anyhow::Result<()> {
 
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
+        comment: None,
         grants: UserGrantSet::new(vec![], HashSet::new()),
         created_on: DateTime::<Utc>::default(),
         update_on: DateTime::<Utc>::default(),

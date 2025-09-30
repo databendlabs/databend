@@ -251,9 +251,9 @@ impl CacheManager {
                 MEMORY_CACHE_TABLE_STATISTICS,
                 config.table_meta_statistic_count as usize,
             );
-            let segment_statistics_cache = Self::new_items_cache_slot(
+            let segment_statistics_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_SEGMENT_STATISTICS,
-                config.table_meta_statistic_count as usize,
+                config.segment_statistics_bytes as usize,
             );
             let compact_segment_info_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,

@@ -6578,6 +6578,174 @@ Query {
 
 
 ---------- Input ----------
+SELECT 'Lowest value sale' AS aggregate, * FROM quarterly_sales PIVOT(MIN(amount) FOR quarter IN (ANY ORDER BY quarter))
+---------- Output ---------
+SELECT 'Lowest value sale' AS aggregate, * FROM quarterly_sales PIVOT(MIN(amount) FOR quarter IN (ANY ORDER BY quarter))
+---------- AST ------------
+Query {
+    span: Some(
+        0..120,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..120,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                AliasedExpr {
+                    expr: Literal {
+                        span: Some(
+                            7..26,
+                        ),
+                        value: String(
+                            "Lowest value sale",
+                        ),
+                    },
+                    alias: Some(
+                        Identifier {
+                            span: Some(
+                                30..39,
+                            ),
+                            name: "aggregate",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                41..42,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        48..120,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            48..63,
+                        ),
+                        name: "quarterly_sales",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    alias: None,
+                    temporal: None,
+                    with_options: None,
+                    pivot: Some(
+                        Pivot {
+                            aggregate: FunctionCall {
+                                span: Some(
+                                    70..81,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            70..73,
+                                        ),
+                                        name: "MIN",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                74..80,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            74..80,
+                                                        ),
+                                                        name: "amount",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    order_by: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            value_column: Identifier {
+                                span: Some(
+                                    86..93,
+                                ),
+                                name: "quarter",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            values: Any {
+                                order_by: Some(
+                                    [
+                                        OrderByExpr {
+                                            expr: ColumnRef {
+                                                span: Some(
+                                                    111..118,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                111..118,
+                                                            ),
+                                                            name: "quarter",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                            asc: None,
+                                            nulls_first: None,
+                                        },
+                                    ],
+                                ),
+                            },
+                        },
+                    ),
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from monthly_sales pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid
 ---------- Output ---------
 SELECT * FROM monthly_sales PIVOT(sum(amount) FOR month IN ('JAN', 'FEB', 'MAR', 'APR')) ORDER BY empid
@@ -7203,7 +7371,7 @@ Query {
 ---------- Input ----------
 select * from (select * from monthly_sales) pivot(sum(amount) for month in ((select distinct month from monthly_sales))) order by empid
 ---------- Output ---------
-SELECT * FROM (SELECT * FROM monthly_sales) PIVOT(sum(amount) FOR month IN ((SELECT DISTINCT month FROM monthly_sales))) ORDER BY empid
+SELECT * FROM (SELECT * FROM monthly_sales) PIVOT(sum(amount) FOR month IN (SELECT DISTINCT month FROM monthly_sales)) ORDER BY empid
 ---------- AST ------------
 Query {
     span: Some(
@@ -7348,87 +7516,79 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            values: ColumnValues(
-                                [
-                                    Subquery {
-                                        span: Some(
-                                            76..118,
-                                        ),
-                                        modifier: None,
-                                        subquery: Query {
+                            values: Subquery(
+                                Query {
+                                    span: Some(
+                                        77..117,
+                                    ),
+                                    with: None,
+                                    body: Select(
+                                        SelectStmt {
                                             span: Some(
                                                 77..117,
                                             ),
-                                            with: None,
-                                            body: Select(
-                                                SelectStmt {
-                                                    span: Some(
-                                                        77..117,
-                                                    ),
-                                                    hints: None,
-                                                    distinct: true,
-                                                    top_n: None,
-                                                    select_list: [
-                                                        AliasedExpr {
-                                                            expr: ColumnRef {
-                                                                span: Some(
-                                                                    93..98,
-                                                                ),
-                                                                column: ColumnRef {
-                                                                    database: None,
-                                                                    table: None,
-                                                                    column: Name(
-                                                                        Identifier {
-                                                                            span: Some(
-                                                                                93..98,
-                                                                            ),
-                                                                            name: "month",
-                                                                            quote: None,
-                                                                            ident_type: None,
-                                                                        },
-                                                                    ),
-                                                                },
-                                                            },
-                                                            alias: None,
-                                                        },
-                                                    ],
-                                                    from: [
-                                                        Table {
-                                                            span: Some(
-                                                                104..117,
-                                                            ),
-                                                            catalog: None,
+                                            hints: None,
+                                            distinct: true,
+                                            top_n: None,
+                                            select_list: [
+                                                AliasedExpr {
+                                                    expr: ColumnRef {
+                                                        span: Some(
+                                                            93..98,
+                                                        ),
+                                                        column: ColumnRef {
                                                             database: None,
-                                                            table: Identifier {
-                                                                span: Some(
-                                                                    104..117,
-                                                                ),
-                                                                name: "monthly_sales",
-                                                                quote: None,
-                                                                ident_type: None,
-                                                            },
-                                                            alias: None,
-                                                            temporal: None,
-                                                            with_options: None,
-                                                            pivot: None,
-                                                            unpivot: None,
-                                                            sample: None,
+                                                            table: None,
+                                                            column: Name(
+                                                                Identifier {
+                                                                    span: Some(
+                                                                        93..98,
+                                                                    ),
+                                                                    name: "month",
+                                                                    quote: None,
+                                                                    ident_type: None,
+                                                                },
+                                                            ),
                                                         },
-                                                    ],
-                                                    selection: None,
-                                                    group_by: None,
-                                                    having: None,
-                                                    window_list: None,
-                                                    qualify: None,
+                                                    },
+                                                    alias: None,
                                                 },
-                                            ),
-                                            order_by: [],
-                                            limit: [],
-                                            offset: None,
-                                            ignore_result: false,
+                                            ],
+                                            from: [
+                                                Table {
+                                                    span: Some(
+                                                        104..117,
+                                                    ),
+                                                    catalog: None,
+                                                    database: None,
+                                                    table: Identifier {
+                                                        span: Some(
+                                                            104..117,
+                                                        ),
+                                                        name: "monthly_sales",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                    alias: None,
+                                                    temporal: None,
+                                                    with_options: None,
+                                                    pivot: None,
+                                                    unpivot: None,
+                                                    sample: None,
+                                                },
+                                            ],
+                                            selection: None,
+                                            group_by: None,
+                                            having: None,
+                                            window_list: None,
+                                            qualify: None,
                                         },
-                                    },
-                                ],
+                                    ),
+                                    order_by: [],
+                                    limit: [],
+                                    offset: None,
+                                    ignore_result: false,
+                                },
                             ),
                         },
                     ),

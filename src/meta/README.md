@@ -74,19 +74,11 @@ To add a new feature(add new type or update an type), the developer should do:
 
 ## Compatibility with Databend Query
 
-The following is an illustration of the latest query-meta compatibility:
+The Query-Meta compatibility changes when `MIN_METASRV_SEMVER` or `MIN_METACLI_SEMVER` changes.
 
-`[, a.b.c)` denotes the range of versions from previous version(on the left column)(inclusive)
-upto `a.b.c` (exclusive).
+The compatibility is stored in [compat.py](compat.py), and a corresponding illustration is generated:
 
-
-| `Meta\Query`       | 1.2.287) | [, 1.2.361) | [, 1.2.715) | [, 1.2.726)      | [, +∞) |
-|:-------------------|:---------|:------------|:------------|:-----------------|:-------|
-| [1.2.63, 1.2.226)  |          | ❌           | ❌            | ❌                | ❌      |
-| [1.2.226, 1.2.258) |          | ✅           | ❌            | ❌                | ❌      |
-| [1.2.258, 1.2.663) |          | ✅           | ✅            | ✅(no semaphore)  | ❌      |
-| [1.2.663, 1.2.677) |          | ✅           | ✅            | ✅(no semaphore)  | ❌      |
-| [1.2.677, +∞)      |          | ✅           | ✅            | ✅                | ✅      |
+![](compatibility_chart.png)
 
 History versions that are not included in the above chart:
 

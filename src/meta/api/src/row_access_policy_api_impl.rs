@@ -20,6 +20,7 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -162,6 +163,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
         let res = self.get_id_and_value(name_ident).await?;
 
+        Ok(res)
+    }
+
+    async fn get_row_access_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<SeqV<RowAccessPolicyMeta>>, MetaError> {
+        debug!(req :? =(policy_id); "RowAccessPolicyApi: {}", func_name!());
+
+        let id = RowAccessPolicyId::new(policy_id);
+        let id_ident = RowAccessPolicyIdIdent::new_generic(tenant, id);
+
+        let res = self.get_pb(&id_ident).await?;
         Ok(res)
     }
 }

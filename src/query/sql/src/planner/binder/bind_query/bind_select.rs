@@ -278,6 +278,7 @@ impl Binder {
 /// [`column_binding`] contains the column binding information of the SelectStmt.
 ///
 /// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
+#[allow(dead_code)]
 struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
@@ -287,14 +288,6 @@ struct SelectRewriter<'a> {
 
 // helper functions to SelectRewriter
 impl SelectRewriter<'_> {
-    fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
-        if self.is_unquoted_ident_case_sensitive {
-            a == b
-        } else {
-            a.eq_ignore_ascii_case(b)
-        }
-    }
-
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -377,17 +370,6 @@ impl SelectRewriter<'_> {
                 .collect(),
         }
     }
-
-    // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
-    fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
-        match expr {
-            Expr::Literal { value, .. } => match value {
-                Literal::String(v) => Some(v.clone()),
-                _ => Some(expr.to_string()),
-            },
-            _ => None,
-        }
-    }
 }
 
 impl<'a> SelectRewriter<'a> {
@@ -397,6 +379,17 @@ impl<'a> SelectRewriter<'a> {
             new_stmt: None,
             is_unquoted_ident_case_sensitive,
             subquery_executor: None,
+        }
+    }
+
+    // For Expr::Literal, expr.to_string() is quoted, sometimes we need the raw string.
+    fn raw_string_from_literal_expr(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Literal { value, .. } => match value {
+                Literal::String(v) => Some(v.clone()),
+                _ => Some(expr.to_string()),
+            },
+            _ => None,
         }
     }
 
@@ -437,24 +430,7 @@ impl<'a> SelectRewriter<'a> {
                 .set_span(expr.span())),
             })
             .collect::<Result<Vec<_>>>()?;
-        let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
-            GroupBy::Normal(
-                self.column_binding
-                    .iter()
-                    .filter(|col_bind| {
-                        !self
-                            .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
-                            && !aggregate_args_names.iter().any(|col| {
-                                self.compare_unquoted_ident(&col.name, &col_bind.column_name)
-                            })
-                    })
-                    .map(|col| Expr::Literal {
-                        span: Span::default(),
-                        value: Literal::UInt64(col.index as u64 + 1),
-                    })
-                    .collect(),
-            )
-        });
+        let new_group_by = stmt.group_by.clone().unwrap_or_else(|| GroupBy::All);
 
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
@@ -467,15 +443,26 @@ impl<'a> SelectRewriter<'a> {
             ..aggregate_name.clone()
         };
 
-        // The values of pivot are divided into two categories: Column(Vec<Expr>) and Subquery.
+        // The values of pivot are divided into three categories: Column(Vec<Expr>), Subquery, and Any.
         // For Column, it must be literal. For Subquery, it should first be executed,
         // and the processing of the result will be consistent with that of Column.
+        // For Any, we need to execute a DISTINCT query on the pivot column to get all unique values.
         // Therefore, the subquery can only return one column, and only return a string type.
         match &pivot.values {
             PivotValues::ColumnValues(values) => {
+                let values = values
+                    .iter()
+                    .map(|value| {
+                        let alias = Self::raw_string_from_literal_expr(value).ok_or_else(|| {
+                            ErrorCode::SyntaxException("Pivot value should be literal")
+                        })?;
+                        Ok((value.clone(), alias))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
                 self.process_pivot_column_values(
                     pivot,
-                    values,
+                    &values,
                     &new_aggregate_name,
                     aggregate_args,
                     &mut new_select_list,
@@ -490,8 +477,50 @@ impl<'a> SelectRewriter<'a> {
                             .execute_query_with_sql_string(&query_sql)
                             .await
                     })?;
-                    let values =
+                    let mut values =
                         self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
+                    values.sort_by(|a, b| a.1.cmp(&b.1));
+                    self.process_pivot_column_values(
+                        pivot,
+                        &values,
+                        &new_aggregate_name,
+                        aggregate_args,
+                        &mut new_select_list,
+                        stmt,
+                    )?;
+                } else {
+                    return Err(ErrorCode::Internal(
+                        "SelectRewriter's Subquery executor is not set",
+                    ));
+                };
+            }
+            PivotValues::Any { order_by } => {
+                if let Some(subquery_executor) = &self.subquery_executor {
+                    // Build a query to get all distinct values from the pivot column
+                    let mut query_sql = format!(
+                        "SELECT DISTINCT {} FROM ({}) AS pivot_source",
+                        pivot.value_column.name,
+                        self.build_pivot_source_query(stmt)?
+                    );
+
+                    // Add ORDER BY if specified
+                    if let Some(order_by_exprs) = order_by {
+                        query_sql.push_str(" ORDER BY ");
+                        for (i, order_expr) in order_by_exprs.iter().enumerate() {
+                            if i > 0 {
+                                query_sql.push_str(", ");
+                            }
+                            query_sql.push_str(&order_expr.to_string());
+                        }
+                    }
+
+                    let data_blocks = databend_common_base::runtime::block_on(async move {
+                        subquery_executor
+                            .execute_query_with_sql_string(&query_sql)
+                            .await
+                    })?;
+                    let values =
+                        self.extract_column_values_from_data_blocks(&data_blocks, stmt.span)?;
                     self.process_pivot_column_values(
                         pivot,
                         &values,
@@ -524,24 +553,22 @@ impl<'a> SelectRewriter<'a> {
     fn process_pivot_column_values(
         &self,
         pivot: &Pivot,
-        values: &[Expr],
+        values: &[(Expr, String)],
         new_aggregate_name: &Identifier,
         aggregate_args: &[Expr],
         new_select_list: &mut Vec<SelectTarget>,
         stmt: &SelectStmt,
     ) -> Result<()> {
-        for value in values {
+        for (value, alias) in values {
             let mut args = aggregate_args.to_vec();
             args.push(Self::expr_eq_from_col_and_value(
                 pivot.value_column.clone(),
                 value.clone(),
             ));
-            let alias = Self::raw_string_from_literal_expr(value)
-                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
             new_select_list.push(Self::target_func_from_name_args(
                 new_aggregate_name.clone(),
                 args,
-                Some(Identifier::from_name(stmt.span, &alias)),
+                Some(Identifier::from_name(stmt.span, alias)),
             ));
         }
         Ok(())
@@ -551,8 +578,8 @@ impl<'a> SelectRewriter<'a> {
         &self,
         data_blocks: &[DataBlock],
         span: Span,
-    ) -> Result<Vec<Expr>> {
-        let mut values: Vec<Expr> = vec![];
+    ) -> Result<Vec<(Expr, String)>> {
+        let mut values = vec![];
         for block in data_blocks {
             if block.num_columns() != 1 {
                 return Err(ErrorCode::SemanticError(
@@ -561,25 +588,131 @@ impl<'a> SelectRewriter<'a> {
                 .set_span(span));
             }
             let columns = block.columns();
+            // TODO: support more scalar into expr types
             for row in 0..block.num_rows() {
-                match columns[0].index(row).unwrap() {
+                let s = columns[0].index(row).unwrap();
+                let data_type = columns[0].data_type();
+                match s {
                     ScalarRef::String(s) => {
                         let literal = Expr::Literal {
                             span,
                             value: Literal::String(s.to_string()),
                         };
-                        values.push(literal);
+                        values.push((literal, s.to_string()));
                     }
-                    _ => {
-                        return Err(ErrorCode::SemanticError(
-                            "The subquery of `pivot in` must return a string type",
-                        )
-                        .set_span(span));
+                    ScalarRef::Null => {
+                        let literal = Expr::Literal {
+                            span,
+                            value: Literal::Null,
+                        };
+                        values.push((literal, "NULL".to_string()));
+                    }
+                    other => {
+                        let e = Expr::Cast {
+                            span,
+                            expr: Box::new(Expr::Literal {
+                                span,
+                                value: Literal::String(other.to_string()),
+                            }),
+                            target_type: data_type.to_type_name()?,
+                            pg_style: false,
+                        };
+                        values.push((e, other.to_string()));
                     }
                 }
             }
         }
         Ok(values)
+    }
+
+    fn build_pivot_source_query(&self, stmt: &SelectStmt) -> Result<String> {
+        // Build the source query for the pivot table without the pivot clause
+        // This is used to get distinct values for ANY pivot
+        let mut source_query = String::new();
+
+        // Start with SELECT clause
+        // Add FROM clause (without pivot)
+        if !stmt.from.is_empty() {
+            source_query.push_str("SELECT *  FROM ");
+            for (i, from_item) in stmt.from.iter().enumerate() {
+                if i > 0 {
+                    source_query.push_str(", ");
+                }
+                // Remove pivot from the from clause
+                match from_item {
+                    TableReference::Table {
+                        span: _,
+                        catalog,
+                        database,
+                        table,
+                        alias,
+                        temporal,
+                        with_options,
+                        pivot: _,
+                        unpivot,
+                        sample,
+                    } => {
+                        if let Some(catalog) = catalog {
+                            source_query.push_str(&catalog.name);
+                            source_query.push('.');
+                        }
+                        if let Some(database) = database {
+                            source_query.push_str(&database.name);
+                            source_query.push('.');
+                        }
+                        source_query.push_str(&table.name);
+
+                        if let Some(temporal) = temporal {
+                            source_query.push(' ');
+                            source_query.push_str(&temporal.to_string());
+                        }
+                        if let Some(with_options) = with_options {
+                            source_query.push(' ');
+                            source_query.push_str(&with_options.to_string());
+                        }
+                        if let Some(alias) = alias {
+                            source_query.push_str(" AS ");
+                            source_query.push_str(&alias.to_string());
+                        }
+                        if let Some(unpivot) = unpivot {
+                            source_query.push(' ');
+                            source_query.push_str(&unpivot.to_string());
+                        }
+                        if let Some(sample) = sample {
+                            source_query.push(' ');
+                            source_query.push_str(&sample.to_string());
+                        }
+                    }
+                    _ => {
+                        source_query.push_str(&from_item.to_string());
+                    }
+                }
+            }
+        } else {
+            return Err(ErrorCode::SemanticError(
+                "The pivot source query must have a FROM clause",
+            ));
+        }
+
+        // Add WHERE clause if present
+        if let Some(where_clause) = &stmt.selection {
+            source_query.push_str(" WHERE ");
+            source_query.push_str(&where_clause.to_string());
+        }
+
+        // Add GROUP BY clause if present
+        if let Some(group_by) = &stmt.group_by {
+            source_query.push_str(" GROUP BY ");
+            source_query.push_str(&group_by.to_string());
+        }
+
+        // Add HAVING clause if present
+        if let Some(having) = &stmt.having {
+            source_query.push_str(" HAVING ");
+            source_query.push_str(&having.to_string());
+        }
+
+        Ok(source_query)
     }
 
     fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {

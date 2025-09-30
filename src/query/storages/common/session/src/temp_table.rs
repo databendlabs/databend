@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -203,6 +204,10 @@ impl TempTblMgr {
             }
             None => Ok(None),
         }
+    }
+
+    pub fn swap_table(&mut self, _req: &SwapTableReq) -> Result<Option<SwapTableReq>> {
+        Err(ErrorCode::Unimplemented("Cannot swap tmp table"))
     }
 
     pub fn get_table_meta_by_id(&self, id: u64) -> Result<Option<SeqV<TableMeta>>> {

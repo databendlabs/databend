@@ -125,17 +125,18 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
 pub fn copy_into(i: Input) -> IResult<Statement> {
     rule!(
          #copy_into_location:"`COPY
-                INTO { internalStage | externalStage | externalLocation }
+                INTO { @<stage_name>[/<path>]  | '<uri>' }
                 FROM { [<database_name>.]<table_name> | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
                 [ copyOptions ]`"
          | #copy_into_table: "`COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`"
     )(i)
 }

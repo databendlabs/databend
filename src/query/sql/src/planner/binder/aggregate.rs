@@ -941,11 +941,12 @@ impl Binder {
             let mut finder = Finder::new(&f);
             finder.visit(&item.scalar)?;
             if !finder.scalars().is_empty() {
-                return Err(ErrorCode::SemanticError(
-                    "GROUP BY items can't contain aggregate functions or window functions"
-                        .to_string(),
-                )
-                .set_span(item.scalar.span()));
+                let scalar = finder.scalars().first().unwrap();
+                return Err(ErrorCode::SemanticError(format!(
+                    "GROUP BY items can't contain aggregate functions or window functions: {:?}",
+                    scalar
+                ))
+                .set_span(scalar.span()));
             }
         }
 

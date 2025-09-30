@@ -15,7 +15,7 @@ statement ok
 CREATE TABLE salaries (
     employee_id INT,
     salary DECIMAL(10, 2)
-);
+) enable_auto_analyze = 0;
 
 statement ok
 BEGIN;

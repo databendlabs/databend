@@ -135,7 +135,7 @@ impl UserApiProvider {
         // Until we can confirm all product use https://github.com/datafuselabs/databend/releases/tag/v1.2.321-nightly or later,
         // We can add account_admin into meta.
         {
-            let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
+            let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC, None);
             user_mgr
                 .add_role(tenant, public, &CreateOption::CreateIfNotExists)
                 .await?;

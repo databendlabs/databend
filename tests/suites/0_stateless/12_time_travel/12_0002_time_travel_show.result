@@ -1,6 +1,6 @@
 t	BASE TABLE	db12_0002	default	account_admin	FUSE		yyyy-mm-dd HH:MM:SS.ssssss	0	0	0	0
 v_t	db12_0002	default	NULL	VIEW	yyyy-mm-dd HH:MM:SS.ssssss	SELECT * FROM db12_0002.t
 t	yyyy-mm-dd HH:MM:SS.ssssss
-seq	1	1	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss	NULL
-seq1	1	1	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss	NULL
+1	1	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss	NULL
+1	1	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss	NULL
 seq	1	1	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss	NULL

@@ -59,6 +59,8 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -85,6 +87,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -541,6 +545,11 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn swap_table(&self, _req: SwapTableReq) -> Result<SwapTableReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         let db = self.get_database(tenant, db_name).await?;
         match db.get_table(table_name).await {
@@ -743,6 +752,13 @@ impl Catalog for IcebergMutableCatalog {
     }
 
     async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        _req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
         unimplemented!()
     }
 }

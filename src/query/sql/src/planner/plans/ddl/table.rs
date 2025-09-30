@@ -243,6 +243,23 @@ impl RenameTablePlan {
     }
 }
 
+/// Swap table names.
+#[derive(Clone, Debug)]
+pub struct SwapTablePlan {
+    pub tenant: Tenant,
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub target_table: String,
+}
+
+impl SwapTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Modify table comment.
 #[derive(Clone, Debug)]
 pub struct ModifyTableCommentPlan {
@@ -315,6 +332,7 @@ pub struct AddTableColumnPlan {
     pub option: AddColumnOption,
     pub is_deterministic: bool,
     pub is_nextval: bool,
+    pub is_autoincrement: bool,
 }
 
 impl AddTableColumnPlan {

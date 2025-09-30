@@ -343,6 +343,10 @@ impl InterpreterFactory {
                 ctx,
                 *rename_table.clone(),
             )?)),
+            Plan::SwapTable(swap_table) => Ok(Arc::new(SwapTableInterpreter::try_create(
+                ctx,
+                *swap_table.clone(),
+            )?)),
             Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
                 ctx,
                 *set_options.clone(),
@@ -533,6 +537,10 @@ impl InterpreterFactory {
             Plan::DropRole(drop_role) => Ok(Arc::new(DropRoleInterpreter::try_create(
                 ctx,
                 *drop_role.clone(),
+            )?)),
+            Plan::AlterRole(alter_role) => Ok(Arc::new(AlterRoleInterpreter::try_create(
+                ctx,
+                *alter_role.clone(),
             )?)),
             Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
                 ctx,

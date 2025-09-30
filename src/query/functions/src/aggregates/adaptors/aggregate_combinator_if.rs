@@ -44,6 +44,7 @@ pub struct AggregateIfCombinator {
     argument_len: usize,
     nested_name: String,
     nested: AggregateFunctionRef,
+    always_false: bool,
 }
 
 impl AggregateIfCombinator {
@@ -63,7 +64,10 @@ impl AggregateIfCombinator {
             )));
         }
 
-        if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
+        let mut always_false = false;
+        if arguments[argument_len - 1].is_null() {
+            always_false = true;
+        } else if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
             return Err(ErrorCode::BadArguments(format!(
                 "The type of the last argument for {name} must be boolean type, but got {:?}",
                 &arguments[argument_len - 1]
@@ -78,6 +82,7 @@ impl AggregateIfCombinator {
             argument_len,
             nested_name: nested_name.to_owned(),
             nested,
+            always_false,
         }))
     }
 
@@ -110,6 +115,9 @@ impl AggregateFunction for AggregateIfCombinator {
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
         let predicate =
             BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
 
@@ -132,6 +140,9 @@ impl AggregateFunction for AggregateIfCombinator {
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
         let predicate: Bitmap =
             BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
         let (columns, row_size) =
@@ -145,6 +156,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        if self.always_false {
+            return Ok(());
+        }
         let predicate: Bitmap =
             BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
         if predicate.get_bit(row) {
@@ -199,6 +213,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn get_if_condition(&self, entries: ProjectedBlock) -> Option<Bitmap> {
+        if self.always_false {
+            return Some(Bitmap::new_constant(false, entries.len()));
+        }
         let condition_col = entries[self.argument_len - 1].clone().remove_nullable();
         let predicate = BooleanType::try_downcast_column(&condition_col.to_column()).unwrap();
         Some(predicate)
