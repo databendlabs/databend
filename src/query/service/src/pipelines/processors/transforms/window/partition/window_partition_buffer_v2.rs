@@ -29,8 +29,7 @@ pub trait SpillWriter: Send {
 
     async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16>;
 
-    async fn close(self) -> Result<Self::Reader>
-    where Self: Sized;
+    async fn close(self) -> Result<Self::Reader>;
 }
 
 #[async_trait::async_trait]

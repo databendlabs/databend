@@ -40,6 +40,8 @@ use super::Location;
 use crate::sessions::QueryContext;
 use crate::spillers::block_reader::BlocksReader;
 use crate::spillers::block_writer::BlocksWriter;
+use crate::spillers::union_file::FileReader;
+use crate::spillers::union_file::UnionFileWriter;
 
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
@@ -357,7 +359,7 @@ pub struct Chunk {
 }
 
 pub struct SpillWriter {
-    file: FileWriter<Vec<u8>>,
+    file: FileWriter<UnionFileWriter>,
 }
 
 impl SpillWriter {
@@ -367,6 +369,10 @@ impl SpillWriter {
             row_group.add(block)?;
         }
         Ok(self.file.flush_row_group(row_group)?)
+    }
+
+    async fn close(self) -> Result<()> {
+        todo!()
     }
 }
 
