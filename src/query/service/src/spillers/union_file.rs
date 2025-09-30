@@ -370,6 +370,12 @@ pub struct UnionFile {
     remote_offset: Option<u64>,
 }
 
+impl UnionFile {
+    pub fn remote_path(&self) -> &str {
+        &self.remote_path
+    }
+}
+
 pub(super) struct FileReader {
     meta: Arc<ParquetMetaData>,
     local: Option<(TempPath, AsyncDmaFile)>,

@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
@@ -24,25 +25,33 @@ use std::time::Instant;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::async_buffer::BufferPool;
 use super::inner::*;
 use super::serialize::*;
 use super::union_file::FileWriter;
+use super::union_file::UnionFile;
+use super::union_file::UnionFileWriter;
 use super::Location;
+use crate::pipelines::processors::transforms::SpillBuilder as WindowSpillBuilder;
+use crate::pipelines::processors::transforms::SpillReader as WindowSpillReader;
+use crate::pipelines::processors::transforms::SpillWriter as WindowSpillWriter;
 use crate::sessions::QueryContext;
 use crate::spillers::block_reader::BlocksReader;
 use crate::spillers::block_writer::BlocksWriter;
-use crate::spillers::union_file::FileReader;
-use crate::spillers::union_file::UnionFileWriter;
 
+#[derive(Clone)]
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
@@ -358,29 +367,194 @@ pub struct Chunk {
     pub layout: Layout,
 }
 
-pub struct SpillWriter {
-    file: FileWriter<UnionFileWriter>,
+const WINDOW_SPILL_BUFFER_MEMORY_BYTES: usize = 64 * 1024 * 1024;
+const WINDOW_SPILL_BUFFER_WORKERS: usize = 2;
+const WINDOW_SPILL_CHUNK_SIZE: usize = 8 * 1024 * 1024;
+
+pub struct WindowPartitionSpillWriter {
+    spiller: Spiller,
+    buffer_pool: Arc<BufferPool>,
+    dio: bool,
+    chunk_size: usize,
+    schema: Option<Arc<DataSchema>>,
+    file_writer: Option<FileWriter<UnionFileWriter>>,
+    row_group_ordinals: Vec<usize>,
 }
 
-impl SpillWriter {
-    pub fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<RowGroupMetaDataPtr> {
-        let mut row_group = self.file.new_row_group();
-        for block in blocks {
-            row_group.add(block)?;
+pub struct WindowPartitionSpillReader {
+    spiller: Spiller,
+    schema: Arc<DataSchema>,
+    parquet_metadata: Arc<ParquetMetaData>,
+    union_file: Option<UnionFile>,
+    row_group_ordinals: Vec<usize>,
+    dio: bool,
+}
+
+impl WindowPartitionSpillWriter {
+    async fn ensure_file_writer(&mut self, blocks: &[DataBlock]) -> Result<()> {
+        if self.file_writer.is_some() {
+            return Ok(());
         }
-        Ok(self.file.flush_row_group(row_group)?)
-    }
 
-    async fn close(self) -> Result<()> {
-        todo!()
+        if blocks.is_empty() {
+            return Err(ErrorCode::Internal(
+                "window spill writer received empty block batch".to_string(),
+            ));
+        }
+
+        if !self.spiller.use_parquet {
+            return Err(ErrorCode::Internal(
+                "window spill requires Parquet spill format".to_string(),
+            ));
+        }
+
+        let schema = Arc::new(blocks[0].infer_schema());
+        let file_writer = self
+            .spiller
+            .new_file_writer(&schema, &self.buffer_pool, self.dio, self.chunk_size)
+            .await?;
+        self.schema = Some(schema);
+        self.file_writer = Some(file_writer);
+        Ok(())
     }
 }
 
-pub struct SpillReader {}
+#[async_trait::async_trait]
+impl WindowSpillWriter for WindowPartitionSpillWriter {
+    type Reader = WindowPartitionSpillReader;
 
-impl SpillReader {
-    pub fn restore(&self, _ordinal: i16) {
-        todo!()
+    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16> {
+        self.ensure_file_writer(&blocks).await?;
+
+        let file_writer = self.file_writer.as_mut().ok_or_else(|| {
+            ErrorCode::Internal("window spill writer not initialized".to_string())
+        })?;
+
+        let row_group_meta = file_writer.spill(blocks)?;
+        let row_group_index = row_group_meta
+            .ordinal()
+            .map(|value| value as usize)
+            .unwrap_or(self.row_group_ordinals.len());
+
+        let ordinal_index = self.row_group_ordinals.len();
+        let ordinal = i16::try_from(ordinal_index).map_err(|_| {
+            ErrorCode::Internal("too many spilled batches for window partition".to_string())
+        })?;
+
+        self.row_group_ordinals.push(row_group_index);
+        Ok(ordinal)
+    }
+
+    async fn close(self) -> Result<<Self as WindowSpillWriter>::Reader> {
+        let Some(file_writer) = self.file_writer else {
+            return Err(ErrorCode::Internal(
+                "attempted to close window spill writer without data".to_string(),
+            ));
+        };
+
+        let file_writer = file_writer;
+
+        let schema = self
+            .schema
+            .ok_or_else(|| ErrorCode::Internal("missing schema for window spill".to_string()))?;
+
+        let (metadata, union_file) = file_writer.finish()?;
+        let remote_path = union_file.remote_path().to_string();
+        let parquet_metadata = Arc::new(metadata);
+
+        let total_size = parquet_metadata
+            .row_groups()
+            .iter()
+            .map(|rg| rg.compressed_size().max(0) as usize)
+            .sum();
+
+        self.spiller.adapter.add_spill_file(
+            Location::Remote(remote_path),
+            Layout::Parquet,
+            total_size,
+        );
+
+        Ok(WindowPartitionSpillReader {
+            spiller: self.spiller,
+            schema,
+            parquet_metadata,
+            union_file: Some(union_file),
+            row_group_ordinals: self.row_group_ordinals,
+            dio: self.dio,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl WindowSpillReader for WindowPartitionSpillReader {
+    async fn restore(&mut self, ordinals: Vec<i16>) -> Result<Vec<DataBlock>> {
+        if ordinals.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let row_groups = ordinals
+            .into_iter()
+            .map(|ordinal| {
+                if ordinal < 0 {
+                    return Err(ErrorCode::Internal(format!(
+                        "invalid spill ordinal {} for window partition",
+                        ordinal
+                    )));
+                }
+                let index = ordinal as usize;
+                self.row_group_ordinals.get(index).copied().ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "spill ordinal {} not found for window partition",
+                        ordinal
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let union_file = self.union_file.take().ok_or_else(|| {
+            ErrorCode::Internal("window spill reader already consumed".to_string())
+        })?;
+
+        self.spiller
+            .load_row_groups(
+                union_file,
+                self.parquet_metadata.clone(),
+                &self.schema,
+                row_groups,
+                self.dio,
+            )
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl WindowSpillBuilder for Spiller {
+    type Writer = WindowPartitionSpillWriter;
+
+    async fn create(&self) -> Result<<Self as WindowSpillBuilder>::Writer> {
+        if !self.use_parquet {
+            return Err(ErrorCode::Internal(
+                "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
+                    .to_string(),
+            ));
+        }
+
+        let runtime = GlobalIORuntime::instance();
+        let buffer_pool = BufferPool::create(
+            runtime,
+            WINDOW_SPILL_BUFFER_MEMORY_BYTES,
+            WINDOW_SPILL_BUFFER_WORKERS,
+        );
+
+        Ok(WindowPartitionSpillWriter {
+            spiller: self.clone(),
+            buffer_pool,
+            dio: self.temp_dir.is_some(),
+            chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+            schema: None,
+            file_writer: None,
+            row_group_ordinals: Vec::new(),
+        })
     }
 }
 
