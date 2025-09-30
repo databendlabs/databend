@@ -126,11 +126,9 @@ impl RowGroupEncoder {
         let cursor = file_writer.into_inner()?;
         let parquet_bytes = bytes::Bytes::from(cursor.into_inner());
 
-        let mut reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
-
+        let reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
         let blocks = reader
-            .into_iter()
-            .map(|batch| DataBlock::from_record_batch(&data_schema, &batch?)?.0)
+            .map(|batch| Ok(DataBlock::from_record_batch(&data_schema, &batch?)?.0))
             .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {

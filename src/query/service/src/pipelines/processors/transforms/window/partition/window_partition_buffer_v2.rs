@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
@@ -7,13 +9,52 @@ use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
 
 #[async_trait::async_trait]
-pub trait Spill: Send + Sync {
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16>;
+pub trait SpillReader: Send {
     async fn restore(&mut self, ordinals: Vec<i16>) -> Result<Vec<DataBlock>>;
 }
 
-pub struct WindowPartitionBufferV2<S: Spill> {
-    spill: S,
+#[async_trait::async_trait]
+pub trait SpillWriter: Send {
+    type Reader: SpillReader;
+
+    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16>;
+
+    async fn close(self) -> Result<Self::Reader>;
+}
+
+#[async_trait::async_trait]
+pub trait SpillBuilder<W: SpillWriter>: Send + Sync {
+    async fn create(&self, partition_id: usize) -> Result<W>;
+}
+
+#[async_trait::async_trait]
+impl<W, F, Fut> SpillBuilder<W> for F
+where
+    W: SpillWriter,
+    F: Fn(usize) -> Fut + Send + Sync,
+    Fut: Future<Output = Result<W>> + Send,
+{
+    async fn create(&self, partition_id: usize) -> Result<W> {
+        (self)(partition_id).await
+    }
+}
+
+#[derive(Default)]
+enum PartitionSpillState<W, R> {
+    #[default]
+    Empty,
+    Writing(W),
+    Reading(R),
+}
+
+pub struct WindowPartitionBufferV2<W, B>
+where
+    W: SpillWriter,
+    W::Reader: SpillReader,
+    B: SpillBuilder<W>,
+{
+    spill_builder: B,
+    partition_spills: Vec<PartitionSpillState<W, W::Reader>>,
     memory_settings: MemorySettings,
     min_spill_size: usize,
     partition_buffer: PartitionBuffer,
@@ -24,16 +65,25 @@ pub struct WindowPartitionBufferV2<S: Spill> {
     spilled_partition_ordinals: Vec<Vec<i16>>,
 }
 
-impl<S: Spill> WindowPartitionBufferV2<S> {
+impl<W, B> WindowPartitionBufferV2<W, B>
+where
+    W: SpillWriter,
+    W::Reader: SpillReader,
+    B: SpillBuilder<W>,
+{
     pub fn new(
-        spill: S,
+        spill_builder: B,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
         let partition_buffer = PartitionBuffer::create(num_partitions);
+        let partition_spills = (0..num_partitions)
+            .map(|_| PartitionSpillState::default)
+            .collect();
         Ok(Self {
-            spill,
+            spill_builder,
+            partition_spills,
             memory_settings,
             min_spill_size: 1024 * 1024,
             partition_buffer,
@@ -83,7 +133,11 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
                 partition_id,
                 &PartitionBufferFetchOption::PickPartitionWithThreshold(spill_unit_size),
             ) {
-                let ordinal = self.spill.spill(blocks).await?;
+                self.ensure_partition_writer(partition_id).await?;
+                let writer = self
+                    .partition_writer_mut(partition_id)
+                    .expect("partition writer must exist");
+                let ordinal = writer.spill(blocks).await?;
                 self.spilled_partition_ordinals[partition_id].push(ordinal);
                 return Ok(());
             }
@@ -105,7 +159,11 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
                 .partition_buffer
                 .fetch_data_blocks(partition_id, &PartitionBufferFetchOption::ReadPartition)
                 .unwrap();
-            let ordinal = self.spill.spill(blocks).await?;
+            self.ensure_partition_writer(partition_id).await?;
+            let writer = self
+                .partition_writer_mut(partition_id)
+                .expect("partition writer must exist");
+            let ordinal = writer.spill(blocks).await?;
             self.spilled_partition_ordinals[partition_id].push(ordinal);
         } else {
             self.can_spill = false;
@@ -122,7 +180,11 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
             let mut result = if ordinals.is_empty() {
                 Vec::new()
             } else {
-                self.spill.restore(ordinals).await?
+                self.close_partition_writer(partition_id).await?;
+                let reader = self
+                    .partition_reader_mut(partition_id)
+                    .expect("partition reader must exist after closing writer");
+                reader.restore(ordinals).await?
             };
 
             if let Some(blocks) = self
@@ -138,5 +200,67 @@ impl<S: Spill> WindowPartitionBufferV2<S> {
         }
 
         Ok(vec![])
+    }
+
+    async fn ensure_partition_writer(&mut self, partition_id: usize) -> Result<()> {
+        if matches!(
+            self.partition_spills.get(partition_id),
+            Some(PartitionSpillState::Empty)
+        ) {
+            let writer = self.spill_builder.create(partition_id).await?;
+            self.partition_spills[partition_id] = PartitionSpillState::Writing(writer);
+            return Ok(());
+        }
+
+        if matches!(
+            self.partition_spills.get(partition_id),
+            Some(PartitionSpillState::Reading(_))
+        ) {
+            debug_assert!(
+                false,
+                "partition {} spill already closed before new writes",
+                partition_id
+            );
+        }
+        Ok(())
+    }
+
+    async fn close_partition_writer(&mut self, partition_id: usize) -> Result<()> {
+        let state = std::mem::replace(
+            &mut self.partition_spills[partition_id],
+            PartitionSpillState::Empty,
+        );
+        match state {
+            PartitionSpillState::Empty => {
+                debug_assert!(
+                    false,
+                    "closing partition {} without spill writer",
+                    partition_id
+                );
+                self.partition_spills[partition_id] = PartitionSpillState::Empty;
+            }
+            PartitionSpillState::Writing(writer) => {
+                let reader = writer.close().await?;
+                self.partition_spills[partition_id] = PartitionSpillState::Reading(reader);
+            }
+            PartitionSpillState::Reading(reader) => {
+                self.partition_spills[partition_id] = PartitionSpillState::Reading(reader);
+            }
+        }
+        Ok(())
+    }
+
+    fn partition_writer_mut(&mut self, partition_id: usize) -> Option<&mut W> {
+        match self.partition_spills.get_mut(partition_id) {
+            Some(PartitionSpillState::Writing(writer)) => Some(writer),
+            _ => None,
+        }
+    }
+
+    fn partition_reader_mut(&mut self, partition_id: usize) -> Option<&mut W::Reader> {
+        match self.partition_spills.get_mut(partition_id) {
+            Some(PartitionSpillState::Reading(reader)) => Some(reader),
+            _ => None,
+        }
     }
 }
