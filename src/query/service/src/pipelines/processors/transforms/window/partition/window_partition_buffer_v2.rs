@@ -12,22 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::concat_data_blocks;
 
 #[async_trait::async_trait]
 pub trait SpillReader: Send {
-    async fn restore(&mut self, ordinals: Vec<i16>) -> Result<Vec<DataBlock>>;
+    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>>;
 }
 
 #[async_trait::async_trait]
 pub trait SpillWriter: Send {
     type Reader: SpillReader;
 
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16>;
+    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize>;
 
     async fn close(self) -> Result<Self::Reader>;
 }
@@ -36,7 +39,7 @@ pub trait SpillWriter: Send {
 pub trait SpillBuilder: Send + Sync {
     type Writer: SpillWriter;
 
-    async fn create(&self) -> Result<Self::Writer>;
+    async fn create(&self, schema: Arc<DataSchema>) -> Result<Self::Writer>;
 }
 
 #[derive(Default)]
@@ -57,7 +60,7 @@ where
     W::Reader: SpillReader,
 {
     state: PartitionSpillState<W>,
-    spilled_ordinals: Vec<i16>,
+    spilled_ordinals: Vec<usize>,
     buffered_blocks: Vec<DataBlock>,
     buffered_size: usize,
 }
@@ -115,11 +118,11 @@ where
         }
     }
 
-    async fn writer_mut<'a, B>(&'a mut self, builder: &B) -> Result<&'a mut W>
+    async fn writer_mut<'a, B>(&'a mut self, builder: &B, block: &DataBlock) -> Result<&'a mut W>
     where B: SpillBuilder<Writer = W> {
         match &mut self.state {
             state @ PartitionSpillState::Empty => {
-                let writer = builder.create().await?;
+                let writer = builder.create(block.infer_schema().into()).await?;
                 let _ = std::mem::replace(state, PartitionSpillState::Writing(writer));
                 let PartitionSpillState::Writing(writer) = state else {
                     unreachable!()
@@ -220,7 +223,9 @@ where
             }
             if let Some(blocks) = partition.fetch_blocks(Some(spill_unit_size)) {
                 let ordinal = {
-                    let writer = partition.writer_mut(&self.spill_builder).await?;
+                    let writer = partition
+                        .writer_mut(&self.spill_builder, &blocks[0])
+                        .await?;
                     writer.spill(blocks).await?
                 };
                 partition.spilled_ordinals.push(ordinal);
@@ -243,7 +248,9 @@ where
             let partition = &mut self.partitions[partition_id];
             let blocks = partition.fetch_blocks(None).unwrap();
             let ordinal = {
-                let writer = partition.writer_mut(&self.spill_builder).await?;
+                let writer = partition
+                    .writer_mut(&self.spill_builder, &blocks[0])
+                    .await?;
                 writer.spill(blocks).await?
             };
             partition.spilled_ordinals.push(ordinal);

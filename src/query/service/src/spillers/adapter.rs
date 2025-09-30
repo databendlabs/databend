@@ -15,7 +15,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
@@ -376,9 +375,8 @@ pub struct WindowPartitionSpillWriter {
     buffer_pool: Arc<BufferPool>,
     dio: bool,
     chunk_size: usize,
-    schema: Option<Arc<DataSchema>>,
+    schema: Arc<DataSchema>,
     file_writer: Option<FileWriter<UnionFileWriter>>,
-    row_group_ordinals: Vec<usize>,
 }
 
 pub struct WindowPartitionSpillReader {
@@ -386,77 +384,36 @@ pub struct WindowPartitionSpillReader {
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
     union_file: Option<UnionFile>,
-    row_group_ordinals: Vec<usize>,
     dio: bool,
-}
-
-impl WindowPartitionSpillWriter {
-    async fn ensure_file_writer(&mut self, blocks: &[DataBlock]) -> Result<()> {
-        if self.file_writer.is_some() {
-            return Ok(());
-        }
-
-        if blocks.is_empty() {
-            return Err(ErrorCode::Internal(
-                "window spill writer received empty block batch".to_string(),
-            ));
-        }
-
-        if !self.spiller.use_parquet {
-            return Err(ErrorCode::Internal(
-                "window spill requires Parquet spill format".to_string(),
-            ));
-        }
-
-        let schema = Arc::new(blocks[0].infer_schema());
-        let file_writer = self
-            .spiller
-            .new_file_writer(&schema, &self.buffer_pool, self.dio, self.chunk_size)
-            .await?;
-        self.schema = Some(schema);
-        self.file_writer = Some(file_writer);
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
 impl WindowSpillWriter for WindowPartitionSpillWriter {
     type Reader = WindowPartitionSpillReader;
 
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<i16> {
-        self.ensure_file_writer(&blocks).await?;
-
-        let file_writer = self.file_writer.as_mut().ok_or_else(|| {
-            ErrorCode::Internal("window spill writer not initialized".to_string())
-        })?;
+    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        let file_writer = match &mut self.file_writer {
+            Some(file_writer) => file_writer,
+            file_writer @ None => {
+                let writer = self
+                    .spiller
+                    .new_file_writer(&self.schema, &self.buffer_pool, self.dio, self.chunk_size)
+                    .await?;
+                file_writer.insert(writer)
+            }
+        };
 
         let row_group_meta = file_writer.spill(blocks)?;
-        let row_group_index = row_group_meta
-            .ordinal()
-            .map(|value| value as usize)
-            .unwrap_or(self.row_group_ordinals.len());
-
-        let ordinal_index = self.row_group_ordinals.len();
-        let ordinal = i16::try_from(ordinal_index).map_err(|_| {
-            ErrorCode::Internal("too many spilled batches for window partition".to_string())
-        })?;
-
-        self.row_group_ordinals.push(row_group_index);
-        Ok(ordinal)
+        let ordinal = row_group_meta.ordinal().unwrap();
+        Ok(ordinal as _)
     }
 
-    async fn close(self) -> Result<<Self as WindowSpillWriter>::Reader> {
+    async fn close(self) -> Result<WindowPartitionSpillReader> {
         let Some(file_writer) = self.file_writer else {
             return Err(ErrorCode::Internal(
                 "attempted to close window spill writer without data".to_string(),
             ));
         };
-
-        let file_writer = file_writer;
-
-        let schema = self
-            .schema
-            .ok_or_else(|| ErrorCode::Internal("missing schema for window spill".to_string()))?;
 
         let (metadata, union_file) = file_writer.finish()?;
         let remote_path = union_file.remote_path().to_string();
@@ -476,10 +433,9 @@ impl WindowSpillWriter for WindowPartitionSpillWriter {
 
         Ok(WindowPartitionSpillReader {
             spiller: self.spiller,
-            schema,
+            schema: self.schema,
             parquet_metadata,
             union_file: Some(union_file),
-            row_group_ordinals: self.row_group_ordinals,
             dio: self.dio,
         })
     }
@@ -487,29 +443,10 @@ impl WindowSpillWriter for WindowPartitionSpillWriter {
 
 #[async_trait::async_trait]
 impl WindowSpillReader for WindowPartitionSpillReader {
-    async fn restore(&mut self, ordinals: Vec<i16>) -> Result<Vec<DataBlock>> {
+    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
         if ordinals.is_empty() {
             return Ok(Vec::new());
         }
-
-        let row_groups = ordinals
-            .into_iter()
-            .map(|ordinal| {
-                if ordinal < 0 {
-                    return Err(ErrorCode::Internal(format!(
-                        "invalid spill ordinal {} for window partition",
-                        ordinal
-                    )));
-                }
-                let index = ordinal as usize;
-                self.row_group_ordinals.get(index).copied().ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "spill ordinal {} not found for window partition",
-                        ordinal
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
 
         let union_file = self.union_file.take().ok_or_else(|| {
             ErrorCode::Internal("window spill reader already consumed".to_string())
@@ -520,7 +457,7 @@ impl WindowSpillReader for WindowPartitionSpillReader {
                 union_file,
                 self.parquet_metadata.clone(),
                 &self.schema,
-                row_groups,
+                ordinals,
                 self.dio,
             )
             .await
@@ -531,7 +468,10 @@ impl WindowSpillReader for WindowPartitionSpillReader {
 impl WindowSpillBuilder for Spiller {
     type Writer = WindowPartitionSpillWriter;
 
-    async fn create(&self) -> Result<<Self as WindowSpillBuilder>::Writer> {
+    async fn create(
+        &self,
+        schema: Arc<DataSchema>,
+    ) -> Result<<Self as WindowSpillBuilder>::Writer> {
         if !self.use_parquet {
             return Err(ErrorCode::Internal(
                 "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
@@ -551,9 +491,8 @@ impl WindowSpillBuilder for Spiller {
             buffer_pool,
             dio: self.temp_dir.is_some(),
             chunk_size: WINDOW_SPILL_CHUNK_SIZE,
-            schema: None,
+            schema,
             file_writer: None,
-            row_group_ordinals: Vec::new(),
         })
     }
 }
