@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -105,18 +107,18 @@ impl Processor for TransformHashJoin {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.initialize {
-            self.initialize = true;
-            self.build_port.set_need_data();
-            self.probe_port.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
         match &mut self.stage {
-            Stage::Build(state) => state.event(&self.build_port),
+            Stage::Build(state) => match state.event(&self.build_port)? {
+                Event::NeedData if !self.initialize => {
+                    self.initialize = true;
+                    self.probe_port.set_need_data();
+                    Ok(Event::NeedData)
+                }
+                other => Ok(other),
+            },
             Stage::BuildFinal(state) => state.event(),
             Stage::Probe(state) => state.event(&self.probe_port),
-            Stage::ProbeFinal(state) => state.event(),
+            Stage::ProbeFinal(state) => state.event(&self.joined_port),
             Stage::Finished => {
                 self.joined_port.finish();
                 Ok(Event::Finished)
@@ -194,6 +196,7 @@ impl Processor for TransformHashJoin {
     }
 }
 
+#[derive(Debug)]
 enum Stage {
     Build(BuildState),
     BuildFinal(BuildFinalState),
@@ -202,6 +205,7 @@ enum Stage {
     Finished,
 }
 
+#[derive(Debug)]
 struct BuildState {
     finished: bool,
     build_data: Option<DataBlock>,
@@ -230,6 +234,7 @@ impl BuildState {
     }
 }
 
+#[derive(Debug)]
 struct BuildFinalState {
     finished: bool,
 }
@@ -250,6 +255,12 @@ impl BuildFinalState {
 struct ProbeState {
     input_data: Option<DataBlock>,
     stream: Option<Box<dyn JoinStream>>,
+}
+
+impl Debug for ProbeState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProbeState").finish()
+    }
 }
 
 impl ProbeState {
@@ -284,6 +295,14 @@ struct ProbeFinalState {
     stream: Option<Box<dyn JoinStream>>,
 }
 
+impl Debug for ProbeFinalState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProbeFinalState")
+            .field("initialized", &self.initialized)
+            .finish()
+    }
+}
+
 impl ProbeFinalState {
     pub fn new() -> ProbeFinalState {
         ProbeFinalState {
@@ -292,14 +311,16 @@ impl ProbeFinalState {
         }
     }
 
-    pub fn event(&mut self) -> Result<Event> {
+    pub fn event(&mut self, output_port: &OutputPort) -> Result<Event> {
         if self.stream.is_some() {
             return Ok(Event::Sync);
         }
 
-        match self.initialized {
-            true => Ok(Event::Async),
-            false => Ok(Event::Sync),
+        if self.initialized {
+            output_port.finish();
+            return Ok(Event::Async);
         }
+
+        Ok(Event::Sync)
     }
 }
