@@ -198,7 +198,11 @@ async fn test_user_manager() -> Result<()> {
             .add_user(&tenant, user_info.clone(), &CreateOption::Create)
             .await?;
 
-        let old_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
+        let old_user = user_mgr
+            .get_meta_user(&tenant, user_info.identity())
+            .await?;
+        let seq = old_user.seq;
+        let mut old_user = old_user.data;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
 
         // alter both password & password_type
@@ -208,10 +212,15 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
             need_change: false,
         };
-        user_mgr
-            .update_user(&tenant, user_info.identity(), Some(auth_info), None)
+        old_user.update_auth_option(Some(auth_info.clone()), None);
+        old_user.update_user_time();
+        old_user.update_auth_history(Some(auth_info));
+        user_mgr.alter_user(&tenant, &old_user, seq).await?;
+        let new_user = user_mgr
+            .get_meta_user(&tenant, user_info.identity())
             .await?;
-        let new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
+        let seq = new_user.seq;
+        let mut new_user = new_user.data;
         assert_eq!(
             new_user.auth_info.get_password().unwrap(),
             Vec::from(new_pwd)
@@ -228,22 +237,22 @@ async fn test_user_manager() -> Result<()> {
             hash_method: PasswordHashMethod::Sha256,
             need_change: false,
         };
-        user_mgr
-            .update_user(&tenant, user_info.identity(), Some(auth_info.clone()), None)
+
+        new_user.update_auth_option(Some(auth_info.clone()), None);
+        new_user.update_user_time();
+        new_user.update_auth_history(Some(auth_info.clone()));
+        user_mgr.alter_user(&tenant, &new_user, seq).await?;
+        let new_new_user = user_mgr
+            .get_meta_user(&tenant, user_info.identity())
             .await?;
-        let new_new_user = user_mgr.get_user(&tenant, user_info.identity()).await?;
+        let new_new_user = new_new_user.data;
         assert_eq!(
             new_new_user.auth_info.get_password().unwrap(),
             Vec::from(new_new_pwd)
         );
 
         let not_exist = user_mgr
-            .update_user(
-                &tenant,
-                UserIdentity::new("user", hostname),
-                Some(auth_info.clone()),
-                None,
-            )
+            .alter_user(&tenant, &UserInfo::new("user", hostname, auth_info), 1)
             .await;
         // ErrorCode::UnknownUser
         assert_eq!(not_exist.err().unwrap().code(), 2201)
