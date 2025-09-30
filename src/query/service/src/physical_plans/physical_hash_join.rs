@@ -395,6 +395,7 @@ impl HashJoin {
         desc: Arc<HashJoinDesc>,
     ) -> Result<()> {
         let state = Arc::new(HashJoinMemoryState::create());
+        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
             builder.hash_join_states.insert(
@@ -422,7 +423,6 @@ impl HashJoin {
 
         debug_assert_eq!(build_sinks.len(), probe_sinks.len());
 
-        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
         let stage_sync_barrier = Arc::new(Barrier::new(output_len));
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);

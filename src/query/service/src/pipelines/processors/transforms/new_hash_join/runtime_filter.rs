@@ -38,11 +38,16 @@ impl PlanRuntimeFilterDesc {
     pub fn create(ctx: &Arc<QueryContext>, join: &HashJoin) -> Arc<PlanRuntimeFilterDesc> {
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
         let mut runtime_filters_ready = Vec::with_capacity(join.runtime_filter.filters.len());
+
         for filter_desc in &join.runtime_filter.filters {
             let filter_desc = RuntimeFilterDesc::from(filter_desc);
-            let ready = Arc::new(RuntimeFilterReady::default());
-            runtime_filters_ready.push(ready.clone());
-            ctx.set_runtime_filter_ready(filter_desc.scan_id, ready);
+
+            if !ctx.get_cluster().is_empty() {
+                let ready = Arc::new(RuntimeFilterReady::default());
+                runtime_filters_ready.push(ready.clone());
+                ctx.set_runtime_filter_ready(filter_desc.scan_id, ready);
+            }
+
             filters_desc.push(filter_desc);
         }
 
