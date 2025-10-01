@@ -236,11 +236,7 @@ mod tests {
                             ttl_ms: None,
                         })),
                     }],
-                    else_then: vec![pb::TxnOp {
-                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
-                            key: "test_key".to_string(),
-                        })),
-                    }],
+                    else_then: vec![pb::TxnOp::get("test_key")],
                 },
             ),
             (
@@ -267,11 +263,7 @@ mod tests {
                             ttl_ms: None,
                         })),
                     }],
-                    else_then: vec![pb::TxnOp {
-                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
-                            key: "test_key".to_string(),
-                        })),
-                    }],
+                    else_then: vec![pb::TxnOp::get("test_key")],
                 },
             ),
             (
@@ -395,11 +387,7 @@ mod tests {
                             match_seq: None,
                         })),
                     }],
-                    else_then: vec![pb::TxnOp {
-                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
-                            key: "complex_key".to_string(),
-                        })),
-                    }],
+                    else_then: vec![pb::TxnOp::get("complex_key")],
                 },
             ),
         ];
