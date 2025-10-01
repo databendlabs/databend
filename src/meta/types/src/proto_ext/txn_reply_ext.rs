@@ -355,7 +355,10 @@ mod tests {
 
         // Get with value (condition failed, return current value)
         let mut reply = pb::TxnReply::new("else");
-        reply.responses = vec![pb::TxnOpResponse::get("test_key", Some(seq_v.clone().into()))];
+        reply.responses = vec![pb::TxnOpResponse::get(
+            "test_key",
+            Some(seq_v.clone().into()),
+        )];
 
         let res = reply.into_upsert_reply();
         let expected_seq_v: SeqV<Vec<u8>> = seq_v.into();
