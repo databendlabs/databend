@@ -125,4 +125,15 @@ impl<'a> DBExporter<'a> {
 
         Ok(strm.boxed())
     }
+
+    /// Export all user keys in a stream of `String`, ignore tombstone.
+    pub async fn export_user_keys(&self) -> Result<IOResultStream<String>, io::Error> {
+        let strm = ScopedSeqBoundedRead(self.db)
+            .range(UserKey::default().., u64::MAX)
+            .await?;
+        // TODO: ignore tombstone, currently db does not include tombstone keys
+        let user_key_strm = strm.map_ok(|(user_key, _)| user_key.key);
+
+        Ok(user_key_strm.boxed())
+    }
 }

@@ -37,6 +37,8 @@ use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::HandshakeResponse;
+use databend_common_meta_types::protobuf::KeysCount;
+use databend_common_meta_types::protobuf::KeysLayoutRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -442,6 +444,31 @@ impl MetaService for MetaServiceImpl {
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
+
+        Ok(Response::new(Box::pin(s)))
+    }
+
+    type SnapshotKeysLayoutStream =
+        Pin<Box<dyn Stream<Item = Result<KeysCount, Status>> + Send + 'static>>;
+
+    async fn snapshot_keys_layout(
+        &self,
+        request: Request<KeysLayoutRequest>,
+    ) -> Result<Response<Self::SnapshotKeysLayoutStream>, Status> {
+        let guard = InFlightRead::guard();
+
+        let layout_request = request.into_inner();
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let strm = meta_handle
+            .handle_snapshot_keys_layout(layout_request)
+            .await??;
+
+        let s = strm.map(move |x| {
+            let _g = &guard; // hold the guard until the stream is done.
+            x.map_err(|e| Status::internal(e.to_string()))
+        });
 
         Ok(Response::new(Box::pin(s)))
     }

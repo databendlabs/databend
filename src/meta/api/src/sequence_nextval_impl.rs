@@ -73,7 +73,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         }
 
         // update meta
-        self.sequence_meta.current += count;
+        self.sequence_meta.current += count * self.sequence_meta.step as u64;
 
         let condition = vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)];
         let if_then = vec![

@@ -901,7 +901,7 @@ impl AccessChecker for PrivilegeAccess {
         let user = self.ctx.get_current_user()?;
         if let Plan::AlterUser(plan) = plan {
             // Alter current user's password do not need to check privileges.
-            if plan.user.username == user.name && plan.user_option.is_none() {
+            if plan.user_info.name == user.name && !plan.change_user_option {
                 return Ok(());
             }
         }

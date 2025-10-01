@@ -27,11 +27,13 @@ use databend_common_expression::FromData;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
+use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_storages_fuse::TableContext;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
@@ -135,12 +137,19 @@ impl TransformAsyncFunction {
         } else {
             // Get or create the sequence counter
             let counter = counter_lock.read().await;
+            let fn_range_collect = |start: u64, end: u64, step: i64| {
+                (0..end - start)
+                    .map(|num| start + num * step as u64)
+                    .collect::<Vec<_>>()
+            };
+            // We need to fetch more sequence numbers
+            let catalog = ctx.get_default_catalog()?;
 
             // Try to reserve sequence numbers from the counter
             if let Some((start, _end)) = counter.try_reserve(count) {
+                let step = fetcher.step(&ctx, &catalog).await?;
                 // We have enough sequence numbers in the current batch
-                let range = start..start + count;
-                UInt64Type::from_data(range.collect::<Vec<u64>>())
+                UInt64Type::from_data(fn_range_collect(start, start + count, step))
             } else {
                 // drop the read lock and get the write lock
                 drop(counter);
@@ -148,13 +157,10 @@ impl TransformAsyncFunction {
                 {
                     // try reserve again
                     if let Some((start, _end)) = counter.try_reserve(count) {
+                        let step = fetcher.step(&ctx, &catalog).await?;
                         // We have enough sequence numbers in the current batch
-                        let range = start..start + count;
-                        UInt64Type::from_data(range.collect::<Vec<u64>>())
+                        UInt64Type::from_data(fn_range_collect(start, count, step))
                     } else {
-                        // We need to fetch more sequence numbers
-                        let catalog = ctx.get_default_catalog()?;
-
                         // Get current state of the counter
                         let current = counter.current.load(Ordering::Relaxed);
                         let max = counter.max.load(Ordering::Relaxed);
@@ -163,7 +169,11 @@ impl TransformAsyncFunction {
                         let remaining = max.saturating_sub(current);
                         let to_fetch = count.saturating_sub(remaining);
 
-                        let (start, batch_size) = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
+                        let NextValFetchResult {
+                            start,
+                            batch_size,
+                            step,
+                        } = fetcher.fetch(&ctx, &catalog, to_fetch).await?;
 
                         // If we have remaining numbers, use them first
                         if remaining > 0 {
@@ -175,14 +185,16 @@ impl TransformAsyncFunction {
 
                             // Add the remaining numbers
                             let remaining_to_use = remaining.min(count);
-                            numbers.extend(
-                                (current..current + remaining_to_use).collect::<Vec<u64>>(),
-                            );
+                            numbers.extend(fn_range_collect(
+                                current,
+                                current + remaining_to_use,
+                                step,
+                            ));
 
                             // Add numbers from the new batch if needed
                             if remaining_to_use < count {
                                 let new_needed = count - remaining_to_use;
-                                numbers.extend((start..start + new_needed).collect::<Vec<u64>>());
+                                numbers.extend(fn_range_collect(start, start + new_needed, step));
                                 // Update the counter to reflect that we've used some of the new batch
                                 counter.current.store(start + new_needed, Ordering::SeqCst);
                             }
@@ -192,8 +204,7 @@ impl TransformAsyncFunction {
                             // No remaining numbers, just use the new batch
                             counter.update_batch(start + count, batch_size - count);
                             // Return the sequence numbers needed for this request
-                            let range = start..start + count;
-                            UInt64Type::from_data(range.collect::<Vec<u64>>())
+                            UInt64Type::from_data(fn_range_collect(start, start + count, step))
                         }
                     }
                 }
@@ -211,7 +222,15 @@ pub trait NextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
         to_fetch: u64,
-    ) -> Result<(u64 /* start */, u64 /* batch */)>;
+    ) -> Result<NextValFetchResult>;
+
+    async fn step(&self, ctx: &QueryContext, catalog: &Arc<dyn Catalog>) -> Result<i64>;
+}
+
+pub struct NextValFetchResult {
+    start: u64,
+    batch_size: u64,
+    step: i64,
 }
 
 pub struct SequenceNextValFetcher {
@@ -224,20 +243,8 @@ impl NextValFetcher for SequenceNextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
         to_fetch: u64,
-    ) -> Result<(u64, u64)> {
-        let visibility_checker = if ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
-        } else {
-            None
-        };
-
-        let req = GetSequenceReq {
-            ident: self.sequence_ident.clone(),
-        };
-        let resp = catalog.get_sequence(req, &visibility_checker).await?;
+    ) -> Result<NextValFetchResult> {
+        let (resp, visibility_checker) = self.get_sequence(ctx, catalog).await?;
         let step_size = resp.meta.step as u64;
 
         // Calculate batch size - take the larger of count or step_size
@@ -252,7 +259,42 @@ impl NextValFetcher for SequenceNextValFetcher {
         let resp = catalog
             .get_sequence_next_value(req, &visibility_checker)
             .await?;
-        Ok((resp.start, batch_size))
+        Ok(NextValFetchResult {
+            start: resp.start,
+            batch_size,
+            step: resp.step,
+        })
+    }
+
+    async fn step(&self, ctx: &QueryContext, catalog: &Arc<dyn Catalog>) -> Result<i64> {
+        self.get_sequence(ctx, catalog)
+            .await
+            .map(|(resp, _)| resp.meta.step)
+    }
+}
+
+impl SequenceNextValFetcher {
+    async fn get_sequence(
+        &self,
+        ctx: &QueryContext,
+        catalog: &Arc<dyn Catalog>,
+    ) -> Result<(GetSequenceReply, Option<GrantObjectVisibilityChecker>)> {
+        let visibility_checker = if ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
+        } else {
+            None
+        };
+
+        let req = GetSequenceReq {
+            ident: self.sequence_ident.clone(),
+        };
+        catalog
+            .get_sequence(req, &visibility_checker)
+            .await
+            .map(|reply| (reply, visibility_checker))
     }
 }
 
@@ -267,24 +309,31 @@ impl NextValFetcher for AutoIncrementNextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
         to_fetch: u64,
-    ) -> Result<(u64, u64)> {
+    ) -> Result<NextValFetchResult> {
         let step_size = self.expr.step as u64;
 
         // Calculate batch size - take the larger of count or step_size
         let batch_size = to_fetch.max(step_size);
+        let step = self.expr.step;
 
         // Calculate batch size - take the larger of count or step_size
         let req = GetAutoIncrementNextValueReq {
             tenant: ctx.get_tenant(),
             key: self.key,
             expr: self.expr,
-            // FIXME: count * step
-            // count: batch_size,
-            count: 1,
+            count: batch_size,
         };
 
         let resp = catalog.get_autoincrement_next_value(req).await?;
-        Ok((resp.start, batch_size))
+        Ok(NextValFetchResult {
+            start: resp.start,
+            batch_size,
+            step,
+        })
+    }
+
+    async fn step(&self, _ctx: &QueryContext, _catalog: &Arc<dyn Catalog>) -> Result<i64> {
+        Ok(self.expr.step)
     }
 }
 

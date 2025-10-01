@@ -24,6 +24,7 @@ use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserIdentity;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
@@ -40,10 +41,10 @@ pub struct CreateUserPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterUserPlan {
-    pub user: UserIdentity,
-    // None means no change to make
-    pub auth_info: Option<AuthInfo>,
-    pub user_option: Option<UserOption>,
+    pub seq: u64,
+    pub user_info: UserInfo,
+    pub change_auth: bool,
+    pub change_user_option: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
