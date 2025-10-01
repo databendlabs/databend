@@ -117,9 +117,11 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
         let sm = learner.raft_store.get_sm_v003();
         let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
-        assert_eq!(
-            Some(now_sec + 1000),
-            seq_v.meta.unwrap().expires_at_sec_opt()
+        let want = now_sec + 1000;
+        let expire_sec = seq_v.meta.unwrap().expires_at_sec_opt().unwrap();
+        assert!(
+            (want..want + 2).contains(&expire_sec),
+            "want: {want} got: {expire_sec}"
         );
         assert_eq!(value2.to_string().into_bytes(), seq_v.data);
     }

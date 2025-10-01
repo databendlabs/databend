@@ -23,6 +23,9 @@ message KVMeta {
   // - Values > `1_000_000_000_000`: treated as milliseconds since epoch
   // - Values ≤ `1_000_000_000_000`: treated as seconds since epoch
   optional uint64 expire_at = 1;
+
+  // The propose timestamp in milliseconds since epoch (1970-01-01).
+  optional uint64 proposed_at_ms = 2;
 }
 
 message SeqV {

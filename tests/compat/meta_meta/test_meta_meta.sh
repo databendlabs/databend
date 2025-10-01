@@ -153,8 +153,9 @@ sleep 3
 
 # Old version SM exported data contains DataHeader
 
-cat ./.databend/leader-tmp   | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/leader-sm
-cat ./.databend/follower-tmp | grep 'state_machine' | grep -v DataHeader | sort > ./.databend/follower-sm
+# remove `proposed_at_ms`, which is added 2025-09-30
+cat ./.databend/leader-tmp   | grep 'state_machine' | grep -v DataHeader | awk '{gsub(/,"proposed_at_ms":[0-9]+/, ""); print}' | sort > ./.databend/leader-sm
+cat ./.databend/follower-tmp | grep 'state_machine' | grep -v DataHeader | awk '{gsub(/,"proposed_at_ms":[0-9]+/, ""); print}' | sort > ./.databend/follower-sm
 
 echo " === diff SM data between Leader and Follower"
 diff ./.databend/leader-sm ./.databend/follower-sm

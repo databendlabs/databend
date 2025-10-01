@@ -155,6 +155,9 @@ use semver::Version;
 /// - 2025-09-27: since 1.2.821
 ///   👥 client: require 1.2.764(yanked), use 1.2.768, for `FetchAddU64`
 ///
+/// - 2025-09-30: since TODO
+///   🖥 server: store raft-log proposing time `proposed_at_ms` in `KVMeta`.
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
