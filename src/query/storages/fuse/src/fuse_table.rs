@@ -1006,7 +1006,13 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
-            let stats = &snapshot.summary.col_stats;
+            let mut stats = snapshot.summary.col_stats.clone();
+            // add virtual column stats
+            if let Some(virtual_col_stats) = &snapshot.summary.virtual_col_stats {
+                for (col_id, stat) in virtual_col_stats {
+                    stats.insert(*col_id, stat.clone());
+                }
+            }
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             let additional_stats_meta = snapshot.summary.additional_stats_meta.as_ref();
             let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {
@@ -1025,7 +1031,7 @@ impl Table for FuseTable {
                 .or(table_statistics.as_ref().map(|v| v.row_count))
                 .unwrap_or(0);
             FuseTableColumnStatisticsProvider::new(
-                stats.clone(),
+                stats,
                 histograms,
                 column_distinct_values,
                 stats_row_count,

@@ -110,6 +110,7 @@ pub struct Statistics {
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+    pub virtual_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
 
@@ -277,6 +278,7 @@ impl Statistics {
             vector_index_size: None,
             virtual_column_size: None,
             col_stats,
+            virtual_col_stats: None,
             cluster_stats: None,
             virtual_block_count: None,
             additional_stats_meta: None,

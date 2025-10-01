@@ -361,6 +361,7 @@ fn build_test_segment_info(
         vector_index_size: None,
         virtual_column_size: None,
         col_stats: col_stats.clone(),
+        virtual_col_stats: None,
         cluster_stats: None,
         virtual_block_count: None,
         additional_stats_meta: None,
