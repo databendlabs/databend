@@ -22,6 +22,7 @@ use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::MetaError;
