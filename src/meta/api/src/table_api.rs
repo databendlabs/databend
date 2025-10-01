@@ -70,6 +70,7 @@ use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -1745,6 +1746,24 @@ where
         Ok(GetTableCopiedFileReply {
             file_info: file_infos,
         })
+    }
+
+    async fn list_table_copied_file_info(
+        &self,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply, MetaError> {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: "".to_string(),
+        };
+
+        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let mut file_info = BTreeMap::new();
+        for (name_key, seqv) in res {
+            file_info.insert(name_key.file, seqv.data);
+        }
+
+        Ok(ListTableCopiedFileReply { file_info })
     }
 
     #[logcall::logcall]
