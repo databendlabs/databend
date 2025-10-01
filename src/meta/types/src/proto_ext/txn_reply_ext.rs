@@ -320,7 +320,7 @@ mod tests {
             Some(prev_seq_v.clone()),
         )];
         let res = reply.into_upsert_reply();
-        let expected_seq_v = prev_seq_v.into();
+        let expected_seq_v: SeqV<Vec<u8>> = prev_seq_v.into();
         assert_eq!(
             res.unwrap(),
             Change::new(Some(expected_seq_v.clone()), Some(expected_seq_v))
@@ -355,10 +355,10 @@ mod tests {
 
         // Get with value (condition failed, return current value)
         let mut reply = pb::TxnReply::new("else");
-        reply.responses = vec![pb::TxnOpResponse::get("test_key", Some(seq_v.clone()))];
+        reply.responses = vec![pb::TxnOpResponse::get("test_key", Some(seq_v.clone().into()))];
 
         let res = reply.into_upsert_reply();
-        let expected_seq_v = seq_v.into();
+        let expected_seq_v: SeqV<Vec<u8>> = seq_v.into();
         assert_eq!(
             res.unwrap(),
             Change::new(Some(expected_seq_v.clone()), Some(expected_seq_v))

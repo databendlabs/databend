@@ -299,7 +299,7 @@ mod tests {
                             key: "test_key".to_string(),
                             value: b"test_value".to_vec(),
                             prev_value: true,
-                            expire_at: Some(1234567890_000),
+                            expire_at: Some(1_234_567_890_000),
                             ttl_ms: Some(3600 * 1000), // 3600 seconds in milliseconds
                         })),
                     }],
@@ -351,7 +351,7 @@ mod tests {
                             key: "test_key".to_string(),
                             value: b"test_value".to_vec(),
                             prev_value: true,
-                            expire_at: Some(9876543210_000),
+                            expire_at: Some(9_876_543_210_000),
                             ttl_ms: None,
                         })),
                     }],
