@@ -28,6 +28,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
@@ -35,20 +36,21 @@ use databend_common_expression::HashMethodSingleBinary;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
-use databend_common_sql::ColumnSet;
 use ethnum::U256;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::memory_state::HashJoinMemoryState;
+use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
-use crate::pipelines::processors::transforms::ProbeStream;
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::{ProbeStream, ProbedRows};
 use crate::sessions::QueryContext;
 
 pub struct MemoryInnerJoin {
@@ -56,11 +58,10 @@ pub struct MemoryInnerJoin {
     squash_block: SquashBlocks,
 
     method: HashMethodKind,
-    state: Arc<HashJoinMemoryState>,
-    build_projection: ColumnSet,
-    probe_projections: ColumnSet,
-    probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
     function_ctx: FunctionContext,
+    state: Arc<HashJoinMemoryState>,
+
+    performance_context: PerformanceContext,
 }
 
 impl MemoryInnerJoin {
@@ -69,9 +70,6 @@ impl MemoryInnerJoin {
         function_ctx: FunctionContext,
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
-        build_projection: ColumnSet,
-        probe_projections: ColumnSet,
-        probe_to_build: Vec<(usize, (bool, bool))>,
         state: Arc<HashJoinMemoryState>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
@@ -83,15 +81,13 @@ impl MemoryInnerJoin {
             state,
             method,
             function_ctx,
-            build_projection,
-            probe_projections,
-            probe_to_build: Arc::new(probe_to_build),
             squash_block: SquashBlocks::new(block_size, block_bytes),
+            performance_context: PerformanceContext::new(),
         })
     }
 
     fn init_columns_vec(&mut self) {
-        if self.build_projection.is_empty() || !self.state.columns.is_empty() {
+        if self.desc.build_projection.is_empty() || !self.state.columns.is_empty() {
             return;
         }
 
@@ -103,13 +99,13 @@ impl MemoryInnerJoin {
         }
 
         if let Some(block) = self.state.chunks.first() {
-            for offset in 0..self.build_projection.len() {
+            for offset in 0..self.desc.build_projection.len() {
                 let column_type = self.state.column_types.as_mut();
                 column_type.push(block.get_by_offset(offset).data_type());
             }
         }
 
-        for offset in 0..self.build_projection.len() {
+        for offset in 0..self.desc.build_projection.len() {
             let full_columns = self
                 .state
                 .chunks
@@ -254,7 +250,7 @@ impl Join for MemoryInnerJoin {
         let keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
         let mut keys_block = DataBlock::new(keys_entries, chunk_block.num_rows());
 
-        chunk_block = chunk_block.project(&self.build_projection);
+        chunk_block = chunk_block.project(&self.desc.build_projection);
         if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
             keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 
@@ -282,7 +278,7 @@ impl Join for MemoryInnerJoin {
         }))
     }
 
-    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>> {
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         if data.is_empty() {
             return Ok(Box::new(EmptyJoinStream));
         }
@@ -297,32 +293,38 @@ impl Join for MemoryInnerJoin {
         };
 
         self.desc.remove_keys_nullable(&mut keys);
-        let probe_block = data.project(&self.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projections);
 
-        let joined_stream = with_join_hash_method!(|T| match self.state.hash_table.deref() {
-            HashJoinHashTable::T(table) => {
-                let probe_keys_stream = table.probe_keys(keys, valids)?;
+        let joined_stream: Box<dyn JoinStream + '_> =
+            with_join_hash_method!(|T| match self.state.hash_table.deref() {
+                HashJoinHashTable::T(table) => {
+                    let probe_data = ProbeData::new(keys, valids);
+                    let probe_keys_stream = table.probe(probe_data)?;
 
-                Ok(MemoryInnerJoinStream::create(
-                    probe_block,
-                    self.state.clone(),
-                    probe_keys_stream,
-                    self.probe_to_build.clone(),
-                ))
-            }
-            HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the hash table is uninitialized.",
-            )),
-        })?;
+                    Ok(MemoryInnerJoinStream::create(
+                        probe_block,
+                        self.state.clone(),
+                        probe_keys_stream,
+                        self.desc.clone(),
+                        &mut self.performance_context.probe_result,
+                    ))
+                }
+                HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the hash table is uninitialized.",
+                )),
+            })?;
 
-        match self.desc.other_predicate.as_ref() {
+        // if let Some(filter_executor) = &mut self.performance_context.filter_executor {
+        match &mut self.performance_context.filter_executor {
             None => Ok(joined_stream),
-            Some(_) => Ok(FilterJoinStream::create(
+            Some(filter_executor) => Ok(FilterJoinStream::create(
                 self.desc.clone(),
                 self.function_ctx.clone(),
                 joined_stream,
+                filter_executor,
             )),
         }
+        // }
     }
 
     fn final_probe(&mut self) -> Result<Box<dyn JoinStream>> {
@@ -330,33 +332,36 @@ impl Join for MemoryInnerJoin {
     }
 }
 
-struct MemoryInnerJoinStream {
+struct MemoryInnerJoinStream<'a> {
+    desc: Arc<HashJoinDesc>,
     probe_data_block: DataBlock,
     join_state: Arc<HashJoinMemoryState>,
-    probe_keys_stream: Box<dyn ProbeStream>,
-    probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
+    probe_keys_stream: Box<dyn ProbeStream + 'a>,
+    test: &'a mut ProbedRows,
 }
 
-unsafe impl Send for MemoryInnerJoinStream {}
-unsafe impl Sync for MemoryInnerJoinStream {}
+unsafe impl<'a> Send for MemoryInnerJoinStream<'a> {}
+unsafe impl<'a> Sync for MemoryInnerJoinStream<'a> {}
 
-impl MemoryInnerJoinStream {
+impl<'a> MemoryInnerJoinStream<'a> {
     pub fn create(
         block: DataBlock,
         state: Arc<HashJoinMemoryState>,
-        probe_keys_stream: Box<dyn ProbeStream>,
-        probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
-    ) -> Box<dyn JoinStream> {
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        desc: Arc<HashJoinDesc>,
+        test: &'a mut ProbedRows,
+    ) -> Box<dyn JoinStream + 'a> {
         Box::new(MemoryInnerJoinStream {
             probe_data_block: block,
             join_state: state,
             probe_keys_stream,
-            probe_to_build,
+            desc,
+            test,
         })
     }
 }
 
-impl JoinStream for MemoryInnerJoinStream {
+impl<'a> JoinStream for MemoryInnerJoinStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
             let probe_result = self.probe_keys_stream.next(65535)?;
@@ -400,8 +405,10 @@ impl JoinStream for MemoryInnerJoinStream {
                 (None, None) => DataBlock::new(vec![], probe_result.matched_build.len()),
             };
 
-            if !self.probe_to_build.is_empty() {
-                for (index, (is_probe_nullable, is_build_nullable)) in self.probe_to_build.iter() {
+            if !self.desc.probe_to_build.is_empty() {
+                for (index, (is_probe_nullable, is_build_nullable)) in
+                    self.desc.probe_to_build.iter()
+                {
                     let entry = match (is_probe_nullable, is_build_nullable) {
                         (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
                         (true, false) => {
@@ -430,27 +437,30 @@ impl JoinStream for MemoryInnerJoinStream {
     }
 }
 
-pub struct FilterJoinStream {
+pub struct FilterJoinStream<'a> {
     desc: Arc<HashJoinDesc>,
-    inner: Box<dyn JoinStream>,
     function_ctx: FunctionContext,
+    inner: Box<dyn JoinStream + 'a>,
+    filter_executor: &'a mut FilterExecutor,
 }
 
-impl FilterJoinStream {
+impl<'a> FilterJoinStream<'a> {
     pub fn create(
         desc: Arc<HashJoinDesc>,
         function_ctx: FunctionContext,
-        inner: Box<dyn JoinStream>,
-    ) -> Box<dyn JoinStream> {
+        inner: Box<dyn JoinStream + 'a>,
+        filter_executor: &'a mut FilterExecutor,
+    ) -> Box<dyn JoinStream + 'a> {
         Box::new(FilterJoinStream {
             desc,
             inner,
             function_ctx,
+            filter_executor,
         })
     }
 }
 
-impl JoinStream for FilterJoinStream {
+impl<'a> JoinStream for FilterJoinStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
             let Some(data_block) = self.inner.next()? else {

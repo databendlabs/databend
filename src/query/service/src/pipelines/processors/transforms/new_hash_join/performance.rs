@@ -12,16 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod join;
-mod memory;
-mod runtime_filter;
-mod transform_hash_join;
-mod hashtable;
-mod performance;
+use databend_common_expression::FilterExecutor;
 
-pub use join::Join;
-pub use memory::HashJoinMemoryState;
-pub use memory::MemoryInnerJoin;
-pub use runtime_filter::PlanRuntimeFilterDesc;
-pub use transform_hash_join::TransformHashJoin;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
+
+pub struct PerformanceContext {
+    pub probe_result: ProbedRows,
+    pub filter_executor: Option<FilterExecutor>,
+}
+
+impl PerformanceContext {
+    pub fn new() -> Self {
+        PerformanceContext {
+            probe_result: ProbedRows::new(vec![], vec![], vec![]),
+            filter_executor: None,
+        }
+    }
+}

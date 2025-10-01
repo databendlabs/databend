@@ -18,7 +18,7 @@ use databend_common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 
-pub trait JoinStream: Send + Sync + 'static {
+pub trait JoinStream: Send + Sync {
     fn next(&mut self) -> Result<Option<DataBlock>>;
 }
 
@@ -31,9 +31,9 @@ pub trait Join: Send + Sync + 'static {
         Ok(JoinRuntimeFilterPacket::default())
     }
 
-    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream>>;
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>>;
 
-    fn final_probe(&mut self) -> Result<Box<dyn JoinStream>>;
+    fn final_probe(&mut self) -> Result<Box<dyn JoinStream + '_>>;
 }
 
 pub struct EmptyJoinStream;

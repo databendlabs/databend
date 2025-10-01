@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
@@ -26,7 +27,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use parking_lot::RwLock;
-
+use databend_common_sql::ColumnSet;
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::PhysicalRuntimeFilters;
@@ -55,6 +56,10 @@ pub struct HashJoinDesc {
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
     pub(crate) runtime_filter: RuntimeFiltersDesc,
+
+    pub(crate) build_projection: ColumnSet,
+    pub(crate) probe_projections: ColumnSet,
+    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +127,9 @@ impl HashJoinDesc {
             from_correlated_subquery: join.from_correlated_subquery,
             single_to_inner: join.single_to_inner.clone(),
             runtime_filter: (&join.runtime_filter).into(),
+            probe_to_build: join.probe_to_build.clone(),
+            build_projection: join.build_projections.clone(),
+            probe_projections: join.probe_projections.clone(),
         })
     }
 

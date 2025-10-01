@@ -395,6 +395,8 @@ impl HashJoin {
         desc: Arc<HashJoinDesc>,
     ) -> Result<()> {
         let state = Arc::new(HashJoinMemoryState::create());
+        // We must build the runtime filter before constructing the child nodes,
+        // as we will inject some runtime filter information into the context for the child nodes to use.
         let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
@@ -467,7 +469,7 @@ impl HashJoin {
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
         state: Arc<HashJoinMemoryState>,
-    ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
+    ) -> Result<Box<MemoryInnerJoin>> {
         let hash_key_types = self
             .build_keys
             .iter()
@@ -489,9 +491,6 @@ impl HashJoin {
             builder.func_ctx.clone(),
             method,
             desc,
-            self.build_projections.clone(),
-            self.probe_projections.clone(),
-            self.probe_to_build.clone(),
             state,
         )?))
     }
