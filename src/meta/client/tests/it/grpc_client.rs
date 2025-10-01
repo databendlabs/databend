@@ -44,7 +44,7 @@ async fn test_grpc_client_timeout() -> anyhow::Result<()> {
     let timeout = Duration::from_secs(3);
     let client = new_client(&srv_addr, Some(timeout))?;
 
-    let res = client.request(UpsertKV::insert("foo", b"foo")).await;
+    let res = client.upsert_kv(UpsertKV::insert("foo", b"foo")).await;
 
     if let Err(err) = res {
         let got = err.to_string();
