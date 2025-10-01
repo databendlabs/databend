@@ -29,7 +29,6 @@ use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::PlanRuntimeFilterDesc;
 
 pub struct TransformHashJoin {
@@ -118,6 +117,7 @@ impl Processor for TransformHashJoin {
         }
     }
 
+    #[allow(clippy::missing_transmute_annotations)]
     fn process(&mut self) -> Result<()> {
         match &mut self.stage {
             Stage::Finished => Ok(()),
@@ -143,6 +143,7 @@ impl Processor for TransformHashJoin {
             Stage::Probe(state) => {
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
+                    // This is safe because both join and stream are properties of the struct.
                     state.stream = Some(unsafe { std::mem::transmute(stream) });
                 }
 
@@ -159,6 +160,7 @@ impl Processor for TransformHashJoin {
                 if !state.initialized {
                     state.initialized = true;
                     let final_stream = self.join.final_probe()?;
+                    // This is safe because both join and stream are properties of the struct.
                     state.stream = Some(unsafe { std::mem::transmute(final_stream) });
                 }
 

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -29,9 +25,12 @@ use databend_common_hashtable::RowPtr;
 use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::BinaryKeyProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::EarlyFilteringProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::{AllUnmatchedProbeStream, ProbeStream};
 use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 
 impl SingleBinaryHashJoinHashTable {
@@ -42,8 +41,6 @@ impl SingleBinaryHashJoinHashTable {
         SingleBinaryHashJoinHashTable {
             hash_table,
             hash_method,
-            probed_rows: AtomicUsize::new(0),
-            matched_probe_rows: AtomicUsize::new(0),
         }
     }
 
@@ -103,44 +100,94 @@ impl SingleBinaryHashJoinHashTable {
         Ok(())
     }
 
-    pub fn probe(&self, probe_data: ProbeData) -> Result<Box<dyn ProbeStream + '_>> {
-        let num_rows = probe_data.num_rows();
+    pub fn probe_matched<'a>(&'a self, data: ProbeData<'a>) -> Result<Box<dyn ProbeStream + 'a>> {
+        let num_rows = data.num_rows();
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
 
-        let keys = ProjectedBlock::from(probe_data.columns());
+        let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
         let keys = hash_method.build_keys_accessor(keys_state.clone())?;
 
-        let enable_early_filtering = match self.probed_rows.load(Ordering::Relaxed) {
+        let probed_rows = data.non_null_rows();
+        let (_, valids, ctx) = data.into_raw();
+
+        let enable_early_filtering = match ctx.probed_rows {
             0 => false,
-            probed_rows => {
-                let matched_probe_rows = self.matched_probe_rows.load(Ordering::Relaxed) as f64;
-                matched_probe_rows / (probed_rows as f64) < 0.8
-            }
+            probed_rows => (ctx.matched_rows as f64) / (probed_rows as f64) < 0.8,
         };
 
-        let probed_rows = probe_data.non_null_rows();
-        self.probed_rows.fetch_add(probed_rows, Ordering::Relaxed);
+        let matched_rows = match enable_early_filtering {
+            true => self.hash_table.early_filtering_matched_probe(
+                &mut hashes,
+                valids,
+                &mut ctx.selection,
+            ),
+            false => self.hash_table.probe(&mut hashes, valids),
+        };
 
-        let (_, valids) = probe_data.into_raw();
-        match enable_early_filtering {
+        ctx.probed_rows += probed_rows;
+        ctx.matched_rows += matched_rows;
+
+        match matched_rows {
+            0 => Ok(Box::new(EmptyProbeStream)),
+            _ => match enable_early_filtering {
+                true => Ok(EarlyFilteringProbeStream::<true>::create(
+                    hashes,
+                    keys,
+                    &ctx.selection,
+                    &[],
+                )),
+                false => Ok(BinaryKeyProbeStream::<true>::create(hashes, keys)),
+            },
+        }
+    }
+
+    pub fn probe<'a>(&'a self, data: ProbeData<'a>) -> Result<Box<dyn ProbeStream + 'a>> {
+        let num_rows = data.num_rows();
+        let hash_method = &self.hash_method;
+        let mut hashes = Vec::with_capacity(num_rows);
+
+        let keys = ProjectedBlock::from(data.columns());
+        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
+        hash_method.build_keys_hashes(&keys_state, &mut hashes);
+        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+
+        let probed_rows = data.non_null_rows();
+        let (_, valids, ctx) = data.into_raw();
+
+        let enable_early_filtering = match ctx.probed_rows {
+            0 => false,
+            probed_rows => (ctx.matched_rows as f64) / (probed_rows as f64) < 0.8,
+        };
+
+        let matched_rows = match enable_early_filtering {
             true => {
-                let mut selection = vec![0; num_rows];
-
-                match self.hash_table.early_filtering_matched_probe(
+                let (matched_rows, _) = self.hash_table.early_filtering_probe(
                     &mut hashes,
                     valids,
-                    &mut selection,
-                ) {
-                    0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                    _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-                }
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                );
+                matched_rows
             }
-            false => match self.hash_table.probe(&mut hashes, valids) {
-                0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
+            false => self.hash_table.probe(&mut hashes, valids),
+        };
+
+        ctx.probed_rows += probed_rows;
+        ctx.matched_rows += matched_rows;
+
+        match matched_rows {
+            0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
+            _ => match enable_early_filtering {
+                true => Ok(EarlyFilteringProbeStream::<false>::create(
+                    hashes,
+                    keys,
+                    &ctx.selection,
+                    &ctx.unmatched_selection,
+                )),
+                false => Ok(BinaryKeyProbeStream::<false>::create(hashes, keys)),
             },
         }
     }

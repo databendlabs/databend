@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::hints::assume;
 use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
@@ -215,25 +216,19 @@ where
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,
-        matched_selection: &mut [u32],
-        unmatched_selection: &mut [u32],
+        matched_selection: &mut Vec<u32>,
+        unmatched_selection: &mut Vec<u32>,
     ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
-                unmatched_selection
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(idx, val)| {
-                        *val = idx as u32;
-                    });
+                unmatched_selection.extend(0..bitmap.null_count() as u32);
                 return (0, hashes.len());
             } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
-        let mut matched_idx = 0;
-        let mut unmatched_idx = 0;
+
         match valids {
             Some(valids) => {
                 valids.iter().zip(hashes.iter_mut().enumerate()).for_each(
@@ -242,22 +237,15 @@ where
                             let header = self.pointers[(*hash >> self.hash_shift) as usize];
                             if header != 0 && early_filtering(header, *hash) {
                                 *hash = remove_header_tag(header);
-                                unsafe {
-                                    *matched_selection.get_unchecked_mut(matched_idx) = idx as u32
-                                };
-                                matched_idx += 1;
+                                assume(matched_selection.len() <= matched_selection.capacity());
+                                matched_selection.push(idx as u32);
                             } else {
-                                unsafe {
-                                    *unmatched_selection.get_unchecked_mut(unmatched_idx) =
-                                        idx as u32
-                                };
-                                unmatched_idx += 1;
+                                assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                                unmatched_selection.push(idx as u32);
                             }
                         } else {
-                            unsafe {
-                                *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
-                            };
-                            unmatched_idx += 1;
+                            assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                            unmatched_selection.push(idx as u32);
                         }
                     },
                 );
@@ -267,18 +255,16 @@ where
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        unsafe { *matched_selection.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
+                        assume(matched_selection.len() <= matched_selection.capacity());
+                        matched_selection.push(idx as u32);
                     } else {
-                        unsafe {
-                            *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
-                        };
-                        unmatched_idx += 1;
+                        assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                        unmatched_selection.push(idx as u32);
                     }
                 });
             }
         }
-        (matched_idx, unmatched_idx)
+        (matched_selection.len(), unmatched_selection.len())
     }
 
     // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
@@ -286,53 +272,43 @@ where
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,
-        selection: &mut [u32],
+        selection: &mut Vec<u32>,
     ) -> usize {
         let mut valids = None;
+
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
-                hashes.iter_mut().for_each(|hash| {
-                    *hash = 0;
-                });
                 return 0;
             } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
-        let mut count = 0;
-        match valids {
-            Some(valids) => {
-                valids.iter().zip(hashes.iter_mut().enumerate()).for_each(
-                    |(valid, (idx, hash))| {
-                        if valid {
-                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                            if header != 0 && early_filtering(header, *hash) {
-                                *hash = remove_header_tag(header);
-                                unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                                count += 1;
-                            } else {
-                                *hash = 0;
-                            }
-                        } else {
-                            *hash = 0;
-                        }
-                    },
-                );
-            }
-            None => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
+
+        if let Some(valids) = valids {
+            for (valid, (idx, hash)) in valids.iter().zip(hashes.iter_mut().enumerate()) {
+                if valid {
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                        count += 1;
-                    } else {
-                        *hash = 0;
+                        assume(selection.len() <= selection.capacity());
+                        selection.push(idx as u32);
                     }
-                });
+                }
+            }
+
+            return selection.len();
+        }
+
+        for (idx, hash) in hashes.iter_mut().enumerate() {
+            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+            if header != 0 && early_filtering(header, *hash) {
+                *hash = remove_header_tag(header);
+                assume(selection.len() <= selection.capacity());
+                selection.push(idx as u32);
             }
         }
-        count
+
+        selection.len()
     }
 
     fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {

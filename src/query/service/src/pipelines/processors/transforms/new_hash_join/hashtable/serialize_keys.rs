@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-
+use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -29,7 +27,9 @@ use databend_common_hashtable::RowPtr;
 use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
 
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::{AllUnmatchedProbeStream, ProbeStream};
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
@@ -42,8 +42,6 @@ impl SerializerHashJoinHashTable {
         SerializerHashJoinHashTable {
             hash_table,
             hash_method,
-            probed_rows: AtomicUsize::new(0),
-            matched_probe_rows: AtomicUsize::new(0),
         }
     }
 
@@ -103,62 +101,112 @@ impl SerializerHashJoinHashTable {
         Ok(())
     }
 
-    pub fn probe(&self, probe_data: ProbeData) -> Result<Box<dyn ProbeStream + '_>> {
-        let num_rows = probe_data.num_rows();
+    pub fn probe_matched<'a>(&'a self, data: ProbeData<'a>) -> Result<Box<dyn ProbeStream + 'a>> {
+        let num_rows = data.num_rows();
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
 
-        let keys = ProjectedBlock::from(probe_data.columns());
+        let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
         let keys = hash_method.build_keys_accessor(keys_state.clone())?;
 
-        let enable_early_filtering = match self.probed_rows.load(Ordering::Relaxed) {
+        let probed_rows = data.non_null_rows();
+        let (_, valids, ctx) = data.into_raw();
+
+        let enable_early_filtering = match ctx.probed_rows {
             0 => false,
-            probed_rows => {
-                let matched_probe_rows = self.matched_probe_rows.load(Ordering::Relaxed) as f64;
-                matched_probe_rows / (probed_rows as f64) < 0.8
-            }
+            probed_rows => (ctx.matched_rows as f64) / (probed_rows as f64) < 0.8,
         };
 
-        let probed_rows = probe_data.non_null_rows();
-        self.probed_rows.fetch_add(probed_rows, Ordering::Relaxed);
+        let matched_rows = match enable_early_filtering {
+            true => self.hash_table.early_filtering_matched_probe(
+                &mut hashes,
+                valids,
+                &mut ctx.selection,
+            ),
+            false => self.hash_table.probe(&mut hashes, valids),
+        };
 
-        let (_, valids) = probe_data.into_raw();
-        match enable_early_filtering {
+        ctx.probed_rows += probed_rows;
+        ctx.matched_rows += matched_rows;
+
+        match matched_rows {
+            0 => Ok(Box::new(EmptyProbeStream)),
+            _ => match enable_early_filtering {
+                true => Ok(EarlyFilteringProbeStream::<true>::create(
+                    hashes,
+                    keys,
+                    &ctx.selection,
+                    &[],
+                )),
+                false => Ok(BinaryKeyProbeStream::<true>::create(hashes, keys)),
+            },
+        }
+    }
+
+    pub fn probe<'a>(&'a self, data: ProbeData<'a>) -> Result<Box<dyn ProbeStream + 'a>> {
+        let num_rows = data.num_rows();
+        let hash_method = &self.hash_method;
+        let mut hashes = Vec::with_capacity(num_rows);
+
+        let keys = ProjectedBlock::from(data.columns());
+        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
+        hash_method.build_keys_hashes(&keys_state, &mut hashes);
+        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+
+        let probed_rows = data.non_null_rows();
+        let (_, valids, ctx) = data.into_raw();
+
+        let enable_early_filtering = match ctx.probed_rows {
+            0 => false,
+            probed_rows => (ctx.matched_rows as f64) / (probed_rows as f64) < 0.8,
+        };
+
+        let matched_rows = match enable_early_filtering {
             true => {
-                let mut selection = vec![0; num_rows];
-
-                match self.hash_table.early_filtering_matched_probe(
+                let (matched_rows, _) = self.hash_table.early_filtering_probe(
                     &mut hashes,
                     valids,
-                    &mut selection,
-                ) {
-                    0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                    _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-                }
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                );
+                matched_rows
             }
-            false => match self.hash_table.probe(&mut hashes, valids) {
-                0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
+            false => self.hash_table.probe(&mut hashes, valids),
+        };
+
+        ctx.probed_rows += probed_rows;
+        ctx.matched_rows += matched_rows;
+
+        match matched_rows {
+            0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
+            _ => match enable_early_filtering {
+                true => Ok(EarlyFilteringProbeStream::<false>::create(
+                    hashes,
+                    keys,
+                    &ctx.selection,
+                    &ctx.unmatched_selection,
+                )),
+                false => Ok(BinaryKeyProbeStream::<false>::create(hashes, keys)),
             },
         }
     }
 }
 
-pub struct BinaryKeyProbeStream {
+pub struct BinaryKeyProbeStream<const MATCHED: bool> {
     key_idx: usize,
     pointers: Vec<u64>,
     keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
     probe_entry_ptr: u64,
 }
 
-impl BinaryKeyProbeStream {
+impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
     pub fn create(
         pointers: Vec<u64>,
         keys: Box<dyn KeyAccessor<Key = [u8]>>,
     ) -> Box<dyn ProbeStream> {
-        Box::new(BinaryKeyProbeStream {
+        Box::new(BinaryKeyProbeStream::<MATCHED> {
             keys,
             pointers,
             key_idx: 0,
@@ -167,40 +215,40 @@ impl BinaryKeyProbeStream {
     }
 }
 
-impl ProbeStream for BinaryKeyProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbedRows> {
-        unsafe {
-            let mut matched_build = Vec::with_capacity(max_rows);
-            let mut matched_probe = Vec::with_capacity(max_rows);
-            let mut unmatched = Vec::with_capacity(max_rows);
+impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
+    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
+        while self.key_idx < self.keys.len() {
+            assume(res.unmatched.len() <= res.unmatched.capacity());
+            assume(res.matched_probe.len() == res.matched_build.len());
+            assume(res.matched_build.len() <= res.matched_build.capacity());
+            assume(res.matched_probe.len() <= res.matched_probe.capacity());
+            assume(self.key_idx <= self.pointers.len());
 
-            while self.key_idx < self.keys.len() {
-                std::hint::assert_unchecked(unmatched.len() <= unmatched.capacity());
-                std::hint::assert_unchecked(matched_probe.len() == matched_build.len());
-                std::hint::assert_unchecked(matched_build.len() <= matched_build.capacity());
-                std::hint::assert_unchecked(matched_probe.len() <= matched_probe.capacity());
+            if res.matched_probe.len() == max_rows {
+                break;
+            }
 
-                if matched_probe.len() == max_rows {
-                    break;
-                }
+            if self.probe_entry_ptr == 0 {
+                self.probe_entry_ptr = self.pointers[self.key_idx];
 
                 if self.probe_entry_ptr == 0 {
-                    self.probe_entry_ptr = *self.pointers.get_unchecked(self.key_idx);
-
-                    if self.probe_entry_ptr == 0 {
-                        unmatched.push(self.key_idx);
-                        self.key_idx += 1;
-                        continue;
+                    if !MATCHED {
+                        res.unmatched.push(self.key_idx);
                     }
+
+                    self.key_idx += 1;
+                    continue;
                 }
+            }
 
-                let key = self.keys.key_unchecked(self.key_idx);
+            let key = unsafe { self.keys.key_unchecked(self.key_idx) };
 
-                while self.probe_entry_ptr != 0 {
-                    let raw_entry = &*(self.probe_entry_ptr as *mut StringRawEntry);
-                    // Compare `early` and the length of the string, the size of `early` is 4.
-                    let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
+            while self.probe_entry_ptr != 0 {
+                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
+                // Compare `early` and the length of the string, the size of `early` is 4.
+                let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
 
+                unsafe {
                     if raw_entry.length as usize == key.len()
                         && key[0..min_len] == raw_entry.early[0..min_len]
                     {
@@ -210,32 +258,131 @@ impl ProbeStream for BinaryKeyProbeStream {
                         );
                         if key == key_ref {
                             let row_ptr = raw_entry.row_ptr;
-                            matched_probe.push(self.key_idx as u64);
-                            matched_build.push(row_ptr);
+                            res.matched_probe.push(self.key_idx as u64);
+                            res.matched_build.push(row_ptr);
 
-                            if matched_probe.len() == max_rows {
+                            if res.matched_probe.len() == max_rows {
                                 self.probe_entry_ptr = raw_entry.next;
 
                                 if self.probe_entry_ptr == 0 {
                                     self.key_idx += 1;
                                 }
 
-                                return Ok(ProbedRows::new(
-                                    unmatched,
-                                    matched_probe,
-                                    matched_build,
-                                ));
+                                return Ok(());
                             }
                         }
                     }
-
-                    self.probe_entry_ptr = raw_entry.next;
                 }
 
-                self.key_idx += 1;
+                self.probe_entry_ptr = raw_entry.next;
             }
 
-            Ok(ProbedRows::new(unmatched, matched_probe, matched_build))
+            self.key_idx += 1;
         }
+
+        Ok(())
+    }
+}
+
+pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
+    idx: usize,
+    pointers: Vec<u64>,
+    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
+    probe_entry_ptr: u64,
+    selections: &'a [u32],
+    unmatched_selection: &'a [u32],
+}
+
+impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
+    pub fn create(
+        pointers: Vec<u64>,
+        keys: Box<dyn KeyAccessor<Key = [u8]>>,
+        selections: &'a [u32],
+        unmatched_selection: &'a [u32],
+    ) -> Box<dyn ProbeStream + 'a> {
+        Box::new(EarlyFilteringProbeStream::<'a, MATCHED> {
+            keys,
+            pointers,
+            selections,
+            unmatched_selection,
+            idx: 0,
+            probe_entry_ptr: 0,
+        })
+    }
+}
+
+impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATCHED> {
+    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
+        if !MATCHED {
+            res.unmatched
+                .extend(self.unmatched_selection.iter().map(|x| *x as usize));
+        }
+
+        while self.idx < self.selections.len() {
+            let key_idx = self.selections[self.idx] as usize;
+
+            assume(res.unmatched.len() <= res.unmatched.capacity());
+            assume(res.matched_probe.len() == res.matched_build.len());
+            assume(res.matched_build.len() <= res.matched_build.capacity());
+            assume(res.matched_probe.len() <= res.matched_probe.capacity());
+            assume(key_idx <= self.pointers.len());
+
+            if res.matched_probe.len() == max_rows {
+                break;
+            }
+
+            if self.probe_entry_ptr == 0 {
+                self.probe_entry_ptr = self.pointers[key_idx];
+
+                if self.probe_entry_ptr == 0 {
+                    if !MATCHED {
+                        res.unmatched.push(key_idx);
+                    }
+
+                    self.idx += 1;
+                    continue;
+                }
+            }
+
+            let key = unsafe { self.keys.key_unchecked(key_idx) };
+
+            while self.probe_entry_ptr != 0 {
+                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
+                // Compare `early` and the length of the string, the size of `early` is 4.
+                let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
+
+                unsafe {
+                    if raw_entry.length as usize == key.len()
+                        && key[0..min_len] == raw_entry.early[0..min_len]
+                    {
+                        let key_ref = std::slice::from_raw_parts(
+                            raw_entry.key as *const u8,
+                            raw_entry.length as usize,
+                        );
+                        if key == key_ref {
+                            let row_ptr = raw_entry.row_ptr;
+                            res.matched_probe.push(key_idx as u64);
+                            res.matched_build.push(row_ptr);
+
+                            if res.matched_probe.len() == max_rows {
+                                self.probe_entry_ptr = raw_entry.next;
+
+                                if self.probe_entry_ptr == 0 {
+                                    self.idx += 1;
+                                }
+
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+
+                self.probe_entry_ptr = raw_entry.next;
+            }
+
+            self.idx += 1;
+        }
+
+        Ok(())
     }
 }

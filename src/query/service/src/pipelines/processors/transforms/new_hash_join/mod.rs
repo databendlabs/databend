@@ -13,12 +13,12 @@
 // limitations under the License.
 
 mod common;
+mod hashtable;
 mod join;
 mod memory;
+mod performance;
 mod runtime_filter;
 mod transform_hash_join;
-mod hashtable;
-mod performance;
 
 pub use join::Join;
 pub use memory::HashJoinMemoryState;

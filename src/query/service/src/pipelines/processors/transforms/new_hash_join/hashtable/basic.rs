@@ -15,16 +15,10 @@
 use databend_common_exception::Result;
 use databend_common_hashtable::RowPtr;
 
-pub struct PerformanceStatistics {
-    matched_hash: usize,
-}
-
 pub struct ProbedRows {
     pub unmatched: Vec<usize>,
     pub matched_probe: Vec<u64>,
     pub matched_build: Vec<RowPtr>,
-
-    // pub performance_statistics: PerformanceStatistics,
 }
 
 impl ProbedRows {
@@ -57,17 +51,23 @@ impl ProbedRows {
     pub fn all_unmatched(unmatched: Vec<usize>) -> ProbedRows {
         ProbedRows::new(unmatched, vec![], vec![])
     }
+
+    pub fn clear(&mut self) {
+        self.unmatched.clear();
+        self.matched_probe.clear();
+        self.matched_build.clear();
+    }
 }
 
 pub trait ProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbedRows>;
+    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()>;
+}
 
-    fn both(&mut self, rows: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        unimplemented!()
-    }
+pub struct EmptyProbeStream;
 
-    fn matched(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        unimplemented!()
+impl ProbeStream for EmptyProbeStream {
+    fn advance(&mut self, _res: &mut ProbedRows, _max_rows: usize) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -83,24 +83,12 @@ impl AllUnmatchedProbeStream {
 }
 
 impl ProbeStream for AllUnmatchedProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbedRows> {
-        if self.idx >= self.size {
-            return Ok(ProbedRows::empty());
-        }
-
-        let res = std::cmp::min(self.size - self.idx, max_rows);
-        let res = (self.idx..self.idx + res).collect::<Vec<_>>();
-        self.idx += res.len();
-        Ok(ProbedRows::all_unmatched(res))
-    }
-
-    fn matched(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
+    fn advance(&mut self, _rows: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if self.idx >= self.size {
             return Ok(());
         }
 
         let unmatched_rows = std::cmp::min(self.size - self.idx, max_rows);
-        res.unmatched.extend(self.idx..self.idx + unmatched_rows);
         self.idx += unmatched_rows;
         Ok(())
     }

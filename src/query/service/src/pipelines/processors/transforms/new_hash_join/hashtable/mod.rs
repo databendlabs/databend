@@ -14,22 +14,55 @@
 
 mod fixed_keys;
 
+pub mod basic;
 mod serialize_keys;
 mod single_binary_key;
-pub mod basic;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 
-pub struct ProbeData {
-    keys: DataBlock,
-    valids: Option<Bitmap>,
+pub struct ProbeHashStatistics {
+    probed_rows: usize,
+    matched_rows: usize,
+
+    selection: Vec<u32>,
+    unmatched_selection: Vec<u32>,
 }
 
-impl ProbeData {
-    pub fn new(keys: DataBlock, valids: Option<Bitmap>) -> Self {
-        Self { keys, valids }
+impl ProbeHashStatistics {
+    pub fn new(max_rows: usize) -> Self {
+        ProbeHashStatistics {
+            probed_rows: 0,
+            matched_rows: 0,
+            selection: Vec::with_capacity(max_rows),
+            unmatched_selection: Vec::with_capacity(max_rows),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.selection.clear();
+        self.unmatched_selection.clear();
+    }
+}
+
+pub struct ProbeData<'a> {
+    keys: DataBlock,
+    valids: Option<Bitmap>,
+    probe_hash_statistics: &'a mut ProbeHashStatistics,
+}
+
+impl<'a> ProbeData<'a> {
+    pub fn new(
+        keys: DataBlock,
+        valids: Option<Bitmap>,
+        probe_hash_statistics: &'a mut ProbeHashStatistics,
+    ) -> Self {
+        ProbeData {
+            keys,
+            valids,
+            probe_hash_statistics,
+        }
     }
 
     pub fn num_rows(&self) -> usize {
@@ -47,7 +80,7 @@ impl ProbeData {
         }
     }
 
-    pub fn into_raw(self) -> (DataBlock, Option<Bitmap>) {
-        (self.keys, self.valids)
+    pub fn into_raw(self) -> (DataBlock, Option<Bitmap>, &'a mut ProbeHashStatistics) {
+        (self.keys, self.valids, self.probe_hash_statistics)
     }
 }

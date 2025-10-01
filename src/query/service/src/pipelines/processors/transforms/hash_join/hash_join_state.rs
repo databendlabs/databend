@@ -23,7 +23,6 @@ use std::sync::Arc;
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
-use databend_common_base::hints::assume;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,14 +36,10 @@ use databend_common_expression::FixedKey;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringRawEntry;
-use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
@@ -59,22 +54,16 @@ use crate::sessions::QueryContext;
 use crate::sql::IndexType;
 
 pub struct SerializerHashJoinHashTable {
-    pub(crate) probed_rows: AtomicUsize,
-    pub(crate) matched_probe_rows: AtomicUsize,
     pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
 pub struct SingleBinaryHashJoinHashTable {
-    pub(crate) probed_rows: AtomicUsize,
-    pub(crate) matched_probe_rows: AtomicUsize,
     pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSingleBinary,
 }
 
 pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey> {
-    pub(crate) probed_rows: AtomicUsize,
-    pub(crate) matched_probe_rows: AtomicUsize,
     pub(crate) hash_table: HashJoinHashMap<T>,
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
@@ -340,5 +329,3 @@ impl HashJoinState {
         }
     }
 }
-
-

@@ -12,20 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_expression::FilterExecutor;
+use databend_common_expression::FunctionContext;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeHashStatistics;
+use crate::pipelines::processors::HashJoinDesc;
 
 pub struct PerformanceContext {
     pub probe_result: ProbedRows,
     pub filter_executor: Option<FilterExecutor>,
+    pub probe_hash_statistics: ProbeHashStatistics,
 }
 
 impl PerformanceContext {
-    pub fn new() -> Self {
+    pub fn create(
+        max_block_size: usize,
+        desc: Arc<HashJoinDesc>,
+        function_context: FunctionContext,
+    ) -> Self {
+        let filter_executor = desc.other_predicate.as_ref().map(|predicate| {
+            FilterExecutor::new(
+                predicate.clone(),
+                function_context,
+                max_block_size,
+                None,
+                &BUILTIN_FUNCTIONS,
+                false,
+            )
+        });
+
         PerformanceContext {
-            probe_result: ProbedRows::new(vec![], vec![], vec![]),
-            filter_executor: None,
+            filter_executor,
+            probe_result: ProbedRows::new(
+                Vec::with_capacity(max_block_size),
+                Vec::with_capacity(max_block_size),
+                Vec::with_capacity(max_block_size),
+            ),
+            probe_hash_statistics: ProbeHashStatistics::new(max_block_size),
         }
     }
 }
