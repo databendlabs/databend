@@ -82,7 +82,6 @@ pub fn supported_features(version: (u64, u64, u64)) -> BTreeMap<&'static str, Ve
 pub fn std() -> &'static [FeatureSpec] {
     #[rustfmt::skip]
     pub const REQUIRES: &[FeatureSpec] = &[
-        features::KV_API,
         features::KV_READ_V1,
         features::TRANSACTION,
         features::EXPORT,
@@ -104,7 +103,6 @@ pub fn std() -> &'static [FeatureSpec] {
 pub fn read_write() -> &'static [FeatureSpec] {
     #[rustfmt::skip]
     pub const REQUIRES: &[FeatureSpec] = &[
-        features::KV_API,
         features::KV_READ_V1,
         features::TRANSACTION,
     ];
@@ -116,7 +114,6 @@ pub fn read_write() -> &'static [FeatureSpec] {
 pub fn read_write_watch() -> &'static [FeatureSpec] {
     #[rustfmt::skip]
     pub const REQUIRES: &[FeatureSpec] = &[
-        features::KV_API,
         features::KV_READ_V1,
         features::TRANSACTION,
         features::WATCH,
