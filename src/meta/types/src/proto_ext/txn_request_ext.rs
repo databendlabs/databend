@@ -66,7 +66,14 @@ impl pb::TxnRequest {
             }
         };
 
-        Self::new(conditions, vec![op]).with_else(vec![pb::TxnOp::get(&upsert.key)])
+        let mut txn = Self::new(conditions.clone(), vec![op]);
+
+        // Only add else_then if there are conditions
+        if !conditions.is_empty() {
+            txn = txn.with_else(vec![pb::TxnOp::get(&upsert.key)]);
+        }
+
+        txn
     }
 
     /// Push a new conditional operation branch to the transaction.
@@ -229,7 +236,11 @@ mod tests {
                             ttl_ms: None,
                         })),
                     }],
-                    else_then: vec![],
+                    else_then: vec![pb::TxnOp {
+                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
+                            key: "test_key".to_string(),
+                        })),
+                    }],
                 },
             ),
             (
@@ -256,7 +267,11 @@ mod tests {
                             ttl_ms: None,
                         })),
                     }],
-                    else_then: vec![],
+                    else_then: vec![pb::TxnOp {
+                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
+                            key: "test_key".to_string(),
+                        })),
+                    }],
                 },
             ),
             (
@@ -380,7 +395,11 @@ mod tests {
                             match_seq: None,
                         })),
                     }],
-                    else_then: vec![],
+                    else_then: vec![pb::TxnOp {
+                        request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
+                            key: "complex_key".to_string(),
+                        })),
+                    }],
                 },
             ),
         ];
