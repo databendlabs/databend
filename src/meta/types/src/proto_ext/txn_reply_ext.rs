@@ -320,10 +320,12 @@ mod tests {
             Some(prev_seq_v.clone()),
         )];
         let res = reply.into_upsert_reply();
-        let expected_seq_v: SeqV<Vec<u8>> = prev_seq_v.into();
         assert_eq!(
             res.unwrap(),
-            Change::new(Some(expected_seq_v.clone()), Some(expected_seq_v))
+            Change::new(
+                Some(prev_seq_v.clone().into()),
+                Some(prev_seq_v.clone().into())
+            )
         );
 
         // Delete no prev
@@ -361,10 +363,9 @@ mod tests {
         )];
 
         let res = reply.into_upsert_reply();
-        let expected_seq_v: SeqV<Vec<u8>> = seq_v.into();
         assert_eq!(
             res.unwrap(),
-            Change::new(Some(expected_seq_v.clone()), Some(expected_seq_v))
+            Change::new(Some(seq_v.clone().into()), Some(seq_v.clone().into()))
         );
 
         // Get with no value
