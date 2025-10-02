@@ -172,6 +172,8 @@ impl HashJoinProbeState {
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
             )?);
+
+            probe_unmatched_indexes.clear();
         }
 
         if !next_process_state {

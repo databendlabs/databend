@@ -80,6 +80,10 @@ impl HashJoinProbeState {
 
         let result_block = DataBlock::take(&process_state.input, &probe_indexes[0..count])?;
 
+        if probe_state.probe_with_selection {
+            probe_indexes.clear();
+        }
+
         probe_state.process_state = None;
 
         if result_block.is_empty() {
