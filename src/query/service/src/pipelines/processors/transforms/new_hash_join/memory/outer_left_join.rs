@@ -131,7 +131,7 @@ impl Join for OuterLeftHashJoin {
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
                 let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
-                probe_hash_statistics.clear();
+                probe_hash_statistics.clear(probe_block.num_rows());
 
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)

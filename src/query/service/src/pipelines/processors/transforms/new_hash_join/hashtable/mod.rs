@@ -40,9 +40,11 @@ impl ProbeHashStatistics {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&mut self, max_rows: usize) {
         self.selection.clear();
         self.unmatched_selection.clear();
+        self.selection.reserve(max_rows);
+        self.unmatched_selection.reserve(max_rows);
     }
 }
 
