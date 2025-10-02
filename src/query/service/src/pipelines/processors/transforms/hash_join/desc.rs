@@ -19,6 +19,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -60,6 +61,7 @@ pub struct HashJoinDesc {
     pub(crate) build_projection: ColumnSet,
     pub(crate) probe_projections: ColumnSet,
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
+    pub(crate) build_schema: DataSchemaRef,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +132,7 @@ impl HashJoinDesc {
             probe_to_build: join.probe_to_build.clone(),
             build_projection: join.build_projections.clone(),
             probe_projections: join.probe_projections.clone(),
+            build_schema: join.build.output_schema()?,
         })
     }
 

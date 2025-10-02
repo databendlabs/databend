@@ -45,3 +45,11 @@ impl JoinStream for EmptyJoinStream {
         Ok(None)
     }
 }
+
+pub struct OneBlockJoinStream(pub Option<DataBlock>);
+
+impl JoinStream for OneBlockJoinStream {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        Ok(self.0.take())
+    }
+}

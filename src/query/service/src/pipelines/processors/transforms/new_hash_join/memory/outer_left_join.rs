@@ -20,11 +20,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::Scalar;
@@ -34,6 +34,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
+use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
@@ -97,6 +98,23 @@ impl Join for OuterLeftHashJoin {
             return Ok(Box::new(EmptyJoinStream));
         }
 
+        if *self.basic_state.build_rows == 0 {
+            let num_rows = data.num_rows();
+
+            let types = self
+                .desc
+                .build_schema
+                .fields
+                .iter()
+                .map(|x| x.data_type().clone())
+                .collect::<Vec<_>>();
+
+            let build_block = null_build_block(&types, data.num_rows());
+            let probe_block = Some(data.project(&self.desc.probe_projections));
+            let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
+            return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
+        }
+
         self.basic_hash_join.finalize_chunks();
 
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
@@ -122,11 +140,6 @@ impl Join for OuterLeftHashJoin {
                 "Aborted query, because the hash table is uninitialized.",
             )),
         })?;
-
-        match self.performance_context.filter_executor.as_ref() {
-            None => {}
-            Some(_) => {}
-        };
 
         Ok(OuterLeftHashJoinStream::create(
             probe_block,
@@ -177,7 +190,6 @@ impl<'a> JoinStream for OuterLeftHashJoinStream<'a> {
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
 
             if !self.probed_rows.unmatched.is_empty() {
-                eprintln!("unmatched rows: {:?}", self.probed_rows.unmatched);
                 self.unmatched_rows
                     .extend_from_slice(&self.probed_rows.unmatched);
             }
@@ -193,26 +205,15 @@ impl<'a> JoinStream for OuterLeftHashJoinStream<'a> {
                     _ => Some(DataBlock::take(&self.probe_data_block, &unmatched)?),
                 };
 
-                let build_block = match self.join_state.columns.is_empty() {
-                    true => None,
-                    false => {
-                        let columns = self
-                            .join_state
-                            .column_types
-                            .iter()
-                            .map(|column_type| {
-                                BlockEntry::new_const_column(
-                                    column_type.wrap_nullable(),
-                                    Scalar::Null,
-                                    unmatched.len(),
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        Some(DataBlock::new(columns, unmatched.len()))
-                    }
-                };
+                let types = &self.join_state.column_types;
+                let build_block = null_build_block(types, unmatched.len());
 
-                return Ok(Some(self.final_result_block(probe_block, build_block)));
+                return Ok(Some(final_result_block(
+                    &self.desc,
+                    probe_block,
+                    build_block,
+                    unmatched.len(),
+                )));
             }
 
             if self.probed_rows.matched_probe.is_empty() {
@@ -247,53 +248,73 @@ impl<'a> JoinStream for OuterLeftHashJoinStream<'a> {
                 }
             };
 
-            return Ok(Some(self.final_result_block(probe_block, build_block)));
+            return Ok(Some(final_result_block(
+                &self.desc,
+                probe_block,
+                build_block,
+                self.probed_rows.matched_build.len(),
+            )));
         }
     }
 }
 
-impl<'a> OuterLeftHashJoinStream<'a> {
-    fn final_result_block(
-        &mut self,
-        probe_block: Option<DataBlock>,
-        build_block: Option<DataBlock>,
-    ) -> DataBlock {
-        let mut result_block = match (probe_block, build_block) {
-            (Some(mut probe_block), Some(build_block)) => {
-                probe_block.merge_block(build_block);
-                probe_block
-            }
-            (Some(probe_block), None) => probe_block,
-            (None, Some(build_block)) => build_block,
-            (None, None) => DataBlock::new(vec![], self.probed_rows.matched_build.len()),
-        };
+fn final_result_block(
+    desc: &HashJoinDesc,
+    probe_block: Option<DataBlock>,
+    build_block: Option<DataBlock>,
+    num_rows: usize,
+) -> DataBlock {
+    let mut result_block = match (probe_block, build_block) {
+        (Some(mut probe_block), Some(build_block)) => {
+            probe_block.merge_block(build_block);
+            probe_block
+        }
+        (Some(probe_block), None) => probe_block,
+        (None, Some(build_block)) => build_block,
+        (None, None) => DataBlock::new(vec![], num_rows),
+    };
 
-        if !self.desc.probe_to_build.is_empty() {
-            for (index, (is_probe_nullable, is_build_nullable)) in self.desc.probe_to_build.iter() {
-                let entry = match (is_probe_nullable, is_build_nullable) {
-                    (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                    (true, false) => result_block.get_by_offset(*index).clone().remove_nullable(),
-                    (false, true) => {
-                        let entry = result_block.get_by_offset(*index);
-                        let col = entry.to_column();
+    if !desc.probe_to_build.is_empty() {
+        for (index, (is_probe_nullable, is_build_nullable)) in desc.probe_to_build.iter() {
+            let entry = match (is_probe_nullable, is_build_nullable) {
+                (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                (true, false) => result_block.get_by_offset(*index).clone().remove_nullable(),
+                (false, true) => {
+                    let entry = result_block.get_by_offset(*index);
+                    let col = entry.to_column();
 
-                        match col.is_null() || col.is_nullable() {
-                            true => entry.clone(),
-                            false => BlockEntry::from(NullableColumn::new_column(
-                                col,
-                                Bitmap::new_constant(true, result_block.num_rows()),
-                            )),
-                        }
+                    match col.is_null() || col.is_nullable() {
+                        true => entry.clone(),
+                        false => BlockEntry::from(NullableColumn::new_column(
+                            col,
+                            Bitmap::new_constant(true, result_block.num_rows()),
+                        )),
                     }
-                };
+                }
+            };
 
-                result_block.add_entry(entry);
-            }
+            result_block.add_entry(entry);
         }
-        result_block
     }
+    result_block
 }
 
-impl<'a> OuterLeftHashJoinStream<'a> {}
+fn null_build_block(types: &[DataType], num_rows: usize) -> Option<DataBlock> {
+    match types.is_empty() {
+        true => None,
+        false => {
+            let columns = types
+                .iter()
+                .map(|column_type| {
+                    BlockEntry::new_const_column(
+                        column_type.wrap_nullable(),
+                        Scalar::Null,
+                        num_rows,
+                    )
+                })
+                .collect::<Vec<_>>();
 
-impl<'a> OuterLeftHashJoinStream<'a> {}
+            Some(DataBlock::new(columns, num_rows))
+        }
+    }
+}
