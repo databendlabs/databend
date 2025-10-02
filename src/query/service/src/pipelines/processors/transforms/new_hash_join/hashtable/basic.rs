@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_hashtable::RowPtr;
 
 pub struct ProbedRows {
-    pub unmatched: Vec<usize>,
+    pub unmatched: Vec<u64>,
     pub matched_probe: Vec<u64>,
     pub matched_build: Vec<RowPtr>,
 }
@@ -27,7 +27,7 @@ impl ProbedRows {
     }
 
     pub fn new(
-        unmatched: Vec<usize>,
+        unmatched: Vec<u64>,
         matched_probe: Vec<u64>,
         matched_build: Vec<RowPtr>,
     ) -> ProbedRows {
@@ -48,7 +48,7 @@ impl ProbedRows {
         self.matched_build.is_empty() && !self.unmatched.is_empty()
     }
 
-    pub fn all_unmatched(unmatched: Vec<usize>) -> ProbedRows {
+    pub fn all_unmatched(unmatched: Vec<u64>) -> ProbedRows {
         ProbedRows::new(unmatched, vec![], vec![])
     }
 

@@ -233,7 +233,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
 
                 if self.probe_entry_ptr == 0 {
                     if !MATCHED {
-                        res.unmatched.push(self.key_idx);
+                        res.unmatched.push(self.key_idx as u64);
                     }
 
                     self.key_idx += 1;
@@ -315,7 +315,7 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if !MATCHED {
             res.unmatched
-                .extend(self.unmatched_selection.iter().map(|x| *x as usize));
+                .extend(self.unmatched_selection.iter().map(|x| *x as u64));
         }
 
         while self.idx < self.selections.len() {
@@ -336,7 +336,7 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
 
                 if self.probe_entry_ptr == 0 {
                     if !MATCHED {
-                        res.unmatched.push(key_idx);
+                        res.unmatched.push(key_idx as u64);
                     }
 
                     self.idx += 1;

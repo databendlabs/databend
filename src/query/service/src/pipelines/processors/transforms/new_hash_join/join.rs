@@ -33,7 +33,9 @@ pub trait Join: Send + Sync + 'static {
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>>;
 
-    fn final_probe(&mut self) -> Result<Box<dyn JoinStream + '_>>;
+    fn final_probe(&mut self) -> Result<Box<dyn JoinStream + '_>> {
+        Ok(Box::new(EmptyJoinStream))
+    }
 }
 
 pub struct EmptyJoinStream;

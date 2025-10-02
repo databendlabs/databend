@@ -208,8 +208,8 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                 self.probe_entry_ptr = self.pointers[self.key_idx];
 
                 if self.probe_entry_ptr == 0 {
-                    if MATCHED {
-                        res.unmatched.push(self.key_idx);
+                    if !MATCHED {
+                        res.unmatched.push(self.key_idx as u64);
                     }
 
                     self.key_idx += 1;
@@ -283,7 +283,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if !MATCHED {
             res.unmatched
-                .extend(self.unmatched_selection.iter().map(|x| *x as usize));
+                .extend(self.unmatched_selection.iter().map(|x| *x as u64));
         }
 
         while self.idx < self.selections.len() {

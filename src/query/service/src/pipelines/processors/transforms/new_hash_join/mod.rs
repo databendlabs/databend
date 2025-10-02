@@ -15,13 +15,13 @@
 mod common;
 mod hashtable;
 mod join;
-mod memory;
+pub mod memory;
 mod performance;
 mod runtime_filter;
 mod transform_hash_join;
 
 pub use join::Join;
-pub use memory::HashJoinMemoryState;
-pub use memory::MemoryInnerJoin;
+pub use memory::BasicHashJoinState;
+pub use memory::InnerHashJoin;
 pub use runtime_filter::PlanRuntimeFilterDesc;
 pub use transform_hash_join::TransformHashJoin;
