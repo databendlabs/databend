@@ -196,8 +196,8 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.keys.len() {
             assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() <= res.matched_build.capacity());
-            assume(res.matched_probe.len() <= res.matched_probe.capacity());
+            assume(res.matched_build.len() < res.matched_build.capacity());
+            assume(res.matched_probe.len() < res.matched_probe.capacity());
             assume(self.key_idx < self.pointers.len());
 
             if res.matched_probe.len() == max_rows {
@@ -289,10 +289,10 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
         while self.idx < self.selections.len() {
             let key_idx = self.selections[self.idx] as usize;
 
-            assume(res.unmatched.len() <= res.unmatched.capacity());
+            assume(res.unmatched.len() < res.unmatched.capacity());
             assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() <= res.matched_build.capacity());
-            assume(res.matched_probe.len() <= res.matched_probe.capacity());
+            assume(res.matched_build.len() < res.matched_build.capacity());
+            assume(res.matched_probe.len() < res.matched_probe.capacity());
             assume(key_idx < self.pointers.len());
 
             if res.matched_probe.len() == max_rows {

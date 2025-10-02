@@ -218,11 +218,11 @@ impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
 impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.keys.len() {
-            assume(res.unmatched.len() <= res.unmatched.capacity());
+            assume(res.unmatched.len() < res.unmatched.capacity());
             assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() <= res.matched_build.capacity());
-            assume(res.matched_probe.len() <= res.matched_probe.capacity());
-            assume(self.key_idx <= self.pointers.len());
+            assume(res.matched_build.len() < res.matched_build.capacity());
+            assume(res.matched_probe.len() < res.matched_probe.capacity());
+            assume(self.key_idx < self.pointers.len());
 
             if res.matched_probe.len() == max_rows {
                 break;
@@ -321,11 +321,11 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
         while self.idx < self.selections.len() {
             let key_idx = self.selections[self.idx] as usize;
 
-            assume(res.unmatched.len() <= res.unmatched.capacity());
+            assume(res.unmatched.len() < res.unmatched.capacity());
             assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() <= res.matched_build.capacity());
-            assume(res.matched_probe.len() <= res.matched_probe.capacity());
-            assume(key_idx <= self.pointers.len());
+            assume(res.matched_build.len() < res.matched_build.capacity());
+            assume(res.matched_probe.len() < res.matched_probe.capacity());
+            assume(key_idx < self.pointers.len());
 
             if res.matched_probe.len() == max_rows {
                 break;

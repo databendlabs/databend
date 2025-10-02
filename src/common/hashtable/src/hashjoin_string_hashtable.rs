@@ -165,14 +165,14 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
-                            assume(matched_selection.len() <= matched_selection.capacity());
+                            assume(matched_selection.len() < matched_selection.capacity());
                             matched_selection.push(idx as u32);
                         } else {
-                            assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                            assume(unmatched_selection.len() < unmatched_selection.capacity());
                             unmatched_selection.push(idx as u32);
                         }
                     } else {
-                        assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                        assume(unmatched_selection.len() < unmatched_selection.capacity());
                         unmatched_selection.push(idx as u32);
                     }
                 });
@@ -182,10 +182,10 @@ where A: Allocator + Clone + 'static
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        assume(matched_selection.len() <= matched_selection.capacity());
+                        assume(matched_selection.len() < matched_selection.capacity());
                         matched_selection.push(idx as u32);
                     } else {
-                        assume(unmatched_selection.len() <= unmatched_selection.capacity());
+                        assume(unmatched_selection.len() < unmatched_selection.capacity());
                         unmatched_selection.push(idx as u32);
                     }
                 });
@@ -217,7 +217,7 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
-                            assume(selection.len() <= selection.capacity());
+                            assume(selection.len() < selection.capacity());
                             selection.push(idx as u32);
                         }
                     }
@@ -228,7 +228,7 @@ where A: Allocator + Clone + 'static
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        assume(selection.len() <= selection.capacity());
+                        assume(selection.len() < selection.capacity());
                         selection.push(idx as u32);
                     }
                 });
