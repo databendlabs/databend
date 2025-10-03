@@ -29,8 +29,6 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_types::MatchSeq;
@@ -47,6 +45,8 @@ use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+
+mod ops;
 
 /// Globally unique identifier of a version of TableMeta.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -352,67 +352,6 @@ pub struct TableIndex {
     pub version: String,
     // index options specify the index configs, like tokenizer.
     pub options: BTreeMap<String, String>,
-}
-
-impl TableMeta {
-    pub fn add_column(
-        &mut self,
-        field: &TableField,
-        comment: &str,
-        index: FieldIndex,
-    ) -> Result<()> {
-        self.fill_field_comments();
-
-        let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.add_column(field, index)?;
-        self.schema = Arc::new(new_schema);
-        self.field_comments.insert(index, comment.to_owned());
-        Ok(())
-    }
-
-    pub fn drop_column(&mut self, column: &str) -> Result<()> {
-        self.fill_field_comments();
-
-        let mut new_schema = self.schema.as_ref().to_owned();
-        let index = new_schema.drop_column(column)?;
-        self.field_comments.remove(index);
-        self.schema = Arc::new(new_schema);
-        Ok(())
-    }
-
-    /// To fix the field comments panic.
-    pub fn fill_field_comments(&mut self) {
-        let num_fields = self.schema.num_fields();
-        // If the field comments is confused, fill it with empty string.
-        if self.field_comments.len() < num_fields {
-            self.field_comments = vec!["".to_string(); num_fields];
-        }
-    }
-
-    pub fn add_constraint(
-        &mut self,
-        constraint_name: String,
-        constraint: Constraint,
-    ) -> Result<()> {
-        if self.constraints.contains_key(&constraint_name) {
-            return Err(ErrorCode::AlterTableError(format!(
-                "constraint {} already exists",
-                constraint_name
-            )));
-        }
-        self.constraints.insert(constraint_name, constraint);
-        Ok(())
-    }
-
-    pub fn drop_constraint(&mut self, constraint_name: &str) -> Result<()> {
-        if self.constraints.remove(constraint_name).is_none() {
-            return Err(ErrorCode::AlterTableError(format!(
-                "constraint {} not exists",
-                constraint_name
-            )));
-        };
-        Ok(())
-    }
 }
 
 impl TableInfo {
