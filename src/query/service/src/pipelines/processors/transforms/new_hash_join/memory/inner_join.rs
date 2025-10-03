@@ -28,6 +28,7 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 
+use crate::pipelines::processors::transforms::build_runtime_filter_packet;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -38,6 +39,8 @@ use crate::pipelines::processors::transforms::new_hash_join::memory::basic::Basi
 use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -88,6 +91,18 @@ impl Join for InnerHashJoin {
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
         self.basic_hash_join.final_build()
+    }
+
+    fn build_runtime_filter(&self, desc: &RuntimeFiltersDesc) -> Result<JoinRuntimeFilterPacket> {
+        build_runtime_filter_packet(
+            self.basic_state.chunks.deref(),
+            *self.basic_state.build_rows,
+            &desc.filters_desc,
+            &self.function_ctx,
+            desc.inlist_threshold,
+            desc.bloom_threshold,
+            desc.min_max_threshold,
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

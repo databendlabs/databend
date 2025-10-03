@@ -59,7 +59,7 @@ use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeft
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
 use crate::pipelines::processors::transforms::InnerHashJoin;
-use crate::pipelines::processors::transforms::PlanRuntimeFilterDesc;
+use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
@@ -401,7 +401,7 @@ impl HashJoin {
         let state = Arc::new(BasicHashJoinState::create());
         // We must build the runtime filter before constructing the child nodes,
         // as we will inject some runtime filter information into the context for the child nodes to use.
-        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
+        let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
             builder.hash_join_states.insert(

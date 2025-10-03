@@ -23,5 +23,5 @@ mod transform_hash_join;
 pub use join::Join;
 pub use memory::BasicHashJoinState;
 pub use memory::InnerHashJoin;
-pub use runtime_filter::PlanRuntimeFilterDesc;
+pub use runtime_filter::RuntimeFiltersDesc;
 pub use transform_hash_join::TransformHashJoin;

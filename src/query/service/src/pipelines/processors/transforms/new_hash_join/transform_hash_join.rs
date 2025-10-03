@@ -29,7 +29,7 @@ use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::PlanRuntimeFilterDesc;
+use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,
@@ -41,7 +41,7 @@ pub struct TransformHashJoin {
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
     projection: ColumnSet,
-    rf_desc: Arc<PlanRuntimeFilterDesc>,
+    rf_desc: Arc<RuntimeFiltersDesc>,
 }
 
 impl TransformHashJoin {
@@ -52,7 +52,7 @@ impl TransformHashJoin {
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
         projection: ColumnSet,
-        rf_desc: Arc<PlanRuntimeFilterDesc>,
+        rf_desc: Arc<RuntimeFiltersDesc>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformHashJoin {
             build_port,
@@ -180,18 +180,18 @@ impl Processor for TransformHashJoin {
         let wait_res = self.stage_sync_barrier.wait().await;
 
         self.stage = match self.stage {
-            Stage::Build(_) => Stage::BuildFinal(BuildFinalState::new()),
-            Stage::BuildFinal(_) => {
+            Stage::Build(_) => {
                 if wait_res.is_leader() {
-                    let packet = self.join.build_runtime_filter()?;
+                    let packet = self.join.build_runtime_filter(&self.rf_desc)?;
 
                     self.rf_desc.globalization(packet).await?;
                 }
 
                 let _wait_res = self.stage_sync_barrier.wait().await;
 
-                Stage::Probe(ProbeState::new())
+                Stage::BuildFinal(BuildFinalState::new())
             }
+            Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
             Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
             Stage::ProbeFinal(_) => Stage::Finished,
             Stage::Finished => Stage::Finished,

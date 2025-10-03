@@ -159,6 +159,7 @@ impl BasicHashJoin {
             }
         }
 
+        let mut columns = Vec::with_capacity(self.desc.build_projection.len());
         for offset in 0..self.desc.build_projection.len() {
             let full_columns = self
                 .state
@@ -167,9 +168,10 @@ impl BasicHashJoin {
                 .map(|block| block.get_by_offset(offset).to_column())
                 .collect::<Vec<_>>();
 
-            let columns = self.state.columns.as_mut();
             columns.push(Column::take_downcast_column_vec(&full_columns));
         }
+
+        std::mem::swap(&mut columns, self.state.columns.as_mut());
     }
 
     fn init_memory_hash_table(&mut self) {
