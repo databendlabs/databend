@@ -196,7 +196,8 @@ mod tests {
         let mut meta = create_test_table_meta();
         let constraint = Constraint::Check("id > 0".to_string());
 
-        meta.add_constraint("check_id".to_string(), constraint).unwrap();
+        meta.add_constraint("check_id".to_string(), constraint)
+            .unwrap();
         assert_eq!(meta.constraints.len(), 1);
 
         meta.drop_constraint("check_id").unwrap();
