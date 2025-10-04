@@ -179,7 +179,8 @@ impl HttpQueryManager {
                 };
 
                 match expire_res {
-                    ExpireResult::Expired => {
+                    ExpireResult::Expired(stop_reason) => {
+                        // this msg is only used when query is starting or running
                         let msg = format!(
                             "[HTTP-QUERY] Query {} timed out after {} seconds",
                             &query_id_clone, query_result_timeout_secs
@@ -188,8 +189,9 @@ impl HttpQueryManager {
                             .stop_query(
                                 &query_id_clone,
                                 &None,
-                                StopReason::Timeout,
+                                stop_reason,
                                 ErrorCode::AbortedQuery(&msg),
+                                false,
                             )
                             .await
                             .ok();
@@ -215,6 +217,7 @@ impl HttpQueryManager {
         client_session_id: &Option<String>,
         reason: StopReason,
         error: ErrorCode,
+        check_session_id: bool,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -222,7 +225,7 @@ impl HttpQueryManager {
             .as_secs();
         let (query, stop_first_run) = self.queries.write().stop(query_id, reason, now);
         if let Some(q) = &query {
-            if reason != StopReason::Timeout {
+            if check_session_id {
                 q.check_client_session_id(client_session_id)?;
             }
             if stop_first_run {
