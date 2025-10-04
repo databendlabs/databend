@@ -27,11 +27,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 
@@ -132,6 +134,19 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
         let retention_time = chrono::Utc::now() - duration;
+
+        // Set vacuum timestamp before starting the vacuum operation (only in non-dry-run mode)
+        // This ensures undrop operations after this point will be blocked
+        if self.plan.option.dry_run.is_none() {
+            let tenant = ctx.get_tenant();
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            if let Err(e) = meta_api
+                .fetch_set_vacuum_timestamp(&tenant, retention_time)
+                .await
+            {
+                info!("Failed to set vacuum timestamp: {:?}", e);
+            }
+        }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
             "=== VACUUM DROP TABLE STARTED === db: {:?}, retention_days: {}, retention_time: {:?}",

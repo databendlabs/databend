@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -27,6 +28,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -40,6 +42,7 @@ use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -47,6 +50,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
 use fastrace::func_name;
@@ -56,10 +60,12 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use seq_marked::SeqValue;
 
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
@@ -100,6 +106,54 @@ where
             }
         }
         Ok(num_meta_key_removed)
+    }
+
+    /// Fetch and conditionally set the vacuum retention timestamp.
+    ///
+    /// This method implements the monotonic timestamp update semantics from the design:
+    /// - Only updates the timestamp if the new value is greater than the current one
+    /// - Returns the OLD timestamp value as per the design specification
+    /// - Ensures atomicity using compare-and-swap operations
+    #[fastrace::trace]
+    async fn fetch_set_vacuum_timestamp(
+        &self,
+        tenant: &Tenant,
+        new_timestamp: DateTime<Utc>,
+    ) -> Result<VacuumWatermark, KVAppError> {
+        let ident = VacuumRetentionIdent::new_global(tenant.clone());
+
+        // Use crud_upsert_with for atomic compare-and-swap semantics
+        let transition = self
+            .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumWatermark>>| {
+                let current_retention = current.into_value().unwrap_or_default();
+
+                // Only update if new timestamp is greater (monotonic property)
+                if new_timestamp > current_retention.time {
+                    let new_retention = VacuumWatermark::new(new_timestamp);
+                    Ok(Some(new_retention))
+                } else {
+                    // Return None to indicate no update needed
+                    Ok(None)
+                }
+            })
+            .await?;
+
+        // Extract the old value to return (as per design specification)
+        let old_retention = transition
+            .expect("crud_upsert_with must return some result")
+            .prev
+            .map(|v| v.data)
+            .unwrap_or_default();
+
+        Ok(old_retention)
+    }
+
+    /// Get the current vacuum retention timestamp for a tenant.
+    #[fastrace::trace]
+    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<VacuumWatermark, KVAppError> {
+        let ident = VacuumRetentionIdent::new_global(tenant.clone());
+        let seq_value = self.get_pb(&ident).await?;
+        Ok(seq_value.map(|v| v.data).unwrap_or_default())
     }
 }
 
