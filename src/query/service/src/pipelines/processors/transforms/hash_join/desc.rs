@@ -19,12 +19,14 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::ColumnSet;
 use parking_lot::RwLock;
 
 use crate::physical_plans::HashJoin;
@@ -55,6 +57,11 @@ pub struct HashJoinDesc {
     /// Whether the Join are derived from correlated subquery.
     pub(crate) from_correlated_subquery: bool,
     pub(crate) runtime_filter: RuntimeFiltersDesc,
+
+    pub(crate) build_projection: ColumnSet,
+    pub(crate) probe_projections: ColumnSet,
+    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
+    pub(crate) build_schema: DataSchemaRef,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +129,10 @@ impl HashJoinDesc {
             from_correlated_subquery: join.from_correlated_subquery,
             single_to_inner: join.single_to_inner.clone(),
             runtime_filter: (&join.runtime_filter).into(),
+            probe_to_build: join.probe_to_build.clone(),
+            build_projection: join.build_projections.clone(),
+            probe_projections: join.probe_projections.clone(),
+            build_schema: join.build.output_schema()?,
         })
     }
 

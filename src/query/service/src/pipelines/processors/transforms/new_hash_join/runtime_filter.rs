@@ -26,16 +26,25 @@ use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 use crate::sessions::QueryContext;
 
-pub struct PlanRuntimeFilterDesc {
+pub struct RuntimeFiltersDesc {
     ctx: Arc<QueryContext>,
 
+    pub bloom_threshold: usize,
+    pub inlist_threshold: usize,
+    pub min_max_threshold: usize,
+
     broadcast_id: Option<u32>,
-    filters_desc: Vec<RuntimeFilterDesc>,
+    pub filters_desc: Vec<RuntimeFilterDesc>,
     runtime_filters_ready: Vec<Arc<RuntimeFilterReady>>,
 }
 
-impl PlanRuntimeFilterDesc {
-    pub fn create(ctx: &Arc<QueryContext>, join: &HashJoin) -> Arc<PlanRuntimeFilterDesc> {
+impl RuntimeFiltersDesc {
+    pub fn create(ctx: &Arc<QueryContext>, join: &HashJoin) -> Result<Arc<RuntimeFiltersDesc>> {
+        let settings = ctx.get_settings();
+        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
+        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
+        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
+
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
         let mut runtime_filters_ready = Vec::with_capacity(join.runtime_filter.filters.len());
 
@@ -51,12 +60,15 @@ impl PlanRuntimeFilterDesc {
             filters_desc.push(filter_desc);
         }
 
-        Arc::new(PlanRuntimeFilterDesc {
+        Ok(Arc::new(RuntimeFiltersDesc {
             filters_desc,
+            bloom_threshold,
+            inlist_threshold,
+            min_max_threshold,
             runtime_filters_ready,
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
-        })
+        }))
     }
 
     pub async fn globalization(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {

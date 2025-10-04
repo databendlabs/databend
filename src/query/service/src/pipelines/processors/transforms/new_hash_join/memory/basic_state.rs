@@ -22,7 +22,7 @@ use databend_common_expression::DataBlock;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 
-pub struct HashJoinMemoryState {
+pub struct BasicHashJoinState {
     pub mutex: Mutex<()>,
     pub build_rows: CStyleCell<usize>,
     pub chunks: CStyleCell<Vec<DataBlock>>,
@@ -34,9 +34,9 @@ pub struct HashJoinMemoryState {
     pub hash_table: CStyleCell<HashJoinHashTable>,
 }
 
-impl HashJoinMemoryState {
+impl BasicHashJoinState {
     pub fn create() -> Self {
-        HashJoinMemoryState {
+        BasicHashJoinState {
             mutex: Mutex::new(()),
             build_rows: CStyleCell::new(0),
             chunks: CStyleCell::new(Vec::new()),

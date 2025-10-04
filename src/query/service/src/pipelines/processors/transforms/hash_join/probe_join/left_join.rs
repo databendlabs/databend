@@ -14,6 +14,7 @@
 
 use std::sync::atomic::Ordering;
 
+use databend_common_base::hints::assume;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -61,11 +62,9 @@ impl HashJoinProbeState {
 
         // Results.
         let mut matched_idx = 0;
-        let mut unmatched_idx = 0;
         let mut result_blocks = vec![];
 
         if probe_state.probe_with_selection {
-            unmatched_idx = probe_state.probe_unmatched_indexes_count;
             let selection = probe_state.selection.as_slice();
             for selection_idx in process_state.next_idx..probe_state.selection_count {
                 let key_idx = unsafe { *selection.get_unchecked(selection_idx) };
@@ -88,8 +87,8 @@ impl HashJoinProbeState {
                         matched_idx += 1;
                     }
                 } else {
-                    unsafe { *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = key_idx };
-                    unmatched_idx += 1;
+                    assume(probe_unmatched_indexes.len() < probe_unmatched_indexes.capacity());
+                    probe_unmatched_indexes.push(key_idx);
                 }
 
                 if matched_idx == max_block_size {
@@ -107,6 +106,7 @@ impl HashJoinProbeState {
                 }
             }
         } else {
+            probe_unmatched_indexes.clear();
             // Probe hash table and generate data blocks.
             for key_idx in process_state.next_idx..process_state.input.num_rows() {
                 let key = unsafe { keys.key_unchecked(key_idx) };
@@ -128,10 +128,8 @@ impl HashJoinProbeState {
                         matched_idx += 1;
                     }
                 } else {
-                    unsafe {
-                        *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = key_idx as u32
-                    };
-                    unmatched_idx += 1;
+                    assume(probe_unmatched_indexes.len() < probe_unmatched_indexes.capacity());
+                    probe_unmatched_indexes.push(key_idx as u32);
                 }
 
                 if matched_idx == max_block_size {
@@ -166,14 +164,16 @@ impl HashJoinProbeState {
             )?;
         }
 
-        if unmatched_idx > 0 {
+        if !probe_unmatched_indexes.is_empty() {
             result_blocks.push(self.process_left_or_full_join_null_block(
-                unmatched_idx,
+                probe_unmatched_indexes.len(),
                 &process_state.input,
                 probe_unmatched_indexes,
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
             )?);
+
+            probe_unmatched_indexes.clear();
         }
 
         if !next_process_state {

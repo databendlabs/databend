@@ -27,7 +27,7 @@ use databend_common_settings::Settings;
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::physical_plans::PhysicalPlan;
-use crate::pipelines::processors::transforms::HashJoinMemoryState;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
@@ -38,7 +38,7 @@ use crate::sessions::QueryContext;
 #[derive(Clone)]
 pub enum HashJoinStateRef {
     OldHashJoinState(Arc<HashJoinState>),
-    NewHashJoinState(Arc<HashJoinMemoryState>),
+    NewHashJoinState(Arc<BasicHashJoinState>),
 }
 
 pub struct PipelineBuilder {

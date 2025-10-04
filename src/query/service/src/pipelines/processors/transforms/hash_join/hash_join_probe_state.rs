@@ -335,6 +335,7 @@ impl HashJoinProbeState {
                     probe_state.with_conjunction,
                 ) {
                     if prefer_early_filtering {
+                        probe_state.selection.clear();
                         // Early filtering, use selection to get better performance.
                         table.hash_table.early_filtering_matched_probe(
                             &mut probe_state.hashes,
@@ -350,6 +351,8 @@ impl HashJoinProbeState {
                         // Early filtering, use matched selection and unmatched selection to get better performance.
                         let unmatched_selection =
                             probe_state.probe_unmatched_indexes.as_mut().unwrap();
+                        probe_state.selection.clear();
+                        unmatched_selection.clear();
                         let (matched_count, unmatched_count) =
                             table.hash_table.early_filtering_probe(
                                 &mut probe_state.hashes,
