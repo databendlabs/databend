@@ -271,7 +271,7 @@ impl HashJoinSpiller {
                     .add_data_block(partition_id, data_block);
                 if let Some(data_blocks) = self
                     .partition_buffer
-                    .fetch_data_blocks(partition_id, &fetch_option)?
+                    .fetch_data_blocks(partition_id, &fetch_option)
                 {
                     self.spiller
                         .spill_with_partition(partition_id, data_blocks)
@@ -335,8 +335,9 @@ impl HashJoinSpiller {
             PartitionBufferFetchOption::ReadPartition
         };
 
-        self.partition_buffer
-            .fetch_data_blocks(partition_id, &option)
+        Ok(self
+            .partition_buffer
+            .fetch_data_blocks(partition_id, &option))
     }
 
     fn partition_data_block(

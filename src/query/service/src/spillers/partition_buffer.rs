@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 pub enum PartitionBufferFetchOption {
@@ -52,8 +51,8 @@ impl PartitionBuffer {
         &mut self,
         partition_id: usize,
         option: &PartitionBufferFetchOption,
-    ) -> Result<Option<Vec<DataBlock>>> {
-        let data_blocks = match option {
+    ) -> Option<Vec<DataBlock>> {
+        match option {
             PartitionBufferFetchOption::ReadPartition => {
                 if !self.partition_data[partition_id].is_empty() {
                     Some(self.partition_data[partition_id].clone())
@@ -71,8 +70,7 @@ impl PartitionBuffer {
                     None
                 }
             }
-        };
-        Ok(data_blocks)
+        }
     }
 
     pub fn memory_size(&self) -> usize {

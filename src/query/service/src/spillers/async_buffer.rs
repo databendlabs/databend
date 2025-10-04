@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::io;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -119,6 +120,7 @@ impl BufferPool {
             available_write_buffers_tx: buffers_tx,
         })
     }
+
     pub fn try_alloc_buffer(&self) -> Option<BytesMut> {
         self.available_write_buffers.try_recv().ok()
     }
@@ -264,8 +266,8 @@ impl BufferWriter {
     }
 }
 
-impl std::io::Write for BufferWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+impl io::Write for BufferWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
         }
@@ -315,7 +317,7 @@ impl std::io::Write for BufferWriter {
         Ok(written)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> io::Result<()> {
         if matches!(&self.current_bytes, Some(current_bytes) if !current_bytes.is_empty()) {
             if let Some(current_bytes) = self.current_bytes.take() {
                 self.pending_buffers.push_back(current_bytes.freeze());

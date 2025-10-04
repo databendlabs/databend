@@ -24,21 +24,29 @@ use std::time::Instant;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::async_buffer::BufferPool;
+use super::block_reader::BlocksReader;
+use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::serialize::*;
+use super::union_file::*;
 use super::Location;
 use crate::sessions::QueryContext;
-use crate::spillers::block_reader::BlocksReader;
-use crate::spillers::block_writer::BlocksWriter;
 
+#[derive(Clone)]
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
@@ -95,8 +103,8 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
+    pub async fn read_spilled_partition(&mut self, partition_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(partition_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
             for (loc, _data_size, _blocks_num) in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;
@@ -342,6 +350,31 @@ impl Spiller {
             .cloned()
             .collect()
     }
+
+    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
+        if !self.use_parquet {
+            return Err(ErrorCode::Internal(
+                "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
+                    .to_string(),
+            ));
+        }
+
+        let runtime = GlobalIORuntime::instance();
+        let buffer_pool = BufferPool::create(
+            runtime,
+            WINDOW_SPILL_BUFFER_MEMORY_BYTES,
+            WINDOW_SPILL_BUFFER_WORKERS,
+        );
+
+        Ok(SpillWriter {
+            spiller: self.clone(),
+            buffer_pool,
+            dio: self.temp_dir.is_some(),
+            chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+            schema,
+            file_writer: None,
+        })
+    }
 }
 
 pub struct MergedPartition {
@@ -352,6 +385,124 @@ pub struct MergedPartition {
 pub struct Chunk {
     pub range: Range<usize>,
     pub layout: Layout,
+}
+
+const WINDOW_SPILL_BUFFER_MEMORY_BYTES: usize = 64 * 1024 * 1024;
+const WINDOW_SPILL_BUFFER_WORKERS: usize = 2;
+const WINDOW_SPILL_CHUNK_SIZE: usize = 8 * 1024 * 1024;
+
+pub struct SpillWriter {
+    spiller: Spiller,
+    buffer_pool: Arc<BufferPool>,
+    dio: bool,
+    chunk_size: usize,
+    schema: Arc<DataSchema>,
+    file_writer: Option<FileWriter<UnionFileWriter>>,
+}
+
+impl SpillWriter {
+    pub async fn open(&mut self) -> Result<()> {
+        if self.file_writer.is_some() {
+            return Err(ErrorCode::Internal("SpillWriter already opened"));
+        }
+
+        let writer = self
+            .spiller
+            .new_file_writer(&self.schema, &self.buffer_pool, self.dio, self.chunk_size)
+            .await?;
+        self.file_writer = Some(writer);
+        Ok(())
+    }
+
+    pub fn is_opened(&self) -> bool {
+        self.file_writer.is_some()
+    }
+
+    pub fn add_row_group(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
+        };
+
+        let row_group_meta = file_writer.spill(blocks)?;
+        let ordinal = row_group_meta.ordinal().unwrap();
+        Ok(ordinal as _)
+    }
+
+    pub fn new_row_group_encoder(&self) -> Option<RowGroupEncoder> {
+        self.file_writer.as_ref().map(|w| w.new_row_group())
+    }
+
+    pub fn add_row_group_encoded(
+        &mut self,
+        row_group: RowGroupEncoder,
+    ) -> Result<RowGroupMetaDataPtr> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
+        };
+        Ok(file_writer.flush_row_group(row_group)?)
+    }
+
+    pub fn close(self) -> Result<SpillReader> {
+        let Some(file_writer) = self.file_writer else {
+            return Err(ErrorCode::Internal(
+                "attempted to close window spill writer without data".to_string(),
+            ));
+        };
+
+        let (metadata, union_file) = file_writer.finish()?;
+        let remote_path = union_file.remote_path().to_string();
+        let parquet_metadata = Arc::new(metadata);
+
+        let total_size = parquet_metadata
+            .row_groups()
+            .iter()
+            .map(|rg| rg.compressed_size().max(0) as usize)
+            .sum();
+
+        self.spiller.adapter.add_spill_file(
+            Location::Remote(remote_path),
+            Layout::Parquet,
+            total_size,
+        );
+
+        Ok(SpillReader {
+            spiller: self.spiller,
+            schema: self.schema,
+            parquet_metadata,
+            union_file: Some(union_file),
+            dio: self.dio,
+        })
+    }
+}
+
+pub struct SpillReader {
+    spiller: Spiller,
+    schema: Arc<DataSchema>,
+    parquet_metadata: Arc<ParquetMetaData>,
+    union_file: Option<UnionFile>,
+    dio: bool,
+}
+
+impl SpillReader {
+    pub async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
+        if ordinals.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let union_file = self.union_file.take().ok_or_else(|| {
+            ErrorCode::Internal("window spill reader already consumed".to_string())
+        })?;
+
+        self.spiller
+            .load_row_groups(
+                union_file,
+                self.parquet_metadata.clone(),
+                &self.schema,
+                ordinals,
+                self.dio,
+            )
+            .await
+    }
 }
 
 impl SpillAdapter for Arc<QueryContext> {

@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 
+use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
@@ -40,21 +41,89 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
+enum WindowBuffer {
+    V1(WindowPartitionBuffer),
+    V2(WindowPartitionBufferV2),
+}
+
+impl WindowBuffer {
+    fn new(
+        is_v2: bool,
+        spiller: Spiller,
+        num_partitions: usize,
+        sort_block_size: usize,
+        memory_settings: MemorySettings,
+    ) -> Result<Self> {
+        if is_v2 {
+            let inner = WindowPartitionBufferV2::new(
+                spiller,
+                num_partitions,
+                sort_block_size,
+                memory_settings,
+            )?;
+            Ok(Self::V2(inner))
+        } else {
+            let inner = WindowPartitionBuffer::new(
+                spiller,
+                num_partitions,
+                sort_block_size,
+                memory_settings,
+            )?;
+            Ok(Self::V1(inner))
+        }
+    }
+
+    fn need_spill(&mut self) -> bool {
+        match self {
+            WindowBuffer::V1(inner) => inner.need_spill(),
+            WindowBuffer::V2(inner) => inner.need_spill(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            WindowBuffer::V1(inner) => inner.is_empty(),
+            WindowBuffer::V2(inner) => inner.is_empty(),
+        }
+    }
+
+    fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
+        match self {
+            WindowBuffer::V1(inner) => inner.add_data_block(partition_id, data_block),
+            WindowBuffer::V2(inner) => inner.add_data_block(partition_id, data_block),
+        }
+    }
+
+    async fn spill(&mut self) -> Result<()> {
+        match self {
+            WindowBuffer::V1(inner) => inner.spill().await,
+            WindowBuffer::V2(inner) => inner.spill().await,
+        }
+    }
+
+    async fn restore(&mut self) -> Result<Vec<DataBlock>> {
+        match self {
+            WindowBuffer::V1(inner) => inner.restore().await,
+            WindowBuffer::V2(inner) => inner.restore().await,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum Step {
+enum Step {
     Sync(SyncStep),
     Async(AsyncStep),
     Finish,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SyncStep {
+enum SyncStep {
     Collect,
     Process,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AsyncStep {
+enum AsyncStep {
     Spill,
     Restore,
 }
@@ -69,7 +138,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     // The partition id is used to map the partition id to the new partition id.
     partition_id: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
-    buffer: WindowPartitionBuffer,
+    buffer: WindowBuffer,
 
     strategy: S,
 
@@ -116,7 +185,8 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer = WindowPartitionBuffer::new(
+        let buffer = WindowBuffer::new(
+            true,
             spiller,
             partitions.len(),
             sort_block_size,
@@ -275,7 +345,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
     fn collect_data_block(
         data_block: DataBlock,
         partition_ids: &[usize],
-        buffer: &mut WindowPartitionBuffer,
+        buffer: &mut WindowBuffer,
     ) {
         if let Some(meta) = data_block
             .get_owned_meta()
