@@ -675,7 +675,7 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_db_id_or_err(
+    async fn get_database_id_or_err(
         &self,
         name_key: &DatabaseNameIdent,
         msg: impl Display + std::fmt::Debug + Send,

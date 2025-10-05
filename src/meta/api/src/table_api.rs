@@ -216,7 +216,7 @@ where
 
         // fixed: does not change in every loop.
         let seq_db_id = self
-            .get_db_id_or_err(&tenant_dbname, "create_table")
+            .get_database_id_or_err(&tenant_dbname, "create_table")
             .await?
             .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
 
