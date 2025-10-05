@@ -296,6 +296,7 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
     use databend_common_pipeline_core::processors::connect;
+    use databend_common_pipeline_core::processors::BlockLimit;
     use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
 
     use super::*;
@@ -315,7 +316,7 @@ mod tests {
         let output = OutputPort::create();
         let input = InputPort::create();
         unsafe {
-            connect(&input, &output);
+            connect(&input, &output, Arc::new(BlockLimit::default()));
         }
 
         let stream = BoundedInputStream {

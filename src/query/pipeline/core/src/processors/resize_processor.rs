@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use log::info;
 
 use crate::pipe::PipeItem;
 use crate::processors::Event;
@@ -110,6 +111,10 @@ impl Processor for ResizeProcessor {
                 }
             }
         }
+        info!(
+            "[resize] event_with_cause: {:?}, input port {:?} output port {:?}",
+            &cause, &self.waiting_inputs, &self.waiting_outputs
+        );
 
         while !self.waiting_outputs.is_empty() && !self.waiting_inputs.is_empty() {
             let output_index = self.waiting_outputs.pop_front().ok_or_else(|| {
@@ -170,6 +175,10 @@ impl Processor for ResizeProcessor {
 
             return Ok(Event::Finished);
         }
+        info!(
+            "[resize] event_with_cause: {:?}, input port {:?} output port {:?}",
+            &cause, &self.waiting_inputs, &self.waiting_outputs
+        );
 
         match self.waiting_outputs.is_empty() {
             true => Ok(Event::NeedConsume),

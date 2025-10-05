@@ -39,6 +39,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_pipeline_core::processors::BlockLimit;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
@@ -46,7 +47,7 @@ use databend_common_pipeline_core::PlanProfile;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
-use log::trace;
+use log::info;
 use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -192,19 +193,24 @@ type StateLockGuard = ExecutingGraph;
 impl ExecutingGraph {
     pub fn create(
         mut pipeline: Pipeline,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        block_limit: Arc<BlockLimit>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
-        Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
+        Self::init_graph(
+            &mut pipeline,
+            &mut graph,
+            &mut time_series_profile_builder,
+            block_limit,
+        );
         let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
-            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | 1u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
@@ -217,21 +223,26 @@ impl ExecutingGraph {
 
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        block_limit: Arc<BlockLimit>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
+            Self::init_graph(
+                pipeline,
+                &mut graph,
+                &mut time_series_profile_builder,
+                block_limit.clone(),
+            );
         }
         let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
-            points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
+            points: AtomicU64::new((DEFAULT_POINTS << 32) | 1u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
             should_finish: AtomicBool::new(false),
@@ -246,6 +257,7 @@ impl ExecutingGraph {
         pipeline: &mut Pipeline,
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
+        block_limit: Arc<BlockLimit>,
     ) {
         let offset = graph.node_count();
         for node in pipeline.graph.node_weights() {
@@ -286,7 +298,6 @@ impl ExecutingGraph {
                 mut_node.tracking_payload.time_series_profile = Some(query_time_series.clone());
             }
         }
-
         for edge in pipeline.graph.edge_indices() {
             let index = EdgeIndex::new(edge.index());
             if let Some((source, target)) = pipeline.graph.edge_endpoints(index) {
@@ -326,6 +337,7 @@ impl ExecutingGraph {
                     connect(
                         &graph[target_node].inputs_port[target_port],
                         &graph[source_node].outputs_port[source_port],
+                        block_limit.clone(),
                     );
                 }
             }
@@ -357,6 +369,9 @@ impl ExecutingGraph {
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
+        // info!("[schedule] ------------new--------------");
+        let _node = &locker.graph[index];
+        // info!("[schedule] Node {:?} trigger schedule", node);
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
@@ -369,6 +384,7 @@ impl ExecutingGraph {
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
+                // info!("Schedule edge: {:?}", edge);
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
                 event_cause = match edge {
@@ -384,6 +400,7 @@ impl ExecutingGraph {
                 let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
 
                 if matches!(*node_state, State::Idle) {
+                    // info!("[schedule] add new Node: {:?}", node);
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
                 } else {
@@ -393,6 +410,7 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
+                // info!("[schedule] Schedule node: {:?}", node);
                 let (event, process_rows) = {
                     let mut payload = node.tracking_payload.clone();
                     payload.process_rows = AtomicUsize::new(0);
@@ -412,7 +430,7 @@ impl ExecutingGraph {
                     }
                 }?;
 
-                trace!(
+                info!(
                     "node id: {:?}, name: {:?}, event: {:?}",
                     node.processor.id(),
                     node.processor.name(),
@@ -445,8 +463,31 @@ impl ExecutingGraph {
                     }
                 };
 
-                node.trigger(&mut need_schedule_edges);
+                let mut new_need_schedule_edges = VecDeque::new();
+                node.trigger(&mut new_need_schedule_edges);
+                while let Some(edge) = new_need_schedule_edges.pop_back() {
+                    if let DirectedEdge::Target(index) = edge {
+                        let port_index = locker.graph.edge_weight(index).unwrap().input_index;
+                        let port = node.inputs_port[port_index].as_ref();
+                        if port.slice_occurred() {
+                            port.reset_slice_occurred();
+                            // info!(
+                            //     "[schedule!!] detect slice occurred on edge: {:?}",
+                            //     DirectedEdge::Source(index)
+                            // );
+                            need_schedule_edges.push_front(DirectedEdge::Source(index));
+                        }
+                    }
+                    need_schedule_edges.push_front(edge);
+                }
+
                 *state_guard_cache.unwrap() = processor_state;
+
+                // info!(
+                //     "[schedule] node {} trigger edge: {:?}",
+                //     node.processor.name(),
+                //     need_schedule_edges
+                // );
             }
         }
 
@@ -690,24 +731,28 @@ pub struct RunningGraph(ExecutingGraph);
 impl RunningGraph {
     pub fn create(
         pipeline: Pipeline,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        block_limit: Arc<BlockLimit>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state =
-            ExecutingGraph::create(pipeline, init_epoch, query_id, finish_condvar_notify)?;
+            ExecutingGraph::create(pipeline, query_id, finish_condvar_notify, block_limit)?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }
 
     pub fn from_pipelines(
         pipelines: Vec<Pipeline>,
-        init_epoch: u32,
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
+        block_limit: Arc<BlockLimit>,
     ) -> Result<Arc<RunningGraph>> {
-        let graph_state =
-            ExecutingGraph::from_pipelines(pipelines, init_epoch, query_id, finish_condvar_notify)?;
+        let graph_state = ExecutingGraph::from_pipelines(
+            pipelines,
+            query_id,
+            finish_condvar_notify,
+            block_limit,
+        )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
     }

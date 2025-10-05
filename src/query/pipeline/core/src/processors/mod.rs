@@ -15,6 +15,7 @@
 mod port;
 mod processor;
 
+mod block_limit;
 mod duplicate_processor;
 mod port_trigger;
 mod profile;
@@ -22,6 +23,7 @@ mod resize_processor;
 mod sequence_group;
 mod shuffle_processor;
 
+pub use block_limit::BlockLimit;
 pub use duplicate_processor::DuplicateProcessor;
 pub use port::connect;
 pub use port::InputPort;

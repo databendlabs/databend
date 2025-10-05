@@ -1496,6 +1496,7 @@ mod tests {
     use databend_common_expression::Scalar;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
+    use databend_common_pipeline_core::processors::BlockLimit;
     use databend_common_pipeline_core::processors::Event;
     use databend_common_pipeline_core::processors::InputPort;
     use databend_common_pipeline_core::processors::OutputPort;
@@ -2441,8 +2442,8 @@ mod tests {
             )?;
 
             unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
+                connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
+                connect(&downstream_input, &output, Arc::new(BlockLimit::default()));
             }
 
             downstream_input.set_need_data();
@@ -2516,8 +2517,8 @@ mod tests {
             )?;
 
             unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
+                connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
+                connect(&downstream_input, &output, Arc::new(BlockLimit::default()));
             }
 
             downstream_input.set_need_data();
@@ -2613,8 +2614,8 @@ mod tests {
             )?;
 
             unsafe {
-                connect(&input, &upstream_output);
-                connect(&downstream_input, &output);
+                connect(&input, &upstream_output, Arc::new(BlockLimit::default()));
+                connect(&downstream_input, &output, Arc::new(BlockLimit::default()));
             }
 
             downstream_input.set_need_data();

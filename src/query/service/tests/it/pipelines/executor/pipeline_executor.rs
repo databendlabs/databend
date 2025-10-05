@@ -47,6 +47,7 @@ async fn test_always_call_on_finished() -> Result<()> {
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        block_limit: Arc::new(Default::default()),
     };
 
     {

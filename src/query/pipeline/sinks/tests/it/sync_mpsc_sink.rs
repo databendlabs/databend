@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::connect;
+use databend_common_pipeline_core::processors::BlockLimit;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -71,8 +72,8 @@ async fn test_sync_mpsc_sink() -> Result<()> {
     let upstream_output2 = OutputPort::create();
 
     unsafe {
-        connect(&input1, &upstream_output1);
-        connect(&input2, &upstream_output2);
+        connect(&input1, &upstream_output1, Arc::new(BlockLimit::default()));
+        connect(&input2, &upstream_output2, Arc::new(BlockLimit::default()));
     }
 
     upstream_output1.push_data(Ok(DataBlock::new(vec![], 1)));

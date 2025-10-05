@@ -245,4 +245,8 @@ pub struct SortTaskMeta {
 }
 
 #[typetag::serde(name = "sort_task")]
-impl BlockMetaInfo for SortTaskMeta {}
+impl BlockMetaInfo for SortTaskMeta {
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(*self)
+    }
+}
