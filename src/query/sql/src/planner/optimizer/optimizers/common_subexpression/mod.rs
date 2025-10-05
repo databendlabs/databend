@@ -12,17 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cascades;
-mod common_subexpression;
-pub mod cte_filter_pushdown;
-pub mod distributed;
-mod hyper_dp;
-pub mod operator;
-pub mod recursive;
-pub mod rule;
+mod analyze;
+mod optimizer;
+mod rewrite;
+mod table_signature;
 
-pub use cascades::CascadesOptimizer;
-pub use common_subexpression::CommonSubexpressionOptimizer;
-pub use cte_filter_pushdown::CTEFilterPushdownOptimizer;
-pub use hyper_dp::DPhpyOptimizer;
-pub use operator::CleanupUnusedCTEOptimizer;
+pub use optimizer::CommonSubexpressionOptimizer;
