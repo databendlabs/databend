@@ -312,9 +312,9 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
             probe_data_block,
             probe_keys_stream,
             filter_executor,
+            unmatched_rows,
             conjunct_unmatched: pending_unmatched,
             conjunct_unmatched_num_rows: num_rows,
-            unmatched_rows: unmatched_rows,
         })
     }
 }
