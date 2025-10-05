@@ -25,7 +25,6 @@ use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -64,7 +63,6 @@ use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
 use crate::dictionary_api::DictionaryApi;
 use crate::error_util::db_id_has_to_exist;
-use crate::error_util::unknown_database_error;
 use crate::garbage_collection_api::GarbageCollectionApi;
 use crate::get_u64_value;
 use crate::index_api::IndexApi;
@@ -283,21 +281,6 @@ pub async fn construct_drop_table_txn_operations(
     }
 
     Ok((tb_id_seq, table_id))
-}
-
-/// Get db id and its seq by name, returns (db_id_seq, db_id)
-///
-/// If the db does not exist, returns AppError::UnknownDatabase
-pub(crate) async fn get_db_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &DatabaseNameIdent,
-    msg: impl Display,
-) -> Result<SeqV<DatabaseId>, KVAppError> {
-    let seq_db_id = kv_api.get_pb(name_key).await?;
-
-    let seq_db_id = seq_db_id.ok_or_else(|| unknown_database_error(name_key, msg))?;
-
-    Ok(seq_db_id.map(|x| x.into_inner()))
 }
 
 /// Returns (db_meta_seq, db_meta)
