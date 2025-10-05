@@ -681,14 +681,12 @@ where
         msg: impl Display + std::fmt::Debug + Send,
     ) -> Result<Result<SeqV<DatabaseId>, UnknownDatabase>, MetaError> {
         let seq_db_id = self.get_pb(name_key).await?;
-        let result = seq_db_id
-            .map(|s| s.map(|x| x.into_inner()))
-            .ok_or_else(|| {
-                UnknownDatabase::new(
-                    name_key.database_name(),
-                    format!("{}: {}", msg, name_key.display()),
-                )
-            });
+        let result = seq_db_id.map(|s| s.map(|x| x.into_inner())).ok_or_else(|| {
+            UnknownDatabase::new(
+                name_key.database_name(),
+                format!("{}: {}", msg, name_key.display()),
+            )
+        });
         Ok(result)
     }
 }
