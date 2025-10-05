@@ -302,6 +302,7 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
             false => Vec::with_capacity(num_rows),
         };
 
+        probed_rows.unmatched.reserve(num_rows);
         Box::new(OuterLeftHashJoinStream::<'a, CONJUNCT> {
             desc,
             join_state,

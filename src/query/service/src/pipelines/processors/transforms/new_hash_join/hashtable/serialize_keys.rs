@@ -243,6 +243,8 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
 
             let key = unsafe { self.keys.key_unchecked(self.key_idx) };
 
+            let origin = res.matched_probe.len();
+
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
                 // Compare `early` and the length of the string, the size of `early` is 4.
@@ -275,6 +277,10 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                 }
 
                 self.probe_entry_ptr = raw_entry.next;
+            }
+
+            if origin == res.matched_probe.len() {
+                res.unmatched.push(self.key_idx as u64);
             }
 
             self.key_idx += 1;
@@ -346,6 +352,8 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
 
             let key = unsafe { self.keys.key_unchecked(key_idx) };
 
+            let origin = res.matched_probe.len();
+
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
                 // Compare `early` and the length of the string, the size of `early` is 4.
@@ -378,6 +386,10 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                 }
 
                 self.probe_entry_ptr = raw_entry.next;
+            }
+
+            if origin == res.matched_probe.len() {
+                res.unmatched.push(key_idx as u64);
             }
 
             self.idx += 1;

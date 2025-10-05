@@ -219,6 +219,7 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
 
             let key = unsafe { self.keys.key_unchecked(self.key_idx) };
 
+            let origin_len = res.matched_probe.len();
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
 
@@ -239,6 +240,10 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                 }
 
                 self.probe_entry_ptr = raw_entry.next;
+            }
+
+            if origin_len == res.matched_probe.len() {
+                res.unmatched.push(self.key_idx as u64);
             }
 
             self.key_idx += 1;
@@ -310,6 +315,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
 
             let key = unsafe { self.keys.key_unchecked(key_idx) };
 
+            let origin_len = res.matched_probe.len();
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
 
@@ -330,6 +336,10 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                 }
 
                 self.probe_entry_ptr = raw_entry.next;
+            }
+
+            if origin_len == res.matched_probe.len() {
+                res.unmatched.push(key_idx as u64);
             }
 
             self.idx += 1;
