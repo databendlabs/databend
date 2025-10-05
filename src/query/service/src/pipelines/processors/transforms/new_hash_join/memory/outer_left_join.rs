@@ -169,8 +169,9 @@ struct OuterLeftHashJoinStream<'a, const CONJUNCT: bool> {
     join_state: Arc<BasicHashJoinState>,
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
-    pending_unmatched: Vec<u8>,
-    pending_unmatched_num_rows: usize,
+    conjunct_unmatched: Vec<u8>,
+    conjunct_unmatched_num_rows: usize,
+    unmatched_rows: Vec<u64>,
     filter_executor: Option<&'a mut FilterExecutor>,
 }
 
@@ -184,19 +185,25 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
 
+            if !CONJUNCT && !self.probed_rows.unmatched.is_empty() {
+                self.unmatched_rows
+                    .extend_from_slice(&self.probed_rows.unmatched);
+            }
+
             if self.probed_rows.is_empty() {
-                if self.pending_unmatched.is_empty() {
+                if self.conjunct_unmatched.is_empty() && self.unmatched_rows.is_empty() {
                     return Ok(None);
                 }
 
-                let unmatched = std::mem::take(&mut self.pending_unmatched);
-
-                let unmatched_row_id = unmatched
-                    .into_iter()
-                    .enumerate()
-                    .filter(|(_, matched)| *matched == 0)
-                    .map(|(row_id, _)| row_id as u64)
-                    .collect::<Vec<_>>();
+                let unmatched_row_id = match CONJUNCT {
+                    true => std::mem::take(&mut self.conjunct_unmatched)
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(_, matched)| *matched == 0)
+                        .map(|(row_id, _)| row_id as u64)
+                        .collect::<Vec<_>>(),
+                    false => std::mem::take(&mut self.unmatched_rows),
+                };
 
                 let probe_block = match self.probe_data_block.num_columns() {
                     0 => None,
@@ -265,8 +272,8 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
                 for idx in true_sel.iter().take(result_count) {
                     let row_id = self.probed_rows.matched_probe[*idx as usize] as usize;
-                    self.pending_unmatched[row_id] = 1;
-                    self.pending_unmatched_num_rows -= 1;
+                    self.conjunct_unmatched[row_id] = 1;
+                    self.conjunct_unmatched_num_rows -= 1;
                 }
 
                 let origin_rows = result_block.num_rows();
@@ -293,6 +300,11 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
             false => Vec::new(),
         };
 
+        let unmatched_rows = match CONJUNCT {
+            true => Vec::new(),
+            false => Vec::with_capacity(num_rows),
+        };
+
         Box::new(OuterLeftHashJoinStream::<'a, CONJUNCT> {
             desc,
             join_state,
@@ -300,8 +312,9 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
             probe_data_block,
             probe_keys_stream,
             filter_executor,
-            pending_unmatched,
-            pending_unmatched_num_rows: num_rows,
+            conjunct_unmatched: pending_unmatched,
+            conjunct_unmatched_num_rows: num_rows,
+            unmatched_rows: unmatched_rows,
         })
     }
 }
