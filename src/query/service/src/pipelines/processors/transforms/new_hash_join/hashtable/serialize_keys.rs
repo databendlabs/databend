@@ -199,6 +199,7 @@ pub struct BinaryKeyProbeStream<const MATCHED: bool> {
     pointers: Vec<u64>,
     keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
     probe_entry_ptr: u64,
+    matched_num_rows: usize,
 }
 
 impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
@@ -211,6 +212,7 @@ impl<const MATCHED: bool> BinaryKeyProbeStream<MATCHED> {
             pointers,
             key_idx: 0,
             probe_entry_ptr: 0,
+            matched_num_rows: 0,
         })
     }
 }
@@ -237,13 +239,12 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                     }
 
                     self.key_idx += 1;
+                    self.matched_num_rows = 0;
                     continue;
                 }
             }
 
             let key = unsafe { self.keys.key_unchecked(self.key_idx) };
-
-            let origin = res.matched_probe.len();
 
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
@@ -268,6 +269,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
 
                                 if self.probe_entry_ptr == 0 {
                                     self.key_idx += 1;
+                                    self.matched_num_rows = 0;
                                 }
 
                                 return Ok(());
@@ -279,11 +281,12 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                 self.probe_entry_ptr = raw_entry.next;
             }
 
-            if origin == res.matched_probe.len() {
+            if !MATCHED && self.matched_num_rows == 0 {
                 res.unmatched.push(self.key_idx as u64);
             }
 
             self.key_idx += 1;
+            self.matched_num_rows = 0;
         }
 
         Ok(())
@@ -297,6 +300,7 @@ pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
     probe_entry_ptr: u64,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
+    matched_num_rows: usize,
 }
 
 impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
@@ -313,6 +317,7 @@ impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
             unmatched_selection,
             idx: 0,
             probe_entry_ptr: 0,
+            matched_num_rows: 0,
         })
     }
 }
@@ -346,13 +351,12 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                     }
 
                     self.idx += 1;
+                    self.matched_num_rows = 0;
                     continue;
                 }
             }
 
             let key = unsafe { self.keys.key_unchecked(key_idx) };
-
-            let origin = res.matched_probe.len();
 
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut StringRawEntry) };
@@ -377,6 +381,7 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
 
                                 if self.probe_entry_ptr == 0 {
                                     self.idx += 1;
+                                    self.matched_num_rows = 0;
                                 }
 
                                 return Ok(());
@@ -388,11 +393,12 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                 self.probe_entry_ptr = raw_entry.next;
             }
 
-            if origin == res.matched_probe.len() {
+            if !MATCHED && self.matched_num_rows == 0 {
                 res.unmatched.push(key_idx as u64);
             }
 
             self.idx += 1;
+            self.matched_num_rows = 0;
         }
 
         Ok(())

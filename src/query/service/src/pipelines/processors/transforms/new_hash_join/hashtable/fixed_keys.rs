@@ -174,6 +174,7 @@ struct FixedKeyProbeStream<Key: FixedKey + HashtableKeyable, const MATCHED: bool
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
     keys: Box<(dyn KeyAccessor<Key = Key>)>,
+    matched_num_rows: usize,
 }
 
 impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> FixedKeyProbeStream<Key, MATCHED> {
@@ -186,6 +187,7 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> FixedKeyProbeStream<
             pointers,
             key_idx: 0,
             probe_entry_ptr: 0,
+            matched_num_rows: 0,
         })
     }
 }
@@ -213,13 +215,13 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                     }
 
                     self.key_idx += 1;
+                    self.matched_num_rows = 0;
                     continue;
                 }
             }
 
             let key = unsafe { self.keys.key_unchecked(self.key_idx) };
 
-            let origin_len = res.matched_probe.len();
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
 
@@ -227,12 +229,14 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                     let row_ptr = raw_entry.row_ptr;
                     res.matched_probe.push(self.key_idx as u64);
                     res.matched_build.push(row_ptr);
+                    self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
                         self.probe_entry_ptr = raw_entry.next;
 
                         if self.probe_entry_ptr == 0 {
                             self.key_idx += 1;
+                            self.matched_num_rows = 0;
                         }
 
                         return Ok(());
@@ -242,11 +246,12 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                 self.probe_entry_ptr = raw_entry.next;
             }
 
-            if origin_len == res.matched_probe.len() {
+            if !MATCHED && self.matched_num_rows == 0 {
                 res.unmatched.push(self.key_idx as u64);
             }
 
             self.key_idx += 1;
+            self.matched_num_rows = 0;
         }
 
         Ok(())
@@ -260,6 +265,7 @@ struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MAT
     keys: Box<(dyn KeyAccessor<Key = Key>)>,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
+    matched_num_rows: usize,
 }
 
 impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
@@ -278,6 +284,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
             unmatched_selection,
             idx: 0,
             probe_entry_ptr: 0,
+            matched_num_rows: 0,
         })
     }
 }
@@ -309,13 +316,13 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
 
                 if self.probe_entry_ptr == 0 {
                     self.idx += 1;
+                    self.matched_num_rows = 0;
                     continue;
                 }
             }
 
             let key = unsafe { self.keys.key_unchecked(key_idx) };
 
-            let origin_len = res.matched_probe.len();
             while self.probe_entry_ptr != 0 {
                 let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
 
@@ -323,12 +330,14 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                     let row_ptr = raw_entry.row_ptr;
                     res.matched_probe.push(key_idx as u64);
                     res.matched_build.push(row_ptr);
+                    self.matched_num_rows += 1;
 
                     if res.matched_probe.len() == max_rows {
                         self.probe_entry_ptr = raw_entry.next;
 
                         if self.probe_entry_ptr == 0 {
                             self.idx += 1;
+                            self.matched_num_rows = 0;
                         }
 
                         return Ok(());
@@ -338,11 +347,12 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
                 self.probe_entry_ptr = raw_entry.next;
             }
 
-            if origin_len == res.matched_probe.len() {
+            if !MATCHED && self.matched_num_rows == 0 {
                 res.unmatched.push(key_idx as u64);
             }
 
             self.idx += 1;
+            self.matched_num_rows = 0;
         }
 
         Ok(())
